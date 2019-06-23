@@ -37,7 +37,6 @@ TEST(Longtail, Basic)
 
 struct FSIterator
 {
-    char m_FolderPath[MAX_PATH];
     WIN32_FIND_DATAA m_FindData;
     HANDLE m_Handle;
 };
@@ -76,23 +75,10 @@ static bool Skip(FSIterator* fs_iterator)
     return true;
 }
 
-bool StartFindFile(FSIterator* fs_iterator, const char* root, const char* folder)
+bool StartFindFile(FSIterator* fs_iterator, const char* path)
 {
-    fs_iterator->m_FolderPath[0] = '0';
-    if (root)
-    {
-        strncpy(fs_iterator->m_FolderPath, root, MAX_PATH);
-        if (folder)
-        {
-            strncat(fs_iterator->m_FolderPath, "\\", MAX_PATH - strlen(fs_iterator->m_FolderPath));
-        }
-    }
-    if (folder)
-    {
-        strncat(fs_iterator->m_FolderPath, folder, MAX_PATH - strlen(fs_iterator->m_FolderPath));
-    }
     char scan_pattern[MAX_PATH];
-    strcpy(scan_pattern, fs_iterator->m_FolderPath);
+    strcpy(scan_pattern, path);
     strncat(scan_pattern, "\\*.*", MAX_PATH - strlen(scan_pattern));
     fs_iterator->m_Handle = ::FindFirstFileA(scan_pattern, &fs_iterator->m_FindData);
     if (fs_iterator->m_Handle == INVALID_HANDLE_VALUE)
@@ -135,27 +121,8 @@ const char* GetDirectoryName(FSIterator* fs_iterator)
     return 0;
 }
 
-const char* GetRootPath(FSIterator* fs_iterator)
+void* OpenReadFile(const char* path)
 {
-    return fs_iterator->m_FolderPath;
-}
-
-void* OpenReadFile(const char* folder, const char* file)
-{
-    char path[MAX_PATH];
-    if (folder)
-    {
-        strncpy(path, folder, MAX_PATH);
-        if (file)
-        {
-            strncat(path, "\\", MAX_PATH - strlen(path));
-        }
-    }
-    if (file)
-    {
-        strncat(path, file, MAX_PATH - strlen(path));
-    }
-
     HANDLE handle = ::CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
     if (handle == INVALID_HANDLE_VALUE)
     {
@@ -183,12 +150,22 @@ void CloseReadFile(void* handle)
     ::CloseHandle(h);
 }
 
+const char* ConcatPath(const char* folder, const char* file)
+{
+    size_t path_len = strlen(folder) + 1 + strlen(file) + 1;
+    char* path = (char*)malloc(path_len);
+    strcpy(path, folder);
+    strcat(path, "\\");
+    strcat(path, file);
+    return path;
+}
+
 #endif
 
 struct Asset
 {
-    char* m_Folder;
-    char* m_File;
+    const char* m_Path;
+    uint64_t m_Size;
     meow_u128 m_Hash;
 };
 
@@ -201,24 +178,26 @@ struct HashJob
 static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     HashJob* hash_job = (HashJob*)context;
-    void* file_handle = OpenReadFile(hash_job->m_Asset.m_Folder, hash_job->m_Asset.m_File);
-    assert(file_handle != 0);
-    uint64_t file_size = GetFileSize(file_handle);
-
+    void* file_handle = OpenReadFile(hash_job->m_Asset.m_Path);
     meow_state state;
     MeowBegin(&state, MeowDefaultSeed);
-
-    uint8_t batch_data[65536];
-    uint64_t offset = 0;
-    while (offset != file_size)
+    if(file_handle)
     {
-        meow_umm len = (file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data);
-        bool read_ok = Read(file_handle, offset, len, batch_data);
-        assert(read_ok);
-        offset += len;
-        MeowAbsorb(&state, len, batch_data);
+        uint64_t file_size = GetFileSize(file_handle);
+        hash_job->m_Asset.m_Size = file_size;
+
+        uint8_t batch_data[65536];
+        uint64_t offset = 0;
+        while (offset != file_size)
+        {
+            meow_umm len = (file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data);
+            bool read_ok = Read(file_handle, offset, len, batch_data);
+            assert(read_ok);
+            offset += len;
+            MeowAbsorb(&state, len, batch_data);
+        }
+        CloseReadFile(file_handle);
     }
-    CloseReadFile(file_handle);
     meow_u128 hash = MeowEnd(&state, 0);
     hash_job->m_Asset.m_Hash = hash;
     nadir::AtomicAdd32(hash_job->m_PendingCount, -1);
@@ -227,7 +206,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
 
 struct AssetFolder
 {
-    char m_FolderPath[MAX_PATH];
+    const char* m_FolderPath;
 };
 
 struct ProcessHashContext
@@ -244,20 +223,19 @@ static void ProcessHash(void* context, const char* root_path, const char* file_n
     Bikeshed shed = process_hash_context->m_Shed;
     uint32_t asset_count = nadir::AtomicAdd32(process_hash_context->m_AssetCount, 1);
     HashJob* job = &process_hash_context->m_HashJobs[asset_count - 1];
-    job->m_Asset.m_Folder = _strdup(root_path);
-    job->m_Asset.m_File = _strdup(file_name);
+    job->m_Asset.m_Path = ConcatPath(root_path, file_name);
+    job->m_Asset.m_Size = 0;
     job->m_PendingCount = process_hash_context->m_PendingCount;
     BikeShed_TaskFunc func[1] = {HashFile};
     void* ctx[1] = {job};
     Bikeshed_TaskID task_id;
-    if (Bikeshed_CreateTasks(shed, 1, func, ctx, &task_id))
+    while (!Bikeshed_CreateTasks(shed, 1, func, ctx, &task_id))
+    {
+        nadir::Sleep(1000);
+    }
     {
         nadir::AtomicAdd32(process_hash_context->m_PendingCount, 1);
         Bikeshed_ReadyTasks(shed, 1, &task_id);
-    }
-    else
-    {
-        assert(false);
     }
 }
 
@@ -270,34 +248,32 @@ static uint32_t RecurseTree(uint32_t max_folder_count, const char* root_folder, 
     uint32_t folder_index = 0;
     uint32_t folder_count = 1;
 
-    strcpy(asset_folders[0].m_FolderPath, root_folder);
+    asset_folders[0].m_FolderPath = _strdup(root_folder);
 
     FSIterator fs_iterator;
     while (folder_index != folder_count)
     {
         AssetFolder* asset_folder = &asset_folders[folder_index % max_folder_count];
 
-        if (StartFindFile(&fs_iterator, asset_folders[folder_index].m_FolderPath, 0))
+        if (StartFindFile(&fs_iterator, asset_folder->m_FolderPath))
         {
             do
             {
-                const char* root_path = GetRootPath(&fs_iterator);
                 if (const char* dir_name = GetDirectoryName(&fs_iterator))
                 {
                     AssetFolder* new_asset_folder = &asset_folders[folder_count % max_folder_count];
                     assert(new_asset_folder != asset_folder);
-                    strcpy(new_asset_folder->m_FolderPath, root_path);
-                    strcat(new_asset_folder->m_FolderPath, "\\");
-                    strcat(new_asset_folder->m_FolderPath, dir_name);
+                    new_asset_folder->m_FolderPath = ConcatPath(asset_folder->m_FolderPath, dir_name);
                     ++folder_count;
                 }
                 else if(const char* file_name = GetFileName(&fs_iterator))
                 {
-                    entry_processor(context, root_path, file_name);
+                    entry_processor(context, asset_folder->m_FolderPath, file_name);
                 }
             }while(FindNextFile(&fs_iterator));
             CloseFindFile(&fs_iterator);
         }
+        free((void*)asset_folder->m_FolderPath);
         ++folder_index;
     }
     delete [] asset_folders;
@@ -398,7 +374,7 @@ TEST(Longtail, ScanContent)
     ProcessHashContext context;
     nadir::TAtomic32 pendingCount = 0;
     nadir::TAtomic32 assetCount = 0;
-    context.m_HashJobs = new HashJob[524288];
+    context.m_HashJobs = new HashJob[1048576];
     context.m_AssetCount = &assetCount;
     context.m_PendingCount = &pendingCount;
     context.m_Shed = shed;
@@ -411,7 +387,7 @@ TEST(Longtail, ScanContent)
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
     }
 
-    RecurseTree(4096, root_path, ProcessHash, &context);
+    RecurseTree(1048576, root_path, ProcessHash, &context);
     while (pendingCount > 0)
     {
         if (Bikeshed_ExecuteOne(shed, 0))
@@ -432,6 +408,9 @@ TEST(Longtail, ScanContent)
     jc::HashTable<uint64_t, Asset*> hashes;
     hashes.Create(assetCount, hash_mem);
 
+    uint64_t redundant_file_count = 0;
+    uint64_t redundant_byte_size = 0;
+
     for (int32_t i = 0; i < assetCount; ++i)
     {
         Asset* asset = &context.m_HashJobs[i].m_Asset;
@@ -442,10 +421,13 @@ TEST(Longtail, ScanContent)
         {
             if (MeowHashesAreEqual(asset->m_Hash, (*existing)->m_Hash))
             {
-                printf("File `%s` in folder `%s` matches file `%s` in folder `%s`: %08X-%08X-%08X-%08X\n",
-                    asset->m_File, asset->m_Folder,
-                    (*existing)->m_File, (*existing)->m_Folder,
+                printf("File `%s` matches file `%s` (%llu bytes): %08X-%08X-%08X-%08X\n",
+                    asset->m_Path,
+                    (*existing)->m_Path,
+                    asset->m_Size,
                     MeowU32From(hash, 3), MeowU32From(hash, 2), MeowU32From(hash, 1), MeowU32From(hash, 0));
+                redundant_byte_size += asset->m_Size;
+                ++redundant_file_count;
                 continue;
             }
             else
@@ -456,8 +438,14 @@ TEST(Longtail, ScanContent)
         }
         hashes.Put(hash_key, asset);
     }
+    printf("Found %llu redundant files comprising %llu bytes\n", redundant_file_count, redundant_byte_size);
 
     free(hash_mem);
+    for (int32_t i = 0; i < assetCount; ++i)
+    {
+        Asset* asset = &context.m_HashJobs[i].m_Asset;
+        free((void*)asset->m_Path);
+    }
     delete [] context.m_HashJobs;
     free(shed);
 }
