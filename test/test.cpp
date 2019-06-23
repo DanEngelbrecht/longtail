@@ -369,7 +369,7 @@ uint64_t mash_hash(meow_u128 hash)
 TEST(Longtail, ScanContent)
 {
     ReadyCallback ready_callback;
-    Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65535, 0, 1)), 65535, 0, 1, &ready_callback.cb);
+    Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(131071, 0, 1)), 131071, 0, 1, &ready_callback.cb);
     const char* root_path = "D:\\TestContent";
     ProcessHashContext context;
     nadir::TAtomic32 pendingCount = 0;
@@ -410,10 +410,12 @@ TEST(Longtail, ScanContent)
 
     uint64_t redundant_file_count = 0;
     uint64_t redundant_byte_size = 0;
+    uint64_t total_byte_size = 0;
 
     for (int32_t i = 0; i < assetCount; ++i)
     {
         Asset* asset = &context.m_HashJobs[i].m_Asset;
+        total_byte_size += asset->m_Size;
         meow_u128 hash = asset->m_Hash;
         uint64_t hash_key = MeowU32From(hash, 0);
         Asset** existing = hashes.Get(hash_key);
@@ -438,7 +440,7 @@ TEST(Longtail, ScanContent)
         }
         hashes.Put(hash_key, asset);
     }
-    printf("Found %llu redundant files comprising %llu bytes\n", redundant_file_count, redundant_byte_size);
+    printf("Found %llu redundant files comprising %llu bytes out of %llu bytes\n", redundant_file_count, redundant_byte_size, total_byte_size);
 
     free(hash_mem);
     for (int32_t i = 0; i < assetCount; ++i)
