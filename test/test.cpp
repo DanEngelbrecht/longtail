@@ -1,4 +1,5 @@
 #include "../third-party/jctest/src/jc_test.h"
+#include "../third-party/meow_hash/meow_hash_x64_aesni.h"
 
 #define LONGTAIL_IMPLEMENTATION
 #include "../src/longtail.h"
@@ -15,12 +16,12 @@ struct TestStorage
         TestStorage* test_storage = (TestStorage*)storage;
         return 0;
     }
-    static struct Longtail_Block* AqcuireBlock(struct Longtail_ReadStorage* storage, meow_u128 block_hash)
+    static struct Longtail_Block* AqcuireBlock(struct Longtail_ReadStorage* storage, uint32_t block_index)
     {
         TestStorage* test_storage = (TestStorage*)storage;
         return 0;
     }
-    static void ReleaseBlock(struct Longtail_ReadStorage* storage, meow_u128 block_hash)
+    static void ReleaseBlock(struct Longtail_ReadStorage* storage, uint32_t block_index)
     {
         TestStorage* test_storage = (TestStorage*)storage;
     }
@@ -359,11 +360,153 @@ struct ThreadWorker
 };
 
 
-
-uint64_t mash_hash(meow_u128 hash)
+struct StoredBlock
 {
-    uint64_t mashed_hash = MeowU64From(hash, 1) ^ MeowU32From(hash, 0);
-    return mashed_hash;
+    TLongtail_Hash m_CompressionType;
+    TLongtail_Hash m_Hash;
+    Longtail_Block m_Block;
+    uint64_t m_ComittedData;
+    uint64_t m_AllocatedData;
+};
+
+
+LONGTAIL_DECLARE_FLEXARRAY(StoredBlock, malloc, free)
+LONGTAIL_DECLARE_FLEXARRAY(uint32_t, malloc, free)
+
+
+struct WriteStorage
+{
+    Longtail_WriteStorage m_Storage = {AllocateBlockIdx, GetBlock, CommitBlockData};
+
+    WriteStorage(StoredBlock** blocks, uint32_t compressionTypes)
+        : m_Blocks(blocks)
+    {
+        size_t hash_table_size = jc::HashTable<uint64_t, StoredBlock*>::CalcSize(compressionTypes);
+        m_CompressionToBlocksMem = malloc(hash_table_size);
+        m_CompressionToBlocks.Create(compressionTypes, m_CompressionToBlocksMem);
+    }
+
+    ~WriteStorage()
+    {
+//        uint32_t size = FlexArray_GetSize(*m_Blocks);
+//        while (size--)
+//        {
+//            free((*m_Blocks)[size].m_Block.m_Data);
+//        }
+        free(m_CompressionToBlocksMem);
+    }
+
+    static uint32_t AllocateBlockIdx(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length)
+    {
+        WriteStorage* write_storage = (WriteStorage*)storage;
+        uint32_t** existing_block_idx_array = write_storage->m_CompressionToBlocks.Get(compression_type);
+        uint32_t* block_idx_ptr;
+        if (existing_block_idx_array == 0)
+        {
+            uint32_t* block_idx_storage = FlexArray_IncreaseCapacity((uint32_t*)0, 16);
+            write_storage->m_CompressionToBlocks.Put(compression_type, block_idx_storage);
+            block_idx_ptr = block_idx_storage;
+        }
+        else
+        {
+            block_idx_ptr = *existing_block_idx_array;
+        }
+        uint32_t capacity = FlexArray_GetCapacity(block_idx_ptr);
+        uint32_t size = FlexArray_GetSize(block_idx_ptr);
+        if (capacity < (size + 1))
+        {
+            block_idx_ptr = FlexArray_SetCapacity(block_idx_ptr, capacity + 16u);
+            write_storage->m_CompressionToBlocks.Put(compression_type, block_idx_ptr);
+        }
+        capacity = FlexArray_GetCapacity(*write_storage->m_Blocks);
+        size = FlexArray_GetSize(*write_storage->m_Blocks);
+        if (capacity < (size + 1))
+        {
+            *write_storage->m_Blocks = FlexArray_SetCapacity(*write_storage->m_Blocks, capacity + 16u);
+        }
+        *FlexArray_Push(block_idx_ptr) = size;
+        StoredBlock* new_block = FlexArray_Push(*write_storage->m_Blocks);
+        new_block->m_CompressionType = compression_type;
+        new_block->m_ComittedData = 0;
+        new_block->m_AllocatedData = 0;
+
+        uint64_t block_size = length;// > 65536u ? length : 65536u;
+        new_block->m_AllocatedData = block_size;
+        new_block->m_Block.m_Data = (uint8_t*)malloc(block_size);
+        new_block->m_ComittedData = length;
+        return size;
+    }
+
+    static  struct Longtail_Block* GetBlock(struct Longtail_WriteStorage* storage, uint32_t block_index)
+    {
+        WriteStorage* write_storage = (WriteStorage*)storage;
+        return &(*write_storage->m_Blocks)[block_index].m_Block;
+    }
+
+    static int CommitBlockData(struct Longtail_WriteStorage* storage, uint32_t block_index)
+    {
+        WriteStorage* write_storage = (WriteStorage*)storage;
+        StoredBlock* stored_block = &(*write_storage->m_Blocks)[block_index];
+        if (stored_block->m_ComittedData == stored_block->m_AllocatedData)
+        {
+            meow_state state;
+            MeowBegin(&state, MeowDefaultSeed);
+            MeowAbsorb(&state, stored_block->m_ComittedData, stored_block->m_Block.m_Data);
+            stored_block->m_Hash = MeowU64From(MeowEnd(&state, 0), 0);
+        }
+        return 1;
+    }
+
+    jc::HashTable<uint64_t, uint32_t*> m_CompressionToBlocks;
+    void* m_CompressionToBlocksMem;
+    StoredBlock** m_Blocks;
+};
+
+struct ReadStorage
+{
+    Longtail_ReadStorage m_Storage = {PreflightBlocks, AqcuireBlock, ReleaseBlock};
+    ReadStorage(StoredBlock* stored_blocks)
+        : m_Blocks(stored_blocks)
+    {
+
+    }
+    static uint64_t PreflightBlocks(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockEntry* blocks)
+    {
+        return 1;
+    }
+    static struct Longtail_Block* AqcuireBlock(struct Longtail_ReadStorage* storage, uint32_t block_index)
+    {
+        ReadStorage* read_storage = (ReadStorage*)storage;
+        return &read_storage->m_Blocks[block_index].m_Block;
+    }
+    static void ReleaseBlock(struct Longtail_ReadStorage* storage, uint32_t block_index)
+    {
+    }
+    StoredBlock* m_Blocks;
+};
+
+static int InputStream(void* context, uint64_t byte_count, uint8_t* data)
+{
+    Asset* asset = (Asset*)context;
+    void*  f= OpenReadFile(asset->m_Path);
+    if (f == 0)
+    {
+        return 0;
+    }
+    Read(f, 0, byte_count, data);
+    CloseReadFile(f);
+    return 1;
+}
+
+LONGTAIL_DECLARE_FLEXARRAY(uint8_t, malloc, free)
+
+int OutputStream(void* context, uint64_t byte_count, const uint8_t* data)
+{
+    uint8_t** buffer = (uint8_t**)context;
+    *buffer = FlexArray_SetCapacity(*buffer, (uint32_t)byte_count);
+    FlexArray_SetSize(*buffer, (uint32_t)byte_count);
+    memmove(*buffer, data, byte_count);
+    return 1;
 }
 
 TEST(Longtail, ScanContent)
@@ -441,6 +584,57 @@ TEST(Longtail, ScanContent)
         hashes.Put(hash_key, asset);
     }
     printf("Found %llu redundant files comprising %llu bytes out of %llu bytes\n", redundant_file_count, redundant_byte_size, total_byte_size);
+
+    Longtail_AssetEntry* asset_array = 0;
+    Longtail_BlockEntry* block_entry_array = 0;
+
+    StoredBlock* blocks = 0;
+
+    // When we write we want mapping from 
+    WriteStorage write_storage(&blocks, 8);
+    {
+        jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
+        while (it != hashes.End())
+        {
+            uint64_t hash_key = *it.GetKey();
+            Asset* asset = *it.GetValue();
+            Longtail_Write(&write_storage.m_Storage, hash_key, InputStream, asset, asset->m_Size, 0, &asset_array, &block_entry_array);
+            ++it;
+        }
+    }
+
+    struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(FlexArray_GetSize(asset_array), FlexArray_GetSize(block_entry_array))),
+        FlexArray_GetSize(asset_array), asset_array,
+        FlexArray_GetSize(block_entry_array), block_entry_array);
+
+    FlexArray_Free(asset_array);
+    FlexArray_Free(block_entry_array);
+
+    {
+        ReadStorage read_storage(blocks);
+        jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
+        while (it != hashes.End())
+        {
+            uint64_t hash_key = *it.GetKey();
+            Asset* asset = *it.GetValue();
+            uint8_t* data = 0;
+            if (!Longtail_Read(longtail, &read_storage.m_Storage, hash_key, OutputStream, &data))
+            {
+                assert(false);
+            }
+            FlexArray_Free(data);
+            ++it;
+        }
+    }
+
+    free(longtail);
+
+    uint32_t blocks_size = FlexArray_GetSize(blocks);
+    while (blocks_size--)
+    {
+        free(blocks[blocks_size].m_Block.m_Data);
+    }
+    FlexArray_Free(blocks);
 
     free(hash_mem);
     for (int32_t i = 0; i < assetCount; ++i)
