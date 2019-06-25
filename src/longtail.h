@@ -17,6 +17,18 @@ struct Longtail_ReadStorage;
 // Each block can have individual compression type (hash identifier)
 // Lookup: path -> hash -> block hash -> block data
 
+// Incremental update of content
+//
+// * Have base content with index
+// * Examine new content
+// * Identify blocks that have unchanged content and add asset entries pointing to unchanged blocks
+// * For each asset that is not found in store in new blocks
+// * New index reuses unchanged blocks!
+
+// TODO: Restructure to put more of test.cpp into longtail (WriteStorage, ReadStorage, BlockStorage)
+
+// Add tools to inspect index (path of resources can not be extracted!), extract content from path etc
+
 typedef uint64_t TLongtail_Hash;
 
 typedef int (*Longtail_OutputStream)(void* context, uint64_t byte_count, const uint8_t* data);
@@ -26,19 +38,15 @@ struct Longtail_ReadStorage
 {
     // Return required memory size?
     uint64_t (*Longtail_PreflightBlocks)(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockEntry* blocks);
-    struct Longtail_Block* (*Longtail_AqcuireBlock)(struct Longtail_ReadStorage* storage, uint32_t block_index);
+    const uint8_t* (*Longtail_AqcuireBlockStorage)(struct Longtail_ReadStorage* storage, uint32_t block_index);
     void (*Longtail_ReleaseBlock)(struct Longtail_ReadStorage* storage, uint32_t block_index);
 };
 
 struct Longtail_WriteStorage
 {
-    // TODO: We should be able to handle partially filled blocks
-//    struct Longtail_Block* (*Longtail_AllocateBlockData)(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length);
-
-    uint32_t (*AllocateBlockIdx)(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length);
-    // TODO: Pointer is not valid if block array is reallocated
-    struct Longtail_Block* (*Longtail_GetBlock)(struct Longtail_WriteStorage* storage, uint32_t block_index);
-    int (*Longtail_CommitBlockData)(struct Longtail_WriteStorage* storage, uint32_t block_index);
+    int (*Longtail_AllocateBlockStorage)(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length, Longtail_BlockEntry* out_block_entry);
+    uint8_t* (*Longtail_GetBlockData)(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry);
+    int (*Longtail_CommitBlockData)(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry);
 };
 
 size_t Longtail_GetSize(uint64_t asset_entry_count, uint64_t block_entry_count);
@@ -52,29 +60,15 @@ int Longtail_Read(struct Longtail* longtail, struct Longtail_ReadStorage* storag
 
 struct Longtail_AssetEntry
 {
-    TLongtail_Hash m_AssetHash; // Path + version
-    uint32_t m_BlockIndex; // First block where it is located in m_BlockEntries array
-//    uint32_t m_BlockCount; // Number of blocks this resource spans
+    TLongtail_Hash m_AssetHash; // Path
+    uint32_t m_BlockEntryIndex; // Block entry where it is located in m_BlockEntries array
 };
 
 struct Longtail_BlockEntry
 {
     uint32_t m_BlockIndex;
-    uint32_t m_StartOffset; // Compressed or raw?
-    uint64_t m_Length;  // Compressed or raw?
-};
-
-#define LONGTAIL_BLOCK_SIZE (32768 - (sizeof(TLongtail_Hash) + sizeof(uint32_t)))
-// Blocksize is the size of the block compressed?
-
-struct Longtail_BlockData
-{
-    uint8_t* m_Data;
-};
-
-struct Longtail_Block
-{
-    uint8_t* m_Data;
+    uint64_t m_StartOffset; // Raw
+    uint64_t m_Length;  // Raw
 };
 
 struct Longtail
@@ -85,63 +79,63 @@ struct Longtail
     struct Longtail_BlockEntry* block_entries;
 };
 
-#define LONGTAIL_FLEXARRAY_CONCAT1(x, y) x ## y
-#define LONGTAIL_FLEXARRAY_CONCAT(x, y) LONGTAIL_FLEXARRAY_CONCAT1(x, y)
+#define LONGTAIL_ARRAY_CONCAT1(x, y) x ## y
+#define LONGTAIL_ARRAY_CONCAT(x, y) LONGTAIL_ARRAY_CONCAT1(x, y)
 
 
-#define LONGTAIL_DECLARE_FLEXARRAY(t, alloc_mem, free_mem) \
-    inline uint32_t FlexArray_GetCapacity(LONGTAIL_FLEXARRAY_CONCAT(t, *) buffer) \
+#define LONGTAIL_DECLARE_ARRAY_TYPE(t, alloc_mem, free_mem) \
+    inline uint32_t Longtail_Array_GetCapacity(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
     { \
         return buffer ? ((uint32_t*)buffer)[-2] : 0; \
     } \
     \
-    inline uint32_t FlexArray_GetSize(LONGTAIL_FLEXARRAY_CONCAT(t, *) buffer) \
+    inline uint32_t Longtail_Array_GetSize(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
     { \
         return buffer ? ((uint32_t*)buffer)[-1] : 0; \
     } \
-    inline void FlexArray_SetSize(LONGTAIL_FLEXARRAY_CONCAT(t, *) buffer, uint32_t size) \
+    inline void Longtail_Array_SetSize(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t size) \
     { \
         ((uint32_t*)buffer)[-1] = size; \
     } \
     \
-    inline void FlexArray_Free(LONGTAIL_FLEXARRAY_CONCAT(t, *) buffer) \
+    inline void Longtail_Array_Free(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
     { \
         free_mem(buffer ? &((uint32_t*)buffer)[-2] : 0); \
     } \
     \
-    inline LONGTAIL_FLEXARRAY_CONCAT(t, *) FlexArray_SetCapacity(LONGTAIL_FLEXARRAY_CONCAT(t, *) buffer, uint32_t new_capacity) \
+    inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_SetCapacity(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t new_capacity) \
     { \
-        uint32_t current_capacity = FlexArray_GetCapacity(buffer); \
+        uint32_t current_capacity = Longtail_Array_GetCapacity(buffer); \
         if (current_capacity == new_capacity) \
         { \
             return buffer; \
         } \
         if (new_capacity == 0) \
         { \
-            FlexArray_Free(buffer); \
+            Longtail_Array_Free(buffer); \
             return 0; \
         } \
         uint32_t* new_buffer_base = (uint32_t*)alloc_mem(sizeof(uint32_t) * 2 + sizeof(t) * new_capacity); \
-        uint32_t current_size = FlexArray_GetSize(buffer); \
+        uint32_t current_size = Longtail_Array_GetSize(buffer); \
         new_buffer_base[0] = new_capacity; \
         new_buffer_base[1] = current_size; \
-        LONGTAIL_FLEXARRAY_CONCAT(t, *) new_buffer = (LONGTAIL_FLEXARRAY_CONCAT(t, *))&new_buffer_base[2]; \
+        LONGTAIL_ARRAY_CONCAT(t, *) new_buffer = (LONGTAIL_ARRAY_CONCAT(t, *))&new_buffer_base[2]; \
         memmove(new_buffer, buffer, sizeof(t) * current_size); \
-        FlexArray_Free(buffer); \
+        Longtail_Array_Free(buffer); \
         return new_buffer; \
     } \
     \
-    inline LONGTAIL_FLEXARRAY_CONCAT(t, *) FlexArray_IncreaseCapacity(LONGTAIL_FLEXARRAY_CONCAT(t, *) buffer, uint32_t count) \
+    inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_IncreaseCapacity(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t count) \
     { \
-        uint32_t current_capacity = FlexArray_GetCapacity(buffer); \
+        uint32_t current_capacity = Longtail_Array_GetCapacity(buffer); \
         uint32_t new_capacity = current_capacity + count; \
-        return FlexArray_SetCapacity(buffer, new_capacity); \
+        return Longtail_Array_SetCapacity(buffer, new_capacity); \
     } \
     \
-    inline LONGTAIL_FLEXARRAY_CONCAT(t, *) FlexArray_Push(LONGTAIL_FLEXARRAY_CONCAT(t, *) buffer) \
+    inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_Push(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
     { \
-        uint32_t offset = FlexArray_GetSize(buffer); \
-        if (offset == FlexArray_GetCapacity(buffer)) \
+        uint32_t offset = Longtail_Array_GetSize(buffer); \
+        if (offset == Longtail_Array_GetCapacity(buffer)) \
         { \
             return 0; \
         } \
@@ -186,37 +180,39 @@ static uint32_t Longtail_GetFirstBlock_private(struct Longtail* longtail, TLongt
     return 0xffffffffu;
 }
 
-LONGTAIL_DECLARE_FLEXARRAY(Longtail_AssetEntry, malloc, free)
-LONGTAIL_DECLARE_FLEXARRAY(Longtail_BlockEntry, malloc, free)
+LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_AssetEntry, malloc, free)
+LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockEntry, malloc, free)
 
-uint32_t Longtail_Write(Longtail_WriteStorage* storage, TLongtail_Hash asset_hash, Longtail_InputStream input_stream, void* context, uint64_t length, TLongtail_Hash compression_type, Longtail_AssetEntry** asset_entry_array, Longtail_BlockEntry** block_entry_array)
+int Longtail_Write(Longtail_WriteStorage* storage, TLongtail_Hash asset_hash, Longtail_InputStream input_stream, void* context, uint64_t length, TLongtail_Hash compression_type, Longtail_AssetEntry** asset_entry_array, Longtail_BlockEntry** block_entry_array)
 {
-    if (FlexArray_GetSize(*asset_entry_array) == FlexArray_GetSize(*asset_entry_array))
+    if (Longtail_Array_GetSize(*asset_entry_array) == Longtail_Array_GetCapacity(*asset_entry_array))
     {
-        *asset_entry_array = FlexArray_IncreaseCapacity(*asset_entry_array, 16);
+        *asset_entry_array = Longtail_Array_IncreaseCapacity(*asset_entry_array, 16);
     }
 
-    uint32_t block_index = storage->AllocateBlockIdx(storage, compression_type, length);
-    Longtail_AssetEntry* asset_entry = FlexArray_Push(*asset_entry_array);
-    asset_entry->m_BlockIndex = FlexArray_GetSize(*block_entry_array);
-    asset_entry->m_AssetHash = asset_hash;
-    if (FlexArray_GetSize(*block_entry_array) == FlexArray_GetSize(*block_entry_array))
-    {
-        *block_entry_array = FlexArray_IncreaseCapacity(*block_entry_array, 16);
-    }
-    Longtail_BlockEntry* block_entry = FlexArray_Push(*block_entry_array);
-    block_entry->m_Length = length;
-    block_entry->m_StartOffset = 0;     // TODO: ?????
-    block_entry->m_BlockIndex = block_index;
-
-    Longtail_Block* block = storage->Longtail_GetBlock(storage, block_index);
-
-    if (0 == input_stream(context, length, block->m_Data))
+    Longtail_BlockEntry block_entry;
+    if (0 == storage->Longtail_AllocateBlockStorage(storage, compression_type, length, &block_entry))
     {
         return 0;
     }
- 
-    storage->Longtail_CommitBlockData(storage, block_index);
+    Longtail_AssetEntry* asset_entry = Longtail_Array_Push(*asset_entry_array);
+    asset_entry->m_BlockEntryIndex = Longtail_Array_GetSize(*block_entry_array);
+    asset_entry->m_AssetHash = asset_hash;
+    if (Longtail_Array_GetSize(*block_entry_array) == Longtail_Array_GetCapacity(*block_entry_array))
+    {
+        *block_entry_array = Longtail_Array_IncreaseCapacity(*block_entry_array, 16);
+    }
+
+    uint8_t* block_data = storage->Longtail_GetBlockData(storage, &block_entry);
+
+    if (0 == input_stream(context, length, block_data))
+    {
+        return 0;
+    }
+
+    *Longtail_Array_Push(*block_entry_array) = block_entry;
+
+    storage->Longtail_CommitBlockData(storage, &block_entry);
  
     return 1;
 }
@@ -231,7 +227,7 @@ int Longtail_Preflight(struct Longtail* longtail, struct Longtail_ReadStorage* s
             return 0;
         }
         struct Longtail_AssetEntry* asset_entry = &longtail->asset_entries[asset_index];
-        struct Longtail_BlockEntry* block_entry = &longtail->block_entries[asset_entry->m_BlockIndex];
+        struct Longtail_BlockEntry* block_entry = &longtail->block_entries[asset_entry->m_BlockEntryIndex];
 
         out_sizes[count] = storage->Longtail_PreflightBlocks(storage, 1, block_entry);
     }
@@ -247,13 +243,13 @@ int Longtail_Read(struct Longtail* longtail, struct Longtail_ReadStorage* storag
     }
 
     struct Longtail_AssetEntry* asset_entry = &longtail->asset_entries[asset_index];
-    struct Longtail_BlockEntry* entry = &longtail->block_entries[asset_entry->m_BlockIndex];
+    struct Longtail_BlockEntry* entry = &longtail->block_entries[asset_entry->m_BlockEntryIndex];
 
 //    uint32_t entry_count = asset_entry->m_BlockCount;
 //    while (entry_count--)
 //    {
-        struct Longtail_Block* block = storage->Longtail_AqcuireBlock(storage, entry->m_BlockIndex);
-        output_stream(context, entry->m_Length, &block->m_Data[entry->m_StartOffset]);
+        const uint8_t* block_data = storage->Longtail_AqcuireBlockStorage(storage, entry->m_BlockIndex);
+        output_stream(context, entry->m_Length, &block_data[entry->m_StartOffset]);
         storage->Longtail_ReleaseBlock(storage, entry->m_BlockIndex);
 //        ++entry;
 //    }
