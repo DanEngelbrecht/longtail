@@ -521,7 +521,7 @@ struct WriteStorage
             write_storage->m_CompressionToBlocks.Put(compression_type, block_idx_ptr);
         }
 
-        size = Longtail_Array_GetSize(*write_storage->m_Blocks);
+        size = Longtail_Array_GetSize(block_idx_ptr);
         if (size > 0)
         {
             uint32_t last_block_index = block_idx_ptr[size - 1];
@@ -540,6 +540,7 @@ struct WriteStorage
             }
         }
 
+        size = Longtail_Array_GetSize(*write_storage->m_Blocks);
         capacity = Longtail_Array_GetCapacity(*write_storage->m_Blocks);
         if (capacity < (size + 1))
         {
@@ -700,7 +701,7 @@ TEST(Longtail, ScanContent)
 {
     ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(131071, 0, 1)), 131071, 0, 1, &ready_callback.cb);
-    const char* root_path = "D:\\TestContent";
+    const char* root_path = "D:\\TestContent\\Version_2";
     ProcessHashContext context;
     nadir::TAtomic32 pendingCount = 0;
     nadir::TAtomic32 assetCount = 0;
@@ -779,7 +780,7 @@ TEST(Longtail, ScanContent)
 
     DiskBlockStorage block_storage("D:\\Temp\\longtail\\cache");
     {
-        WriteStorage write_storage(&blocks, 8, &block_storage.m_Storage);
+        WriteStorage write_storage(&blocks, 512, &block_storage.m_Storage);
         {
             jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
             while (it != hashes.End())
@@ -787,7 +788,12 @@ TEST(Longtail, ScanContent)
                 uint64_t content_hash = *it.GetKey();
                 Asset* asset = *it.GetValue();
                 uint64_t path_hash = GetPathHash(asset->m_Path);
-                Longtail_Write(&write_storage.m_Storage, path_hash, InputStream, asset, asset->m_Size, 0, &asset_array, &block_entry_array);
+                const char * extension = strrchr(asset->m_Path, '.');
+                TLongtail_Hash type_hash = extension ? GetPathHash(extension) : 0;
+                if (!Longtail_Write(&write_storage.m_Storage, path_hash, InputStream, asset, asset->m_Size, type_hash, &asset_array, &block_entry_array))
+                {
+                    assert(false);
+                }
                 ++it;
             }
         }
