@@ -554,6 +554,7 @@ struct WriteStorage
         if (length < write_storage->m_BlockSize)
         {
             size = Longtail_Array_GetSize(block_idx_ptr);
+            uint32_t best_fit = size;
             for (uint32_t i = 0; i < size; ++i)
             {
                 uint32_t reuse_block_index = block_idx_ptr[i];
@@ -561,15 +562,22 @@ struct WriteStorage
                 if (reuse_live_block->m_Data)
                 {
                     StoredBlock* reuse_block = &(*write_storage->m_Blocks)[reuse_block_index];
-                    if (reuse_block->m_Size - reuse_live_block->m_CommitedSize >= length)
+                    uint64_t space_left = reuse_block->m_Size - reuse_live_block->m_CommitedSize;
+                    if (space_left >= length)
                     {
-                        out_block_entry->m_BlockIndex = reuse_block_index;
-                        out_block_entry->m_Length = length;
-                        out_block_entry->m_StartOffset = reuse_live_block->m_CommitedSize;
-                        return 1;
+                        if ((best_fit == size) || space_left < ((*write_storage->m_Blocks)[best_fit].m_Size - write_storage->m_LiveBlocks[best_fit].m_CommitedSize))
+                        {
+                            best_fit = reuse_block_index;
+                        }
                     }
-//                    PersistBlock(write_storage, reuse_block_index);
                 }
+            }
+            if (best_fit != size)
+            {
+                out_block_entry->m_BlockIndex = best_fit;
+                out_block_entry->m_Length = length;
+                out_block_entry->m_StartOffset = write_storage->m_LiveBlocks[best_fit].m_CommitedSize;
+                return 1;
             }
         }
 
