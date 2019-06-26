@@ -1,5 +1,7 @@
 #pragma once
 
+#include "longtail_array.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,7 +47,7 @@ struct Longtail_ReadStorage
 struct Longtail_WriteStorage
 {
     int (*Longtail_AllocateBlockStorage)(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length, Longtail_BlockEntry* out_block_entry);
-    uint8_t* (*Longtail_GetBlockData)(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry);
+    int (*Longtail_WriteBlockData)(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry, Longtail_InputStream input_stream, void* context);
     int (*Longtail_CommitBlockData)(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry);
 };
 
@@ -78,70 +80,6 @@ struct Longtail
     struct Longtail_AssetEntry* asset_entries;
     struct Longtail_BlockEntry* block_entries;
 };
-
-#define LONGTAIL_ARRAY_CONCAT1(x, y) x ## y
-#define LONGTAIL_ARRAY_CONCAT(x, y) LONGTAIL_ARRAY_CONCAT1(x, y)
-
-
-#define LONGTAIL_DECLARE_ARRAY_TYPE(t, alloc_mem, free_mem) \
-    inline uint32_t Longtail_Array_GetCapacity(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
-    { \
-        return buffer ? ((uint32_t*)buffer)[-2] : 0; \
-    } \
-    \
-    inline uint32_t Longtail_Array_GetSize(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
-    { \
-        return buffer ? ((uint32_t*)buffer)[-1] : 0; \
-    } \
-    inline void Longtail_Array_SetSize(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t size) \
-    { \
-        ((uint32_t*)buffer)[-1] = size; \
-    } \
-    \
-    inline void Longtail_Array_Free(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
-    { \
-        free_mem(buffer ? &((uint32_t*)buffer)[-2] : 0); \
-    } \
-    \
-    inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_SetCapacity(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t new_capacity) \
-    { \
-        uint32_t current_capacity = Longtail_Array_GetCapacity(buffer); \
-        if (current_capacity == new_capacity) \
-        { \
-            return buffer; \
-        } \
-        if (new_capacity == 0) \
-        { \
-            Longtail_Array_Free(buffer); \
-            return 0; \
-        } \
-        uint32_t* new_buffer_base = (uint32_t*)alloc_mem(sizeof(uint32_t) * 2 + sizeof(t) * new_capacity); \
-        uint32_t current_size = Longtail_Array_GetSize(buffer); \
-        new_buffer_base[0] = new_capacity; \
-        new_buffer_base[1] = current_size; \
-        LONGTAIL_ARRAY_CONCAT(t, *) new_buffer = (LONGTAIL_ARRAY_CONCAT(t, *))&new_buffer_base[2]; \
-        memmove(new_buffer, buffer, sizeof(t) * current_size); \
-        Longtail_Array_Free(buffer); \
-        return new_buffer; \
-    } \
-    \
-    inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_IncreaseCapacity(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t count) \
-    { \
-        uint32_t current_capacity = Longtail_Array_GetCapacity(buffer); \
-        uint32_t new_capacity = current_capacity + count; \
-        return Longtail_Array_SetCapacity(buffer, new_capacity); \
-    } \
-    \
-    inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_Push(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
-    { \
-        uint32_t offset = Longtail_Array_GetSize(buffer); \
-        if (offset == Longtail_Array_GetCapacity(buffer)) \
-        { \
-            return 0; \
-        } \
-        ((uint32_t*)buffer)[-1] = offset + 1; \
-        return &buffer[offset]; \
-    }
 
 #define LONGTAIL_ALIGN_SIZE_PRIVATE(x, align) (((x) + ((align)-1)) & ~((align)-1))
 
@@ -203,9 +141,7 @@ int Longtail_Write(Longtail_WriteStorage* storage, TLongtail_Hash asset_hash, Lo
         *block_entry_array = Longtail_Array_IncreaseCapacity(*block_entry_array, 16);
     }
 
-    uint8_t* block_data = storage->Longtail_GetBlockData(storage, &block_entry);
-
-    if (0 == input_stream(context, length, block_data))
+    if (0 == storage->Longtail_WriteBlockData(storage, &block_entry, input_stream, context))
     {
         return 0;
     }
@@ -245,14 +181,10 @@ int Longtail_Read(struct Longtail* longtail, struct Longtail_ReadStorage* storag
     struct Longtail_AssetEntry* asset_entry = &longtail->asset_entries[asset_index];
     struct Longtail_BlockEntry* entry = &longtail->block_entries[asset_entry->m_BlockEntryIndex];
 
-//    uint32_t entry_count = asset_entry->m_BlockCount;
-//    while (entry_count--)
-//    {
-        const uint8_t* block_data = storage->Longtail_AqcuireBlockStorage(storage, entry->m_BlockIndex);
-        output_stream(context, entry->m_Length, &block_data[entry->m_StartOffset]);
-        storage->Longtail_ReleaseBlock(storage, entry->m_BlockIndex);
-//        ++entry;
-//    }
+    const uint8_t* block_data = storage->Longtail_AqcuireBlockStorage(storage, entry->m_BlockIndex);
+    output_stream(context, entry->m_Length, &block_data[entry->m_StartOffset]);
+    storage->Longtail_ReleaseBlock(storage, entry->m_BlockIndex);
+
     return 1;
 }
 

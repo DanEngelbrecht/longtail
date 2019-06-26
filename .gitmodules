@@ -1,3 +1,6 @@
 [submodule "third-party\\nadir"]
 	path = third-party\\nadir
 	url = https://github.com/DanEngelbrecht/nadir.git
+[submodule "third-party/lizard"]
+	path = third-party/lizard
+	url = https://github.com/inikep/lizard.git

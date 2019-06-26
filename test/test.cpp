@@ -8,6 +8,10 @@
 #include "../third-party/nadir/src/nadir.h"
 #include "../third-party/jc_containers/src/jc_hashtable.h"
 
+#include "../third-party/lizard/lib/lizard_common.h"
+#include "../third-party/lizard/lib/lizard_decompress.h"
+#include "../third-party/lizard/lib/lizard_compress.h"
+
 #include <inttypes.h>
 
 struct TestStorage
@@ -426,14 +430,27 @@ struct DiskBlockStorage
             CloseReadFile(r);
             return 1;
         }
+
+        const size_t max_dst_size = Lizard_compressBound((int)length);
+        void* compressed_buffer = malloc(max_dst_size);
+        int compressed_size = Lizard_compress((const char*)data, (char*)compressed_buffer, (int)length, (int)max_dst_size, 43);//LIZARD_MAX_CLEVEL);
+        if (compressed_size < 0)
+        {
+            free(compressed_buffer);
+            return 0;
+        }
+        compressed_buffer = realloc(compressed_buffer, (size_t)compressed_size);
+
         void* f = OpenWriteFile(path);
         if (!f)
         {
+            free(compressed_buffer);
             return 0;
         }
-        bool ok = Write(f, 0, length, data);
+        bool ok = Write(f, 0, compressed_size, compressed_buffer);
         CloseWriteFile(f);
         free((char*)path);
+        free(compressed_buffer);
         return ok ? 1 : 0;
     }
 
@@ -446,9 +463,21 @@ struct DiskBlockStorage
         {
             return 0;
         }
-        bool ok = Read(f, 0, length, data);
-        CloseWriteFile(f);
+        uint64_t compressed_size = GetFileSize(f);
+        void* compressed_buffer = malloc(compressed_size);
+        bool ok = Read(f, 0, compressed_size, compressed_buffer);
+        CloseReadFile(f);
         free((char*)path);
+
+        if (!ok)
+        {
+            free(compressed_buffer);
+            return false;
+        }
+
+        int result = Lizard_decompress_safe((const char*)compressed_buffer, (char*)data, (int)compressed_size, (int)length);
+        free(compressed_buffer);
+        ok = result >= length;
         return ok ? 1 : 0;
     }
 
@@ -470,12 +499,13 @@ struct DiskBlockStorage
 
 struct WriteStorage
 {
-    Longtail_WriteStorage m_Storage = {AllocateBlockStorage, GetBlockData, CommitBlockData};
+    Longtail_WriteStorage m_Storage = {AllocateBlockStorage, WriteBlockData, CommitBlockData};
 
-    WriteStorage(StoredBlock** blocks, uint32_t compressionTypes, BlockStorage* block_storage)
+    WriteStorage(StoredBlock** blocks, uint64_t block_size, uint32_t compressionTypes, BlockStorage* block_storage)
         : m_Blocks(blocks)
         , m_LiveBlocks(0)
         , m_BlockStorage(block_storage)
+        , m_BlockSize(block_size)
     {
         size_t hash_table_size = jc::HashTable<uint64_t, StoredBlock*>::CalcSize(compressionTypes);
         m_CompressionToBlocksMem = malloc(hash_table_size);
@@ -521,22 +551,25 @@ struct WriteStorage
             write_storage->m_CompressionToBlocks.Put(compression_type, block_idx_ptr);
         }
 
-        size = Longtail_Array_GetSize(block_idx_ptr);
-        if (size > 0)
+        if (length < write_storage->m_BlockSize)
         {
-            uint32_t last_block_index = block_idx_ptr[size - 1];
-            StoredBlock* last_block = &(*write_storage->m_Blocks)[last_block_index];
-            LiveBlock* last_live_block = &write_storage->m_LiveBlocks[last_block_index];
-            if (last_live_block->m_Data)
+            size = Longtail_Array_GetSize(block_idx_ptr);
+            for (uint32_t i = 0; i < size; ++i)
             {
-                if (last_block->m_Size - last_live_block->m_CommitedSize >= length)
+                uint32_t reuse_block_index = block_idx_ptr[i];
+                LiveBlock* reuse_live_block = &write_storage->m_LiveBlocks[reuse_block_index];
+                if (reuse_live_block->m_Data)
                 {
-                    out_block_entry->m_BlockIndex = last_block_index;
-                    out_block_entry->m_Length = length;
-                    out_block_entry->m_StartOffset = last_live_block->m_CommitedSize;
-                    return 1;
+                    StoredBlock* reuse_block = &(*write_storage->m_Blocks)[reuse_block_index];
+                    if (reuse_block->m_Size - reuse_live_block->m_CommitedSize >= length)
+                    {
+                        out_block_entry->m_BlockIndex = reuse_block_index;
+                        out_block_entry->m_Length = length;
+                        out_block_entry->m_StartOffset = reuse_live_block->m_CommitedSize;
+                        return 1;
+                    }
+//                    PersistBlock(write_storage, reuse_block_index);
                 }
-                PersistBlock(write_storage, last_block_index);
             }
         }
 
@@ -554,7 +587,7 @@ struct WriteStorage
         live_block->m_CommitedSize = 0;
         new_block->m_Size = 0;
 
-        uint64_t block_size = length > 65536u ? length : 65536u;
+        uint64_t block_size = length > write_storage->m_BlockSize ? length : write_storage->m_BlockSize;
         new_block->m_Size = block_size;
         live_block->m_Data = (uint8_t*)malloc(block_size);
 
@@ -565,11 +598,12 @@ struct WriteStorage
         return 1;
     }
 
-    static uint8_t* GetBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry)
+    static int WriteBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry, Longtail_InputStream input_stream, void* context)
     {
         WriteStorage* write_storage = (WriteStorage*)storage;
+        StoredBlock* stored_block = &(*write_storage->m_Blocks)[block_entry->m_BlockIndex];
         LiveBlock* live_block = &write_storage->m_LiveBlocks[block_entry->m_BlockIndex];
-        return &live_block->m_Data[block_entry->m_StartOffset];
+        return input_stream(context, block_entry->m_Length, &live_block->m_Data[block_entry->m_StartOffset]);
     }
 
     static int CommitBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry)
@@ -578,7 +612,7 @@ struct WriteStorage
         StoredBlock* stored_block = &(*write_storage->m_Blocks)[block_entry->m_BlockIndex];
         LiveBlock* live_block = &write_storage->m_LiveBlocks[block_entry->m_BlockIndex];
         live_block->m_CommitedSize = block_entry->m_StartOffset + block_entry->m_Length;
-        if (live_block->m_CommitedSize == stored_block->m_Size)
+        if (live_block->m_CommitedSize >= (stored_block->m_Size - 512))
         {
             PersistBlock(write_storage, block_entry->m_BlockIndex);
         }
@@ -607,6 +641,7 @@ struct WriteStorage
     StoredBlock** m_Blocks;
     LiveBlock* m_LiveBlocks;
     BlockStorage* m_BlockStorage;
+    uint64_t m_BlockSize;
 };
 
 struct ReadStorage
@@ -701,7 +736,7 @@ TEST(Longtail, ScanContent)
 {
     ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(131071, 0, 1)), 131071, 0, 1, &ready_callback.cb);
-    const char* root_path = "D:\\TestContent\\Version_2";
+    const char* root_path = "D:\\TestContent\\Version_1";
     ProcessHashContext context;
     nadir::TAtomic32 pendingCount = 0;
     nadir::TAtomic32 assetCount = 0;
@@ -780,7 +815,7 @@ TEST(Longtail, ScanContent)
 
     DiskBlockStorage block_storage("D:\\Temp\\longtail\\cache");
     {
-        WriteStorage write_storage(&blocks, 512, &block_storage.m_Storage);
+        WriteStorage write_storage(&blocks, 131072u, 512, &block_storage.m_Storage);
         {
             jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
             while (it != hashes.End())
