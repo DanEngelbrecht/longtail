@@ -433,7 +433,7 @@ struct DiskBlockStorage
 
         const size_t max_dst_size = Lizard_compressBound((int)length);
         void* compressed_buffer = malloc(max_dst_size);
-        int compressed_size = Lizard_compress((const char*)data, (char*)compressed_buffer, (int)length, (int)max_dst_size, 43);//LIZARD_MAX_CLEVEL);
+        int compressed_size = Lizard_compress((const char*)data, (char*)compressed_buffer, (int)length, (int)max_dst_size, 44);//LIZARD_MAX_CLEVEL);
         if (compressed_size < 0)
         {
             free(compressed_buffer);
@@ -620,7 +620,7 @@ struct WriteStorage
         StoredBlock* stored_block = &(*write_storage->m_Blocks)[block_entry->m_BlockIndex];
         LiveBlock* live_block = &write_storage->m_LiveBlocks[block_entry->m_BlockIndex];
         live_block->m_CommitedSize = block_entry->m_StartOffset + block_entry->m_Length;
-        if (live_block->m_CommitedSize >= (stored_block->m_Size - 512))
+        if (live_block->m_CommitedSize >= (stored_block->m_Size - 8))
         {
             PersistBlock(write_storage, block_entry->m_BlockIndex);
         }
