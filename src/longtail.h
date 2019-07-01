@@ -46,9 +46,11 @@ struct Longtail_ReadStorage
 
 struct Longtail_WriteStorage
 {
+    int (*Longtail_AddExistingBlock)(struct Longtail_WriteStorage* storage, TLongtail_Hash hash, uint32_t* out_block_index);
     int (*Longtail_AllocateBlockStorage)(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length, Longtail_BlockEntry* out_block_entry);
     int (*Longtail_WriteBlockData)(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry, Longtail_InputStream input_stream, void* context);
     int (*Longtail_CommitBlockData)(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry);
+    TLongtail_Hash (*Longtail_FinalizeBlock)(struct Longtail_WriteStorage* storage, uint32_t block_index);
 };
 
 size_t Longtail_GetSize(uint64_t asset_entry_count, uint64_t block_entry_count);
@@ -79,13 +81,23 @@ struct Longtail
     uint64_t block_entry_count;
     struct Longtail_AssetEntry* asset_entries;
     struct Longtail_BlockEntry* block_entries;
+    TLongtail_Hash* m_BlockHashes;  // TODO: m_BlockIndex of Longtail_BlockEntry points into this array to tell which block (identified by hash) that contain the data
+};
+
+struct Longtail_BlockAssets
+{
+    uint64_t m_AssetIndex;
+    uint64_t m_AssetCount;
 };
 
 #define LONGTAIL_ALIGN_SIZE_PRIVATE(x, align) (((x) + ((align)-1)) & ~((align)-1))
 
-size_t Longtail_GetSize(uint64_t asset_entry_count, uint64_t block_entry_count)
+size_t Longtail_GetSize(uint64_t asset_entry_count, uint64_t block_entry_count/*, uint64_t block_count*/)
 {
-    return LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail), 8) + LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_AssetEntry) * asset_entry_count, 8) + sizeof(Longtail_BlockEntry) * block_entry_count;
+    return LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail), 8) +
+        LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_AssetEntry) * asset_entry_count, 8) +
+        LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_BlockEntry) * block_entry_count, 8)/* +
+        (sizeof(TLongtail_Hash) * block_count)*/;
 }
 
 struct Longtail* Longtail_Open(void* mem, uint64_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint64_t block_entry_count, struct Longtail_BlockEntry* block_entries)
@@ -100,7 +112,115 @@ struct Longtail* Longtail_Open(void* mem, uint64_t asset_entry_count, struct Lon
     p += LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_AssetEntry) * asset_entry_count, 8);
     longtail->block_entries = (Longtail_BlockEntry*)p;
     memcpy(longtail->block_entries, block_entries, sizeof(Longtail_BlockEntry) * block_entry_count);
+    p += LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_BlockEntry) * block_entry_count, 8);
+    longtail->m_BlockHashes = (TLongtail_Hash*)p;   // TODO: This needs to be filled out!
     return longtail;
+}
+
+struct Longtail_AssetBuilderEntry
+{
+    TLongtail_Hash m_AssetHash; // Path
+    uint32_t m_BlockIndex;
+    uint64_t m_StartOffset; // Raw
+    uint64_t m_Length;  // Raw
+};
+
+LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_AssetBuilderEntry, malloc, free)
+LONGTAIL_DECLARE_ARRAY_TYPE(TLongtail_Hash, malloc, free)
+
+struct Longtail_Builder
+{
+    struct Longtail_AssetBuilderEntry* m_AssetBuilderEntries;
+    TLongtail_Hash* m_BlockHashes;
+};
+
+void Longtail_Builder_Initialize(struct Longtail_Builder* builder)
+{
+    builder->m_AssetBuilderEntries = 0;
+    builder->m_BlockHashes = 0;
+}
+
+static int Longtail_Builder_Add(struct Longtail_Builder* builder, Longtail_WriteStorage* storage, TLongtail_Hash asset_hash, Longtail_InputStream input_stream, void* context, uint64_t length, TLongtail_Hash compression_type)
+{
+    Longtail_BlockEntry block_entry;
+    if (0 == storage->Longtail_AllocateBlockStorage(storage, compression_type, length, &block_entry))
+    {
+        return 0;
+    }
+
+    if (Longtail_Array_GetSize(builder->m_AssetBuilderEntries) == Longtail_Array_GetCapacity(builder->m_AssetBuilderEntries))
+    {
+        builder->m_AssetBuilderEntries = Longtail_Array_IncreaseCapacity(builder->m_AssetBuilderEntries, 16);
+    }
+
+    if (block_entry.m_BlockIndex >= Longtail_Array_GetCapacity(builder->m_BlockHashes))
+    {
+        builder->m_BlockHashes = Longtail_Array_SetCapacity(builder->m_BlockHashes, block_entry.m_BlockIndex + 16);
+    }
+
+    if (block_entry.m_BlockIndex >= Longtail_Array_GetSize(builder->m_BlockHashes))
+    {
+        Longtail_Array_SetSize(builder->m_BlockHashes, block_entry.m_BlockIndex + 1);
+    }
+
+    Longtail_AssetBuilderEntry* asset_entry = Longtail_Array_Push(builder->m_AssetBuilderEntries);
+    asset_entry->m_AssetHash = asset_hash;
+    asset_entry->m_Length = length;
+    asset_entry->m_BlockIndex = block_entry.m_BlockIndex;
+    asset_entry->m_StartOffset = block_entry.m_StartOffset;
+
+    if (0 == storage->Longtail_WriteBlockData(storage, &block_entry, input_stream, context))
+    {
+        return 0;
+    }
+    if (0 == storage->Longtail_CommitBlockData(storage, &block_entry))
+    {
+        return 0;
+    }
+    return 1;
+}
+
+static int Logtail_Builder_AddExistingBlock(struct Longtail_Builder* builder, Longtail_WriteStorage* storage, TLongtail_Hash block_hash, uint32_t asset_count, TLongtail_Hash* asset_hashes, uint64_t* start_offsets, uint64_t* lengths)
+{
+    uint32_t block_index = 0;
+    if (0 == storage->Longtail_AddExistingBlock(storage, block_hash, &block_index))
+    {
+        return 0;
+    }
+    if (block_index >= Longtail_Array_GetCapacity(builder->m_BlockHashes))
+    {
+        builder->m_BlockHashes = Longtail_Array_SetCapacity(builder->m_BlockHashes, block_index + 16);
+    }
+
+    if (block_index >= Longtail_Array_GetSize(builder->m_BlockHashes))
+    {
+        Longtail_Array_SetSize(builder->m_BlockHashes, block_index + 1);
+    }
+
+    if (asset_count >= Longtail_Array_GetCapacity(builder->m_AssetBuilderEntries))
+    {
+        builder->m_AssetBuilderEntries = Longtail_Array_SetCapacity(builder->m_AssetBuilderEntries, asset_count + 16);
+    }
+
+    for (uint32_t a = 0; a < asset_count; ++a)
+    {
+        Longtail_AssetBuilderEntry* asset_entry = Longtail_Array_Push(builder->m_AssetBuilderEntries);
+        asset_entry->m_AssetHash = asset_hashes[a];
+        asset_entry->m_Length = lengths[a];
+        asset_entry->m_BlockIndex = block_index;
+        asset_entry->m_StartOffset = start_offsets[a];
+    }
+
+    return 1;
+}
+
+static int Longtail_FinalizeBuilder(struct Longtail_Builder* builder, Longtail_WriteStorage* storage)
+{
+    uint32_t block_count = Longtail_Array_GetSize(builder->m_BlockHashes);
+    for (uint32_t b = 0; b < block_count; ++b)
+    {
+        builder->m_BlockHashes[b] = storage->Longtail_FinalizeBlock(storage, b);
+    }
 }
 
 static uint32_t Longtail_GetFirstBlock_private(struct Longtail* longtail, TLongtail_Hash asset)

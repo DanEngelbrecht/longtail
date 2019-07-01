@@ -413,45 +413,94 @@ struct BlockStorage
     int (*BlockStorage_ReadBlock)(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, void* data);
 };
 
+struct DiskBlockStorage;
+
+struct CompressJob
+{
+    nadir::TAtomic32* active_job_count;
+    uint64_t length;
+    const void* data;
+    const char* path;
+};
+
+static Bikeshed_TaskResult CompressFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
+{
+    CompressJob* compress_job = (CompressJob*)context;
+    const size_t max_dst_size = Lizard_compressBound((int)compress_job->length);
+    void* compressed_buffer = malloc(max_dst_size);
+
+    bool ok = false;
+    int compressed_size = Lizard_compress((const char*)compress_job->data, (char*)compressed_buffer, (int)compress_job->length, (int)max_dst_size, 44);//LIZARD_MAX_CLEVEL);
+    if (compressed_size > 0)
+    {
+        compressed_buffer = realloc(compressed_buffer, (size_t)compressed_size);
+
+        void* f = OpenWriteFile(compress_job->path);
+        if (f)
+        {
+            ok = Write(f, 0, compressed_size, compressed_buffer);
+            CloseWriteFile(f);
+        }
+        free((char*)compress_job->path);
+        free((void*)compress_job->data);
+        free(compressed_buffer);
+        free(compress_job);
+    }
+    nadir::AtomicAdd32(compress_job->active_job_count, -1);
+    return BIKESHED_TASK_RESULT_COMPLETE;
+}
+
 struct DiskBlockStorage
 {
     BlockStorage m_Storage = {WriteBlock, ReadBlock};
-    DiskBlockStorage(const char* store_path)
+    DiskBlockStorage(const char* store_path, Bikeshed shed)
         : m_StorePath(store_path)
+        , m_ActiveJobCount(0)
+        , m_Shed(shed)
     {}
+
+    void FinalizeWrites()
+    {
+        while(m_ActiveJobCount > 0)
+        {
+            if (Bikeshed_ExecuteOne(m_Shed, 0))
+            {
+                continue;
+            }
+            printf("Files left to compress: %d\n", m_ActiveJobCount);
+            nadir::Sleep(1000);
+        }
+    }
 
     static int WriteBlock(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, const void* data)
     {
         DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
-        const char* path = disk_block_storage->MakeBlockPath(hash);
-        if (void* r = OpenReadFile(path))
+
+        CompressJob* compress_job = (CompressJob*)malloc(sizeof(CompressJob));
+        compress_job->path = disk_block_storage->MakeBlockPath(hash);
+        if (void* r = OpenReadFile(compress_job->path))
         {
             // Already exists and filename indicates content so we know it correct
             CloseReadFile(r);
+            free((char*)compress_job->path);
+            free(compress_job);
             return 1;
         }
 
-        const size_t max_dst_size = Lizard_compressBound((int)length);
-        void* compressed_buffer = malloc(max_dst_size);
-        int compressed_size = Lizard_compress((const char*)data, (char*)compressed_buffer, (int)length, (int)max_dst_size, 44);//LIZARD_MAX_CLEVEL);
-        if (compressed_size < 0)
+        compress_job->active_job_count = &disk_block_storage->m_ActiveJobCount;
+        compress_job->length = length;
+        compress_job->data = malloc(length);
+        memcpy((void*)compress_job->data, data, length);
+        BikeShed_TaskFunc taskfunc[1] = { CompressFile };
+        void* context[1] = {compress_job};
+        Bikeshed_TaskID task_ids[1];
+        while (!Bikeshed_CreateTasks(disk_block_storage->m_Shed, 1, taskfunc, context, task_ids))
         {
-            free(compressed_buffer);
-            return 0;
+            nadir::Sleep(1000);
         }
-        compressed_buffer = realloc(compressed_buffer, (size_t)compressed_size);
-
-        void* f = OpenWriteFile(path);
-        if (!f)
-        {
-            free(compressed_buffer);
-            return 0;
-        }
-        bool ok = Write(f, 0, compressed_size, compressed_buffer);
-        CloseWriteFile(f);
-        free((char*)path);
-        free(compressed_buffer);
-        return ok ? 1 : 0;
+        nadir::AtomicAdd32(&disk_block_storage->m_ActiveJobCount, 1);
+        Bikeshed_ReadyTasks(disk_block_storage->m_Shed, 1, task_ids);
+        return 1;
     }
 
     static int ReadBlock(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, void* data)
@@ -489,6 +538,8 @@ struct DiskBlockStorage
         return path;
     }
     const char* m_StorePath;
+    Bikeshed m_Shed;
+    nadir::TAtomic32 m_ActiveJobCount;
 };
 
 
@@ -499,7 +550,7 @@ struct DiskBlockStorage
 
 struct WriteStorage
 {
-    Longtail_WriteStorage m_Storage = {AllocateBlockStorage, WriteBlockData, CommitBlockData};
+    Longtail_WriteStorage m_Storage = {AddExistingBlock, AllocateBlockStorage, WriteBlockData, CommitBlockData, FinalizeBlock};
 
     WriteStorage(StoredBlock** blocks, uint64_t block_size, uint32_t compressionTypes, BlockStorage* block_storage)
         : m_Blocks(blocks)
@@ -525,6 +576,28 @@ struct WriteStorage
         }
         Longtail_Array_Free(m_LiveBlocks);
         free(m_CompressionToBlocksMem);
+    }
+
+    static int AddExistingBlock(struct Longtail_WriteStorage* storage, TLongtail_Hash hash, uint32_t* out_block_index)
+    {
+        WriteStorage* write_storage = (WriteStorage*)storage;
+        uint32_t size = Longtail_Array_GetSize(*write_storage->m_Blocks);
+        uint32_t capacity = Longtail_Array_GetCapacity(*write_storage->m_Blocks);
+        if (capacity < (size + 1))
+        {
+            *write_storage->m_Blocks = Longtail_Array_SetCapacity(*write_storage->m_Blocks, capacity + 16u);
+            write_storage->m_LiveBlocks = Longtail_Array_SetCapacity(write_storage->m_LiveBlocks, capacity + 16u);
+        }
+
+        StoredBlock* new_block = Longtail_Array_Push(*write_storage->m_Blocks);
+        new_block->m_CompressionType = 0;
+        new_block->m_Hash = hash;
+        new_block->m_Size = 0;
+        LiveBlock* live_block = Longtail_Array_Push(write_storage->m_LiveBlocks);
+        live_block->m_Data = 0;
+        live_block->m_CommitedSize = 0;
+        *out_block_index = size;
+        return 1;
     }
 
     static int AllocateBlockStorage(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length, Longtail_BlockEntry* out_block_entry)
@@ -626,6 +699,21 @@ struct WriteStorage
         }
 
         return 1;
+    }
+
+    static TLongtail_Hash FinalizeBlock(struct Longtail_WriteStorage* storage, uint32_t block_index)
+    {
+        WriteStorage* write_storage = (WriteStorage*)storage;
+        StoredBlock* stored_block = &(*write_storage->m_Blocks)[block_index];
+        LiveBlock* live_block = &write_storage->m_LiveBlocks[block_index];
+        if (live_block->m_Data)
+        {
+            if (0 == PersistBlock(write_storage, block_index))
+            {
+                return 0;
+            }
+        }
+        return stored_block->m_Hash;
     }
 
     static int PersistBlock(WriteStorage* write_storage, uint32_t block_index)
@@ -740,6 +828,92 @@ static uint64_t GetPathHash(const char* path)
     return path_hash;
 }
 
+//LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_AssetEntry, malloc, free)
+//LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockEntry, malloc, free)
+LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockAssets, malloc, free)
+
+struct Longtail_IndexDiffer
+{
+    struct Longtail_AssetEntry* m_AssetArray;
+    struct Longtail_BlockEntry* m_BlockArray;
+    struct Longtail_BlockAssets* m_BlockAssets;
+    TLongtail_Hash* m_AssetHashes;
+};
+
+int Longtail_CompareAssetEntry(const void* element1, const void* element2)
+{
+    const struct Longtail_AssetEntry* entry1 = (const struct Longtail_AssetEntry*)element1;
+    const struct Longtail_AssetEntry* entry2 = (const struct Longtail_AssetEntry*)element2;
+    return (int)((int64_t)entry1->m_BlockEntryIndex - (int64_t)entry2->m_BlockEntryIndex);
+}
+
+Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint32_t block_entry_count, struct Longtail_BlockEntry* block_entries, uint32_t new_asset_count, TLongtail_Hash* new_asset_hashes)
+{
+    Longtail_IndexDiffer* index_differ = (Longtail_IndexDiffer*)mem;
+    index_differ->m_AssetArray = 0;
+    index_differ->m_BlockArray = 0;
+//    index_differ->m_AssetArray = Longtail_Array_SetCapacity(index_differ->m_AssetArray, asset_entry_count);
+//    index_differ->m_BlockArray = Longtail_Array_SetCapacity(index_differ->m_BlockArray, block_entry_count);
+//    memcpy(index_differ->m_AssetArray, asset_entries, sizeof(Longtail_AssetEntry) * asset_entry_count);
+//    memcpy(index_differ->m_BlockArray, block_entries, sizeof(Longtail_BlockEntry) * block_entry_count);
+    qsort(asset_entries, asset_entry_count, sizeof(Longtail_AssetEntry), Longtail_CompareAssetEntry);
+    uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize(new_asset_count);
+    void* hash_mem = malloc(hash_size);
+    jc::HashTable<uint64_t, uint32_t> hashes;
+    hashes.Create(new_asset_count, hash_mem);
+    for (uint32_t i = 0; i < new_asset_count; ++i)
+    {
+        hashes.Put(new_asset_hashes[i], new_asset_count);
+    }
+    uint32_t b = 0;
+    while (b < asset_entry_count)
+    {
+        uint32_t block_index = asset_entries[b].m_BlockEntryIndex;
+        uint32_t scan_b = b;
+        uint32_t found_assets = 0;
+
+        while (scan_b < asset_entry_count && (asset_entries[scan_b].m_BlockEntryIndex) == block_index)
+        {
+            if (hashes.Get(asset_entries[scan_b].m_AssetHash))
+            {
+                ++found_assets;
+            }
+            ++scan_b;
+        }
+        uint32_t assets_in_block = scan_b - b;
+        if (assets_in_block == found_assets)
+        {
+            for (uint32_t f = b; f < scan_b; ++f)
+            {
+                hashes.Put(asset_entries[f].m_AssetHash, block_index);
+            }
+        }
+    }
+    // We now have a map with assets that are not in the index already
+
+    // TODO: Need to sort out the asset->block_entry->block_hash thing
+    // How we add data to an existing block store, indexes and all
+
+    index_differ->m_AssetArray = Longtail_Array_SetCapacity(index_differ->m_AssetArray, asset_entry_count);
+    index_differ->m_BlockArray = Longtail_Array_SetCapacity(index_differ->m_BlockArray, block_entry_count);
+
+    for (uint32_t a = 0; a < new_asset_count; ++a)
+    {
+        TLongtail_Hash asset_hash = new_asset_hashes[a];
+        uint32_t* existing_block_index = hashes.Get(asset_hash);
+        if (existing_block_index)
+        {
+            Longtail_AssetEntry* asset_entry = Longtail_Array_Push(index_differ->m_AssetArray);
+            Longtail_BlockEntry* block_entry = Longtail_Array_Push(index_differ->m_BlockArray);
+            block_entry->m_BlockIndex = *existing_block_index;
+            asset_entry->m_AssetHash = 0;
+            asset_entry->m_BlockEntryIndex = 0;
+        }
+    }
+
+    return index_differ;
+}
+
 TEST(Longtail, ScanContent)
 {
     ReadyCallback ready_callback;
@@ -754,7 +928,7 @@ TEST(Longtail, ScanContent)
     context.m_Shed = shed;
     nadir::TAtomic32 stop = 0;
 
-    static const uint32_t WORKER_COUNT = 3;
+    static const uint32_t WORKER_COUNT = 5;
     ThreadWorker workers[WORKER_COUNT];
     for (uint32_t i = 0; i < WORKER_COUNT; ++i)
     {
@@ -768,16 +942,12 @@ TEST(Longtail, ScanContent)
         {
             continue;
         }
-        ReadyCallback::Wait(&ready_callback);
+        printf("Files left to hash: %d\n", pendingCount);
+        nadir::Sleep(1000);
+//        ReadyCallback::Wait(&ready_callback);
     }
 
-    nadir::AtomicAdd32(&stop, 1);
-    ReadyCallback::Ready(&ready_callback.cb, 0, WORKER_COUNT);
-    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
-    {
-        workers[i].JoinThread();
-    }
-    uint32_t hash_size = jc::HashTable<meow_u128, char*>::CalcSize(assetCount);
+    uint32_t hash_size = jc::HashTable<uint64_t, char*>::CalcSize(assetCount);
     void* hash_mem = malloc(hash_size);
     jc::HashTable<uint64_t, Asset*> hashes;
     hashes.Create(assetCount, hash_mem);
@@ -821,7 +991,7 @@ TEST(Longtail, ScanContent)
 
     StoredBlock* blocks = 0;
 
-    DiskBlockStorage block_storage("D:\\Temp\\longtail\\cache");
+    DiskBlockStorage block_storage("D:\\Temp\\longtail\\cache", shed);
     {
         WriteStorage write_storage(&blocks, 131072u, 512, &block_storage.m_Storage);
         {
@@ -841,6 +1011,8 @@ TEST(Longtail, ScanContent)
             }
         }
     }
+    block_storage.FinalizeWrites();
+    printf("Comitted %u files\n", hashes.Size());
 
     struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(Longtail_Array_GetSize(asset_array), Longtail_Array_GetSize(block_entry_array))),
         Longtail_Array_GetSize(asset_array), asset_array,
@@ -874,6 +1046,7 @@ TEST(Longtail, ScanContent)
             ++it;
         }
     }
+    printf("Read back %u files\n", hashes.Size());
 
     free(longtail);
 
@@ -886,5 +1059,13 @@ TEST(Longtail, ScanContent)
         free((void*)asset->m_Path);
     }
     delete [] context.m_HashJobs;
+
+    nadir::AtomicAdd32(&stop, 1);
+    ReadyCallback::Ready(&ready_callback.cb, 0, WORKER_COUNT);
+    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
+    {
+        workers[i].JoinThread();
+    }
+
     free(shed);
 }
