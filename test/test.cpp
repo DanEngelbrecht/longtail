@@ -411,6 +411,7 @@ struct BlockStorage
 {
     int (*BlockStorage_WriteBlock)(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, const void* data);
     int (*BlockStorage_ReadBlock)(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, void* data);
+    uint64_t (*BlockStorage_GetStoredSize)(BlockStorage* storage, TLongtail_Hash hash);
 };
 
 struct DiskBlockStorage;
@@ -418,9 +419,10 @@ struct DiskBlockStorage;
 struct CompressJob
 {
     nadir::TAtomic32* active_job_count;
+    BlockStorage* base_storage;
+    TLongtail_Hash hash;
     uint64_t length;
     const void* data;
-    const char* path;
 };
 
 static Bikeshed_TaskResult CompressFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
@@ -435,94 +437,65 @@ static Bikeshed_TaskResult CompressFile(Bikeshed shed, Bikeshed_TaskID, uint8_t,
     {
         compressed_buffer = realloc(compressed_buffer, (size_t)compressed_size);
 
-        void* f = OpenWriteFile(compress_job->path);
-        if (f)
-        {
-            ok = Write(f, 0, compressed_size, compressed_buffer);
-            CloseWriteFile(f);
-        }
-        free((char*)compress_job->path);
-        free((void*)compress_job->data);
+        compress_job->base_storage->BlockStorage_WriteBlock(compress_job->base_storage, compress_job->hash, compressed_size, compressed_buffer);
         free(compressed_buffer);
-        free(compress_job);
     }
     nadir::AtomicAdd32(compress_job->active_job_count, -1);
+    free(compress_job);
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-struct DiskBlockStorage
+struct CompressStorage
 {
-    BlockStorage m_Storage = {WriteBlock, ReadBlock};
-    DiskBlockStorage(const char* store_path, Bikeshed shed)
-        : m_StorePath(store_path)
-        , m_ActiveJobCount(0)
-        , m_Shed(shed)
-    {}
+    BlockStorage m_Storage = {WriteBlock, ReadBlock, GetStoredSize};
 
-    void FinalizeWrites()
+    CompressStorage(BlockStorage* base_storage, Bikeshed shed, nadir::TAtomic32* active_job_count)
+        : m_BaseStorage(base_storage)
+        , m_Shed(shed)
+        , m_ActiveJobCount(active_job_count)
     {
-        int32_t old_left_to_compress = 0;
-        while(m_ActiveJobCount > 0)
-        {
-            if (Bikeshed_ExecuteOne(m_Shed, 0))
-            {
-                continue;
-            }
-            if (old_left_to_compress != m_ActiveJobCount)
-            {
-                old_left_to_compress = m_ActiveJobCount;
-                printf("Files left to compress: %d\n", old_left_to_compress);
-            }
-            nadir::Sleep(1000);
-        }
+
     }
 
     static int WriteBlock(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, const void* data)
     {
-        DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
+        CompressStorage* compress_storage = (CompressStorage*)storage;
 
-        CompressJob* compress_job = (CompressJob*)malloc(sizeof(CompressJob));
-        compress_job->path = disk_block_storage->MakeBlockPath(hash);
-        if (void* r = OpenReadFile(compress_job->path))
-        {
-            // Already exists and filename indicates content so we know it correct
-            CloseReadFile(r);
-            free((char*)compress_job->path);
-            free(compress_job);
-            return 1;
-        }
+        uint8_t* p = (uint8_t*)(malloc(sizeof(CompressJob) + length));
 
-        compress_job->active_job_count = &disk_block_storage->m_ActiveJobCount;
+        CompressJob* compress_job = (CompressJob*)p;
+        p += sizeof(CompressJob);
+        compress_job->active_job_count = compress_storage->m_ActiveJobCount;
+        compress_job->base_storage = compress_storage->m_BaseStorage;
+        compress_job->hash = hash;
         compress_job->length = length;
-        compress_job->data = malloc(length);
+        compress_job->data = p;
+
         memcpy((void*)compress_job->data, data, length);
         BikeShed_TaskFunc taskfunc[1] = { CompressFile };
         void* context[1] = {compress_job};
         Bikeshed_TaskID task_ids[1];
-        while (!Bikeshed_CreateTasks(disk_block_storage->m_Shed, 1, taskfunc, context, task_ids))
+        while (!Bikeshed_CreateTasks(compress_storage->m_Shed, 1, taskfunc, context, task_ids))
         {
             nadir::Sleep(1000);
         }
-        nadir::AtomicAdd32(&disk_block_storage->m_ActiveJobCount, 1);
-        Bikeshed_ReadyTasks(disk_block_storage->m_Shed, 1, task_ids);
+        nadir::AtomicAdd32(compress_storage->m_ActiveJobCount, 1);
+        Bikeshed_ReadyTasks(compress_storage->m_Shed, 1, task_ids);
         return 1;
     }
 
     static int ReadBlock(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, void* data)
     {
-        DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
-        const char* path = disk_block_storage->MakeBlockPath(hash);
-        void* f = OpenReadFile(path);
-        if (!f)
+        CompressStorage* compress_storage = (CompressStorage*)storage;
+
+        uint64_t compressed_size = compress_storage->m_BaseStorage->BlockStorage_GetStoredSize(compress_storage->m_BaseStorage, hash);
+        if (compressed_size == 0)
         {
             return 0;
         }
-        uint64_t compressed_size = GetFileSize(f);
-        void* compressed_buffer = malloc(compressed_size);
-        bool ok = Read(f, 0, compressed_size, compressed_buffer);
-        CloseReadFile(f);
-        free((char*)path);
 
+        void* compressed_buffer = malloc(compressed_size);
+        int ok = compress_storage->m_BaseStorage->BlockStorage_ReadBlock(compress_storage->m_BaseStorage, hash, compressed_size, compressed_buffer);
         if (!ok)
         {
             free(compressed_buffer);
@@ -535,6 +508,75 @@ struct DiskBlockStorage
         return ok ? 1 : 0;
     }
 
+    static uint64_t GetStoredSize(BlockStorage* storage, TLongtail_Hash hash)
+    {
+        CompressStorage* compress_storage = (CompressStorage*)storage;
+        return compress_storage->m_BaseStorage->BlockStorage_GetStoredSize(storage, hash);
+    }
+
+
+    nadir::TAtomic32* m_ActiveJobCount;
+    BlockStorage* m_BaseStorage;
+    Bikeshed m_Shed;
+};
+
+struct DiskBlockStorage
+{
+    BlockStorage m_Storage = {WriteBlock, ReadBlock, GetStoredSize};
+    DiskBlockStorage(const char* store_path)
+        : m_StorePath(store_path)
+        , m_ActiveJobCount(0)
+    {}
+
+    static int WriteBlock(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, const void* data)
+    {
+        DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
+
+        const char* path = disk_block_storage->MakeBlockPath(hash);
+
+        void* f = OpenWriteFile(path);
+        free((char*)path);
+        if (!f)
+        {
+            return 0;
+        }
+
+        bool ok = Write(f, 0, length, data);
+        CloseWriteFile(f);
+        return ok ? 1 : 0;
+    }
+
+    static int ReadBlock(BlockStorage* storage, TLongtail_Hash hash, uint64_t length, void* data)
+    {
+        DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
+        const char* path = disk_block_storage->MakeBlockPath(hash);
+        void* f = OpenReadFile(path);
+        free((char*)path);
+        if (!f)
+        {
+            return 0;
+        }
+
+        bool ok = Read(f, 0, length, data);
+        CloseReadFile(f);
+        return ok ? 1 : 0;
+    }
+
+    static uint64_t GetStoredSize(BlockStorage* storage, TLongtail_Hash hash)
+    {
+        DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
+        const char* path = disk_block_storage->MakeBlockPath(hash);
+        void* f = OpenReadFile(path);
+        free((char*)path);
+        if (!f)
+        {
+            return 0;
+        }
+        uint64_t size = GetFileSize(f);
+        CloseReadFile(f);
+        return size;
+    }
+
     const char* MakeBlockPath(TLongtail_Hash hash)
     {
         char file_name[64];
@@ -543,7 +585,6 @@ struct DiskBlockStorage
         return path;
     }
     const char* m_StorePath;
-    Bikeshed m_Shed;
     nadir::TAtomic32 m_ActiveJobCount;
 };
 
@@ -730,11 +771,15 @@ struct WriteStorage
         MeowAbsorb(&state, live_block->m_CommitedSize, live_block->m_Data);
         stored_block->m_Hash = MeowU64From(MeowEnd(&state, 0), 0);
 
-        int result = write_storage->m_BlockStorage->BlockStorage_WriteBlock(write_storage->m_BlockStorage, stored_block->m_Hash, live_block->m_CommitedSize, live_block->m_Data);
-        free(live_block->m_Data);
-        live_block->m_Data = 0;
-        stored_block->m_Size = live_block->m_CommitedSize;
-        return result;
+        if (write_storage->m_BlockStorage->BlockStorage_GetStoredSize(write_storage->m_BlockStorage, stored_block->m_Hash) == 0)
+        {
+            int result = write_storage->m_BlockStorage->BlockStorage_WriteBlock(write_storage->m_BlockStorage, stored_block->m_Hash, live_block->m_CommitedSize, live_block->m_Data);
+            free(live_block->m_Data);
+            live_block->m_Data = 0;
+            stored_block->m_Size = live_block->m_CommitedSize;
+            return result;
+        }
+        return 1;
     }
 
     jc::HashTable<uint64_t, uint32_t*> m_CompressionToBlocks;
@@ -955,7 +1000,6 @@ TEST(Longtail, ScanContent)
             printf("Files left to hash: %d\n", old_pending_count);
         }
         nadir::Sleep(1000);
-//        ReadyCallback::Wait(&ready_callback);
     }
 
     uint32_t hash_size = jc::HashTable<uint64_t, char*>::CalcSize(assetCount);
@@ -1002,7 +1046,8 @@ TEST(Longtail, ScanContent)
 
     StoredBlock* blocks = 0;
 
-    DiskBlockStorage block_storage("D:\\Temp\\longtail\\cache", shed);
+    DiskBlockStorage disk_block_storage("D:\\Temp\\longtail\\cache");
+    CompressStorage block_storage(&disk_block_storage.m_Storage, shed, &pendingCount);
     {
         WriteStorage write_storage(&blocks, 131072u, 512, &block_storage.m_Storage);
         {
@@ -1022,7 +1067,22 @@ TEST(Longtail, ScanContent)
             }
         }
     }
-    block_storage.FinalizeWrites();
+
+    old_pending_count = 0;
+    while (pendingCount > 0)
+    {
+        if (Bikeshed_ExecuteOne(shed, 0))
+        {
+            continue;
+        }
+        if (old_pending_count != pendingCount)
+        {
+            old_pending_count = pendingCount;
+            printf("Files left to store: %d\n", old_pending_count);
+        }
+        nadir::Sleep(1000);
+    }
+
     printf("Comitted %u files\n", hashes.Size());
 
     struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(Longtail_Array_GetSize(asset_array), Longtail_Array_GetSize(block_entry_array))),
