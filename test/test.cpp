@@ -461,13 +461,18 @@ struct DiskBlockStorage
 
     void FinalizeWrites()
     {
+        int32_t old_left_to_compress = 0;
         while(m_ActiveJobCount > 0)
         {
             if (Bikeshed_ExecuteOne(m_Shed, 0))
             {
                 continue;
             }
-            printf("Files left to compress: %d\n", m_ActiveJobCount);
+            if (old_left_to_compress != m_ActiveJobCount)
+            {
+                old_left_to_compress = m_ActiveJobCount;
+                printf("Files left to compress: %d\n", old_left_to_compress);
+            }
             nadir::Sleep(1000);
         }
     }
@@ -928,7 +933,7 @@ TEST(Longtail, ScanContent)
     context.m_Shed = shed;
     nadir::TAtomic32 stop = 0;
 
-    static const uint32_t WORKER_COUNT = 5;
+    static const uint32_t WORKER_COUNT = 7;
     ThreadWorker workers[WORKER_COUNT];
     for (uint32_t i = 0; i < WORKER_COUNT; ++i)
     {
@@ -936,13 +941,19 @@ TEST(Longtail, ScanContent)
     }
 
     RecurseTree(1048576, root_path, ProcessHash, &context);
+
+    int32_t old_pending_count = 0;
     while (pendingCount > 0)
     {
         if (Bikeshed_ExecuteOne(shed, 0))
         {
             continue;
         }
-        printf("Files left to hash: %d\n", pendingCount);
+        if (old_pending_count != pendingCount)
+        {
+            old_pending_count = pendingCount;
+            printf("Files left to hash: %d\n", old_pending_count);
+        }
         nadir::Sleep(1000);
 //        ReadyCallback::Wait(&ready_callback);
     }
