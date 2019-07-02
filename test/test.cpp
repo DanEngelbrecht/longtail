@@ -269,45 +269,55 @@ static void ProcessHash(void* context, const char* root_path, const char* file_n
     }
 }
 
+LONGTAIL_DECLARE_ARRAY_TYPE(AssetFolder, malloc, free)
+
 typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
 
-static uint32_t RecurseTree(uint32_t max_folder_count, const char* root_folder, ProcessEntry entry_processor, void* context)
+static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, void* context)
 {
-    AssetFolder* asset_folders = new AssetFolder[max_folder_count];
+    AssetFolder* asset_folders = Longtail_Array_SetCapacity((AssetFolder*)0, 256);
 
     uint32_t folder_index = 0;
-    uint32_t folder_count = 1;
 
-    asset_folders[0].m_FolderPath = _strdup(root_folder);
+    Longtail_Array_Push(asset_folders)->m_FolderPath = _strdup(root_folder);
 
     FSIterator fs_iterator;
-    while (folder_index != folder_count)
+    while (folder_index != Longtail_Array_GetSize(asset_folders))
     {
-        AssetFolder* asset_folder = &asset_folders[folder_index % max_folder_count];
+        const char* asset_folder = asset_folders[folder_index++].m_FolderPath;
 
-        if (StartFindFile(&fs_iterator, asset_folder->m_FolderPath))
+        if (StartFindFile(&fs_iterator, asset_folder))
         {
             do
             {
                 if (const char* dir_name = GetDirectoryName(&fs_iterator))
                 {
-                    AssetFolder* new_asset_folder = &asset_folders[folder_count % max_folder_count];
-                    assert(new_asset_folder != asset_folder);
-                    new_asset_folder->m_FolderPath = ConcatPath(asset_folder->m_FolderPath, dir_name);
-                    ++folder_count;
+                    Longtail_Array_Push(asset_folders)->m_FolderPath = ConcatPath(asset_folder, dir_name);
+                    if (Longtail_Array_GetSize(asset_folders) == Longtail_Array_GetCapacity(asset_folders))
+                    {
+                        AssetFolder* asset_folders_new = Longtail_Array_SetCapacity((AssetFolder*)0, Longtail_Array_GetSize(asset_folders) + 256);
+                        uint32_t unprocessed_count = (Longtail_Array_GetSize(asset_folders) - folder_index);
+                        if (unprocessed_count > 0)
+                        {
+                            Longtail_Array_SetSize(asset_folders_new, unprocessed_count);
+                            memcpy(asset_folders_new, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
+                        }
+                        Longtail_Array_Free(asset_folders);
+                        asset_folders = asset_folders_new;
+                        folder_index = 0;
+                    }
                 }
                 else if(const char* file_name = GetFileName(&fs_iterator))
                 {
-                    entry_processor(context, asset_folder->m_FolderPath, file_name);
+                    entry_processor(context, asset_folder, file_name);
                 }
             }while(FindNextFile(&fs_iterator));
             CloseFindFile(&fs_iterator);
         }
-        free((void*)asset_folder->m_FolderPath);
-        ++folder_index;
+        free((void*)asset_folder);
     }
-    delete [] asset_folders;
-    return folder_count;
+    Longtail_Array_Free(asset_folders);
+    return 1;
 }
 
 struct ReadyCallback
@@ -985,7 +995,7 @@ TEST(Longtail, ScanContent)
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
     }
 
-    RecurseTree(1048576, root_path, ProcessHash, &context);
+    RecurseTree(root_path, ProcessHash, &context);
 
     int32_t old_pending_count = 0;
     while (pendingCount > 0)
