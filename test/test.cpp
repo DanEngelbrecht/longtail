@@ -275,14 +275,14 @@ typedef void (*ProcessEntry)(void* context, const char* root_path, const char* f
 
 static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, void* context)
 {
-    AssetFolder* asset_folders = Longtail_Array_SetCapacity((AssetFolder*)0, 256);
+    AssetFolder* asset_folders = SetCapacity_AssetFolder((AssetFolder*)0, 256);
 
     uint32_t folder_index = 0;
 
-    Longtail_Array_Push(asset_folders)->m_FolderPath = _strdup(root_folder);
+    Push_AssetFolder(asset_folders)->m_FolderPath = _strdup(root_folder);
 
     FSIterator fs_iterator;
-    while (folder_index != Longtail_Array_GetSize(asset_folders))
+    while (folder_index != GetSize_AssetFolder(asset_folders))
     {
         const char* asset_folder = asset_folders[folder_index++].m_FolderPath;
 
@@ -292,17 +292,17 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
             {
                 if (const char* dir_name = GetDirectoryName(&fs_iterator))
                 {
-                    Longtail_Array_Push(asset_folders)->m_FolderPath = ConcatPath(asset_folder, dir_name);
-                    if (Longtail_Array_GetSize(asset_folders) == Longtail_Array_GetCapacity(asset_folders))
+                    Push_AssetFolder(asset_folders)->m_FolderPath = ConcatPath(asset_folder, dir_name);
+                    if (GetSize_AssetFolder(asset_folders) == GetCapacity_AssetFolder(asset_folders))
                     {
-                        AssetFolder* asset_folders_new = Longtail_Array_SetCapacity((AssetFolder*)0, Longtail_Array_GetSize(asset_folders) + 256);
-                        uint32_t unprocessed_count = (Longtail_Array_GetSize(asset_folders) - folder_index);
+                        AssetFolder* asset_folders_new = SetCapacity_AssetFolder((AssetFolder*)0, GetSize_AssetFolder(asset_folders) + 256);
+                        uint32_t unprocessed_count = (GetSize_AssetFolder(asset_folders) - folder_index);
                         if (unprocessed_count > 0)
                         {
-                            Longtail_Array_SetSize(asset_folders_new, unprocessed_count);
+                            SetSize_AssetFolder(asset_folders_new, unprocessed_count);
                             memcpy(asset_folders_new, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
                         }
-                        Longtail_Array_Free(asset_folders);
+                        Free_AssetFolder(asset_folders);
                         asset_folders = asset_folders_new;
                         folder_index = 0;
                     }
@@ -316,7 +316,7 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
         }
         free((void*)asset_folder);
     }
-    Longtail_Array_Free(asset_folders);
+    Free_AssetFolder(asset_folders);
     return 1;
 }
 
@@ -629,22 +629,22 @@ struct SimpleWriteStorage
             PersistCurrentBlock(this);
             free((void*)m_CurrentBlockData);
         }
-        Longtail_Array_Free(m_Blocks);
+        Free_TLongtail_Hash(m_Blocks);
     }
 
     static int AddExistingBlock(struct Longtail_WriteStorage* storage, TLongtail_Hash hash, uint32_t* out_block_index)
     {
         SimpleWriteStorage* simple_storage = (SimpleWriteStorage*)storage;
-        *out_block_index = Longtail_Array_GetSize(simple_storage->m_Blocks);
-        simple_storage->m_Blocks = Longtail_Array_EnsureCapacity(simple_storage->m_Blocks, 16u);
-        *Longtail_Array_Push(simple_storage->m_Blocks) = hash;
+        *out_block_index = GetSize_TLongtail_Hash(simple_storage->m_Blocks);
+        simple_storage->m_Blocks = EnsureCapacity_TLongtail_Hash(simple_storage->m_Blocks, 16u);
+        *Push_TLongtail_Hash(simple_storage->m_Blocks) = hash;
         return 1;
     }
 
     static int AllocateBlockStorage(struct Longtail_WriteStorage* storage, TLongtail_Hash tag, uint64_t length, Longtail_BlockStore* out_block_entry)
     {
         SimpleWriteStorage* simple_storage = (SimpleWriteStorage*)storage;
-        simple_storage->m_Blocks = Longtail_Array_EnsureCapacity(simple_storage->m_Blocks, 16u);
+        simple_storage->m_Blocks = EnsureCapacity_TLongtail_Hash(simple_storage->m_Blocks, 16u);
         if (simple_storage->m_CurrentBlockData && (simple_storage->m_CurrentBlockUsedSize + length) > simple_storage->m_DefaultBlockSize)
         {
             PersistCurrentBlock(simple_storage);
@@ -657,8 +657,8 @@ struct SimpleWriteStorage
             }
             else
             {
-                simple_storage->m_CurrentBlockIndex = Longtail_Array_GetSize(simple_storage->m_Blocks);
-                *Longtail_Array_Push(simple_storage->m_Blocks) = 0xfffffffffffffffflu;
+                simple_storage->m_CurrentBlockIndex = GetSize_TLongtail_Hash(simple_storage->m_Blocks);
+                *Push_TLongtail_Hash(simple_storage->m_Blocks) = 0xfffffffffffffffflu;
                 simple_storage->m_CurrentBlockUsedSize = 0;
             }
         }
@@ -668,8 +668,8 @@ struct SimpleWriteStorage
             simple_storage->m_CurrentBlockSize = block_size;
             simple_storage->m_CurrentBlockData = (uint8_t*)malloc(block_size);
             simple_storage->m_CurrentBlockUsedSize = 0;
-            simple_storage->m_CurrentBlockIndex = Longtail_Array_GetSize(simple_storage->m_Blocks);
-            *Longtail_Array_Push(simple_storage->m_Blocks) = 0xfffffffffffffffflu;
+            simple_storage->m_CurrentBlockIndex = GetSize_TLongtail_Hash(simple_storage->m_Blocks);
+            *Push_TLongtail_Hash(simple_storage->m_Blocks) = 0xfffffffffffffffflu;
         }
         out_block_entry->m_BlockIndex = simple_storage->m_CurrentBlockIndex;
         out_block_entry->m_StartOffset = simple_storage->m_CurrentBlockUsedSize;
@@ -732,7 +732,9 @@ struct SimpleWriteStorage
     uint32_t m_CurrentBlockUsedSize;
 };
 
-LONGTAIL_DECLARE_ARRAY_TYPE(uint8_t*, malloc, free)
+typedef uint8_t* TBlockData;
+
+LONGTAIL_DECLARE_ARRAY_TYPE(TBlockData, malloc, free)
 
 struct SimpleReadStorage
 {
@@ -742,9 +744,9 @@ struct SimpleReadStorage
         , m_BlockStorage(block_storage)
         , m_BlockData()
     {
-        uint32_t block_count = Longtail_Array_GetSize(m_Blocks);
-        m_BlockData = Longtail_Array_SetCapacity(m_BlockData, block_count);
-        Longtail_Array_SetSize(m_BlockData, block_count);
+        uint32_t block_count = GetSize_TLongtail_Hash(m_Blocks);
+        m_BlockData = SetCapacity_TBlockData(m_BlockData, block_count);
+        SetSize_TBlockData(m_BlockData, block_count);
         for (uint32_t i = 0; i < block_count; ++i)
         {
             m_BlockData[i] = 0;
@@ -753,7 +755,7 @@ struct SimpleReadStorage
 
     ~SimpleReadStorage()
     {
-        Longtail_Array_Free(m_BlockData);
+        Free_TBlockData(m_BlockData);
     }
 //    static uint64_t PreflightBlocks(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockStore* blocks)
 //    {
@@ -1065,8 +1067,8 @@ LONGTAIL_DECLARE_ARRAY_TYPE(uint8_t, malloc, free)
 int OutputStream(void* context, uint64_t byte_count, const uint8_t* data)
 {
     uint8_t** buffer = (uint8_t**)context;
-    *buffer = Longtail_Array_SetCapacity(*buffer, (uint32_t)byte_count);
-    Longtail_Array_SetSize(*buffer, (uint32_t)byte_count);
+    *buffer = SetCapacity_uint8_t(*buffer, (uint32_t)byte_count);
+    SetSize_uint8_t(*buffer, (uint32_t)byte_count);
     memmove(*buffer, data, byte_count);
     return 1;
 }
@@ -1146,8 +1148,8 @@ Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct
     // TODO: Need to sort out the asset->block_entry->block_hash thing
     // How we add data to an existing block store, indexes and all
 
-    index_differ->m_AssetArray = Longtail_Array_SetCapacity(index_differ->m_AssetArray, asset_entry_count);
-    index_differ->m_BlockArray = Longtail_Array_SetCapacity(index_differ->m_BlockArray, block_entry_count);
+    index_differ->m_AssetArray = SetCapacity_Longtail_AssetEntry(index_differ->m_AssetArray, asset_entry_count);
+    index_differ->m_BlockArray = SetCapacity_Longtail_BlockStore(index_differ->m_BlockArray, block_entry_count);
 
     for (uint32_t a = 0; a < new_asset_count; ++a)
     {
@@ -1155,8 +1157,8 @@ Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct
         uint32_t* existing_block_index = hashes.Get(asset_hash);
         if (existing_block_index)
         {
-            Longtail_AssetEntry* asset_entry = Longtail_Array_Push(index_differ->m_AssetArray);
-            Longtail_BlockStore* block_entry = Longtail_Array_Push(index_differ->m_BlockArray);
+            Longtail_AssetEntry* asset_entry = Push_Longtail_AssetEntry(index_differ->m_AssetArray);
+            Longtail_BlockStore* block_entry = Push_Longtail_BlockStore(index_differ->m_BlockArray);
             block_entry->m_BlockIndex = *existing_block_index;
             asset_entry->m_AssetHash = 0;
         }
@@ -1245,8 +1247,8 @@ static void ScanHash(void* context, const char* , const char* file_name)
     TLongtail_Hash hash;
     if (1 == sscanf(file_name, "0x%" PRIx64, &hash))
     {
-        scan_context->m_Hashes = Longtail_Array_EnsureCapacity(scan_context->m_Hashes, 16u);
-        *(Longtail_Array_Push(scan_context->m_Hashes)) = hash;
+        scan_context->m_Hashes = EnsureCapacity_TLongtail_Hash(scan_context->m_Hashes, 16u);
+        *(Push_TLongtail_Hash(scan_context->m_Hashes)) = hash;
     }
 }
 
@@ -1272,14 +1274,14 @@ TEST(Longtail, ScanContent)
     ScanExistingDataContext scan_context;
     scan_context.m_Hashes = 0;
     RecurseTree(cache_path, ScanHash, &scan_context);
-    uint32_t found_count = Longtail_Array_GetSize(scan_context.m_Hashes);
+    uint32_t found_count = GetSize_TLongtail_Hash(scan_context.m_Hashes);
     for (uint32_t b = 0; b < found_count; ++b)
     {
         printf("Block %u, hash %llu\n",
             b,
             scan_context.m_Hashes[b]);
     }
-    Longtail_Array_Free(scan_context.m_Hashes);
+    Free_TLongtail_Hash(scan_context.m_Hashes);
 
 
     nadir::TAtomic32 pendingCount = 0;
@@ -1376,8 +1378,8 @@ TEST(Longtail, ScanContent)
 
             Longtail_FinalizeBuilder(&builder);
 
-            uint32_t asset_count = Longtail_Array_GetSize(builder.m_AssetEntries);
-            uint32_t block_count = Longtail_Array_GetSize(builder.m_BlockHashes);
+            uint32_t asset_count = GetSize_Longtail_AssetEntry(builder.m_AssetEntries);
+            uint32_t block_count = GetSize_TLongtail_Hash(builder.m_BlockHashes);
 
             for (uint32_t a = 0; a < asset_count; ++a)
             {
@@ -1417,9 +1419,9 @@ TEST(Longtail, ScanContent)
 
     printf("Comitted %u files\n", hashes.Size());
 
-    struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(Longtail_Array_GetSize(builder.m_AssetEntries), Longtail_Array_GetSize(builder.m_BlockHashes))),
-        Longtail_Array_GetSize(builder.m_AssetEntries), builder.m_AssetEntries,
-        Longtail_Array_GetSize(builder.m_BlockHashes), builder.m_BlockHashes);
+    struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(GetSize_Longtail_AssetEntry(builder.m_AssetEntries), GetSize_TLongtail_Hash(builder.m_BlockHashes))),
+        GetSize_Longtail_AssetEntry(builder.m_AssetEntries), builder.m_AssetEntries,
+        GetSize_TLongtail_Hash(builder.m_BlockHashes), builder.m_BlockHashes);
 
     {
         SimpleReadStorage read_storage(builder.m_BlockHashes, &block_storage.m_Storage);
@@ -1438,11 +1440,11 @@ TEST(Longtail, ScanContent)
 
             meow_state state;
             MeowBegin(&state, MeowDefaultSeed);
-            MeowAbsorb(&state, Longtail_Array_GetSize(data), data);
+            MeowAbsorb(&state, GetSize_uint8_t(data), data);
             uint64_t verify_hash = MeowU64From(MeowEnd(&state, 0), 0);
             assert(hash_key == verify_hash);
 
-            Longtail_Array_Free(data);
+            Free_uint8_t(data);
             ++it;
         }
     }
