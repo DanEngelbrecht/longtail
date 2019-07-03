@@ -54,6 +54,18 @@
         return Longtail_Array_SetCapacity(buffer, new_capacity); \
     } \
     \
+    inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_EnsureCapacity(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t size_increment) \
+    { \
+        uint32_t size = Longtail_Array_GetSize(buffer); \
+        uint32_t current_capacity = Longtail_Array_GetCapacity(buffer); \
+        if (size < current_capacity) \
+        { \
+            return buffer; \
+        } \
+        uint32_t new_capacity = current_capacity + size_increment; \
+        return Longtail_Array_SetCapacity(buffer, new_capacity); \
+    } \
+    \
     inline LONGTAIL_ARRAY_CONCAT(t, *) Longtail_Array_Push(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
     { \
         uint32_t offset = Longtail_Array_GetSize(buffer); \
@@ -63,5 +75,10 @@
         } \
         ((uint32_t*)buffer)[-1] = offset + 1; \
         return &buffer[offset]; \
+    } \
+    \
+    inline void Longtail_Array_Pop(LONGTAIL_ARRAY_CONCAT(t, *) buffer) \
+    { \
+        Longtail_Array_SetSize(buffer, Longtail_Array_GetSize(buffer) - 1); \
     }
 

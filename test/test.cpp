@@ -16,12 +16,12 @@
 
 struct TestStorage
 {
-    Longtail_ReadStorage m_Storge = {PreflightBlocks, AqcuireBlockStorage, ReleaseBlock};
-    static uint64_t PreflightBlocks(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockEntry* blocks)
-    {
-        TestStorage* test_storage = (TestStorage*)storage;
-        return 0;
-    }
+    Longtail_ReadStorage m_Storge = {/*PreflightBlocks, */AqcuireBlockStorage, ReleaseBlock};
+//    static uint64_t PreflightBlocks(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockStore* blocks)
+//    {
+//        TestStorage* test_storage = (TestStorage*)storage;
+//        return 0;
+//    }
     static const uint8_t* AqcuireBlockStorage(struct Longtail_ReadStorage* storage, uint32_t block_index)
     {
         TestStorage* test_storage = (TestStorage*)storage;
@@ -401,7 +401,7 @@ struct ThreadWorker
 
 struct StoredBlock
 {
-    TLongtail_Hash m_CompressionType;
+    TLongtail_Hash m_Tag;
     TLongtail_Hash m_Hash;
     uint64_t m_Size;
 };
@@ -439,15 +439,16 @@ static Bikeshed_TaskResult CompressFile(Bikeshed shed, Bikeshed_TaskID, uint8_t,
 {
     CompressJob* compress_job = (CompressJob*)context;
     const size_t max_dst_size = Lizard_compressBound((int)compress_job->length);
-    void* compressed_buffer = malloc(max_dst_size);
+    void* compressed_buffer = malloc(sizeof(int32_t) + max_dst_size);
 
     bool ok = false;
-    int compressed_size = Lizard_compress((const char*)compress_job->data, (char*)compressed_buffer, (int)compress_job->length, (int)max_dst_size, 44);//LIZARD_MAX_CLEVEL);
+    int compressed_size = Lizard_compress((const char*)compress_job->data, &((char*)compressed_buffer)[sizeof(int32_t)], (int)compress_job->length, (int)max_dst_size, 44);//LIZARD_MAX_CLEVEL);
     if (compressed_size > 0)
     {
-        compressed_buffer = realloc(compressed_buffer, (size_t)compressed_size);
+        compressed_buffer = realloc(compressed_buffer, (size_t)(sizeof(int) + compressed_size));
+        ((int*)compressed_buffer)[0] = (int)compress_job->length;
 
-        compress_job->base_storage->BlockStorage_WriteBlock(compress_job->base_storage, compress_job->hash, compressed_size, compressed_buffer);
+        compress_job->base_storage->BlockStorage_WriteBlock(compress_job->base_storage, compress_job->hash, sizeof(int32_t) + compressed_size, compressed_buffer);
         free(compressed_buffer);
     }
     nadir::AtomicAdd32(compress_job->active_job_count, -1);
@@ -504,7 +505,7 @@ struct CompressStorage
             return 0;
         }
 
-        void* compressed_buffer = malloc(compressed_size);
+        char* compressed_buffer = (char*)malloc(compressed_size);
         int ok = compress_storage->m_BaseStorage->BlockStorage_ReadBlock(compress_storage->m_BaseStorage, hash, compressed_size, compressed_buffer);
         if (!ok)
         {
@@ -512,7 +513,10 @@ struct CompressStorage
             return false;
         }
 
-        int result = Lizard_decompress_safe((const char*)compressed_buffer, (char*)data, (int)compressed_size, (int)length);
+        int32_t raw_size = ((int32_t*)compressed_buffer)[0];
+        assert(length <= raw_size);
+
+        int result = Lizard_decompress_safe((const char*)(compressed_buffer + sizeof(int32_t)), (char*)data, (int)compressed_size, (int)length);
         free(compressed_buffer);
         ok = result >= length;
         return ok ? 1 : 0;
@@ -521,7 +525,10 @@ struct CompressStorage
     static uint64_t GetStoredSize(BlockStorage* storage, TLongtail_Hash hash)
     {
         CompressStorage* compress_storage = (CompressStorage*)storage;
-        return compress_storage->m_BaseStorage->BlockStorage_GetStoredSize(storage, hash);
+        int32_t size = 0;
+        int ok = compress_storage->m_BaseStorage->BlockStorage_ReadBlock(compress_storage->m_BaseStorage, hash, sizeof(int32_t), &size);
+
+        return ok ? size : 0;
     }
 
 
@@ -599,24 +606,209 @@ struct DiskBlockStorage
 };
 
 
+struct SimpleWriteStorage
+{
+    Longtail_WriteStorage m_Storage = {AddExistingBlock, AllocateBlockStorage, WriteBlockData, CommitBlockData, FinalizeBlock};
 
+    SimpleWriteStorage(BlockStorage* block_storage, uint32_t default_block_size)
+        : m_BlockStore(block_storage)
+        , m_DefaultBlockSize(default_block_size)
+        , m_Blocks()
+        , m_CurrentBlockIndex(0)
+        , m_CurrentBlockData(0)
+        , m_CurrentBlockSize(0)
+        , m_CurrentBlockUsedSize(0)
+    {
 
+    }
 
+    ~SimpleWriteStorage()
+    {
+        if (m_CurrentBlockData)
+        {
+            PersistCurrentBlock(this);
+            free((void*)m_CurrentBlockData);
+        }
+        Longtail_Array_Free(m_Blocks);
+    }
+
+    static int AddExistingBlock(struct Longtail_WriteStorage* storage, TLongtail_Hash hash, uint32_t* out_block_index)
+    {
+        SimpleWriteStorage* simple_storage = (SimpleWriteStorage*)storage;
+        *out_block_index = Longtail_Array_GetSize(simple_storage->m_Blocks);
+        simple_storage->m_Blocks = Longtail_Array_EnsureCapacity(simple_storage->m_Blocks, 16u);
+        *Longtail_Array_Push(simple_storage->m_Blocks) = hash;
+        return 1;
+    }
+
+    static int AllocateBlockStorage(struct Longtail_WriteStorage* storage, TLongtail_Hash tag, uint64_t length, Longtail_BlockStore* out_block_entry)
+    {
+        SimpleWriteStorage* simple_storage = (SimpleWriteStorage*)storage;
+        simple_storage->m_Blocks = Longtail_Array_EnsureCapacity(simple_storage->m_Blocks, 16u);
+        if (simple_storage->m_CurrentBlockData && (simple_storage->m_CurrentBlockUsedSize + length) > simple_storage->m_DefaultBlockSize)
+        {
+            PersistCurrentBlock(simple_storage);
+            if (length > simple_storage->m_CurrentBlockSize)
+            {
+                free((void*)simple_storage->m_CurrentBlockData);
+                simple_storage->m_CurrentBlockData = 0;
+                simple_storage->m_CurrentBlockSize = 0;
+                simple_storage->m_CurrentBlockUsedSize = 0;
+            }
+            else
+            {
+                simple_storage->m_CurrentBlockIndex = Longtail_Array_GetSize(simple_storage->m_Blocks);
+                *Longtail_Array_Push(simple_storage->m_Blocks) = 0xfffffffffffffffflu;
+                simple_storage->m_CurrentBlockUsedSize = 0;
+            }
+        }
+        if (0 == simple_storage->m_CurrentBlockData)
+        {
+            uint32_t block_size = (uint32_t)(length > simple_storage->m_DefaultBlockSize ? length : simple_storage->m_DefaultBlockSize);
+            simple_storage->m_CurrentBlockSize = block_size;
+            simple_storage->m_CurrentBlockData = (uint8_t*)malloc(block_size);
+            simple_storage->m_CurrentBlockUsedSize = 0;
+            simple_storage->m_CurrentBlockIndex = Longtail_Array_GetSize(simple_storage->m_Blocks);
+            *Longtail_Array_Push(simple_storage->m_Blocks) = 0xfffffffffffffffflu;
+        }
+        out_block_entry->m_BlockIndex = simple_storage->m_CurrentBlockIndex;
+        out_block_entry->m_StartOffset = simple_storage->m_CurrentBlockUsedSize;
+        out_block_entry->m_Length = length;
+        simple_storage->m_CurrentBlockUsedSize += (uint32_t)length;
+        return 1;
+    }
+
+    static int WriteBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockStore* block_entry, Longtail_InputStream input_stream, void* context)
+    {
+        SimpleWriteStorage* simple_storage = (SimpleWriteStorage*)storage;
+        assert(block_entry->m_BlockIndex == simple_storage->m_CurrentBlockIndex);
+        return input_stream(context, block_entry->m_Length, &simple_storage->m_CurrentBlockData[block_entry->m_StartOffset]);
+    }
+
+    static int CommitBlockData(struct Longtail_WriteStorage* , const Longtail_BlockStore* )
+    {
+        return 1;
+    }
+
+    static TLongtail_Hash FinalizeBlock(struct Longtail_WriteStorage* storage, uint32_t block_index)
+    {
+        SimpleWriteStorage* simple_storage = (SimpleWriteStorage*)storage;
+        if (block_index == simple_storage->m_CurrentBlockIndex)
+        {
+            if (0 == PersistCurrentBlock(simple_storage))
+            {
+                return 0;
+            }
+            free(simple_storage->m_CurrentBlockData);
+            simple_storage->m_CurrentBlockData = 0;
+            simple_storage->m_CurrentBlockSize = 0u;
+            simple_storage->m_CurrentBlockUsedSize = 0u;
+        }
+        assert(simple_storage->m_Blocks[block_index] != 0xfffffffffffffffflu);
+        return simple_storage->m_Blocks[block_index];
+    }
+
+    static int PersistCurrentBlock(SimpleWriteStorage* simple_storage)
+    {
+        meow_state state;
+        MeowBegin(&state, MeowDefaultSeed);
+        MeowAbsorb(&state, simple_storage->m_CurrentBlockUsedSize, simple_storage->m_CurrentBlockData);
+        TLongtail_Hash hash = MeowU64From(MeowEnd(&state, 0), 0);
+        simple_storage->m_Blocks[simple_storage->m_CurrentBlockIndex] = hash;
+
+        if (simple_storage->m_BlockStore->BlockStorage_GetStoredSize(simple_storage->m_BlockStore, hash) == 0)
+        {
+            return simple_storage->m_BlockStore->BlockStorage_WriteBlock(simple_storage->m_BlockStore, hash, simple_storage->m_CurrentBlockUsedSize, simple_storage->m_CurrentBlockData);
+        }
+        return 1;
+    }
+
+    BlockStorage* m_BlockStore;
+    const uint32_t m_DefaultBlockSize;
+    TLongtail_Hash* m_Blocks;
+    uint32_t m_CurrentBlockIndex;
+    uint8_t* m_CurrentBlockData;
+    uint32_t m_CurrentBlockSize;
+    uint32_t m_CurrentBlockUsedSize;
+};
+
+LONGTAIL_DECLARE_ARRAY_TYPE(uint8_t*, malloc, free)
+
+struct SimpleReadStorage
+{
+    Longtail_ReadStorage m_Storage = {/*PreflightBlocks, */AqcuireBlockStorage, ReleaseBlock};
+    SimpleReadStorage(TLongtail_Hash* block_hashes_array, BlockStorage* block_storage)
+        : m_Blocks(block_hashes_array)
+        , m_BlockStorage(block_storage)
+        , m_BlockData()
+    {
+        uint32_t block_count = Longtail_Array_GetSize(m_Blocks);
+        m_BlockData = Longtail_Array_SetCapacity(m_BlockData, block_count);
+        Longtail_Array_SetSize(m_BlockData, block_count);
+        for (uint32_t i = 0; i < block_count; ++i)
+        {
+            m_BlockData[i] = 0;
+        }
+    }
+
+    ~SimpleReadStorage()
+    {
+        Longtail_Array_Free(m_BlockData);
+    }
+//    static uint64_t PreflightBlocks(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockStore* blocks)
+//    {
+//        return 1;
+//    }
+    static const uint8_t* AqcuireBlockStorage(struct Longtail_ReadStorage* storage, uint32_t block_index)
+    {
+        SimpleReadStorage* simple_read_storage = (SimpleReadStorage*)storage;
+        if (simple_read_storage->m_BlockData[block_index] == 0)
+        {
+            TLongtail_Hash hash = simple_read_storage->m_Blocks[block_index];
+            uint32_t block_size = (uint32_t)simple_read_storage->m_BlockStorage->BlockStorage_GetStoredSize(simple_read_storage->m_BlockStorage, hash);
+            if (block_size == 0)
+            {
+                return 0;
+            }
+
+            simple_read_storage->m_BlockData[block_index] = (uint8_t*)malloc(block_size);
+            if (0 == simple_read_storage->m_BlockStorage->BlockStorage_ReadBlock(simple_read_storage->m_BlockStorage, hash, block_size, simple_read_storage->m_BlockData[block_index]))
+            {
+                free(simple_read_storage->m_BlockData[block_index]);
+                simple_read_storage->m_BlockData[block_index] = 0;
+                return 0;
+            }
+        }
+        return simple_read_storage->m_BlockData[block_index];
+    }
+
+    static void ReleaseBlock(struct Longtail_ReadStorage* storage, uint32_t block_index)
+    {
+        SimpleReadStorage* simple_read_storage = (SimpleReadStorage*)storage;
+        free(simple_read_storage->m_BlockData[block_index]);
+        simple_read_storage->m_BlockData[block_index] = 0;
+    }
+    TLongtail_Hash* m_Blocks;
+    BlockStorage* m_BlockStorage;
+    uint8_t** m_BlockData;
+};
+
+#if 0
 ///////////////////// TODO: Refine and make part of Longtail
 
 struct WriteStorage
 {
     Longtail_WriteStorage m_Storage = {AddExistingBlock, AllocateBlockStorage, WriteBlockData, CommitBlockData, FinalizeBlock};
 
-    WriteStorage(StoredBlock** blocks, uint64_t block_size, uint32_t compressionTypes, BlockStorage* block_storage)
+    WriteStorage(StoredBlock** blocks, uint64_t block_size, uint32_t tag_types, BlockStorage* block_storage)
         : m_Blocks(blocks)
         , m_LiveBlocks(0)
         , m_BlockStorage(block_storage)
         , m_BlockSize(block_size)
     {
-        size_t hash_table_size = jc::HashTable<uint64_t, StoredBlock*>::CalcSize(compressionTypes);
-        m_CompressionToBlocksMem = malloc(hash_table_size);
-        m_CompressionToBlocks.Create(compressionTypes, m_CompressionToBlocksMem);
+        size_t hash_table_size = jc::HashTable<uint64_t, StoredBlock*>::CalcSize(tag_types);
+        m_TagToBlocksMem = malloc(hash_table_size);
+        m_TagToBlocks.Create(tag_types, m_TagToBlocksMem);
     }
 
     ~WriteStorage()
@@ -631,7 +823,7 @@ struct WriteStorage
             }
         }
         Longtail_Array_Free(m_LiveBlocks);
-        free(m_CompressionToBlocksMem);
+        free(m_TagToBlocksMem);
     }
 
     static int AddExistingBlock(struct Longtail_WriteStorage* storage, TLongtail_Hash hash, uint32_t* out_block_index)
@@ -646,7 +838,7 @@ struct WriteStorage
         }
 
         StoredBlock* new_block = Longtail_Array_Push(*write_storage->m_Blocks);
-        new_block->m_CompressionType = 0;
+        new_block->m_Tag = 0;
         new_block->m_Hash = hash;
         new_block->m_Size = 0;
         LiveBlock* live_block = Longtail_Array_Push(write_storage->m_LiveBlocks);
@@ -656,15 +848,15 @@ struct WriteStorage
         return 1;
     }
 
-    static int AllocateBlockStorage(struct Longtail_WriteStorage* storage, TLongtail_Hash compression_type, uint64_t length, Longtail_BlockEntry* out_block_entry)
+    static int AllocateBlockStorage(struct Longtail_WriteStorage* storage, TLongtail_Hash tag, uint64_t length, Longtail_BlockStore* out_block_entry)
     {
         WriteStorage* write_storage = (WriteStorage*)storage;
-        uint32_t** existing_block_idx_array = write_storage->m_CompressionToBlocks.Get(compression_type);
+        uint32_t** existing_block_idx_array = write_storage->m_TagToBlocks.Get(tag);
         uint32_t* block_idx_ptr;
         if (existing_block_idx_array == 0)
         {
             uint32_t* block_idx_storage = Longtail_Array_IncreaseCapacity((uint32_t*)0, 16);
-            write_storage->m_CompressionToBlocks.Put(compression_type, block_idx_storage);
+            write_storage->m_TagToBlocks.Put(tag, block_idx_storage);
             block_idx_ptr = block_idx_storage;
         }
         else
@@ -677,7 +869,7 @@ struct WriteStorage
         if (capacity < (size + 1))
         {
             block_idx_ptr = Longtail_Array_SetCapacity(block_idx_ptr, capacity + 16u);
-            write_storage->m_CompressionToBlocks.Put(compression_type, block_idx_ptr);
+            write_storage->m_TagToBlocks.Put(tag, block_idx_ptr);
         }
 
         if (length < write_storage->m_BlockSize)
@@ -719,7 +911,7 @@ struct WriteStorage
         }
         *Longtail_Array_Push(block_idx_ptr) = size;
         StoredBlock* new_block = Longtail_Array_Push(*write_storage->m_Blocks);
-        new_block->m_CompressionType = compression_type;
+        new_block->m_Tag = tag;
         LiveBlock* live_block = Longtail_Array_Push(write_storage->m_LiveBlocks);
         live_block->m_CommitedSize = 0;
         new_block->m_Size = 0;
@@ -735,7 +927,7 @@ struct WriteStorage
         return 1;
     }
 
-    static int WriteBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry, Longtail_InputStream input_stream, void* context)
+    static int WriteBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockStore* block_entry, Longtail_InputStream input_stream, void* context)
     {
         WriteStorage* write_storage = (WriteStorage*)storage;
         StoredBlock* stored_block = &(*write_storage->m_Blocks)[block_entry->m_BlockIndex];
@@ -743,7 +935,7 @@ struct WriteStorage
         return input_stream(context, block_entry->m_Length, &live_block->m_Data[block_entry->m_StartOffset]);
     }
 
-    static int CommitBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockEntry* block_entry)
+    static int CommitBlockData(struct Longtail_WriteStorage* storage, const Longtail_BlockStore* block_entry)
     {
         WriteStorage* write_storage = (WriteStorage*)storage;
         StoredBlock* stored_block = &(*write_storage->m_Blocks)[block_entry->m_BlockIndex];
@@ -792,8 +984,8 @@ struct WriteStorage
         return 1;
     }
 
-    jc::HashTable<uint64_t, uint32_t*> m_CompressionToBlocks;
-    void* m_CompressionToBlocksMem;
+    jc::HashTable<uint64_t, uint32_t*> m_TagToBlocks;
+    void* m_TagToBlocksMem;
     StoredBlock** m_Blocks;
     LiveBlock* m_LiveBlocks;
     BlockStorage* m_BlockStorage;
@@ -802,7 +994,7 @@ struct WriteStorage
 
 struct ReadStorage
 {
-    Longtail_ReadStorage m_Storage = {PreflightBlocks, AqcuireBlockStorage, ReleaseBlock};
+    Longtail_ReadStorage m_Storage = {/*PreflightBlocks, */AqcuireBlockStorage, ReleaseBlock};
     ReadStorage(StoredBlock* stored_blocks, BlockStorage* block_storage)
         : m_Blocks(stored_blocks)
         , m_LiveBlocks(0)
@@ -814,10 +1006,10 @@ struct ReadStorage
     {
         Longtail_Array_Free(m_LiveBlocks);
     }
-    static uint64_t PreflightBlocks(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockEntry* blocks)
-    {
-        return 1;
-    }
+//    static uint64_t PreflightBlocks(struct Longtail_ReadStorage* storage, uint32_t block_count, struct Longtail_BlockStore* blocks)
+//    {
+//        return 1;
+//    }
     static const uint8_t* AqcuireBlockStorage(struct Longtail_ReadStorage* storage, uint32_t block_index)
     {
         ReadStorage* read_storage = (ReadStorage*)storage;
@@ -840,7 +1032,7 @@ struct ReadStorage
     BlockStorage* m_BlockStorage;
 };
 
-
+#endif
 
 
 
@@ -889,13 +1081,13 @@ static uint64_t GetPathHash(const char* path)
 }
 
 //LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_AssetEntry, malloc, free)
-//LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockEntry, malloc, free)
+LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockStore, malloc, free)
 LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockAssets, malloc, free)
 
 struct Longtail_IndexDiffer
 {
     struct Longtail_AssetEntry* m_AssetArray;
-    struct Longtail_BlockEntry* m_BlockArray;
+    struct Longtail_BlockStore* m_BlockArray;
     struct Longtail_BlockAssets* m_BlockAssets;
     TLongtail_Hash* m_AssetHashes;
 };
@@ -904,10 +1096,10 @@ int Longtail_CompareAssetEntry(const void* element1, const void* element2)
 {
     const struct Longtail_AssetEntry* entry1 = (const struct Longtail_AssetEntry*)element1;
     const struct Longtail_AssetEntry* entry2 = (const struct Longtail_AssetEntry*)element2;
-    return (int)((int64_t)entry1->m_BlockEntryIndex - (int64_t)entry2->m_BlockEntryIndex);
+    return (int)((int64_t)entry1->m_BlockStore.m_BlockIndex - (int64_t)entry2->m_BlockStore.m_BlockIndex);
 }
 
-Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint32_t block_entry_count, struct Longtail_BlockEntry* block_entries, uint32_t new_asset_count, TLongtail_Hash* new_asset_hashes)
+Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint32_t block_entry_count, struct Longtail_BlockStore* block_entries, uint32_t new_asset_count, TLongtail_Hash* new_asset_hashes)
 {
     Longtail_IndexDiffer* index_differ = (Longtail_IndexDiffer*)mem;
     index_differ->m_AssetArray = 0;
@@ -915,7 +1107,7 @@ Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct
 //    index_differ->m_AssetArray = Longtail_Array_SetCapacity(index_differ->m_AssetArray, asset_entry_count);
 //    index_differ->m_BlockArray = Longtail_Array_SetCapacity(index_differ->m_BlockArray, block_entry_count);
 //    memcpy(index_differ->m_AssetArray, asset_entries, sizeof(Longtail_AssetEntry) * asset_entry_count);
-//    memcpy(index_differ->m_BlockArray, block_entries, sizeof(Longtail_BlockEntry) * block_entry_count);
+//    memcpy(index_differ->m_BlockArray, block_entries, sizeof(Longtail_BlockStore) * block_entry_count);
     qsort(asset_entries, asset_entry_count, sizeof(Longtail_AssetEntry), Longtail_CompareAssetEntry);
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize(new_asset_count);
     void* hash_mem = malloc(hash_size);
@@ -928,11 +1120,11 @@ Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct
     uint32_t b = 0;
     while (b < asset_entry_count)
     {
-        uint32_t block_index = asset_entries[b].m_BlockEntryIndex;
+        uint32_t block_index = asset_entries[b].m_BlockStore.m_BlockIndex;
         uint32_t scan_b = b;
         uint32_t found_assets = 0;
 
-        while (scan_b < asset_entry_count && (asset_entries[scan_b].m_BlockEntryIndex) == block_index)
+        while (scan_b < asset_entry_count && (asset_entries[scan_b].m_BlockStore.m_BlockIndex) == block_index)
         {
             if (hashes.Get(asset_entries[scan_b].m_AssetHash))
             {
@@ -964,28 +1156,106 @@ Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct
         if (existing_block_index)
         {
             Longtail_AssetEntry* asset_entry = Longtail_Array_Push(index_differ->m_AssetArray);
-            Longtail_BlockEntry* block_entry = Longtail_Array_Push(index_differ->m_BlockArray);
+            Longtail_BlockStore* block_entry = Longtail_Array_Push(index_differ->m_BlockArray);
             block_entry->m_BlockIndex = *existing_block_index;
             asset_entry->m_AssetHash = 0;
-            asset_entry->m_BlockEntryIndex = 0;
         }
     }
 
     return index_differ;
 }
 
+static TLongtail_Hash GetContentTag(const char* path)
+{
+    const char * extension = strrchr(path, '.');
+    if (extension)
+    {
+        if (strcmp(extension, ".uasset") == 0)
+        {
+            return 1000;
+        }
+        if (strcmp(extension, ".uexp") == 0)
+        {
+            if (strstr(path, "Meshes"))
+            {
+                return GetPathHash("Meshes");
+            }
+            if (strstr(path, "Textures"))
+            {
+                return GetPathHash("Textures");
+            }
+            if (strstr(path, "Sounds"))
+            {
+                return GetPathHash("Sounds");
+            }
+            if (strstr(path, "Animations"))
+            {
+                return GetPathHash("Animations");
+            }
+            if (strstr(path, "Blueprints"))
+            {
+                return GetPathHash("Blueprints");
+            }
+            if (strstr(path, "Characters"))
+            {
+                return GetPathHash("Characters");
+            }
+            if (strstr(path, "Effects"))
+            {
+                return GetPathHash("Effects");
+            }
+            if (strstr(path, "Materials"))
+            {
+                return GetPathHash("Materials");
+            }
+            if (strstr(path, "Maps"))
+            {
+                return GetPathHash("Maps");
+            }
+            if (strstr(path, "Movies"))
+            {
+                return GetPathHash("Movies");
+            }
+            if (strstr(path, "Slate"))
+            {
+                return GetPathHash("Slate");
+            }
+            if (strstr(path, "Sounds"))
+            {
+                return GetPathHash("MeshSoundses");
+            }
+        }
+        return GetPathHash(extension);
+    }
+    return 2000;
+}
+
+struct ScanExistingDataContext
+{
+//    Bikeshed m_Shed;
+//    HashJob* m_HashJobs;
+//    nadir::TAtomic32* m_AssetCount;
+//    nadir::TAtomic32* m_PendingCount;
+    TLongtail_Hash* m_Hashes;
+};
+
+static void ScanHash(void* context, const char* , const char* file_name)
+{
+    ScanExistingDataContext* scan_context = (ScanExistingDataContext*)context;
+    TLongtail_Hash hash;
+    if (1 == sscanf(file_name, "0x%" PRIx64, &hash))
+    {
+        scan_context->m_Hashes = Longtail_Array_EnsureCapacity(scan_context->m_Hashes, 16u);
+        *(Longtail_Array_Push(scan_context->m_Hashes)) = hash;
+    }
+}
+
+
 TEST(Longtail, ScanContent)
 {
     ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(131071, 0, 1)), 131071, 0, 1, &ready_callback.cb);
-    const char* root_path = "D:\\TestContent\\Version_1";
-    ProcessHashContext context;
-    nadir::TAtomic32 pendingCount = 0;
-    nadir::TAtomic32 assetCount = 0;
-    context.m_HashJobs = new HashJob[1048576];
-    context.m_AssetCount = &assetCount;
-    context.m_PendingCount = &pendingCount;
-    context.m_Shed = shed;
+
     nadir::TAtomic32 stop = 0;
 
     static const uint32_t WORKER_COUNT = 7;
@@ -994,6 +1264,32 @@ TEST(Longtail, ScanContent)
     {
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
     }
+
+
+    const char* root_path = "D:\\TestContent\\Version_1";
+    const char* cache_path = "D:\\Temp\\longtail\\cache";
+
+    ScanExistingDataContext scan_context;
+    scan_context.m_Hashes = 0;
+    RecurseTree(cache_path, ScanHash, &scan_context);
+    uint32_t found_count = Longtail_Array_GetSize(scan_context.m_Hashes);
+    for (uint32_t b = 0; b < found_count; ++b)
+    {
+        printf("Block %u, hash %llu\n",
+            b,
+            scan_context.m_Hashes[b]);
+    }
+    Longtail_Array_Free(scan_context.m_Hashes);
+
+
+    nadir::TAtomic32 pendingCount = 0;
+    nadir::TAtomic32 assetCount = 0;
+ 
+    ProcessHashContext context;
+    context.m_Shed = shed;
+    context.m_HashJobs = new HashJob[1048576];
+    context.m_AssetCount = &assetCount;
+    context.m_PendingCount = &pendingCount;
 
     RecurseTree(root_path, ProcessHash, &context);
 
@@ -1052,14 +1348,15 @@ TEST(Longtail, ScanContent)
     printf("Found %llu redundant files comprising %llu bytes out of %llu bytes\n", redundant_file_count, redundant_byte_size, total_byte_size);
 
     Longtail_AssetEntry* asset_array = 0;
-    Longtail_BlockEntry* block_entry_array = 0;
+    Longtail_BlockStore* block_entry_array = 0;
 
-    StoredBlock* blocks = 0;
+    Longtail_Builder builder;
 
-    DiskBlockStorage disk_block_storage("D:\\Temp\\longtail\\cache");
+    DiskBlockStorage disk_block_storage(cache_path);
     CompressStorage block_storage(&disk_block_storage.m_Storage, shed, &pendingCount);
     {
-        WriteStorage write_storage(&blocks, 131072u, 512, &block_storage.m_Storage);
+        SimpleWriteStorage write_storage(&block_storage.m_Storage, 131072u);
+        Longtail_Builder_Initialize(&builder, &write_storage.m_Storage);
         {
             jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
             while (it != hashes.End())
@@ -1067,16 +1364,41 @@ TEST(Longtail, ScanContent)
                 uint64_t content_hash = *it.GetKey();
                 Asset* asset = *it.GetValue();
                 uint64_t path_hash = GetPathHash(asset->m_Path);
-                const char * extension = strrchr(asset->m_Path, '.');
-                TLongtail_Hash type_hash = extension ? GetPathHash(extension) : 0;
-                if (!Longtail_Write(&write_storage.m_Storage, path_hash, InputStream, asset, asset->m_Size, type_hash, &asset_array, &block_entry_array))
+                TLongtail_Hash tag = GetContentTag(asset->m_Path);
+
+
+                if (!Longtail_Builder_Add(&builder, path_hash, InputStream, asset, asset->m_Size, tag))
                 {
                     assert(false);
                 }
                 ++it;
             }
+
+            Longtail_FinalizeBuilder(&builder);
+
+            uint32_t asset_count = Longtail_Array_GetSize(builder.m_AssetEntries);
+            uint32_t block_count = Longtail_Array_GetSize(builder.m_BlockHashes);
+
+            for (uint32_t a = 0; a < asset_count; ++a)
+            {
+                Longtail_AssetEntry* asset_entry = &builder.m_AssetEntries[a];
+                printf("Asset %u, %llu, in block %u, at %llu, size %llu\n",
+                    a,
+                    asset_entry->m_AssetHash,
+                    asset_entry->m_BlockStore.m_BlockIndex,
+                    asset_entry->m_BlockStore.m_StartOffset,
+                    asset_entry->m_BlockStore.m_Length);
+            }
+
+            for (uint32_t b = 0; b < block_count; ++b)
+            {
+                printf("Block %u, hash %llu\n",
+                    b,
+                    builder.m_BlockHashes[b]);
+            }
         }
     }
+
 
     old_pending_count = 0;
     while (pendingCount > 0)
@@ -1095,15 +1417,12 @@ TEST(Longtail, ScanContent)
 
     printf("Comitted %u files\n", hashes.Size());
 
-    struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(Longtail_Array_GetSize(asset_array), Longtail_Array_GetSize(block_entry_array))),
-        Longtail_Array_GetSize(asset_array), asset_array,
-        Longtail_Array_GetSize(block_entry_array), block_entry_array);
-
-    Longtail_Array_Free(asset_array);
-    Longtail_Array_Free(block_entry_array);
+    struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(Longtail_Array_GetSize(builder.m_AssetEntries), Longtail_Array_GetSize(builder.m_BlockHashes))),
+        Longtail_Array_GetSize(builder.m_AssetEntries), builder.m_AssetEntries,
+        Longtail_Array_GetSize(builder.m_BlockHashes), builder.m_BlockHashes);
 
     {
-        ReadStorage read_storage(blocks, &block_storage.m_Storage);
+        SimpleReadStorage read_storage(builder.m_BlockHashes, &block_storage.m_Storage);
         jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
         while (it != hashes.End())
         {
@@ -1130,8 +1449,6 @@ TEST(Longtail, ScanContent)
     printf("Read back %u files\n", hashes.Size());
 
     free(longtail);
-
-    Longtail_Array_Free(blocks);
 
     free(hash_mem);
     for (int32_t i = 0; i < assetCount; ++i)
