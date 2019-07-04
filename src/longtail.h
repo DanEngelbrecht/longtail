@@ -179,7 +179,7 @@ static int Longtail_Builder_Add(struct Longtail_Builder* builder, TLongtail_Hash
     return 1;
 }
 
-static int Logtail_Builder_AddExistingBlock(struct Longtail_Builder* builder, TLongtail_Hash block_hash, uint32_t asset_count, TLongtail_Hash* asset_hashes, uint64_t* start_offsets, uint64_t* lengths)
+static int Longtail_Builder_AddExistingBlock(struct Longtail_Builder* builder, TLongtail_Hash block_hash, uint32_t asset_count, struct Longtail_AssetEntry* asset_entries)
 {
     uint32_t block_index = 0;
     if (0 == builder->m_Storage->Longtail_AddExistingBlock(builder->m_Storage, block_hash, &block_index))
@@ -196,18 +196,16 @@ static int Logtail_Builder_AddExistingBlock(struct Longtail_Builder* builder, TL
         SetSize_TLongtail_Hash(builder->m_BlockHashes, block_index + 1);
     }
 
-    if (asset_count >= GetCapacity_Longtail_AssetEntry(builder->m_AssetEntries))
+    if (GetSize_Longtail_AssetEntry(builder->m_AssetEntries) + asset_count >= GetCapacity_Longtail_AssetEntry(builder->m_AssetEntries))
     {
-        builder->m_AssetEntries = SetCapacity_Longtail_AssetEntry(builder->m_AssetEntries, asset_count + 16);
+        builder->m_AssetEntries = SetCapacity_Longtail_AssetEntry(builder->m_AssetEntries, GetSize_Longtail_AssetEntry(builder->m_AssetEntries) + asset_count + 16);
     }
 
     for (uint32_t a = 0; a < asset_count; ++a)
     {
         Longtail_AssetEntry* asset_entry = Push_Longtail_AssetEntry(builder->m_AssetEntries);
-        asset_entry->m_AssetHash = asset_hashes[a];
-        asset_entry->m_BlockStore.m_Length = lengths[a];
+        *asset_entry = asset_entries[a];
         asset_entry->m_BlockStore.m_BlockIndex = block_index;
-        asset_entry->m_BlockStore.m_StartOffset = start_offsets[a];
     }
 
     return 1;
@@ -288,6 +286,10 @@ int Longtail_Read(struct Longtail* longtail, struct Longtail_ReadStorage* storag
     struct Longtail_AssetEntry* asset_entry = &longtail->asset_entries[asset_index];
 
     const uint8_t* block_data = storage->Longtail_AqcuireBlockStorage(storage, asset_entry->m_BlockStore.m_BlockIndex);
+	if (block_data == 0)
+	{
+		return 0;
+	}
     output_stream(context, asset_entry->m_BlockStore.m_Length, &block_data[asset_entry->m_BlockStore.m_StartOffset]);
     storage->Longtail_ReleaseBlock(storage, asset_entry->m_BlockStore.m_BlockIndex);
 

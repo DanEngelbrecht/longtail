@@ -707,7 +707,7 @@ struct SimpleWriteStorage
     static TLongtail_Hash FinalizeBlock(struct Longtail_WriteStorage* storage, uint32_t block_index)
     {
         SimpleWriteStorage* simple_storage = (SimpleWriteStorage*)storage;
-        if (block_index == simple_storage->m_CurrentBlockIndex)
+        if (block_index == simple_storage->m_CurrentBlockIndex && simple_storage->m_CurrentBlockData)
         {
             if (0 == PersistCurrentBlock(simple_storage))
             {
@@ -717,6 +717,7 @@ struct SimpleWriteStorage
             simple_storage->m_CurrentBlockData = 0;
             simple_storage->m_CurrentBlockSize = 0u;
             simple_storage->m_CurrentBlockUsedSize = 0u;
+            simple_storage->m_CurrentBlockIndex = GetSize_TLongtail_Hash(simple_storage->m_Blocks);
         }
         assert(simple_storage->m_Blocks[block_index] != 0xfffffffffffffffflu);
         return simple_storage->m_Blocks[block_index];
@@ -729,7 +730,6 @@ struct SimpleWriteStorage
         MeowAbsorb(&state, simple_storage->m_CurrentBlockUsedSize, simple_storage->m_CurrentBlockData);
         TLongtail_Hash hash = MeowU64From(MeowEnd(&state, 0), 0);
         simple_storage->m_Blocks[simple_storage->m_CurrentBlockIndex] = hash;
-
         if (simple_storage->m_BlockStore->BlockStorage_GetStoredSize(simple_storage->m_BlockStore, hash) == 0)
         {
             return simple_storage->m_BlockStore->BlockStorage_WriteBlock(simple_storage->m_BlockStore, hash, simple_storage->m_CurrentBlockUsedSize, simple_storage->m_CurrentBlockData);
@@ -1125,16 +1125,16 @@ struct Longtail_AssetRegistry
 struct OrderedCacheContent
 {
     TLongtail_Hash* m_BlockHashes;
-    TLongtail_Hash* m_AssetHashes;
+    Longtail_AssetEntry* m_AssetEntries;
     struct Longtail_BlockAssets* m_BlockAssets;
 };
 
 struct AssetSorter
 {
-    AssetSorter(struct Longtail_AssetEntry* asset_entries)
+    AssetSorter(const struct Longtail_AssetEntry* asset_entries)
         : asset_entries(asset_entries)
     {}
-    struct Longtail_AssetEntry* asset_entries;
+    const struct Longtail_AssetEntry* asset_entries;
     bool operator()(uint32_t left, uint32_t right)
     {
         const Longtail_AssetEntry& a = asset_entries[left];
@@ -1147,11 +1147,11 @@ struct AssetSorter
     }
 };
 
-struct OrderedCacheContent* BuildOrderedCacheContent(uint32_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint32_t block_count, TLongtail_Hash* block_hashes)
+struct OrderedCacheContent* BuildOrderedCacheContent(uint32_t asset_entry_count, const struct Longtail_AssetEntry* asset_entries, uint32_t block_count, const TLongtail_Hash* block_hashes)
 {
     OrderedCacheContent* ordered_content = (OrderedCacheContent*)malloc(sizeof(OrderedCacheContent));
     ordered_content->m_BlockHashes = SetCapacity_TLongtail_Hash((TLongtail_Hash*)0, block_count);
-    ordered_content->m_AssetHashes = SetCapacity_TLongtail_Hash((TLongtail_Hash*)0, asset_entry_count);
+    ordered_content->m_AssetEntries = SetCapacity_Longtail_AssetEntry((Longtail_AssetEntry*)0, asset_entry_count);
     ordered_content->m_BlockAssets = SetCapacity_Longtail_BlockAssets((Longtail_BlockAssets*)0, asset_entry_count); // Worst case
 
     uint32_t* asset_order = new uint32_t[asset_entry_count];
@@ -1167,13 +1167,13 @@ struct OrderedCacheContent* BuildOrderedCacheContent(uint32_t asset_entry_count,
     while (ai < asset_entry_count)
     {
         uint32_t asset_index = asset_order[ai];
-        struct Longtail_AssetEntry* a = &asset_entries[asset_index];
+        const struct Longtail_AssetEntry* a = &asset_entries[asset_index];
         uint32_t block_index = a->m_BlockStore.m_BlockIndex;
         Longtail_BlockAssets* block_asset = Push_Longtail_BlockAssets(ordered_content->m_BlockAssets);
-        uint32_t block_asset_index = GetSize_TLongtail_Hash(ordered_content->m_AssetHashes);
+        uint32_t block_asset_index = GetSize_Longtail_AssetEntry(ordered_content->m_AssetEntries);
         block_asset->m_AssetIndex = block_asset_index;
         block_asset->m_AssetCount = 1;
-        *Push_TLongtail_Hash(ordered_content->m_AssetHashes) = a->m_AssetHash;
+        *Push_Longtail_AssetEntry(ordered_content->m_AssetEntries) = *a;
         *Push_TLongtail_Hash(ordered_content->m_BlockHashes) = block_hashes[block_index];
 
         ++ai;
@@ -1181,8 +1181,8 @@ struct OrderedCacheContent* BuildOrderedCacheContent(uint32_t asset_entry_count,
 
         while (ai < asset_entry_count && asset_entries[asset_index].m_BlockStore.m_BlockIndex == block_index)
         {
-            struct Longtail_AssetEntry* a = &asset_entries[asset_index];
-            *Push_TLongtail_Hash(ordered_content->m_AssetHashes) = a->m_AssetHash;
+            const struct Longtail_AssetEntry* a = &asset_entries[asset_index];
+            *Push_Longtail_AssetEntry(ordered_content->m_AssetEntries) = *a;
             ++block_asset->m_AssetCount;
 
             ++ai;
@@ -1190,6 +1190,9 @@ struct OrderedCacheContent* BuildOrderedCacheContent(uint32_t asset_entry_count,
         }
 
     }
+
+    delete [] asset_order;
+
     return ordered_content;
 }
 
@@ -1456,133 +1459,187 @@ TEST(Longtail, ScanContent)
     }
     printf("Found %llu redundant files comprising %llu bytes out of %llu bytes\n", redundant_file_count, redundant_byte_size, total_byte_size);
 
-    Longtail_AssetEntry* asset_array = 0;
-    Longtail_BlockStore* block_entry_array = 0;
-
     Longtail_Builder builder;
 
-    DiskBlockStorage disk_block_storage(cache_path);
-    CompressStorage block_storage(&disk_block_storage.m_Storage, shed, &pendingCount);
     {
-        SimpleWriteStorage write_storage(&block_storage.m_Storage, 131072u);
-        Longtail_Builder_Initialize(&builder, &write_storage.m_Storage);
+        DiskBlockStorage disk_block_storage(cache_path);
+        CompressStorage block_storage(&disk_block_storage.m_Storage, shed, &pendingCount);
         {
-            jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
-            while (it != hashes.End())
+            SimpleWriteStorage write_storage(&block_storage.m_Storage, 131072u);
+            Longtail_Builder_Initialize(&builder, &write_storage.m_Storage);
             {
-                uint64_t content_hash = *it.GetKey();
-                Asset* asset = *it.GetValue();
-                uint64_t path_hash = GetPathHash(asset->m_Path);
-                TLongtail_Hash tag = GetContentTag(asset->m_Path);
-
-
-                if (!Longtail_Builder_Add(&builder, path_hash, InputStream, asset, asset->m_Size, tag))
+                jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
+                while (it != hashes.End())
                 {
-                    assert(false);
+                    uint64_t content_hash = *it.GetKey();
+                    Asset* asset = *it.GetValue();
+                    uint64_t path_hash = GetPathHash(asset->m_Path);
+                    TLongtail_Hash tag = GetContentTag(asset->m_Path);
+
+
+                    if (!Longtail_Builder_Add(&builder, path_hash, InputStream, asset, asset->m_Size, tag))
+                    {
+                        assert(false);
+                    }
+                    ++it;
                 }
-                ++it;
+
+                Longtail_FinalizeBuilder(&builder);
+
+                uint32_t asset_count = GetSize_Longtail_AssetEntry(builder.m_AssetEntries);
+                uint32_t block_count = GetSize_TLongtail_Hash(builder.m_BlockHashes);
+
+                for (uint32_t a = 0; a < asset_count; ++a)
+                {
+                    Longtail_AssetEntry* asset_entry = &builder.m_AssetEntries[a];
+                    printf("Asset %u, %llu, in block %u, at %llu, size %llu\n",
+                        a,
+                        asset_entry->m_AssetHash,
+                        asset_entry->m_BlockStore.m_BlockIndex,
+                        asset_entry->m_BlockStore.m_StartOffset,
+                        asset_entry->m_BlockStore.m_Length);
+                }
+
+                for (uint32_t b = 0; b < block_count; ++b)
+                {
+                    printf("Block %u, hash %llu\n",
+                        b,
+                        builder.m_BlockHashes[b]);
+                }
             }
+        }
 
-            Longtail_FinalizeBuilder(&builder);
 
-            uint32_t asset_count = GetSize_Longtail_AssetEntry(builder.m_AssetEntries);
-            uint32_t block_count = GetSize_TLongtail_Hash(builder.m_BlockHashes);
-
-            for (uint32_t a = 0; a < asset_count; ++a)
+        old_pending_count = 0;
+        while (pendingCount > 0)
+        {
+            if (Bikeshed_ExecuteOne(shed, 0))
             {
-                Longtail_AssetEntry* asset_entry = &builder.m_AssetEntries[a];
-                printf("Asset %u, %llu, in block %u, at %llu, size %llu\n",
-                    a,
-                    asset_entry->m_AssetHash,
-                    asset_entry->m_BlockStore.m_BlockIndex,
-                    asset_entry->m_BlockStore.m_StartOffset,
-                    asset_entry->m_BlockStore.m_Length);
+                continue;
             }
-
-            for (uint32_t b = 0; b < block_count; ++b)
+            if (old_pending_count != pendingCount)
             {
-                printf("Block %u, hash %llu\n",
-                    b,
-                    builder.m_BlockHashes[b]);
+                old_pending_count = pendingCount;
+                printf("Files left to store: %d\n", old_pending_count);
             }
+            nadir::Sleep(1000);
+        }
+
+        printf("Comitted %u files\n", hashes.Size());
+
+        {
+            const size_t longtail_size = Longtail_GetSize(GetSize_Longtail_AssetEntry(builder.m_AssetEntries), GetSize_TLongtail_Hash(builder.m_BlockHashes));
+            struct Longtail* longtail = Longtail_Open(malloc(longtail_size),
+                GetSize_Longtail_AssetEntry(builder.m_AssetEntries), builder.m_AssetEntries,
+                GetSize_TLongtail_Hash(builder.m_BlockHashes), builder.m_BlockHashes);
+
+            {
+                SimpleReadStorage read_storage(builder.m_BlockHashes, &block_storage.m_Storage);
+                jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
+                while (it != hashes.End())
+                {
+                    uint64_t hash_key = *it.GetKey();
+                    Asset* asset = *it.GetValue();
+                    uint64_t path_hash = GetPathHash(asset->m_Path);
+
+                    uint8_t* data = 0;
+                    if (!Longtail_Read(longtail, &read_storage.m_Storage, path_hash, OutputStream, &data))
+                    {
+                        assert(false);
+                    }
+
+                    meow_state state;
+                    MeowBegin(&state, MeowDefaultSeed);
+                    MeowAbsorb(&state, GetSize_uint8_t(data), data);
+                    uint64_t verify_hash = MeowU64From(MeowEnd(&state, 0), 0);
+                    assert(hash_key == verify_hash);
+
+                    Free_uint8_t(data);
+                    ++it;
+                }
+            }
+            printf("Read back %u files\n", hashes.Size());
+
+            free(longtail);
         }
     }
-
-
-    old_pending_count = 0;
-    while (pendingCount > 0)
-    {
-        if (Bikeshed_ExecuteOne(shed, 0))
-        {
-            continue;
-        }
-        if (old_pending_count != pendingCount)
-        {
-            old_pending_count = pendingCount;
-            printf("Files left to store: %d\n", old_pending_count);
-        }
-        nadir::Sleep(1000);
-    }
-
-    printf("Comitted %u files\n", hashes.Size());
-
-
     struct OrderedCacheContent* ordered_content = BuildOrderedCacheContent(
         GetSize_Longtail_AssetEntry(builder.m_AssetEntries), builder.m_AssetEntries,
         GetSize_TLongtail_Hash(builder.m_BlockHashes), builder.m_BlockHashes);
 
+    Longtail_Builder builder2;
     {
-        uint32_t block_asset_count = GetSize_Longtail_BlockAssets(ordered_content->m_BlockAssets);
-        uint32_t block_count = GetSize_TLongtail_Hash(ordered_content->m_BlockHashes);
+        DiskBlockStorage disk_block_storage2(cache_path);
+        CompressStorage block_storage2(&disk_block_storage2.m_Storage, shed, &pendingCount);
 
-        for (uint32_t ba = 0; ba < block_asset_count; ++ba)
         {
-            uint32_t block_asset_count = ordered_content->m_BlockAssets[ba].m_AssetCount;
-            uint32_t asset_hash_index = ordered_content->m_BlockAssets[ba].m_AssetIndex;
-            while (block_asset_count--)
+            SimpleWriteStorage write_storage2(&block_storage2.m_Storage, 131072u);
+            Longtail_Builder_Initialize(&builder2, &write_storage2.m_Storage);
+
+            uint32_t block_asset_count = GetSize_Longtail_BlockAssets(ordered_content->m_BlockAssets);
+
+            for (uint32_t ba = 0; ba < block_asset_count; ++ba)
             {
-                printf("Block %u, Hash: %llu, Asset: %llu\n",
-                    ba,
-                    ordered_content->m_BlockHashes[ba],
-                    ordered_content->m_AssetHashes[asset_hash_index]);
-                ++asset_hash_index;
-            }
-        }
-    }
+                TLongtail_Hash block_hash = ordered_content->m_BlockHashes[ba];
 
-    const size_t longtail_size = Longtail_GetSize(GetSize_Longtail_AssetEntry(builder.m_AssetEntries), GetSize_TLongtail_Hash(builder.m_BlockHashes));
-    struct Longtail* longtail = Longtail_Open(malloc(longtail_size),
-        GetSize_Longtail_AssetEntry(builder.m_AssetEntries), builder.m_AssetEntries,
-        GetSize_TLongtail_Hash(builder.m_BlockHashes), builder.m_BlockHashes);
+                uint32_t block_asset_count = ordered_content->m_BlockAssets[ba].m_AssetCount;
+                uint32_t asset_entry_index = ordered_content->m_BlockAssets[ba].m_AssetIndex;
 
-    {
-        SimpleReadStorage read_storage(builder.m_BlockHashes, &block_storage.m_Storage);
-        jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
-        while (it != hashes.End())
-        {
-            uint64_t hash_key = *it.GetKey();
-            Asset* asset = *it.GetValue();
-            uint64_t path_hash = GetPathHash(asset->m_Path);
-
-            uint8_t* data = 0;
-            if (!Longtail_Read(longtail, &read_storage.m_Storage, path_hash, OutputStream, &data))
-            {
-                assert(false);
+                Longtail_Builder_AddExistingBlock(&builder2, block_hash, block_asset_count, &ordered_content->m_AssetEntries[asset_entry_index]);
             }
 
-            meow_state state;
-            MeowBegin(&state, MeowDefaultSeed);
-            MeowAbsorb(&state, GetSize_uint8_t(data), data);
-            uint64_t verify_hash = MeowU64From(MeowEnd(&state, 0), 0);
-            assert(hash_key == verify_hash);
-
-            Free_uint8_t(data);
-            ++it;
+            Longtail_FinalizeBuilder(&builder2);
         }
-    }
-    printf("Read back %u files\n", hashes.Size());
 
-    free(longtail);
+        while (pendingCount > 0)
+        {
+            if (Bikeshed_ExecuteOne(shed, 0))
+            {
+                continue;
+            }
+            if (old_pending_count != pendingCount)
+            {
+                old_pending_count = pendingCount;
+                printf("Files2 left to store: %d\n", old_pending_count);
+            }
+            nadir::Sleep(1000);
+        }
+        printf("Added %u existing assets in %u blocks\n", GetSize_Longtail_AssetEntry(ordered_content->m_AssetEntries), GetSize_TLongtail_Hash(ordered_content->m_BlockHashes));
+
+        const size_t longtail_size = Longtail_GetSize(GetSize_Longtail_AssetEntry(builder2.m_AssetEntries), GetSize_TLongtail_Hash(builder2.m_BlockHashes));
+        struct Longtail* longtail = Longtail_Open(malloc(longtail_size),
+            GetSize_Longtail_AssetEntry(builder2.m_AssetEntries), builder2.m_AssetEntries,
+            GetSize_TLongtail_Hash(builder2.m_BlockHashes), builder2.m_BlockHashes);
+
+        {
+            SimpleReadStorage read_storage(builder2.m_BlockHashes, &block_storage2.m_Storage);
+            jc::HashTable<uint64_t, Asset*>::Iterator it = hashes.Begin();
+            while (it != hashes.End())
+            {
+                uint64_t hash_key = *it.GetKey();
+                Asset* asset = *it.GetValue();
+                uint64_t path_hash = GetPathHash(asset->m_Path);
+
+                uint8_t* data = 0;
+                if (!Longtail_Read(longtail, &read_storage.m_Storage, path_hash, OutputStream, &data))
+                {
+                    assert(false);
+                }
+
+                meow_state state;
+                MeowBegin(&state, MeowDefaultSeed);
+                MeowAbsorb(&state, GetSize_uint8_t(data), data);
+                uint64_t verify_hash = MeowU64From(MeowEnd(&state, 0), 0);
+                assert(hash_key == verify_hash);
+
+                Free_uint8_t(data);
+                ++it;
+            }
+        }
+        printf("Read back %u files\n", hashes.Size());
+
+        free(longtail);
+    }
 
     free(hash_mem);
     for (int32_t i = 0; i < assetCount; ++i)
