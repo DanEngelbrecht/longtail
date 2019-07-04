@@ -95,8 +95,8 @@ struct Longtail
 
 struct Longtail_BlockAssets
 {
-    uint64_t m_AssetIndex;
-    uint64_t m_AssetCount;
+    uint32_t m_AssetIndex;
+    uint32_t m_AssetCount;
 };
 
 #define LONGTAIL_ALIGN_SIZE_PRIVATE(x, align) (((x) + ((align)-1)) & ~((align)-1))
@@ -145,10 +145,7 @@ void Longtail_Builder_Initialize(struct Longtail_Builder* builder, Longtail_Writ
 
 static int Longtail_Builder_Add(struct Longtail_Builder* builder, TLongtail_Hash asset_hash, Longtail_InputStream input_stream, void* context, uint64_t length, TLongtail_Hash tag)
 {
-    if (GetSize_Longtail_AssetEntry(builder->m_AssetEntries) == GetCapacity_Longtail_AssetEntry(builder->m_AssetEntries))
-    {
-         builder->m_AssetEntries = IncreaseCapacity_Longtail_AssetEntry(builder->m_AssetEntries, 16);
-    }
+    builder->m_AssetEntries = EnsureCapacity_Longtail_AssetEntry(builder->m_AssetEntries, 16u);
 
     Longtail_AssetEntry* asset_entry = Push_Longtail_AssetEntry(builder->m_AssetEntries);
     if (0 == builder->m_Storage->Longtail_AllocateBlockStorage(builder->m_Storage, tag, length, &asset_entry->m_BlockStore))

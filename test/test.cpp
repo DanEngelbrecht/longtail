@@ -14,6 +14,8 @@
 
 #include <inttypes.h>
 
+#include <algorithm>
+
 struct TestStorage
 {
     Longtail_ReadStorage m_Storge = {/*PreflightBlocks, */AqcuireBlockStorage, ReleaseBlock};
@@ -295,16 +297,28 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
                     Push_AssetFolder(asset_folders)->m_FolderPath = ConcatPath(asset_folder, dir_name);
                     if (GetSize_AssetFolder(asset_folders) == GetCapacity_AssetFolder(asset_folders))
                     {
-                        AssetFolder* asset_folders_new = SetCapacity_AssetFolder((AssetFolder*)0, GetSize_AssetFolder(asset_folders) + 256);
                         uint32_t unprocessed_count = (GetSize_AssetFolder(asset_folders) - folder_index);
-                        if (unprocessed_count > 0)
+                        if (folder_index > 0)
                         {
-                            SetSize_AssetFolder(asset_folders_new, unprocessed_count);
-                            memcpy(asset_folders_new, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
+                            if (unprocessed_count > 0)
+                            {
+                                memmove(asset_folders, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
+                                SetSize_AssetFolder(asset_folders, unprocessed_count);
+                            }
+                            folder_index = 0;
                         }
-                        Free_AssetFolder(asset_folders);
-                        asset_folders = asset_folders_new;
-                        folder_index = 0;
+                        else
+                        {
+                            AssetFolder* asset_folders_new = SetCapacity_AssetFolder((AssetFolder*)0, GetCapacity_AssetFolder(asset_folders) + 256);
+                            if (unprocessed_count > 0)
+                            {
+                                SetSize_AssetFolder(asset_folders_new, unprocessed_count);
+                                memcpy(asset_folders_new, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
+                            }
+                            Free_AssetFolder(asset_folders);
+                            asset_folders = asset_folders_new;
+                            folder_index = 0;
+                        }
                     }
                 }
                 else if(const char* file_name = GetFileName(&fs_iterator))
@@ -1082,14 +1096,107 @@ static uint64_t GetPathHash(const char* path)
     return path_hash;
 }
 
-//LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_AssetEntry, malloc, free)
 LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockStore, malloc, free)
 LONGTAIL_DECLARE_ARRAY_TYPE(Longtail_BlockAssets, malloc, free)
+
+struct Longtail_AssetRegistry
+{
+    // If all the assets are still in the new index, keep the block and the assets, otherwise throw it away
+
+    // For each block we want the assets in that block
+    // Build a map of all new asset content hash to "invalid block"
+
+    // Iterate over asset content hashes is each block, check if we all the content hashes are in the new asset set
+    //  Yes: Store block and set all the asset content hases in block to point to index of stored block
+    //  No: Don't store block
+    // Iterate over all assets, get path hash, look up content hash, look up block index in map from asset content has to block index
+    // if "invalid block" start a new block and store content there
+
+    // Queries:
+    //  Is the asset content hash present
+
+    // Need:
+    //   A list of blocks with the asset content in them
+
+    struct Longtail_AssetEntry* m_AssetArray;
+
+};
+
+struct OrderedCacheContent
+{
+    TLongtail_Hash* m_BlockHashes;
+    TLongtail_Hash* m_AssetHashes;
+    struct Longtail_BlockAssets* m_BlockAssets;
+};
+
+struct AssetSorter
+{
+    AssetSorter(struct Longtail_AssetEntry* asset_entries)
+        : asset_entries(asset_entries)
+    {}
+    struct Longtail_AssetEntry* asset_entries;
+    bool operator()(uint32_t left, uint32_t right)
+    {
+        const Longtail_AssetEntry& a = asset_entries[left];
+        const Longtail_AssetEntry& b = asset_entries[right];
+        if (a.m_BlockStore.m_BlockIndex == b.m_BlockStore.m_BlockIndex)
+        {
+            return a.m_BlockStore.m_StartOffset < b.m_BlockStore.m_StartOffset;
+        }
+        return a.m_BlockStore.m_BlockIndex < b.m_BlockStore.m_BlockIndex;
+    }
+};
+
+struct OrderedCacheContent* BuildOrderedCacheContent(uint32_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint32_t block_count, TLongtail_Hash* block_hashes)
+{
+    OrderedCacheContent* ordered_content = (OrderedCacheContent*)malloc(sizeof(OrderedCacheContent));
+    ordered_content->m_BlockHashes = SetCapacity_TLongtail_Hash((TLongtail_Hash*)0, block_count);
+    ordered_content->m_AssetHashes = SetCapacity_TLongtail_Hash((TLongtail_Hash*)0, asset_entry_count);
+    ordered_content->m_BlockAssets = SetCapacity_Longtail_BlockAssets((Longtail_BlockAssets*)0, asset_entry_count); // Worst case
+
+    uint32_t* asset_order = new uint32_t[asset_entry_count];
+    for (uint32_t ai = 0; ai < asset_entry_count; ++ai)
+    {
+        asset_order[ai] = ai;
+    }
+
+    // Sort the asset references so the blocks are consecutive ascending
+    std::sort(&asset_order[0], &asset_order[asset_entry_count], AssetSorter(asset_entries));
+
+    uint32_t ai = 0;
+    while (ai < asset_entry_count)
+    {
+        uint32_t asset_index = asset_order[ai];
+        struct Longtail_AssetEntry* a = &asset_entries[asset_index];
+        uint32_t block_index = a->m_BlockStore.m_BlockIndex;
+        Longtail_BlockAssets* block_asset = Push_Longtail_BlockAssets(ordered_content->m_BlockAssets);
+        uint32_t block_asset_index = GetSize_TLongtail_Hash(ordered_content->m_AssetHashes);
+        block_asset->m_AssetIndex = block_asset_index;
+        block_asset->m_AssetCount = 1;
+        *Push_TLongtail_Hash(ordered_content->m_AssetHashes) = a->m_AssetHash;
+        *Push_TLongtail_Hash(ordered_content->m_BlockHashes) = block_hashes[block_index];
+
+        ++ai;
+        asset_index = asset_order[ai];
+
+        while (ai < asset_entry_count && asset_entries[asset_index].m_BlockStore.m_BlockIndex == block_index)
+        {
+            struct Longtail_AssetEntry* a = &asset_entries[asset_index];
+            *Push_TLongtail_Hash(ordered_content->m_AssetHashes) = a->m_AssetHash;
+            ++block_asset->m_AssetCount;
+
+            ++ai;
+            asset_index = asset_order[ai];
+        }
+
+    }
+    return ordered_content;
+}
 
 struct Longtail_IndexDiffer
 {
     struct Longtail_AssetEntry* m_AssetArray;
-    struct Longtail_BlockStore* m_BlockArray;
+    TLongtail_Hash* m_BlockHashes;
     struct Longtail_BlockAssets* m_BlockAssets;
     TLongtail_Hash* m_AssetHashes;
 };
@@ -1101,19 +1208,19 @@ int Longtail_CompareAssetEntry(const void* element1, const void* element2)
     return (int)((int64_t)entry1->m_BlockStore.m_BlockIndex - (int64_t)entry2->m_BlockStore.m_BlockIndex);
 }
 
-Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint32_t block_entry_count, struct Longtail_BlockStore* block_entries, uint32_t new_asset_count, TLongtail_Hash* new_asset_hashes)
+Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint32_t block_count, TLongtail_Hash* block_hashes, uint32_t new_asset_count, TLongtail_Hash* new_asset_hashes)
 {
     Longtail_IndexDiffer* index_differ = (Longtail_IndexDiffer*)mem;
     index_differ->m_AssetArray = 0;
-    index_differ->m_BlockArray = 0;
+    index_differ->m_BlockHashes = 0;
 //    index_differ->m_AssetArray = Longtail_Array_SetCapacity(index_differ->m_AssetArray, asset_entry_count);
 //    index_differ->m_BlockArray = Longtail_Array_SetCapacity(index_differ->m_BlockArray, block_entry_count);
 //    memcpy(index_differ->m_AssetArray, asset_entries, sizeof(Longtail_AssetEntry) * asset_entry_count);
 //    memcpy(index_differ->m_BlockArray, block_entries, sizeof(Longtail_BlockStore) * block_entry_count);
     qsort(asset_entries, asset_entry_count, sizeof(Longtail_AssetEntry), Longtail_CompareAssetEntry);
-    uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize(new_asset_count);
+    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize(new_asset_count);
     void* hash_mem = malloc(hash_size);
-    jc::HashTable<uint64_t, uint32_t> hashes;
+    jc::HashTable<TLongtail_Hash, uint32_t> hashes;
     hashes.Create(new_asset_count, hash_mem);
     for (uint32_t i = 0; i < new_asset_count; ++i)
     {
@@ -1149,7 +1256,7 @@ Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct
     // How we add data to an existing block store, indexes and all
 
     index_differ->m_AssetArray = SetCapacity_Longtail_AssetEntry(index_differ->m_AssetArray, asset_entry_count);
-    index_differ->m_BlockArray = SetCapacity_Longtail_BlockStore(index_differ->m_BlockArray, block_entry_count);
+    index_differ->m_BlockHashes = SetCapacity_TLongtail_Hash(index_differ->m_BlockHashes, block_count);
 
     for (uint32_t a = 0; a < new_asset_count; ++a)
     {
@@ -1158,8 +1265,8 @@ Longtail_IndexDiffer* CreateDiffer(void* mem, uint32_t asset_entry_count, struct
         if (existing_block_index)
         {
             Longtail_AssetEntry* asset_entry = Push_Longtail_AssetEntry(index_differ->m_AssetArray);
-            Longtail_BlockStore* block_entry = Push_Longtail_BlockStore(index_differ->m_BlockArray);
-            block_entry->m_BlockIndex = *existing_block_index;
+//            TLongtail_Hash* block_hash = Push_TLongtail_Hash(index_differ->m_BlockHashes);
+            asset_entry->m_BlockStore.m_BlockIndex = *existing_block_index;
             asset_entry->m_AssetHash = 0;
         }
     }
@@ -1419,7 +1526,32 @@ TEST(Longtail, ScanContent)
 
     printf("Comitted %u files\n", hashes.Size());
 
-    struct Longtail* longtail = Longtail_Open(malloc(Longtail_GetSize(GetSize_Longtail_AssetEntry(builder.m_AssetEntries), GetSize_TLongtail_Hash(builder.m_BlockHashes))),
+
+    struct OrderedCacheContent* ordered_content = BuildOrderedCacheContent(
+        GetSize_Longtail_AssetEntry(builder.m_AssetEntries), builder.m_AssetEntries,
+        GetSize_TLongtail_Hash(builder.m_BlockHashes), builder.m_BlockHashes);
+
+    {
+        uint32_t block_asset_count = GetSize_Longtail_BlockAssets(ordered_content->m_BlockAssets);
+        uint32_t block_count = GetSize_TLongtail_Hash(ordered_content->m_BlockHashes);
+
+        for (uint32_t ba = 0; ba < block_asset_count; ++ba)
+        {
+            uint32_t block_asset_count = ordered_content->m_BlockAssets[ba].m_AssetCount;
+            uint32_t asset_hash_index = ordered_content->m_BlockAssets[ba].m_AssetIndex;
+            while (block_asset_count--)
+            {
+                printf("Block %u, Hash: %llu, Asset: %llu\n",
+                    ba,
+                    ordered_content->m_BlockHashes[ba],
+                    ordered_content->m_AssetHashes[asset_hash_index]);
+                ++asset_hash_index;
+            }
+        }
+    }
+
+    const size_t longtail_size = Longtail_GetSize(GetSize_Longtail_AssetEntry(builder.m_AssetEntries), GetSize_TLongtail_Hash(builder.m_BlockHashes));
+    struct Longtail* longtail = Longtail_Open(malloc(longtail_size),
         GetSize_Longtail_AssetEntry(builder.m_AssetEntries), builder.m_AssetEntries,
         GetSize_TLongtail_Hash(builder.m_BlockHashes), builder.m_BlockHashes);
 
