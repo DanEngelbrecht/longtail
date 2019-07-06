@@ -413,21 +413,21 @@ struct ThreadWorker
 };
 
 
-struct StoredBlock
-{
-    TLongtail_Hash m_Tag;
-    TLongtail_Hash m_Hash;
-    uint64_t m_Size;
-};
+//struct StoredBlock
+//{
+//    TLongtail_Hash m_Tag;
+//    TLongtail_Hash m_Hash;
+//    uint64_t m_Size;
+//};
 
-struct LiveBlock
-{
-    uint8_t* m_Data;
-    uint64_t m_CommitedSize;
-};
+//struct LiveBlock
+//{
+//    uint8_t* m_Data;
+//    uint64_t m_CommitedSize;
+//};
 
-LONGTAIL_DECLARE_ARRAY_TYPE(StoredBlock, malloc, free)
-LONGTAIL_DECLARE_ARRAY_TYPE(LiveBlock, malloc, free)
+//LONGTAIL_DECLARE_ARRAY_TYPE(StoredBlock, malloc, free)
+//LONGTAIL_DECLARE_ARRAY_TYPE(LiveBlock, malloc, free)
 LONGTAIL_DECLARE_ARRAY_TYPE(uint32_t, malloc, free)
 
 // This storage is responsible for storing/retrieveing the data, caching if data is on remote store and compression
