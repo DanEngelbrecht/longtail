@@ -1232,8 +1232,10 @@ TEST(Longtail, ScanContent)
     }
 
 
-    const char* root_path = "D:\\TestContent\\Version_1";
-    const char* cache_path = "D:\\Temp\\longtail\\cache";
+//    const char* root_path = "D:\\TestContent\\Version_1";
+    const char* root_path = "/Users/danengelbrecht/Documents/Projects/blossom_blast_saga/build/default";
+//    const char* cache_path = "D:\\Temp\\longtail\\cache";
+    const char* cache_path = "/Users/danengelbrecht/tmp/cache";
 
     ScanExistingDataContext scan_context;
     scan_context.m_Hashes = 0;

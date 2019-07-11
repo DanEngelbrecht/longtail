@@ -4,9 +4,9 @@ set +e
 mkdir -p build
 
 #OPT=-O3
-OPT="-g -O1"
+OPT="-g"
 #DISASSEMBLY='-S -masm=intel'
-ASAN="-fsanitize=address -fno-omit-frame-pointer"
+#ASAN="-fsanitize=address -fno-omit-frame-pointer"
 #CXXFLAGS="$CXXFLAGS -Wall -Weverything -pedantic -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
 CXXFLAGS="$CXXFLAGS -Wno-deprecated-register -Wno-deprecated"
 ARCH="-m64 -maes"

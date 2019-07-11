@@ -21,7 +21,10 @@ inline uint32_t Longtail_Array_GetSize_impl(void* buffer)
 
 inline void Longtail_Array_SetSize_impl(void* buffer, uint32_t size)
 {
-    ((uint32_t*)buffer)[-1] = size;
+    if (buffer && size)
+    {
+        ((uint32_t*)buffer)[-1] = size;
+    }
 }
 
 inline void Longtail_Array_Free_impl(void* buffer, longtail_impl_free_func free_func)
