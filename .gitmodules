@@ -4,3 +4,6 @@
 [submodule "third-party/lizard"]
 	path = third-party/lizard
 	url = https://github.com/inikep/lizard.git
+[submodule "third-party/trove"]
+	path = third-party/trove
+	url = https://github.com/DanEngelbrecht/trove.git
