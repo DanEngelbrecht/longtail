@@ -87,12 +87,12 @@ inline void Longtail_Array_Pop_impl(void* buffer)
 }
 
 #define LONGTAIL_DECLARE_ARRAY_TYPE(t, alloc_mem, free_mem) \
-    inline uint32_t LONGTAIL_ARRAY_CONCAT(GetCapacity_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer) { return Longtail_Array_GetCapacity_impl(buffer); } \
-    inline uint32_t LONGTAIL_ARRAY_CONCAT(GetSize_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer) { return Longtail_Array_GetSize_impl(buffer); } \
-    inline void LONGTAIL_ARRAY_CONCAT(SetSize_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t size) { return Longtail_Array_SetSize_impl(buffer, size); } \
-    inline void LONGTAIL_ARRAY_CONCAT(Free_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer) { Longtail_Array_Free_impl(buffer, free_mem); } \
-    inline LONGTAIL_ARRAY_CONCAT(t, *) LONGTAIL_ARRAY_CONCAT(SetCapacity_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t new_capacity) { return (LONGTAIL_ARRAY_CONCAT(t, *))Longtail_Array_SetCapacity_impl(buffer, sizeof(t), new_capacity, alloc_mem, free_mem); } \
-    inline LONGTAIL_ARRAY_CONCAT(t, *) LONGTAIL_ARRAY_CONCAT(IncreaseCapacity_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t count) { return (LONGTAIL_ARRAY_CONCAT(t, *))Longtail_Array_IncreaseCapacity_impl(buffer, sizeof(t), count, alloc_mem, free_mem); } \
-    inline LONGTAIL_ARRAY_CONCAT(t, *) LONGTAIL_ARRAY_CONCAT(EnsureCapacity_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer, uint32_t size_increment) { return (LONGTAIL_ARRAY_CONCAT(t, *))Longtail_Array_EnsureCapacity_impl(buffer, sizeof(t), size_increment, alloc_mem, free_mem); } \
-    inline LONGTAIL_ARRAY_CONCAT(t, *) LONGTAIL_ARRAY_CONCAT(Push_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer) { return (LONGTAIL_ARRAY_CONCAT(t, *))Longtail_Array_Push_impl(buffer, sizeof(t)); } \
-    inline void LONGTAIL_ARRAY_CONCAT(Pop_, t)(LONGTAIL_ARRAY_CONCAT(t, *) buffer) { Longtail_Array_Pop_impl(buffer); }
+    inline uint32_t LONGTAIL_ARRAY_CONCAT(GetCapacity_, t)(t* buffer) { return Longtail_Array_GetCapacity_impl(buffer); } \
+    inline uint32_t LONGTAIL_ARRAY_CONCAT(GetSize_, t)(t* buffer) { return Longtail_Array_GetSize_impl(buffer); } \
+    inline void LONGTAIL_ARRAY_CONCAT(SetSize_, t)(t* buffer, uint32_t size) { return Longtail_Array_SetSize_impl(buffer, size); } \
+    inline void LONGTAIL_ARRAY_CONCAT(Free_, t)(t* buffer) { Longtail_Array_Free_impl(buffer, free_mem); } \
+    inline t* LONGTAIL_ARRAY_CONCAT(SetCapacity_, t)(t* buffer, uint32_t new_capacity) { return (t*)Longtail_Array_SetCapacity_impl(buffer, sizeof(t), new_capacity, alloc_mem, free_mem); } \
+    inline t* LONGTAIL_ARRAY_CONCAT(IncreaseCapacity_, t)(t* buffer, uint32_t count) { return (t*)Longtail_Array_IncreaseCapacity_impl(buffer, sizeof(t), count, alloc_mem, free_mem); } \
+    inline t* LONGTAIL_ARRAY_CONCAT(EnsureCapacity_, t)(t* buffer, uint32_t size_increment) { return (t*)Longtail_Array_EnsureCapacity_impl(buffer, sizeof(t), size_increment, alloc_mem, free_mem); } \
+    inline t* LONGTAIL_ARRAY_CONCAT(Push_, t)(t* buffer) { return (t*)Longtail_Array_Push_impl(buffer, sizeof(t)); } \
+    inline void LONGTAIL_ARRAY_CONCAT(Pop_, t)(t* buffer) { Longtail_Array_Pop_impl(buffer); }

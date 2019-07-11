@@ -7,6 +7,7 @@
 #include "../third-party/bikeshed/bikeshed.h"
 #include "../third-party/nadir/src/nadir.h"
 #include "../third-party/jc_containers/src/jc_hashtable.h"
+#include "../third-party/trove/src/trove.h"
 
 #include "../third-party/lizard/lib/lizard_common.h"
 #include "../third-party/lizard/lib/lizard_decompress.h"
@@ -15,6 +16,13 @@
 #include <inttypes.h>
 
 #include <algorithm>
+
+#if defined(_WIN32)
+    #include <malloc.h>
+    #define alloca _alloca
+#else
+    #include <alloca.h>
+#endif
 
 struct TestStorage
 {
@@ -40,160 +48,6 @@ TEST(Longtail, Basic)
     TestStorage storage;
 }
 
-#if defined(_WIN32)
-
-#include <Windows.h>
-
-struct FSIterator
-{
-    WIN32_FIND_DATAA m_FindData;
-    HANDLE m_Handle;
-};
-
-static bool IsSkippableFile(FSIterator* fs_iterator)
-{
-    const char* p = fs_iterator->m_FindData.cFileName;
-    if ((*p++) != '.')
-    {
-        return false;
-    }
-    if ((*p) == '\0')
-    {
-        return true;
-    }
-    if ((*p++) != '.')
-    {
-        return false;
-    }
-    if ((*p) == '\0')
-    {
-        return true;
-    }
-    return false;
-}
-
-static bool Skip(FSIterator* fs_iterator)
-{
-    while (IsSkippableFile(fs_iterator))
-    {
-        if (FALSE == ::FindNextFileA(fs_iterator->m_Handle, &fs_iterator->m_FindData))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool StartFindFile(FSIterator* fs_iterator, const char* path)
-{
-    char scan_pattern[MAX_PATH];
-    strcpy(scan_pattern, path);
-    strncat(scan_pattern, "\\*.*", MAX_PATH - strlen(scan_pattern));
-    fs_iterator->m_Handle = ::FindFirstFileA(scan_pattern, &fs_iterator->m_FindData);
-    if (fs_iterator->m_Handle == INVALID_HANDLE_VALUE)
-    {
-        return false;
-    }
-    return Skip(fs_iterator);
-}
-
-bool FindNextFile(FSIterator* fs_iterator)
-{
-    if (FALSE == ::FindNextFileA(fs_iterator->m_Handle, &fs_iterator->m_FindData))
-    {
-        return false;
-    }
-    return Skip(fs_iterator);
-}
-
-void CloseFindFile(FSIterator* fs_iterator)
-{
-    ::FindClose(fs_iterator->m_Handle);
-    fs_iterator->m_Handle = INVALID_HANDLE_VALUE;
-}
-
-const char* GetFileName(FSIterator* fs_iterator)
-{
-    if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-    {
-        return 0;
-    }
-    return fs_iterator->m_FindData.cFileName;
-}
-
-const char* GetDirectoryName(FSIterator* fs_iterator)
-{
-    if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-    {
-        return fs_iterator->m_FindData.cFileName;
-    }
-    return 0;
-}
-
-void* OpenReadFile(const char* path)
-{
-    HANDLE handle = ::CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-    if (handle == INVALID_HANDLE_VALUE)
-    {
-        return 0;
-    }
-    return (void*)handle;
-}
-
-void* OpenWriteFile(const char* path)
-{
-    HANDLE handle = ::CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
-    if (handle == INVALID_HANDLE_VALUE)
-    {
-        return 0;
-    }
-    return (void*)handle;
-}
-
-bool Read(void* handle, uint64_t offset, uint64_t length, void* output)
-{
-    HANDLE h = (HANDLE)(handle);
-    ::SetFilePointer(h, (LONG)offset, 0, FILE_BEGIN);
-    return TRUE == ::ReadFile(h, output, (LONG)length, 0, 0);
-}
-
-bool Write(void* handle, uint64_t offset, uint64_t length, const void* input)
-{
-    HANDLE h = (HANDLE)(handle);
-    ::SetFilePointer(h, (LONG)offset, 0, FILE_BEGIN);
-    return TRUE == ::WriteFile(h, input, (LONG)length, 0, 0);
-}
-
-uint64_t GetFileSize(void* handle)
-{
-    HANDLE h = (HANDLE)(handle);
-    return ::GetFileSize(h, 0);
-}
-
-void CloseReadFile(void* handle)
-{
-    HANDLE h = (HANDLE)(handle);
-    ::CloseHandle(h);
-}
-
-void CloseWriteFile(void* handle)
-{
-    HANDLE h = (HANDLE)(handle);
-    ::CloseHandle(h);
-}
-
-const char* ConcatPath(const char* folder, const char* file)
-{
-    size_t path_len = strlen(folder) + 1 + strlen(file) + 1;
-    char* path = (char*)malloc(path_len);
-    strcpy(path, folder);
-    strcat(path, "\\");
-    strcat(path, file);
-    return path;
-}
-
-#endif
-
 struct Asset
 {
     const char* m_Path;
@@ -210,12 +64,12 @@ struct HashJob
 static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     HashJob* hash_job = (HashJob*)context;
-    void* file_handle = OpenReadFile(hash_job->m_Asset.m_Path);
+    HTroveOpenReadFile file_handle = Trove_OpenReadFile(hash_job->m_Asset.m_Path);
     meow_state state;
     MeowBegin(&state, MeowDefaultSeed);
     if(file_handle)
     {
-        uint64_t file_size = GetFileSize(file_handle);
+        uint64_t file_size = Trove_GetFileSize(file_handle);
         hash_job->m_Asset.m_Size = file_size;
 
         uint8_t batch_data[65536];
@@ -223,12 +77,12 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         while (offset != file_size)
         {
             meow_umm len = (file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data);
-            bool read_ok = Read(file_handle, offset, len, batch_data);
+            bool read_ok = Trove_Read(file_handle, offset, len, batch_data);
             assert(read_ok);
             offset += len;
             MeowAbsorb(&state, len, batch_data);
         }
-        CloseReadFile(file_handle);
+        Trove_CloseReadFile(file_handle);
     }
     meow_u128 hash = MeowEnd(&state, 0);
     hash_job->m_Asset.m_Hash = hash;
@@ -255,7 +109,7 @@ static void ProcessHash(void* context, const char* root_path, const char* file_n
     Bikeshed shed = process_hash_context->m_Shed;
     uint32_t asset_count = nadir::AtomicAdd32(process_hash_context->m_AssetCount, 1);
     HashJob* job = &process_hash_context->m_HashJobs[asset_count - 1];
-    job->m_Asset.m_Path = ConcatPath(root_path, file_name);
+    job->m_Asset.m_Path = Trove_ConcatPath(root_path, file_name);
     job->m_Asset.m_Size = 0;
     job->m_PendingCount = process_hash_context->m_PendingCount;
     BikeShed_TaskFunc func[1] = {HashFile};
@@ -281,20 +135,20 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
 
     uint32_t folder_index = 0;
 
-    Push_AssetFolder(asset_folders)->m_FolderPath = _strdup(root_folder);
+    Push_AssetFolder(asset_folders)->m_FolderPath = strdup(root_folder);
 
-    FSIterator fs_iterator;
+    HTrove_FSIterator fs_iterator = (HTrove_FSIterator)alloca(Trove_GetFSIteratorSize());
     while (folder_index != GetSize_AssetFolder(asset_folders))
     {
         const char* asset_folder = asset_folders[folder_index++].m_FolderPath;
 
-        if (StartFindFile(&fs_iterator, asset_folder))
+        if (Trove_StartFind(fs_iterator, asset_folder))
         {
             do
             {
-                if (const char* dir_name = GetDirectoryName(&fs_iterator))
+                if (const char* dir_name = Trove_GetDirectoryName(fs_iterator))
                 {
-                    Push_AssetFolder(asset_folders)->m_FolderPath = ConcatPath(asset_folder, dir_name);
+                    Push_AssetFolder(asset_folders)->m_FolderPath = Trove_ConcatPath(asset_folder, dir_name);
                     if (GetSize_AssetFolder(asset_folders) == GetCapacity_AssetFolder(asset_folders))
                     {
                         uint32_t unprocessed_count = (GetSize_AssetFolder(asset_folders) - folder_index);
@@ -321,12 +175,12 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
                         }
                     }
                 }
-                else if(const char* file_name = GetFileName(&fs_iterator))
+                else if(const char* file_name = Trove_GetFileName(fs_iterator))
                 {
                     entry_processor(context, asset_folder, file_name);
                 }
-            }while(FindNextFile(&fs_iterator));
-            CloseFindFile(&fs_iterator);
+            }while(Trove_FindNext(fs_iterator));
+            Trove_CloseFind(fs_iterator);
         }
         free((void*)asset_folder);
     }
@@ -565,15 +419,15 @@ struct DiskBlockStorage
 
         const char* path = disk_block_storage->MakeBlockPath(hash);
 
-        void* f = OpenWriteFile(path);
+        HTroveOpenWriteFile f = Trove_OpenWriteFile(path);
         free((char*)path);
         if (!f)
         {
             return 0;
         }
 
-        bool ok = Write(f, 0, length, data);
-        CloseWriteFile(f);
+        bool ok = Trove_Write(f, 0, length, data);
+        Trove_CloseWriteFile(f);
         return ok ? 1 : 0;
     }
 
@@ -581,15 +435,15 @@ struct DiskBlockStorage
     {
         DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
         const char* path = disk_block_storage->MakeBlockPath(hash);
-        void* f = OpenReadFile(path);
+        HTroveOpenReadFile f = Trove_OpenReadFile(path);
         free((char*)path);
         if (!f)
         {
             return 0;
         }
 
-        bool ok = Read(f, 0, length, data);
-        CloseReadFile(f);
+        bool ok = Trove_Read(f, 0, length, data);
+        Trove_CloseReadFile(f);
         return ok ? 1 : 0;
     }
 
@@ -597,14 +451,14 @@ struct DiskBlockStorage
     {
         DiskBlockStorage* disk_block_storage = (DiskBlockStorage*)storage;
         const char* path = disk_block_storage->MakeBlockPath(hash);
-        void* f = OpenReadFile(path);
+        HTroveOpenReadFile f = Trove_OpenReadFile(path);
         free((char*)path);
         if (!f)
         {
             return 0;
         }
-        uint64_t size = GetFileSize(f);
-        CloseReadFile(f);
+        uint64_t size = Trove_GetFileSize(f);
+        Trove_CloseReadFile(f);
         return size;
     }
 
@@ -612,7 +466,7 @@ struct DiskBlockStorage
     {
         char file_name[64];
         sprintf(file_name, "0x%" PRIx64, hash);
-        const char* path = ConcatPath(m_StorePath, file_name);
+        const char* path = Trove_ConcatPath(m_StorePath, file_name);
         return path;
     }
     const char* m_StorePath;
@@ -1066,13 +920,13 @@ struct ReadStorage
 static int InputStream(void* context, uint64_t byte_count, uint8_t* data)
 {
     Asset* asset = (Asset*)context;
-    void*  f= OpenReadFile(asset->m_Path);
+    HTroveOpenReadFile f= Trove_OpenReadFile(asset->m_Path);
     if (f == 0)
     {
         return 0;
     }
-    Read(f, 0, byte_count, data);
-    CloseReadFile(f);
+    Trove_Read(f, 0, byte_count, data);
+    Trove_CloseReadFile(f);
     return 1;
 }
 

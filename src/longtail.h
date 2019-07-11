@@ -296,4 +296,4 @@ int Longtail_Read(struct Longtail* longtail, struct Longtail_ReadStorage* storag
     return 1;
 }
 
-#endif LONGTAIL_IMPLEMENTATION
+#endif // LONGTAIL_IMPLEMENTATION
