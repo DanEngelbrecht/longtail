@@ -1,3 +1,16 @@
+|Branch      | OSX / Linux / Windows |
+|------------|-----------------------|
+|master      | [![Build Status](https://travis-ci.org/DanEngelbrecht/longtail.svg?branch=master)](https://travis-ci.org/DanEngelbrecht/longtail?branch=master) |
+
+# longtail
+Experimental incremental asset delivery format
+
+# tests
+To build builds, call `build/d_clang.sh` for debug and `build/r_clang.sh` for release on OSX/Linux, `build\d_cl.bat` for debug and `build\r_cl.bat` for release on Windows.
+
+Run test with `output/test_debug` for debug and `output/test` for release on OSX/Linux, `output\test_debug.exe` for debug and `output\test.exe` for release on Windows.
+
+# wip
 MHash . https://github.com/cmuratori/meow_hash
 
 MHash for block identiy, also signifies content
