@@ -76,7 +76,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         uint64_t offset = 0;
         while (offset != file_size)
         {
-            meow_umm len = (file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data);
+            meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
             bool read_ok = Trove_Read(file_handle, offset, len, batch_data);
             assert(read_ok);
             offset += len;
@@ -340,7 +340,7 @@ struct CompressStorage
     {
         CompressStorage* compress_storage = (CompressStorage*)storage;
 
-        uint8_t* p = (uint8_t*)(malloc(sizeof(CompressJob) + length));
+        uint8_t* p = (uint8_t*)(malloc((size_t)(sizeof(CompressJob) + length)));
 
         CompressJob* compress_job = (CompressJob*)p;
         p += sizeof(CompressJob);
@@ -350,7 +350,7 @@ struct CompressStorage
         compress_job->length = length;
         compress_job->data = p;
 
-        memcpy((void*)compress_job->data, data, length);
+        memcpy((void*)compress_job->data, data, (size_t)length);
         BikeShed_TaskFunc taskfunc[1] = { CompressFile };
         void* context[1] = {compress_job};
         Bikeshed_TaskID task_ids[1];
@@ -373,7 +373,7 @@ struct CompressStorage
             return 0;
         }
 
-        char* compressed_buffer = (char*)malloc(compressed_size);
+        char* compressed_buffer = (char*)malloc((size_t)(compressed_size));
         int ok = compress_storage->m_BaseStorage->BlockStorage_ReadBlock(compress_storage->m_BaseStorage, hash, compressed_size, compressed_buffer);
         if (!ok)
         {
@@ -937,7 +937,7 @@ int OutputStream(void* context, uint64_t byte_count, const uint8_t* data)
     uint8_t** buffer = (uint8_t**)context;
     *buffer = SetCapacity_uint8_t(*buffer, (uint32_t)byte_count);
     SetSize_uint8_t(*buffer, (uint32_t)byte_count);
-    memmove(*buffer, data, byte_count);
+    memmove(*buffer, data, (size_t)byte_count);
     return 1;
 }
 

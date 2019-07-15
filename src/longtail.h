@@ -103,10 +103,10 @@ struct Longtail_BlockAssets
 
 size_t Longtail_GetSize(uint64_t asset_entry_count, uint64_t block_count)
 {
-    return LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail), 8) +
+    return (size_t)(LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail), 8) +
         LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_AssetEntry) * asset_entry_count, 8) +
 //        LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_BlockEntry) * block_entry_count, 8) +
-        (sizeof(TLongtail_Hash) * block_count);
+        (sizeof(TLongtail_Hash) * block_count));
 }
 
 struct Longtail* Longtail_Open(void* mem, uint64_t asset_entry_count, struct Longtail_AssetEntry* asset_entries, uint64_t block_count, TLongtail_Hash* block_hashes)
@@ -118,11 +118,11 @@ struct Longtail* Longtail_Open(void* mem, uint64_t asset_entry_count, struct Lon
     p += LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail), 8);
 
     longtail->asset_entries = (Longtail_AssetEntry*)p;
-    memcpy(longtail->asset_entries, asset_entries, sizeof(Longtail_AssetEntry) * asset_entry_count);
+    memcpy(longtail->asset_entries, asset_entries, (size_t)(sizeof(Longtail_AssetEntry) * asset_entry_count));
     p += LONGTAIL_ALIGN_SIZE_PRIVATE(sizeof(Longtail_AssetEntry) * asset_entry_count, 8);
 
     longtail->block_hashes = (TLongtail_Hash*)p;
-    memcpy(longtail->block_hashes, block_hashes, sizeof(TLongtail_Hash) * block_count);
+    memcpy(longtail->block_hashes, block_hashes, (size_t)(sizeof(TLongtail_Hash) * block_count));
     return longtail;
 }
 
