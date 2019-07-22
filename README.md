@@ -5,6 +5,9 @@
 # longtail
 Experimental incremental asset delivery format
 
+# Cloning
+git clone --recurse-submodules https://github.com/DanEngelbrecht/longtail.git
+
 # tests
 To build builds, call `build/d_clang.sh` for debug and `build/r_clang.sh` for release on OSX/Linux, `build\d_cl.bat` for debug and `build\r_cl.bat` for release on Windows.
 
