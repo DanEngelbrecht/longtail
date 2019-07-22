@@ -24,7 +24,7 @@ This is the "manifest" of the games content. Small, efficient and easy to diff t
 A chunk of data containing one or more assets content. Name of block is stringified version of the blocks contents hash. Easy to validate for errors and makes naming blocks unique.
 
 ### Block content
-PEach block contains information on the assets inside it. The block has asset content hash and length for each asset inside the block as a list at the end of the block.
+Each block contains information on the assets inside it. The block has asset content hash and length for each asset inside the block as a list at the end of the block.
 
 | DATA | DATA LENGTH |
 |-|-|
@@ -55,10 +55,10 @@ If an asset is present in more than one block, how do we represent that in the C
 Check Content Index for the block needed, open block and read using offset and length from the Content Index.
 
 ## Known, not locally present asset
-Check Content Index for the block needed, request the non-local block and store it locally. Scan the block for assets and insert them in the Content Index.
+Check Content Index for the block needed, request the non-local block and store it locally. Scan the block for assets and insert them in the Content Index, open block and read using offset and length from the Content Index.
 
 ## Unknown asset
-Request for block containing asset content hash, request the block and store it locally. Scan the block for assets and insert them in the Content Index.
+Request block hash containing asset content hash, request the block and store it locally. Scan the block for assets and insert them in the Content Index, open block and read using offset and length from the Content Index.
 
 # WIP
 MHash . https://github.com/cmuratori/meow_hash
