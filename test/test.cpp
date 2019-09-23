@@ -1245,7 +1245,7 @@ TEST(Longtail, ScanContent)
     {
         printf("Block %u, hash %llu\n",
             b,
-            scan_context.m_Hashes[b]);
+            (unsigned long long)scan_context.m_Hashes[b]);
     }
     Free_TLongtail_Hash(scan_context.m_Hashes);
 
@@ -1299,7 +1299,7 @@ TEST(Longtail, ScanContent)
                 printf("File `%s` matches file `%s` (%llu bytes): %08X-%08X-%08X-%08X\n",
                     asset->m_Path,
                     (*existing)->m_Path,
-                    asset->m_Size,
+                    (unsigned long long)asset->m_Size,
                     MeowU32From(hash, 3), MeowU32From(hash, 2), MeowU32From(hash, 1), MeowU32From(hash, 0));
                 redundant_byte_size += asset->m_Size;
                 ++redundant_file_count;
@@ -1313,7 +1313,7 @@ TEST(Longtail, ScanContent)
         }
         hashes.Put(hash_key, asset);
     }
-    printf("Found %llu redundant files comprising %llu bytes out of %llu bytes\n", redundant_file_count, redundant_byte_size, total_byte_size);
+    printf("Found %llu redundant files comprising %llu bytes out of %llu bytes\n", (unsigned long long)redundant_file_count, (unsigned long long)redundant_byte_size, (unsigned long long)total_byte_size);
 
     Longtail_Builder builder;
 
@@ -1350,17 +1350,17 @@ TEST(Longtail, ScanContent)
                     Longtail_AssetEntry* asset_entry = &builder.m_AssetEntries[a];
                     printf("Asset %u, %llu, in block %u, at %llu, size %llu\n",
                         a,
-                        asset_entry->m_AssetHash,
-                        asset_entry->m_BlockStore.m_BlockIndex,
-                        asset_entry->m_BlockStore.m_StartOffset,
-                        asset_entry->m_BlockStore.m_Length);
+                        (unsigned long long)asset_entry->m_AssetHash,
+                        (unsigned int)asset_entry->m_BlockStore.m_BlockIndex,
+                        (unsigned long long)asset_entry->m_BlockStore.m_StartOffset,
+                        (unsigned long long)asset_entry->m_BlockStore.m_Length);
                 }
 
                 for (uint32_t b = 0; b < block_count; ++b)
                 {
                     printf("Block %u, hash %llu\n",
                         b,
-                        builder.m_BlockHashes[b]);
+                        (unsigned long long)builder.m_BlockHashes[b]);
                 }
             }
         }
