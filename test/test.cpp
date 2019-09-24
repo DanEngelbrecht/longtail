@@ -43,87 +43,10 @@ struct TestStorage
     }
 };
 
-TEST(Longtail, Basic)
-{
-    TestStorage storage;
-}
-
-struct Asset
-{
-    const char* m_Path;
-    uint64_t m_Size;
-    meow_u128 m_Hash;
-};
-
-struct HashJob
-{
-    Asset m_Asset;
-    nadir::TAtomic32* m_PendingCount;
-};
-
-static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
-{
-    HashJob* hash_job = (HashJob*)context;
-    HTroveOpenReadFile file_handle = Trove_OpenReadFile(hash_job->m_Asset.m_Path);
-    meow_state state;
-    MeowBegin(&state, MeowDefaultSeed);
-    if(file_handle)
-    {
-        uint64_t file_size = Trove_GetFileSize(file_handle);
-        hash_job->m_Asset.m_Size = file_size;
-
-        uint8_t batch_data[65536];
-        uint64_t offset = 0;
-        while (offset != file_size)
-        {
-            meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
-            bool read_ok = Trove_Read(file_handle, offset, len, batch_data);
-            assert(read_ok);
-            offset += len;
-            MeowAbsorb(&state, len, batch_data);
-        }
-        Trove_CloseReadFile(file_handle);
-    }
-    meow_u128 hash = MeowEnd(&state, 0);
-    hash_job->m_Asset.m_Hash = hash;
-    nadir::AtomicAdd32(hash_job->m_PendingCount, -1);
-    return BIKESHED_TASK_RESULT_COMPLETE;
-}
-
 struct AssetFolder
 {
     const char* m_FolderPath;
 };
-
-struct ProcessHashContext
-{
-    Bikeshed m_Shed;
-    HashJob* m_HashJobs;
-    nadir::TAtomic32* m_AssetCount;
-    nadir::TAtomic32* m_PendingCount;
-};
-
-static void ProcessHash(void* context, const char* root_path, const char* file_name)
-{
-    ProcessHashContext* process_hash_context = (ProcessHashContext*)context;
-    Bikeshed shed = process_hash_context->m_Shed;
-    uint32_t asset_count = nadir::AtomicAdd32(process_hash_context->m_AssetCount, 1);
-    HashJob* job = &process_hash_context->m_HashJobs[asset_count - 1];
-    job->m_Asset.m_Path = Trove_ConcatPath(root_path, file_name);
-    job->m_Asset.m_Size = 0;
-    job->m_PendingCount = process_hash_context->m_PendingCount;
-    BikeShed_TaskFunc func[1] = {HashFile};
-    void* ctx[1] = {job};
-    Bikeshed_TaskID task_id;
-    while (!Bikeshed_CreateTasks(shed, 1, func, ctx, &task_id))
-    {
-        nadir::Sleep(1000);
-    }
-    {
-        nadir::AtomicAdd32(process_hash_context->m_PendingCount, 1);
-        Bikeshed_ReadyTasks(shed, 1, &task_id);
-    }
-}
 
 LONGTAIL_DECLARE_ARRAY_TYPE(AssetFolder, malloc, free)
 
@@ -186,6 +109,306 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
     }
     Free_AssetFolder(asset_folders);
     return 1;
+}
+
+TEST(Longtail, Basic)
+{
+    TestStorage storage;
+}
+
+struct Longtail_PathEntry
+{
+    TLongtail_Hash m_PathHash;
+    uint32_t m_PathOffset;
+    uint32_t m_ParentIndex;
+    uint32_t m_ChildCount;  // (uint32_t)-1 for files
+};
+
+struct Longtail_StringCacheEntry
+{
+	TLongtail_Hash m_StringHash;
+	uint32_t m_StringOffset;
+};
+
+struct Longtail_StringCache
+{
+	Longtail_StringCacheEntry* m_Entry;
+	char* m_DataBuffer;
+	uint32_t m_EntryCount;
+	uint32_t m_DataBufferSize;
+};
+
+uint32_t AddString(Longtail_StringCache* cache, const char* string, uint32_t string_length, TLongtail_Hash string_hash)
+{
+	for (uint32_t i = 0; i < cache->m_EntryCount; ++i)
+	{
+		if (cache->m_Entry->m_StringHash == string_hash)
+		{
+			return cache->m_Entry->m_StringOffset;
+		}
+	}
+	uint32_t string_offset = cache->m_DataBufferSize;
+	cache->m_Entry = (Longtail_StringCacheEntry*)realloc(cache->m_Entry, sizeof(Longtail_StringCacheEntry) * (cache->m_EntryCount + 1));
+	cache->m_Entry[cache->m_EntryCount].m_StringHash = string_hash;
+	cache->m_DataBuffer = (char*)realloc(cache->m_DataBuffer, cache->m_DataBufferSize + string_length + 1);
+	memcpy(&cache->m_DataBuffer[cache->m_DataBufferSize], string, string_length);
+	cache->m_DataBuffer[cache->m_DataBufferSize + string_length] = '\0';
+	cache->m_DataBufferSize += (string_length + 1);
+	cache->m_EntryCount += 1;
+	return string_offset;
+}
+
+struct Longtail_Paths
+{
+    Longtail_PathEntry* m_PathEntries;
+    char* m_PathStorage;
+};
+/*
+uint32_t find_path_offset(const Longtail_Paths& paths, const TLongtail_Hash* sub_path_hashes, uint32_t path_count, TLongtail_Hash sub_path_hash)
+{
+	uint32_t path_index = 0;
+	while (path_index < path_count)
+	{
+		if (sub_path_hashes[path_index] == sub_path_hash)
+		{
+			return paths.m_PathEntries[path_index].m_PathOffset;
+		}
+		++path_index;
+	}
+	return path_count;
+};
+*/
+TEST(Longtail, PathIndex)
+{
+	Longtail_StringCache string_cache;
+	memset(&string_cache, 0, sizeof(string_cache));
+
+	uint32_t path_count = 0;
+	uint32_t path_data_size = 0;
+	Longtail_Paths paths;
+	paths.m_PathEntries = 0;
+    paths.m_PathStorage = (char*)0;
+	TLongtail_Hash* sub_path_hashes = 0;
+
+    auto find_path_index = [](const Longtail_Paths& paths, TLongtail_Hash* sub_path_hashes, uint32_t path_count, uint32_t parent_path_index, TLongtail_Hash sub_path_hash)
+    {
+        uint32_t path_index = 0;
+        while (path_index < path_count)
+        {
+            if (sub_path_hashes[path_index] == sub_path_hash && paths.m_PathEntries[path_index].m_ParentIndex == parent_path_index)
+            {
+                return path_index;
+            }
+            ++path_index;
+        }
+        return path_count;
+    };
+
+	auto get_sub_path_hash = [](const char* path_begin, const char* path_end)
+    {
+        meow_state state;
+        MeowBegin(&state, MeowDefaultSeed);
+        MeowAbsorb(&state, (meow_umm)(path_end - path_begin), (void*)path_begin);
+        uint64_t path_hash = MeowU64From(MeowEnd(&state, 0), 0);
+        return path_hash;
+    };
+
+    auto find_sub_path_end = [](const char* path)
+    {
+        while (*path && *path != '/')
+        {
+            ++path;
+        }
+        return path;
+    };
+
+    auto add_sub_path = [](Longtail_Paths& paths, uint32_t path_count, uint32_t parent_path_index, bool is_directory, TLongtail_Hash path_hash, Longtail_StringCache* string_cache, TLongtail_Hash*& sub_path_hashes, const char* sub_path, uint32_t sub_path_length, TLongtail_Hash sub_path_hash)
+    {
+		sub_path_hashes = (TLongtail_Hash*)realloc(sub_path_hashes, sizeof(TLongtail_Hash) * (path_count + 1));
+		sub_path_hashes[path_count] = sub_path_hash;
+		paths.m_PathEntries = (Longtail_PathEntry*)realloc(paths.m_PathEntries, sizeof(Longtail_PathEntry) * (path_count + 1));
+        paths.m_PathEntries[path_count].m_PathHash = path_hash;
+		paths.m_PathEntries[path_count].m_ParentIndex = parent_path_index;
+		paths.m_PathEntries[path_count].m_PathOffset = AddString(string_cache, sub_path, sub_path_length, sub_path_hash);
+        paths.m_PathEntries[path_count].m_ChildCount = is_directory ? 0u : (uint32_t)-1;
+        if (parent_path_index != (uint32_t)-1)
+        {
+    		paths.m_PathEntries[parent_path_index].m_ChildCount++;
+        }
+        return path_count;
+    };
+
+    const char* root_path = "D:\\TestContent\\Version_1";
+//    const char* root_path = "/Users/danengelbrecht/Documents/Projects/blossom_blast_saga/build/default";
+    const char* cache_path = "D:\\Temp\\longtail\\cache";
+//    const char* cache_path = "/Users/danengelbrecht/tmp/cache";
+
+    struct Folders
+    {
+        char** folder_names;
+        uint32_t folder_count;
+    };
+
+    Folders folders;
+    folders.folder_names = 0;
+    folders.folder_count = 0;
+
+    auto add_folder = [](void* context, const char* root_path, const char* file_name)
+    {
+        Folders* folders = (Folders*)context;
+        uint32_t folder_count = 0;
+        folders->folder_names = (char**)realloc(folders->folder_names, sizeof(char*) * (folders->folder_count + 1));
+        folders->folder_names[folders->folder_count] = (char*)malloc(strlen(root_path) + 1 + strlen(file_name) + 1);
+        strcpy(folders->folder_names[folders->folder_count], root_path);
+        strcpy(&folders->folder_names[folders->folder_count][strlen(root_path)], "/");
+        strcpy(&folders->folder_names[folders->folder_count][strlen(root_path) + 1], file_name);
+        char* backslash = strchr(folders->folder_names[folders->folder_count], '\\');
+        while (backslash)
+        {
+            *backslash = '/';
+            backslash = strchr(folders->folder_names[folders->folder_count], '\\');
+        }
+		++folders->folder_count;
+    };
+
+    RecurseTree(root_path, add_folder, &folders);
+
+    for (uint32_t p = 0; p < folders.folder_count; ++p)
+    {
+        uint32_t parent_path_index = (uint32_t)-1;
+        const char* path = folders.folder_names[p];
+        const char* sub_path_end = find_sub_path_end(path);
+        while (*sub_path_end)
+        {
+            TLongtail_Hash sub_path_hash = get_sub_path_hash(path, sub_path_end);
+            uint32_t path_index = find_path_index(paths, sub_path_hashes, path_count, parent_path_index, sub_path_hash);
+            if (path_index == path_count)
+            {
+				const uint32_t path_length = (uint32_t)(sub_path_end - path);
+                TLongtail_Hash path_hash = get_sub_path_hash(folders.folder_names[p], sub_path_end);
+                path_index = add_sub_path(paths, path_count, parent_path_index, true, path_hash, &string_cache, sub_path_hashes, path, path_length, sub_path_hash);
+				++path_count;
+            }
+
+            parent_path_index = path_index;
+            path = sub_path_end + 1;
+            sub_path_end = find_sub_path_end(path);
+        }
+        TLongtail_Hash sub_path_hash = get_sub_path_hash(path, sub_path_end);
+        ASSERT_EQ(path_count, find_path_index(paths, sub_path_hashes, path_count, parent_path_index, sub_path_hash));
+        const uint32_t path_length = (uint32_t)(sub_path_end - path);
+        TLongtail_Hash path_hash = get_sub_path_hash(folders.folder_names[p], sub_path_end);
+        add_sub_path(paths,  path_count, parent_path_index, false, path_hash, &string_cache, sub_path_hashes, path, path_length, sub_path_hash);
+		++path_count;
+	}
+
+	free(folders.folder_names);
+
+	paths.m_PathStorage = string_cache.m_DataBuffer;
+	string_cache.m_DataBuffer = 0;
+
+	for (uint32_t sub_path_index = 0; sub_path_index < path_count; ++sub_path_index)
+	{
+		char* path = strdup(&paths.m_PathStorage[paths.m_PathEntries[sub_path_index].m_PathOffset]);
+		uint32_t parent_path_index = paths.m_PathEntries[sub_path_index].m_ParentIndex;
+		while (parent_path_index != (uint32_t)-1)
+		{
+			const char* parent_path = &paths.m_PathStorage[paths.m_PathEntries[parent_path_index].m_PathOffset];
+			size_t path_length = strlen(path);
+			size_t parent_path_length = strlen(parent_path);
+			path = (char*)realloc(path, path_length + 1 + parent_path_length + 1);
+			memmove(&path[parent_path_length + 1], path, path_length);
+			path[path_length + 1 + parent_path_length] = '\0';
+			path[parent_path_length] = '/';
+			memcpy(path, parent_path, parent_path_length);
+			parent_path_index = paths.m_PathEntries[parent_path_index].m_ParentIndex;
+		}
+        if (paths.m_PathEntries[sub_path_index].m_ChildCount == (uint32_t)-1)
+        {
+            printf("File '%s'\n", path);
+        }
+        else
+        {
+            printf("Folder '%s' (%u items)\n", path, paths.m_PathEntries[sub_path_index].m_ChildCount);
+        }
+		free(path);
+	};
+
+    free(sub_path_hashes);
+    free(paths.m_PathStorage);
+    free(paths.m_PathEntries);
+}
+
+struct Asset
+{
+    const char* m_Path;
+    uint64_t m_Size;
+    meow_u128 m_Hash;
+};
+
+struct HashJob
+{
+    Asset m_Asset;
+    nadir::TAtomic32* m_PendingCount;
+};
+
+static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
+{
+    HashJob* hash_job = (HashJob*)context;
+    HTroveOpenReadFile file_handle = Trove_OpenReadFile(hash_job->m_Asset.m_Path);
+    meow_state state;
+    MeowBegin(&state, MeowDefaultSeed);
+    if(file_handle)
+    {
+        uint64_t file_size = Trove_GetFileSize(file_handle);
+        hash_job->m_Asset.m_Size = file_size;
+
+        uint8_t batch_data[65536];
+        uint64_t offset = 0;
+        while (offset != file_size)
+        {
+            meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
+            bool read_ok = Trove_Read(file_handle, offset, len, batch_data);
+            assert(read_ok);
+            offset += len;
+            MeowAbsorb(&state, len, batch_data);
+        }
+        Trove_CloseReadFile(file_handle);
+    }
+    meow_u128 hash = MeowEnd(&state, 0);
+    hash_job->m_Asset.m_Hash = hash;
+    nadir::AtomicAdd32(hash_job->m_PendingCount, -1);
+    return BIKESHED_TASK_RESULT_COMPLETE;
+}
+
+struct ProcessHashContext
+{
+    Bikeshed m_Shed;
+    HashJob* m_HashJobs;
+    nadir::TAtomic32* m_AssetCount;
+    nadir::TAtomic32* m_PendingCount;
+};
+
+static void ProcessHash(void* context, const char* root_path, const char* file_name)
+{
+    ProcessHashContext* process_hash_context = (ProcessHashContext*)context;
+    Bikeshed shed = process_hash_context->m_Shed;
+    uint32_t asset_count = nadir::AtomicAdd32(process_hash_context->m_AssetCount, 1);
+    HashJob* job = &process_hash_context->m_HashJobs[asset_count - 1];
+    job->m_Asset.m_Path = Trove_ConcatPath(root_path, file_name);
+    job->m_Asset.m_Size = 0;
+    job->m_PendingCount = process_hash_context->m_PendingCount;
+    BikeShed_TaskFunc func[1] = {HashFile};
+    void* ctx[1] = {job};
+    Bikeshed_TaskID task_id;
+    while (!Bikeshed_CreateTasks(shed, 1, func, ctx, &task_id))
+    {
+        nadir::Sleep(1000);
+    }
+    {
+        nadir::AtomicAdd32(process_hash_context->m_PendingCount, 1);
+        Bikeshed_ReadyTasks(shed, 1, &task_id);
+    }
 }
 
 struct ReadyCallback
@@ -941,12 +1164,12 @@ int OutputStream(void* context, uint64_t byte_count, const uint8_t* data)
     return 1;
 }
 
-static uint64_t GetPathHash(const char* path)
+static TLongtail_Hash GetPathHash(const char* path)
 {
     meow_state state;
     MeowBegin(&state, MeowDefaultSeed);
     MeowAbsorb(&state, strlen(path), (void*)path);
-    uint64_t path_hash = MeowU64From(MeowEnd(&state, 0), 0);
+    TLongtail_Hash path_hash = MeowU64From(MeowEnd(&state, 0), 0);
     return path_hash;
 }
 
@@ -1216,159 +1439,6 @@ static void ScanHash(void* context, const char* , const char* file_name)
     }
 }
 
-struct Longtail_PathEntry
-{
-	// Indicate if directory or not
-    TLongtail_Hash m_PathHash;
-    uint64_t m_PathOffset;
-    uint64_t m_ParentPath;
-};
-
-struct Longtail_Paths
-{
-    Longtail_PathEntry* m_PathEntries;
-    char* m_PathStorage;
-};
-
-uint64_t find_path_offset(const Longtail_Paths& paths, TLongtail_Hash sub_path_hash)
-{
-	uint64_t path_index = 1;
-	while (paths.m_PathEntries[path_index - 1].m_PathHash != 0)
-	{
-		if (paths.m_PathEntries[path_index - 1].m_PathHash == sub_path_hash)
-		{
-			return paths.m_PathEntries[path_index - 1].m_PathOffset;
-		}
-		++path_index;
-	}
-	return (uint64_t)-1;
-};
-
-TEST(Longtail, PathIndex)
-{
-    static const uint64_t PATH_COUNT = 10;
-    static const char* PATHS[PATH_COUNT] = {
-        "content/engine/binaries/win32/client.exe",
-        "content/engine/binaries/win64/client.exe",
-        "content/engine/binaries/win32/server.exe",
-        "content/engine/binaries/win64/server.exe",
-        "content/textures/text_a.png",
-        "content/textures/text_b.png",
-        "content/textures/text_c.png",
-        "content/shaders/pbr_a.hlsl",
-        "content/shaders/pbr_b.hlsl",
-        "content/shaders/pbr_c.hlsl"
-    };
-
-	uint64_t sub_path_count = 0;
-	uint64_t path_data_size = 0;
-	Longtail_Paths paths;
-	paths.m_PathEntries = (Longtail_PathEntry*)malloc(sizeof(Longtail_PathEntry) * (sub_path_count + 1));
-	paths.m_PathEntries[0].m_PathHash = 0;
-    paths.m_PathStorage = (char*)0;
-
-    auto find_path_index = [](const Longtail_Paths& paths, uint64_t parent_path_index, TLongtail_Hash sub_path_hash)
-    {
-        uint64_t path_index = 1;
-        while (paths.m_PathEntries[path_index - 1].m_PathHash != 0)
-        {
-            if (paths.m_PathEntries[path_index - 1].m_PathHash == sub_path_hash && paths.m_PathEntries[path_index - 1].m_ParentPath == parent_path_index)
-            {
-                return path_index;
-            }
-            ++path_index;
-        }
-        return (uint64_t)0;
-    };
-
-	auto get_sub_path_hash = [](const char* path_begin, const char* path_end)
-    {
-        meow_state state;
-        MeowBegin(&state, MeowDefaultSeed);
-        MeowAbsorb(&state, (meow_umm)(path_end - path_begin), (void*)path_begin);
-        uint64_t path_hash = MeowU64From(MeowEnd(&state, 0), 0);
-        return path_hash;
-    };
-
-    auto find_sub_path_end = [](const char* path)
-    {
-        while (*path && *path != '/')
-        {
-            ++path;
-        }
-        return path;
-    };
-
-    auto add_sub_path = [](Longtail_Paths& paths, TLongtail_Hash path_hash, uint64_t parent_path_index, const char* path, size_t path_length, uint64_t& sub_path_count, size_t& path_data_size)
-    {
-		uint64_t path_offset = find_path_offset(paths, path_hash);
-		if (path_offset == (uint64_t)-1)
-		{
-			paths.m_PathStorage = (char*)realloc(paths.m_PathStorage, path_data_size + path_length + 1);
-			memcpy(&paths.m_PathStorage[path_data_size], path, path_length);
-			path_offset = path_data_size;
-			path_data_size += path_length;
-			paths.m_PathStorage[path_data_size] = '\0';
-			++path_data_size;
-		}
-
-		paths.m_PathEntries = (Longtail_PathEntry*)realloc(paths.m_PathEntries, sizeof(Longtail_PathEntry) * (sub_path_count + 2));
-		paths.m_PathEntries[sub_path_count + 1].m_PathHash = 0;
-        paths.m_PathEntries[sub_path_count].m_PathHash = path_hash;
-		paths.m_PathEntries[sub_path_count].m_ParentPath = parent_path_index;
-		paths.m_PathEntries[sub_path_count].m_PathOffset = path_offset;
-        ++sub_path_count;
-    };
-
-    for (uint64_t p = 0; p < PATH_COUNT; ++p)
-    {
-        uint64_t parent_path_index = 0;
-        const char* path = PATHS[p];
-        const char* sub_path_end = find_sub_path_end(path);
-        while (*sub_path_end)
-        {
-            TLongtail_Hash path_hash = get_sub_path_hash(path, sub_path_end);
-            uint64_t path_index = find_path_index(paths, parent_path_index, path_hash);
-            if (path_index == 0)
-            {
-				path_index = sub_path_count + 1;
-				const size_t path_length = (size_t)(sub_path_end - path);
-                add_sub_path(paths, path_hash, parent_path_index, path, path_length, sub_path_count, path_data_size);
-            }
-
-            parent_path_index = path_index;
-            path = sub_path_end + 1;
-            sub_path_end = find_sub_path_end(path);
-        }
-        TLongtail_Hash path_hash = get_sub_path_hash(path, sub_path_end);
-        ASSERT_EQ(0u, find_path_index(paths, path_hash, parent_path_index));
-        const size_t path_length = (size_t)(sub_path_end - path);
-        add_sub_path(paths, path_hash, parent_path_index, path, path_length, sub_path_count, path_data_size);
-    }
-
-	for (uint64_t sub_path_index = 0; sub_path_index < sub_path_count; ++sub_path_index)
-	{
-		char* path = strdup(&paths.m_PathStorage[paths.m_PathEntries[sub_path_index].m_PathOffset]);
-		uint64_t parent_path_index = paths.m_PathEntries[sub_path_index].m_ParentPath;
-		while (parent_path_index != 0)
-		{
-			const char* parent_path = &paths.m_PathStorage[paths.m_PathEntries[parent_path_index - 1].m_PathOffset];
-			size_t path_length = strlen(path);
-			size_t parent_path_length = strlen(parent_path);
-			path = (char*)realloc(path, path_length + 1 + parent_path_length + 1);
-			memmove(&path[parent_path_length + 1], path, path_length);
-			path[path_length + 1 + parent_path_length] = '\0';
-			path[parent_path_length] = '/';
-			memcpy(path, parent_path, parent_path_length);
-			parent_path_index = paths.m_PathEntries[parent_path_index - 1].m_ParentPath;
-		}
-		printf("Path '%s'\n", path);
-		free(path);
-	};
-
-    free(paths.m_PathStorage);
-    free(paths.m_PathEntries);
-}
 #if 0
 TEST(Longtail, ScanContent)
 {
