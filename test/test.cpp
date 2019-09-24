@@ -1218,6 +1218,7 @@ static void ScanHash(void* context, const char* , const char* file_name)
 
 struct Longtail_PathEntry
 {
+	// Indicate if directory or not
     TLongtail_Hash m_PathHash;
     uint64_t m_PathOffset;
     uint64_t m_ParentPath;
@@ -1227,6 +1228,20 @@ struct Longtail_Paths
 {
     Longtail_PathEntry* m_PathEntries;
     char* m_PathStorage;
+};
+
+uint64_t find_path_offset(const Longtail_Paths& paths, TLongtail_Hash sub_path_hash)
+{
+	uint64_t path_index = 1;
+	while (paths.m_PathEntries[path_index - 1].m_PathHash != 0)
+	{
+		if (paths.m_PathEntries[path_index - 1].m_PathHash == sub_path_hash)
+		{
+			return paths.m_PathEntries[path_index - 1].m_PathOffset;
+		}
+		++path_index;
+	}
+	return (uint64_t)-1;
 };
 
 TEST(Longtail, PathIndex)
@@ -1245,8 +1260,11 @@ TEST(Longtail, PathIndex)
         "content/shaders/pbr_c.hlsl"
     };
 
-    Longtail_Paths paths;
-    paths.m_PathEntries = (Longtail_PathEntry*)malloc(sizeof(Longtail_PathEntry) * PATH_COUNT + 1);
+	uint64_t sub_path_count = 0;
+	uint64_t path_data_size = 0;
+	Longtail_Paths paths;
+	paths.m_PathEntries = (Longtail_PathEntry*)malloc(sizeof(Longtail_PathEntry) * (sub_path_count + 1));
+	paths.m_PathEntries[0].m_PathHash = 0;
     paths.m_PathStorage = (char*)0;
 
     auto find_path_index = [](const Longtail_Paths& paths, uint64_t parent_path_index, TLongtail_Hash sub_path_hash)
@@ -1263,7 +1281,7 @@ TEST(Longtail, PathIndex)
         return (uint64_t)0;
     };
 
-    auto get_sub_path_hash = [](const char* path_begin, const char* path_end)
+	auto get_sub_path_hash = [](const char* path_begin, const char* path_end)
     {
         meow_state state;
         MeowBegin(&state, MeowDefaultSeed);
@@ -1283,19 +1301,25 @@ TEST(Longtail, PathIndex)
 
     auto add_sub_path = [](Longtail_Paths& paths, TLongtail_Hash path_hash, uint64_t parent_path_index, const char* path, size_t path_length, uint64_t& sub_path_count, size_t& path_data_size)
     {
+		uint64_t path_offset = find_path_offset(paths, path_hash);
+		if (path_offset == (uint64_t)-1)
+		{
+			paths.m_PathStorage = (char*)realloc(paths.m_PathStorage, path_data_size + path_length + 1);
+			memcpy(&paths.m_PathStorage[path_data_size], path, path_length);
+			path_offset = path_data_size;
+			path_data_size += path_length;
+			paths.m_PathStorage[path_data_size] = '\0';
+			++path_data_size;
+		}
+
+		paths.m_PathEntries = (Longtail_PathEntry*)realloc(paths.m_PathEntries, sizeof(Longtail_PathEntry) * (sub_path_count + 2));
+		paths.m_PathEntries[sub_path_count + 1].m_PathHash = 0;
         paths.m_PathEntries[sub_path_count].m_PathHash = path_hash;
-        paths.m_PathEntries[sub_path_count].m_PathOffset = path_data_size;
-        paths.m_PathEntries[sub_path_count].m_ParentPath = parent_path_index;
-        paths.m_PathStorage = (char*)realloc(paths.m_PathStorage, path_data_size + path_length + 1);
-        memcpy(&paths.m_PathStorage[path_data_size], path, path_length);
-        path_data_size += path_length;
-        paths.m_PathStorage[path_data_size] = '\0';
-        ++path_data_size;
+		paths.m_PathEntries[sub_path_count].m_ParentPath = parent_path_index;
+		paths.m_PathEntries[sub_path_count].m_PathOffset = path_offset;
         ++sub_path_count;
     };
 
-    uint64_t sub_path_count = 0;
-    uint64_t path_data_size = 0;
     for (uint64_t p = 0; p < PATH_COUNT; ++p)
     {
         uint64_t parent_path_index = 0;
@@ -1304,10 +1328,11 @@ TEST(Longtail, PathIndex)
         while (*sub_path_end)
         {
             TLongtail_Hash path_hash = get_sub_path_hash(path, sub_path_end);
-            uint64_t path_index = find_path_index(paths, path_hash, parent_path_index);
+            uint64_t path_index = find_path_index(paths, parent_path_index, path_hash);
             if (path_index == 0)
             {
-                const size_t path_length = (size_t)(sub_path_end - path);
+				path_index = sub_path_count + 1;
+				const size_t path_length = (size_t)(sub_path_end - path);
                 add_sub_path(paths, path_hash, parent_path_index, path, path_length, sub_path_count, path_data_size);
             }
 
@@ -1320,6 +1345,26 @@ TEST(Longtail, PathIndex)
         const size_t path_length = (size_t)(sub_path_end - path);
         add_sub_path(paths, path_hash, parent_path_index, path, path_length, sub_path_count, path_data_size);
     }
+
+	for (uint64_t sub_path_index = 0; sub_path_index < sub_path_count; ++sub_path_index)
+	{
+		char* path = strdup(&paths.m_PathStorage[paths.m_PathEntries[sub_path_index].m_PathOffset]);
+		uint64_t parent_path_index = paths.m_PathEntries[sub_path_index].m_ParentPath;
+		while (parent_path_index != 0)
+		{
+			const char* parent_path = &paths.m_PathStorage[paths.m_PathEntries[parent_path_index - 1].m_PathOffset];
+			size_t path_length = strlen(path);
+			size_t parent_path_length = strlen(parent_path);
+			path = (char*)realloc(path, path_length + 1 + parent_path_length + 1);
+			memmove(&path[parent_path_length + 1], path, path_length);
+			path[path_length + 1 + parent_path_length] = '\0';
+			path[parent_path_length] = '/';
+			memcpy(path, parent_path, parent_path_length);
+			parent_path_index = paths.m_PathEntries[parent_path_index - 1].m_ParentPath;
+		}
+		printf("Path '%s'\n", path);
+		free(path);
+	};
 
     free(paths.m_PathStorage);
     free(paths.m_PathEntries);
