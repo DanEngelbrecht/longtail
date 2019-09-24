@@ -1216,7 +1216,115 @@ static void ScanHash(void* context, const char* , const char* file_name)
     }
 }
 
+struct Longtail_PathEntry
+{
+    TLongtail_Hash m_PathHash;
+    uint64_t m_PathOffset;
+    uint64_t m_ParentPath;
+};
 
+struct Longtail_Paths
+{
+    Longtail_PathEntry* m_PathEntries;
+    char* m_PathStorage;
+};
+
+TEST(Longtail, PathIndex)
+{
+    static const uint64_t PATH_COUNT = 10;
+    static const char* PATHS[PATH_COUNT] = {
+        "content/engine/binaries/win32/client.exe",
+        "content/engine/binaries/win64/client.exe",
+        "content/engine/binaries/win32/server.exe",
+        "content/engine/binaries/win64/server.exe",
+        "content/textures/text_a.png",
+        "content/textures/text_b.png",
+        "content/textures/text_c.png",
+        "content/shaders/pbr_a.hlsl",
+        "content/shaders/pbr_b.hlsl",
+        "content/shaders/pbr_c.hlsl"
+    };
+
+    Longtail_Paths paths;
+    paths.m_PathEntries = (Longtail_PathEntry*)malloc(sizeof(Longtail_PathEntry) * PATH_COUNT + 1);
+    paths.m_PathStorage = (char*)0;
+
+    auto find_path_index = [](const Longtail_Paths& paths, uint64_t parent_path_index, TLongtail_Hash sub_path_hash)
+    {
+        uint64_t path_index = 1;
+        while (paths.m_PathEntries[path_index - 1].m_PathHash != 0)
+        {
+            if (paths.m_PathEntries[path_index - 1].m_PathHash == sub_path_hash && paths.m_PathEntries[path_index - 1].m_ParentPath == parent_path_index)
+            {
+                return path_index;
+            }
+            ++path_index;
+        }
+        return (uint64_t)0;
+    };
+
+    auto get_sub_path_hash = [](const char* path_begin, const char* path_end)
+    {
+        meow_state state;
+        MeowBegin(&state, MeowDefaultSeed);
+        MeowAbsorb(&state, (meow_umm)(path_end - path_begin), (void*)path_begin);
+        uint64_t path_hash = MeowU64From(MeowEnd(&state, 0), 0);
+        return path_hash;
+    };
+
+    auto find_sub_path_end = [](const char* path)
+    {
+        while (*path && *path != '/')
+        {
+            ++path;
+        }
+        return path;
+    };
+
+    auto add_sub_path = [](Longtail_Paths& paths, TLongtail_Hash path_hash, uint64_t parent_path_index, const char* path, size_t path_length, uint64_t& sub_path_count, size_t& path_data_size)
+    {
+        paths.m_PathEntries[sub_path_count].m_PathHash = path_hash;
+        paths.m_PathEntries[sub_path_count].m_PathOffset = path_data_size;
+        paths.m_PathEntries[sub_path_count].m_ParentPath = parent_path_index;
+        paths.m_PathStorage = (char*)realloc(paths.m_PathStorage, path_data_size + path_length + 1);
+        memcpy(&paths.m_PathStorage[path_data_size], path, path_length);
+        path_data_size += path_length;
+        paths.m_PathStorage[path_data_size] = '\0';
+        ++path_data_size;
+        ++sub_path_count;
+    };
+
+    uint64_t sub_path_count = 0;
+    uint64_t path_data_size = 0;
+    for (uint64_t p = 0; p < PATH_COUNT; ++p)
+    {
+        uint64_t parent_path_index = 0;
+        const char* path = PATHS[p];
+        const char* sub_path_end = find_sub_path_end(path);
+        while (*sub_path_end)
+        {
+            TLongtail_Hash path_hash = get_sub_path_hash(path, sub_path_end);
+            uint64_t path_index = find_path_index(paths, path_hash, parent_path_index);
+            if (path_index == 0)
+            {
+                const size_t path_length = (size_t)(sub_path_end - path);
+                add_sub_path(paths, path_hash, parent_path_index, path, path_length, sub_path_count, path_data_size);
+            }
+
+            parent_path_index = path_index;
+            path = sub_path_end + 1;
+            sub_path_end = find_sub_path_end(path);
+        }
+        TLongtail_Hash path_hash = get_sub_path_hash(path, sub_path_end);
+        ASSERT_EQ(0u, find_path_index(paths, path_hash, parent_path_index));
+        const size_t path_length = (size_t)(sub_path_end - path);
+        add_sub_path(paths, path_hash, parent_path_index, path, path_length, sub_path_count, path_data_size);
+    }
+
+    free(paths.m_PathStorage);
+    free(paths.m_PathEntries);
+}
+#if 0
 TEST(Longtail, ScanContent)
 {
     ReadyCallback ready_callback;
@@ -1514,3 +1622,4 @@ TEST(Longtail, ScanContent)
 
     free(shed);
 }
+#endif
