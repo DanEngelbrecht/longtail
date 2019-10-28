@@ -24,6 +24,396 @@
     #include <alloca.h>
 #endif
 
+namespace Jobs
+{
+
+struct ReadyCallback
+{
+    Bikeshed_ReadyCallback cb = {Ready};
+    ReadyCallback()
+    {
+        m_Semaphore = nadir::CreateSema(malloc(nadir::GetSemaSize()), 0);
+    }
+    ~ReadyCallback()
+    {
+        nadir::DeleteSema(m_Semaphore);
+        free(m_Semaphore);
+    }
+    static void Ready(struct Bikeshed_ReadyCallback* ready_callback, uint8_t channel, uint32_t ready_count)
+    {
+        ReadyCallback* cb = (ReadyCallback*)ready_callback;
+        nadir::PostSema(cb->m_Semaphore, ready_count);
+    }
+    static void Wait(ReadyCallback* cb)
+    {
+        nadir::WaitSema(cb->m_Semaphore);
+    }
+    nadir::HSema m_Semaphore;
+};
+
+struct ThreadWorker
+{
+    ThreadWorker()
+        : stop(0)
+        , shed(0)
+        , semaphore(0)
+        , thread(0)
+    {
+    }
+
+    ~ThreadWorker()
+    {
+    }
+
+    bool CreateThread(Bikeshed in_shed, nadir::HSema in_semaphore, nadir::TAtomic32* in_stop)
+    {
+        shed               = in_shed;
+        stop               = in_stop;
+        semaphore          = in_semaphore;
+        thread             = nadir::CreateThread(malloc(nadir::GetThreadSize()), ThreadWorker::Execute, 0, this);
+        return thread != 0;
+    }
+
+    void JoinThread()
+    {
+        nadir::JoinThread(thread, nadir::TIMEOUT_INFINITE);
+    }
+
+    void DisposeThread()
+    {
+        nadir::DeleteThread(thread);
+        free(thread);
+    }
+
+    static int32_t Execute(void* context)
+    {
+        ThreadWorker* _this = reinterpret_cast<ThreadWorker*>(context);
+
+        while (*_this->stop == 0)
+        {
+            if (!Bikeshed_ExecuteOne(_this->shed, 0))
+            {
+                nadir::WaitSema(_this->semaphore);
+            }
+        }
+        return 0;
+    }
+
+    nadir::TAtomic32*   stop;
+    Bikeshed            shed;
+    nadir::HSema        semaphore;
+    nadir::HThread      thread;
+};
+
+}
+
+
+
+
+
+
+
+struct AssetFolder
+{
+    const char* m_FolderPath;
+};
+
+LONGTAIL_DECLARE_ARRAY_TYPE(AssetFolder, malloc, free)
+
+typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
+
+static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, void* context)
+{
+    AssetFolder* asset_folders = SetCapacity_AssetFolder((AssetFolder*)0, 256);
+
+    uint32_t folder_index = 0;
+
+    Push_AssetFolder(asset_folders)->m_FolderPath = strdup(root_folder);
+
+    HTrove_FSIterator fs_iterator = (HTrove_FSIterator)alloca(Trove_GetFSIteratorSize());
+    while (folder_index != GetSize_AssetFolder(asset_folders))
+    {
+        const char* asset_folder = asset_folders[folder_index++].m_FolderPath;
+
+        if (Trove_StartFind(fs_iterator, asset_folder))
+        {
+            do
+            {
+                if (const char* dir_name = Trove_GetDirectoryName(fs_iterator))
+                {
+                    Push_AssetFolder(asset_folders)->m_FolderPath = Trove_ConcatPath(asset_folder, dir_name);
+                    if (GetSize_AssetFolder(asset_folders) == GetCapacity_AssetFolder(asset_folders))
+                    {
+                        uint32_t unprocessed_count = (GetSize_AssetFolder(asset_folders) - folder_index);
+                        if (folder_index > 0)
+                        {
+                            if (unprocessed_count > 0)
+                            {
+                                memmove(asset_folders, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
+                                SetSize_AssetFolder(asset_folders, unprocessed_count);
+                            }
+                            folder_index = 0;
+                        }
+                        else
+                        {
+                            AssetFolder* asset_folders_new = SetCapacity_AssetFolder((AssetFolder*)0, GetCapacity_AssetFolder(asset_folders) + 256);
+                            if (unprocessed_count > 0)
+                            {
+                                SetSize_AssetFolder(asset_folders_new, unprocessed_count);
+                                memcpy(asset_folders_new, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
+                            }
+                            Free_AssetFolder(asset_folders);
+                            asset_folders = asset_folders_new;
+                            folder_index = 0;
+                        }
+                    }
+                }
+                else if(const char* file_name = Trove_GetFileName(fs_iterator))
+                {
+                    entry_processor(context, asset_folder, file_name);
+                }
+            }while(Trove_FindNext(fs_iterator));
+            Trove_CloseFind(fs_iterator);
+        }
+        free((void*)asset_folder);
+    }
+    Free_AssetFolder(asset_folders);
+    return 1;
+}
+
+struct AssetPaths
+{
+    char** paths;
+    uint32_t count;
+};
+
+void FreeAssetpaths(AssetPaths* assets)
+{
+    for (uint32_t i = 0; i < assets->count; ++i)
+    {
+        free(assets->paths[i]);
+    }
+
+    free(assets->paths);
+}
+
+int GetContent(const char* root_path, AssetPaths* out_assets)
+{
+    out_assets->paths = 0;
+    out_assets->count = 0;
+
+    auto add_folder = [](void* context, const char* root_path, const char* file_name)
+    {
+        AssetPaths* assets = (AssetPaths*)context;
+        assets->paths = (char**)realloc(assets->paths, sizeof(char*) * (assets->count + 1));
+        assets->paths[assets->count] = (char*)malloc(strlen(root_path) + 1 + strlen(file_name) + 1);
+        strcpy(assets->paths[assets->count], root_path);
+        strcpy(&assets->paths[assets->count][strlen(root_path)], "/");
+        strcpy(&assets->paths[assets->count][strlen(root_path) + 1], file_name);
+
+        // Normalize path
+        char* backslash = strchr(assets->paths[assets->count], '\\');
+        while (backslash)
+        {
+            *backslash = '/';
+            backslash = strchr(assets->paths[assets->count], '\\');
+        }
+		++assets->count;
+    };
+
+    RecurseTree(root_path, add_folder, out_assets);
+
+    return 0;
+}
+
+struct AssetHashInfo
+{
+    uint64_t m_ContentSize;
+    TLongtail_Hash m_PathHash;
+    meow_u128 m_ContentHash;
+};
+
+struct HashJob
+{
+    AssetHashInfo* m_AssetHashInfo;
+    const char* m_RootPath;
+    const char* m_Path;
+    nadir::TAtomic32* m_PendingCount;
+};
+
+static TLongtail_Hash GetPathHash(const char* path)
+{
+    meow_state state;
+    MeowBegin(&state, MeowDefaultSeed);
+    MeowAbsorb(&state, strlen(path), (void*)path);
+    TLongtail_Hash path_hash = MeowU64From(MeowEnd(&state, 0), 0);
+    return path_hash;
+}
+
+static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
+{
+    HashJob* hash_job = (HashJob*)context;
+//    const char* path = Trove_ConcatPath(hash_job->m_RootPath, hash_job->m_Path);
+
+    char* platform_path = strdup(hash_job->m_Path);
+    char* backslash = strchr(platform_path, '\\');
+    while (backslash)
+    {
+        *backslash = '/';
+        backslash = strchr(backslash, '\\');
+    }
+
+    HTroveOpenReadFile file_handle = Trove_OpenReadFile(platform_path);
+    meow_state state;
+    MeowBegin(&state, MeowDefaultSeed);
+    if(file_handle)
+    {
+        uint64_t file_size = Trove_GetFileSize(file_handle);
+        hash_job->m_AssetHashInfo->m_ContentSize = file_size;
+
+        uint8_t batch_data[65536];
+        uint64_t offset = 0;
+        while (offset != file_size)
+        {
+            meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
+            bool read_ok = Trove_Read(file_handle, offset, len, batch_data);
+            assert(read_ok);
+            offset += len;
+            MeowAbsorb(&state, len, batch_data);
+        }
+        Trove_CloseReadFile(file_handle);
+    }
+    meow_u128 hash = MeowEnd(&state, 0);
+    hash_job->m_AssetHashInfo->m_ContentHash = hash;
+    hash_job->m_AssetHashInfo->m_PathHash = GetPathHash(&hash_job->m_Path[strlen(hash_job->m_RootPath) + 1]);
+    nadir::AtomicAdd32(hash_job->m_PendingCount, -1);
+    free((char*)platform_path);
+    return BIKESHED_TASK_RESULT_COMPLETE;
+}
+
+struct ProcessHashContext
+{
+    Bikeshed m_Shed;
+    HashJob* m_HashJobs;
+    nadir::TAtomic32* m_PendingCount;
+};
+
+void GetFileHashes(Bikeshed shed, const char* root_path, const char** paths, uint64_t asset_count, AssetHashInfo* out_asset_hash_info)
+{
+    ProcessHashContext context;
+    context.m_Shed = shed;
+    context.m_HashJobs = new HashJob[asset_count];
+    nadir::TAtomic32 pendingCount = 0;
+    context.m_PendingCount = &pendingCount;
+
+    uint64_t assets_left = asset_count;
+    static const uint32_t BATCH_SIZE = 64;
+    Bikeshed_TaskID task_ids[BATCH_SIZE];
+    BikeShed_TaskFunc func[BATCH_SIZE];
+    void* ctx[BATCH_SIZE];
+    for (uint32_t i = 0; i < BATCH_SIZE; ++i)
+    {
+        func[i] = HashFile;
+    }
+    uint64_t offset = 0;
+    while (offset < asset_count) {
+        uint64_t assets_left = asset_count - offset;
+        uint32_t batch_count = assets_left > BATCH_SIZE ? BATCH_SIZE : (uint32_t)assets_left;
+        for (uint32_t i = 0; i < batch_count; ++i)
+        {
+            HashJob* job = &context.m_HashJobs[offset + i];
+			ctx[i] = &context.m_HashJobs[i + offset];
+			job->m_RootPath = root_path;
+            job->m_Path = paths[i + offset];
+            job->m_PendingCount = &pendingCount;
+            job->m_AssetHashInfo = &out_asset_hash_info[i + offset];
+            job->m_AssetHashInfo->m_ContentSize = 0;
+        }
+
+        while (!Bikeshed_CreateTasks(shed, batch_count, func, ctx, task_ids))
+        {
+            nadir::Sleep(1000);
+        }
+
+        {
+            nadir::AtomicAdd32(&pendingCount, batch_count);
+            Bikeshed_ReadyTasks(shed, batch_count, task_ids);
+        }
+        offset += batch_count;
+    }
+
+    int32_t old_pending_count = 0;
+    while (pendingCount > 0)
+    {
+        if (Bikeshed_ExecuteOne(shed, 0))
+        {
+            continue;
+        }
+        if (old_pending_count != pendingCount)
+        {
+            old_pending_count = pendingCount;
+            printf("Files left to hash: %d\n", old_pending_count);
+        }
+        nadir::Sleep(1000);
+    }
+
+    delete [] context.m_HashJobs;
+}
+
+TEST(Longtail, ScanContent)
+{
+    Jobs::ReadyCallback ready_callback;
+    Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
+
+    nadir::TAtomic32 stop = 0;
+
+    static const uint32_t WORKER_COUNT = 7;
+    Jobs::ThreadWorker workers[WORKER_COUNT];
+    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
+    {
+        workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
+    }
+
+
+//    const char* root_path = "D:\\TestContent\\Source\\gitc352a449064be52c8965fe28856bd914b0bbae0c";
+    const char* root_path = "D:\\TestContent\\Source\\gita1ffa22e55b2278eae44b15535dc143c41342d5c";
+
+//    const char* root_path = "/Users/danengelbrecht/Documents/Projects/blossom_blast_saga/build/default";
+//    const char* cache_path = "D:\\Temp\\longtail\\cache";
+//    const char* cache_path = "/Users/danengelbrecht/tmp/cache";
+    AssetPaths asset_paths;
+
+    GetContent(root_path, &asset_paths);
+
+    AssetHashInfo* asset_hash_infos = new AssetHashInfo[asset_paths.count];
+
+    GetFileHashes(shed, root_path, (const char**)asset_paths.paths, asset_paths.count, asset_hash_infos);
+
+    if (0)
+    {
+        for (uint64_t i = 0; i < asset_paths.count; ++i)
+        {
+            const char* asset_path  = asset_paths.paths[i];
+            AssetHashInfo* asset_hash_info = &asset_hash_infos[i];
+            uint64_t content_hash = MeowU64From(asset_hash_info->m_ContentHash, 0);
+
+            char hash_str[64];
+            sprintf(hash_str, "0x%" PRIx64, content_hash);
+
+            printf("%s: %s\n", asset_path, hash_str);
+        }
+    }
+
+    delete [] asset_hash_infos;
+
+    FreeAssetpaths(&asset_paths);
+}
+
+
+
+
+
+#if 0
 struct TestStorage
 {
     Longtail_ReadStorage m_Storge = {/*PreflightBlocks, */AqcuireBlockStorage, ReleaseBlock};
@@ -298,7 +688,7 @@ TEST(Longtail, PathIndex)
         ASSERT_EQ(path_count, find_path_index(paths, sub_path_hashes, path_count, parent_path_index, sub_path_hash));
         const uint32_t path_length = (uint32_t)(sub_path_end - path);
         TLongtail_Hash path_hash = get_sub_path_hash(folders.folder_names[p], sub_path_end);
-        add_sub_path(paths,  path_count, parent_path_index, false, path_hash, &string_cache, sub_path_hashes, path, path_length, sub_path_hash);
+        add_sub_path(paths, path_count, parent_path_index, false, path_hash, &string_cache, sub_path_hashes, path, path_length, sub_path_hash);
 		++path_count;
 	}
 
@@ -1738,3 +2128,5 @@ TEST(Longtail, ScanContent)
     free(shed);
 }
 #endif
+
+#endif // 0

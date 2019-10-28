@@ -42,7 +42,7 @@ To read it, jump to end of block, read how many assets there are, back up to ind
 Each block is compressed separately so it is a good idea to bunch smaller assets together to reduce size and IO operations.
 
 ## Content Index
-Lookup tabke from sset content hash to block, offset in block and length. This is updated as new blocks are added and old blocks are purged.
+Lookup table from asset content hash to block, offset in block and length. This is updated as new blocks are added and old blocks are purged.
 
 ### Duplicates
 If an asset is present in more than one block, how do we represent that in the Content Index? It really does not matter to which block it points to, it is the content that matters so duplicates is only wasting space.
@@ -59,6 +59,81 @@ Check Content Index for the block needed, request the non-local block and store 
 
 ## Unknown asset
 Request block hash containing asset content hash, request the block and store it locally. Scan the block for assets and insert them in the Content Index, open block and read using offset and length from the Content Index.
+
+# RSync-style application
+
+## Local
+- Assets (implicit paths) - can be built on the fly from Version Index and Content Cache. Any missing content needs to be fetched from remote
+- Version Index (possibly cached)
+  - path hash[] -> {parent path hash, name offset, asset hash}[]
+    names[]
+
+### Content Cache
+- Content Index (contains no path information)
+  - asset hash[] -> {block hash, offset, length}
+- Blocks (contains no path information)
+  - asset data[]
+  - {asset hash, block offset, size}[]
+  - asset count
+
+## Content Cache
+The Content cache can either be a dedicated remote cache or a local folder of a destination target. To build the local Assets you also need a Version Index.
+
+- Content Index (contains no path information)
+  - asset hash[] -> {block hash, offset, length}
+- Blocks (contains no path information)
+  - asset data[]
+  - {asset hash, block offset, size}[]
+  - asset count
+
+
+
+## Remote
+- Assets (implicit paths) - can be built on the fly from Version Index and Content Cache. Any missing content needs to be fetched from remote
+- Version Index (possibly cached)
+  - path hash[] -> {parent path hash, name offset, asset hash}[]
+    names[]
+
+
+
+
+Scan source folder
+    Build Local Version Index
+        Convert paths -> path hash
+        Calculate hash of each file
+Bundle source assets into blocks
+    Customizable association algorithm
+    Custimizable compression algorithm
+    Build Blocks
+        Cache them locally
+    Update Local Content Index
+
+Get target Remote Content Index
+Copy missing blocks from Local Content Index to Remote Content Index
+Update Remote Content Index
+Copy Local Version Index to Remote Version Index
+Build Version Index
+    Convert paths -> path hash
+    Calculate hash of each file
+Remove unwanted assets from Remote Folder
+    Remove any files in Remote Content Index not in Local Content Index
+        Diff Remote Version Index with Remote Version Index
+        Remove assets
+        Update Remote Version Index
+Add missing assets to Remote Folder
+    Add assets in Local Version Index not in Remote Version Index
+        Diff Local Version Index with Remote Version Index
+        Add assets from Remote Content Index
+            Get asset path hash from Local Version Index
+            Convert asset path hash to asset path
+            Look up block in Content Index
+            Copy asset from Remote Content Index to destination folder
+
+As new assets are added they move into "new" blocks but untouched assets remains in their old blocks, this means fast-changing assets will be kept in small delta like packets while slow-changing assets will not be transmitted. It *can* lead to lots of small fragmented blocks if only a few small assets will be changed (and never the same assets). This can be remedied with re-blocking the Content Index cache by bundling up existing blocks.
+
+A Content Index Cache can easily be cleaned up using the Content Index, any block that is not pointed to by the Content Index may be deleted.
+
+The Local Index and the Remote Index does not *have* to be the same layout - if they differ it will only have the risk of transmitting redundant data.
 
 # WIP
 MHash . https://github.com/cmuratori/meow_hash
