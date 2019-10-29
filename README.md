@@ -61,6 +61,19 @@ Check Content Index for the block needed, request the non-local block and store 
 Request block hash containing asset content hash, request the block and store it locally. Scan the block for assets and insert them in the Content Index, open block and read using offset and length from the Content Index.
 
 # RSync-style application
+lvi = longtail version index
+lci = longtail content index
+lbl = longtail block list
+
+longtail build-version-index <asset-path> >local_version.lvi
+longtail build-content-index <content-path> >local_content.lci
+longtail update-content-index local_version.lvi <asset-path> local_content.lci <content-path>
+wget <remote-content-index> >remote_content.lci
+longtail build-version-content-index <asset-path> local_content.lci >upload_content.lbl
+wput <remote-content-path> <content-path> <upload_content.lbl
+wput <remote-path> local_content.lci
+
+??? Better granularity? Should we diff against assets?
 
 ## Local
 - Assets (implicit paths) - can be built on the fly from Version Index and Content Cache. Any missing content needs to be fetched from remote
