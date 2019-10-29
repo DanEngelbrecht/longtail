@@ -24,6 +24,40 @@
     #include <alloca.h>
 #endif
 
+#if defined(_WIN32)
+
+void Trove_NormalizePath(char* path)
+{
+    while (*path)
+    {
+        *path++ = *path == '\\' ? '/' : *path;
+    }
+}
+
+void Trove_DenormalizePath(char* path)
+{
+    while (*path)
+    {
+        *path++ = *path == '/' ? '\\' : *path;
+    }
+}
+
+#endif
+
+#if defined(__APPLE__) || defined(__linux__)
+
+void Trove_NormalizePath(char* )
+{
+
+}
+
+void Trove_DenormalizePath(char* )
+{
+
+}
+
+#endif
+
 namespace Jobs
 {
 
@@ -202,26 +236,37 @@ int GetContent(const char* root_path, AssetPaths* out_assets)
     out_assets->paths = 0;
     out_assets->count = 0;
 
+    struct Context {
+        const char* root_path;
+        AssetPaths* assets;
+    };
+
     auto add_folder = [](void* context, const char* root_path, const char* file_name)
     {
-        AssetPaths* assets = (AssetPaths*)context;
-        assets->paths = (char**)realloc(assets->paths, sizeof(char*) * (assets->count + 1));
-        assets->paths[assets->count] = (char*)malloc(strlen(root_path) + 1 + strlen(file_name) + 1);
-        strcpy(assets->paths[assets->count], root_path);
-        strcpy(&assets->paths[assets->count][strlen(root_path)], "/");
-        strcpy(&assets->paths[assets->count][strlen(root_path) + 1], file_name);
+        Context* asset_context = (Context*)context;
+        AssetPaths* assets = asset_context->assets;
 
-        // Normalize path
-        char* backslash = strchr(assets->paths[assets->count], '\\');
-        while (backslash)
+        size_t base_path_length = strlen(asset_context->root_path);
+
+        char* full_path = (char*)Trove_ConcatPath(root_path, file_name);
+        Trove_NormalizePath(full_path);
+        const char* s = &full_path[base_path_length];
+        if (*s == '/')
         {
-            *backslash = '/';
-            backslash = strchr(assets->paths[assets->count], '\\');
+            ++s;
         }
+
+        assets->paths = (char**)realloc(assets->paths, sizeof(char*) * (assets->count + 1));
+        assets->paths[assets->count] = strdup(s);
+
+        free(full_path);
+
 		++assets->count;
     };
 
-    RecurseTree(root_path, add_folder, out_assets);
+    Context context = { root_path, out_assets };
+
+    RecurseTree(root_path, add_folder, &context);
 
     return 0;
 }
@@ -230,7 +275,7 @@ struct AssetHashInfo
 {
     uint64_t m_ContentSize;
     TLongtail_Hash m_PathHash;
-    meow_u128 m_ContentHash;
+    TLongtail_Hash m_ContentHash;
 };
 
 struct HashJob
@@ -253,17 +298,10 @@ static TLongtail_Hash GetPathHash(const char* path)
 static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     HashJob* hash_job = (HashJob*)context;
-//    const char* path = Trove_ConcatPath(hash_job->m_RootPath, hash_job->m_Path);
+    char* path = (char*)Trove_ConcatPath(hash_job->m_RootPath, hash_job->m_Path);
+    Trove_DenormalizePath(path);
 
-    char* platform_path = strdup(hash_job->m_Path);
-    char* backslash = strchr(platform_path, '\\');
-    while (backslash)
-    {
-        *backslash = '/';
-        backslash = strchr(backslash, '\\');
-    }
-
-    HTroveOpenReadFile file_handle = Trove_OpenReadFile(platform_path);
+    HTroveOpenReadFile file_handle = Trove_OpenReadFile(path);
     meow_state state;
     MeowBegin(&state, MeowDefaultSeed);
     if(file_handle)
@@ -284,10 +322,10 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         Trove_CloseReadFile(file_handle);
     }
     meow_u128 hash = MeowEnd(&state, 0);
-    hash_job->m_AssetHashInfo->m_ContentHash = hash;
-    hash_job->m_AssetHashInfo->m_PathHash = GetPathHash(&hash_job->m_Path[strlen(hash_job->m_RootPath) + 1]);
+    hash_job->m_AssetHashInfo->m_ContentHash = MeowU64From(hash, 0);
+    hash_job->m_AssetHashInfo->m_PathHash = GetPathHash(hash_job->m_Path);
     nadir::AtomicAdd32(hash_job->m_PendingCount, -1);
-    free((char*)platform_path);
+    free((char*)path);
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
@@ -360,6 +398,80 @@ void GetFileHashes(Bikeshed shed, const char* root_path, const char** paths, uin
     delete [] context.m_HashJobs;
 }
 
+struct VersionIndex
+{
+    uint64_t m_AssetCount;
+    TLongtail_Hash* m_PathHash;
+    TLongtail_Hash* m_AssetHash;
+    uint32_t* m_NameOffset;
+    char* m_NameData;
+};
+
+size_t GetVersionIndexSize(uint32_t asset_count, char* const* asset_paths)
+{
+    uint64_t name_data_size = 0;
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        name_data_size += strlen(asset_paths[i]) + 1;
+    }
+
+    size_t version_index_size = sizeof(uint64_t) +
+        sizeof(VersionIndex) +
+        (sizeof(TLongtail_Hash) * asset_count) +
+        (sizeof(TLongtail_Hash) * asset_count) +
+        (sizeof(uint64_t) * asset_count) +
+        name_data_size;
+
+    return version_index_size;
+}
+
+void InitVersionIndex(VersionIndex* version_index)
+{
+    uint64_t asset_count = version_index->m_AssetCount;
+
+    char* p = (char*)version_index;
+    p += sizeof(VersionIndex);
+
+    version_index->m_PathHash = (TLongtail_Hash*)p;
+    p += (sizeof(TLongtail_Hash) * asset_count);
+
+    version_index->m_AssetHash = (TLongtail_Hash*)p;
+    p += (sizeof(TLongtail_Hash) * asset_count);
+
+    version_index->m_NameOffset = (uint32_t*)p;
+    p += (sizeof(uint32_t) * asset_count);
+
+    version_index->m_NameData = (char*)p;
+}
+
+VersionIndex* BuildVersionIndex(void* mem, uint32_t asset_count, char* const* asset_paths, const AssetHashInfo* asset_hash_info)
+{
+    VersionIndex* version_index = (VersionIndex*)mem;
+    version_index->m_AssetCount = asset_count;
+    InitVersionIndex(version_index);
+
+    uint32_t name_offset = 0;
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        version_index->m_PathHash[i] = asset_hash_info[i].m_PathHash;
+        version_index->m_AssetHash[i] = asset_hash_info[i].m_ContentHash;
+        version_index->m_NameOffset[i] = name_offset;
+        uint32_t path_length = (uint32_t)strlen(asset_paths[i]) + 1;
+        memcpy(&version_index->m_NameData[name_offset], asset_paths[i], path_length);
+        name_offset += path_length;
+    }
+    return version_index;
+}
+
+struct ContentIndex
+{
+    uint64_t m_AssetCount;
+    TLongtail_Hash* m_AssetHash;
+    TLongtail_Hash* m_BlockHash;
+    uint64_t* m_BlockOffset;
+    uint64_t* m_AssetSize;
+};
+
 TEST(Longtail, ScanContent)
 {
     Jobs::ReadyCallback ready_callback;
@@ -389,24 +501,47 @@ TEST(Longtail, ScanContent)
 
     GetFileHashes(shed, root_path, (const char**)asset_paths.paths, asset_paths.count, asset_hash_infos);
 
-    if (0)
+    size_t version_index_size = GetVersionIndexSize(asset_paths.count, asset_paths.paths);
+    void* version_index_mem = malloc(version_index_size);
+    printf("Asset count: %" PRIu64 ", Version index size: %" PRIu64, (uint64_t)asset_paths.count, (uint64_t)version_index_size);
+
+    VersionIndex* version_index = BuildVersionIndex(version_index_mem, asset_paths.count, asset_paths.paths, asset_hash_infos);
+
+    delete [] asset_hash_infos;
+    FreeAssetpaths(&asset_paths);
+
     {
-        for (uint64_t i = 0; i < asset_paths.count; ++i)
+        HTroveOpenWriteFile file_handle = Trove_OpenWriteFile("D:\\Temp\\VersionIndex.lvi");
+        Trove_Write(file_handle, 0, version_index_size, version_index);
+        Trove_CloseWriteFile(file_handle);
+    }
+    free(version_index);
+
+    {
+        HTroveOpenReadFile file_handle = Trove_OpenReadFile("D:\\Temp\\VersionIndex.lvi");
+        version_index_size = Trove_GetFileSize(file_handle);
+        version_index = (VersionIndex*)malloc(version_index_size);
+        Trove_Read(file_handle, 0, version_index_size, version_index);
+        InitVersionIndex(version_index);
+        Trove_CloseReadFile(file_handle);
+    }
+
+    if (1)
+    {
+        for (uint64_t i = 0; i < version_index->m_AssetCount; ++i)
         {
-            const char* asset_path  = asset_paths.paths[i];
-            AssetHashInfo* asset_hash_info = &asset_hash_infos[i];
-            uint64_t content_hash = MeowU64From(asset_hash_info->m_ContentHash, 0);
+            const char* asset_path  = &version_index->m_NameData[version_index->m_NameOffset[i]];
 
-            char hash_str[64];
-            sprintf(hash_str, "0x%" PRIx64, content_hash);
+            char path_hash_str[64];
+            sprintf(path_hash_str, "0x%" PRIx64, version_index->m_AssetHash[i]);
+            char content_hash_str[64];
+            sprintf(content_hash_str, "0x%" PRIx64, version_index->m_AssetHash[i]);
 
-            printf("%s: %s\n", asset_path, hash_str);
+            printf("%s (%s) = %s\n", asset_path, path_hash_str, content_hash_str);
         }
     }
 
-    delete [] asset_hash_infos;
-
-    FreeAssetpaths(&asset_paths);
+    free(version_index);
 }
 
 
