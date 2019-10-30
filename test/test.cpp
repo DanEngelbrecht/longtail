@@ -937,6 +937,7 @@ TEST(Longtail, ScanContent)
                 }
                 printf("Block count: %u\n", block_count);
 
+                // Build Content Index (from block list)
                 size_t content_index_size = GetContentIndexSize(block_count, unique_asset_count);
                 ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
 
@@ -978,6 +979,36 @@ TEST(Longtail, ScanContent)
             free(assets_index);
             free(asset_sizes);
 
+            ////////// Upload
+            // download remote_content_index.lci
+            // build_local_content_index(content_folder, local_content_index_path)
+            // build_local_version_index(asset_folder, local_version_index_path)
+
+            // build_blocks_for_missing_assets(asset_folder, local_version_index_path, content_folder, local_content_index_path, remote_content_index_path, block_list_path)
+            // upload [block_list_path] from content_folder
+            // upload local_content_index_path
+
+            ////////// Download
+            // download version_index.lci
+            // build_local_content_index(content_folder, local_content_index_path)
+            // build_list_of_missing_assets(local_version_index_path, local_content_index_path)
+            // download remote_content_index.lci
+            // list_blocks_for_missing_assets(local_version_index_path, remote_content_index.lci)
+            // download [block_list_path] to content_folder
+            // merge_content_index(local_content_index_path, content_folder, block_list_path)
+            // build_local_asset_folder(local_version_index_path, local_content_index_path, content_folder, asset_folder)
+
+
+
+
+            // Build Local Version Index    <- asset folder (local fs) -> local version index (local fs)
+            // Load Remote Content Index    <- remote version index (remote fs) <- local version index (local fs)
+            // Calculate list of assets not in Remote Content Index
+            // Load Local Content Index
+            // Calculate list of assets not in Local Content Index
+            // Build blocks missing assets into Local Content Index
+            // Upload blocks from Local Content Index for all missing assets to Remote Content Index
+            // Upload Version Index
         }
         free(version_index);
     }
