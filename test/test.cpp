@@ -260,6 +260,7 @@ int GetContent(const char* root_path, AssetPaths* out_assets)
         assets->paths[assets->count] = strdup(s);
 
         free(full_path);
+        full_path = 0;
 
         ++assets->count;
     };
@@ -777,11 +778,14 @@ VersionIndex* CreateVersionIndex(Bikeshed shed, const char* assets_path, uint32_
         contentSizes);
 
     free(contentHashes);
+    contentHashes = 0;
     free(pathHashes);
+    pathHashes = 0;
 
     if (!asset_sizes)
     {
         free(contentSizes);
+        contentSizes = 0;
     }
     FreeAssetpaths(&asset_paths);
 
@@ -832,7 +836,6 @@ uint32_t CreatePathLookupTable(
 }
 
 ContentIndex* CreateContentIndex(
-    Bikeshed shed,
     const char* assets_path,
     uint64_t asset_count,
     const TLongtail_Hash* asset_content_hashes,
@@ -982,8 +985,10 @@ ContentIndex* CreateContentIndex(
             }
         }
         free(block_indexes[i]);
+        block_indexes[i] = 0;
     }
     free(block_indexes);
+    block_indexes = 0;
 
     HTroveOpenWriteFile file_handle = Trove_OpenWriteFile("D:\\Temp\\ContentIndex.lci");
     Trove_Write(file_handle, 0, content_index_size - sizeof(ContentIndex), &content_index[1]);
@@ -996,7 +1001,9 @@ ContentIndex* CreateContentIndex(
     free(((tmp*)&hashes)->mem);
 
     free(assets_index);
+    assets_index = 0;
     free(content_tags);
+    content_tags = 0;
 
     return content_index;
 }
@@ -1044,7 +1051,9 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
     *removed_hash_count = removed;
 
     free(news);
+    news = 0;
     free(refs);
+    refs = 0;
 }
 
 int WriteContentBlocks(
@@ -1100,8 +1109,10 @@ int WriteContentBlocks(
             write_offset += asset_size;
 
             free(buffer);
+            buffer = 0;
             Trove_CloseReadFile(file_handle);
             free((char*)full_path);
+            full_path = 0;
 
             ++asset_index;
         }
@@ -1135,13 +1146,54 @@ int WriteContentBlocks(
         }
         
         free((char*)block_path);
+        block_path = 0;
 
         free((char*)tmp_block_path);
+        tmp_block_path = 0;
 
         block_start_asset_index += asset_count;
     }
 
     return 1;
+}
+
+ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char* content_path, const VersionIndex* version, const uint32_t* asset_sizes, GetContentTagFunc get_content_tag)
+{
+    TLongtail_Hash* removed_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * *version->m_AssetCount);
+    TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * *version->m_AssetCount);
+
+    uint32_t added_hash_count = 0;
+    uint32_t removed_hash_count = 0;
+    DiffHashes(content_index->m_AssetContentHash, *content_index->m_AssetCount, version->m_AssetContentHash, *version->m_AssetCount, &added_hash_count, added_hashes, &removed_hash_count, removed_hashes);
+
+    uint32_t* diff_asset_sizes = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
+    uint32_t* diff_name_offsets = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
+
+    // HACK Horrible perf!
+    uint32_t found_assets = 0;
+    for (uint32_t i = 0; i < *version->m_AssetCount; ++i)
+    {
+        for (uint32_t j = 0; j < added_hash_count; ++j)
+        {
+            if (version->m_AssetContentHash[i] == added_hashes[j])
+            {
+                diff_asset_sizes[j] = asset_sizes[i];
+                diff_name_offsets[j] = version->m_NameOffset[i];
+            }
+        }
+    }
+
+    ContentIndex* diff_content_index = CreateContentIndex(
+        content_path,
+        added_hash_count,
+        added_hashes,
+        added_hashes,
+        diff_asset_sizes,
+        diff_name_offsets,
+        version->m_NameData,
+        get_content_tag);
+
+    return diff_content_index;
 }
 
 TEST(Longtail, ScanContent)
@@ -1185,7 +1237,6 @@ TEST(Longtail, ScanContent)
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     ContentIndex* local_content_index = CreateContentIndex(
-        shed,
         local_path_1,
         *version1->m_AssetCount,
         version1->m_AssetContentHash,
@@ -1222,97 +1273,56 @@ TEST(Longtail, ScanContent)
     }
 
     free(local_content_index);
+    local_content_index = 0;
     free(version1);
+    version1 = 0;
+    free(version_1_asset_sizes);
+    version_1_asset_sizes = 0;
 
     uint32_t* version_2_asset_sizes;
     VersionIndex* version2 = CreateVersionIndex(shed, local_path_2, &version_2_asset_sizes);
     WriteVersionIndex(version2, version_index_path_2);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
+    free(version2);
+    version2 = 0;
     
-    free(version_1_asset_sizes);
-
     VersionIndex* version1b = ReadVersionIndex(version_index_path_1);
     printf("%" PRIu64 " assets in index `%s`\n", *version1b->m_AssetCount, version_index_path_1);
     VersionIndex* version2b = ReadVersionIndex(version_index_path_2);
     printf("%" PRIu64 " assets in index `%s`\n", *version2b->m_AssetCount, version_index_path_2);
 
-    TLongtail_Hash* removed_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * *version1b->m_AssetCount);
-    TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * *version2b->m_AssetCount);
-    uint32_t added_hash_count = 0;
-    uint32_t removed_hash_count = 0;
-    DiffHashes(version1b->m_AssetContentHash, *version1b->m_AssetCount, version2b->m_AssetContentHash, *version2b->m_AssetCount, &added_hash_count, added_hashes, &removed_hash_count, removed_hashes);
+    ContentIndex* local_content_indexb = ReadContentIndex(local_content_index_path);
+    printf("%" PRIu64 " blocks in index `%s`\n", *local_content_indexb->m_BlockCount, local_content_index_path);
 
-/*
-    size_t version_index_size = GetVersionIndexSize(added_hash_count, paths);
-    void* version_index_mem = malloc(version_index_size);
+    ContentIndex* missing_content = CreateMissingContent(local_content_indexb, local_path_2, version2b, version_2_asset_sizes, GetContentTag);
 
-    VersionIndex* version_index = BuildVersionIndex(version_index_mem, version_index_size, added_hash_count, added_asset_paths, added_asset_content_hashes, added_asset_content_sizes);
-*/
-
-    uint32_t* diff_asset_sizes = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
-    uint32_t* diff_name_offsets = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
-
-    // HACK Horrible perf!
-    uint32_t found_assets = 0;
-    for (uint32_t i = 0; i < *version2->m_AssetCount; ++i)
-    {
-        for (uint32_t j = 0; j < added_hash_count; ++j)
-        {
-            if (version2->m_AssetContentHash[i] == added_hashes[j])
-            {
-                diff_asset_sizes[j] = version_2_asset_sizes[i];
-                diff_name_offsets[j] = version2->m_NameOffset[i];
-            }
-        }
-    }
-
-    free(version_2_asset_sizes);
-
-    ContentIndex* diff_content_index = CreateContentIndex(
-        shed,
-        local_path_2,
-        added_hash_count,
-        added_hashes,
-        added_hashes,
-        diff_asset_sizes,
-        diff_name_offsets,
-        version2->m_NameData,
-        GetContentTag);
-
-    free(diff_asset_sizes);
-    free(diff_name_offsets);
-        
     jc::HashTable<TLongtail_Hash, uint32_t> hashes2;
     CreatePathLookupTable(
         local_path_2,
-        *version2->m_AssetCount,
-        version2->m_AssetContentHash,
-        version2->m_NameOffset,
-        version2->m_NameData,
+        *version2b->m_AssetCount,
+        version2b->m_AssetContentHash,
+        version2b->m_NameOffset,
+        version2b->m_NameData,
         0,
         &hashes2,
         0,
         0);
 
-    if (1)
+    if (0)
     {
         WriteContentBlocks(
             shed,
-            diff_content_index,
+            missing_content,
             &hashes2,
-            version2->m_NameData,
+            version2b->m_NameData,
             local_path_2,
             local_content_path);
     }
 
-	printf("%" PRIu64 " blocks from version `%s` to version `%s`\n", *diff_content_index->m_BlockCount, local_path_1, local_path_2);
+	printf("%" PRIu64 " blocks for version `%s` missing in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
 	
-	free(diff_content_index);
-
-    free(removed_hashes);
-    free(added_hashes);
-	free(version2);
-
+	free(missing_content);
+    missing_content = 0;
 
     // EVILEVIL HACK
     struct tmp {
@@ -1322,10 +1332,9 @@ TEST(Longtail, ScanContent)
     free(((tmp*)&hashes1)->mem);
 
     free(version1b);
+    version1b = 0;
     free(version2b);
-
-    ContentIndex* local_content_indexb = ReadContentIndex(local_content_index_path);
-    printf("%" PRIu64 " blocks in index `%s`\n", *local_content_indexb->m_BlockCount, local_content_index_path);
+    version2b = 0;
 
     nadir::AtomicAdd32(&stop, 1);
     Jobs::ReadyCallback::Ready(&ready_callback.cb, 0, WORKER_COUNT);
@@ -1335,6 +1344,7 @@ TEST(Longtail, ScanContent)
     }
 
     free(shed);
+    shed = 0;
 
     return;
 #if 0
