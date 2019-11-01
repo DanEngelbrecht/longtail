@@ -1056,27 +1056,6 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
     free(refs);
 }
 
-/*
-void BuildPathLookup(uint64_t asset_count, const uint64_t* path_name_offset, const TLongtail_Hash* asset_content_hash, jc::HashTable<TLongtail_Hash, uint64_t>* path_lookup)
-{
-    // Only pick up unique assets
-
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint64_t>::CalcSize(asset_count);
-    void* hash_mem = malloc(hash_size);
-    jc::HashTable<TLongtail_Hash, uint64_t> hashes;
-    hashes.Create(asset_count, hash_mem);
-
-    for (uint32_t i = 0; i < asset_count; ++i)
-    {
-        TLongtail_Hash hash = asset_content_hash[i];
-        uint64_t* existing_index = path_lookup->Get(hash);
-        if (existing_index == 0)
-        {
-            path_lookup->Put(hash, path_name_offset[i]);
-        }
-    }
-}
-*/
 int WriteContentBlocks(
     Bikeshed shed,
     ContentIndex* content_index,
@@ -1174,203 +1153,6 @@ int WriteContentBlocks(
     return 1;
 }
 
-#if 0
-ContentIndex* CreateContentIndex(
-    Bikeshed shed,
-    const char* assets_path,
-    uint64_t asset_count,
-    const TLongtail_Hash* asset_content_hashes,
-    const TLongtail_Hash* asset_path_hashes,
-    const uint64_t* asset_sizes,
-    const char* const* asset_paths,
-    const char* content_folder,
-    GetContentTagFunc get_content_tag)
-{
-    if (asset_count == 0)
-    {
-        return 0;
-    }
-    uint32_t* assets_index = (uint32_t*)malloc(sizeof(uint64_t) * asset_count);
-    TLongtail_Hash* content_tags = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
-
-    // Map asset_hash to unique asset path
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint64_t>::CalcSize(asset_count);
-    void* hash_mem = malloc(hash_size);
-    jc::HashTable<TLongtail_Hash, uint64_t> hashes;
-    hashes.Create(asset_count, hash_mem);
-
-    // Only pick up unique assets
-    uint32_t unique_asset_count = 0;
-    for (uint32_t i = 0; i < asset_count; ++i)
-    {
-        TLongtail_Hash hash = asset_content_hashes[i];
-        uint64_t* existing_index = hashes.Get(hash);
-        if (existing_index == 0)
-        {
-            hashes.Put(hash, i);
-
-            assets_index[unique_asset_count++] = i;
-            content_tags[i] = get_content_tag(assets_path, asset_paths[i]);
-        }
-    }
-
-    struct CompareAssetEntry
-    {
-        CompareAssetEntry(const TLongtail_Hash* asset_path_hashes, const uint64_t* asset_sizes, const TLongtail_Hash* asset_tags)
-            : asset_path_hashes(asset_path_hashes)
-            , asset_sizes(asset_sizes)
-            , asset_tags(asset_tags)
-        {
-
-        }
-
-        // This sorting algorithm is very arbitrary!
-        bool operator()(uint32_t a, uint32_t b) const
-        {   
-            TLongtail_Hash a_tag = asset_tags[a];
-            TLongtail_Hash b_tag = asset_tags[b];
-            if (a_tag < b_tag)
-            {
-                return true;
-            }
-            else if (b_tag < a_tag)
-            {
-                return false;
-            }
-            uint64_t a_size = asset_sizes[a];
-            uint64_t b_size = asset_sizes[b];
-            if (a_size < b_size)
-            {
-                return true;
-            }
-            else if (b_size < a_size)
-            {
-                return false;
-            }
-            TLongtail_Hash a_hash = asset_path_hashes[a];
-            TLongtail_Hash b_hash = asset_path_hashes[b];
-            return (a_hash < b_hash);
-        }
-
-        const TLongtail_Hash* asset_path_hashes;
-        const uint64_t* asset_sizes;
-        const TLongtail_Hash* asset_tags;
-    };
-
-    std::sort(&assets_index[0], &assets_index[unique_asset_count], CompareAssetEntry(asset_path_hashes, asset_sizes, content_tags));
-
-    if (0)
-    {
-        for (uint64_t i = 0; i < unique_asset_count; ++i)
-        {
-            uint32_t asset_index = assets_index[i];
-            const char* asset_path  = asset_paths[asset_index];
-
-            char path_hash_str[64];
-            sprintf(path_hash_str, "0x%" PRIx64, asset_path_hashes[asset_index]);
-            char content_hash_str[64];
-            sprintf(content_hash_str, "0x%" PRIx64, asset_content_hashes[asset_index]);
-
-            printf("%s (%s) = %s\n", asset_path, path_hash_str, content_hash_str);
-        }
-    }
-
-//    const char* content_folder = "D:\\Temp\\local_content";
-    BlockIndex** block_indexes = (BlockIndex**)malloc(sizeof(BlockIndex*) * unique_asset_count);
-
-    static const uint32_t MAX_ASSETS_PER_BLOCK = 4096;
-    static const uint32_t MAX_BLOCK_SIZE = 65536;
-    uint32_t stored_asset_indexes[MAX_ASSETS_PER_BLOCK];
-
-    uint64_t current_size = 0;
-    TLongtail_Hash current_tag = content_tags[assets_index[0]];
-    uint64_t i = 0;
-    uint32_t asset_count_in_block = 0;
-    uint32_t block_count = 0;
-
-    while (i < unique_asset_count)
-    {
-        uint64_t asset_index = assets_index[i];
-        while (current_size < MAX_BLOCK_SIZE && (current_tag == content_tags[asset_index] || current_size < (MAX_BLOCK_SIZE / 2)) && asset_count_in_block < MAX_ASSETS_PER_BLOCK)
-        {
-            current_size += asset_sizes[asset_index];
-            stored_asset_indexes[asset_count_in_block] = asset_index;
-            ++i;
-            asset_index = assets_index[i];
-            ++asset_count_in_block;
-        }
-
-        block_indexes[block_count] = WriteBlock(
-            malloc(GetBlockIndexSize(asset_count_in_block)),
-            content_folder,
-            assets_path,
-            asset_count_in_block,
-            stored_asset_indexes,
-            asset_paths,
-            asset_path_hashes,
-            asset_content_hashes,
-            asset_sizes);
-
-        ++block_count;
-        current_tag = content_tags[asset_index];
-        current_size = 0;
-        asset_count_in_block = 0;
-    }
-    if (current_size > 0)
-    {
-        block_indexes[block_count] = WriteBlock(
-            malloc(GetBlockIndexSize(asset_count_in_block)),
-            content_folder,
-            assets_path,
-            asset_count_in_block,
-            stored_asset_indexes,
-            asset_paths,
-            asset_path_hashes,
-            asset_content_hashes,
-            asset_sizes);
-        ++block_count;
-    }
-
-    // Build Content Index (from block list)
-    size_t content_index_size = GetContentIndexSize(block_count, unique_asset_count);
-    ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
-
-    content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex)];
-    content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
-    *content_index->m_BlockCount = block_count;
-    *content_index->m_AssetCount = unique_asset_count;
-    InitContentIndex(content_index);
-
-    uint64_t asset_index = 0;
-    for (uint32_t i = 0; i < block_count; ++i)
-    {
-        content_index->m_BlockHash[i] = block_indexes[i]->m_BlockHash;
-        uint64_t asset_offset = 0;
-        for (uint64_t a = 0; a < block_indexes[i]->m_AssetCount; ++a)
-        {
-            content_index->m_AssetHash[asset_index] = block_indexes[i]->m_Entries[a].m_AssetHash;
-            content_index->m_AssetBlock[asset_index] = i;
-            content_index->m_AssetOffset[asset_index] = asset_offset;
-            content_index->m_AssetLength[asset_index] = block_indexes[i]->m_Entries[a].m_AssetSize;
-            asset_offset += block_indexes[i]->m_Entries[a].m_AssetSize;
-        }
-        free(block_indexes[block_count]);
-    }
-    free(block_indexes);
-
-    HTroveOpenWriteFile file_handle = Trove_OpenWriteFile("D:\\Temp\\ContentIndex.lci");
-    Trove_Write(file_handle, 0, content_index_size - sizeof(ContentIndex), &content_index[1]);
-    Trove_CloseWriteFile(file_handle);
-
-    free(hash_mem);
-
-    free(assets_index);
-    free(content_tags);
-
-    return content_index;
-}
-#endif
-
 TEST(Longtail, ScanContent)
 {
     Jobs::ReadyCallback ready_callback;
@@ -1385,38 +1167,31 @@ TEST(Longtail, ScanContent)
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
     }
 
+    #define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
+    #define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
 
-//    const char* root_path = "D:\\TestContent\\Source\\gitc352a449064be52c8965fe28856bd914b0bbae0c";
-//    const char* root_path = "D:\\Temp\\gita1ffa22e55b2278eae44b15535dc143c41342d5c";
-      const char* local_path_1 = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\local\\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor";
-      const char* version_index_path_1 = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\local\\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor.lvi";
+//    #define HOME "test\\data"
+    #define HOME "D:\\Temp\\longtail"
 
-      const char* local_path_2 = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\local\\gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor";
-      const char* version_index_path_2 = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\local\\gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor.lvi";
+    const char* local_path_1 = HOME "\\local\\git" VERSION1 "_Win64_Editor";
+    const char* version_index_path_1 = HOME "\\local\\git" VERSION1 "_Win64_Editor.lvi";
 
-      const char* local_content_path = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\local_content";
-      const char* local_content_index_path = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\local.lci";
+    const char* local_path_2 = HOME "\\local\\git" VERSION2 "_Win64_Editor";
+    const char* version_index_path_2 = HOME "\\local\\git" VERSION2 "_Win64_Editor.lvi";
 
-      const char* remote_content_path = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\remote_content";
-      const char* remote_content_index_path = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\remote.lci";
+    const char* local_content_path = HOME "\\local_content";
+    const char* local_content_index_path = HOME "\\local.lci";
 
-      const char* remote_path_1 = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\remote\\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor";
-      const char* remote_path_2 = "D:\\github\\DanEngelbrecht\\longtail\\test\\data\\remote\\gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor";
+    const char* remote_content_path = HOME "\\remote_content";
+    const char* remote_content_index_path = HOME "\\remote.lci";
 
-//    const char* root_path = "/Users/danengelbrecht/Documents/Projects/blossom_blast_saga/build/default";
-//    const char* cache_path = "D:\\Temp\\longtail\\cache";
-//    const char* cache_path = "/Users/danengelbrecht/tmp/cache";
+    const char* remote_path_1 = HOME "\\remote\\git" VERSION1 "_Win64_Editor";
+    const char* remote_path_2 = HOME "\\remote\\git" VERSION2 "_Win64_Editor";
 
     uint64_t* version_1_asset_sizes;
     VersionIndex* version1 = CreateVersionIndex(shed, local_path_1, &version_1_asset_sizes);
     WriteVersionIndex(version1, version_index_path_1);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
-
-//    const char** version_1_asset_paths = (const char**)(malloc(sizeof(char*) * (*version1->m_AssetCount)));
-//    for (uint32_t i = 0; i < *version1->m_AssetCount; ++i)
-//    {
-//        version_1_asset_paths[i] = &version1->m_NameData[version1->m_NameOffset[i]];
-//    }
 
     ContentIndex* local_content_index = CreateContentIndex(
         shed,
@@ -1444,13 +1219,16 @@ TEST(Longtail, ScanContent)
     WriteContentIndex(local_content_index, local_content_index_path);
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
-//    WriteContentBlocks(
-//        shed,
-//        local_content_index,
-//        &hashes1,
-//        version1->m_NameData,
-//        local_path_1,
-//        local_content_path);
+    if (0)
+    {
+        WriteContentBlocks(
+            shed,
+            local_content_index,
+            &hashes1,
+            version1->m_NameData,
+            local_path_1,
+            local_content_path);
+    }
 
     free(local_content_index);
     free(version1);
@@ -1525,13 +1303,16 @@ TEST(Longtail, ScanContent)
         0,
         0);
 
-    WriteContentBlocks(
-        shed,
-        diff_content_index,
-        &hashes2,
-        version2->m_NameData,
-        local_path_2,
-        local_content_path);
+    if (1)
+    {
+        WriteContentBlocks(
+            shed,
+            diff_content_index,
+            &hashes2,
+            version2->m_NameData,
+            local_path_2,
+            local_content_path);
+    }
 
 	printf("%" PRIu64 " blocks from version `%s` to version `%s`\n", *diff_content_index->m_BlockCount, local_path_1, local_path_2);
 	
