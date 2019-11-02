@@ -1197,7 +1197,7 @@ ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char
 
     uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)asset_count);
     jc::HashTable<TLongtail_Hash, uint32_t> asset_index_lookup;
-    void* path_lookup_mem = malloc(sizeof(PathLookup) + hash_size);
+    void* path_lookup_mem = malloc(hash_size);
     asset_index_lookup.Create(asset_count, path_lookup_mem);
     for (uint64_t i = 0; i < asset_count; ++i)
     {
@@ -1243,7 +1243,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
         uint64_t content_index_asset_count = *content_index->m_AssetCount;
         uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint64_t>::CalcSize((uint32_t)content_index_asset_count);
         jc::HashTable<TLongtail_Hash, uint32_t> content_hash_to_asset_index;
-        void* content_hash_to_asset_index_mem = malloc(sizeof(PathLookup) + hash_size);
+        void* content_hash_to_asset_index_mem = malloc(hash_size);
         content_hash_to_asset_index.Create(content_index_asset_count, content_hash_to_asset_index_mem);
         for (uint64_t i = 0; i < content_index_asset_count; ++i)
         {
@@ -1286,7 +1286,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
 
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
     jc::HashTable<uint64_t, uint32_t> block_index_to_asset_count;
-    void* block_index_to_first_asset_index_mem = malloc(sizeof(PathLookup) + hash_size);
+    void* block_index_to_first_asset_index_mem = malloc(hash_size);
     block_index_to_asset_count.Create((uint32_t)*content_index->m_AssetCount, block_index_to_first_asset_index_mem);
 
     uint64_t copy_block_count = 0;
@@ -1349,6 +1349,48 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
     copy_blocks = 0;
 
     return existing_content_index;
+}
+
+void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
+{
+    uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
+    jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
+    void* content_hash_to_content_asset_index_mem = malloc(hash_size);
+    content_hash_to_content_asset_index.Create((uint32_t)*content_index->m_AssetCount, content_hash_to_content_asset_index_mem);
+    for (uint64_t i = 0; i < *content_index->m_AssetCount; ++i)
+    {
+        content_hash_to_content_asset_index.Put(content_index->m_AssetContentHash[i], i);
+    }
+
+    for (uint64_t i = 0; i < *version_index->m_AssetCount; ++i)
+    {
+        TLongtail_Hash asset_content_hash = version_index->m_AssetContentHash[i];
+        const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[i]];
+        uint32_t* asset_index_in_content_index_ptr = content_hash_to_content_asset_index.Get(asset_content_hash);
+        if (!asset_index_in_content_index_ptr)
+        {
+            printf("Missing asset: `%s`!\n", asset_path);
+            exit(1);
+        }
+        uint32_t asset_index_in_content_index = *asset_index_in_content_index_ptr;
+        uint64_t block_index = content_index->m_AssetBlockIndex[asset_index_in_content_index];
+        uint32_t offset_in_block = content_index->m_AssetBlockOffset[asset_index_in_content_index];
+        uint32_t size = content_index->m_AssetLength[asset_index_in_content_index];
+        if (size != *version_index->m_AssetSize)
+        {
+			// TODO! WE FAIL HERE
+            printf("Mismatching sizes: `%s`!\n", asset_path);
+            exit(1);
+        }
+        TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
+        char block_file_name[64];
+        sprintf(block_file_name, "0x%" PRIx64 ".lrb", block_hash);
+        const char* block_path = Trove_ConcatPath(content_path, block_file_name);
+        free((char*)block_path);
+        block_path = 0;
+        const char* target_path = Trove_ConcatPath(version_path, asset_path);
+        free((char*)target_path);
+    }
 }
 
 TEST(Longtail, ScanContent)
@@ -1475,6 +1517,15 @@ TEST(Longtail, ScanContent)
 	uint64_t remaining_missing_asset_count = 0;
 	ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
 	printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
+
+    // Copy existing blocks
+
+    // Merge existing_blocks into local_content_indexb!
+
+    //     ReconstructVersion(local_content_indexb, version2b, const char* content_path, const char* version_path)
+
+    ReconstructVersion(local_content_indexb, version1b, local_content_path, local_path_1);
+
 
     free(existing_blocks);
     existing_blocks = 0;
