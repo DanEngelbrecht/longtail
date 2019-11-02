@@ -400,6 +400,7 @@ struct VersionIndex
     uint64_t* m_AssetCount;
     TLongtail_Hash* m_PathHash;
     TLongtail_Hash* m_AssetContentHash;
+    uint32_t* m_AssetSize;
     uint32_t* m_NameOffset;
     uint32_t m_NameDataSize;
     char* m_NameData;
@@ -420,6 +421,7 @@ size_t GetVersionIndexDataSize(uint32_t asset_count, uint32_t name_data_size)
     size_t version_index_size = sizeof(uint64_t) +
         (sizeof(TLongtail_Hash) * asset_count) +
         (sizeof(TLongtail_Hash) * asset_count) +
+        (sizeof(uint32_t) * asset_count) +
         (sizeof(uint32_t) * asset_count) +
         name_data_size;
 
@@ -449,6 +451,9 @@ void InitVersionIndex(VersionIndex* version_index, size_t version_index_data_siz
 
     version_index->m_AssetContentHash = (TLongtail_Hash*)p;
     p += (sizeof(TLongtail_Hash) * asset_count);
+
+    version_index->m_AssetSize = (uint32_t*)p;
+    p += (sizeof(uint32_t) * asset_count);
 
     version_index->m_NameOffset = (uint32_t*)p;
     p += (sizeof(uint32_t) * asset_count);
@@ -480,6 +485,7 @@ VersionIndex* BuildVersionIndex(
     {
         version_index->m_PathHash[i] = pathHashes[i];
         version_index->m_AssetContentHash[i] = contentHashes[i];
+        version_index->m_AssetSize[i] = contentSizes[i];
         version_index->m_NameOffset[i] = name_offset;
         uint32_t path_length = (uint32_t)strlen(asset_paths[i]) + 1;
         memcpy(&version_index->m_NameData[name_offset], asset_paths[i], path_length);
@@ -748,7 +754,7 @@ VersionIndex* ReadVersionIndex(const char* path)
     return version_index;
 }
 
-VersionIndex* CreateVersionIndex(Bikeshed shed, const char* assets_path, uint32_t** asset_sizes)
+VersionIndex* CreateVersionIndex(Bikeshed shed, const char* assets_path)
 {
     AssetPaths asset_paths;
 
@@ -759,11 +765,6 @@ VersionIndex* CreateVersionIndex(Bikeshed shed, const char* assets_path, uint32_
     TLongtail_Hash* contentHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_paths.count);
     
     GetFileHashes(shed, assets_path, (const char**)asset_paths.paths, asset_paths.count, pathHashes, contentHashes, contentSizes);
-
-    if (asset_sizes)
-    {
-        *asset_sizes = contentSizes;
-    }
 
     size_t version_index_size = GetVersionIndexSize(asset_paths.count, asset_paths.paths);
     void* version_index_mem = malloc(version_index_size);
@@ -781,12 +782,9 @@ VersionIndex* CreateVersionIndex(Bikeshed shed, const char* assets_path, uint32_
     contentHashes = 0;
     free(pathHashes);
     pathHashes = 0;
+    free(contentSizes);
+    contentSizes = 0;
 
-    if (!asset_sizes)
-    {
-        free(contentSizes);
-        contentSizes = 0;
-    }
     FreeAssetpaths(&asset_paths);
 
     return version_index;
@@ -1184,7 +1182,7 @@ uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex*
     return missing_hash_count;
 }
 
-ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char* content_path, const VersionIndex* version, const uint32_t* asset_sizes, GetContentTagFunc get_content_tag)
+ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char* content_path, const VersionIndex* version, GetContentTagFunc get_content_tag)
 {
     uint64_t asset_count = *version->m_AssetCount;
     TLongtail_Hash* removed_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
@@ -1217,7 +1215,7 @@ ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char
             return 0;
         }
         uint64_t asset_index = *asset_index_ptr;
-        diff_asset_sizes[j] = asset_sizes[asset_index];
+        diff_asset_sizes[j] = version->m_AssetSize[asset_index];
         diff_name_offsets[j] = version->m_NameOffset[asset_index];
     }
     free(path_lookup_mem);
@@ -1388,8 +1386,7 @@ TEST(Longtail, ScanContent)
     const char* remote_path_1 = HOME "\\remote\\git" VERSION1 "_Win64_Editor";
     const char* remote_path_2 = HOME "\\remote\\git" VERSION2 "_Win64_Editor";
 
-    uint32_t* version_1_asset_sizes;
-    VersionIndex* version1 = CreateVersionIndex(shed, local_path_1, &version_1_asset_sizes);
+    VersionIndex* version1 = CreateVersionIndex(shed, local_path_1);
     WriteVersionIndex(version1, version_index_path_1);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
@@ -1398,7 +1395,7 @@ TEST(Longtail, ScanContent)
         *version1->m_AssetCount,
         version1->m_AssetContentHash,
         version1->m_PathHash,
-        version_1_asset_sizes,
+        version1->m_AssetSize,
         version1->m_NameOffset,
         version1->m_NameData,
         GetContentTag);
@@ -1425,11 +1422,8 @@ TEST(Longtail, ScanContent)
     local_content_index = 0;
     free(version1);
     version1 = 0;
-    free(version_1_asset_sizes);
-    version_1_asset_sizes = 0;
 
-    uint32_t* version_2_asset_sizes;
-    VersionIndex* version2 = CreateVersionIndex(shed, local_path_2, &version_2_asset_sizes);
+    VersionIndex* version2 = CreateVersionIndex(shed, local_path_2);
     WriteVersionIndex(version2, version_index_path_2);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
     free(version2);
@@ -1444,7 +1438,7 @@ TEST(Longtail, ScanContent)
     printf("%" PRIu64 " blocks in index `%s`\n", *local_content_indexb->m_BlockCount, local_content_index_path);
 
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
-    ContentIndex* missing_content = CreateMissingContent(local_content_indexb, local_path_2, version2b, version_2_asset_sizes, GetContentTag);
+    ContentIndex* missing_content = CreateMissingContent(local_content_indexb, local_path_2, version2b, GetContentTag);
 
     if (0)
     {
@@ -1459,7 +1453,7 @@ TEST(Longtail, ScanContent)
         path_lookup = 0;
     }
 
-	printf("%" PRIu64 " blocks for version `%s` missing in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
+	printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
 	
 	free(missing_content);
     missing_content = 0;
@@ -1469,7 +1463,7 @@ TEST(Longtail, ScanContent)
         *version2b->m_AssetCount,
         version2b->m_AssetContentHash,
         version2b->m_PathHash,
-        version_2_asset_sizes,
+        version2b->m_AssetSize,
         version2b->m_NameOffset,
         version2b->m_NameData,
         GetContentTag);
@@ -1477,13 +1471,19 @@ TEST(Longtail, ScanContent)
     uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2b->m_AssetCount);
     uint64_t missing_asset_count = GetMissingAssets(local_content_indexb, version2b, missing_assets);
 
-    // Get the blocks 
 	uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
 	uint64_t remaining_missing_asset_count = 0;
 	ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
+	printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
+
+    free(existing_blocks);
+    existing_blocks = 0;
 	free(remaining_missing_assets);
+    remaining_missing_assets = 0;
     free(missing_assets);
+    missing_assets = 0;
     free(remote_content_index);
+    remote_content_index = 0;
 
     free(version1b);
     version1b = 0;
