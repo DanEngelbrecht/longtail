@@ -1362,10 +1362,61 @@ void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* v
         content_hash_to_content_asset_index.Put(content_index->m_AssetContentHash[i], i);
     }
 
-    for (uint64_t i = 0; i < *version_index->m_AssetCount; ++i)
+    // We should sort the assets on block index, then block offset
+    // When creating the asset we should make sure to recreate the full path (we need this regardless)
+
+    uint64_t asset_count = *version_index->m_AssetCount;
+    uint64_t* asset_order = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
+    for (uint64_t i = 0; i < asset_count; ++i)
     {
-        TLongtail_Hash asset_content_hash = version_index->m_AssetContentHash[i];
-        const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[i]];
+        asset_order[i] = i;
+    }
+
+    struct ReconstructOrder
+    {
+        ReconstructOrder(const ContentIndex* content_index, const TLongtail_Hash* asset_hashes, const jc::HashTable<uint64_t, uint32_t>* content_hash_to_content_asset_index)
+            : content_index(content_index)
+            , asset_hashes(asset_hashes)
+            , content_hash_to_content_asset_index(content_hash_to_content_asset_index)
+        {
+
+        }
+
+        // This sorting algorithm is very arbitrary!
+        bool operator()(uint32_t a, uint32_t b) const
+        {   
+            TLongtail_Hash a_hash = asset_hashes[a];
+            TLongtail_Hash b_hash = asset_hashes[b];
+            uint32_t a_asset_index_in_content_index = *content_hash_to_content_asset_index->Get(a_hash);
+            uint32_t b_asset_index_in_content_index = *content_hash_to_content_asset_index->Get(b_hash);
+
+            uint64_t a_block_index = content_index->m_AssetBlockIndex[a_asset_index_in_content_index];
+            uint64_t b_block_index = content_index->m_AssetBlockIndex[b_asset_index_in_content_index];
+            if (a_block_index < b_block_index)
+            {
+                return true;
+            }
+            if (a_block_index > b_block_index)
+            {
+                return false;
+            }
+
+            uint32_t a_offset_in_block = content_index->m_AssetBlockOffset[a_asset_index_in_content_index];
+            uint32_t b_offset_in_block = content_index->m_AssetBlockOffset[b_asset_index_in_content_index];
+            return a_offset_in_block < b_offset_in_block;
+        }
+
+        const ContentIndex* content_index;
+        const TLongtail_Hash* asset_hashes;
+        const jc::HashTable<uint64_t, uint32_t>* content_hash_to_content_asset_index;
+    };
+    std::sort(&asset_order[0], &asset_order[asset_count], ReconstructOrder(content_index, version_index->m_AssetContentHash, &content_hash_to_content_asset_index));
+
+    for (uint64_t i = 0; i < asset_count; ++i)
+    {
+        uint64_t asset_index = asset_order[i];
+        TLongtail_Hash asset_content_hash = version_index->m_AssetContentHash[asset_index];
+        const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[asset_index]];
         uint32_t* asset_index_in_content_index_ptr = content_hash_to_content_asset_index.Get(asset_content_hash);
         if (!asset_index_in_content_index_ptr)
         {
@@ -1376,9 +1427,8 @@ void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* v
         uint64_t block_index = content_index->m_AssetBlockIndex[asset_index_in_content_index];
         uint32_t offset_in_block = content_index->m_AssetBlockOffset[asset_index_in_content_index];
         uint32_t size = content_index->m_AssetLength[asset_index_in_content_index];
-        if (size != *version_index->m_AssetSize)
+        if (size != version_index->m_AssetSize[i])
         {
-			// TODO! WE FAIL HERE
             printf("Mismatching sizes: `%s`!\n", asset_path);
             exit(1);
         }
@@ -1391,6 +1441,8 @@ void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* v
         const char* target_path = Trove_ConcatPath(version_path, asset_path);
         free((char*)target_path);
     }
+
+    free(asset_order);
 }
 
 void RunStuff()
@@ -1644,7 +1696,6 @@ TEST(Longtail, TestGetUniqueAssets)
 
 }
 
-
 TEST(Longtail, TestGetBlocksForAssets)
 {
 //    ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t asset_count, const TLongtail_Hash* asset_hashes, uint64_t* out_missing_asset_count, uint64_t* out_missing_assets)
@@ -1727,6 +1778,60 @@ TEST(Longtail, TestCreateMissingContent)
 TEST(Longtail, TestGetMissingAssets)
 {
 //    uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
+}
+
+TEST(Longtail, TestReconstructVersion)
+{
+    ContentIndex* content_index = 0;
+    {
+        const char* assets_path = "";
+        const uint64_t asset_count = 5;
+        const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
+        const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
+        const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+        const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
+        const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+
+        content_index = CreateContentIndex(
+            assets_path,
+            asset_count,
+            asset_content_hashes,
+            asset_path_hashes,
+            asset_sizes,
+            asset_name_offsets,
+            asset_name_data,
+            GetContentTagFake);
+    }
+
+    const char* asset_paths[5] = {
+        "fifth_",
+        "fourth",
+        "third_",
+        "second",
+        "first_"
+    };
+
+    const TLongtail_Hash asset_path_hashes[5] = {10, 20, 30, 40, 50};
+    const TLongtail_Hash asset_content_hashes[5] = { 1, 2, 3, 4, 5};
+    const uint32_t asset_sizes[5] = {32001, 32001, 32002, 32003, 32003};
+
+    size_t version_index_size = GetVersionIndexSize(5, asset_paths);
+    void* version_index_mem = malloc(version_index_size);
+
+    VersionIndex* version_index = BuildVersionIndex(
+        version_index_mem,
+        version_index_size,
+        5,
+        asset_paths,
+        asset_path_hashes,
+        asset_content_hashes,
+        asset_sizes);
+
+    ReconstructVersion(
+        content_index,
+        version_index,
+        "",
+        "");
 }
 
 
