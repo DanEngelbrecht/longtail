@@ -1572,7 +1572,7 @@ TEST(Longtail, TestVersionIndex)
 
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
-    const uint32_t asset_sizes[5] = {32000, 32000, 32000, 32000, 32000};
+    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
 
     size_t version_index_size = GetVersionIndexSize(5, asset_paths);
     void* version_index_mem = malloc(version_index_size);
@@ -1631,6 +1631,104 @@ TEST(Longtail, TestContentIndex)
 
 	free(content_index);
 }
+
+TEST(Longtail, TestDiffHashes)
+{
+
+//void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_count, const TLongtail_Hash* new_hashes, uint32_t new_hash_count, uint32_t* added_hash_count, TLongtail_Hash* added_hashes, uint32_t* removed_hash_count, TLongtail_Hash* removed_hashes)
+}
+
+TEST(Longtail, TestGetUniqueAssets)
+{
+//uint32_t GetUniqueAssets(uint64_t asset_count, const TLongtail_Hash* asset_content_hashes, uint32_t* out_unique_asset_indexes)
+
+}
+
+
+TEST(Longtail, TestGetBlocksForAssets)
+{
+//    ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t asset_count, const TLongtail_Hash* asset_hashes, uint64_t* out_missing_asset_count, uint64_t* out_missing_assets)
+}
+
+TEST(Longtail, TestCreateMissingContent)
+{
+    const char* assets_path = "";
+    const uint64_t asset_count = 5;
+    const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
+    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
+    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
+    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+
+    ContentIndex* content_index = CreateContentIndex(
+        assets_path,
+        asset_count - 4,
+        asset_content_hashes,
+        asset_path_hashes,
+        asset_sizes,
+        asset_name_offsets,
+        asset_name_data,
+        GetContentTagFake);
+
+    const char* asset_paths[5] = {
+        "fifth_",
+        "fourth",
+        "third_",
+        "second",
+        "first_"
+    };
+
+    size_t version_index_size = GetVersionIndexSize(5, asset_paths);
+    void* version_index_mem = malloc(version_index_size);
+
+    VersionIndex* version_index = BuildVersionIndex(
+        version_index_mem,
+        version_index_size,
+        5,
+        asset_paths,
+        asset_path_hashes,
+        asset_content_hashes,
+        asset_sizes);
+
+    ContentIndex* missing_content_index = CreateMissingContent(
+        content_index,
+        "",
+        version_index,
+        GetContentTagFake);
+
+    ASSERT_EQ(2u, *missing_content_index->m_BlockCount);
+    ASSERT_EQ(4u, *missing_content_index->m_AssetCount);
+
+    ASSERT_EQ(0u, missing_content_index->m_AssetBlockIndex[0]);
+    ASSERT_EQ(asset_content_hashes[4], missing_content_index->m_AssetContentHash[0]);
+    ASSERT_EQ(asset_sizes[4], missing_content_index->m_AssetLength[0]);
+
+    ASSERT_EQ(0u, missing_content_index->m_AssetBlockIndex[0]);
+    ASSERT_EQ(asset_content_hashes[3], missing_content_index->m_AssetContentHash[1]);
+    ASSERT_EQ(asset_sizes[3], missing_content_index->m_AssetLength[1]);
+    ASSERT_EQ(32001u, missing_content_index->m_AssetBlockOffset[1]);
+
+    ASSERT_EQ(0u, missing_content_index->m_AssetBlockIndex[2]);
+    ASSERT_EQ(asset_content_hashes[2], missing_content_index->m_AssetContentHash[2]);
+    ASSERT_EQ(asset_sizes[2], missing_content_index->m_AssetLength[2]);
+    ASSERT_EQ(64002u, missing_content_index->m_AssetBlockOffset[2]);
+
+    ASSERT_EQ(1u, missing_content_index->m_AssetBlockIndex[3]);
+    ASSERT_EQ(asset_content_hashes[1], missing_content_index->m_AssetContentHash[3]);
+    ASSERT_EQ(asset_sizes[1], missing_content_index->m_AssetLength[3]);
+    ASSERT_EQ(0u, missing_content_index->m_AssetBlockOffset[3]);
+
+    free(version_index);
+    free(content_index);
+
+    free(missing_content_index);
+}
+
+TEST(Longtail, TestGetMissingAssets)
+{
+//    uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
+}
+
 
 #if 0
     // 2. Read version index
