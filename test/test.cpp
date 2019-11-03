@@ -406,7 +406,7 @@ struct VersionIndex
     char* m_NameData;
 };
 
-uint32_t GetNameDataSize(uint32_t asset_count, char* const* asset_paths)
+uint32_t GetNameDataSize(uint32_t asset_count, const char* const* asset_paths)
 {
     size_t name_data_size = 0;
     for (uint32_t i = 0; i < asset_count; ++i)
@@ -428,7 +428,7 @@ size_t GetVersionIndexDataSize(uint32_t asset_count, uint32_t name_data_size)
     return version_index_size;
 }
 
-size_t GetVersionIndexSize(uint32_t asset_count, char* const* asset_paths)
+size_t GetVersionIndexSize(uint32_t asset_count, const char* const* asset_paths)
 {
     return sizeof(VersionIndex) +
             GetVersionIndexDataSize(asset_count, GetNameDataSize(asset_count, asset_paths));
@@ -469,10 +469,10 @@ VersionIndex* BuildVersionIndex(
     void* mem,
     size_t mem_size,
     uint32_t asset_count,
-    char* const* asset_paths,
-    TLongtail_Hash* pathHashes,
-    TLongtail_Hash* contentHashes,
-    uint32_t* contentSizes)
+    const char* const* asset_paths,
+    const TLongtail_Hash* pathHashes,
+    const TLongtail_Hash* contentHashes,
+    const uint32_t* contentSizes)
 {
     VersionIndex* version_index = (VersionIndex*)mem;
     version_index->m_AssetCount = (uint64_t*)&((char*)mem)[sizeof(VersionIndex)];
@@ -1393,7 +1393,7 @@ void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* v
     }
 }
 
-TEST(Longtail, ScanContent)
+void RunStuff()
 {
     Jobs::ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
@@ -1552,6 +1552,86 @@ TEST(Longtail, ScanContent)
     shed = 0;
 
     return;
+}
+
+TLongtail_Hash GetContentTagFake(const char* , const char* path)
+{
+    return 0u;
+ //   return (TLongtail_Hash)((uintptr_t)path) / 14;
+}
+
+TEST(Longtail, TestVersionIndex)
+{
+    const char* asset_paths[5] = {
+        "fifth_",
+        "fourth",
+        "third_",
+        "second",
+        "first_"
+    };
+
+    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
+    const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
+    const uint32_t asset_sizes[5] = {32000, 32000, 32000, 32000, 32000};
+
+    size_t version_index_size = GetVersionIndexSize(5, asset_paths);
+    void* version_index_mem = malloc(version_index_size);
+
+    VersionIndex* version_index = BuildVersionIndex(
+        version_index_mem,
+        version_index_size,
+        5,
+        asset_paths,
+        asset_path_hashes,
+        asset_content_hashes,
+        asset_sizes);
+
+    free(version_index);
+}
+
+TEST(Longtail, TestContentIndex)
+{
+
+    const char* assets_path = "";
+    const uint64_t asset_count = 5;
+    const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
+    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
+    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
+    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+
+    ContentIndex* content_index = CreateContentIndex(
+        assets_path,
+        asset_count,
+        asset_content_hashes,
+        asset_path_hashes,
+        asset_sizes,
+        asset_name_offsets,
+        asset_name_data,
+        GetContentTagFake);
+
+    ASSERT_EQ(5u, *content_index->m_AssetCount);
+    ASSERT_EQ(2u, *content_index->m_BlockCount);
+    for (uint32_t i = 0; i < *content_index->m_AssetCount; ++i)
+    {
+		ASSERT_EQ(asset_content_hashes[4 - i], content_index->m_AssetContentHash[i]);
+		ASSERT_EQ(asset_sizes[4 - i], content_index->m_AssetLength[i]);
+	}
+	ASSERT_EQ(0u, content_index->m_AssetBlockIndex[0]);
+	ASSERT_EQ(0u, content_index->m_AssetBlockIndex[1]);
+	ASSERT_EQ(0u, content_index->m_AssetBlockIndex[2]);
+	ASSERT_EQ(1u, content_index->m_AssetBlockIndex[3]);
+	ASSERT_EQ(1u, content_index->m_AssetBlockIndex[4]);
+
+	ASSERT_EQ(0u, content_index->m_AssetBlockOffset[0]);
+	ASSERT_EQ(32001u, content_index->m_AssetBlockOffset[1]);
+	ASSERT_EQ(64002u, content_index->m_AssetBlockOffset[2]);
+	ASSERT_EQ(0u, content_index->m_AssetBlockOffset[3]);
+	ASSERT_EQ(32003u, content_index->m_AssetBlockOffset[4]);
+
+	free(content_index);
+}
+
 #if 0
     // 2. Read version index
     {
@@ -1812,9 +1892,9 @@ TEST(Longtail, ScanContent)
         }
         free(version_index);
     }
-#endif
 }
 
+#endif
 
 
 
