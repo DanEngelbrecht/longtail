@@ -42,6 +42,38 @@ void Trove_DenormalizePath(char* path)
     }
 }
 
+int Trove_EnsureParentPathExistsNative(char* path)
+{
+	char* last_path_delimiter = (char*)strrchr(path, '\\');
+	if (last_path_delimiter == 0)
+	{
+		return 1;
+	}
+	*last_path_delimiter = '\0';
+	DWORD attr = ::GetFileAttributesA(path);
+	if (attr == INVALID_FILE_ATTRIBUTES)
+	{
+		if (!Trove_EnsureParentPathExistsNative(path))
+		{
+			*last_path_delimiter = '\\';
+			return 0;
+		}
+		BOOL success = ::CreateDirectoryA(path, 0);
+		*last_path_delimiter = '\\';
+		return success ? 1 : 0;
+	}
+	*last_path_delimiter = '\\';
+	return 1;
+}
+
+int Trove_EnsureParentPathExists(char* path)
+{
+	Trove_DenormalizePath(path);
+	int success = Trove_EnsureParentPathExistsNative(path);
+	Trove_NormalizePath(path);
+	return success;
+}
+
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -598,19 +630,19 @@ BlockIndex* CreateBlockIndex(
     const uint32_t* asset_sizes)
 {
     BlockIndex* block_index = InitBlockIndex(mem, asset_count_in_block);
-    for (uint32_t i = 0; i < asset_count_in_block; ++i)
+	meow_state state;
+	MeowBegin(&state, MeowDefaultSeed);
+	for (uint32_t i = 0; i < asset_count_in_block; ++i)
     {
         uint32_t asset_index = asset_indexes[i];
         block_index->m_Entries[i].m_AssetContentHash = asset_content_hashes[asset_index];
         block_index->m_Entries[i].m_AssetSize = asset_sizes[asset_index];
-    }
+		MeowAbsorb(&state, (meow_umm)(sizeof(TLongtail_Hash)), (void*)&asset_content_hashes[asset_index]);
+		MeowAbsorb(&state, (meow_umm)(sizeof(uint32_t)), (void*)&asset_sizes[asset_index]);
+	}
+	MeowAbsorb(&state, (meow_umm)(sizeof(uint32_t)), (void*)& asset_count_in_block);
 
-    meow_state state;
-    MeowBegin(&state, MeowDefaultSeed);
-    MeowAbsorb(&state, (meow_umm)(sizeof(BlockIndexEntry)), (void*)block_index->m_Entries);
-    MeowAbsorb(&state, (meow_umm)(sizeof(uint32_t)), (void*)&asset_count_in_block);
     TLongtail_Hash block_hash = MeowU64From(MeowEnd(&state, 0), 0);
-
     block_index->m_BlockHash = block_hash;
 
     return block_index;
@@ -1100,9 +1132,22 @@ int WriteContentBlocks(
     {
         TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
 
+        char file_name[64];
+        sprintf(file_name, "0x%" PRIx64 ".lrb", block_hash);
+        char* block_path = (char*)Trove_ConcatPath(content_folder, file_name);
+        Trove_DenormalizePath(block_path);
+		DWORD attrs = GetFileAttributesA(block_path);
+        if (attrs != INVALID_FILE_ATTRIBUTES)
+        {
+            free((char*)block_path);
+            block_path = 0;
+            continue;
+        }
+
         char tmp_block_name[64];
         sprintf(tmp_block_name, "0x%" PRIx64 ".tmp", block_hash);
-        const char* tmp_block_path = Trove_ConcatPath(content_folder, tmp_block_name);
+        char* tmp_block_path = (char*)Trove_ConcatPath(content_folder, tmp_block_name);
+        Trove_DenormalizePath(tmp_block_path);
         HTroveOpenWriteFile block_file_handle = Trove_OpenWriteFile(tmp_block_path);
         uint32_t write_offset = 0;
 
@@ -1151,10 +1196,6 @@ int WriteContentBlocks(
         Trove_Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
         write_offset += sizeof(uint32_t);
         Trove_CloseWriteFile(block_file_handle);
-
-        char file_name[64];
-        sprintf(file_name, "0x%" PRIx64 ".lrb", block_hash);
-        const char* block_path = Trove_ConcatPath(content_folder, file_name);
 
         // TODO: Non-portable!
         BOOL ok = ::MoveFileA(tmp_block_path, block_path);
@@ -1351,7 +1392,80 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
     return existing_content_index;
 }
 
-void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
+struct ReconstructJob
+{
+    char* m_BlockPath;
+    char** m_AssetPaths;
+    uint32_t m_AssetCount;
+    uint32_t* m_AssetBlockOffsets;
+    uint32_t* m_AssetLengths;
+    nadir::TAtomic32* m_PendingCount;
+};
+
+ReconstructJob* CreateReconstructJob(uint32_t asset_count)
+{
+    size_t job_size = sizeof(ReconstructJob) +
+        sizeof(char*) * asset_count +
+        sizeof(uint32_t) * asset_count +
+        sizeof(uint32_t) * asset_count;
+
+    ReconstructJob* job = (ReconstructJob*)malloc(job_size);
+    char* p = (char*)&job[1];
+    job->m_AssetPaths = (char**)p;
+    p += sizeof(char*) * asset_count;
+
+    job->m_AssetBlockOffsets = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_count;
+
+    job->m_AssetLengths = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_count;
+
+    return job;
+}
+
+static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
+{
+    ReconstructJob* job = (ReconstructJob*)context;
+    HTroveOpenReadFile block_file_handle = Trove_OpenReadFile(job->m_BlockPath);
+    if(block_file_handle)
+    {
+        uint8_t batch_data[65536];
+
+        for (uint32_t asset_index = 0; asset_index < job->m_AssetCount; ++asset_index)
+        {
+            char* asset_path = job->m_AssetPaths[asset_index];
+			Trove_EnsureParentPathExists(asset_path);
+
+            Trove_DenormalizePath(asset_path);
+            HTroveOpenWriteFile asset_file_handle = Trove_OpenWriteFile(asset_path);
+            if(asset_file_handle)
+            {
+                uint32_t asset_length = job->m_AssetLengths[asset_index];
+                uint64_t read_offset = job->m_AssetBlockOffsets[asset_index];
+                uint64_t write_offset = 0;
+
+                while (write_offset != asset_length)
+                {
+                    uint64_t left = asset_length - write_offset;
+                    uint64_t len = left < sizeof(batch_data) ? left : sizeof(batch_data);
+                    bool read_ok = Trove_Read(block_file_handle, read_offset, len, batch_data);
+                    assert(read_ok);
+                    bool write_ok = Trove_Write(asset_file_handle, write_offset, len, batch_data);
+                    read_offset += len;
+                    write_offset += len;
+                }
+            }
+            Trove_CloseWriteFile(asset_file_handle);
+            asset_file_handle = 0;
+        }
+        Trove_CloseReadFile(block_file_handle);
+        block_file_handle = 0;
+    }
+    nadir::AtomicAdd32(job->m_PendingCount, -1);
+    return BIKESHED_TASK_RESULT_COMPLETE;
+}
+
+void ReconstructVersion(Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
 {
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
     jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
@@ -1362,33 +1476,34 @@ void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* v
         content_hash_to_content_asset_index.Put(content_index->m_AssetContentHash[i], i);
     }
 
-    // We should sort the assets on block index, then block offset
-    // When creating the asset we should make sure to recreate the full path (we need this regardless)
-
-    uint64_t asset_count = *version_index->m_AssetCount;
+	uint64_t asset_count = *version_index->m_AssetCount;
     uint64_t* asset_order = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
-    for (uint64_t i = 0; i < asset_count; ++i)
-    {
-        asset_order[i] = i;
-    }
+	uint64_t* version_index_to_content_index = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
+	for (uint64_t i = 0; i < asset_count; ++i)
+	{
+		asset_order[i] = i;
+		version_index_to_content_index[i] = *content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
+	}
+
+    free(content_hash_to_content_asset_index_mem);
+    content_hash_to_content_asset_index_mem = 0;
 
     struct ReconstructOrder
     {
-        ReconstructOrder(const ContentIndex* content_index, const TLongtail_Hash* asset_hashes, const jc::HashTable<uint64_t, uint32_t>* content_hash_to_content_asset_index)
+        ReconstructOrder(const ContentIndex* content_index, const TLongtail_Hash* asset_hashes, const uint64_t* version_index_to_content_index)
             : content_index(content_index)
             , asset_hashes(asset_hashes)
-            , content_hash_to_content_asset_index(content_hash_to_content_asset_index)
+            , version_index_to_content_index(version_index_to_content_index)
         {
 
         }
 
-        // This sorting algorithm is very arbitrary!
         bool operator()(uint32_t a, uint32_t b) const
         {   
             TLongtail_Hash a_hash = asset_hashes[a];
             TLongtail_Hash b_hash = asset_hashes[b];
-            uint32_t a_asset_index_in_content_index = *content_hash_to_content_asset_index->Get(a_hash);
-            uint32_t b_asset_index_in_content_index = *content_hash_to_content_asset_index->Get(b_hash);
+            uint32_t a_asset_index_in_content_index = (uint32_t)version_index_to_content_index[a];
+            uint32_t b_asset_index_in_content_index = (uint32_t)version_index_to_content_index[b];
 
             uint64_t a_block_index = content_index->m_AssetBlockIndex[a_asset_index_in_content_index];
             uint64_t b_block_index = content_index->m_AssetBlockIndex[b_asset_index_in_content_index];
@@ -1408,40 +1523,114 @@ void ReconstructVersion(const ContentIndex* content_index, const VersionIndex* v
 
         const ContentIndex* content_index;
         const TLongtail_Hash* asset_hashes;
-        const jc::HashTable<uint64_t, uint32_t>* content_hash_to_content_asset_index;
+        const uint64_t* version_index_to_content_index;
     };
-    std::sort(&asset_order[0], &asset_order[asset_count], ReconstructOrder(content_index, version_index->m_AssetContentHash, &content_hash_to_content_asset_index));
+    std::sort(&asset_order[0], &asset_order[asset_count], ReconstructOrder(content_index, version_index->m_AssetContentHash, version_index_to_content_index));
 
-    for (uint64_t i = 0; i < asset_count; ++i)
+    nadir::TAtomic32 pending_job_count = 0;
+    ReconstructJob** reconstruct_jobs = (ReconstructJob**)malloc(sizeof(ReconstructJob*) * asset_count);
+    uint32_t job_count = 0;
+    uint64_t i = 0;
+    while (i < asset_count)
     {
         uint64_t asset_index = asset_order[i];
-        TLongtail_Hash asset_content_hash = version_index->m_AssetContentHash[asset_index];
-        const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[asset_index]];
-        uint32_t* asset_index_in_content_index_ptr = content_hash_to_content_asset_index.Get(asset_content_hash);
-        if (!asset_index_in_content_index_ptr)
-        {
-            printf("Missing asset: `%s`!\n", asset_path);
-            exit(1);
-        }
-        uint32_t asset_index_in_content_index = *asset_index_in_content_index_ptr;
+
+        uint32_t asset_index_in_content_index = version_index_to_content_index[asset_index];
         uint64_t block_index = content_index->m_AssetBlockIndex[asset_index_in_content_index];
-        uint32_t offset_in_block = content_index->m_AssetBlockOffset[asset_index_in_content_index];
-        uint32_t size = content_index->m_AssetLength[asset_index_in_content_index];
-        if (size != version_index->m_AssetSize[i])
+
+        uint32_t asset_count_from_block = 1;
+        while(((i + asset_count_from_block) < asset_count))
         {
-            printf("Mismatching sizes: `%s`!\n", asset_path);
-            exit(1);
+            uint32_t next_asset_index = asset_order[i + asset_count_from_block];
+            uint64_t next_asset_index_in_content_index = version_index_to_content_index[next_asset_index];
+            uint64_t next_block_index = content_index->m_AssetBlockIndex[next_asset_index_in_content_index];
+            if (block_index != next_block_index)
+            {
+                break;
+            }
+            ++asset_count_from_block;
         }
+
+        ReconstructJob* job = CreateReconstructJob(asset_count_from_block);
+        reconstruct_jobs[job_count++] = job;
+        job->m_PendingCount = &pending_job_count;
+
         TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
         char block_file_name[64];
         sprintf(block_file_name, "0x%" PRIx64 ".lrb", block_hash);
-        const char* block_path = Trove_ConcatPath(content_path, block_file_name);
-        free((char*)block_path);
-        block_path = 0;
-        const char* target_path = Trove_ConcatPath(version_path, asset_path);
-        free((char*)target_path);
+
+        job->m_BlockPath = (char*)Trove_ConcatPath(content_path, block_file_name);
+        job->m_AssetCount = asset_count_from_block;
+
+        for (uint32_t j = 0; j < asset_count_from_block; ++j)
+        {
+            uint64_t asset_index = asset_order[i + j];
+            const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[asset_index]];
+            job->m_AssetPaths[j] = (char*)Trove_ConcatPath(version_path, asset_path);
+            Trove_NormalizePath(job->m_AssetPaths[j]);
+            uint64_t asset_index_in_content_index = version_index_to_content_index[asset_index];
+            job->m_AssetBlockOffsets[j] = content_index->m_AssetBlockOffset[asset_index_in_content_index];
+            job->m_AssetLengths[j] = content_index->m_AssetLength[asset_index_in_content_index];
+        }
+
+        if (shed == 0)
+        {
+            nadir::AtomicAdd32(&pending_job_count, 1);
+            Bikeshed_TaskResult result = ReconstructFromBlock(shed, 0, 0, job);
+            assert(result == BIKESHED_TASK_RESULT_COMPLETE);
+        }
+		else
+		{
+			Bikeshed_TaskID task_ids[1];
+			BikeShed_TaskFunc func[1] = { ReconstructFromBlock };
+			void* ctx[1] = { job };
+
+			while (!Bikeshed_CreateTasks(shed, 1, func, ctx, task_ids))
+			{
+				nadir::Sleep(1000);
+			}
+
+			{
+				nadir::AtomicAdd32(&pending_job_count, 1);
+				Bikeshed_ReadyTasks(shed, 1, task_ids);
+			}
+		}
+
+        i += asset_count_from_block;
     }
 
+    if (shed)
+    {
+        int32_t old_pending_count = 0;
+        while (pending_job_count > 0)
+        {
+            if (Bikeshed_ExecuteOne(shed, 0))
+            {
+                continue;
+            }
+            if (old_pending_count != pending_job_count)
+            {
+                old_pending_count = pending_job_count;
+                printf("Blocks left to reconstruct from: %d\n", pending_job_count);
+            }
+            nadir::Sleep(1000);
+        }
+    }
+
+    while (job_count--)
+    {
+        ReconstructJob* job = reconstruct_jobs[job_count];
+        free(job->m_BlockPath);
+        for (uint32_t i = 0; i < job->m_AssetCount; ++i)
+        {
+            free(job->m_AssetPaths[i]);
+        }
+        free(reconstruct_jobs[job_count]);
+    }
+
+    free(reconstruct_jobs);
+
+    free(version_index_to_content_index);
     free(asset_order);
 }
 
@@ -1459,26 +1648,32 @@ void RunStuff()
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
     }
 
-    #define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
-    #define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
-
 //    #define HOME "test\\data"
     #define HOME "D:\\Temp\\longtail"
 
-    const char* local_path_1 = HOME "\\local\\git" VERSION1 "_Win64_Editor";
-    const char* version_index_path_1 = HOME "\\local\\git" VERSION1 "_Win64_Editor.lvi";
+	#define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
+	#define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
 
-    const char* local_path_2 = HOME "\\local\\git" VERSION2 "_Win64_Editor";
-    const char* version_index_path_2 = HOME "\\local\\git" VERSION2 "_Win64_Editor.lvi";
+	#define VERSION1_FOLDER "git" VERSION1 "_Win64_Editor"
+	#define VERSION2_FOLDER "git" VERSION2 "_Win64_Editor"
 
-    const char* local_content_path = HOME "\\local_content";
+//    #define VERSION1_FOLDER "version1"
+//    #define VERSION2_FOLDER "version2"
+
+	const char* local_path_1 = HOME "\\local\\" VERSION1_FOLDER;
+    const char* version_index_path_1 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
+
+    const char* local_path_2 = HOME "\\local\\" VERSION2_FOLDER;
+    const char* version_index_path_2 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
+
+    const char* local_content_path = "C:\\Temp\\local_content";//HOME "\\local_content";
     const char* local_content_index_path = HOME "\\local.lci";
 
     const char* remote_content_path = HOME "\\remote_content";
     const char* remote_content_index_path = HOME "\\remote.lci";
 
-    const char* remote_path_1 = HOME "\\remote\\git" VERSION1 "_Win64_Editor";
-    const char* remote_path_2 = HOME "\\remote\\git" VERSION2 "_Win64_Editor";
+    const char* remote_path_1 = "C:\\Temp\\remote";// HOME "\\remote\\" VERSION1_FOLDER;
+    const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
 
     VersionIndex* version1 = CreateVersionIndex(shed, local_path_1);
     WriteVersionIndex(version1, version_index_path_1);
@@ -1497,10 +1692,10 @@ void RunStuff()
     WriteContentIndex(local_content_index, local_content_index_path);
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
-    if (0)
+    if (1)
     {
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
-
+		printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
+		PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
         WriteContentBlocks(
             shed,
             local_content_index,
@@ -1512,10 +1707,16 @@ void RunStuff()
         path_lookup = 0;
     }
 
-    free(local_content_index);
-    local_content_index = 0;
-    free(version1);
-    version1 = 0;
+	printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
+	ReconstructVersion(shed, local_content_index, version1, local_content_path, remote_path_1);
+
+	free(local_content_index);
+	local_content_index = 0;
+	free(version1);
+	version1 = 0;
+
+	return;
+
 
     VersionIndex* version2 = CreateVersionIndex(shed, local_path_2);
     WriteVersionIndex(version2, version_index_path_2);
@@ -1534,16 +1735,18 @@ void RunStuff()
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
     ContentIndex* missing_content = CreateMissingContent(local_content_indexb, local_path_2, version2b, GetContentTag);
 
-    if (0)
+    if (1)
     {
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
+		printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
+		PathLookup* path_lookup = CreateContentHashToPathLookup(version2b, 0);
         WriteContentBlocks(
             shed,
             missing_content,
             path_lookup,
             local_path_2,
             local_content_path);
-        free(path_lookup);
+
+		free(path_lookup);
         path_lookup = 0;
     }
 
@@ -1576,7 +1779,7 @@ void RunStuff()
 
     //     ReconstructVersion(local_content_indexb, version2b, const char* content_path, const char* version_path)
 
-    ReconstructVersion(local_content_indexb, version1b, local_content_path, local_path_1);
+    ReconstructVersion(0, local_content_indexb, version1b, local_content_path, local_path_1);
 
 
     free(existing_blocks);
@@ -1612,9 +1815,14 @@ TLongtail_Hash GetContentTagFake(const char* , const char* path)
  //   return (TLongtail_Hash)((uintptr_t)path) / 14;
 }
 
+TEST(Longtail, SlowAndPainful)
+{
+	RunStuff();
+}
+
 TEST(Longtail, TestVersionIndex)
 {
-    const char* asset_paths[5] = {
+	const char* asset_paths[5] = {
         "fifth_",
         "fourth",
         "third_",
@@ -1643,7 +1851,6 @@ TEST(Longtail, TestVersionIndex)
 
 TEST(Longtail, TestContentIndex)
 {
-
     const char* assets_path = "";
     const uint64_t asset_count = 5;
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
@@ -1828,6 +2035,7 @@ TEST(Longtail, TestReconstructVersion)
         asset_sizes);
 
     ReconstructVersion(
+        0,
         content_index,
         version_index,
         "",
