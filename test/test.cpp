@@ -1251,6 +1251,7 @@ int WriteContentBlocks(
 		DWORD attrs = GetFileAttributesA(block_path);
         if (attrs != INVALID_FILE_ATTRIBUTES)
         {
+            write_block_jobs[block_index] = 0;
             free((char*)block_path);
             block_path = 0;
             continue;
