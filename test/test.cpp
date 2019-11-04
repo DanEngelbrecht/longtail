@@ -491,6 +491,12 @@ static TLongtail_Hash GetPathHash(const char* path)
     return path_hash;
 }
 
+struct PathLookup
+{
+    jc::HashTable<TLongtail_Hash, uint32_t> m_HashToNameOffset;
+    const char* m_NameData;
+};
+
 static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     HashJob* hash_job = (HashJob*)context;
@@ -608,6 +614,43 @@ struct VersionIndex
     uint32_t m_NameDataSize;
     char* m_NameData;
 };
+
+PathLookup* CreateContentHashToPathLookup(const VersionIndex* version_index, uint64_t* out_unique_asset_indexes)
+{
+    uint32_t asset_count = (uint32_t)(*version_index->m_AssetCount);
+    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize(asset_count);
+    PathLookup* path_lookup = (PathLookup*)malloc(sizeof(PathLookup) + hash_size);
+    path_lookup->m_HashToNameOffset.Create(asset_count, &path_lookup[1]);
+    path_lookup->m_NameData = version_index->m_NameData;
+
+    // Only pick up unique assets
+    uint32_t unique_asset_count = 0;
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        TLongtail_Hash content_hash = version_index->m_AssetContentHash[i];
+        uint32_t* existing_index = path_lookup->m_HashToNameOffset.Get(content_hash);
+        if (existing_index == 0)
+        {
+            path_lookup->m_HashToNameOffset.Put(content_hash, version_index->m_NameOffset[i]);
+            if (out_unique_asset_indexes)
+            {
+                out_unique_asset_indexes[unique_asset_count] = i;
+            }
+            ++unique_asset_count;
+        }
+    }
+    return path_lookup;
+}
+
+const char* GetPathFromAssetContentHash(const PathLookup* path_lookup, TLongtail_Hash asset_content_hash)
+{
+    const uint32_t* index_ptr = path_lookup->m_HashToNameOffset.Get(asset_content_hash);
+    if (index_ptr == 0)
+    {
+        return 0;
+    }
+    return &path_lookup->m_NameData[*index_ptr];
+}
 
 uint32_t GetNameDataSize(uint32_t asset_count, const char* const* asset_paths)
 {
@@ -1021,6 +1064,13 @@ uint32_t GetUniqueAssets(uint64_t asset_count, const TLongtail_Hash* asset_conte
     return unique_asset_count;
 }
 
+char* GetBlockName(TLongtail_Hash block_hash)
+{
+    char* name = (char*)malloc(64);
+    sprintf(name, "0x%" PRIx64, block_hash);
+    return name;
+}
+
 typedef TLongtail_Hash (*GetContentTagFunc)(const char* assets_path, const char* path);
 
 ContentIndex* CreateContentIndex(
@@ -1031,7 +1081,8 @@ ContentIndex* CreateContentIndex(
     const uint32_t* asset_sizes,
     const uint32_t* asset_name_offsets,
     const char* asset_name_data,
-    GetContentTagFunc get_content_tag)
+    GetContentTagFunc get_content_tag,
+    PathLookup* path_lookup)
 {
     if (asset_count == 0)
     {
@@ -1166,6 +1217,15 @@ ContentIndex* CreateContentIndex(
             content_index->m_AssetBlockIndex[asset_index] = i;
             content_index->m_AssetBlockOffset[asset_index] = asset_offset;
             content_index->m_AssetLength[asset_index] = block_indexes[i]->m_Entries[a].m_AssetSize;
+
+            if (path_lookup)
+            {
+                const char* path = GetPathFromAssetContentHash(path_lookup, block_indexes[i]->m_Entries[a].m_AssetContentHash);
+                char* block_name = GetBlockName(block_indexes[i]->m_BlockHash);
+                //printf("Indexing `%s` in block `%s` at offset %u, size %u\n", path, block_name, (uint32_t)asset_offset, (uint32_t)block_indexes[i]->m_Entries[a].m_AssetSize);
+                free(block_name);
+            }
+
             asset_offset += block_indexes[i]->m_Entries[a].m_AssetSize;
             ++asset_index;
             if (asset_index > unique_asset_count)
@@ -1243,49 +1303,6 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
     refs = 0;
 }
 
-struct PathLookup
-{
-    jc::HashTable<TLongtail_Hash, uint32_t> m_HashToNameOffset;
-    const char* m_NameData;
-};
-
-PathLookup* CreateContentHashToPathLookup(const VersionIndex* version_index, uint64_t* out_unique_asset_indexes)
-{
-    uint32_t asset_count = (uint32_t)(*version_index->m_AssetCount);
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize(asset_count);
-    PathLookup* path_lookup = (PathLookup*)malloc(sizeof(PathLookup) + hash_size);
-    path_lookup->m_HashToNameOffset.Create(asset_count, &path_lookup[1]);
-    path_lookup->m_NameData = version_index->m_NameData;
-
-    // Only pick up unique assets
-    uint32_t unique_asset_count = 0;
-    for (uint32_t i = 0; i < asset_count; ++i)
-    {
-        TLongtail_Hash content_hash = version_index->m_AssetContentHash[i];
-        uint32_t* existing_index = path_lookup->m_HashToNameOffset.Get(content_hash);
-        if (existing_index == 0)
-        {
-            path_lookup->m_HashToNameOffset.Put(content_hash, version_index->m_NameOffset[i]);
-            if (out_unique_asset_indexes)
-            {
-                out_unique_asset_indexes[unique_asset_count] = i;
-            }
-            ++unique_asset_count;
-        }
-    }
-    return path_lookup;
-}
-
-const char* GetPathFromAssetContentHash(const PathLookup* path_lookup, TLongtail_Hash asset_content_hash)
-{
-    const uint32_t* index_ptr = path_lookup->m_HashToNameOffset.Get(asset_content_hash);
-    if (index_ptr == 0)
-    {
-        return 0;
-    }
-    return &path_lookup->m_NameData[*index_ptr];
-}
-
 struct WriteBlockJob
 {
     StorageAPI* m_StorageAPI;
@@ -1296,6 +1313,7 @@ struct WriteBlockJob
     uint64_t m_FirstAssetIndex;
     uint32_t m_AssetCount;
     nadir::TAtomic32* m_PendingCount;
+    uint32_t m_Success;
 };
 
 WriteBlockJob* CreateWriteContentBlockJob()
@@ -1317,12 +1335,13 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
     uint64_t block_index = content_index->m_AssetBlockIndex[block_start_asset_index];
     TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
 
+    char* block_name = GetBlockName(block_hash);
     char file_name[64];
-    sprintf(file_name, "0x%" PRIx64 ".lrb", block_hash);
+    sprintf(file_name, "%s.lrb", block_name);
     char* block_path = storage_api->ConcatPath(content_folder, file_name);
 
     char tmp_block_name[64];
-    sprintf(tmp_block_name, "0x%" PRIx64 ".tmp", block_hash);
+    sprintf(tmp_block_name, "%s.tmp", block_name);
     char* tmp_block_path = (char*)storage_api->ConcatPath(content_folder, tmp_block_name);
     StorageAPI::HOpenFile block_file_handle = storage_api->OpenWriteFile(tmp_block_path);
     uint32_t write_offset = 0;
@@ -1335,13 +1354,14 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
 
         char* full_path = storage_api->ConcatPath(job->m_AssetsFolder, asset_path);
         StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(full_path);
-        if (storage_api->GetSize(file_handle) != asset_size)
+        if (!file_handle || (storage_api->GetSize(file_handle) != asset_size))
         {
             storage_api->CloseRead(file_handle);
             storage_api->CloseWrite(block_file_handle);
             nadir::AtomicAdd32(job->m_PendingCount, -1);
             return BIKESHED_TASK_RESULT_COMPLETE;
         }
+        //printf("Storing `%s` in block `%s` at offset %u, size %u\n", asset_path, block_name, (uint32_t)write_offset, (uint32_t)asset_size);
         void* buffer = malloc(asset_size);
         storage_api->Read(file_handle, 0, asset_size, buffer);
         storage_api->Write(block_file_handle, write_offset, asset_size, buffer);
@@ -1352,9 +1372,8 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         storage_api->CloseRead(file_handle);
         free((char*)full_path);
         full_path = 0;
-
-        ++asset_index;
     }
+    free(block_name);
 
     for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
     {
@@ -1371,16 +1390,15 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
     write_offset += sizeof(uint32_t);
     storage_api->CloseWrite(block_file_handle);
 
-    if (!storage_api->MoveFile(tmp_block_path, block_path))
-    {
-        printf("Failed to move `%s` to `%s`\n", tmp_block_path, block_path);
-    }
+    int success = storage_api->MoveFile(tmp_block_path, block_path);
 
     free((char*)block_path);
     block_path = 0;
 
     free((char*)tmp_block_path);
     tmp_block_path = 0;
+
+    job->m_Success = success;
 
     nadir::AtomicAdd32(job->m_PendingCount, -1);
     return BIKESHED_TASK_RESULT_COMPLETE;
@@ -1407,8 +1425,10 @@ int WriteContentBlocks(
     {
         TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
 
+        char* block_name = GetBlockName(block_hash);
         char file_name[64];
-        sprintf(file_name, "0x%" PRIx64 ".lrb", block_hash);
+        sprintf(file_name, "%s.lrb", block_name);
+        free(block_name);
         char* block_path = storage_api->ConcatPath(content_folder, file_name);
         if (storage_api->IsFile(block_path))
         {
@@ -1434,6 +1454,7 @@ int WriteContentBlocks(
         job->m_FirstAssetIndex = block_start_asset_index;
         job->m_AssetCount = asset_count;
         job->m_PendingCount = &pending_job_count;
+        job->m_Success = 0;
 
         if (shed == 0)
         {
@@ -1479,15 +1500,24 @@ int WriteContentBlocks(
         }
     }
 
+    int success = 1;
     while (block_count--)
     {
         WriteBlockJob* job = write_block_jobs[block_count];
+        if (!job)
+        {
+            continue;
+        }
+        if (!job->m_Success)
+        {
+            success = 0;
+        }
         free(job);
     }
 
     free(write_block_jobs);
 
-    return 1;
+    return success;
 }
 
 uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
@@ -1544,7 +1574,8 @@ ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char
         diff_asset_sizes,
         diff_name_offsets,
         version->m_NameData,
-        get_content_tag);
+        get_content_tag,
+        0);
 
     return diff_content_index;
 }
@@ -1675,6 +1706,7 @@ struct ReconstructJob
     uint32_t* m_AssetBlockOffsets;
     uint32_t* m_AssetLengths;
     nadir::TAtomic32* m_PendingCount;
+    uint32_t m_Success;
 };
 
 ReconstructJob* CreateReconstructJob(uint32_t asset_count)
@@ -1709,6 +1741,9 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
         for (uint32_t asset_index = 0; asset_index < job->m_AssetCount; ++asset_index)
         {
             char* asset_path = job->m_AssetPaths[asset_index];
+
+            //printf("Recontructing `%s` from block `%s` at offset %u, size %u\n", asset_path, job->m_BlockPath, (uint32_t)job->m_AssetBlockOffsets[asset_index], (uint32_t)job->m_AssetLengths[asset_index]);
+
             job->m_StorageAPI->EnsureParentPathExists(asset_path);
 
             StorageAPI::HOpenFile asset_file_handle = job->m_StorageAPI->OpenWriteFile(asset_path);
@@ -1735,11 +1770,12 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
         job->m_StorageAPI->CloseRead(block_file_handle);
         block_file_handle = 0;
     }
+    job->m_Success = 1;
     nadir::AtomicAdd32(job->m_PendingCount, -1);
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-void ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
+int ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
 {
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
     jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
@@ -1829,10 +1865,12 @@ void ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentInd
         reconstruct_jobs[job_count++] = job;
         job->m_StorageAPI = storage_api;
         job->m_PendingCount = &pending_job_count;
+        job->m_Success = 0;
 
         TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
+        char* block_name = GetBlockName(block_hash);
         char block_file_name[64];
-        sprintf(block_file_name, "0x%" PRIx64 ".lrb", block_hash);
+        sprintf(block_file_name, "%s.lrb", block_name);
 
         job->m_BlockPath = storage_api->ConcatPath(content_path, block_file_name);
         job->m_AssetCount = asset_count_from_block;
@@ -1893,12 +1931,18 @@ void ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentInd
         }
     }
 
+    int success = 1;
     while (job_count--)
     {
         ReconstructJob* job = reconstruct_jobs[job_count];
         free(job->m_BlockPath);
         for (uint32_t i = 0; i < job->m_AssetCount; ++i)
         {
+            if (!job->m_Success)
+            {
+                success = 0;
+                //printf("Failed reconstructing `%s`\n", job->m_AssetPaths[i]);
+            }
             free(job->m_AssetPaths[i]);
         }
         free(reconstruct_jobs[job_count]);
@@ -1908,10 +1952,13 @@ void ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentInd
 
     free(version_index_to_content_index);
     free(asset_order);
+    return success;
 }
 
 void LifelikeTest()
 {
+    if (1) return;
+
     Jobs::ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
 
@@ -1963,7 +2010,8 @@ void LifelikeTest()
         version1->m_AssetSize,
         version1->m_NameOffset,
         version1->m_NameData,
-        GetContentTag);
+        GetContentTag,
+        0);
 
     WriteContentIndex(&gTroveStorageAPI, local_content_index, local_content_index_path);
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
@@ -2041,7 +2089,8 @@ void LifelikeTest()
         version2b->m_AssetSize,
         version2b->m_NameOffset,
         version2b->m_NameData,
-        GetContentTag);
+        GetContentTag,
+        0);
 
     uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2b->m_AssetCount);
     uint64_t missing_asset_count = GetMissingAssets(local_content_indexb, version2b, missing_assets);
@@ -2145,7 +2194,8 @@ TEST(Longtail, TestContentIndex)
         asset_sizes,
         asset_name_offsets,
         asset_name_data,
-        GetContentTagFake);
+        GetContentTagFake,
+        0);
 
     ASSERT_EQ(5u, *content_index->m_AssetCount);
     ASSERT_EQ(2u, *content_index->m_BlockCount);
@@ -2204,7 +2254,8 @@ TEST(Longtail, TestCreateMissingContent)
         asset_sizes,
         asset_name_offsets,
         asset_name_data,
-        GetContentTagFake);
+        GetContentTagFake,
+        0);
 
     const char* asset_paths[5] = {
         "fifth_",
@@ -2265,9 +2316,179 @@ TEST(Longtail, TestGetMissingAssets)
 //    uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
 }
 
+typedef char TContent;
+LONGTAIL_DECLARE_ARRAY_TYPE(TContent, malloc, free)
+
+struct InMemStorageAPI
+{
+    static jc::HashTable<TLongtail_Hash, TContent*> m_PathHashToContent;
+    static void* m_PathHashToContentMem;
+
+    static void Init()
+    {
+        free(m_PathHashToContentMem);
+        uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint64_t>::CalcSize(65536);
+        m_PathHashToContentMem = malloc(hash_size);
+        m_PathHashToContent.Create(65536, m_PathHashToContentMem);
+    }
+
+    static StorageAPI::HOpenFile OpenReadFile(const char* path)
+    {
+        TLongtail_Hash path_hash = GetPathHash(path);
+        TContent** it = m_PathHashToContent.Get(path_hash);
+        if (it)
+        {
+            return (StorageAPI::HOpenFile)*it;
+        }
+        return 0;
+    }
+    static uint64_t GetSize(StorageAPI::HOpenFile f)
+    {
+        TContent* content = (TContent*)f;
+        return GetSize_TContent(content);
+    }
+    static int Read(StorageAPI::HOpenFile f, uint64_t offset, uint64_t length, void* output)
+    {
+        TContent* content = (TContent*)f;
+        memcpy(output, &content[offset], length);
+        return 1;
+    }
+    static void CloseRead(StorageAPI::HOpenFile)
+    {
+    }
+
+    static StorageAPI::HOpenFile OpenWriteFile(const char* path)
+    {
+        TLongtail_Hash path_hash = GetPathHash(path);
+        TContent** it = m_PathHashToContent.Get(path_hash);
+        if (it)
+        {
+            Free_TContent(*it);
+            *it = 0;
+        }
+        TContent* content = SetCapacity_TContent((TContent*)0, 16);
+        m_PathHashToContent.Put(path_hash, content);
+        return (StorageAPI::HOpenFile)path_hash;
+    }
+    static int Write(StorageAPI::HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+    {
+        TLongtail_Hash path_hash = (TLongtail_Hash)f;
+        TContent** it = m_PathHashToContent.Get(path_hash);
+        if (!it)
+        {
+            return 0;
+        }
+        TContent* content = *it;
+        size_t size = GetSize_TContent(content);
+        if (offset + length > size)
+        {
+            size = offset + length;
+        }
+        content = SetCapacity_TContent(content, (uint32_t)size);
+        SetSize_TContent(content, (uint32_t)size);
+        memcpy(&(content)[offset], input, length);
+        *it = content;
+        return 1;
+    }
+    static void CloseWrite(StorageAPI::HOpenFile)
+    {
+    }
+
+    static int MoveFile(const char* source_path, const char* target_path)
+    {
+        TLongtail_Hash source_path_hash = GetPathHash(source_path);
+        TContent** source_path_ptr = m_PathHashToContent.Get(source_path_hash);
+        if (!source_path_ptr)
+        {
+            return 0;
+        }
+        TLongtail_Hash target_path_hash = GetPathHash(target_path);
+        TContent** target_path_ptr = m_PathHashToContent.Get(target_path_hash);
+        if (target_path_ptr)
+        {
+            return 0;
+        }
+        m_PathHashToContent.Put(target_path_hash, *source_path_ptr);
+        m_PathHashToContent.Erase(source_path_hash);
+        return 1;
+    }
+    static int EnsureParentPathExists(const char* path)
+    {
+        return 1;
+    }
+    static char* ConcatPath(const char* root_path, const char* sub_path)
+    {
+        size_t path_len = strlen(root_path) + 1 + strlen(sub_path) + 1;
+        char* path = (char*)malloc(path_len);
+        strcpy(path, root_path);
+        strcat(path, "/");
+        strcat(path, sub_path);
+        return path;
+    }
+
+    static int IsDir(const char*)
+    {
+        return 0;
+    }
+    static int IsFile(const char* path)
+    {
+        TLongtail_Hash source_path_hash = GetPathHash(path);
+        TContent** source_path_ptr = m_PathHashToContent.Get(source_path_hash);
+        if (!source_path_ptr)
+        {
+            return 0;
+        }
+        return (*source_path_ptr) != 0;
+    }
+
+    static StorageAPI::HIterator StartFind(const char*)
+    {
+        return 0;
+    }
+    static int FindNext(StorageAPI::HIterator)
+    {
+        return 1;
+    }
+    static void CloseFind(StorageAPI::HIterator)
+    {
+    }
+    static const char* GetFileName(StorageAPI::HIterator)
+    {
+        return 0;
+    }
+    static const char* GetDirectoryName(StorageAPI::HIterator)
+    {
+        return 0;
+    }
+};
+
+jc::HashTable<TLongtail_Hash, TContent*> InMemStorageAPI::m_PathHashToContent;
+void* InMemStorageAPI::m_PathHashToContentMem = 0;
+
+
+StorageAPI gInMemStorageAPI = {
+    InMemStorageAPI::OpenReadFile,
+    InMemStorageAPI::GetSize,
+    InMemStorageAPI::Read,
+    InMemStorageAPI::CloseRead,
+    InMemStorageAPI::OpenWriteFile,
+    InMemStorageAPI::Write,
+    InMemStorageAPI::CloseWrite,
+    InMemStorageAPI::MoveFile,
+    InMemStorageAPI::EnsureParentPathExists,
+    InMemStorageAPI::ConcatPath,
+    InMemStorageAPI::IsDir,
+    InMemStorageAPI::IsFile,
+    InMemStorageAPI::StartFind,
+    InMemStorageAPI::FindNext,
+    InMemStorageAPI::CloseFind,
+    InMemStorageAPI::GetFileName,
+    InMemStorageAPI::GetDirectoryName
+};
+
 TEST(Longtail, TestReconstructVersion)
 {
-    ContentIndex* content_index = 0;
+/*    ContentIndex* content_index = 0;
     {
         const char* assets_path = "";
         const uint64_t asset_count = 5;
@@ -2286,7 +2507,7 @@ TEST(Longtail, TestReconstructVersion)
             asset_name_offsets,
             asset_name_data,
             GetContentTagFake);
-    }
+    }*/
 
     const char* asset_paths[5] = {
         "fifth_",
@@ -2296,9 +2517,32 @@ TEST(Longtail, TestReconstructVersion)
         "first_"
     };
 
-    const TLongtail_Hash asset_path_hashes[5] = {10, 20, 30, 40, 50};
-    const TLongtail_Hash asset_content_hashes[5] = { 1, 2, 3, 4, 5};
+    TLongtail_Hash asset_path_hashes[5];// = {GetPathHash("10"), GetPathHash("20"), GetPathHash("30"), GetPathHash("40"), GetPathHash("50")};
+    TLongtail_Hash asset_content_hashes[5];// = { 1, 2, 3, 4, 5};
     const uint32_t asset_sizes[5] = {32001, 32001, 32002, 32003, 32003};
+    InMemStorageAPI::Init();
+    StorageAPI* storage_api = &gInMemStorageAPI;
+    for (uint32_t i = 0; i < 5; ++i)
+    {
+        asset_path_hashes[i] = GetPathHash(asset_paths[i]);
+        char* path = storage_api->ConcatPath("source_path", asset_paths[i]);
+        StorageAPI::HOpenFile f = storage_api->OpenWriteFile(path);
+        free(path);
+        char* data = (char*)malloc(asset_sizes[i]);
+        for (uint32_t d = 0; d < asset_sizes[i]; ++d)
+        {
+            data[d] = (char)i;
+        }
+        storage_api->Write(f, 0, asset_sizes[i], data);
+        storage_api->CloseWrite(f);
+
+        meow_state state;
+        MeowBegin(&state, MeowDefaultSeed);
+        MeowAbsorb(&state, (meow_umm)(asset_sizes[i]), (void*)data);
+        uint64_t data_hash = MeowU64From(MeowEnd(&state, 0), 0);
+        asset_content_hashes[i] = data_hash;
+        free(data);
+    }
 
     size_t version_index_size = GetVersionIndexSize(5, asset_paths);
     void* version_index_mem = malloc(version_index_size);
@@ -2311,14 +2555,62 @@ TEST(Longtail, TestReconstructVersion)
         asset_path_hashes,
         asset_content_hashes,
         asset_sizes);
+    ASSERT_NE((VersionIndex*)0, version_index);
 
-    ReconstructVersion(
-        &gTroveStorageAPI,
+    PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
+    ASSERT_NE((PathLookup*)0, path_lookup);
+
+    ContentIndex* content_index = CreateContentIndex(
+        "source_path",
+        *version_index->m_AssetCount,
+        version_index->m_AssetContentHash,
+        version_index->m_PathHash,
+        version_index->m_AssetSize,
+        version_index->m_NameOffset,
+        version_index->m_NameData,
+        GetContentTagFake,
+        path_lookup);
+    ASSERT_NE((ContentIndex*)0, content_index);
+
+    ASSERT_EQ(1, WriteContentBlocks(
+        &gInMemStorageAPI,
+        0,
+        content_index,
+        path_lookup,
+        "source_path",
+        "local_content"));
+
+    free(path_lookup);
+
+    ASSERT_EQ(1, ReconstructVersion(
+        &gInMemStorageAPI,
         0,
         content_index,
         version_index,
-        "",
-        "");
+        "local_content",
+        "target_path"));
+
+    for (uint32_t i = 0; i < 5; ++i)
+    {
+        char* path = storage_api->ConcatPath("target_path", asset_paths[i]);
+        asset_path_hashes[i] = GetPathHash(path);
+        StorageAPI::HOpenFile f = storage_api->OpenReadFile(path);
+        ASSERT_NE((StorageAPI::HOpenFile)0, f);
+        free(path);
+        ASSERT_EQ(asset_sizes[i], storage_api->GetSize(f));
+        char* data = (char*)malloc(asset_sizes[i]);
+        storage_api->Read(f, 0, asset_sizes[i], data);
+        for (uint32_t d = 0; d < asset_sizes[i]; ++d)
+        {
+            if ((char)i != data[d])
+            {
+                ASSERT_EQ((char)i, data[d]);
+            }
+        }
+        storage_api->CloseRead(f);
+        free(data);
+    }
+
 }
 
 
