@@ -42,45 +42,33 @@ void Trove_DenormalizePath(char* path)
     }
 }
 
-int Trove_EnsureParentPathExistsNative(char* path)
-{
-	char* last_path_delimiter = (char*)strrchr(path, '\\');
-	if (last_path_delimiter == 0)
-	{
-		return 1;
-	}
-	*last_path_delimiter = '\0';
-	DWORD attr = ::GetFileAttributesA(path);
-	if (attr == INVALID_FILE_ATTRIBUTES)
-	{
-		if (!Trove_EnsureParentPathExistsNative(path))
-		{
-			*last_path_delimiter = '\\';
-			return 0;
-		}
-		BOOL success = ::CreateDirectoryA(path, 0);
-		*last_path_delimiter = '\\';
-		return success ? 1 : 0;
-	}
-	*last_path_delimiter = '\\';
-	return 1;
-}
-
 int Trove_EnsureParentPathExists(char* path)
 {
-	Trove_DenormalizePath(path);
-	int success = Trove_EnsureParentPathExistsNative(path);
-	Trove_NormalizePath(path);
-	return success;
+    char* last_path_delimiter = (char*)strrchr(path, '\\');
+    if (last_path_delimiter == 0)
+    {
+        return 1;
+    }
+    *last_path_delimiter = '\0';
+    DWORD attr = ::GetFileAttributesA(path);
+    if (attr == INVALID_FILE_ATTRIBUTES)
+    {
+        if (!Trove_EnsureParentPathExists(path))
+        {
+            *last_path_delimiter = '\\';
+            return 0;
+        }
+        BOOL success = ::CreateDirectoryA(path, 0);
+        *last_path_delimiter = '\\';
+        return success ? 1 : 0;
+    }
+    *last_path_delimiter = '\\';
+    return 1;
 }
 
 int Trove_MoveFile(const char* source, const char* target)
 {
-	Trove_DenormalizePath((char*)source);
-	Trove_DenormalizePath((char*)target);
     BOOL ok = ::MoveFileA(source, target);
-	Trove_NormalizePath((char*)target);
-	Trove_NormalizePath((char*)source);
     return ok ? 1 : 0;
 }
 
@@ -185,7 +173,176 @@ struct ThreadWorker
 
 
 
+struct StorageAPI
+{
+    typedef struct OpenFile* HOpenFile;
+    HOpenFile (*OpenReadFile)(const char* path);
+    uint64_t (*GetSize)(HOpenFile f);
+    int (*Read)(HOpenFile f, uint64_t offset, uint64_t length, void* output);
+    void (*CloseRead)(HOpenFile f);
 
+    HOpenFile (*OpenWriteFile)(const char* path);
+    int (*Write)(HOpenFile f, uint64_t offset, uint64_t length, const void* input);
+    void (*CloseWrite)(HOpenFile f);
+
+    int (*MoveFile)(const char* source_path, const char* target_path);
+    int (*EnsureParentPathExists)(const char* path);
+    char* (*ConcatPath)(const char* root_path, const char* sub_path);
+
+    int (*IsDir)(const char* path);
+    int (*IsFile)(const char* path);
+
+    typedef struct Iterator* HIterator;
+    StorageAPI::HIterator (*StartFind)(const char* path);
+    int (*FindNext)(HIterator iterator);
+    void (*CloseFind)(HIterator iterator);
+    const char* (*GetFileName)(HIterator iterator);
+    const char* (*GetDirectoryName)(HIterator iterator);
+};
+
+struct TroveStorageAPI
+{
+    static StorageAPI::HOpenFile OpenReadFile(const char* path)
+    {
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        StorageAPI::HOpenFile r = (StorageAPI::HOpenFile)Trove_OpenReadFile(tmp_path);
+        free(tmp_path);
+        return r;
+    }
+    static uint64_t GetSize(StorageAPI::HOpenFile f)
+    {
+        return Trove_GetFileSize((HTroveOpenReadFile)f);
+    }
+    static int Read(StorageAPI::HOpenFile f, uint64_t offset, uint64_t length, void* output)
+    {
+        return Trove_Read((HTroveOpenReadFile)f, offset,length, output);
+    }
+    static void CloseRead(StorageAPI::HOpenFile f)
+    {
+        Trove_CloseReadFile((HTroveOpenReadFile)f);
+    }
+
+    static StorageAPI::HOpenFile OpenWriteFile(const char* path)
+    {
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        StorageAPI::HOpenFile r = (StorageAPI::HOpenFile)Trove_OpenWriteFile(tmp_path);
+        free(tmp_path);
+        return r;
+    }
+    static int Write(StorageAPI::HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+    {
+        return Trove_Write((HTroveOpenWriteFile)f, offset,length, input);
+    }
+    static void CloseWrite(StorageAPI::HOpenFile f)
+    {
+        Trove_CloseWriteFile((HTroveOpenWriteFile)f);
+    }
+
+    static int MoveFile(const char* source_path, const char* target_path)
+    {
+        char* tmp_source_path = strdup(source_path);
+        Trove_DenormalizePath(tmp_source_path);
+        char* tmp_target_path = strdup(target_path);
+        Trove_DenormalizePath(tmp_target_path);
+        int ok = Trove_MoveFile(tmp_source_path, tmp_target_path);
+        free(tmp_target_path);
+        free(tmp_source_path);
+        return ok;
+    }
+    static int EnsureParentPathExists(const char* path)
+    {
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        int success = Trove_EnsureParentPathExists(tmp_path);
+        free(tmp_path);
+        return success;
+    }
+    static char* ConcatPath(const char* root_path, const char* sub_path)
+    {
+        // TODO: Trove is inconsistent - it works on normalized paths!
+        char* path = (char*)Trove_ConcatPath(root_path, sub_path);
+        Trove_NormalizePath(path);
+        return path;
+    }
+
+    static int IsDir(const char* path)
+    {
+        DWORD attrs = GetFileAttributesA(path);
+        if (attrs == INVALID_FILE_ATTRIBUTES)
+        {
+            return 0;
+        }
+        return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+    }
+
+    static int IsFile(const char* path)
+    {
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        DWORD attrs = GetFileAttributesA(tmp_path);
+        free(tmp_path);
+        if (attrs == INVALID_FILE_ATTRIBUTES)
+        {
+            return 0;
+        }
+        return (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    }
+
+    static StorageAPI::HIterator StartFind(const char* path)
+    {
+        StorageAPI::HIterator iterator = (StorageAPI::HIterator)malloc(Trove_GetFSIteratorSize());
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        int ok = Trove_StartFind((HTrove_FSIterator)iterator, tmp_path);
+        free(tmp_path);
+        if (!ok)
+        {
+            free(iterator);
+            iterator = 0;
+        }
+        return iterator;
+    }
+    static int FindNext(StorageAPI::HIterator iterator)
+    {
+        return Trove_FindNext((HTrove_FSIterator)iterator);
+    }
+    static void CloseFind(StorageAPI::HIterator iterator)
+    {
+        Trove_CloseFind((HTrove_FSIterator)iterator);
+        free(iterator);
+    }
+    static const char* GetFileName(StorageAPI::HIterator iterator)
+    {
+        return Trove_GetFileName((HTrove_FSIterator)iterator);
+    }
+    static const char* GetDirectoryName(StorageAPI::HIterator iterator)
+    {
+        return Trove_GetDirectoryName((HTrove_FSIterator)iterator);
+    }
+
+};
+
+StorageAPI gTroveStorageAPI = {
+    TroveStorageAPI::OpenReadFile,
+    TroveStorageAPI::GetSize,
+    TroveStorageAPI::Read,
+    TroveStorageAPI::CloseRead,
+    TroveStorageAPI::OpenWriteFile,
+    TroveStorageAPI::Write,
+    TroveStorageAPI::CloseWrite,
+    TroveStorageAPI::MoveFile,
+    TroveStorageAPI::EnsureParentPathExists,
+    TroveStorageAPI::ConcatPath,
+    TroveStorageAPI::IsDir,
+    TroveStorageAPI::IsFile,
+    TroveStorageAPI::StartFind,
+    TroveStorageAPI::FindNext,
+    TroveStorageAPI::CloseFind,
+    TroveStorageAPI::GetFileName,
+    TroveStorageAPI::GetDirectoryName
+};
 
 
 
@@ -198,7 +355,7 @@ LONGTAIL_DECLARE_ARRAY_TYPE(AssetFolder, malloc, free)
 
 typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
 
-static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, void* context)
+static int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
     AssetFolder* asset_folders = SetCapacity_AssetFolder((AssetFolder*)0, 256);
 
@@ -206,18 +363,18 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
 
     Push_AssetFolder(asset_folders)->m_FolderPath = strdup(root_folder);
 
-    HTrove_FSIterator fs_iterator = (HTrove_FSIterator)alloca(Trove_GetFSIteratorSize());
     while (folder_index != GetSize_AssetFolder(asset_folders))
     {
         const char* asset_folder = asset_folders[folder_index++].m_FolderPath;
 
-        if (Trove_StartFind(fs_iterator, asset_folder))
+        StorageAPI::HIterator fs_iterator = storage_api->StartFind(asset_folder);
+        if (fs_iterator)
         {
             do
             {
-                if (const char* dir_name = Trove_GetDirectoryName(fs_iterator))
+                if (const char* dir_name = storage_api->GetDirectoryName(fs_iterator))
                 {
-                    Push_AssetFolder(asset_folders)->m_FolderPath = Trove_ConcatPath(asset_folder, dir_name);
+                    Push_AssetFolder(asset_folders)->m_FolderPath = storage_api->ConcatPath(asset_folder, dir_name);
                     if (GetSize_AssetFolder(asset_folders) == GetCapacity_AssetFolder(asset_folders))
                     {
                         uint32_t unprocessed_count = (GetSize_AssetFolder(asset_folders) - folder_index);
@@ -244,12 +401,12 @@ static int RecurseTree(const char* root_folder, ProcessEntry entry_processor, vo
                         }
                     }
                 }
-                else if(const char* file_name = Trove_GetFileName(fs_iterator))
+                else if(const char* file_name = storage_api->GetFileName(fs_iterator))
                 {
                     entry_processor(context, asset_folder, file_name);
                 }
-            }while(Trove_FindNext(fs_iterator));
-            Trove_CloseFind(fs_iterator);
+            }while(storage_api->FindNext(fs_iterator));
+            storage_api->CloseFind(fs_iterator);
         }
         free((void*)asset_folder);
     }
@@ -273,12 +430,13 @@ void FreeAssetpaths(AssetPaths* assets)
     free(assets->paths);
 }
 
-int GetContent(const char* root_path, AssetPaths* out_assets)
+int GetContent(StorageAPI* storage_api, const char* root_path, AssetPaths* out_assets)
 {
     out_assets->paths = 0;
     out_assets->count = 0;
 
     struct Context {
+        StorageAPI* storage_api;
         const char* root_path;
         AssetPaths* assets;
     };
@@ -290,8 +448,7 @@ int GetContent(const char* root_path, AssetPaths* out_assets)
 
         size_t base_path_length = strlen(asset_context->root_path);
 
-        char* full_path = (char*)Trove_ConcatPath(root_path, file_name);
-        Trove_NormalizePath(full_path);
+        char* full_path = asset_context->storage_api->ConcatPath(root_path, file_name);
         const char* s = &full_path[base_path_length];
         if (*s == '/')
         {
@@ -307,15 +464,16 @@ int GetContent(const char* root_path, AssetPaths* out_assets)
         ++assets->count;
     };
 
-    Context context = { root_path, out_assets };
+    Context context = { storage_api, root_path, out_assets };
 
-    RecurseTree(root_path, add_folder, &context);
+    RecurseTree(storage_api, root_path, add_folder, &context);
 
     return 0;
 }
 
 struct HashJob
 {
+    StorageAPI* m_StorageAPI;
     TLongtail_Hash* m_PathHash;
     TLongtail_Hash* m_ContentHash;
     uint32_t* m_ContentSize;
@@ -336,15 +494,15 @@ static TLongtail_Hash GetPathHash(const char* path)
 static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     HashJob* hash_job = (HashJob*)context;
-    char* path = (char*)Trove_ConcatPath(hash_job->m_RootPath, hash_job->m_Path);
-    Trove_DenormalizePath(path);
+    StorageAPI* storage_api = hash_job->m_StorageAPI;
+    char* path = storage_api->ConcatPath(hash_job->m_RootPath, hash_job->m_Path);
 
-    HTroveOpenReadFile file_handle = Trove_OpenReadFile(path);
+    StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(path);
     meow_state state;
     MeowBegin(&state, MeowDefaultSeed);
     if(file_handle)
     {
-        uint32_t file_size = (uint32_t)Trove_GetFileSize(file_handle);
+        uint32_t file_size = (uint32_t)storage_api->GetSize(file_handle);
         *hash_job->m_ContentSize = file_size;
 
         uint8_t batch_data[65536];
@@ -352,12 +510,12 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         while (offset != file_size)
         {
             meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
-            bool read_ok = Trove_Read(file_handle, offset, len, batch_data);
+            bool read_ok = storage_api->Read(file_handle, offset, len, batch_data);
             assert(read_ok);
             offset += len;
             MeowAbsorb(&state, len, batch_data);
         }
-        Trove_CloseReadFile(file_handle);
+        storage_api->CloseRead(file_handle);
     }
     meow_u128 hash = MeowEnd(&state, 0);
     *hash_job->m_ContentHash = MeowU64From(hash, 0);
@@ -369,14 +527,16 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
 
 struct ProcessHashContext
 {
+    StorageAPI* m_StorageAPI;
     Bikeshed m_Shed;
     HashJob* m_HashJobs;
     nadir::TAtomic32* m_PendingCount;
 };
 
-void GetFileHashes(Bikeshed shed, const char* root_path, const char** paths, uint64_t asset_count, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
+void GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const char** paths, uint64_t asset_count, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
 {
     ProcessHashContext context;
+    context.m_StorageAPI = storage_api;
     context.m_Shed = shed;
     context.m_HashJobs = new HashJob[asset_count];
     nadir::TAtomic32 pendingCount = 0;
@@ -399,6 +559,7 @@ void GetFileHashes(Bikeshed shed, const char* root_path, const char** paths, uin
         {
             HashJob* job = &context.m_HashJobs[offset + i];
             ctx[i] = &context.m_HashJobs[i + offset];
+            job->m_StorageAPI = storage_api;
             job->m_RootPath = root_path;
             job->m_Path = paths[i + offset];
             job->m_PendingCount = &pendingCount;
@@ -640,17 +801,17 @@ BlockIndex* CreateBlockIndex(
     const uint32_t* asset_sizes)
 {
     BlockIndex* block_index = InitBlockIndex(mem, asset_count_in_block);
-	meow_state state;
-	MeowBegin(&state, MeowDefaultSeed);
-	for (uint32_t i = 0; i < asset_count_in_block; ++i)
+    meow_state state;
+    MeowBegin(&state, MeowDefaultSeed);
+    for (uint32_t i = 0; i < asset_count_in_block; ++i)
     {
         uint32_t asset_index = asset_indexes[i];
         block_index->m_Entries[i].m_AssetContentHash = asset_content_hashes[asset_index];
         block_index->m_Entries[i].m_AssetSize = asset_sizes[asset_index];
-		MeowAbsorb(&state, (meow_umm)(sizeof(TLongtail_Hash)), (void*)&asset_content_hashes[asset_index]);
-		MeowAbsorb(&state, (meow_umm)(sizeof(uint32_t)), (void*)&asset_sizes[asset_index]);
-	}
-	MeowAbsorb(&state, (meow_umm)(sizeof(uint32_t)), (void*)& asset_count_in_block);
+        MeowAbsorb(&state, (meow_umm)(sizeof(TLongtail_Hash)), (void*)&asset_content_hashes[asset_index]);
+        MeowAbsorb(&state, (meow_umm)(sizeof(uint32_t)), (void*)&asset_sizes[asset_index]);
+    }
+    MeowAbsorb(&state, (meow_umm)(sizeof(uint32_t)), (void*)& asset_count_in_block);
 
     TLongtail_Hash block_hash = MeowU64From(MeowEnd(&state, 0), 0);
     block_index->m_BlockHash = block_hash;
@@ -712,101 +873,102 @@ void InitContentIndex(ContentIndex* content_index)
     p += (sizeof(uint32_t) * asset_count);
 }
 
-int WriteContentIndex(ContentIndex* content_index, const char* path)
+int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, const char* path)
 {
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_AssetCount);
 
-    HTroveOpenWriteFile file_handle = Trove_OpenWriteFile(path);
+    StorageAPI::HOpenFile file_handle = storage_api->OpenWriteFile(path);
     if (!file_handle)
     {
         return 0;
     }
-    if (!Trove_Write(file_handle, 0, index_data_size, &content_index[1]))
+    if (!storage_api->Write(file_handle, 0, index_data_size, &content_index[1]))
     {
         return 0;
     }
-    Trove_CloseWriteFile(file_handle);
+    storage_api->CloseWrite(file_handle);
 
     return 1;
 }
 
-ContentIndex* ReadContentIndex(const char* path)
+ContentIndex* ReadContentIndex(StorageAPI* storage_api, const char* path)
 {
-    HTroveOpenReadFile file_handle = Trove_OpenReadFile(path);
+    StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(path);
     if (!file_handle)
     {
         return 0;
     }
-    size_t content_index_data_size = Trove_GetFileSize(file_handle);
+    size_t content_index_data_size = storage_api->GetSize(file_handle);
     ContentIndex* content_index = (ContentIndex*)malloc(sizeof(ContentIndex) + content_index_data_size);
     if (!content_index)
     {
-        Trove_CloseReadFile(file_handle);
+        storage_api->CloseRead(file_handle);
         return 0;
     }
-    if (!Trove_Read(file_handle, 0, content_index_data_size, &content_index[1]))
+    if (!storage_api->Read(file_handle, 0, content_index_data_size, &content_index[1]))
     {
-        Trove_CloseReadFile(file_handle);
+        storage_api->CloseRead(file_handle);
         return 0;
     }
     InitContentIndex(content_index);
-    Trove_CloseReadFile(file_handle);
+    storage_api->CloseRead(file_handle);
     return content_index;
 }
 
-int WriteVersionIndex(VersionIndex* version_index, const char* path)
+int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, const char* path)
 {
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), version_index->m_NameDataSize);
 
-    HTroveOpenWriteFile file_handle = Trove_OpenWriteFile(path);
+    StorageAPI::HOpenFile file_handle = storage_api->OpenWriteFile(path);
     if (!file_handle)
     {
         return 0;
     }
-    if (!Trove_Write(file_handle, 0, index_data_size, &version_index[1]))
+    if (!storage_api->Write(file_handle, 0, index_data_size, &version_index[1]))
     {
+        storage_api->CloseWrite(file_handle);
         return 0;
     }
-    Trove_CloseWriteFile(file_handle);
+    storage_api->CloseWrite(file_handle);
 
     return 1;
 }
 
-VersionIndex* ReadVersionIndex(const char* path)
+VersionIndex* ReadVersionIndex(StorageAPI* storage_api, const char* path)
 {
-    HTroveOpenReadFile file_handle = Trove_OpenReadFile(path);
+    StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(path);
     if (!file_handle)
     {
         return 0;
     }
-    size_t version_index_data_size = Trove_GetFileSize(file_handle);
+    size_t version_index_data_size = storage_api->GetSize(file_handle);
     VersionIndex* version_index = (VersionIndex*)malloc(sizeof(VersionIndex) + version_index_data_size);
     if (!version_index)
     {
-        Trove_CloseReadFile(file_handle);
+        storage_api->CloseRead(file_handle);
         return 0;
     }
-    if (!Trove_Read(file_handle, 0, version_index_data_size, &version_index[1]))
+    if (!storage_api->Read(file_handle, 0, version_index_data_size, &version_index[1]))
     {
-        Trove_CloseReadFile(file_handle);
+        storage_api->CloseRead(file_handle);
         return 0;
     }
     InitVersionIndex(version_index, version_index_data_size);
-    Trove_CloseReadFile(file_handle);
+    storage_api->CloseRead(file_handle);
     return version_index;
 }
 
-VersionIndex* CreateVersionIndex(Bikeshed shed, const char* assets_path)
+VersionIndex* CreateVersionIndex(StorageAPI* storage_api, Bikeshed shed, const char* assets_path)
 {
     AssetPaths asset_paths;
 
-    GetContent(assets_path, &asset_paths);
+    GetContent(storage_api, assets_path, &asset_paths);
 
     uint32_t* contentSizes = (uint32_t*)malloc(sizeof(uint32_t) * asset_paths.count);
     TLongtail_Hash* pathHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_paths.count);
     TLongtail_Hash* contentHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_paths.count);
     
-    GetFileHashes(shed, assets_path, (const char**)asset_paths.paths, asset_paths.count, pathHashes, contentHashes, contentSizes);
+    GetFileHashes(storage_api, shed, assets_path, (const char**)asset_paths.paths, asset_paths.count, pathHashes, contentHashes, contentSizes);
 
     size_t version_index_size = GetVersionIndexSize(asset_paths.count, asset_paths.paths);
     void* version_index_mem = malloc(version_index_size);
@@ -962,7 +1124,7 @@ ContentIndex* CreateContentIndex(
             asset_sizes);
 
         ++block_count;
-		current_tag = i < unique_asset_count ? content_tags[asset_index] : 0;
+        current_tag = i < unique_asset_count ? content_tags[asset_index] : 0;
         current_size = 0;
         asset_count_in_block = 0;
     }
@@ -1048,8 +1210,8 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
             {
                 removed_hashes[removed] = refs[ri];
             }
-			++removed;
-			++ri;
+            ++removed;
+            ++ri;
         }
         else if (refs[ri] > news[ni])
         {
@@ -1063,13 +1225,13 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
     *added_hash_count = added;
     while (ri < reference_hash_count)
     {
-		if (removed_hashes)
-		{
-			removed_hashes[removed] = refs[ri];
-		}
-		++removed;
-		++ri;
-	}
+        if (removed_hashes)
+        {
+            removed_hashes[removed] = refs[ri];
+        }
+        ++removed;
+        ++ri;
+    }
     if (removed_hash_count)
     {
         *removed_hash_count = removed;
@@ -1126,6 +1288,7 @@ const char* GetPathFromAssetContentHash(const PathLookup* path_lookup, TLongtail
 
 struct WriteBlockJob
 {
+    StorageAPI* m_StorageAPI;
     const char* m_ContentFolder;
     const char* m_AssetsFolder;
     const ContentIndex* m_ContentIndex;
@@ -1145,6 +1308,7 @@ WriteBlockJob* CreateWriteContentBlockJob()
 static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     WriteBlockJob* job = (WriteBlockJob*)context;
+    StorageAPI* storage_api = job->m_StorageAPI;
 
     const ContentIndex* content_index = job->m_ContentIndex;
     const char* content_folder = job->m_ContentFolder;
@@ -1155,13 +1319,12 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
 
     char file_name[64];
     sprintf(file_name, "0x%" PRIx64 ".lrb", block_hash);
-    char* block_path = (char*)Trove_ConcatPath(content_folder, file_name);
+    char* block_path = storage_api->ConcatPath(content_folder, file_name);
 
     char tmp_block_name[64];
     sprintf(tmp_block_name, "0x%" PRIx64 ".tmp", block_hash);
-    char* tmp_block_path = (char*)Trove_ConcatPath(content_folder, tmp_block_name);
-    Trove_DenormalizePath(tmp_block_path);
-    HTroveOpenWriteFile block_file_handle = Trove_OpenWriteFile(tmp_block_path);
+    char* tmp_block_path = (char*)storage_api->ConcatPath(content_folder, tmp_block_name);
+    StorageAPI::HOpenFile block_file_handle = storage_api->OpenWriteFile(tmp_block_path);
     uint32_t write_offset = 0;
 
     for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
@@ -1170,24 +1333,23 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         uint32_t asset_size = content_index->m_AssetLength[asset_index];
         const char* asset_path = GetPathFromAssetContentHash(job->m_PathLookup, asset_content_hash);
 
-        char* full_path = (char*)Trove_ConcatPath(job->m_AssetsFolder, asset_path);
-        Trove_DenormalizePath(full_path);
-        HTroveOpenReadFile file_handle = Trove_OpenReadFile(full_path);
-        if (Trove_GetFileSize(file_handle) != asset_size)
+        char* full_path = storage_api->ConcatPath(job->m_AssetsFolder, asset_path);
+        StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(full_path);
+        if (storage_api->GetSize(file_handle) != asset_size)
         {
-            Trove_CloseReadFile(file_handle);
-            Trove_CloseWriteFile(block_file_handle);
+            storage_api->CloseRead(file_handle);
+            storage_api->CloseWrite(block_file_handle);
             nadir::AtomicAdd32(job->m_PendingCount, -1);
             return BIKESHED_TASK_RESULT_COMPLETE;
         }
         void* buffer = malloc(asset_size);
-        Trove_Read(file_handle, 0, asset_size, buffer);
-        Trove_Write(block_file_handle, write_offset, asset_size, buffer);
+        storage_api->Read(file_handle, 0, asset_size, buffer);
+        storage_api->Write(block_file_handle, write_offset, asset_size, buffer);
         write_offset += asset_size;
 
         free(buffer);
         buffer = 0;
-        Trove_CloseReadFile(file_handle);
+        storage_api->CloseRead(file_handle);
         free((char*)full_path);
         full_path = 0;
 
@@ -1197,19 +1359,19 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
     for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
     {
         TLongtail_Hash asset_content_hash = content_index->m_AssetContentHash[asset_index];
-        Trove_Write(block_file_handle, write_offset, sizeof(TLongtail_Hash), &asset_content_hash);
+        storage_api->Write(block_file_handle, write_offset, sizeof(TLongtail_Hash), &asset_content_hash);
         write_offset += sizeof(TLongtail_Hash);
 
         uint32_t asset_size = content_index->m_AssetLength[asset_index];
-        Trove_Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_size);
+        storage_api->Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_size);
         write_offset += sizeof(uint32_t);
     }
 
-    Trove_Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
+    storage_api->Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
     write_offset += sizeof(uint32_t);
-    Trove_CloseWriteFile(block_file_handle);
+    storage_api->CloseWrite(block_file_handle);
 
-    if (!Trove_MoveFile(tmp_block_path, block_path))
+    if (!storage_api->MoveFile(tmp_block_path, block_path))
     {
         printf("Failed to move `%s` to `%s`\n", tmp_block_path, block_path);
     }
@@ -1225,6 +1387,7 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
 }
 
 int WriteContentBlocks(
+    StorageAPI* storage_api,
     Bikeshed shed,
     ContentIndex* content_index,
     PathLookup* asset_content_hash_to_path,
@@ -1246,10 +1409,8 @@ int WriteContentBlocks(
 
         char file_name[64];
         sprintf(file_name, "0x%" PRIx64 ".lrb", block_hash);
-        char* block_path = (char*)Trove_ConcatPath(content_folder, file_name);
-        Trove_DenormalizePath(block_path);
-		DWORD attrs = GetFileAttributesA(block_path);
-        if (attrs != INVALID_FILE_ATTRIBUTES)
+        char* block_path = storage_api->ConcatPath(content_folder, file_name);
+        if (storage_api->IsFile(block_path))
         {
             write_block_jobs[block_index] = 0;
             free((char*)block_path);
@@ -1265,6 +1426,7 @@ int WriteContentBlocks(
 
         WriteBlockJob* job = CreateWriteContentBlockJob();
         write_block_jobs[block_index] = job;
+        job->m_StorageAPI = storage_api;
         job->m_ContentFolder = content_folder;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
@@ -1279,22 +1441,22 @@ int WriteContentBlocks(
             Bikeshed_TaskResult result = WriteContentBlockJob(shed, 0, 0, job);
             assert(result == BIKESHED_TASK_RESULT_COMPLETE);
         }
-		else
-		{
-			Bikeshed_TaskID task_ids[1];
-			BikeShed_TaskFunc func[1] = { WriteContentBlockJob };
-			void* ctx[1] = { job };
+        else
+        {
+            Bikeshed_TaskID task_ids[1];
+            BikeShed_TaskFunc func[1] = { WriteContentBlockJob };
+            void* ctx[1] = { job };
 
-			while (!Bikeshed_CreateTasks(shed, 1, func, ctx, task_ids))
-			{
-				nadir::Sleep(1000);
-			}
+            while (!Bikeshed_CreateTasks(shed, 1, func, ctx, task_ids))
+            {
+                nadir::Sleep(1000);
+            }
 
-			{
-				nadir::AtomicAdd32(&pending_job_count, 1);
-				Bikeshed_ReadyTasks(shed, 1, task_ids);
-			}
-		}
+            {
+                nadir::AtomicAdd32(&pending_job_count, 1);
+                Bikeshed_ReadyTasks(shed, 1, task_ids);
+            }
+        }
 
         block_start_asset_index += asset_count;
     }
@@ -1455,8 +1617,8 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
         {
             block_index_to_asset_count.Put(block_index, 1);
             copy_blocks[copy_block_count++] = block_index;
-			unique_asset_count += asset_count_in_blocks[block_index];
-		}
+            unique_asset_count += asset_count_in_blocks[block_index];
+        }
         else
         {
             (*block_index_ptr)++;
@@ -1506,6 +1668,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
 
 struct ReconstructJob
 {
+    StorageAPI* m_StorageAPI;
     char* m_BlockPath;
     char** m_AssetPaths;
     uint32_t m_AssetCount;
@@ -1538,7 +1701,7 @@ ReconstructJob* CreateReconstructJob(uint32_t asset_count)
 static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     ReconstructJob* job = (ReconstructJob*)context;
-    HTroveOpenReadFile block_file_handle = Trove_OpenReadFile(job->m_BlockPath);
+    StorageAPI::HOpenFile block_file_handle = job->m_StorageAPI->OpenReadFile(job->m_BlockPath);
     if(block_file_handle)
     {
         uint8_t batch_data[65536];
@@ -1546,10 +1709,9 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
         for (uint32_t asset_index = 0; asset_index < job->m_AssetCount; ++asset_index)
         {
             char* asset_path = job->m_AssetPaths[asset_index];
-			Trove_EnsureParentPathExists(asset_path);
+            job->m_StorageAPI->EnsureParentPathExists(asset_path);
 
-            Trove_DenormalizePath(asset_path);
-            HTroveOpenWriteFile asset_file_handle = Trove_OpenWriteFile(asset_path);
+            StorageAPI::HOpenFile asset_file_handle = job->m_StorageAPI->OpenWriteFile(asset_path);
             if(asset_file_handle)
             {
                 uint32_t asset_length = job->m_AssetLengths[asset_index];
@@ -1560,24 +1722,24 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
                 {
                     uint64_t left = asset_length - write_offset;
                     uint64_t len = left < sizeof(batch_data) ? left : sizeof(batch_data);
-                    bool read_ok = Trove_Read(block_file_handle, read_offset, len, batch_data);
+                    bool read_ok = job->m_StorageAPI->Read(block_file_handle, read_offset, len, batch_data);
                     assert(read_ok);
-                    bool write_ok = Trove_Write(asset_file_handle, write_offset, len, batch_data);
+                    bool write_ok = job->m_StorageAPI->Write(asset_file_handle, write_offset, len, batch_data);
                     read_offset += len;
                     write_offset += len;
                 }
             }
-            Trove_CloseWriteFile(asset_file_handle);
+            job->m_StorageAPI->CloseWrite(asset_file_handle);
             asset_file_handle = 0;
         }
-        Trove_CloseReadFile(block_file_handle);
+        job->m_StorageAPI->CloseRead(block_file_handle);
         block_file_handle = 0;
     }
     nadir::AtomicAdd32(job->m_PendingCount, -1);
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-void ReconstructVersion(Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
+void ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
 {
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
     jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
@@ -1588,14 +1750,14 @@ void ReconstructVersion(Bikeshed shed, const ContentIndex* content_index, const 
         content_hash_to_content_asset_index.Put(content_index->m_AssetContentHash[i], i);
     }
 
-	uint64_t asset_count = *version_index->m_AssetCount;
+    uint64_t asset_count = *version_index->m_AssetCount;
     uint64_t* asset_order = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
-	uint64_t* version_index_to_content_index = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
-	for (uint64_t i = 0; i < asset_count; ++i)
-	{
-		asset_order[i] = i;
-		version_index_to_content_index[i] = *content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
-	}
+    uint64_t* version_index_to_content_index = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
+    for (uint64_t i = 0; i < asset_count; ++i)
+    {
+        asset_order[i] = i;
+        version_index_to_content_index[i] = *content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
+    }
 
     free(content_hash_to_content_asset_index_mem);
     content_hash_to_content_asset_index_mem = 0;
@@ -1665,22 +1827,24 @@ void ReconstructVersion(Bikeshed shed, const ContentIndex* content_index, const 
 
         ReconstructJob* job = CreateReconstructJob(asset_count_from_block);
         reconstruct_jobs[job_count++] = job;
+        job->m_StorageAPI = storage_api;
         job->m_PendingCount = &pending_job_count;
 
         TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
         char block_file_name[64];
         sprintf(block_file_name, "0x%" PRIx64 ".lrb", block_hash);
 
-        job->m_BlockPath = (char*)Trove_ConcatPath(content_path, block_file_name);
+        job->m_BlockPath = storage_api->ConcatPath(content_path, block_file_name);
         job->m_AssetCount = asset_count_from_block;
 
         for (uint32_t j = 0; j < asset_count_from_block; ++j)
         {
             uint64_t asset_index = asset_order[i + j];
             const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[asset_index]];
-            job->m_AssetPaths[j] = (char*)Trove_ConcatPath(version_path, asset_path);
-            Trove_NormalizePath(job->m_AssetPaths[j]);
+            job->m_AssetPaths[j] = storage_api->ConcatPath(version_path, asset_path);
             uint64_t asset_index_in_content_index = version_index_to_content_index[asset_index];
+            assert(content_index->m_AssetLength[asset_index_in_content_index] == version_index->m_AssetSize[asset_index]);
+            assert(content_index->m_AssetContentHash[asset_index_in_content_index] == version_index->m_AssetContentHash[asset_index]);
             job->m_AssetBlockOffsets[j] = content_index->m_AssetBlockOffset[asset_index_in_content_index];
             job->m_AssetLengths[j] = content_index->m_AssetLength[asset_index_in_content_index];
         }
@@ -1691,22 +1855,22 @@ void ReconstructVersion(Bikeshed shed, const ContentIndex* content_index, const 
             Bikeshed_TaskResult result = ReconstructFromBlock(shed, 0, 0, job);
             assert(result == BIKESHED_TASK_RESULT_COMPLETE);
         }
-		else
-		{
-			Bikeshed_TaskID task_ids[1];
-			BikeShed_TaskFunc func[1] = { ReconstructFromBlock };
-			void* ctx[1] = { job };
+        else
+        {
+            Bikeshed_TaskID task_ids[1];
+            BikeShed_TaskFunc func[1] = { ReconstructFromBlock };
+            void* ctx[1] = { job };
 
-			while (!Bikeshed_CreateTasks(shed, 1, func, ctx, task_ids))
-			{
-				nadir::Sleep(1000);
-			}
+            while (!Bikeshed_CreateTasks(shed, 1, func, ctx, task_ids))
+            {
+                nadir::Sleep(1000);
+            }
 
-			{
-				nadir::AtomicAdd32(&pending_job_count, 1);
-				Bikeshed_ReadyTasks(shed, 1, task_ids);
-			}
-		}
+            {
+                nadir::AtomicAdd32(&pending_job_count, 1);
+                Bikeshed_ReadyTasks(shed, 1, task_ids);
+            }
+        }
 
         i += asset_count_from_block;
     }
@@ -1763,16 +1927,16 @@ void LifelikeTest()
 //    #define HOME "test\\data"
     #define HOME "D:\\Temp\\longtail"
 
-	#define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
-	#define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
+    #define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
+    #define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
 
-	#define VERSION1_FOLDER "git" VERSION1 "_Win64_Editor"
-	#define VERSION2_FOLDER "git" VERSION2 "_Win64_Editor"
+    #define VERSION1_FOLDER "git" VERSION1 "_Win64_Editor"
+    #define VERSION2_FOLDER "git" VERSION2 "_Win64_Editor"
 
 //    #define VERSION1_FOLDER "version1"
 //    #define VERSION2_FOLDER "version2"
 
-	const char* local_path_1 = HOME "\\local\\" VERSION1_FOLDER;
+    const char* local_path_1 = HOME "\\local\\" VERSION1_FOLDER;
     const char* version_index_path_1 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
 
     const char* local_path_2 = HOME "\\local\\" VERSION2_FOLDER;
@@ -1787,8 +1951,8 @@ void LifelikeTest()
     const char* remote_path_1 = HOME "\\remote\\" VERSION1_FOLDER;
     const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
 
-    VersionIndex* version1 = CreateVersionIndex(shed, local_path_1);
-    WriteVersionIndex(version1, version_index_path_1);
+    VersionIndex* version1 = CreateVersionIndex(&gTroveStorageAPI, shed, local_path_1);
+    WriteVersionIndex(&gTroveStorageAPI, version1, version_index_path_1);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     ContentIndex* local_content_index = CreateContentIndex(
@@ -1801,14 +1965,15 @@ void LifelikeTest()
         version1->m_NameData,
         GetContentTag);
 
-    WriteContentIndex(local_content_index, local_content_index_path);
+    WriteContentIndex(&gTroveStorageAPI, local_content_index, local_content_index_path);
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
     if (1)
     {
-		printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
-		PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
+        printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
         WriteContentBlocks(
+            &gTroveStorageAPI, 
             shed,
             local_content_index,
             path_lookup,
@@ -1819,29 +1984,29 @@ void LifelikeTest()
         path_lookup = 0;
     }
 
-	printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-	ReconstructVersion(shed, local_content_index, version1, local_content_path, remote_path_1);
+    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
+    ReconstructVersion(&gTroveStorageAPI, shed, local_content_index, version1, local_content_path, remote_path_1);
 
-	free(local_content_index);
-	local_content_index = 0;
-	free(version1);
-	version1 = 0;
+    free(local_content_index);
+    local_content_index = 0;
+    free(version1);
+    version1 = 0;
 
-	return;
+    return;
 
 
-    VersionIndex* version2 = CreateVersionIndex(shed, local_path_2);
-    WriteVersionIndex(version2, version_index_path_2);
+    VersionIndex* version2 = CreateVersionIndex(&gTroveStorageAPI, shed, local_path_2);
+    WriteVersionIndex(&gTroveStorageAPI, version2, version_index_path_2);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
     free(version2);
     version2 = 0;
     
-    VersionIndex* version1b = ReadVersionIndex(version_index_path_1);
+    VersionIndex* version1b = ReadVersionIndex(&gTroveStorageAPI, version_index_path_1);
     printf("%" PRIu64 " assets in index `%s`\n", *version1b->m_AssetCount, version_index_path_1);
-    VersionIndex* version2b = ReadVersionIndex(version_index_path_2);
+    VersionIndex* version2b = ReadVersionIndex(&gTroveStorageAPI, version_index_path_2);
     printf("%" PRIu64 " assets in index `%s`\n", *version2b->m_AssetCount, version_index_path_2);
 
-    ContentIndex* local_content_indexb = ReadContentIndex(local_content_index_path);
+    ContentIndex* local_content_indexb = ReadContentIndex(&gTroveStorageAPI, local_content_index_path);
     printf("%" PRIu64 " blocks in index `%s`\n", *local_content_indexb->m_BlockCount, local_content_index_path);
 
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
@@ -1849,22 +2014,23 @@ void LifelikeTest()
 
     if (1)
     {
-		printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
-		PathLookup* path_lookup = CreateContentHashToPathLookup(version2b, 0);
+        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version2b, 0);
         WriteContentBlocks(
+            &gTroveStorageAPI, 
             shed,
             missing_content,
             path_lookup,
             local_path_2,
             local_content_path);
 
-		free(path_lookup);
+        free(path_lookup);
         path_lookup = 0;
     }
 
-	printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
-	
-	free(missing_content);
+    printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
+
+    free(missing_content);
     missing_content = 0;
 
     ContentIndex* remote_content_index = CreateContentIndex(
@@ -1880,10 +2046,10 @@ void LifelikeTest()
     uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2b->m_AssetCount);
     uint64_t missing_asset_count = GetMissingAssets(local_content_indexb, version2b, missing_assets);
 
-	uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
-	uint64_t remaining_missing_asset_count = 0;
-	ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
-	printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
+    uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
+    uint64_t remaining_missing_asset_count = 0;
+    ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
+    printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
 
     // Copy existing blocks
 
@@ -1891,12 +2057,12 @@ void LifelikeTest()
 
     //     ReconstructVersion(local_content_indexb, version2b, const char* content_path, const char* version_path)
 
-    ReconstructVersion(0, local_content_indexb, version1b, local_content_path, local_path_1);
+    ReconstructVersion(&gTroveStorageAPI, shed, local_content_indexb, version1b, local_content_path, local_path_1);
 
 
     free(existing_blocks);
     existing_blocks = 0;
-	free(remaining_missing_assets);
+    free(remaining_missing_assets);
     remaining_missing_assets = 0;
     free(missing_assets);
     missing_assets = 0;
@@ -1929,12 +2095,12 @@ TLongtail_Hash GetContentTagFake(const char* , const char* path)
 
 TEST(Longtail, LifelikeTest)
 {
-	LifelikeTest();
+    LifelikeTest();
 }
 
 TEST(Longtail, TestVersionIndex)
 {
-	const char* asset_paths[5] = {
+    const char* asset_paths[5] = {
         "fifth_",
         "fourth",
         "third_",
@@ -1985,22 +2151,22 @@ TEST(Longtail, TestContentIndex)
     ASSERT_EQ(2u, *content_index->m_BlockCount);
     for (uint32_t i = 0; i < *content_index->m_AssetCount; ++i)
     {
-		ASSERT_EQ(asset_content_hashes[4 - i], content_index->m_AssetContentHash[i]);
-		ASSERT_EQ(asset_sizes[4 - i], content_index->m_AssetLength[i]);
-	}
-	ASSERT_EQ(0u, content_index->m_AssetBlockIndex[0]);
-	ASSERT_EQ(0u, content_index->m_AssetBlockIndex[1]);
-	ASSERT_EQ(0u, content_index->m_AssetBlockIndex[2]);
-	ASSERT_EQ(1u, content_index->m_AssetBlockIndex[3]);
-	ASSERT_EQ(1u, content_index->m_AssetBlockIndex[4]);
+        ASSERT_EQ(asset_content_hashes[4 - i], content_index->m_AssetContentHash[i]);
+        ASSERT_EQ(asset_sizes[4 - i], content_index->m_AssetLength[i]);
+    }
+    ASSERT_EQ(0u, content_index->m_AssetBlockIndex[0]);
+    ASSERT_EQ(0u, content_index->m_AssetBlockIndex[1]);
+    ASSERT_EQ(0u, content_index->m_AssetBlockIndex[2]);
+    ASSERT_EQ(1u, content_index->m_AssetBlockIndex[3]);
+    ASSERT_EQ(1u, content_index->m_AssetBlockIndex[4]);
 
-	ASSERT_EQ(0u, content_index->m_AssetBlockOffset[0]);
-	ASSERT_EQ(32001u, content_index->m_AssetBlockOffset[1]);
-	ASSERT_EQ(64002u, content_index->m_AssetBlockOffset[2]);
-	ASSERT_EQ(0u, content_index->m_AssetBlockOffset[3]);
-	ASSERT_EQ(32003u, content_index->m_AssetBlockOffset[4]);
+    ASSERT_EQ(0u, content_index->m_AssetBlockOffset[0]);
+    ASSERT_EQ(32001u, content_index->m_AssetBlockOffset[1]);
+    ASSERT_EQ(64002u, content_index->m_AssetBlockOffset[2]);
+    ASSERT_EQ(0u, content_index->m_AssetBlockOffset[3]);
+    ASSERT_EQ(32003u, content_index->m_AssetBlockOffset[4]);
 
-	free(content_index);
+    free(content_index);
 }
 
 TEST(Longtail, TestDiffHashes)
@@ -2147,6 +2313,7 @@ TEST(Longtail, TestReconstructVersion)
         asset_sizes);
 
     ReconstructVersion(
+        &gTroveStorageAPI,
         0,
         content_index,
         version_index,
