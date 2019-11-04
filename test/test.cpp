@@ -1343,8 +1343,16 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
     char tmp_block_name[64];
     sprintf(tmp_block_name, "%s.tmp", block_name);
     char* tmp_block_path = (char*)storage_api->ConcatPath(content_folder, tmp_block_name);
-    StorageAPI::HOpenFile block_file_handle = storage_api->OpenWriteFile(tmp_block_path);
-    uint32_t write_offset = 0;
+
+    uint32_t block_data_size = 0;
+    for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
+    {
+        uint32_t asset_size = content_index->m_AssetLength[asset_index];
+        block_data_size += asset_size;
+    }
+
+    char* write_buffer = (char*)malloc(block_data_size);
+    char* write_ptr = write_buffer;
 
     for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
     {
@@ -1357,48 +1365,67 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         if (!file_handle || (storage_api->GetSize(file_handle) != asset_size))
         {
             storage_api->CloseRead(file_handle);
-            storage_api->CloseWrite(block_file_handle);
             nadir::AtomicAdd32(job->m_PendingCount, -1);
             return BIKESHED_TASK_RESULT_COMPLETE;
         }
         //printf("Storing `%s` in block `%s` at offset %u, size %u\n", asset_path, block_name, (uint32_t)write_offset, (uint32_t)asset_size);
-        void* buffer = malloc(asset_size);
-        storage_api->Read(file_handle, 0, asset_size, buffer);
-        storage_api->Write(block_file_handle, write_offset, asset_size, buffer);
-        write_offset += asset_size;
+        storage_api->Read(file_handle, 0, asset_size, write_ptr);
+        write_ptr += sizeof(asset_size);
 
-        free(buffer);
-        buffer = 0;
         storage_api->CloseRead(file_handle);
         free((char*)full_path);
         full_path = 0;
     }
-    free(block_name);
 
-    for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
+    const size_t max_dst_size = Lizard_compressBound((int)block_data_size);
+    char* compressed_buffer = (char*)malloc((sizeof(uint32_t) * 2) + max_dst_size);
+    ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
+
+    int compressed_size = Lizard_compress((const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], (int)block_data_size, (int)max_dst_size, 44);//LIZARD_MAX_CLEVEL);
+    free(write_buffer);
+    if (compressed_size > 0)
     {
-        TLongtail_Hash asset_content_hash = content_index->m_AssetContentHash[asset_index];
-        storage_api->Write(block_file_handle, write_offset, sizeof(TLongtail_Hash), &asset_content_hash);
-        write_offset += sizeof(TLongtail_Hash);
+        ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
 
-        uint32_t asset_size = content_index->m_AssetLength[asset_index];
-        storage_api->Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_size);
+        StorageAPI::HOpenFile block_file_handle = storage_api->OpenWriteFile(tmp_block_path);
+        storage_api->Write(block_file_handle, 0, (sizeof(uint32_t) * 2) + compressed_size, compressed_buffer);
+        free(compressed_buffer);
+        uint64_t write_offset = (sizeof(uint32_t) * 2) + compressed_size;
+
+        uint32_t aligned_size = (((write_offset + 15) / 16) * 16);
+        uint32_t padding = aligned_size - write_offset;
+        if (padding)
+        {
+            storage_api->Write(block_file_handle, write_offset, padding, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0");
+            write_offset = aligned_size;
+        }
+
+        for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
+        {
+            TLongtail_Hash asset_content_hash = content_index->m_AssetContentHash[asset_index];
+            storage_api->Write(block_file_handle, write_offset, sizeof(TLongtail_Hash), &asset_content_hash);
+            write_offset += sizeof(TLongtail_Hash);
+
+            uint32_t asset_size = content_index->m_AssetLength[asset_index];
+            storage_api->Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_size);
+            write_offset += sizeof(uint32_t);
+        }
+
+        storage_api->Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
         write_offset += sizeof(uint32_t);
+        storage_api->CloseWrite(block_file_handle);
+
+        int success = storage_api->MoveFile(tmp_block_path, block_path);
+        job->m_Success = success;
     }
-
-    storage_api->Write(block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
-    write_offset += sizeof(uint32_t);
-    storage_api->CloseWrite(block_file_handle);
-
-    int success = storage_api->MoveFile(tmp_block_path, block_path);
+    free(block_name);
+    block_name = 0;
 
     free((char*)block_path);
     block_path = 0;
 
     free((char*)tmp_block_path);
     tmp_block_path = 0;
-
-    job->m_Success = success;
 
     nadir::AtomicAdd32(job->m_PendingCount, -1);
     return BIKESHED_TASK_RESULT_COMPLETE;
@@ -1424,6 +1451,11 @@ int WriteContentBlocks(
     for (uint32_t block_index = 0; block_index < block_count; ++block_index)
     {
         TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
+        uint32_t asset_count = 1;
+        while (content_index->m_AssetBlockIndex[block_start_asset_index + asset_count] == block_index)
+        {
+            ++asset_count;
+        }
 
         char* block_name = GetBlockName(block_hash);
         char file_name[64];
@@ -1435,13 +1467,8 @@ int WriteContentBlocks(
             write_block_jobs[block_index] = 0;
             free((char*)block_path);
             block_path = 0;
+            block_start_asset_index += asset_count;
             continue;
-        }
-
-        uint32_t asset_count = 1;
-        while (content_index->m_AssetBlockIndex[block_start_asset_index + asset_count] == block_index)
-        {
-            ++asset_count;
         }
 
         WriteBlockJob* job = CreateWriteContentBlockJob();
@@ -1736,7 +1763,29 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
     StorageAPI::HOpenFile block_file_handle = job->m_StorageAPI->OpenReadFile(job->m_BlockPath);
     if(block_file_handle)
     {
-        uint8_t batch_data[65536];
+        uint64_t compressed_block_size = job->m_StorageAPI->GetSize(block_file_handle);
+        char* compressed_block_content = (char*)malloc(job->m_StorageAPI->GetSize(block_file_handle));
+        if (!job->m_StorageAPI->Read(block_file_handle, 0, compressed_block_size, compressed_block_content))
+        {
+            job->m_StorageAPI->CloseRead(block_file_handle);
+            free(compressed_block_content);
+            nadir::AtomicAdd32(job->m_PendingCount, -1);
+            return BIKESHED_TASK_RESULT_COMPLETE;
+        }
+        uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
+        uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
+        char* decompressed_buffer = (char*)malloc(uncompressed_size);
+        int result = Lizard_decompress_safe(&compressed_block_content[sizeof(uint32_t) * 2], decompressed_buffer, (int)compressed_size, uncompressed_size);
+        free(compressed_block_content);
+        job->m_StorageAPI->CloseRead(block_file_handle);
+        block_file_handle = 0;
+        if (result < (int)uncompressed_size)
+        {
+            free(decompressed_buffer);
+            decompressed_buffer = 0;
+            nadir::AtomicAdd32(job->m_PendingCount, -1);
+            return BIKESHED_TASK_RESULT_COMPLETE;
+        }
 
         for (uint32_t asset_index = 0; asset_index < job->m_AssetCount; ++asset_index)
         {
@@ -1747,28 +1796,31 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
             job->m_StorageAPI->EnsureParentPathExists(asset_path);
 
             StorageAPI::HOpenFile asset_file_handle = job->m_StorageAPI->OpenWriteFile(asset_path);
-            if(asset_file_handle)
+            if(!asset_file_handle)
             {
-                uint32_t asset_length = job->m_AssetLengths[asset_index];
-                uint64_t read_offset = job->m_AssetBlockOffsets[asset_index];
-                uint64_t write_offset = 0;
-
-                while (write_offset != asset_length)
-                {
-                    uint64_t left = asset_length - write_offset;
-                    uint64_t len = left < sizeof(batch_data) ? left : sizeof(batch_data);
-                    bool read_ok = job->m_StorageAPI->Read(block_file_handle, read_offset, len, batch_data);
-                    assert(read_ok);
-                    bool write_ok = job->m_StorageAPI->Write(asset_file_handle, write_offset, len, batch_data);
-                    read_offset += len;
-                    write_offset += len;
-                }
+                free(decompressed_buffer);
+                decompressed_buffer = 0;
+                nadir::AtomicAdd32(job->m_PendingCount, -1);
+                return BIKESHED_TASK_RESULT_COMPLETE;
+            }
+            uint32_t asset_length = job->m_AssetLengths[asset_index];
+            uint64_t read_offset = job->m_AssetBlockOffsets[asset_index];
+            uint64_t write_offset = 0;
+            bool write_ok = job->m_StorageAPI->Write(asset_file_handle, write_offset, asset_length, &decompressed_buffer[read_offset]);
+            if (!write_ok)
+            {
+                free(decompressed_buffer);
+                decompressed_buffer = 0;
+                nadir::AtomicAdd32(job->m_PendingCount, -1);
+                return BIKESHED_TASK_RESULT_COMPLETE;
             }
             job->m_StorageAPI->CloseWrite(asset_file_handle);
             asset_file_handle = 0;
         }
         job->m_StorageAPI->CloseRead(block_file_handle);
         block_file_handle = 0;
+        free(decompressed_buffer);
+        decompressed_buffer = 0;
     }
     job->m_Success = 1;
     nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2510,16 +2562,16 @@ TEST(Longtail, TestReconstructVersion)
     }*/
 
     const char* asset_paths[5] = {
-        "fifth_",
-        "fourth",
-        "third_",
+        "first_",
         "second",
-        "first_"
+        "third_",
+        "fourth",
+        "fifth_"
     };
 
     TLongtail_Hash asset_path_hashes[5];// = {GetPathHash("10"), GetPathHash("20"), GetPathHash("30"), GetPathHash("40"), GetPathHash("50")};
     TLongtail_Hash asset_content_hashes[5];// = { 1, 2, 3, 4, 5};
-    const uint32_t asset_sizes[5] = {32001, 32001, 32002, 32003, 32003};
+    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
     InMemStorageAPI::Init();
     StorageAPI* storage_api = &gInMemStorageAPI;
     for (uint32_t i = 0; i < 5; ++i)
@@ -2531,7 +2583,7 @@ TEST(Longtail, TestReconstructVersion)
         char* data = (char*)malloc(asset_sizes[i]);
         for (uint32_t d = 0; d < asset_sizes[i]; ++d)
         {
-            data[d] = (char)i;
+            data[d] = (char)(i + 1);
         }
         storage_api->Write(f, 0, asset_sizes[i], data);
         storage_api->CloseWrite(f);
@@ -2602,9 +2654,9 @@ TEST(Longtail, TestReconstructVersion)
         storage_api->Read(f, 0, asset_sizes[i], data);
         for (uint32_t d = 0; d < asset_sizes[i]; ++d)
         {
-            if ((char)i != data[d])
+            if ((char)(i + 1) != data[d])
             {
-                ASSERT_EQ((char)i, data[d]);
+                ASSERT_EQ((char)(i + 1), data[d]);
             }
         }
         storage_api->CloseRead(f);
