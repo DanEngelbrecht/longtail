@@ -1370,7 +1370,7 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         }
         //printf("Storing `%s` in block `%s` at offset %u, size %u\n", asset_path, block_name, (uint32_t)write_offset, (uint32_t)asset_size);
         storage_api->Read(file_handle, 0, asset_size, write_ptr);
-        write_ptr += sizeof(asset_size);
+        write_ptr += asset_size;
 
         storage_api->CloseRead(file_handle);
         free((char*)full_path);
