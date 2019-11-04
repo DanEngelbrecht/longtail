@@ -1778,13 +1778,13 @@ void LifelikeTest()
     const char* local_path_2 = HOME "\\local\\" VERSION2_FOLDER;
     const char* version_index_path_2 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
 
-    const char* local_content_path = "C:\\Temp\\local_content";//HOME "\\local_content";
+    const char* local_content_path = HOME "\\local_content";//HOME "\\local_content";
     const char* local_content_index_path = HOME "\\local.lci";
 
     const char* remote_content_path = HOME "\\remote_content";
     const char* remote_content_index_path = HOME "\\remote.lci";
 
-    const char* remote_path_1 = "C:\\Temp\\remote";// HOME "\\remote\\" VERSION1_FOLDER;
+    const char* remote_path_1 = HOME "\\remote\\" VERSION1_FOLDER;
     const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
 
     VersionIndex* version1 = CreateVersionIndex(shed, local_path_1);
