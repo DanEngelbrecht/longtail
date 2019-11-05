@@ -344,7 +344,136 @@ StorageAPI gTroveStorageAPI = {
     TroveStorageAPI::GetDirectoryName
 };
 
+struct CompressionAPI
+{
+    typedef struct CompressionContext* HCompressionContext;
+    typedef struct DecompressionContext* HDecompressionContext;
+    typedef struct Settings* HSettings;
+    HSettings (*GetDefaultSettings)();
+    HSettings (*GetMaxCompressionSetting)();
 
+    HCompressionContext (*CreateCompressionContext)(HSettings settings);
+    size_t (*GetMaxCompressedSize)(HCompressionContext context, size_t size);
+    size_t (*Compress)(HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size);
+    void (*DeleteCompressionContext)(HCompressionContext context);
+
+    HDecompressionContext (*CreateDecompressionContext)();
+    size_t (*Decompress)(HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size);
+    void (*DeleteDecompressionContext)(HDecompressionContext context);
+};
+
+struct LizardCompressionAPI
+{
+    static int DefaultCompressionSetting;
+    static int MaxCompressionSetting;
+    static CompressionAPI::HSettings GetDefaultSettings()
+    {
+        return (CompressionAPI::HSettings)&DefaultCompressionSetting;
+    }
+    static CompressionAPI::HSettings GetMaxCompressionSetting()
+    {
+        return (CompressionAPI::HSettings)&MaxCompressionSetting;
+    }
+    static CompressionAPI::HCompressionContext CreateCompressionContext(CompressionAPI::HSettings settings)
+    {
+        return (CompressionAPI::HCompressionContext)settings;
+    }
+    static size_t GetMaxCompressedSize(CompressionAPI::HCompressionContext , size_t size)
+    {
+        return (size_t)Lizard_compressBound((int)size);
+    }
+    static size_t Compress(CompressionAPI::HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
+    {
+        int compression_setting = *(int*)context;
+        int compressed_size = Lizard_compress(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
+        return (size_t)(compressed_size >= 0 ? compressed_size : 0);
+    }
+    static void DeleteCompressionContext(CompressionAPI::HCompressionContext)
+    {
+    }
+    static CompressionAPI::HDecompressionContext CreateDecompressionContext()
+    {
+        return (CompressionAPI::HDecompressionContext)GetDefaultSettings();
+    }
+    static size_t Decompress(CompressionAPI::HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size)
+    {
+        int result = Lizard_decompress_safe(compressed, uncompressed, (int)compressed_size, (int)max_uncompressed_size);
+        return (size_t)(result >= 0 ? result : 0);
+    }
+    static void DeleteDecompressionContext(CompressionAPI::HDecompressionContext)
+    {
+    }
+};
+
+int LizardCompressionAPI::DefaultCompressionSetting = 44;
+int LizardCompressionAPI::MaxCompressionSetting = LIZARD_MAX_CLEVEL;
+
+CompressionAPI gLizardCompressionAPI = {
+    LizardCompressionAPI::GetDefaultSettings,
+    LizardCompressionAPI::GetMaxCompressionSetting,
+    LizardCompressionAPI::CreateCompressionContext,
+    LizardCompressionAPI::GetMaxCompressedSize,
+    LizardCompressionAPI::Compress,
+    LizardCompressionAPI::DeleteCompressionContext,
+    LizardCompressionAPI::CreateDecompressionContext,
+    LizardCompressionAPI::Decompress,
+    LizardCompressionAPI::DeleteDecompressionContext
+};
+
+struct StoreCompressionAPI
+{
+    static int DefaultCompressionSetting;
+    static CompressionAPI::HSettings GetDefaultSettings()
+    {
+        return (CompressionAPI::HSettings)&DefaultCompressionSetting;
+    }
+    static CompressionAPI::HSettings GetMaxCompressionSetting()
+    {
+        return GetDefaultSettings();
+    }
+    static CompressionAPI::HCompressionContext CreateCompressionContext(CompressionAPI::HSettings settings)
+    {
+        return (CompressionAPI::HCompressionContext)settings;
+    }
+    static size_t GetMaxCompressedSize(CompressionAPI::HCompressionContext , size_t size)
+    {
+        return size;
+    }
+    static size_t Compress(CompressionAPI::HCompressionContext , const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
+    {
+        memmove(compressed, uncompressed, uncompressed_size);
+        return uncompressed_size;
+    }
+    static void DeleteCompressionContext(CompressionAPI::HCompressionContext)
+    {
+    }
+    static CompressionAPI::HDecompressionContext CreateDecompressionContext()
+    {
+        return (CompressionAPI::HDecompressionContext)GetDefaultSettings();
+    }
+    static size_t Decompress(CompressionAPI::HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size)
+    {
+        memmove(uncompressed, compressed, compressed_size);
+        return compressed_size;
+    }
+    static void DeleteDecompressionContext(CompressionAPI::HDecompressionContext)
+    {
+    }
+};
+
+int StoreCompressionAPI::DefaultCompressionSetting = 0;
+
+CompressionAPI gStoreCompressionAPI = {
+    StoreCompressionAPI::GetDefaultSettings,
+    StoreCompressionAPI::GetMaxCompressionSetting,
+    StoreCompressionAPI::CreateCompressionContext,
+    StoreCompressionAPI::GetMaxCompressedSize,
+    StoreCompressionAPI::Compress,
+    StoreCompressionAPI::DeleteCompressionContext,
+    StoreCompressionAPI::CreateDecompressionContext,
+    StoreCompressionAPI::Decompress,
+    StoreCompressionAPI::DeleteDecompressionContext
+};
 
 struct AssetFolder
 {
@@ -1306,6 +1435,7 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
 struct WriteBlockJob
 {
     StorageAPI* m_StorageAPI;
+    CompressionAPI* m_CompressionAPI;
     const char* m_ContentFolder;
     const char* m_AssetsFolder;
     const ContentIndex* m_ContentIndex;
@@ -1327,6 +1457,7 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
 {
     WriteBlockJob* job = (WriteBlockJob*)context;
     StorageAPI* storage_api = job->m_StorageAPI;
+    CompressionAPI* compression_api = job->m_CompressionAPI;
 
     const ContentIndex* content_index = job->m_ContentIndex;
     const char* content_folder = job->m_ContentFolder;
@@ -1377,11 +1508,13 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         full_path = 0;
     }
 
-    const size_t max_dst_size = Lizard_compressBound((int)block_data_size);
+    CompressionAPI::HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api->GetDefaultSettings());
+    const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_context, block_data_size);
     char* compressed_buffer = (char*)malloc((sizeof(uint32_t) * 2) + max_dst_size);
     ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
 
-    int compressed_size = Lizard_compress((const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], (int)block_data_size, (int)max_dst_size, 44);//LIZARD_MAX_CLEVEL);
+    size_t compressed_size = compression_api->Compress(compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
+    compression_api->DeleteCompressionContext(compression_context);
     free(write_buffer);
     if (compressed_size > 0)
     {
@@ -1433,6 +1566,7 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
 
 int WriteContentBlocks(
     StorageAPI* storage_api,
+    CompressionAPI* compression_api,
     Bikeshed shed,
     ContentIndex* content_index,
     PathLookup* asset_content_hash_to_path,
@@ -1474,6 +1608,7 @@ int WriteContentBlocks(
         WriteBlockJob* job = CreateWriteContentBlockJob();
         write_block_jobs[block_index] = job;
         job->m_StorageAPI = storage_api;
+        job->m_CompressionAPI = compression_api;
         job->m_ContentFolder = content_folder;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
@@ -1607,6 +1742,48 @@ ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char
     return diff_content_index;
 }
 
+ContentIndex* MergeContentIndex(ContentIndex* local_content_index, ContentIndex* remote_content_index)
+{
+    uint64_t local_block_count = *local_content_index->m_BlockCount;
+    uint64_t remote_block_count = *remote_content_index->m_BlockCount;
+    uint64_t local_asset_count = *local_content_index->m_AssetCount;
+    uint64_t remote_asset_count = *remote_content_index->m_AssetCount;
+    uint64_t block_count = local_block_count + remote_block_count;
+    uint64_t asset_count = local_asset_count + remote_asset_count;
+    size_t content_index_size = GetContentIndexSize(block_count, asset_count);
+    ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
+
+    content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex)];
+    content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
+    *content_index->m_BlockCount = block_count;
+    *content_index->m_AssetCount = asset_count;
+    InitContentIndex(content_index);
+
+    for (uint64_t b = 0; b < local_block_count; ++b)
+    {
+        content_index->m_BlockHash[b] = local_content_index->m_BlockHash[b];
+    }
+    for (uint64_t b = 0; b < remote_block_count; ++b)
+    {
+        content_index->m_BlockHash[local_block_count + b] = remote_content_index->m_BlockHash[b];
+    }
+    for (uint64_t a = 0; a < local_asset_count; ++a)
+    {
+        content_index->m_AssetContentHash[a] = local_content_index->m_AssetContentHash[a];
+        content_index->m_AssetBlockIndex[a] = local_content_index->m_AssetBlockIndex[a];
+        content_index->m_AssetBlockOffset[a] = local_content_index->m_AssetBlockOffset[a];
+        content_index->m_AssetLength[a] = local_content_index->m_AssetLength[a];
+    }
+    for (uint64_t a = 0; a < remote_asset_count; ++a)
+    {
+        content_index->m_AssetContentHash[local_asset_count + a] = remote_content_index->m_AssetContentHash[a];
+        content_index->m_AssetBlockIndex[local_asset_count + a] = remote_content_index->m_AssetBlockIndex[a];
+        content_index->m_AssetBlockOffset[local_asset_count + a] = remote_content_index->m_AssetBlockOffset[a];
+        content_index->m_AssetLength[local_asset_count + a] = remote_content_index->m_AssetLength[a];
+    }
+    return content_index;
+}
+
 ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t asset_count, const TLongtail_Hash* asset_hashes, uint64_t* out_missing_asset_count, uint64_t* out_missing_assets)
 {
     uint64_t found_asset_count = 0;
@@ -1727,6 +1904,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
 struct ReconstructJob
 {
     StorageAPI* m_StorageAPI;
+    CompressionAPI* m_CompressionAPI;
     char* m_BlockPath;
     char** m_AssetPaths;
     uint32_t m_AssetCount;
@@ -1760,74 +1938,82 @@ ReconstructJob* CreateReconstructJob(uint32_t asset_count)
 static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
 {
     ReconstructJob* job = (ReconstructJob*)context;
-    StorageAPI::HOpenFile block_file_handle = job->m_StorageAPI->OpenReadFile(job->m_BlockPath);
-    if(block_file_handle)
+    StorageAPI* storage_api = job->m_StorageAPI;
+    CompressionAPI* compression_api = job->m_CompressionAPI;
+    StorageAPI::HOpenFile block_file_handle = storage_api->OpenReadFile(job->m_BlockPath);
+	if (!block_file_handle)
+	{
+		return BIKESHED_TASK_RESULT_COMPLETE;
+	}
+
+	uint64_t compressed_block_size = storage_api->GetSize(block_file_handle);
+    char* compressed_block_content = (char*)malloc(storage_api->GetSize(block_file_handle));
+    if (!storage_api->Read(block_file_handle, 0, compressed_block_size, compressed_block_content))
     {
-        uint64_t compressed_block_size = job->m_StorageAPI->GetSize(block_file_handle);
-        char* compressed_block_content = (char*)malloc(job->m_StorageAPI->GetSize(block_file_handle));
-        if (!job->m_StorageAPI->Read(block_file_handle, 0, compressed_block_size, compressed_block_content))
-        {
-            job->m_StorageAPI->CloseRead(block_file_handle);
-            free(compressed_block_content);
-            nadir::AtomicAdd32(job->m_PendingCount, -1);
-            return BIKESHED_TASK_RESULT_COMPLETE;
-        }
-        uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
-        uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
-        char* decompressed_buffer = (char*)malloc(uncompressed_size);
-        int result = Lizard_decompress_safe(&compressed_block_content[sizeof(uint32_t) * 2], decompressed_buffer, (int)compressed_size, uncompressed_size);
+        storage_api->CloseRead(block_file_handle);
         free(compressed_block_content);
-        job->m_StorageAPI->CloseRead(block_file_handle);
-        block_file_handle = 0;
-        if (result < (int)uncompressed_size)
+        nadir::AtomicAdd32(job->m_PendingCount, -1);
+        return BIKESHED_TASK_RESULT_COMPLETE;
+    }
+    uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
+    uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
+    char* decompressed_buffer = (char*)malloc(uncompressed_size);
+    CompressionAPI::HDecompressionContext compression_context = compression_api->CreateDecompressionContext();
+    size_t result = compression_api->Decompress(compression_context, &compressed_block_content[sizeof(uint32_t) * 2], decompressed_buffer, compressed_size, uncompressed_size);
+    compression_api->DeleteDecompressionContext(compression_context);
+    free(compressed_block_content);
+    storage_api->CloseRead(block_file_handle);
+    block_file_handle = 0;
+    if (result < uncompressed_size)
+    {
+        free(decompressed_buffer);
+        decompressed_buffer = 0;
+        nadir::AtomicAdd32(job->m_PendingCount, -1);
+        return BIKESHED_TASK_RESULT_COMPLETE;
+    }
+
+    for (uint32_t asset_index = 0; asset_index < job->m_AssetCount; ++asset_index)
+    {
+        char* asset_path = job->m_AssetPaths[asset_index];
+
+        //printf("Recontructing `%s` from block `%s` at offset %u, size %u\n", asset_path, job->m_BlockPath, (uint32_t)job->m_AssetBlockOffsets[asset_index], (uint32_t)job->m_AssetLengths[asset_index]);
+
+        storage_api->EnsureParentPathExists(asset_path);
+
+        // TODO: This failed? for "C:/Temp/longtail/remote/gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor/Engine/Content/Internationalization/icudt53l/coll/ucadata.icu"
+        StorageAPI::HOpenFile asset_file_handle = storage_api->OpenWriteFile(asset_path);
+        if(!asset_file_handle)
         {
             free(decompressed_buffer);
             decompressed_buffer = 0;
             nadir::AtomicAdd32(job->m_PendingCount, -1);
             return BIKESHED_TASK_RESULT_COMPLETE;
         }
-
-        for (uint32_t asset_index = 0; asset_index < job->m_AssetCount; ++asset_index)
+        uint32_t asset_length = job->m_AssetLengths[asset_index];
+        uint64_t read_offset = job->m_AssetBlockOffsets[asset_index];
+        uint64_t write_offset = 0;
+        bool write_ok = storage_api->Write(asset_file_handle, write_offset, asset_length, &decompressed_buffer[read_offset]);
+        if (!write_ok)
         {
-            char* asset_path = job->m_AssetPaths[asset_index];
-
-            //printf("Recontructing `%s` from block `%s` at offset %u, size %u\n", asset_path, job->m_BlockPath, (uint32_t)job->m_AssetBlockOffsets[asset_index], (uint32_t)job->m_AssetLengths[asset_index]);
-
-            job->m_StorageAPI->EnsureParentPathExists(asset_path);
-
-            StorageAPI::HOpenFile asset_file_handle = job->m_StorageAPI->OpenWriteFile(asset_path);
-            if(!asset_file_handle)
-            {
-                free(decompressed_buffer);
-                decompressed_buffer = 0;
-                nadir::AtomicAdd32(job->m_PendingCount, -1);
-                return BIKESHED_TASK_RESULT_COMPLETE;
-            }
-            uint32_t asset_length = job->m_AssetLengths[asset_index];
-            uint64_t read_offset = job->m_AssetBlockOffsets[asset_index];
-            uint64_t write_offset = 0;
-            bool write_ok = job->m_StorageAPI->Write(asset_file_handle, write_offset, asset_length, &decompressed_buffer[read_offset]);
-            if (!write_ok)
-            {
-                free(decompressed_buffer);
-                decompressed_buffer = 0;
-                nadir::AtomicAdd32(job->m_PendingCount, -1);
-                return BIKESHED_TASK_RESULT_COMPLETE;
-            }
-            job->m_StorageAPI->CloseWrite(asset_file_handle);
-            asset_file_handle = 0;
+            free(decompressed_buffer);
+            decompressed_buffer = 0;
+            nadir::AtomicAdd32(job->m_PendingCount, -1);
+            return BIKESHED_TASK_RESULT_COMPLETE;
         }
-        job->m_StorageAPI->CloseRead(block_file_handle);
-        block_file_handle = 0;
-        free(decompressed_buffer);
-        decompressed_buffer = 0;
+        storage_api->CloseWrite(asset_file_handle);
+        asset_file_handle = 0;
     }
-    job->m_Success = 1;
+    storage_api->CloseRead(block_file_handle);
+    block_file_handle = 0;
+    free(decompressed_buffer);
+    decompressed_buffer = 0;
+
+	job->m_Success = 1;
     nadir::AtomicAdd32(job->m_PendingCount, -1);
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-int ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
+int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api, Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
 {
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
     jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
@@ -1844,7 +2030,13 @@ int ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentInde
     for (uint64_t i = 0; i < asset_count; ++i)
     {
         asset_order[i] = i;
-        version_index_to_content_index[i] = *content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
+		uint32_t* asset_index_ptr = content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
+		if (!asset_index_ptr)
+		{
+			free(content_hash_to_content_asset_index_mem);
+			return 0;
+		}
+        version_index_to_content_index[i] = *asset_index_ptr;
     }
 
     free(content_hash_to_content_asset_index_mem);
@@ -1916,6 +2108,7 @@ int ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentInde
         ReconstructJob* job = CreateReconstructJob(asset_count_from_block);
         reconstruct_jobs[job_count++] = job;
         job->m_StorageAPI = storage_api;
+        job->m_CompressionAPI = compression_api;
         job->m_PendingCount = &pending_job_count;
         job->m_Success = 0;
 
@@ -1987,14 +2180,14 @@ int ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentInde
     while (job_count--)
     {
         ReconstructJob* job = reconstruct_jobs[job_count];
-        free(job->m_BlockPath);
+		if (!job->m_Success)
+		{
+			success = 0;
+			//printf("Failed reconstructing `%s`\n", job->m_AssetPaths[i]);
+		}
+		free(job->m_BlockPath);
         for (uint32_t i = 0; i < job->m_AssetCount; ++i)
         {
-            if (!job->m_Success)
-            {
-                success = 0;
-                //printf("Failed reconstructing `%s`\n", job->m_AssetPaths[i]);
-            }
             free(job->m_AssetPaths[i]);
         }
         free(reconstruct_jobs[job_count]);
@@ -2009,7 +2202,7 @@ int ReconstructVersion(StorageAPI* storage_api, Bikeshed shed, const ContentInde
 
 void LifelikeTest()
 {
-    if (1) return;
+    if (0) return;
 
     Jobs::ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
@@ -2024,7 +2217,7 @@ void LifelikeTest()
     }
 
 //    #define HOME "test\\data"
-    #define HOME "D:\\Temp\\longtail"
+    #define HOME "C:\\Temp\\longtail"
 
     #define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
     #define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
@@ -2050,10 +2243,12 @@ void LifelikeTest()
     const char* remote_path_1 = HOME "\\remote\\" VERSION1_FOLDER;
     const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
 
+    printf("Indexing `%s`...\n", local_path_1);
     VersionIndex* version1 = CreateVersionIndex(&gTroveStorageAPI, shed, local_path_1);
     WriteVersionIndex(&gTroveStorageAPI, version1, version_index_path_1);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
+    printf("Creating local content index...\n");
     ContentIndex* local_content_index = CreateContentIndex(
         local_path_1,
         *version1->m_AssetCount,
@@ -2065,6 +2260,7 @@ void LifelikeTest()
         GetContentTag,
         0);
 
+    printf("Writing local content index...\n");
     WriteContentIndex(&gTroveStorageAPI, local_content_index, local_content_index_path);
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
@@ -2073,7 +2269,8 @@ void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
         PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
         WriteContentBlocks(
-            &gTroveStorageAPI, 
+            &gTroveStorageAPI,
+            &gLizardCompressionAPI,
             shed,
             local_content_index,
             path_lookup,
@@ -2085,95 +2282,125 @@ void LifelikeTest()
     }
 
     printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-    ReconstructVersion(&gTroveStorageAPI, shed, local_content_index, version1, local_content_path, remote_path_1);
+    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI, &gLizardCompressionAPI, shed, local_content_index, version1, local_content_path, remote_path_1));
+    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
-    free(local_content_index);
-    local_content_index = 0;
-    free(version1);
-    version1 = 0;
-
-    return;
-
-
+    printf("Indexing `%s`...\n", local_path_2);
     VersionIndex* version2 = CreateVersionIndex(&gTroveStorageAPI, shed, local_path_2);
-    WriteVersionIndex(&gTroveStorageAPI, version2, version_index_path_2);
+    ASSERT_NE((VersionIndex*)0, version2);
+    ASSERT_EQ(1, WriteVersionIndex(&gTroveStorageAPI, version2, version_index_path_2));
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
-    free(version2);
-    version2 = 0;
     
-    VersionIndex* version1b = ReadVersionIndex(&gTroveStorageAPI, version_index_path_1);
-    printf("%" PRIu64 " assets in index `%s`\n", *version1b->m_AssetCount, version_index_path_1);
-    VersionIndex* version2b = ReadVersionIndex(&gTroveStorageAPI, version_index_path_2);
-    printf("%" PRIu64 " assets in index `%s`\n", *version2b->m_AssetCount, version_index_path_2);
-
-    ContentIndex* local_content_indexb = ReadContentIndex(&gTroveStorageAPI, local_content_index_path);
-    printf("%" PRIu64 " blocks in index `%s`\n", *local_content_indexb->m_BlockCount, local_content_index_path);
-
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
-    ContentIndex* missing_content = CreateMissingContent(local_content_indexb, local_path_2, version2b, GetContentTag);
+    // TODO: Broken?
+    ContentIndex* missing_content = CreateMissingContent(local_content_index, local_path_2, version2, GetContentTag);
+    ASSERT_NE((ContentIndex*)0, missing_content);
+    printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
 
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version2b, 0);
-        WriteContentBlocks(
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
+        ASSERT_NE((PathLookup*)0, path_lookup);
+        // TODO: Broken?
+        ASSERT_EQ(1, WriteContentBlocks(
             &gTroveStorageAPI, 
+            &gLizardCompressionAPI,
             shed,
             missing_content,
             path_lookup,
             local_path_2,
-            local_content_path);
+			local_content_path));
 
         free(path_lookup);
         path_lookup = 0;
     }
 
-    printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
+    if (1)
+    {
+        // Write this to disk for reference to see how big the diff is...
+        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
+        ASSERT_NE((PathLookup*)0, path_lookup);
+        ASSERT_EQ(1, WriteContentBlocks(
+            &gTroveStorageAPI, 
+            &gLizardCompressionAPI,
+            shed,
+            missing_content,
+            path_lookup,
+            local_path_2,
+			remote_content_path));
 
-    free(missing_content);
-    missing_content = 0;
+        free(path_lookup);
+        path_lookup = 0;
+    }
 
-    ContentIndex* remote_content_index = CreateContentIndex(
-        local_path_2,
-        *version2b->m_AssetCount,
-        version2b->m_AssetContentHash,
-        version2b->m_PathHash,
-        version2b->m_AssetSize,
-        version2b->m_NameOffset,
-        version2b->m_NameData,
-        GetContentTag,
-        0);
+//    ContentIndex* remote_content_index = CreateContentIndex(
+//        local_path_2,
+//        *version2->m_AssetCount,
+//        version2->m_AssetContentHash,
+//        version2->m_PathHash,
+//        version2->m_AssetSize,
+//        version2->m_NameOffset,
+//        version2->m_NameData,
+//        GetContentTag,
+//        0);
 
-    uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2b->m_AssetCount);
-    uint64_t missing_asset_count = GetMissingAssets(local_content_indexb, version2b, missing_assets);
+//    uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2->m_AssetCount);
+//    uint64_t missing_asset_count = GetMissingAssets(local_content_index, version2, missing_assets);
+//
+//    uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
+//    uint64_t remaining_missing_asset_count = 0;
+//    ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
+//    printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
 
-    uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
-    uint64_t remaining_missing_asset_count = 0;
-    ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
-    printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
+//    // Copy existing blocks
+//    for (uint64_t block_index = 0; block_index < *missing_content->m_BlockCount; ++block_index)
+//    {
+//        TLongtail_Hash block_hash = missing_content->m_BlockHash[block_index];
+//        char* block_name = GetBlockName(block_hash);
+//        char block_file_name[64];
+//        sprintf(block_file_name, "%s.lrb", block_name);
+//        char* source_path = gTroveStorageAPI.ConcatPath(remote_content_path, block_file_name);
+//        StorageAPI::HOpenFile s = gTroveStorageAPI.OpenReadFile(source_path);
+//        char* target_path = gTroveStorageAPI.ConcatPath(local_content_path, block_file_name);
+//        StorageAPI::HOpenFile t = gTroveStorageAPI.OpenWriteFile(target_path);
+//        uint64_t size = gTroveStorageAPI.GetSize(s);
+//        char* buffer = (char*)malloc(size);
+//        gTroveStorageAPI.Read(s, 0, size, buffer);
+//        gTroveStorageAPI.Write(t, 0, size, buffer);
+//        free(buffer);
+//        gTroveStorageAPI.CloseWrite(t);
+//        gTroveStorageAPI.CloseRead(s);
+//    }
 
-    // Copy existing blocks
+    // TODO: Broken?
+	ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
+    ASSERT_NE((ContentIndex*)0, merged_local_content);
+	free(missing_content);
+	missing_content = 0;
+	free(local_content_index);
+	local_content_index = 0;
 
-    // Merge existing_blocks into local_content_indexb!
+    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
+    // TODO: Broken? Resulting content is corrupted!
+    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI, &gLizardCompressionAPI, shed, merged_local_content, version2, local_content_path, remote_path_2));
+    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
-    //     ReconstructVersion(local_content_indexb, version2b, const char* content_path, const char* version_path)
+//    free(existing_blocks);
+//    existing_blocks = 0;
+//    free(remaining_missing_assets);
+//    remaining_missing_assets = 0;
+//    free(missing_assets);
+//    missing_assets = 0;
+//    free(remote_content_index);
+//    remote_content_index = 0;
 
-    ReconstructVersion(&gTroveStorageAPI, shed, local_content_indexb, version1b, local_content_path, local_path_1);
+	free(merged_local_content);
+	merged_local_content = 0;
 
-
-    free(existing_blocks);
-    existing_blocks = 0;
-    free(remaining_missing_assets);
-    remaining_missing_assets = 0;
-    free(missing_assets);
-    missing_assets = 0;
-    free(remote_content_index);
-    remote_content_index = 0;
-
-    free(version1b);
-    version1b = 0;
-    free(version2b);
-    version2b = 0;
+    free(version1);
+    version1 = 0;
 
     nadir::AtomicAdd32(&stop, 1);
     Jobs::ReadyCallback::Ready(&ready_callback.cb, 0, WORKER_COUNT);
@@ -2626,6 +2853,7 @@ TEST(Longtail, TestReconstructVersion)
 
     ASSERT_EQ(1, WriteContentBlocks(
         &gInMemStorageAPI,
+        &gLizardCompressionAPI,
         0,
         content_index,
         path_lookup,
@@ -2636,6 +2864,7 @@ TEST(Longtail, TestReconstructVersion)
 
     ASSERT_EQ(1, ReconstructVersion(
         &gInMemStorageAPI,
+        &gStoreCompressionAPI,
         0,
         content_index,
         version_index,
