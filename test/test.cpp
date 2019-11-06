@@ -1504,7 +1504,15 @@ ContentIndex* CreateContentIndex(
 {
     if (asset_count == 0)
     {
-        return 0;
+        size_t content_index_size = GetContentIndexSize(0, 0);
+        ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
+
+        content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex)];
+        content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
+        *content_index->m_BlockCount = 0;
+        *content_index->m_AssetCount = 0;
+        InitContentIndex(content_index);
+        return content_index;
     }
     uint32_t* assets_index = (uint32_t*)malloc(sizeof(uint32_t) * asset_count);
     uint32_t unique_asset_count = GetUniqueAssets(asset_count, asset_content_hashes, assets_index);
@@ -2489,228 +2497,10 @@ int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api,
     return success;
 }
 
-void LifelikeTest()
-{
-    if (0) return;
-
-    Jobs::ReadyCallback ready_callback;
-    Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
-
-    nadir::TAtomic32 stop = 0;
-
-    static const uint32_t WORKER_COUNT = 7;
-    Jobs::ThreadWorker workers[WORKER_COUNT];
-    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
-    {
-        workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
-    }
-
-//    #define HOME "test\\data"
-    #define HOME "C:\\Temp\\longtail"
-
-    #define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
-    #define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
-
-    #define VERSION1_FOLDER "git" VERSION1 "_Win64_Editor"
-    #define VERSION2_FOLDER "git" VERSION2 "_Win64_Editor"
-
-//    #define VERSION1_FOLDER "version1"
-//    #define VERSION2_FOLDER "version2"
-
-    const char* local_path_1 = HOME "\\local\\" VERSION1_FOLDER;
-    const char* version_index_path_1 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
-
-    const char* local_path_2 = HOME "\\local\\" VERSION2_FOLDER;
-    const char* version_index_path_2 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
-
-    const char* local_content_path = HOME "\\local_content";//HOME "\\local_content";
-    const char* local_content_index_path = HOME "\\local.lci";
-
-    const char* remote_content_path = HOME "\\remote_content";
-    const char* remote_content_index_path = HOME "\\remote.lci";
-
-    const char* remote_path_1 = HOME "\\remote\\" VERSION1_FOLDER;
-    const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
-
-    printf("Indexing `%s`...\n", local_path_1);
-    TroveStorageAPI gTroveStorageAPI;
-    VersionIndex* version1 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_1);
-    WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version1, version_index_path_1);
-    printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
-
-    printf("Creating local content index...\n");
-    ContentIndex* local_content_index = CreateContentIndex(
-        local_path_1,
-        *version1->m_AssetCount,
-        version1->m_AssetContentHash,
-        version1->m_PathHash,
-        version1->m_AssetSize,
-        version1->m_NameOffset,
-        version1->m_NameData,
-        GetContentTag);
-
-    printf("Writing local content index...\n");
-    WriteContentIndex(&gTroveStorageAPI.m_StorageAPI, local_content_index, local_content_index_path);
-    printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
-
-    if (1)
-    {
-        printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
-        WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI,
-            &gTroveStorageAPI.m_StorageAPI,
-            &gLizardCompressionAPI,
-            shed,
-            local_content_index,
-            path_lookup,
-            local_path_1,
-            local_content_path);
-
-        free(path_lookup);
-        path_lookup = 0;
-    }
-
-    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI.m_StorageAPI, &gLizardCompressionAPI, shed, local_content_index, version1, local_content_path, remote_path_1));
-    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-
-    printf("Indexing `%s`...\n", local_path_2);
-    VersionIndex* version2 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_2);
-    ASSERT_NE((VersionIndex*)0, version2);
-    ASSERT_EQ(1, WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version2, version_index_path_2));
-    printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
-    
-    // What is missing in local content that we need from remote version in new blocks with just the missing assets.
-    ContentIndex* missing_content = CreateMissingContent(local_content_index, local_path_2, version2, GetContentTag);
-    ASSERT_NE((ContentIndex*)0, missing_content);
-    printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
-
-    if (1)
-    {
-        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
-        ASSERT_NE((PathLookup*)0, path_lookup);
-        ASSERT_EQ(1, WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gLizardCompressionAPI,
-            shed,
-            missing_content,
-            path_lookup,
-            local_path_2,
-			local_content_path));
-
-        free(path_lookup);
-        path_lookup = 0;
-    }
-
-    if (1)
-    {
-        // Write this to disk for reference to see how big the diff is...
-        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
-        ASSERT_NE((PathLookup*)0, path_lookup);
-        ASSERT_EQ(1, WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gLizardCompressionAPI,
-            shed,
-            missing_content,
-            path_lookup,
-            local_path_2,
-			remote_content_path));
-
-        free(path_lookup);
-        path_lookup = 0;
-    }
-
-//    ContentIndex* remote_content_index = CreateContentIndex(
-//        local_path_2,
-//        *version2->m_AssetCount,
-//        version2->m_AssetContentHash,
-//        version2->m_PathHash,
-//        version2->m_AssetSize,
-//        version2->m_NameOffset,
-//        version2->m_NameData,
-//        GetContentTag);
-
-//    uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2->m_AssetCount);
-//    uint64_t missing_asset_count = GetMissingAssets(local_content_index, version2, missing_assets);
-//
-//    uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
-//    uint64_t remaining_missing_asset_count = 0;
-//    ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
-//    printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
-
-//    // Copy existing blocks
-//    for (uint64_t block_index = 0; block_index < *missing_content->m_BlockCount; ++block_index)
-//    {
-//        TLongtail_Hash block_hash = missing_content->m_BlockHash[block_index];
-//        char* block_name = GetBlockName(block_hash);
-//        char block_file_name[64];
-//        sprintf(block_file_name, "%s.lrb", block_name);
-//        char* source_path = gTroveStorageAPI.ConcatPath(remote_content_path, block_file_name);
-//        StorageAPI::HOpenFile s = gTroveStorageAPI.OpenReadFile(source_path);
-//        char* target_path = gTroveStorageAPI.ConcatPath(local_content_path, block_file_name);
-//        StorageAPI::HOpenFile t = gTroveStorageAPI.OpenWriteFile(target_path);
-//        uint64_t size = gTroveStorageAPI.GetSize(s);
-//        char* buffer = (char*)malloc(size);
-//        gTroveStorageAPI.Read(s, 0, size, buffer);
-//        gTroveStorageAPI.Write(t, 0, size, buffer);
-//        free(buffer);
-//        gTroveStorageAPI.CloseWrite(t);
-//        gTroveStorageAPI.CloseRead(s);
-//    }
-
-	ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
-    ASSERT_NE((ContentIndex*)0, merged_local_content);
-	free(missing_content);
-	missing_content = 0;
-	free(local_content_index);
-	local_content_index = 0;
-
-    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI.m_StorageAPI, &gLizardCompressionAPI, shed, merged_local_content, version2, local_content_path, remote_path_2));
-    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-
-//    free(existing_blocks);
-//    existing_blocks = 0;
-//    free(remaining_missing_assets);
-//    remaining_missing_assets = 0;
-//    free(missing_assets);
-//    missing_assets = 0;
-//    free(remote_content_index);
-//    remote_content_index = 0;
-
-	free(merged_local_content);
-	merged_local_content = 0;
-
-    free(version1);
-    version1 = 0;
-
-    nadir::AtomicAdd32(&stop, 1);
-    Jobs::ReadyCallback::Ready(&ready_callback.cb, 0, WORKER_COUNT);
-    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
-    {
-        workers[i].JoinThread();
-    }
-
-    free(shed);
-    shed = 0;
-
-    return;
-}
-
 TLongtail_Hash GetContentTagFake(const char* , const char* path)
 {
     return 0u;
  //   return (TLongtail_Hash)((uintptr_t)path) / 14;
-}
-
-TEST(Longtail, LifelikeTest)
-{
-    LifelikeTest();
 }
 
 TEST(Longtail, VersionIndex)
@@ -3133,6 +2923,390 @@ TEST(Longtail, ReconstructVersion)
     }
 
 }
+
+void Bench()
+{
+    if (0) return;
+
+    #define HOME "D:\\Temp\\longtail"
+    #define VERSION1 "2f7f84a05fc290c717c8b5c0e59f8121481151e6"
+    #define VERSION2 "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d"
+    #define VERSION3 "fdeb1390885c2f426700ca653433730d1ca78dab"
+    #define VERSION4 "81cccf054b23a0b5a941612ef0a2a836b6e02fd6"
+    #define VERSION5 "558af6b2a10d9ab5a267b219af4f795a17cc032f"
+    #define VERSION6 "c2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c"
+
+    const char* VERSION_SOURCE_FOLDERS[6] = 
+        {
+            HOME "\\local\\git" VERSION1 "_Win64_Editor",
+            HOME "\\local\\git" VERSION2 "_Win64_Editor",
+            HOME "\\local\\git" VERSION3 "_Win64_Editor",
+            HOME "\\local\\git" VERSION4 "_Win64_Editor",
+            HOME "\\local\\git" VERSION5 "_Win64_Editor",
+            HOME "\\local\\git" VERSION6 "_Win64_Editor"
+        };
+
+    const char* VERSION_INDEX_FILES[6] =
+        {
+            HOME "\\local\\git" VERSION1 "_Win64_Editor" ".lvi",
+            HOME "\\local\\git" VERSION2 "_Win64_Editor" ".lvi",
+            HOME "\\local\\git" VERSION3 "_Win64_Editor" ".lvi",
+            HOME "\\local\\git" VERSION4 "_Win64_Editor" ".lvi",
+            HOME "\\local\\git" VERSION5 "_Win64_Editor" ".lvi",
+            HOME "\\local\\git" VERSION6 "_Win64_Editor" ".lvi"
+        };
+
+    const char* CONTENT_INDEX_FILES[6] =
+        {
+            HOME "\\local\\git" VERSION1 "_Win64_Editor" ".lci",
+            HOME "\\local\\git" VERSION2 "_Win64_Editor" ".lci",
+            HOME "\\local\\git" VERSION3 "_Win64_Editor" ".lci",
+            HOME "\\local\\git" VERSION4 "_Win64_Editor" ".lci",
+            HOME "\\local\\git" VERSION5 "_Win64_Editor" ".lci",
+            HOME "\\local\\git" VERSION6 "_Win64_Editor" ".lci"
+        };
+
+    const char* CONTENT_FOLDER = HOME "\\chunks";
+
+    const char* DELTA_UPLOAD_CONTENT_FOLDERS[6] = 
+        {
+            HOME "\\upload_" "git" VERSION1 "_Win64_Editor",
+            HOME "\\upload_" "git" VERSION2 "_Win64_Editor",
+            HOME "\\upload_" "git" VERSION3 "_Win64_Editor",
+            HOME "\\upload_" "git" VERSION4 "_Win64_Editor",
+            HOME "\\upload_" "git" VERSION5 "_Win64_Editor",
+            HOME "\\upload_" "git" VERSION6 "_Win64_Editor"
+        };
+    const char* DELTA_DOWNLOAD_CONTENT_FOLDERS[6] = 
+        {
+            HOME "\\download_""git" VERSION1 "_Win64_Editor",
+            HOME "\\download_""git" VERSION2 "_Win64_Editor",
+            HOME "\\download_""git" VERSION3 "_Win64_Editor",
+            HOME "\\download_""git" VERSION4 "_Win64_Editor",
+            HOME "\\download_""git" VERSION5 "_Win64_Editor",
+            HOME "\\download_""git" VERSION6 "_Win64_Editor"
+        };
+
+
+    Jobs::ReadyCallback ready_callback;
+    Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
+
+    nadir::TAtomic32 stop = 0;
+
+    static const uint32_t WORKER_COUNT = 19;
+    Jobs::ThreadWorker workers[WORKER_COUNT];
+    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
+    {
+        workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
+    }
+
+    ContentIndex* full_content_index = CreateContentIndex(
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0);
+    VersionIndex* version_indexes[5];
+    ContentIndex* content_indexes[5];
+
+    TroveStorageAPI gTroveStorageAPI;
+    for (uint32_t i = 0; i < 5; ++i)
+    {
+        printf("Indexing `%s`\n", VERSION_SOURCE_FOLDERS[i]);
+        VersionIndex* version_index = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, VERSION_SOURCE_FOLDERS[i]);
+        printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, VERSION_SOURCE_FOLDERS[i]);
+        WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version_index, VERSION_INDEX_FILES[i]);
+        printf("Wrote version index to `%s`\n", VERSION_INDEX_FILES[i]);
+        ContentIndex* content_index = CreateContentIndex(
+            VERSION_SOURCE_FOLDERS[i],
+            *version_index->m_AssetCount,
+            version_index->m_AssetContentHash,
+            version_index->m_PathHash,
+            version_index->m_AssetSize,
+            version_index->m_NameOffset,
+            version_index->m_NameData,
+            GetContentTag);
+        printf("Built content index for %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, VERSION_SOURCE_FOLDERS[i]);
+        WriteContentIndex(&gTroveStorageAPI.m_StorageAPI, content_index, CONTENT_INDEX_FILES[i]);
+
+        // What is missing in local content that we need from remote version in new blocks with just the missing assets.
+        ContentIndex* missing_content = CreateMissingContent(local_content_index, local_path_2, version2, GetContentTag);
+        ASSERT_NE((ContentIndex*)0, missing_content);
+        printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
+
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
+        printf("Writing %" PRIu64 " block to `%s`\n", *content_index->m_BlockCount, DELTA_UPLOAD_CONTENT_FOLDERS[i]);
+        WriteContentBlocks(
+            &gTroveStorageAPI.m_StorageAPI,
+            &gTroveStorageAPI.m_StorageAPI,
+            &gLizardCompressionAPI,
+            shed,
+            content_index,
+            path_lookup,
+            VERSION_SOURCE_FOLDERS[i],
+            DELTA_UPLOAD_CONTENT_FOLDERS[i]);
+
+        free(path_lookup);
+        path_lookup = 0;
+
+        version_indexes[i] = version_index;
+        content_indexes[i] = content_index;
+    }
+
+    nadir::AtomicAdd32(&stop, 1);
+    Jobs::ReadyCallback::Ready(&ready_callback.cb, 0, WORKER_COUNT);
+    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
+    {
+        workers[i].JoinThread();
+    }
+
+    for (uint32_t i = 0; i < 5; ++i)
+    {
+        free(content_indexes[i]);
+        free(version_indexes[i]);
+    }
+
+    free(full_content_index);
+
+    free(shed);
+    shed = 0;
+
+    #undef VERSION1
+    #undef VERSION2
+    #undef VERSION3
+    #undef VERSION4
+    #undef VERSION5
+    #undef VERSION6
+
+}
+
+void LifelikeTest()
+{
+    if (1) return;
+
+    Jobs::ReadyCallback ready_callback;
+    Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
+
+    nadir::TAtomic32 stop = 0;
+
+    static const uint32_t WORKER_COUNT = 19;
+    Jobs::ThreadWorker workers[WORKER_COUNT];
+    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
+    {
+        workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
+    }
+
+//    #define HOME "test\\data"
+    #define HOME "D:\\Temp\\longtail"
+
+    #define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
+    #define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
+
+    #define VERSION1_FOLDER "git" VERSION1 "_Win64_Editor"
+    #define VERSION2_FOLDER "git" VERSION2 "_Win64_Editor"
+
+//    #define VERSION1_FOLDER "version1"
+//    #define VERSION2_FOLDER "version2"
+
+    const char* local_path_1 = HOME "\\local\\" VERSION1_FOLDER;
+    const char* version_index_path_1 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
+
+    const char* local_path_2 = HOME "\\local\\" VERSION2_FOLDER;
+    const char* version_index_path_2 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
+
+    const char* local_content_path = HOME "\\local_content";//HOME "\\local_content";
+    const char* local_content_index_path = HOME "\\local.lci";
+
+    const char* remote_content_path = HOME "\\remote_content";
+    const char* remote_content_index_path = HOME "\\remote.lci";
+
+    const char* remote_path_1 = HOME "\\remote\\" VERSION1_FOLDER;
+    const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
+
+    printf("Indexing `%s`...\n", local_path_1);
+    TroveStorageAPI gTroveStorageAPI;
+    VersionIndex* version1 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_1);
+    WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version1, version_index_path_1);
+    printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
+
+    printf("Creating local content index...\n");
+    ContentIndex* local_content_index = CreateContentIndex(
+        local_path_1,
+        *version1->m_AssetCount,
+        version1->m_AssetContentHash,
+        version1->m_PathHash,
+        version1->m_AssetSize,
+        version1->m_NameOffset,
+        version1->m_NameData,
+        GetContentTag);
+
+    printf("Writing local content index...\n");
+    WriteContentIndex(&gTroveStorageAPI.m_StorageAPI, local_content_index, local_content_index_path);
+    printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
+
+    if (1)
+    {
+        printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
+        WriteContentBlocks(
+            &gTroveStorageAPI.m_StorageAPI,
+            &gTroveStorageAPI.m_StorageAPI,
+            &gLizardCompressionAPI,
+            shed,
+            local_content_index,
+            path_lookup,
+            local_path_1,
+            local_content_path);
+
+        free(path_lookup);
+        path_lookup = 0;
+    }
+
+    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
+    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI.m_StorageAPI, &gLizardCompressionAPI, shed, local_content_index, version1, local_content_path, remote_path_1));
+    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
+
+    printf("Indexing `%s`...\n", local_path_2);
+    VersionIndex* version2 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_2);
+    ASSERT_NE((VersionIndex*)0, version2);
+    ASSERT_EQ(1, WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version2, version_index_path_2));
+    printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
+    
+    // What is missing in local content that we need from remote version in new blocks with just the missing assets.
+    ContentIndex* missing_content = CreateMissingContent(local_content_index, local_path_2, version2, GetContentTag);
+    ASSERT_NE((ContentIndex*)0, missing_content);
+    printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
+
+    if (1)
+    {
+        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
+        ASSERT_NE((PathLookup*)0, path_lookup);
+        ASSERT_EQ(1, WriteContentBlocks(
+            &gTroveStorageAPI.m_StorageAPI, 
+            &gTroveStorageAPI.m_StorageAPI, 
+            &gLizardCompressionAPI,
+            shed,
+            missing_content,
+            path_lookup,
+            local_path_2,
+			local_content_path));
+
+        free(path_lookup);
+        path_lookup = 0;
+    }
+
+    if (1)
+    {
+        // Write this to disk for reference to see how big the diff is...
+        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
+        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
+        ASSERT_NE((PathLookup*)0, path_lookup);
+        ASSERT_EQ(1, WriteContentBlocks(
+            &gTroveStorageAPI.m_StorageAPI, 
+            &gTroveStorageAPI.m_StorageAPI, 
+            &gLizardCompressionAPI,
+            shed,
+            missing_content,
+            path_lookup,
+            local_path_2,
+			remote_content_path));
+
+        free(path_lookup);
+        path_lookup = 0;
+    }
+
+//    ContentIndex* remote_content_index = CreateContentIndex(
+//        local_path_2,
+//        *version2->m_AssetCount,
+//        version2->m_AssetContentHash,
+//        version2->m_PathHash,
+//        version2->m_AssetSize,
+//        version2->m_NameOffset,
+//        version2->m_NameData,
+//        GetContentTag);
+
+//    uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2->m_AssetCount);
+//    uint64_t missing_asset_count = GetMissingAssets(local_content_index, version2, missing_assets);
+//
+//    uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
+//    uint64_t remaining_missing_asset_count = 0;
+//    ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
+//    printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
+
+//    // Copy existing blocks
+//    for (uint64_t block_index = 0; block_index < *missing_content->m_BlockCount; ++block_index)
+//    {
+//        TLongtail_Hash block_hash = missing_content->m_BlockHash[block_index];
+//        char* block_name = GetBlockName(block_hash);
+//        char block_file_name[64];
+//        sprintf(block_file_name, "%s.lrb", block_name);
+//        char* source_path = gTroveStorageAPI.ConcatPath(remote_content_path, block_file_name);
+//        StorageAPI::HOpenFile s = gTroveStorageAPI.OpenReadFile(source_path);
+//        char* target_path = gTroveStorageAPI.ConcatPath(local_content_path, block_file_name);
+//        StorageAPI::HOpenFile t = gTroveStorageAPI.OpenWriteFile(target_path);
+//        uint64_t size = gTroveStorageAPI.GetSize(s);
+//        char* buffer = (char*)malloc(size);
+//        gTroveStorageAPI.Read(s, 0, size, buffer);
+//        gTroveStorageAPI.Write(t, 0, size, buffer);
+//        free(buffer);
+//        gTroveStorageAPI.CloseWrite(t);
+//        gTroveStorageAPI.CloseRead(s);
+//    }
+
+	ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
+    ASSERT_NE((ContentIndex*)0, merged_local_content);
+	free(missing_content);
+	missing_content = 0;
+	free(local_content_index);
+	local_content_index = 0;
+
+    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
+    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI.m_StorageAPI, &gLizardCompressionAPI, shed, merged_local_content, version2, local_content_path, remote_path_2));
+    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
+
+//    free(existing_blocks);
+//    existing_blocks = 0;
+//    free(remaining_missing_assets);
+//    remaining_missing_assets = 0;
+//    free(missing_assets);
+//    missing_assets = 0;
+//    free(remote_content_index);
+//    remote_content_index = 0;
+
+	free(merged_local_content);
+	merged_local_content = 0;
+
+    free(version1);
+    version1 = 0;
+
+    nadir::AtomicAdd32(&stop, 1);
+    Jobs::ReadyCallback::Ready(&ready_callback.cb, 0, WORKER_COUNT);
+    for (uint32_t i = 0; i < WORKER_COUNT; ++i)
+    {
+        workers[i].JoinThread();
+    }
+
+    free(shed);
+    shed = 0;
+
+    return;
+}
+
+TEST(Longtail, Bench)
+{
+    Bench();
+}
+
+TEST(Longtail, LifelikeTest)
+{
+    LifelikeTest();
+}
+
+
 
 
 #if 0
