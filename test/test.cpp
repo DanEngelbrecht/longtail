@@ -59,8 +59,21 @@ int Trove_EnsureParentPathExists(char* path)
             return 0;
         }
         BOOL success = ::CreateDirectoryA(path, 0);
+		if (!success)
+		{
+			attr = ::GetFileAttributesA(path);
+			if (attr != INVALID_FILE_ATTRIBUTES)
+			{
+				// Someone else created it
+				success = TRUE;
+			}
+		}
         *last_path_delimiter = '\\';
-        return success ? 1 : 0;
+		if (success)
+		{
+			return 1;
+		}
+        return 0;
     }
     *last_path_delimiter = '\\';
     return 1;
@@ -2249,9 +2262,14 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
 
         //printf("Recontructing `%s` from block `%s` at offset %u, size %u\n", asset_path, job->m_BlockPath, (uint32_t)job->m_AssetBlockOffsets[asset_index], (uint32_t)job->m_AssetLengths[asset_index]);
 
-        storage_api->EnsureParentPathExists(storage_api, asset_path);
+		if (!storage_api->EnsureParentPathExists(storage_api, asset_path))
+		{
+			free(decompressed_buffer);
+			decompressed_buffer = 0;
+			nadir::AtomicAdd32(job->m_PendingCount, -1);
+			return BIKESHED_TASK_RESULT_COMPLETE;
+		}
 
-        // TODO: This failed? for "C:/Temp/longtail/remote/gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor/Engine/Content/Internationalization/icudt53l/coll/ucadata.icu"
         StorageAPI::HOpenFile asset_file_handle = storage_api->OpenWriteFile(storage_api, asset_path);
         if(!asset_file_handle)
         {
@@ -2473,7 +2491,7 @@ int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api,
 
 void LifelikeTest()
 {
-    if (1) return;
+    if (0) return;
 
     Jobs::ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
@@ -2564,7 +2582,6 @@ void LifelikeTest()
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
     
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
-    // TODO: Broken?
     ContentIndex* missing_content = CreateMissingContent(local_content_index, local_path_2, version2, GetContentTag);
     ASSERT_NE((ContentIndex*)0, missing_content);
     printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
@@ -2574,7 +2591,6 @@ void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
         PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
         ASSERT_NE((PathLookup*)0, path_lookup);
-        // TODO: Broken?
         ASSERT_EQ(1, WriteContentBlocks(
             &gTroveStorageAPI.m_StorageAPI, 
             &gTroveStorageAPI.m_StorageAPI, 
@@ -2647,7 +2663,6 @@ void LifelikeTest()
 //        gTroveStorageAPI.CloseRead(s);
 //    }
 
-    // TODO: Broken?
 	ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
     ASSERT_NE((ContentIndex*)0, merged_local_content);
 	free(missing_content);
@@ -2656,7 +2671,6 @@ void LifelikeTest()
 	local_content_index = 0;
 
     printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-    // TODO: Broken? Resulting content is corrupted!
     ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI.m_StorageAPI, &gLizardCompressionAPI, shed, merged_local_content, version2, local_content_path, remote_path_2));
     printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
