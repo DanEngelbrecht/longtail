@@ -967,7 +967,11 @@ void GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path
             job->m_PathHash = &pathHashes[i + offset];
             job->m_ContentHash = &contentHashes[i + offset];
             job->m_ContentSize = &contentSizes[i + offset];
-            HashFile(0, 0, 0, job);
+			if (!shed)
+			{
+				nadir::AtomicAdd32(&pendingCount, 1);
+				HashFile(0, 0, 0, job);
+			}
         }
 
         if (shed)
@@ -2971,7 +2975,7 @@ TEST(Longtail, MergeContentIndex)
 
         for (uint64_t j = 0; j < expected_size; j++)
         {
-            ASSERT_EQ((int)j, (int)buffer[j]);
+            ASSERT_EQ((int)i, (int)buffer[j]);
         }
 
         free(buffer);
