@@ -925,6 +925,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         {
             meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
             bool read_ok = storage_api->Read(storage_api, file_handle, offset, len, batch_data);
+            // TODO: Don't use assert!
             assert(read_ok);
             offset += len;
             MeowAbsorb(&state, len, batch_data);
@@ -1339,6 +1340,10 @@ int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, cons
 {
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_AssetCount);
 
+    if (!storage_api->EnsureParentPathExists(storage_api, path))
+    {
+        return 0;
+    }
     StorageAPI::HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path);
     if (!file_handle)
     {
@@ -1381,6 +1386,10 @@ int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, cons
 {
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), version_index->m_NameDataSize);
 
+    if (!storage_api->EnsureParentPathExists(storage_api, path))
+    {
+        return 0;
+    }
     StorageAPI::HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path);
     if (!file_handle)
     {
@@ -1811,8 +1820,20 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
     {
         ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
 
+        if (!target_storage_api->EnsureParentPathExists(target_storage_api, tmp_block_path))
+        {
+            free(compressed_buffer);
+            nadir::AtomicAdd32(job->m_PendingCount, -1);
+            return BIKESHED_TASK_RESULT_COMPLETE;
+        }
         StorageAPI::HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path);
-        target_storage_api->Write(target_storage_api, block_file_handle, 0, (sizeof(uint32_t) * 2) + compressed_size, compressed_buffer);
+        if (!block_file_handle)
+        {
+            free(compressed_buffer);
+            nadir::AtomicAdd32(job->m_PendingCount, -1);
+            return BIKESHED_TASK_RESULT_COMPLETE;
+        }
+        int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, (sizeof(uint32_t) * 2) + compressed_size, compressed_buffer);
         free(compressed_buffer);
         uint64_t write_offset = (sizeof(uint32_t) * 2) + compressed_size;
 
@@ -1827,20 +1848,20 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
         {
             TLongtail_Hash asset_content_hash = content_index->m_AssetContentHash[asset_index];
-            target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(TLongtail_Hash), &asset_content_hash);
+            write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(TLongtail_Hash), &asset_content_hash);
             write_offset += sizeof(TLongtail_Hash);
 
             uint32_t asset_size = content_index->m_AssetLength[asset_index];
-            target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &asset_size);
+            write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &asset_size);
             write_offset += sizeof(uint32_t);
         }
 
-        target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
+        write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
         write_offset += sizeof(uint32_t);
         target_storage_api->CloseWrite(target_storage_api, block_file_handle);
 
-        int success = target_storage_api->MoveFile(target_storage_api, tmp_block_path, block_path);
-        job->m_Success = success;
+        write_ok = write_ok & target_storage_api->MoveFile(target_storage_api, tmp_block_path, block_path);
+        job->m_Success = write_ok;
     }
     free(block_name);
     block_name = 0;
@@ -1915,6 +1936,7 @@ int WriteContentBlocks(
         {
             nadir::AtomicAdd32(&pending_job_count, 1);
             Bikeshed_TaskResult result = WriteContentBlockJob(shed, 0, 0, job);
+            // TODO: Don't use assert!
             assert(result == BIKESHED_TASK_RESULT_COMPLETE);
         }
         else
@@ -2423,8 +2445,6 @@ int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api,
             const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[asset_index]];
             job->m_AssetPaths[j] = storage_api->ConcatPath(storage_api, version_path, asset_path);
             uint64_t asset_index_in_content_index = version_index_to_content_index[asset_index];
-            assert(content_index->m_AssetLength[asset_index_in_content_index] == version_index->m_AssetSize[asset_index]);
-            assert(content_index->m_AssetContentHash[asset_index_in_content_index] == version_index->m_AssetContentHash[asset_index]);
             job->m_AssetBlockOffsets[j] = content_index->m_AssetBlockOffset[asset_index_in_content_index];
             job->m_AssetLengths[j] = content_index->m_AssetLength[asset_index_in_content_index];
         }
@@ -2433,6 +2453,7 @@ int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api,
         {
             nadir::AtomicAdd32(&pending_job_count, 1);
             Bikeshed_TaskResult result = ReconstructFromBlock(shed, 0, 0, job);
+            // TODO: Don't use assert!
             assert(result == BIKESHED_TASK_RESULT_COMPLETE);
         }
         else
@@ -2928,72 +2949,46 @@ void Bench()
 {
     if (0) return;
 
+
+#if 0
     #define HOME "D:\\Temp\\longtail"
-    #define VERSION1 "2f7f84a05fc290c717c8b5c0e59f8121481151e6"
-    #define VERSION2 "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d"
-    #define VERSION3 "fdeb1390885c2f426700ca653433730d1ca78dab"
-    #define VERSION4 "81cccf054b23a0b5a941612ef0a2a836b6e02fd6"
-    #define VERSION5 "558af6b2a10d9ab5a267b219af4f795a17cc032f"
-    #define VERSION6 "c2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c"
 
-    const char* VERSION_SOURCE_FOLDERS[6] = 
-        {
-            HOME "\\local\\git" VERSION1 "_Win64_Editor",
-            HOME "\\local\\git" VERSION2 "_Win64_Editor",
-            HOME "\\local\\git" VERSION3 "_Win64_Editor",
-            HOME "\\local\\git" VERSION4 "_Win64_Editor",
-            HOME "\\local\\git" VERSION5 "_Win64_Editor",
-            HOME "\\local\\git" VERSION6 "_Win64_Editor"
-        };
+    const uint32_t VERSION_COUNT = 6;
+    const char* VERSION[VERSION_COUNT] = {
+        "git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor"
+        "git916600e1ecb9da13f75835cd1b2d2e6a67f1a92d_Win64_Editor"
+        "gitfdeb1390885c2f426700ca653433730d1ca78dab_Win64_Editor"
+        "git81cccf054b23a0b5a941612ef0a2a836b6e02fd6_Win64_Editor"
+        "git558af6b2a10d9ab5a267b219af4f795a17cc032f_Win64_Editor"
+        "gitc2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c_Win64_Editor"
+    };
+#else
+    #define HOME "C:\\Temp\\longtail"
 
-    const char* VERSION_INDEX_FILES[6] =
-        {
-            HOME "\\local\\git" VERSION1 "_Win64_Editor" ".lvi",
-            HOME "\\local\\git" VERSION2 "_Win64_Editor" ".lvi",
-            HOME "\\local\\git" VERSION3 "_Win64_Editor" ".lvi",
-            HOME "\\local\\git" VERSION4 "_Win64_Editor" ".lvi",
-            HOME "\\local\\git" VERSION5 "_Win64_Editor" ".lvi",
-            HOME "\\local\\git" VERSION6 "_Win64_Editor" ".lvi"
-        };
+    const uint32_t VERSION_COUNT = 2;
+    const char* VERSION[VERSION_COUNT] = {
+        "git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor",
+        "gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor"
+    };
+#endif
 
-    const char* CONTENT_INDEX_FILES[6] =
-        {
-            HOME "\\local\\git" VERSION1 "_Win64_Editor" ".lci",
-            HOME "\\local\\git" VERSION2 "_Win64_Editor" ".lci",
-            HOME "\\local\\git" VERSION3 "_Win64_Editor" ".lci",
-            HOME "\\local\\git" VERSION4 "_Win64_Editor" ".lci",
-            HOME "\\local\\git" VERSION5 "_Win64_Editor" ".lci",
-            HOME "\\local\\git" VERSION6 "_Win64_Editor" ".lci"
-        };
+    const char* SOURCE_VERSION_PREFIX = HOME "\\local\\";
+    const char* VERSION_INDEX_SUFFIX = ".lvi";
+    const char* CONTENT_INDEX_SUFFIX = ".lci";
 
     const char* CONTENT_FOLDER = HOME "\\chunks";
 
-    const char* DELTA_UPLOAD_CONTENT_FOLDERS[6] = 
-        {
-            HOME "\\upload_" "git" VERSION1 "_Win64_Editor",
-            HOME "\\upload_" "git" VERSION2 "_Win64_Editor",
-            HOME "\\upload_" "git" VERSION3 "_Win64_Editor",
-            HOME "\\upload_" "git" VERSION4 "_Win64_Editor",
-            HOME "\\upload_" "git" VERSION5 "_Win64_Editor",
-            HOME "\\upload_" "git" VERSION6 "_Win64_Editor"
-        };
-    const char* DELTA_DOWNLOAD_CONTENT_FOLDERS[6] = 
-        {
-            HOME "\\download_""git" VERSION1 "_Win64_Editor",
-            HOME "\\download_""git" VERSION2 "_Win64_Editor",
-            HOME "\\download_""git" VERSION3 "_Win64_Editor",
-            HOME "\\download_""git" VERSION4 "_Win64_Editor",
-            HOME "\\download_""git" VERSION5 "_Win64_Editor",
-            HOME "\\download_""git" VERSION6 "_Win64_Editor"
-        };
+    const char* UPLOAD_VERSION_PREFIX = HOME "\\upload\\";
+    const char* UPLOAD_VERSION_SUFFIX = "_chunks";
 
+    const char* TARGET_VERSION_PREFIX = HOME "\\remote\\";
 
     Jobs::ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
 
     nadir::TAtomic32 stop = 0;
 
-    static const uint32_t WORKER_COUNT = 19;
+    static const uint32_t WORKER_COUNT = 7;
     Jobs::ThreadWorker workers[WORKER_COUNT];
     for (uint32_t i = 0; i < WORKER_COUNT; ++i)
     {
@@ -3009,51 +3004,100 @@ void Bench()
             0,
             0,
             0);
-    VersionIndex* version_indexes[5];
-    ContentIndex* content_indexes[5];
+    ASSERT_NE((ContentIndex*)0, full_content_index);
+    VersionIndex* version_indexes[VERSION_COUNT];
 
     TroveStorageAPI gTroveStorageAPI;
-    for (uint32_t i = 0; i < 5; ++i)
+    for (uint32_t i = 0; i < VERSION_COUNT; ++i)
     {
-        printf("Indexing `%s`\n", VERSION_SOURCE_FOLDERS[i]);
-        VersionIndex* version_index = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, VERSION_SOURCE_FOLDERS[i]);
-        printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, VERSION_SOURCE_FOLDERS[i]);
-        WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version_index, VERSION_INDEX_FILES[i]);
-        printf("Wrote version index to `%s`\n", VERSION_INDEX_FILES[i]);
-        ContentIndex* content_index = CreateContentIndex(
-            VERSION_SOURCE_FOLDERS[i],
-            *version_index->m_AssetCount,
-            version_index->m_AssetContentHash,
-            version_index->m_PathHash,
-            version_index->m_AssetSize,
-            version_index->m_NameOffset,
-            version_index->m_NameData,
-            GetContentTag);
-        printf("Built content index for %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, VERSION_SOURCE_FOLDERS[i]);
-        WriteContentIndex(&gTroveStorageAPI.m_StorageAPI, content_index, CONTENT_INDEX_FILES[i]);
+        char version_source_folder[256];
+        sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
+        printf("Indexing `%s`\n", version_source_folder);
+        VersionIndex* version_index = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, version_source_folder);
+        ASSERT_NE((VersionIndex*)0, version_index);
+        printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
 
-        // What is missing in local content that we need from remote version in new blocks with just the missing assets.
-        ContentIndex* missing_content = CreateMissingContent(local_content_index, local_path_2, version2, GetContentTag);
-        ASSERT_NE((ContentIndex*)0, missing_content);
-        printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
+        char version_index_file[256];
+        sprintf(version_index_file, "%s%s%s", SOURCE_VERSION_PREFIX, VERSION[i], VERSION_INDEX_SUFFIX);
+        ASSERT_NE(0, WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version_index, version_index_file));
+        printf("Wrote version index to `%s`\n", version_index_file);
+
+        ContentIndex* missing_content_index = CreateMissingContent(full_content_index, version_source_folder, version_index, GetContentTag);
+        ASSERT_NE((ContentIndex*)0, missing_content_index);
 
         PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
-        printf("Writing %" PRIu64 " block to `%s`\n", *content_index->m_BlockCount, DELTA_UPLOAD_CONTENT_FOLDERS[i]);
-        WriteContentBlocks(
+        char delta_upload_content_folder[256];
+        sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
+        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
+        ASSERT_NE(0, WriteContentBlocks(
             &gTroveStorageAPI.m_StorageAPI,
             &gTroveStorageAPI.m_StorageAPI,
             &gLizardCompressionAPI,
             shed,
-            content_index,
+            missing_content_index,
             path_lookup,
-            VERSION_SOURCE_FOLDERS[i],
-            DELTA_UPLOAD_CONTENT_FOLDERS[i]);
+            version_source_folder,
+            delta_upload_content_folder));
+
+        printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
+        for (uint64_t b = 0; b < *missing_content_index->m_BlockCount; ++b)
+        {
+            TLongtail_Hash block_hash = missing_content_index->m_BlockHash[b];
+            char* block_name = GetBlockName(block_hash);
+            char source_path[256];
+            sprintf(source_path, "%s/%s.lrb", delta_upload_content_folder, block_name);
+            char target_path[256];
+            sprintf(target_path, "%s/%s.lrb", CONTENT_FOLDER, block_name);
+            StorageAPI::HOpenFile s = gTroveStorageAPI.m_StorageAPI.OpenReadFile(&gTroveStorageAPI.m_StorageAPI, source_path);
+            ASSERT_NE((StorageAPI::HOpenFile)0, s);
+            ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.EnsureParentPathExists(&gTroveStorageAPI.m_StorageAPI, target_path));
+            StorageAPI::HOpenFile t = gTroveStorageAPI.m_StorageAPI.OpenWriteFile(&gTroveStorageAPI.m_StorageAPI, target_path);
+            ASSERT_NE((StorageAPI::HOpenFile)0, t);
+            uint64_t block_file_size = gTroveStorageAPI.m_StorageAPI.GetSize(&gTroveStorageAPI.m_StorageAPI, s);
+            void* buffer = malloc(block_file_size);
+            ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.Read(&gTroveStorageAPI.m_StorageAPI, s, 0, block_file_size, buffer));
+            ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.Write(&gTroveStorageAPI.m_StorageAPI, t, 0, block_file_size, buffer));
+            gTroveStorageAPI.m_StorageAPI.CloseRead(&gTroveStorageAPI.m_StorageAPI, s);
+            gTroveStorageAPI.m_StorageAPI.CloseWrite(&gTroveStorageAPI.m_StorageAPI, t);
+            free(block_name);
+        }
+
+/*        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, CONTENT_FOLDER);
+        ASSERT_NE(0, WriteContentBlocks(
+            &gTroveStorageAPI.m_StorageAPI,
+            &gTroveStorageAPI.m_StorageAPI,
+            &gLizardCompressionAPI,
+            shed,
+            missing_content_index,
+            path_lookup,
+            version_source_folder,
+            CONTENT_FOLDER));*/
+
+        ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);
+        ASSERT_NE((ContentIndex*)0, merged_content_index);
+        free(missing_content_index);
+        missing_content_index = 0;
+        free(full_content_index);
+        full_content_index = merged_content_index;
+        merged_content_index = 0;
+
+        char version_target_folder[256];
+        sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
+        printf("Reconstructing %" PRIu64 " assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
+        ASSERT_NE(0, ReconstructVersion(
+            &gTroveStorageAPI.m_StorageAPI,
+            &gLizardCompressionAPI,
+            shed,
+            full_content_index,
+            version_index,
+            CONTENT_FOLDER,
+            version_target_folder));
 
         free(path_lookup);
         path_lookup = 0;
 
         version_indexes[i] = version_index;
-        content_indexes[i] = content_index;
+        version_index = 0;
     }
 
     nadir::AtomicAdd32(&stop, 1);
@@ -3063,9 +3107,8 @@ void Bench()
         workers[i].JoinThread();
     }
 
-    for (uint32_t i = 0; i < 5; ++i)
+    for (uint32_t i = 0; i < VERSION_COUNT; ++i)
     {
-        free(content_indexes[i]);
         free(version_indexes[i]);
     }
 
@@ -3074,13 +3117,7 @@ void Bench()
     free(shed);
     shed = 0;
 
-    #undef VERSION1
-    #undef VERSION2
-    #undef VERSION3
-    #undef VERSION4
-    #undef VERSION5
-    #undef VERSION6
-
+    #undef HOME
 }
 
 void LifelikeTest()
