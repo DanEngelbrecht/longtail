@@ -831,61 +831,131 @@ static int RecurseTree(StorageAPI* storage_api, const char* root_folder, Process
     return 1;
 }
 
-struct AssetPaths
+struct Paths
 {
-    char** paths;
-    uint32_t count;
+    uint32_t m_DataSize;
+    uint32_t* m_PathCount;
+    uint32_t* m_Offsets;
+    char* m_Data;
 };
 
-void FreeAssetpaths(AssetPaths* assets)
+size_t GetPathsSize(uint32_t path_count, uint32_t path_data_size)
 {
-    for (uint32_t i = 0; i < assets->count; ++i)
-    {
-        free(assets->paths[i]);
-    }
+    return sizeof(Paths) +
+        sizeof(uint32_t) +
+        sizeof(uint32_t) * path_count +
+        path_data_size;
+};
 
-    free(assets->paths);
-}
-
-int GetContent(StorageAPI* storage_api, const char* root_path, AssetPaths* out_assets)
+Paths* CreatePaths(uint32_t path_count, uint32_t path_data_size)
 {
-    out_assets->paths = 0;
-    out_assets->count = 0;
+    Paths* paths = (Paths*)malloc(GetPathsSize(path_count, path_data_size));
+    char* p = (char*)&paths[1];
+    paths->m_DataSize = 0;
+    paths->m_PathCount = (uint32_t*)p;
+    p += sizeof(uint32_t);
+    paths->m_Offsets = (uint32_t*)p;
+    p += sizeof(uint32_t) * path_count;
+    paths->m_Data = p;
+    *paths->m_PathCount = 0;
+    return paths;
+};
 
+Paths* GetFilesRecursively(StorageAPI* storage_api, const char* root_path)
+{
     struct Context {
-        StorageAPI* storage_api;
-        const char* root_path;
-        AssetPaths* assets;
+        StorageAPI* m_StorageAPI;
+        uint32_t m_ReservedPathCount;
+        uint32_t m_ReservedPathSize;
+        uint32_t m_RootPathLength;
+        Paths* m_Paths;
     };
 
-    auto add_folder = [](void* context, const char* root_path, const char* file_name)
+    const uint32_t default_path_count = 512;
+    const uint32_t default_path_data_size = default_path_count * 128;
+
+    auto add_file = [](void* context, const char* root_path, const char* file_name)
     {
-        Context* asset_context = (Context*)context;
-        AssetPaths* assets = asset_context->assets;
+        Context* paths_context = (Context*)context;
+        StorageAPI* storage_api = paths_context->m_StorageAPI;
+        Paths* paths = paths_context->m_Paths;
 
-        size_t base_path_length = strlen(asset_context->root_path);
+        const uint32_t root_path_length = paths_context->m_RootPathLength;
 
-        char* full_path = asset_context->storage_api->ConcatPath(asset_context->storage_api, root_path, file_name);
-        const char* s = &full_path[base_path_length];
+        char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
+        const char* s = &full_path[root_path_length];
         if (*s == '/')
         {
             ++s;
         }
+        uint32_t path_size = (uint32_t)(strlen(s) + 1);
 
-        assets->paths = (char**)realloc(assets->paths, sizeof(char*) * (assets->count + 1));
-        assets->paths[assets->count] = strdup(s);
+        int out_of_path_data = paths_context->m_Paths->m_DataSize + path_size > paths_context->m_ReservedPathSize;
+        int out_of_path_count = *paths_context->m_Paths->m_PathCount >= paths_context->m_ReservedPathCount;
+        if (out_of_path_count | out_of_path_data)
+        {
+            uint32_t extra_path_count = out_of_path_count ? 512 : 0;
+            uint32_t extra_path_data_size = out_of_path_data ? (512 * 128) : 0;
+
+            const uint32_t new_path_count = paths_context->m_ReservedPathCount + extra_path_count;
+            const uint32_t new_path_data_size = paths_context->m_ReservedPathSize + extra_path_data_size;
+            Paths* new_paths = CreatePaths(new_path_count, new_path_data_size);
+            paths_context->m_ReservedPathCount = new_path_count;
+            paths_context->m_ReservedPathSize = new_path_data_size;
+            new_paths->m_DataSize = paths->m_DataSize;
+            *new_paths->m_PathCount = *paths->m_PathCount;
+
+            memmove(new_paths->m_Offsets, paths->m_Offsets, sizeof(uint32_t) * *paths->m_PathCount);
+            memmove(new_paths->m_Data, paths->m_Data, paths->m_DataSize);
+
+            free(paths);
+            paths = new_paths;
+
+            paths_context->m_Paths = paths;
+        }
+
+        memmove(&paths->m_Data[paths->m_DataSize], s, path_size);
+        paths->m_Offsets[*paths->m_PathCount] = paths->m_DataSize;
+        paths->m_DataSize += path_size;
+        (*paths->m_PathCount)++;
 
         free(full_path);
         full_path = 0;
-
-        ++assets->count;
     };
 
-    Context context = { storage_api, root_path, out_assets };
+    Paths* paths = CreatePaths(default_path_count, default_path_data_size);//(Paths*)malloc(GetPathsSize(default_path_count, default_path_data_size));
+//static int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
+    Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths};
+    paths = 0;
 
-    RecurseTree(storage_api, root_path, add_folder, &context);
+    if(!RecurseTree(storage_api, root_path, add_file, &context))
+    {
+        free(context.m_Paths);
+        return 0;
+    }
 
-    return 0;
+    return context.m_Paths;
+}
+
+Paths* MakePaths(uint32_t path_count, const char* const* path_names)
+{
+    uint32_t name_data_size = 0;
+    for (uint32_t i = 0; i < path_count; ++i)
+    {
+        name_data_size += (uint32_t)strlen(path_names[i]) + 1;
+    }
+    Paths* paths = CreatePaths(path_count, name_data_size);
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < path_count; ++i)
+    {
+        uint32_t length = (uint32_t)strlen(path_names[i]) + 1;
+        paths->m_Offsets[i] = offset;
+        memmove(&paths->m_Data[offset], path_names[i], length);
+        offset += length;
+    }
+    paths->m_DataSize = offset;
+    *paths->m_PathCount = path_count;
+    return paths;
 }
 
 struct HashJob
@@ -948,8 +1018,9 @@ struct ProcessHashContext
     nadir::TAtomic32* m_PendingCount;
 };
 
-void GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const char** paths, uint64_t asset_count, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
+void GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
 {
+    uint32_t asset_count = *paths->m_PathCount;
     ProcessHashContext context;
     context.m_StorageAPI = storage_api;
     context.m_Shed = shed;
@@ -976,7 +1047,7 @@ void GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path
             ctx[i] = &context.m_HashJobs[i + offset];
             job->m_StorageAPI = storage_api;
             job->m_RootPath = root_path;
-            job->m_Path = paths[i + offset];
+            job->m_Path = &paths->m_Data[paths->m_Offsets[i + offset]];
             job->m_PendingCount = &pendingCount;
             job->m_PathHash = &pathHashes[i + offset];
             job->m_ContentHash = &contentHashes[i + offset];
@@ -1072,16 +1143,6 @@ const char* GetPathFromAssetContentHash(const PathLookup* path_lookup, TLongtail
     return &path_lookup->m_NameData[*index_ptr];
 }
 
-uint32_t GetNameDataSize(uint32_t asset_count, const char* const* asset_paths)
-{
-    size_t name_data_size = 0;
-    for (uint32_t i = 0; i < asset_count; ++i)
-    {
-        name_data_size += strlen(asset_paths[i]) + 1;
-    }
-    return (uint32_t)name_data_size;
-}
-
 size_t GetVersionIndexDataSize(uint32_t asset_count, uint32_t name_data_size)
 {
     size_t version_index_size = sizeof(uint64_t) +
@@ -1094,10 +1155,10 @@ size_t GetVersionIndexDataSize(uint32_t asset_count, uint32_t name_data_size)
     return version_index_size;
 }
 
-size_t GetVersionIndexSize(uint32_t asset_count, const char* const* asset_paths)
+size_t GetVersionIndexSize(uint32_t asset_count, uint32_t path_data_size)
 {
     return sizeof(VersionIndex) +
-            GetVersionIndexDataSize(asset_count, GetNameDataSize(asset_count, asset_paths));
+            GetVersionIndexDataSize(asset_count, path_data_size);
 }
 
 void InitVersionIndex(VersionIndex* version_index, size_t version_index_data_size)
@@ -1134,29 +1195,26 @@ void InitVersionIndex(VersionIndex* version_index, size_t version_index_data_siz
 VersionIndex* BuildVersionIndex(
     void* mem,
     size_t mem_size,
-    uint32_t asset_count,
-    const char* const* asset_paths,
+    const Paths* paths,
     const TLongtail_Hash* pathHashes,
     const TLongtail_Hash* contentHashes,
     const uint32_t* contentSizes)
 {
+    uint32_t asset_count = *paths->m_PathCount;
     VersionIndex* version_index = (VersionIndex*)mem;
     version_index->m_AssetCount = (uint64_t*)&((char*)mem)[sizeof(VersionIndex)];
     *version_index->m_AssetCount = asset_count;
 
     InitVersionIndex(version_index, mem_size - sizeof(VersionIndex));
 
-    uint32_t name_offset = 0;
     for (uint32_t i = 0; i < asset_count; ++i)
     {
         version_index->m_PathHash[i] = pathHashes[i];
         version_index->m_AssetContentHash[i] = contentHashes[i];
         version_index->m_AssetSize[i] = contentSizes[i];
-        version_index->m_NameOffset[i] = name_offset;
-        uint32_t path_length = (uint32_t)strlen(asset_paths[i]) + 1;
-        memcpy(&version_index->m_NameData[name_offset], asset_paths[i], path_length);
-        name_offset += path_length;
+        version_index->m_NameOffset[i] = paths->m_Offsets[i];
     }
+    memmove(version_index->m_NameData, paths->m_Data, paths->m_DataSize);
 
     return version_index;
 }
@@ -1429,26 +1487,22 @@ VersionIndex* ReadVersionIndex(StorageAPI* storage_api, const char* path)
     return version_index;
 }
 
-VersionIndex* CreateVersionIndex(StorageAPI* storage_api, Bikeshed shed, const char* assets_path)
+VersionIndex* CreateVersionIndex(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const Paths* paths)
 {
-    AssetPaths asset_paths;
-
-    GetContent(storage_api, assets_path, &asset_paths);
-
-    uint32_t* contentSizes = (uint32_t*)malloc(sizeof(uint32_t) * asset_paths.count);
-    TLongtail_Hash* pathHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_paths.count);
-    TLongtail_Hash* contentHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_paths.count);
+    uint32_t path_count = *paths->m_PathCount;
+    uint32_t* contentSizes = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
+    TLongtail_Hash* pathHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
+    TLongtail_Hash* contentHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
     
-    GetFileHashes(storage_api, shed, assets_path, (const char**)asset_paths.paths, asset_paths.count, pathHashes, contentHashes, contentSizes);
+    GetFileHashes(storage_api, shed, root_path, paths, pathHashes, contentHashes, contentSizes);
 
-    size_t version_index_size = GetVersionIndexSize(asset_paths.count, asset_paths.paths);
+    size_t version_index_size = GetVersionIndexSize(path_count, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
         version_index_size,
-        asset_paths.count,
-        asset_paths.paths,
+        paths,
         pathHashes,
         contentHashes,
         contentSizes);
@@ -1459,8 +1513,6 @@ VersionIndex* CreateVersionIndex(StorageAPI* storage_api, Bikeshed shed, const c
     pathHashes = 0;
     free(contentSizes);
     contentSizes = 0;
-
-    FreeAssetpaths(&asset_paths);
 
     return version_index;
 }
@@ -2538,19 +2590,20 @@ TEST(Longtail, VersionIndex)
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
 
-    size_t version_index_size = GetVersionIndexSize(5, asset_paths);
+    Paths* paths = MakePaths(5, asset_paths);
+    size_t version_index_size = GetVersionIndexSize(5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
         version_index_size,
-        5,
-        asset_paths,
+        paths,
         asset_path_hashes,
         asset_content_hashes,
         asset_sizes);
 
     free(version_index);
+    free(paths);
 }
 
 TEST(Longtail, ContentIndex)
@@ -2640,17 +2693,18 @@ TEST(Longtail, CreateMissingContent)
         "first_"
     };
 
-    size_t version_index_size = GetVersionIndexSize(5, asset_paths);
+    Paths* paths = MakePaths(5, asset_paths);
+    size_t version_index_size = GetVersionIndexSize(5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
         version_index_size,
-        5,
-        asset_paths,
+        paths,
         asset_path_hashes,
         asset_content_hashes,
         asset_sizes);
+    free(paths);
 
     ContentIndex* missing_content_index = CreateMissingContent(
         content_index,
@@ -2714,11 +2768,16 @@ TEST(Longtail, MergeContentIndex)
     InMemStorageAPI remote_storage;
     CreateFakeContent(&remote_storage.m_StorageAPI, 10);
 
-    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, 0, "");
+    Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
+    ASSERT_NE((Paths*)0, local_paths);
+
+    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, 0, "", local_paths);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(5, *local_version_index->m_AssetCount);
 
-    VersionIndex* remote_version_index = CreateVersionIndex(&remote_storage.m_StorageAPI, 0, "");
+    Paths* remote_paths = GetFilesRecursively(&remote_storage.m_StorageAPI, "");
+    ASSERT_NE((Paths*)0, local_paths);
+    VersionIndex* remote_version_index = CreateVersionIndex(&remote_storage.m_StorageAPI, 0, "", remote_paths);
     ASSERT_NE((VersionIndex*)0, remote_version_index);
     ASSERT_EQ(10, *remote_version_index->m_AssetCount);
 
@@ -2874,18 +2933,19 @@ TEST(Longtail, ReconstructVersion)
         free(data);
     }
 
-    size_t version_index_size = GetVersionIndexSize(5, asset_paths);
+    Paths* paths = MakePaths(5, asset_paths);
+    size_t version_index_size = GetVersionIndexSize(5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
         version_index_size,
-        5,
-        asset_paths,
+        paths,
         asset_path_hashes,
         asset_content_hashes,
         asset_sizes);
     ASSERT_NE((VersionIndex*)0, version_index);
+    free(paths);
 
     PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
     ASSERT_NE((PathLookup*)0, path_lookup);
@@ -2950,7 +3010,7 @@ void Bench()
     if (0) return;
 
 
-#if 0
+#if 1
     #define HOME "D:\\Temp\\longtail"
 
     const uint32_t VERSION_COUNT = 6;
@@ -3013,7 +3073,10 @@ void Bench()
         char version_source_folder[256];
         sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
         printf("Indexing `%s`\n", version_source_folder);
-        VersionIndex* version_index = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, version_source_folder);
+        Paths* version_source_paths = GetFilesRecursively(&gTroveStorageAPI.m_StorageAPI, version_source_folder);
+        ASSERT_NE((Paths*)0, version_source_paths);
+        VersionIndex* version_index = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, version_source_folder, version_source_paths);
+        free(version_source_paths);
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
 
@@ -3044,34 +3107,39 @@ void Bench()
         {
             TLongtail_Hash block_hash = missing_content_index->m_BlockHash[b];
             char* block_name = GetBlockName(block_hash);
+
             char source_path[256];
             sprintf(source_path, "%s/%s.lrb", delta_upload_content_folder, block_name);
+
             char target_path[256];
             sprintf(target_path, "%s/%s.lrb", CONTENT_FOLDER, block_name);
+
+            free(block_name);
+
+            StorageAPI::HOpenFile v = gTroveStorageAPI.m_StorageAPI.OpenReadFile(&gTroveStorageAPI.m_StorageAPI, target_path);
+            if (v)
+            {
+                gTroveStorageAPI.m_StorageAPI.CloseRead(&gTroveStorageAPI.m_StorageAPI, v);
+                v = 0;
+                continue;
+            }
+
             StorageAPI::HOpenFile s = gTroveStorageAPI.m_StorageAPI.OpenReadFile(&gTroveStorageAPI.m_StorageAPI, source_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, s);
+
             ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.EnsureParentPathExists(&gTroveStorageAPI.m_StorageAPI, target_path));
             StorageAPI::HOpenFile t = gTroveStorageAPI.m_StorageAPI.OpenWriteFile(&gTroveStorageAPI.m_StorageAPI, target_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, t);
+
             uint64_t block_file_size = gTroveStorageAPI.m_StorageAPI.GetSize(&gTroveStorageAPI.m_StorageAPI, s);
             void* buffer = malloc(block_file_size);
+
             ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.Read(&gTroveStorageAPI.m_StorageAPI, s, 0, block_file_size, buffer));
             ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.Write(&gTroveStorageAPI.m_StorageAPI, t, 0, block_file_size, buffer));
+
             gTroveStorageAPI.m_StorageAPI.CloseRead(&gTroveStorageAPI.m_StorageAPI, s);
             gTroveStorageAPI.m_StorageAPI.CloseWrite(&gTroveStorageAPI.m_StorageAPI, t);
-            free(block_name);
         }
-
-/*        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, CONTENT_FOLDER);
-        ASSERT_NE(0, WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI,
-            &gTroveStorageAPI.m_StorageAPI,
-            &gLizardCompressionAPI,
-            shed,
-            missing_content_index,
-            path_lookup,
-            version_source_folder,
-            CONTENT_FOLDER));*/
 
         ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);
         ASSERT_NE((ContentIndex*)0, merged_content_index);
@@ -3122,7 +3190,7 @@ void Bench()
 
 void LifelikeTest()
 {
-    if (1) return;
+    if (0) return;
 
     Jobs::ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
@@ -3165,8 +3233,11 @@ void LifelikeTest()
 
     printf("Indexing `%s`...\n", local_path_1);
     TroveStorageAPI gTroveStorageAPI;
-    VersionIndex* version1 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_1);
+    Paths* local_path_1_paths = GetFilesRecursively(&gTroveStorageAPI.m_StorageAPI, local_path_1);
+    ASSERT_NE((Paths*)0, local_path_1_paths);
+    VersionIndex* version1 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_1, local_path_1_paths);
     WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version1, version_index_path_1);
+    free(local_path_1_paths);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     printf("Creating local content index...\n");
@@ -3207,7 +3278,10 @@ void LifelikeTest()
     printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
-    VersionIndex* version2 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_2);
+    Paths* local_path_2_paths = GetFilesRecursively(&gTroveStorageAPI.m_StorageAPI, local_path_2);
+    ASSERT_NE((Paths*)0, local_path_2_paths);
+    VersionIndex* version2 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_2, local_path_2_paths);
+    free(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version2, version_index_path_2));
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
