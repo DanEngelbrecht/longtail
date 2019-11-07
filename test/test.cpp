@@ -42,43 +42,6 @@ void Trove_DenormalizePath(char* path)
     }
 }
 
-int Trove_EnsureParentPathExists(char* path)
-{
-    char* last_path_delimiter = (char*)strrchr(path, '\\');
-    if (last_path_delimiter == 0)
-    {
-        return 1;
-    }
-    *last_path_delimiter = '\0';
-    DWORD attr = ::GetFileAttributesA(path);
-    if (attr == INVALID_FILE_ATTRIBUTES)
-    {
-        if (!Trove_EnsureParentPathExists(path))
-        {
-            *last_path_delimiter = '\\';
-            return 0;
-        }
-        BOOL success = ::CreateDirectoryA(path, 0);
-        if (!success)
-        {
-            attr = ::GetFileAttributesA(path);
-            if (attr != INVALID_FILE_ATTRIBUTES)
-            {
-                // Someone else created it
-                success = TRUE;
-            }
-        }
-        *last_path_delimiter = '\\';
-        if (success)
-        {
-            return 1;
-        }
-        return 0;
-    }
-    *last_path_delimiter = '\\';
-    return 1;
-}
-
 int Trove_CreateDirectory(const char* path)
 {
     BOOL ok = ::CreateDirectoryA(path, NULL);
@@ -216,7 +179,6 @@ struct StorageAPI
     int (*CreateDirectory)(StorageAPI* storage_api, const char* path);
 
     int (*MoveFile)(StorageAPI* storage_api, const char* source_path, const char* target_path);
-    int (*EnsureParentPathExists)(StorageAPI* storage_api, const char* path);
     char* (*ConcatPath)(StorageAPI* storage_api, const char* root_path, const char* sub_path);
 
     int (*IsDir)(StorageAPI* storage_api, const char* path);
@@ -229,6 +191,47 @@ struct StorageAPI
     const char* (*GetFileName)(StorageAPI* storage_api, HIterator iterator);
     const char* (*GetDirectoryName)(StorageAPI* storage_api, HIterator iterator);
 };
+
+
+int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
+{
+    char* dir_path = strdup(path);
+    char* last_path_delimiter = (char*)strrchr(dir_path, '/');
+    if (last_path_delimiter == 0)
+    {
+        return 1;
+    }
+    *last_path_delimiter = '\0';
+    if (storage_api->IsDir(storage_api, dir_path))
+    {
+        free(dir_path);
+        return 1;
+    }
+    else
+    {
+        if (!EnsureParentPathExists(storage_api, dir_path))
+        {
+            free(dir_path);
+            return 0;
+        }
+        if (storage_api->CreateDirectory(storage_api, dir_path))
+        {
+            free(dir_path);
+            return 1;
+        }
+        if (storage_api->IsDir(storage_api, dir_path))
+        {
+            free(dir_path);
+            return 1;
+        }
+    }
+    int ok = EnsureParentPathExists(storage_api, dir_path);
+    free(dir_path);
+    return ok;
+}
+
+
+
 
 struct TroveStorageAPI
 {
@@ -244,7 +247,6 @@ struct TroveStorageAPI
             CloseWrite,
             CreateDirectory,
             MoveFile,
-            EnsureParentPathExists,
             ConcatPath,
             IsDir,
             IsFile,
@@ -314,14 +316,6 @@ struct TroveStorageAPI
         free(tmp_target_path);
         free(tmp_source_path);
         return ok;
-    }
-    static int EnsureParentPathExists(StorageAPI* , const char* path)
-    {
-        char* tmp_path = strdup(path);
-        Trove_DenormalizePath(tmp_path);
-        int success = Trove_EnsureParentPathExists(tmp_path);
-        free(tmp_path);
-        return success;
     }
     static char* ConcatPath(StorageAPI* , const char* root_path, const char* sub_path)
     {
@@ -414,7 +408,6 @@ struct InMemStorageAPI
             CloseWrite,
             CreateDirectory,
             MoveFile,
-            EnsureParentPathExists,
             ConcatPath,
             IsDir,
             IsFile,
@@ -505,6 +498,11 @@ struct InMemStorageAPI
     static StorageAPI::HOpenFile OpenWriteFile(StorageAPI* storage_api, const char* path)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
+        TLongtail_Hash parent_path_hash = GetParentPathHash(path);
+        if (!instance->m_PathHashToContent.Get(parent_path_hash))
+        {
+            return 0;
+        }
         TLongtail_Hash path_hash = GetPathHash(path);
         PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
         if (it)
@@ -515,7 +513,7 @@ struct InMemStorageAPI
         }
         PathEntry* path_entry = (PathEntry*)malloc(sizeof(PathEntry));
         path_entry->m_Content = SetCapacity_TContent((TContent*)0, 16);
-        path_entry->m_ParentHash = GetParentPathHash(path);
+        path_entry->m_ParentHash = parent_path_hash;
         path_entry->m_FileName = strdup(GetFileName(path));
         instance->m_PathHashToContent.Put(path_hash, path_entry);
         return (StorageAPI::HOpenFile)path_hash;
@@ -545,8 +543,31 @@ struct InMemStorageAPI
     {
     }
 
-    static int CreateDirectory(StorageAPI*, const char*)
+    static int CreateDirectory(StorageAPI* storage_api, const char* path)
     {
+        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
+        TLongtail_Hash parent_path_hash = GetParentPathHash(path);
+        if (parent_path_hash && !instance->m_PathHashToContent.Get(parent_path_hash))
+        {
+            return 0;
+        }
+        TLongtail_Hash path_hash = GetPathHash(path);
+        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(path_hash);
+        if (source_path_ptr)
+        {
+            if ((*source_path_ptr)->m_Content == 0)
+            {
+                return 1;
+            }
+            // Not a directory!
+            return 0;
+        }
+
+        PathEntry* path_entry = (PathEntry*)malloc(sizeof(PathEntry));
+        path_entry->m_Content = 0;
+        path_entry->m_ParentHash = parent_path_hash;
+        path_entry->m_FileName = strdup(GetFileName(path));
+        instance->m_PathHashToContent.Put(path_hash, path_entry);
         return 1;
     }
 
@@ -570,10 +591,6 @@ struct InMemStorageAPI
         instance->m_PathHashToContent.Erase(source_path_hash);
         return 1;
     }
-    static int EnsureParentPathExists(StorageAPI* , const char* path)
-    {
-        return 1;
-    }
     static char* ConcatPath(StorageAPI* , const char* root_path, const char* sub_path)
     {
         if (root_path[0] == 0)
@@ -588,9 +605,16 @@ struct InMemStorageAPI
         return path;
     }
 
-    static int IsDir(StorageAPI* , const char*)
+    static int IsDir(StorageAPI* storage_api, const char* path)
     {
-        return 0;
+        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
+        TLongtail_Hash source_path_hash = GetPathHash(path);
+        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(source_path_hash);
+        if (!source_path_ptr)
+        {
+            return 0;
+        }
+        return (*source_path_ptr)->m_Content == 0;
     }
     static int IsFile(StorageAPI* storage_api, const char* path)
     {
@@ -601,7 +625,7 @@ struct InMemStorageAPI
         {
             return 0;
         }
-        return (*source_path_ptr) != 0;
+        return (*source_path_ptr)->m_Content != 0;
     }
 
     static StorageAPI::HIterator StartFind(StorageAPI* storage_api, const char* path)
@@ -644,15 +668,33 @@ struct InMemStorageAPI
         jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
         free(it_ptr);
     }
-    static const char* GetFileName(StorageAPI* storage_api, StorageAPI::HIterator iterator)
+    static const char* GetFileName(StorageAPI* , StorageAPI::HIterator iterator)
     {
         jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
         PathEntry* path_entry = *(*it_ptr).GetValue();
+        if (path_entry == 0)
+        {
+            return 0;
+        }
+        if (path_entry->m_Content == 0)
+        {
+            return 0;
+        }
         return path_entry->m_FileName;
     }
-    static const char* GetDirectoryName(StorageAPI* , StorageAPI::HIterator)
+    static const char* GetDirectoryName(StorageAPI* , StorageAPI::HIterator iterator)
     {
-        return 0;
+        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
+        PathEntry* path_entry = *(*it_ptr).GetValue();
+        if (path_entry == 0)
+        {
+            return 0;
+        }
+        if (path_entry->m_Content != 0)
+        {
+            return 0;
+        }
+        return path_entry->m_FileName;
     }
 };
 
@@ -1459,7 +1501,7 @@ int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, cons
 {
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_AssetCount);
 
-    if (!storage_api->EnsureParentPathExists(storage_api, path))
+    if (!EnsureParentPathExists(storage_api, path))
     {
         return 0;
     }
@@ -1505,7 +1547,7 @@ int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, cons
 {
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), version_index->m_NameDataSize);
 
-    if (!storage_api->EnsureParentPathExists(storage_api, path))
+    if (!EnsureParentPathExists(storage_api, path))
     {
         return 0;
     }
@@ -1936,7 +1978,7 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
     {
         ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
 
-        if (!target_storage_api->EnsureParentPathExists(target_storage_api, tmp_block_path))
+        if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
         {
             free(compressed_buffer);
             nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2409,7 +2451,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
 
         //printf("Recontructing `%s` from block `%s` at offset %u, size %u\n", asset_path, job->m_BlockPath, (uint32_t)job->m_AssetBlockOffsets[asset_index], (uint32_t)job->m_AssetLengths[asset_index]);
 
-        if (!storage_api->EnsureParentPathExists(storage_api, asset_path))
+        if (!EnsureParentPathExists(storage_api, asset_path))
         {
             free(decompressed_buffer);
             decompressed_buffer = 0;
@@ -2823,28 +2865,64 @@ TEST(Longtail, GetMissingAssets)
 //    uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
 }
 
-static void CreateFakeContent(StorageAPI* storage_api, uint32_t count)
+static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, uint32_t count)
 {
     for (uint32_t i = 0; i < count; ++i)
     {
-        char path[20];
-        sprintf(path, "%u", i);
+        char path[128];
+        sprintf(path, "%s%s%u", parent_path ? parent_path : "", parent_path && parent_path[0] ? "/" : "", i);
+        if (0 == EnsureParentPathExists(storage_api, path))
+        {
+            return 0;
+        }
         StorageAPI::HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path);
+        if (!content_file)
+        {
+            return 0;
+        }
         uint64_t content_size = 32000 + 1 + i;
         char* data = new char[content_size];
         memset(data, i, content_size);
-        storage_api->Write(storage_api, content_file, 0, content_size, data);
+        int ok = storage_api->Write(storage_api, content_file, 0, content_size, data);
         free(data);
+        if (!ok)
+        {
+            return 0;
+        }
     }
+    return 1;
+}
+
+TEST(Longtail, VersionIndexDirectories)
+{
+    InMemStorageAPI local_storage;
+    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "two_items", 2));
+    local_storage.m_StorageAPI.CreateDirectory(&local_storage.m_StorageAPI, "no_items");
+    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));    // TODO: Bad whitespace!?
+    ASSERT_EQ(1, EnsureParentPathExists(&local_storage.m_StorageAPI, "deep/folders/with/nothing/in/menoexists.nop"));
+
+    Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
+    for (uint32_t i = 0; i < *local_paths->m_PathCount; ++i)
+    {
+        printf("%s\n", &local_paths->m_Data[local_paths->m_Offsets[i]]);
+    }
+    ASSERT_NE((Paths*)0, local_paths);
+
+    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, 0, "", local_paths);
+    ASSERT_NE((VersionIndex*)0, local_version_index);
+    ASSERT_EQ(17, *local_version_index->m_AssetCount);
+
+    free(local_version_index);
+    free(local_paths);
 }
 
 TEST(Longtail, MergeContentIndex)
 {
     InMemStorageAPI local_storage;
-    CreateFakeContent(&local_storage.m_StorageAPI, 5);
+    CreateFakeContent(&local_storage.m_StorageAPI, 0, 5);
 
     InMemStorageAPI remote_storage;
-    CreateFakeContent(&remote_storage.m_StorageAPI, 10);
+    CreateFakeContent(&remote_storage.m_StorageAPI, 0, 10);
 
     Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
@@ -3088,7 +3166,7 @@ TEST(Longtail, ReconstructVersion)
 
 void Bench()
 {
-    if (0) return;
+    if (1) return;
 
 
 #if 1
@@ -3209,7 +3287,7 @@ void Bench()
             StorageAPI::HOpenFile s = trove_storage.m_StorageAPI.OpenReadFile(&trove_storage.m_StorageAPI, source_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, s);
 
-            ASSERT_NE(0, trove_storage.m_StorageAPI.EnsureParentPathExists(&trove_storage.m_StorageAPI, target_path));
+            ASSERT_NE(0, EnsureParentPathExists(&trove_storage.m_StorageAPI, target_path));
             StorageAPI::HOpenFile t = trove_storage.m_StorageAPI.OpenWriteFile(&trove_storage.m_StorageAPI, target_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, t);
 
@@ -3272,7 +3350,7 @@ void Bench()
 
 void LifelikeTest()
 {
-    if (0) return;
+    if (1) return;
 
     Jobs::ReadyCallback ready_callback;
     Bikeshed shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &ready_callback.cb);
