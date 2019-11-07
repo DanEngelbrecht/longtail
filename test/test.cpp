@@ -26,6 +26,13 @@
 
 #if defined(_WIN32)
 
+int GetCPUCount()
+{
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    return sysinfo.dwNumberOfProcessors;
+}
+
 void Trove_NormalizePath(char* path)
 {
     while (*path)
@@ -58,6 +65,11 @@ int Trove_MoveFile(const char* source, const char* target)
 
 #if defined(__APPLE__) || defined(__linux__)
 
+int GetCPUCount()
+{
+   return sysconf(_SC_NPROCESSORS_ONLN);
+}
+
 void Trove_NormalizePath(char* )
 {
 
@@ -66,6 +78,16 @@ void Trove_NormalizePath(char* )
 void Trove_DenormalizePath(char* )
 {
 
+}
+
+int Trove_CreateDirectory(const char* path)
+{
+    return 0;
+}
+
+int Trove_MoveFile(const char* source, const char* target)
+{
+    return 0;
 }
 
 #endif
@@ -192,6 +214,18 @@ struct StorageAPI
     const char* (*GetDirectoryName)(StorageAPI* storage_api, HIterator iterator);
 };
 
+int SafeCreateDirectory(StorageAPI* storage_api, const char* path)
+{
+    if (storage_api->CreateDirectory(storage_api, path))
+    {
+        return 1;
+    }
+    if (storage_api->IsDir(storage_api, path))
+    {
+        return 1;
+    }
+    return 0;
+}
 
 int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
 {
@@ -214,12 +248,7 @@ int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
             free(dir_path);
             return 0;
         }
-        if (storage_api->CreateDirectory(storage_api, dir_path))
-        {
-            free(dir_path);
-            return 1;
-        }
-        if (storage_api->IsDir(storage_api, dir_path))
+        if (SafeCreateDirectory(storage_api, dir_path))
         {
             free(dir_path);
             return 1;
@@ -479,7 +508,7 @@ struct InMemStorageAPI
         size_t dir_length = (uintptr_t)dir_path_begin - (uintptr_t)path;
         char* dir_path = (char*)malloc(dir_length + 1);
         strncpy(dir_path, path, dir_length);
-        dir_path[dir_length + 1] = '\0';
+        dir_path[dir_length] = '\0';
         TLongtail_Hash hash = GetPathHash(dir_path);
         free(dir_path);
         return hash;
@@ -499,7 +528,7 @@ struct InMemStorageAPI
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash parent_path_hash = GetParentPathHash(path);
-        if (!instance->m_PathHashToContent.Get(parent_path_hash))
+        if (parent_path_hash != 0 && !instance->m_PathHashToContent.Get(parent_path_hash))
         {
             return 0;
         }
@@ -2461,7 +2490,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
 
         if (IsDirPath(asset_path))
         {
-            if (!storage_api->CreateDirectory(storage_api, asset_path))
+            if (!SafeCreateDirectory(storage_api, asset_path))
             {
                 free(decompressed_buffer);
                 decompressed_buffer = 0;
@@ -2902,15 +2931,11 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(1, EnsureParentPathExists(&local_storage.m_StorageAPI, "deep/folders/with/nothing/in/menoexists.nop"));
 
     Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
-    for (uint32_t i = 0; i < *local_paths->m_PathCount; ++i)
-    {
-        printf("%s\n", &local_paths->m_Data[local_paths->m_Offsets[i]]);
-    }
     ASSERT_NE((Paths*)0, local_paths);
 
     VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, 0, "", local_paths);
     ASSERT_NE((VersionIndex*)0, local_version_index);
-    ASSERT_EQ(17, *local_version_index->m_AssetCount);
+    ASSERT_EQ(16, *local_version_index->m_AssetCount);
 
     free(local_version_index);
     free(local_paths);
@@ -3073,14 +3098,16 @@ TEST(Longtail, ReconstructVersion)
     {
         asset_path_hashes[i] = GetPathHash(asset_paths[i]);
         char* path = storage_api->ConcatPath(storage_api, "source_path", asset_paths[i]);
+        ASSERT_NE(0, EnsureParentPathExists(storage_api, path));
         StorageAPI::HOpenFile f = storage_api->OpenWriteFile(storage_api, path);
+        ASSERT_NE((StorageAPI::HOpenFile)0, f);
         free(path);
         char* data = (char*)malloc(asset_sizes[i]);
         for (uint32_t d = 0; d < asset_sizes[i]; ++d)
         {
             data[d] = (char)(i + 1);
         }
-        storage_api->Write(storage_api, f, 0, asset_sizes[i], data);
+        ASSERT_EQ(1, storage_api->Write(storage_api, f, 0, asset_sizes[i], data));
         storage_api->CloseWrite(storage_api, f);
 
         meow_state state;
@@ -3166,10 +3193,10 @@ TEST(Longtail, ReconstructVersion)
 
 void Bench()
 {
-    if (1) return;
+    if (0) return;
 
 
-#if 1
+#if 0
     #define HOME "D:\\Temp\\longtail"
 
     const uint32_t VERSION_COUNT = 6;
@@ -3207,8 +3234,8 @@ void Bench()
 
     nadir::TAtomic32 stop = 0;
 
-    static const uint32_t WORKER_COUNT = 7;
-    Jobs::ThreadWorker workers[WORKER_COUNT];
+    static const uint32_t WORKER_COUNT = GetCPUCount() < 1 ? 1 : GetCPUCount() - 1;
+    Jobs::ThreadWorker* workers = new Jobs::ThreadWorker[WORKER_COUNT];
     for (uint32_t i = 0; i < WORKER_COUNT; ++i)
     {
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
@@ -3334,6 +3361,7 @@ void Bench()
     {
         workers[i].JoinThread();
     }
+    delete []workers;
 
     for (uint32_t i = 0; i < VERSION_COUNT; ++i)
     {
@@ -3357,8 +3385,8 @@ void LifelikeTest()
 
     nadir::TAtomic32 stop = 0;
 
-    static const uint32_t WORKER_COUNT = 19;
-    Jobs::ThreadWorker workers[WORKER_COUNT];
+    static const uint32_t WORKER_COUNT = GetCPUCount() < 1 ? 1 : GetCPUCount() - 1;
+    Jobs::ThreadWorker* workers = new Jobs::ThreadWorker[WORKER_COUNT];
     for (uint32_t i = 0; i < WORKER_COUNT; ++i)
     {
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
@@ -3562,6 +3590,7 @@ void LifelikeTest()
     {
         workers[i].JoinThread();
     }
+    delete []workers;
 
     free(shed);
     shed = 0;
@@ -5273,8 +5302,8 @@ TEST(Longtail, ScanContent)
 
     nadir::TAtomic32 stop = 0;
 
-    static const uint32_t WORKER_COUNT = 7;
-    ThreadWorker workers[WORKER_COUNT];
+    static const uint32_t WORKER_COUNT = GetCPUCount() < 1 ? 1 : GetCPUCount() - 1;
+    Jobs::ThreadWorker* workers = new Jobs::ThreadWorker[WORKER_COUNT];
     for (uint32_t i = 0; i < WORKER_COUNT; ++i)
     {
         workers[i].CreateThread(shed, ready_callback.m_Semaphore, &stop);
@@ -5560,6 +5589,7 @@ TEST(Longtail, ScanContent)
     {
         workers[i].JoinThread();
     }
+    delete []workers;
 
     free(shed);
 }
