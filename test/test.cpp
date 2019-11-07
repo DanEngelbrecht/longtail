@@ -791,6 +791,7 @@ static int RecurseTree(StorageAPI* storage_api, const char* root_folder, Process
             {
                 if (const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator))
                 {
+                    entry_processor(context, asset_folder, dir_name);
                     Push_AssetFolder(asset_folders)->m_FolderPath = storage_api->ConcatPath(storage_api, asset_folder, dir_name);
                     if (GetSize_AssetFolder(asset_folders) == GetCapacity_AssetFolder(asset_folders))
                     {
@@ -878,11 +879,16 @@ Paths* GetFilesRecursively(StorageAPI* storage_api, const char* root_path)
     {
         Context* paths_context = (Context*)context;
         StorageAPI* storage_api = paths_context->m_StorageAPI;
-        Paths* paths = paths_context->m_Paths;
-
-        const uint32_t root_path_length = paths_context->m_RootPathLength;
 
         char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
+        if (storage_api->IsDir(storage_api, full_path))
+        {
+            // Ignore directories for now
+            return;
+        }
+
+        Paths* paths = paths_context->m_Paths;
+        const uint32_t root_path_length = paths_context->m_RootPathLength;
         const char* s = &full_path[root_path_length];
         if (*s == '/')
         {
@@ -1101,6 +1107,8 @@ struct VersionIndex
     TLongtail_Hash* m_PathHash;
     TLongtail_Hash* m_AssetContentHash;
     uint32_t* m_AssetSize;
+    // uint64_t m_CreationDate;
+    // uint64_t m_ModificationDate;
     uint32_t* m_NameOffset;
     uint32_t m_NameDataSize;
     char* m_NameData;
