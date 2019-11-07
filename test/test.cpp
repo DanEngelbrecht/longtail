@@ -775,26 +775,23 @@ struct StoreCompressionAPI
 
 int StoreCompressionAPI::DefaultCompressionSetting = 0;
 
-struct AssetFolder
-{
-    const char* m_FolderPath;
-};
 
-LONGTAIL_DECLARE_ARRAY_TYPE(AssetFolder, malloc, free)
+typedef char* TFolderPaths;
+LONGTAIL_DECLARE_ARRAY_TYPE(TFolderPaths, malloc, free)
 
 typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
 
 static int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
-    AssetFolder* asset_folders = SetCapacity_AssetFolder((AssetFolder*)0, 256);
+    TFolderPaths* folder_paths = SetCapacity_TFolderPaths((TFolderPaths*)0, 256);
 
     uint32_t folder_index = 0;
 
-    Push_AssetFolder(asset_folders)->m_FolderPath = strdup(root_folder);
+    *Push_TFolderPaths(folder_paths) = strdup(root_folder);
 
-    while (folder_index != GetSize_AssetFolder(asset_folders))
+    while (folder_index != GetSize_TFolderPaths(folder_paths))
     {
-        const char* asset_folder = asset_folders[folder_index++].m_FolderPath;
+        const char* asset_folder = folder_paths[folder_index++];
 
         StorageAPI::HIterator fs_iterator = storage_api->StartFind(storage_api, asset_folder);
         if (fs_iterator)
@@ -804,29 +801,29 @@ static int RecurseTree(StorageAPI* storage_api, const char* root_folder, Process
                 if (const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator))
                 {
                     entry_processor(context, asset_folder, dir_name);
-                    Push_AssetFolder(asset_folders)->m_FolderPath = storage_api->ConcatPath(storage_api, asset_folder, dir_name);
-                    if (GetSize_AssetFolder(asset_folders) == GetCapacity_AssetFolder(asset_folders))
+                    *Push_TFolderPaths(folder_paths) = storage_api->ConcatPath(storage_api, asset_folder, dir_name);
+                    if (GetSize_TFolderPaths(folder_paths) == GetCapacity_TFolderPaths(folder_paths))
                     {
-                        uint32_t unprocessed_count = (GetSize_AssetFolder(asset_folders) - folder_index);
+                        uint32_t unprocessed_count = (GetSize_TFolderPaths(folder_paths) - folder_index);
                         if (folder_index > 0)
                         {
                             if (unprocessed_count > 0)
                             {
-                                memmove(asset_folders, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
-                                SetSize_AssetFolder(asset_folders, unprocessed_count);
+                                memmove(folder_paths, &folder_paths[folder_index], sizeof(TFolderPaths) * unprocessed_count);
+                                SetSize_TFolderPaths(folder_paths, unprocessed_count);
                             }
                             folder_index = 0;
                         }
                         else
                         {
-                            AssetFolder* asset_folders_new = SetCapacity_AssetFolder((AssetFolder*)0, GetCapacity_AssetFolder(asset_folders) + 256);
+                            TFolderPaths* folder_paths_new = SetCapacity_TFolderPaths((TFolderPaths*)0, GetCapacity_TFolderPaths(folder_paths) + 256);
                             if (unprocessed_count > 0)
                             {
-                                SetSize_AssetFolder(asset_folders_new, unprocessed_count);
-                                memcpy(asset_folders_new, &asset_folders[folder_index], sizeof(AssetFolder) * unprocessed_count);
+                                SetSize_TFolderPaths(folder_paths_new, unprocessed_count);
+                                memcpy(folder_paths_new, &folder_paths[folder_index], sizeof(TFolderPaths) * unprocessed_count);
                             }
-                            Free_AssetFolder(asset_folders);
-                            asset_folders = asset_folders_new;
+                            Free_TFolderPaths(folder_paths);
+                            folder_paths = folder_paths_new;
                             folder_index = 0;
                         }
                     }
@@ -840,7 +837,7 @@ static int RecurseTree(StorageAPI* storage_api, const char* root_folder, Process
         }
         free((void*)asset_folder);
     }
-    Free_AssetFolder(asset_folders);
+    Free_TFolderPaths(folder_paths);
     return 1;
 }
 
