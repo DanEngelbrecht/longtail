@@ -637,58 +637,75 @@ struct CompressionAPI
     typedef struct CompressionContext* HCompressionContext;
     typedef struct DecompressionContext* HDecompressionContext;
     typedef struct Settings* HSettings;
-    HSettings (*GetDefaultSettings)();
-    HSettings (*GetMaxCompressionSetting)();
+    HSettings (*GetDefaultSettings)(CompressionAPI* compression_api);
+    HSettings (*GetMaxCompressionSetting)(CompressionAPI* compression_api);
 
-    HCompressionContext (*CreateCompressionContext)(HSettings settings);
-    size_t (*GetMaxCompressedSize)(HCompressionContext context, size_t size);
-    size_t (*Compress)(HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size);
-    void (*DeleteCompressionContext)(HCompressionContext context);
+    HCompressionContext (*CreateCompressionContext)(CompressionAPI* compression_api, HSettings settings);
+    size_t (*GetMaxCompressedSize)(CompressionAPI* compression_api, HCompressionContext context, size_t size);
+    size_t (*Compress)(CompressionAPI* compression_api, HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size);
+    void (*DeleteCompressionContext)(CompressionAPI* compression_api, HCompressionContext context);
 
-    HDecompressionContext (*CreateDecompressionContext)();
-    size_t (*Decompress)(HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size);
-    void (*DeleteDecompressionContext)(HDecompressionContext context);
+    HDecompressionContext (*CreateDecompressionContext)(CompressionAPI* compression_api);
+    size_t (*Decompress)(CompressionAPI* compression_api, HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size);
+    void (*DeleteDecompressionContext)(CompressionAPI* compression_api, HDecompressionContext context);
 };
 
 struct LizardCompressionAPI
 {
+    CompressionAPI m_CompressionAPI;
+
+    LizardCompressionAPI()
+        : m_CompressionAPI{
+            GetDefaultSettings,
+            GetMaxCompressionSetting,
+            CreateCompressionContext,
+            GetMaxCompressedSize,
+            Compress,
+            DeleteCompressionContext,
+            CreateDecompressionContext,
+            Decompress,
+            DeleteDecompressionContext
+            }
+    {
+    }
+
     static int DefaultCompressionSetting;
     static int MaxCompressionSetting;
-    static CompressionAPI::HSettings GetDefaultSettings()
+    static CompressionAPI::HSettings GetDefaultSettings(CompressionAPI*)
     {
         return (CompressionAPI::HSettings)&DefaultCompressionSetting;
     }
-    static CompressionAPI::HSettings GetMaxCompressionSetting()
+    static CompressionAPI::HSettings GetMaxCompressionSetting(CompressionAPI*)
     {
         return (CompressionAPI::HSettings)&MaxCompressionSetting;
     }
-    static CompressionAPI::HCompressionContext CreateCompressionContext(CompressionAPI::HSettings settings)
+    static CompressionAPI::HCompressionContext CreateCompressionContext(CompressionAPI*, CompressionAPI::HSettings settings)
     {
         return (CompressionAPI::HCompressionContext)settings;
     }
-    static size_t GetMaxCompressedSize(CompressionAPI::HCompressionContext , size_t size)
+    static size_t GetMaxCompressedSize(CompressionAPI*, CompressionAPI::HCompressionContext , size_t size)
     {
         return (size_t)Lizard_compressBound((int)size);
     }
-    static size_t Compress(CompressionAPI::HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
+    static size_t Compress(CompressionAPI*, CompressionAPI::HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
     {
         int compression_setting = *(int*)context;
         int compressed_size = Lizard_compress(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
         return (size_t)(compressed_size >= 0 ? compressed_size : 0);
     }
-    static void DeleteCompressionContext(CompressionAPI::HCompressionContext)
+    static void DeleteCompressionContext(CompressionAPI*, CompressionAPI::HCompressionContext)
     {
     }
-    static CompressionAPI::HDecompressionContext CreateDecompressionContext()
+    static CompressionAPI::HDecompressionContext CreateDecompressionContext(CompressionAPI* compression_api)
     {
-        return (CompressionAPI::HDecompressionContext)GetDefaultSettings();
+        return (CompressionAPI::HDecompressionContext)GetDefaultSettings(compression_api);
     }
-    static size_t Decompress(CompressionAPI::HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
+    static size_t Decompress(CompressionAPI*, CompressionAPI::HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
     {
         int result = Lizard_decompress_safe(compressed, uncompressed, (int)compressed_size, (int)uncompressed_size);
         return (size_t)(result >= 0 ? result : 0);
     }
-    static void DeleteDecompressionContext(CompressionAPI::HDecompressionContext)
+    static void DeleteDecompressionContext(CompressionAPI*, CompressionAPI::HDecompressionContext)
     {
     }
 };
@@ -696,72 +713,67 @@ struct LizardCompressionAPI
 int LizardCompressionAPI::DefaultCompressionSetting = 44;
 int LizardCompressionAPI::MaxCompressionSetting = LIZARD_MAX_CLEVEL;
 
-CompressionAPI gLizardCompressionAPI = {
-    LizardCompressionAPI::GetDefaultSettings,
-    LizardCompressionAPI::GetMaxCompressionSetting,
-    LizardCompressionAPI::CreateCompressionContext,
-    LizardCompressionAPI::GetMaxCompressedSize,
-    LizardCompressionAPI::Compress,
-    LizardCompressionAPI::DeleteCompressionContext,
-    LizardCompressionAPI::CreateDecompressionContext,
-    LizardCompressionAPI::Decompress,
-    LizardCompressionAPI::DeleteDecompressionContext
-};
 
 struct StoreCompressionAPI
 {
+    CompressionAPI m_CompressionAPI;
+
+    StoreCompressionAPI()
+        : m_CompressionAPI{
+            GetDefaultSettings,
+            GetMaxCompressionSetting,
+            CreateCompressionContext,
+            GetMaxCompressedSize,
+            Compress,
+            DeleteCompressionContext,
+            CreateDecompressionContext,
+            Decompress,
+            DeleteDecompressionContext
+            }
+    {
+
+    }
+
     static int DefaultCompressionSetting;
-    static CompressionAPI::HSettings GetDefaultSettings()
+    static CompressionAPI::HSettings GetDefaultSettings(CompressionAPI*)
     {
         return (CompressionAPI::HSettings)&DefaultCompressionSetting;
     }
-    static CompressionAPI::HSettings GetMaxCompressionSetting()
+    static CompressionAPI::HSettings GetMaxCompressionSetting(CompressionAPI* compression_api)
     {
-        return GetDefaultSettings();
+        return GetDefaultSettings(compression_api);
     }
-    static CompressionAPI::HCompressionContext CreateCompressionContext(CompressionAPI::HSettings settings)
+    static CompressionAPI::HCompressionContext CreateCompressionContext(CompressionAPI*, CompressionAPI::HSettings settings)
     {
         return (CompressionAPI::HCompressionContext)settings;
     }
-    static size_t GetMaxCompressedSize(CompressionAPI::HCompressionContext , size_t size)
+    static size_t GetMaxCompressedSize(CompressionAPI*, CompressionAPI::HCompressionContext , size_t size)
     {
         return size;
     }
-    static size_t Compress(CompressionAPI::HCompressionContext , const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
+    static size_t Compress(CompressionAPI*, CompressionAPI::HCompressionContext , const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
     {
         memmove(compressed, uncompressed, uncompressed_size);
         return uncompressed_size;
     }
-    static void DeleteCompressionContext(CompressionAPI::HCompressionContext)
+    static void DeleteCompressionContext(CompressionAPI*, CompressionAPI::HCompressionContext)
     {
     }
-    static CompressionAPI::HDecompressionContext CreateDecompressionContext()
+    static CompressionAPI::HDecompressionContext CreateDecompressionContext(CompressionAPI* compression_api)
     {
-        return (CompressionAPI::HDecompressionContext)GetDefaultSettings();
+        return (CompressionAPI::HDecompressionContext)GetDefaultSettings(compression_api);
     }
-    static size_t Decompress(CompressionAPI::HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
+    static size_t Decompress(CompressionAPI*, CompressionAPI::HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
     {
         memmove(uncompressed, compressed, uncompressed_size);
         return uncompressed_size;
     }
-    static void DeleteDecompressionContext(CompressionAPI::HDecompressionContext)
+    static void DeleteDecompressionContext(CompressionAPI*, CompressionAPI::HDecompressionContext)
     {
     }
 };
 
 int StoreCompressionAPI::DefaultCompressionSetting = 0;
-
-CompressionAPI gStoreCompressionAPI = {
-    StoreCompressionAPI::GetDefaultSettings,
-    StoreCompressionAPI::GetMaxCompressionSetting,
-    StoreCompressionAPI::CreateCompressionContext,
-    StoreCompressionAPI::GetMaxCompressedSize,
-    StoreCompressionAPI::Compress,
-    StoreCompressionAPI::DeleteCompressionContext,
-    StoreCompressionAPI::CreateDecompressionContext,
-    StoreCompressionAPI::Decompress,
-    StoreCompressionAPI::DeleteDecompressionContext
-};
 
 struct AssetFolder
 {
@@ -930,7 +942,6 @@ Paths* GetFilesRecursively(StorageAPI* storage_api, const char* root_path)
     };
 
     Paths* paths = CreatePaths(default_path_count, default_path_data_size);//(Paths*)malloc(GetPathsSize(default_path_count, default_path_data_size));
-//static int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
     Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths};
     paths = 0;
 
@@ -1868,13 +1879,13 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         full_path = 0;
     }
 
-    CompressionAPI::HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api->GetDefaultSettings());
-    const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_context, block_data_size);
+    CompressionAPI::HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api));
+    const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
     char* compressed_buffer = (char*)malloc((sizeof(uint32_t) * 2) + max_dst_size);
     ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
 
-    size_t compressed_size = compression_api->Compress(compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
-    compression_api->DeleteCompressionContext(compression_context);
+    size_t compressed_size = compression_api->Compress(compression_api, compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
+    compression_api->DeleteCompressionContext(compression_api, compression_context);
     free(write_buffer);
     if (compressed_size > 0)
     {
@@ -2332,9 +2343,9 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
     uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
     uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
     char* decompressed_buffer = (char*)malloc(uncompressed_size);
-    CompressionAPI::HDecompressionContext compression_context = compression_api->CreateDecompressionContext();
-    size_t result = compression_api->Decompress(compression_context, &compressed_block_content[sizeof(uint32_t) * 2], decompressed_buffer, compressed_size, uncompressed_size);
-    compression_api->DeleteDecompressionContext(compression_context);
+    CompressionAPI::HDecompressionContext compression_context = compression_api->CreateDecompressionContext(compression_api);
+    size_t result = compression_api->Decompress(compression_api, compression_context, &compressed_block_content[sizeof(uint32_t) * 2], decompressed_buffer, compressed_size, uncompressed_size);
+    compression_api->DeleteDecompressionContext(compression_api, compression_context);
     free(compressed_block_content);
     storage_api->CloseRead(storage_api, block_file_handle);
     block_file_handle = 0;
@@ -2799,11 +2810,13 @@ TEST(Longtail, MergeContentIndex)
 			local_version_index->m_NameData,
 			GetContentTagFake);
 
+    StoreCompressionAPI store_compression;
+
     PathLookup* local_path_lookup = CreateContentHashToPathLookup(local_version_index, 0);
     ASSERT_EQ(1, WriteContentBlocks(
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
-        &gStoreCompressionAPI,
+        &store_compression.m_CompressionAPI,
         0,
         local_content_index,
         local_path_lookup,
@@ -2824,7 +2837,7 @@ TEST(Longtail, MergeContentIndex)
     ASSERT_EQ(1, WriteContentBlocks(
         &remote_storage.m_StorageAPI,
         &remote_storage.m_StorageAPI,
-        &gStoreCompressionAPI,
+        &store_compression.m_CompressionAPI,
         0,
         remote_content_index,
         remote_path_lookup,
@@ -2836,7 +2849,7 @@ TEST(Longtail, MergeContentIndex)
     ASSERT_EQ(1, WriteContentBlocks(
         &remote_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
-        &gStoreCompressionAPI,
+        &store_compression.m_CompressionAPI,
         0,
         missing_content,
         remote_path_lookup,
@@ -2846,7 +2859,7 @@ TEST(Longtail, MergeContentIndex)
     ContentIndex* merged_content_index = MergeContentIndex(local_content_index, missing_content);
     ASSERT_EQ(1, ReconstructVersion(
         &local_storage.m_StorageAPI,
-        &gStoreCompressionAPI,
+        &store_compression.m_CompressionAPI,
         0,
         merged_content_index,
         remote_version_index,
@@ -2969,10 +2982,11 @@ TEST(Longtail, ReconstructVersion)
         GetContentTagFake);
     ASSERT_NE((ContentIndex*)0, content_index);
 
+    LizardCompressionAPI lizard_compression;
     ASSERT_EQ(1, WriteContentBlocks(
         storage_api,
         storage_api,
-        &gLizardCompressionAPI,
+        &lizard_compression.m_CompressionAPI,
         0,
         content_index,
         path_lookup,
@@ -2983,7 +2997,7 @@ TEST(Longtail, ReconstructVersion)
 
     ASSERT_EQ(1, ReconstructVersion(
         storage_api,
-        &gLizardCompressionAPI,
+        &lizard_compression.m_CompressionAPI,
         0,
         content_index,
         version_index,
@@ -3075,35 +3089,36 @@ void Bench()
     ASSERT_NE((ContentIndex*)0, full_content_index);
     VersionIndex* version_indexes[VERSION_COUNT];
 
-    TroveStorageAPI gTroveStorageAPI;
+    TroveStorageAPI trove_storage;
     for (uint32_t i = 0; i < VERSION_COUNT; ++i)
     {
         char version_source_folder[256];
         sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
         printf("Indexing `%s`\n", version_source_folder);
-        Paths* version_source_paths = GetFilesRecursively(&gTroveStorageAPI.m_StorageAPI, version_source_folder);
+        Paths* version_source_paths = GetFilesRecursively(&trove_storage.m_StorageAPI, version_source_folder);
         ASSERT_NE((Paths*)0, version_source_paths);
-        VersionIndex* version_index = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, version_source_folder, version_source_paths);
+        VersionIndex* version_index = CreateVersionIndex(&trove_storage.m_StorageAPI, shed, version_source_folder, version_source_paths);
         free(version_source_paths);
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
 
         char version_index_file[256];
         sprintf(version_index_file, "%s%s%s", SOURCE_VERSION_PREFIX, VERSION[i], VERSION_INDEX_SUFFIX);
-        ASSERT_NE(0, WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version_index, version_index_file));
+        ASSERT_NE(0, WriteVersionIndex(&trove_storage.m_StorageAPI, version_index, version_index_file));
         printf("Wrote version index to `%s`\n", version_index_file);
 
         ContentIndex* missing_content_index = CreateMissingContent(full_content_index, version_source_folder, version_index, GetContentTag);
         ASSERT_NE((ContentIndex*)0, missing_content_index);
 
+        LizardCompressionAPI lizard_compression;
         PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
         ASSERT_NE(0, WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI,
-            &gTroveStorageAPI.m_StorageAPI,
-            &gLizardCompressionAPI,
+            &trove_storage.m_StorageAPI,
+            &trove_storage.m_StorageAPI,
+            &lizard_compression.m_CompressionAPI,
             shed,
             missing_content_index,
             path_lookup,
@@ -3124,29 +3139,29 @@ void Bench()
 
             free(block_name);
 
-            StorageAPI::HOpenFile v = gTroveStorageAPI.m_StorageAPI.OpenReadFile(&gTroveStorageAPI.m_StorageAPI, target_path);
+            StorageAPI::HOpenFile v = trove_storage.m_StorageAPI.OpenReadFile(&trove_storage.m_StorageAPI, target_path);
             if (v)
             {
-                gTroveStorageAPI.m_StorageAPI.CloseRead(&gTroveStorageAPI.m_StorageAPI, v);
+                trove_storage.m_StorageAPI.CloseRead(&trove_storage.m_StorageAPI, v);
                 v = 0;
                 continue;
             }
 
-            StorageAPI::HOpenFile s = gTroveStorageAPI.m_StorageAPI.OpenReadFile(&gTroveStorageAPI.m_StorageAPI, source_path);
+            StorageAPI::HOpenFile s = trove_storage.m_StorageAPI.OpenReadFile(&trove_storage.m_StorageAPI, source_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, s);
 
-            ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.EnsureParentPathExists(&gTroveStorageAPI.m_StorageAPI, target_path));
-            StorageAPI::HOpenFile t = gTroveStorageAPI.m_StorageAPI.OpenWriteFile(&gTroveStorageAPI.m_StorageAPI, target_path);
+            ASSERT_NE(0, trove_storage.m_StorageAPI.EnsureParentPathExists(&trove_storage.m_StorageAPI, target_path));
+            StorageAPI::HOpenFile t = trove_storage.m_StorageAPI.OpenWriteFile(&trove_storage.m_StorageAPI, target_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, t);
 
-            uint64_t block_file_size = gTroveStorageAPI.m_StorageAPI.GetSize(&gTroveStorageAPI.m_StorageAPI, s);
+            uint64_t block_file_size = trove_storage.m_StorageAPI.GetSize(&trove_storage.m_StorageAPI, s);
             void* buffer = malloc(block_file_size);
 
-            ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.Read(&gTroveStorageAPI.m_StorageAPI, s, 0, block_file_size, buffer));
-            ASSERT_NE(0, gTroveStorageAPI.m_StorageAPI.Write(&gTroveStorageAPI.m_StorageAPI, t, 0, block_file_size, buffer));
+            ASSERT_NE(0, trove_storage.m_StorageAPI.Read(&trove_storage.m_StorageAPI, s, 0, block_file_size, buffer));
+            ASSERT_NE(0, trove_storage.m_StorageAPI.Write(&trove_storage.m_StorageAPI, t, 0, block_file_size, buffer));
 
-            gTroveStorageAPI.m_StorageAPI.CloseRead(&gTroveStorageAPI.m_StorageAPI, s);
-            gTroveStorageAPI.m_StorageAPI.CloseWrite(&gTroveStorageAPI.m_StorageAPI, t);
+            trove_storage.m_StorageAPI.CloseRead(&trove_storage.m_StorageAPI, s);
+            trove_storage.m_StorageAPI.CloseWrite(&trove_storage.m_StorageAPI, t);
         }
 
         ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);
@@ -3161,8 +3176,8 @@ void Bench()
         sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
         printf("Reconstructing %" PRIu64 " assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
         ASSERT_NE(0, ReconstructVersion(
-            &gTroveStorageAPI.m_StorageAPI,
-            &gLizardCompressionAPI,
+            &trove_storage.m_StorageAPI,
+            &lizard_compression.m_CompressionAPI,
             shed,
             full_content_index,
             version_index,
@@ -3240,11 +3255,13 @@ void LifelikeTest()
     const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
 
     printf("Indexing `%s`...\n", local_path_1);
-    TroveStorageAPI gTroveStorageAPI;
-    Paths* local_path_1_paths = GetFilesRecursively(&gTroveStorageAPI.m_StorageAPI, local_path_1);
+    TroveStorageAPI trove_storage;
+    LizardCompressionAPI lizard_compression;
+
+    Paths* local_path_1_paths = GetFilesRecursively(&trove_storage.m_StorageAPI, local_path_1);
     ASSERT_NE((Paths*)0, local_path_1_paths);
-    VersionIndex* version1 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_1, local_path_1_paths);
-    WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version1, version_index_path_1);
+    VersionIndex* version1 = CreateVersionIndex(&trove_storage.m_StorageAPI, shed, local_path_1, local_path_1_paths);
+    WriteVersionIndex(&trove_storage.m_StorageAPI, version1, version_index_path_1);
     free(local_path_1_paths);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
@@ -3260,7 +3277,7 @@ void LifelikeTest()
         GetContentTag);
 
     printf("Writing local content index...\n");
-    WriteContentIndex(&gTroveStorageAPI.m_StorageAPI, local_content_index, local_content_index_path);
+    WriteContentIndex(&trove_storage.m_StorageAPI, local_content_index, local_content_index_path);
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
     if (1)
@@ -3268,9 +3285,9 @@ void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
         PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
         WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI,
-            &gTroveStorageAPI.m_StorageAPI,
-            &gLizardCompressionAPI,
+            &trove_storage.m_StorageAPI,
+            &trove_storage.m_StorageAPI,
+            &lizard_compression.m_CompressionAPI,
             shed,
             local_content_index,
             path_lookup,
@@ -3282,16 +3299,16 @@ void LifelikeTest()
     }
 
     printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI.m_StorageAPI, &gLizardCompressionAPI, shed, local_content_index, version1, local_content_path, remote_path_1));
+    ASSERT_EQ(1, ReconstructVersion(&trove_storage.m_StorageAPI, &lizard_compression.m_CompressionAPI, shed, local_content_index, version1, local_content_path, remote_path_1));
     printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
-    Paths* local_path_2_paths = GetFilesRecursively(&gTroveStorageAPI.m_StorageAPI, local_path_2);
+    Paths* local_path_2_paths = GetFilesRecursively(&trove_storage.m_StorageAPI, local_path_2);
     ASSERT_NE((Paths*)0, local_path_2_paths);
-    VersionIndex* version2 = CreateVersionIndex(&gTroveStorageAPI.m_StorageAPI, shed, local_path_2, local_path_2_paths);
+    VersionIndex* version2 = CreateVersionIndex(&trove_storage.m_StorageAPI, shed, local_path_2, local_path_2_paths);
     free(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);
-    ASSERT_EQ(1, WriteVersionIndex(&gTroveStorageAPI.m_StorageAPI, version2, version_index_path_2));
+    ASSERT_EQ(1, WriteVersionIndex(&trove_storage.m_StorageAPI, version2, version_index_path_2));
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
     
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
@@ -3305,9 +3322,9 @@ void LifelikeTest()
         PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
         ASSERT_NE((PathLookup*)0, path_lookup);
         ASSERT_EQ(1, WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gLizardCompressionAPI,
+            &trove_storage.m_StorageAPI,
+            &trove_storage.m_StorageAPI,
+            &lizard_compression.m_CompressionAPI,
             shed,
             missing_content,
             path_lookup,
@@ -3325,9 +3342,9 @@ void LifelikeTest()
         PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
         ASSERT_NE((PathLookup*)0, path_lookup);
         ASSERT_EQ(1, WriteContentBlocks(
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gTroveStorageAPI.m_StorageAPI, 
-            &gLizardCompressionAPI,
+            &trove_storage.m_StorageAPI,
+            &trove_storage.m_StorageAPI,
+            &lizard_compression.m_CompressionAPI,
             shed,
             missing_content,
             path_lookup,
@@ -3363,17 +3380,17 @@ void LifelikeTest()
 //        char* block_name = GetBlockName(block_hash);
 //        char block_file_name[64];
 //        sprintf(block_file_name, "%s.lrb", block_name);
-//        char* source_path = gTroveStorageAPI.ConcatPath(remote_content_path, block_file_name);
-//        StorageAPI::HOpenFile s = gTroveStorageAPI.OpenReadFile(source_path);
-//        char* target_path = gTroveStorageAPI.ConcatPath(local_content_path, block_file_name);
-//        StorageAPI::HOpenFile t = gTroveStorageAPI.OpenWriteFile(target_path);
-//        uint64_t size = gTroveStorageAPI.GetSize(s);
+//        char* source_path = trove_storage.ConcatPath(remote_content_path, block_file_name);
+//        StorageAPI::HOpenFile s = trove_storage.OpenReadFile(source_path);
+//        char* target_path = trove_storage.ConcatPath(local_content_path, block_file_name);
+//        StorageAPI::HOpenFile t = trove_storage.OpenWriteFile(target_path);
+//        uint64_t size = trove_storage.GetSize(s);
 //        char* buffer = (char*)malloc(size);
-//        gTroveStorageAPI.Read(s, 0, size, buffer);
-//        gTroveStorageAPI.Write(t, 0, size, buffer);
+//        trove_storage.Read(s, 0, size, buffer);
+//        trove_storage.Write(t, 0, size, buffer);
 //        free(buffer);
-//        gTroveStorageAPI.CloseWrite(t);
-//        gTroveStorageAPI.CloseRead(s);
+//        trove_storage.CloseWrite(t);
+//        trove_storage.CloseRead(s);
 //    }
 
 	ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
@@ -3384,7 +3401,7 @@ void LifelikeTest()
 	local_content_index = 0;
 
     printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-    ASSERT_EQ(1, ReconstructVersion(&gTroveStorageAPI.m_StorageAPI, &gLizardCompressionAPI, shed, merged_local_content, version2, local_content_path, remote_path_2));
+    ASSERT_EQ(1, ReconstructVersion(&trove_storage.m_StorageAPI, &lizard_compression.m_CompressionAPI, shed, merged_local_content, version2, local_content_path, remote_path_2));
     printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
 //    free(existing_blocks);
