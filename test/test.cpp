@@ -24,6 +24,15 @@
     #include <alloca.h>
 #endif
 
+#define VERBOSE_LOGS
+
+#ifdef VERBOSE_LOGS
+    #define LOG(fmt, ...) \
+        printf("--- ");printf(fmt, __VA_ARGS__);
+#else
+    #define LOG
+#endif
+
 #if defined(_WIN32)
 
 int GetCPUCount()
@@ -245,6 +254,7 @@ int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
     {
         if (!EnsureParentPathExists(storage_api, dir_path))
         {
+            LOG("EnsureParentPathExists failed: `%s`\n", dir_path)
             free(dir_path);
             return 0;
         }
@@ -255,6 +265,10 @@ int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
         }
     }
     int ok = EnsureParentPathExists(storage_api, dir_path);
+    if (!ok)
+    {
+        LOG("EnsureParentPathExists failed: `%s`\n", dir_path)
+    }
     free(dir_path);
     return ok;
 }
@@ -530,6 +544,7 @@ struct InMemStorageAPI
         TLongtail_Hash parent_path_hash = GetParentPathHash(path);
         if (parent_path_hash != 0 && !instance->m_PathHashToContent.Get(parent_path_hash))
         {
+            LOG("InMemStorageAPI::OpenWriteFile `%s` failed - parent folder does not exist\n", path)
             return 0;
         }
         TLongtail_Hash path_hash = GetPathHash(path);
@@ -578,6 +593,7 @@ struct InMemStorageAPI
         TLongtail_Hash parent_path_hash = GetParentPathHash(path);
         if (parent_path_hash && !instance->m_PathHashToContent.Get(parent_path_hash))
         {
+            LOG("InMemStorageAPI::CreateDirectory `%s` failed - parent folder does not exist\n", path)
             return 0;
         }
         TLongtail_Hash path_hash = GetPathHash(path);
@@ -588,7 +604,7 @@ struct InMemStorageAPI
             {
                 return 1;
             }
-            // Not a directory!
+            LOG("InMemStorageAPI::CreateDirectory `%s` failed - path exists and is not a directory\n", path)
             return 0;
         }
 
@@ -607,12 +623,14 @@ struct InMemStorageAPI
         PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(source_path_hash);
         if (!source_path_ptr)
         {
+            LOG("InMemStorageAPI::MoveFile from `%s` to `%s` failed - source path does not exist\n", source_path, target_path)
             return 0;
         }
         TLongtail_Hash target_path_hash = GetPathHash(target_path);
         PathEntry** target_path_ptr = instance->m_PathHashToContent.Get(target_path_hash);
         if (target_path_ptr)
         {
+            LOG("InMemStorageAPI::MoveFile from `%s` to `%s` failed - target path does not exist\n", source_path, target_path)
             return 0;
         }
         (*source_path_ptr)->m_ParentHash = GetParentPathHash(target_path);
@@ -878,6 +896,7 @@ typedef void (*ProcessEntry)(void* context, const char* root_path, const char* f
 
 static int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
+    LOG("RecurseTree `%s`\n", root_folder)
     TFolderPaths* folder_paths = SetCapacity_TFolderPaths((TFolderPaths*)0, 256);
 
     uint32_t folder_index = 0;
@@ -1007,6 +1026,7 @@ Paths* AppendPath(Paths* paths, const char* path, uint32_t* max_path_count, uint
 
 Paths* GetFilesRecursively(StorageAPI* storage_api, const char* root_path)
 {
+    LOG("GetFilesRecursively `%s`\n", root_path)
     struct Context {
         StorageAPI* m_StorageAPI;
         uint32_t m_ReservedPathCount;
@@ -1091,6 +1111,7 @@ struct HashJob
     const char* m_RootPath;
     const char* m_Path;
     nadir::TAtomic32* m_PendingCount;
+    int m_Success;
 };
 
 struct PathLookup
@@ -1104,6 +1125,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
     HashJob* hash_job = (HashJob*)context;
 
     TLongtail_Hash content_hash = 0;
+    hash_job->m_Success = 0;
 
     if (!IsDirPath(hash_job->m_Path))
     {
@@ -1115,6 +1137,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         MeowBegin(&state, MeowDefaultSeed);
         if(file_handle)
         {
+            hash_job->m_Success = 1;
             uint32_t file_size = (uint32_t)storage_api->GetSize(storage_api, file_handle);
             *hash_job->m_ContentSize = file_size;
 
@@ -1124,12 +1147,21 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
             {
                 meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
                 bool read_ok = storage_api->Read(storage_api, file_handle, offset, len, batch_data);
-                // TODO: Don't use assert!
+                if (!read_ok)
+                {
+                    LOG("HashFile failed to read from `%s`\n", path)
+                    hash_job->m_Success = 0;
+                    break;
+                }
                 assert(read_ok);
                 offset += len;
                 MeowAbsorb(&state, len, batch_data);
             }
             storage_api->CloseRead(storage_api, file_handle);
+        }
+        else
+        {
+            LOG("HashFile failed to open `%s`\n", path)
         }
         content_hash = MeowU64From(MeowEnd(&state, 0), 0);
         free((char*)path);
@@ -1148,8 +1180,9 @@ struct ProcessHashContext
     nadir::TAtomic32* m_PendingCount;
 };
 
-void GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
+int GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
 {
+    LOG("GetFileHashes in folder `%s` for %u assets\n", root_path, (uint32_t)*paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
     ProcessHashContext context;
     context.m_StorageAPI = storage_api;
@@ -1216,13 +1249,23 @@ void GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path
             if (old_pending_count != pendingCount)
             {
                 old_pending_count = pendingCount;
-                printf("Files left to hash: %d\n", old_pending_count);
+                LOG("Files left to hash: %d\n", old_pending_count);
             }
             nadir::Sleep(1000);
         }
     }
 
+    int success = 1;
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        if (!context.m_HashJobs[i].m_Success)
+        {
+            success = 0;
+        }
+    }
+
     delete [] context.m_HashJobs;
+    return success;
 }
 
 struct VersionIndex
@@ -1528,6 +1571,7 @@ void InitContentIndex(ContentIndex* content_index)
 
 int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, const char* path)
 {
+    LOG("WriteContentIndex to `%s`\n", path)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_AssetCount);
 
     if (!EnsureParentPathExists(storage_api, path))
@@ -1550,6 +1594,7 @@ int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, cons
 
 ContentIndex* ReadContentIndex(StorageAPI* storage_api, const char* path)
 {
+    LOG("ReadContentIndex from `%s`\n", path)
     StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
@@ -1574,6 +1619,7 @@ ContentIndex* ReadContentIndex(StorageAPI* storage_api, const char* path)
 
 int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, const char* path)
 {
+    LOG("WriteVersionIndex to `%s`\n", path)
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), version_index->m_NameDataSize);
 
     if (!EnsureParentPathExists(storage_api, path))
@@ -1597,6 +1643,7 @@ int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, cons
 
 VersionIndex* ReadVersionIndex(StorageAPI* storage_api, const char* path)
 {
+    LOG("ReadVersionIndex from `%s`\n", path)
     StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
@@ -1695,6 +1742,7 @@ ContentIndex* CreateContentIndex(
     const char* asset_name_data,
     GetContentTagFunc get_content_tag)
 {
+    LOG("CreateContentIndex from `%s`\n", assets_path)
     if (asset_count == 0)
     {
         size_t content_index_size = GetContentIndexSize(0, 0);
@@ -1974,6 +2022,14 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         TLongtail_Hash asset_content_hash = content_index->m_AssetContentHash[asset_index];
         uint32_t asset_size = content_index->m_AssetLength[asset_index];
         const char* asset_path = GetPathFromAssetContentHash(job->m_PathLookup, asset_content_hash);
+        if (!asset_path)
+        {
+            LOG("Failed to get path for asset content 0x%" PRIx64 "\n", asset_content_hash)
+            free(write_buffer);
+            free(block_name);
+            nadir::AtomicAdd32(job->m_PendingCount, -1);
+            return BIKESHED_TASK_RESULT_COMPLETE;
+        }
 
         if (!IsDirPath(asset_path))
         {
@@ -1981,6 +2037,9 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
             StorageAPI::HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
             if (!file_handle || (source_storage_api->GetSize(source_storage_api, file_handle) != asset_size))
             {
+                LOG("Missing or mismatching asset content `%s`\n", asset_path)
+                free(write_buffer);
+                free(block_name);
                 source_storage_api->CloseRead(source_storage_api, file_handle);
                 nadir::AtomicAdd32(job->m_PendingCount, -1);
                 return BIKESHED_TASK_RESULT_COMPLETE;
@@ -2009,6 +2068,7 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
 
         if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
         {
+            LOG("Failed to create parent path for `%s`\n", tmp_block_path)
             free(compressed_buffer);
             nadir::AtomicAdd32(job->m_PendingCount, -1);
             return BIKESHED_TASK_RESULT_COMPLETE;
@@ -2016,6 +2076,7 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         StorageAPI::HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path);
         if (!block_file_handle)
         {
+            LOG("Failed to create block file `%s`\n", tmp_block_path)
             free(compressed_buffer);
             nadir::AtomicAdd32(job->m_PendingCount, -1);
             return BIKESHED_TASK_RESULT_COMPLETE;
@@ -2046,7 +2107,6 @@ static Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, 
         write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
         write_offset += sizeof(uint32_t);
         target_storage_api->CloseWrite(target_storage_api, block_file_handle);
-
         write_ok = write_ok & target_storage_api->MoveFile(target_storage_api, tmp_block_path, block_path);
         job->m_Success = write_ok;
     }
@@ -2073,6 +2133,7 @@ int WriteContentBlocks(
     const char* assets_folder,
     const char* content_folder)
 {
+    LOG("WriteContentBlocks from `%s` to `%s`\n", assets_folder, content_folder)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -2158,7 +2219,7 @@ int WriteContentBlocks(
             if (old_pending_count != pending_job_count)
             {
                 old_pending_count = pending_job_count;
-                printf("Blocks left to to write: %d\n", pending_job_count);
+                LOG("Blocks left to to write: %d\n", pending_job_count);
             }
             nadir::Sleep(1000);
         }
@@ -2193,6 +2254,7 @@ uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex*
 
 ContentIndex* CreateMissingContent(const ContentIndex* content_index, const char* content_path, const VersionIndex* version, GetContentTagFunc get_content_tag)
 {
+    LOG("CreateMissingContent in `%s`\n", content_path)
     uint64_t asset_count = *version->m_AssetCount;
     TLongtail_Hash* removed_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
@@ -2445,6 +2507,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
     StorageAPI::HOpenFile block_file_handle = storage_api->OpenReadFile(storage_api, job->m_BlockPath);
     if (!block_file_handle)
     {
+        LOG("Failed to open block file `%s`\n", job->m_BlockPath)
         return BIKESHED_TASK_RESULT_COMPLETE;
     }
 
@@ -2452,6 +2515,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
     char* compressed_block_content = (char*)malloc(compressed_block_size);
     if (!storage_api->Read(storage_api, block_file_handle, 0, compressed_block_size, compressed_block_content))
     {
+        LOG("Failed to read block file `%s`\n", job->m_BlockPath)
         storage_api->CloseRead(storage_api, block_file_handle);
         free(compressed_block_content);
         nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2468,6 +2532,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
     block_file_handle = 0;
     if (result < uncompressed_size)
     {
+        LOG("Block file is malformed (compression header) `%s`\n", job->m_BlockPath)
         free(decompressed_buffer);
         decompressed_buffer = 0;
         nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2482,6 +2547,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
 
         if (!EnsureParentPathExists(storage_api, asset_path))
         {
+            LOG("Failed to create parent path for `%s`\n", asset_path)
             free(decompressed_buffer);
             decompressed_buffer = 0;
             nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2492,6 +2558,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
         {
             if (!SafeCreateDirectory(storage_api, asset_path))
             {
+                LOG("Failed to create asset folder `%s`\n", asset_path)
                 free(decompressed_buffer);
                 decompressed_buffer = 0;
                 nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2503,6 +2570,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
             StorageAPI::HOpenFile asset_file_handle = storage_api->OpenWriteFile(storage_api, asset_path);
             if(!asset_file_handle)
             {
+                LOG("Failed to create asset file `%s`\n", asset_path)
                 free(decompressed_buffer);
                 decompressed_buffer = 0;
                 nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2516,6 +2584,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
             asset_file_handle = 0;
             if (!write_ok)
             {
+                LOG("Failed to write asset file `%s`\n", asset_path)
                 free(decompressed_buffer);
                 decompressed_buffer = 0;
                 nadir::AtomicAdd32(job->m_PendingCount, -1);
@@ -2535,6 +2604,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(Bikeshed shed, Bikeshed_TaskID, 
 
 int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api, Bikeshed shed, const ContentIndex* content_index, const VersionIndex* version_index, const char* content_path, const char* version_path)
 {
+    LOG("ReconstructVersion from `%s` to `%s`\n", content_path, version_path)
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
     jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
     void* content_hash_to_content_asset_index_mem = malloc(hash_size);
@@ -2553,6 +2623,7 @@ int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api,
         uint32_t* asset_index_ptr = content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
         if (!asset_index_ptr)
         {
+            LOG("Asset 0x%" PRIx64 " was not find in content index\n", version_index->m_AssetContentHash[i])
             free(content_hash_to_content_asset_index_mem);
             return 0;
         }
@@ -2689,7 +2760,7 @@ int ReconstructVersion(StorageAPI* storage_api, CompressionAPI* compression_api,
             if (old_pending_count != pending_job_count)
             {
                 old_pending_count = pending_job_count;
-                printf("Blocks left to reconstruct from: %d\n", pending_job_count);
+                LOG("Blocks left to reconstruct from: %d\n", pending_job_count);
             }
             nadir::Sleep(1000);
         }
@@ -3196,7 +3267,7 @@ void Bench()
     if (0) return;
 
 
-#if 0
+#if 1
     #define HOME "D:\\Temp\\longtail"
 
     const uint32_t VERSION_COUNT = 6;
