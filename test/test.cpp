@@ -186,10 +186,10 @@ struct ThreadWorker
 
 struct HashAPI
 {
-    typedef struct HashContext* HHashContext;
-    HHashContext (*BeginContext)(HashAPI* hash_api);
-    void (*Hash)(HashAPI* hash_api, HHashContext context, uint32_t length, void* data);
-    uint64_t (*EndContext)(HashAPI* hash_api, HHashContext context);
+    typedef struct Context* HContext;
+    HContext (*BeginContext)(HashAPI* hash_api);
+    void (*Hash)(HashAPI* hash_api, HContext context, uint32_t length, void* data);
+    uint64_t (*EndContext)(HashAPI* hash_api, HContext context);
 };
 
 struct MeowHashAPI
@@ -204,17 +204,18 @@ struct MeowHashAPI
     {
     }
 
-    static HashAPI::HHashContext BeginContext(HashAPI* hash_api)
+    static HashAPI::HContext BeginContext(HashAPI* hash_api)
     {
         meow_state* state = (meow_state*)malloc(sizeof(meow_state));
-        return (HashAPI::HHashContext)state;
+        MeowBegin(state, MeowDefaultSeed);
+        return (HashAPI::HContext)state;
     }
-    static void Hash(HashAPI* hash_api, HashAPI::HHashContext context, uint32_t length, void* data)
+    static void Hash(HashAPI* hash_api, HashAPI::HContext context, uint32_t length, void* data)
     {
         meow_state* state = (meow_state*)context;
         MeowAbsorb(state, length, data);
     }
-    static uint64_t EndContext(HashAPI* hash_api, HashAPI::HHashContext context)
+    static uint64_t EndContext(HashAPI* hash_api, HashAPI::HContext context)
     {
         meow_state* state = (meow_state*)context;
         uint64_t hash = MeowU64From(MeowEnd(state, 0), 0);
@@ -402,7 +403,7 @@ struct TroveStorageAPI
 
 static TLongtail_Hash GetPathHash(HashAPI* hash_api, const char* path)
 {
-    HashAPI::HHashContext context = hash_api->BeginContext(hash_api);
+    HashAPI::HContext context = hash_api->BeginContext(hash_api);
     hash_api->Hash(hash_api, context, (uint32_t)strlen(path), (void*)path);
     return (TLongtail_Hash)hash_api->EndContext(hash_api, context);
 }
@@ -1167,8 +1168,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         char* path = storage_api->ConcatPath(storage_api, hash_job->m_RootPath, hash_job->m_Path);
 
         StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
-        meow_state state;
-        MeowBegin(&state, MeowDefaultSeed);
+        HashAPI::HContext hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
         if(file_handle)
         {
             hash_job->m_Success = 1;
@@ -1179,7 +1179,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
             uint32_t offset = 0;
             while (offset != file_size)
             {
-                meow_umm len = (meow_umm)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
+                uint32_t len = (uint32_t)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
                 bool read_ok = storage_api->Read(storage_api, file_handle, offset, len, batch_data);
                 if (!read_ok)
                 {
@@ -1189,7 +1189,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
                 }
                 assert(read_ok);
                 offset += len;
-                MeowAbsorb(&state, len, batch_data);
+                hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, hash_context, len, batch_data);
             }
             storage_api->CloseRead(storage_api, file_handle);
         }
@@ -1197,7 +1197,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
         {
             LOG("HashFile failed to open `%s`\n", path)
         }
-        content_hash = MeowU64From(MeowEnd(&state, 0), 0);
+        content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, hash_context);
         free((char*)path);
     }
     *hash_job->m_ContentHash = content_hash;
@@ -1206,7 +1206,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-struct ProcessHashContext
+struct ProcessContext
 {
     StorageAPI* m_StorageAPI;
     Bikeshed m_Shed;
@@ -1214,11 +1214,11 @@ struct ProcessHashContext
     nadir::TAtomic32* m_PendingCount;
 };
 
-int GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
+int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, Bikeshed shed, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
 {
     LOG("GetFileHashes in folder `%s` for %u assets\n", root_path, (uint32_t)*paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
-    ProcessHashContext context;
+    ProcessContext context;
     context.m_StorageAPI = storage_api;
     context.m_Shed = shed;
     context.m_HashJobs = new HashJob[asset_count];
@@ -1243,6 +1243,7 @@ int GetFileHashes(StorageAPI* storage_api, Bikeshed shed, const char* root_path,
             HashJob* job = &context.m_HashJobs[offset + i];
             ctx[i] = &context.m_HashJobs[i + offset];
             job->m_StorageAPI = storage_api;
+            job->m_HashAPI = hash_api;
             job->m_RootPath = root_path;
             job->m_Path = &paths->m_Data[paths->m_Offsets[i + offset]];
             job->m_PendingCount = &pendingCount;
@@ -1434,64 +1435,10 @@ static TLongtail_Hash GetContentTag(const char* , const char* path)
     const char * extension = strrchr(path, '.');
     if (extension)
     {
-        if (strcmp(extension, ".uasset") == 0)
-        {
-            return 1000;
-        }
-        if (strcmp(extension, ".uexp") == 0)
-        {
-            if (strstr(path, "Meshes"))
-            {
-                return GetPathHash("Meshes");
-            }
-            if (strstr(path, "Textures"))
-            {
-                return GetPathHash("Textures");
-            }
-            if (strstr(path, "Sounds"))
-            {
-                return GetPathHash("Sounds");
-            }
-            if (strstr(path, "Animations"))
-            {
-                return GetPathHash("Animations");
-            }
-            if (strstr(path, "Blueprints"))
-            {
-                return GetPathHash("Blueprints");
-            }
-            if (strstr(path, "Characters"))
-            {
-                return GetPathHash("Characters");
-            }
-            if (strstr(path, "Effects"))
-            {
-                return GetPathHash("Effects");
-            }
-            if (strstr(path, "Materials"))
-            {
-                return GetPathHash("Materials");
-            }
-            if (strstr(path, "Maps"))
-            {
-                return GetPathHash("Maps");
-            }
-            if (strstr(path, "Movies"))
-            {
-                return GetPathHash("Movies");
-            }
-            if (strstr(path, "Slate"))
-            {
-                return GetPathHash("Slate");
-            }
-            if (strstr(path, "Sounds"))
-            {
-                return GetPathHash("MeshSoundses");
-            }
-        }
-        return GetPathHash(extension);
+        MeowHashAPI hash;
+        return GetPathHash(&hash.m_HashAPI, path);
     }
-    return 2000;
+    return (TLongtail_Hash)-1;
 }
 
 struct BlockIndexEntry
@@ -1700,14 +1647,14 @@ VersionIndex* ReadVersionIndex(StorageAPI* storage_api, const char* path)
     return version_index;
 }
 
-VersionIndex* CreateVersionIndex(StorageAPI* storage_api, Bikeshed shed, const char* root_path, const Paths* paths)
+VersionIndex* CreateVersionIndex(StorageAPI* storage_api, HashAPI* hash_api, Bikeshed shed, const char* root_path, const Paths* paths)
 {
     uint32_t path_count = *paths->m_PathCount;
     uint32_t* contentSizes = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
     TLongtail_Hash* pathHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
     TLongtail_Hash* contentHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
     
-    GetFileHashes(storage_api, shed, root_path, paths, pathHashes, contentHashes, contentSizes);
+    GetFileHashes(storage_api, hash_api, shed, root_path, paths, pathHashes, contentHashes, contentSizes);
 
     size_t version_index_size = GetVersionIndexSize(path_count, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
@@ -3030,6 +2977,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
 TEST(Longtail, VersionIndexDirectories)
 {
     InMemStorageAPI local_storage;
+    MeowHashAPI hash_api;
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "two_items", 2));
     local_storage.m_StorageAPI.CreateDirectory(&local_storage.m_StorageAPI, "no_items");
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));    // TODO: Bad whitespace!?
@@ -3038,7 +2986,7 @@ TEST(Longtail, VersionIndexDirectories)
     Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
 
-    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, 0, "", local_paths);
+    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, &hash_api.m_HashAPI, 0, "", local_paths);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(16, *local_version_index->m_AssetCount);
 
@@ -3049,6 +2997,8 @@ TEST(Longtail, VersionIndexDirectories)
 TEST(Longtail, MergeContentIndex)
 {
     InMemStorageAPI local_storage;
+    MeowHashAPI hash_api;
+
     CreateFakeContent(&local_storage.m_StorageAPI, 0, 5);
 
     InMemStorageAPI remote_storage;
@@ -3057,13 +3007,13 @@ TEST(Longtail, MergeContentIndex)
     Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
 
-    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, 0, "", local_paths);
+    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, &hash_api.m_HashAPI, 0, "", local_paths);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(5, *local_version_index->m_AssetCount);
 
     Paths* remote_paths = GetFilesRecursively(&remote_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
-    VersionIndex* remote_version_index = CreateVersionIndex(&remote_storage.m_StorageAPI, 0, "", remote_paths);
+    VersionIndex* remote_version_index = CreateVersionIndex(&remote_storage.m_StorageAPI, &hash_api.m_HashAPI, 0, "", remote_paths);
     ASSERT_NE((VersionIndex*)0, remote_version_index);
     ASSERT_EQ(10, *remote_version_index->m_AssetCount);
 
@@ -3194,6 +3144,7 @@ TEST(Longtail, ReconstructVersion)
         "fifth_"
     };
 
+    MeowHashAPI hash_api;
     TLongtail_Hash asset_path_hashes[5];// = {GetPathHash("10"), GetPathHash("20"), GetPathHash("30"), GetPathHash("40"), GetPathHash("50")};
     TLongtail_Hash asset_content_hashes[5];// = { 1, 2, 3, 4, 5};
     const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
@@ -3201,7 +3152,7 @@ TEST(Longtail, ReconstructVersion)
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
     for (uint32_t i = 0; i < 5; ++i)
     {
-        asset_path_hashes[i] = GetPathHash(asset_paths[i]);
+        asset_path_hashes[i] = GetPathHash(&hash_api.m_HashAPI, asset_paths[i]);
         char* path = storage_api->ConcatPath(storage_api, "source_path", asset_paths[i]);
         ASSERT_NE(0, EnsureParentPathExists(storage_api, path));
         StorageAPI::HOpenFile f = storage_api->OpenWriteFile(storage_api, path);
@@ -3276,7 +3227,7 @@ TEST(Longtail, ReconstructVersion)
     for (uint32_t i = 0; i < 5; ++i)
     {
         char* path = (char*)storage_api->ConcatPath(storage_api, "target_path", asset_paths[i]);
-        asset_path_hashes[i] = GetPathHash(path);
+        asset_path_hashes[i] = GetPathHash(&hash_api.m_HashAPI, path);
         StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, path);
         ASSERT_NE((StorageAPI::HOpenFile)0, f);
         free(path);
@@ -3347,7 +3298,7 @@ void Bench()
     }
 
     ContentIndex* full_content_index = CreateContentIndex(
-            0,
+            "",
             0,
             0,
             0,
@@ -3359,6 +3310,7 @@ void Bench()
     VersionIndex* version_indexes[VERSION_COUNT];
 
     TroveStorageAPI trove_storage;
+    MeowHashAPI meow_hash;
     for (uint32_t i = 0; i < VERSION_COUNT; ++i)
     {
         char version_source_folder[256];
@@ -3366,7 +3318,7 @@ void Bench()
         printf("Indexing `%s`\n", version_source_folder);
         Paths* version_source_paths = GetFilesRecursively(&trove_storage.m_StorageAPI, version_source_folder);
         ASSERT_NE((Paths*)0, version_source_paths);
-        VersionIndex* version_index = CreateVersionIndex(&trove_storage.m_StorageAPI, shed, version_source_folder, version_source_paths);
+        VersionIndex* version_index = CreateVersionIndex(&trove_storage.m_StorageAPI, &meow_hash.m_HashAPI, shed, version_source_folder, version_source_paths);
         free(version_source_paths);
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
@@ -3526,11 +3478,12 @@ void LifelikeTest()
 
     printf("Indexing `%s`...\n", local_path_1);
     TroveStorageAPI trove_storage;
+    MeowHashAPI meow_hash;
     LizardCompressionAPI lizard_compression;
 
     Paths* local_path_1_paths = GetFilesRecursively(&trove_storage.m_StorageAPI, local_path_1);
     ASSERT_NE((Paths*)0, local_path_1_paths);
-    VersionIndex* version1 = CreateVersionIndex(&trove_storage.m_StorageAPI, shed, local_path_1, local_path_1_paths);
+    VersionIndex* version1 = CreateVersionIndex(&trove_storage.m_StorageAPI, &meow_hash.m_HashAPI, shed, local_path_1, local_path_1_paths);
     WriteVersionIndex(&trove_storage.m_StorageAPI, version1, version_index_path_1);
     free(local_path_1_paths);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
@@ -3575,7 +3528,7 @@ void LifelikeTest()
     printf("Indexing `%s`...\n", local_path_2);
     Paths* local_path_2_paths = GetFilesRecursively(&trove_storage.m_StorageAPI, local_path_2);
     ASSERT_NE((Paths*)0, local_path_2_paths);
-    VersionIndex* version2 = CreateVersionIndex(&trove_storage.m_StorageAPI, shed, local_path_2, local_path_2_paths);
+    VersionIndex* version2 = CreateVersionIndex(&trove_storage.m_StorageAPI, &meow_hash.m_HashAPI, shed, local_path_2, local_path_2_paths);
     free(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(&trove_storage.m_StorageAPI, version2, version_index_path_2));
@@ -4341,7 +4294,7 @@ static Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, voi
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-struct ProcessHashContext
+struct ProcessContext
 {
     Bikeshed m_Shed;
     HashJob* m_HashJobs;
@@ -4351,7 +4304,7 @@ struct ProcessHashContext
 
 static void ProcessHash(void* context, const char* root_path, const char* file_name)
 {
-    ProcessHashContext* process_hash_context = (ProcessHashContext*)context;
+    ProcessContext* process_hash_context = (ProcessContext*)context;
     Bikeshed shed = process_hash_context->m_Shed;
     uint32_t asset_count = nadir::AtomicAdd32(process_hash_context->m_AssetCount, 1);
     HashJob* job = &process_hash_context->m_HashJobs[asset_count - 1];
@@ -5436,7 +5389,7 @@ TEST(Longtail, ScanContent)
     nadir::TAtomic32 pendingCount = 0;
     nadir::TAtomic32 assetCount = 0;
  
-    ProcessHashContext context;
+    ProcessContext context;
     context.m_Shed = shed;
     context.m_HashJobs = new HashJob[1048576];
     context.m_AssetCount = &assetCount;
