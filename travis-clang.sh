@@ -2,7 +2,13 @@
 
 set -e
 
-sh ./build.sh
+pushd test
+sh ../build.sh
+sh ../build.sh release
+popd
+pushd cmd
+sh ../build.sh
+sh ../build.sh release
+popd
 ./build/test_debug
-sh ./build.sh release
 ./build/test

@@ -2,7 +2,13 @@
 
 set -e
 
-./build.bat
+pushd test
+../build.bat
+../build.bat release
+popd
+pushd cmd
+../build.bat
+../build.bat release
+popd test
 ./build/test_debug.exe
-./build.bat release
 ./build/test.exe

@@ -3267,7 +3267,7 @@ void Bench()
     if (0) return;
 
 
-#if 1
+#if 0
     #define HOME "D:\\Temp\\longtail"
 
     const uint32_t VERSION_COUNT = 6;

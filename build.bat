@@ -12,19 +12,20 @@ if "%1%" == "build-third-party" (
 if "!RELEASE_MODE!" == "release" (
     set OPT=/O2
     set CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626
-    set OUTPUT=test
-    set THIRD_PARTY_LIB=third-party.lib
 
     call build_options.bat
+    set OUTPUT=!TARGET!
+    set THIRD_PARTY_LIB=!TARGET!-third-party.lib
     if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
 
 ) else (
     set OPT=
     set CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626
-    set OUTPUT=test_debug
-    set THIRD_PARTY_LIB=third-party-debug.lib
 
     call build_options.bat
+    set OUTPUT=!TARGET!_debug
+    set THIRD_PARTY_LIB=!TARGET!-third-party-debug.lib
+
     if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
 
     set CXXFLAGS=!CXXFLAGS! !CXXFLAGS_DEBUG!
@@ -68,26 +69,26 @@ if NOT DEFINED VCINSTALLDIR (
 )
 
 
-if NOT EXIST build/!THIRD_PARTY_LIB! (
+if NOT EXIST ..\build\!THIRD_PARTY_LIB! (
     set BUILD_THIRD_PARTY=build-third-party
 )
 
-IF NOT EXIST build (
-    mkdir build
+IF NOT EXIST ..\build (
+    mkdir ..\build
 )
 
 if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo "Compiling third party dependencies to library" %THIRD_PARTY_LIB%
-    del /s build\!THIRD_PARTY_LIB! >nul 2>&1
-    cd third-party
+    del /s ..\build\!THIRD_PARTY_LIB! >nul 2>&1
+    pushd ..\third-party
     cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% /Fd:..\build\test_vc.pdb
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
-    cd ..
+    popd
     if !LIB_COMPILE_ERROR! neq 0 exit /b !LIB_COMPILE_ERROR!
-    lib.exe /nologo third-party\*.obj /OUT:build\!THIRD_PARTY_LIB!
-    del third-party\*.obj
- )
+    lib.exe /nologo ..\third-party\*.obj /OUT:..\build\!THIRD_PARTY_LIB!
+    del ..\third-party\*.obj
+)
 
-cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fo:build\ /Fd:build\test_vc.pdb /link /out:build\%OUTPUT%.exe /pdb:build\%OUTPUT%.pdb build\!THIRD_PARTY_LIB!
+cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fo:..\build\ /Fd:..\build\test_vc.pdb /link /out:..\build\%OUTPUT%.exe /pdb:..\build\%OUTPUT%.pdb ..\build\!THIRD_PARTY_LIB!
 
 exit /B %ERRORLEVEL%
