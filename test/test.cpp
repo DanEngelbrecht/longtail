@@ -482,6 +482,8 @@ struct InMemStorageAPI
             return 0;
         }
         (*source_path_ptr)->m_ParentHash = GetParentPathHash(instance, target_path);
+		free((*source_path_ptr)->m_FileName);
+		(*source_path_ptr)->m_FileName = strdup(GetFileName(target_path));
         instance->m_PathHashToContent.Put(target_path_hash, *source_path_ptr);
         instance->m_PathHashToContent.Erase(source_path_hash);
         return 1;
@@ -678,7 +680,6 @@ Paths* MakePaths(uint32_t path_count, const char* const* path_names)
     return paths;
 }
 
-// Very hacky!
 static TLongtail_Hash GetContentTag(const char* , const char* path)
 {
     const char * extension = strrchr(path, '.');
@@ -693,7 +694,35 @@ static TLongtail_Hash GetContentTag(const char* , const char* path)
 TLongtail_Hash GetContentTagFake(const char* , const char* path)
 {
     return 0u;
- //   return (TLongtail_Hash)((uintptr_t)path) / 14;
+}
+
+static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, uint32_t count)
+{
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        char path[128];
+        sprintf(path, "%s%s%u", parent_path ? parent_path : "", parent_path && parent_path[0] ? "/" : "", i);
+        if (0 == EnsureParentPathExists(storage_api, path))
+        {
+            return 0;
+        }
+        StorageAPI::HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path);
+        if (!content_file)
+        {
+            return 0;
+        }
+        uint64_t content_size = 32000 + 1 + i;
+        char* data = new char[content_size];
+        memset(data, i, content_size);
+        int ok = storage_api->Write(storage_api, content_file, 0, content_size, data);
+        free(data);
+        if (!ok)
+        {
+            return 0;
+        }
+		storage_api->CloseWrite(storage_api, content_file);
+    }
+    return 1;
 }
 
 TEST(Longtail, VersionIndex)
@@ -769,6 +798,62 @@ TEST(Longtail, ContentIndex)
     ASSERT_EQ(32003u, content_index->m_AssetBlockOffset[4]);
 
     free(content_index);
+}
+
+TEST(Longtail, ContentIndexSerialization)
+{
+    InMemStorageAPI local_storage;
+    MeowHashAPI hash_api;
+    LizardCompressionAPI compression_api;
+    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/two_items", 2));
+    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/five_items", 5));
+    Paths* version1_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "source/version1");
+    ASSERT_NE((Paths*)0, version1_paths);
+    VersionIndex* vindex = CreateVersionIndex(
+        &local_storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        0,
+        "source/version1",
+        version1_paths);
+    ASSERT_NE((VersionIndex*)0, vindex);
+
+    ContentIndex* cindex = CreateContentIndex(
+        &hash_api.m_HashAPI,
+        "source/version1",
+        *vindex->m_AssetCount,
+        vindex->m_AssetContentHash,
+        vindex->m_PathHash,
+        vindex->m_AssetSize,
+        vindex->m_NameOffset,
+        vindex->m_NameData,
+        GetContentTag);
+    ASSERT_NE((ContentIndex*)0, cindex);
+
+    PathLookup* path_lookup = CreateContentHashToPathLookup(vindex, 0);
+    ASSERT_NE((PathLookup*)0, path_lookup);
+    int ok = WriteContent(
+        &local_storage.m_StorageAPI,
+        &local_storage.m_StorageAPI,
+        &compression_api.m_CompressionAPI,
+        0,
+        cindex,
+        path_lookup,
+        "source/version1",
+        "chunks");
+
+	ContentIndex* cindex2 = ReadContent(
+		&local_storage.m_StorageAPI,
+		&hash_api.m_HashAPI,
+		"chunks");
+	ASSERT_NE((ContentIndex*)0, cindex2);
+	ASSERT_EQ(*cindex->m_AssetCount, *cindex2->m_AssetCount);
+	ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
+
+	free(cindex2);
+    free(path_lookup);
+    free(cindex);
+    free(vindex);
+    free(version1_paths);
 }
 
 TEST(Longtail, DiffHashes)
@@ -870,34 +955,6 @@ TEST(Longtail, CreateMissingContent)
 TEST(Longtail, GetMissingAssets)
 {
 //    uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
-}
-
-static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, uint32_t count)
-{
-    for (uint32_t i = 0; i < count; ++i)
-    {
-        char path[128];
-        sprintf(path, "%s%s%u", parent_path ? parent_path : "", parent_path && parent_path[0] ? "/" : "", i);
-        if (0 == EnsureParentPathExists(storage_api, path))
-        {
-            return 0;
-        }
-        StorageAPI::HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path);
-        if (!content_file)
-        {
-            return 0;
-        }
-        uint64_t content_size = 32000 + 1 + i;
-        char* data = new char[content_size];
-        memset(data, i, content_size);
-        int ok = storage_api->Write(storage_api, content_file, 0, content_size, data);
-        free(data);
-        if (!ok)
-        {
-            return 0;
-        }
-    }
-    return 1;
 }
 
 TEST(Longtail, VersionIndexDirectories)
@@ -1183,7 +1240,7 @@ TEST(Longtail, ReconstructVersion)
 
 void Bench()
 {
-    if (0) return;
+    if (1) return;
 
 
 #if 0

@@ -119,6 +119,7 @@ int WriteContent(
 
 ContentIndex* ReadContent(
     StorageAPI* storage_api,
+    HashAPI* hash_api,
     const char* content_path);
 
 ContentIndex* MergeContentIndex(
@@ -139,8 +140,6 @@ int ReconstructVersion(
     const char* version_path);
 
 #if defined(LONGTAIL_IMPLEMENTATION) || 1
-
-#define LONGTAIL_VERBOSE_LOGS
 
 #ifdef LONGTAIL_VERBOSE_LOGS
     #define LONGTAIL_LOG(fmt, ...) \
@@ -502,6 +501,7 @@ Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* cont
     }
     else {
         content_hash = 0;
+		*hash_job->m_ContentSize = 0;
         hash_job->m_Success = 1;
     }
     *hash_job->m_ContentHash = content_hash;
@@ -775,31 +775,38 @@ VersionIndex* ReadVersionIndex(StorageAPI* storage_api, const char* path)
     return version_index;
 }
 
-struct BlockIndexEntry
-{
-    TLongtail_Hash m_AssetContentHash;
-    uint32_t m_AssetSize;
-};
-
 struct BlockIndex
 {
     TLongtail_Hash m_BlockHash;
-    uint32_t m_AssetCountInBlock;
-    BlockIndexEntry* m_Entries;
+    TLongtail_Hash* m_AssetContentHashes; //[]
+    uint32_t* m_AssetSizes; // []
+    uint32_t* m_AssetCount;
 };
 
-BlockIndex* InitBlockIndex(void* mem, uint32_t asset_count_in_block)
+size_t GetBlockIndexDataSize(uint32_t asset_count)
+{
+    return (sizeof(TLongtail_Hash) * asset_count) +
+        (sizeof(uint32_t) * asset_count) +
+        sizeof(uint32_t);
+}
+
+BlockIndex* InitBlockIndex(void* mem, uint32_t asset_count)
 {
     BlockIndex* block_index = (BlockIndex*)mem;
-    block_index->m_AssetCountInBlock = asset_count_in_block;
-    block_index->m_Entries = (BlockIndexEntry*)&block_index[1];
+    char* p = (char*)&block_index[1];
+    block_index->m_AssetContentHashes = (TLongtail_Hash*)p;
+    p += sizeof(TLongtail_Hash) * asset_count;
+    block_index->m_AssetSizes = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_count;
+    block_index->m_AssetCount = (uint32_t*)p;
     return block_index;
 }
 
-size_t GetBlockIndexSize(uint32_t asset_count_in_block)
+size_t GetBlockIndexSize(uint32_t asset_count)
 {
-    size_t block_index_size = sizeof(BlockIndex) +
-        (sizeof(BlockIndexEntry) * asset_count_in_block);
+    size_t block_index_size =
+        sizeof(BlockIndex) +
+        GetBlockIndexDataSize(asset_count);
 
     return block_index_size;
 }
@@ -813,18 +820,15 @@ BlockIndex* CreateBlockIndex(
     const uint32_t* asset_sizes)
 {
     BlockIndex* block_index = InitBlockIndex(mem, asset_count_in_block);
-    HashAPI::HContext hash_context = hash_api->BeginContext(hash_api);
     for (uint32_t i = 0; i < asset_count_in_block; ++i)
     {
         uint32_t asset_index = asset_indexes[i];
-        block_index->m_Entries[i].m_AssetContentHash = asset_content_hashes[asset_index];
-        block_index->m_Entries[i].m_AssetSize = asset_sizes[asset_index];
-        hash_api->Hash(hash_api, hash_context, (uint32_t)(sizeof(TLongtail_Hash)), (void*)&asset_content_hashes[asset_index]);
-        hash_api->Hash(hash_api, hash_context, (uint32_t)(sizeof(TLongtail_Hash)), (void*)&asset_content_hashes[asset_index]);
-        hash_api->Hash(hash_api, hash_context, (uint32_t)(sizeof(uint32_t)), (void*)&asset_sizes[asset_index]);
+        block_index->m_AssetContentHashes[i] = asset_content_hashes[asset_index];
+        block_index->m_AssetSizes[i] = asset_sizes[asset_index];
     }
-    hash_api->Hash(hash_api, hash_context, (uint32_t)(sizeof(uint32_t)), (void*)&asset_count_in_block);
-
+	*block_index->m_AssetCount = asset_count_in_block;
+	HashAPI::HContext hash_context = hash_api->BeginContext(hash_api);
+    hash_api->Hash(hash_api, hash_context, (uint32_t)(GetBlockIndexDataSize(asset_count_in_block)), (void*)&block_index[1]);
     TLongtail_Hash block_hash = hash_api->EndContext(hash_api, hash_context);
     block_index->m_BlockHash = block_hash;
 
@@ -1059,24 +1063,25 @@ ContentIndex* CreateContentIndex(
     uint64_t asset_index = 0;
     for (uint32_t i = 0; i < block_count; ++i)
     {
-        content_index->m_BlockHash[i] = block_indexes[i]->m_BlockHash;
+        BlockIndex* block_index = block_indexes[i];
+        content_index->m_BlockHash[i] = block_index->m_BlockHash;
         uint64_t asset_offset = 0;
-        for (uint32_t a = 0; a < block_indexes[i]->m_AssetCountInBlock; ++a)
+        for (uint32_t a = 0; a < *block_index->m_AssetCount; ++a)
         {
-            content_index->m_AssetContentHash[asset_index] = block_indexes[i]->m_Entries[a].m_AssetContentHash;
+            content_index->m_AssetContentHash[asset_index] = block_index->m_AssetContentHashes[a];
             content_index->m_AssetBlockIndex[asset_index] = i;
             content_index->m_AssetBlockOffset[asset_index] = asset_offset;
-            content_index->m_AssetLength[asset_index] = block_indexes[i]->m_Entries[a].m_AssetSize;
+            content_index->m_AssetLength[asset_index] = block_index->m_AssetSizes[a];
 
-            asset_offset += block_indexes[i]->m_Entries[a].m_AssetSize;
+            asset_offset += block_index->m_AssetSizes[a];
             ++asset_index;
             if (asset_index > unique_asset_count)
             {
                 break;
             }
         }
-        free(block_indexes[i]);
-        block_indexes[i] = 0;
+        free(block_index);
+        block_index = 0;
     }
     free(block_indexes);
     block_indexes = 0;
@@ -1800,13 +1805,10 @@ int ReconstructVersion(
     return success;
 }
 
-
-// Returns count of assets read
-uint32_t ReadBlock(
+BlockIndex* ReadBlock(
     StorageAPI* storage_api,
-    const char* full_block_path,
-    TLongtail_Hash* asset_hashes,
-    uint32_t* asset_sizes)
+    HashAPI* hash_api,
+    const char* full_block_path)
 {
     StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, full_block_path);
     if (!f)
@@ -1825,35 +1827,27 @@ uint32_t ReadBlock(
         storage_api->CloseRead(storage_api, f);
         return 0;
     }
-    uint32_t asset_index_size = (asset_count) * (sizeof(TLongtail_Hash) + sizeof(uint32_t));
-    if (s < asset_index_size + sizeof(uint32_t))
-    {
-        storage_api->CloseRead(storage_api, f);
-        return 0;
-    }
+    BlockIndex* block_index = InitBlockIndex(malloc(GetBlockIndexSize(asset_count)), asset_count);
+    size_t block_index_data_size = GetBlockIndexDataSize(asset_count);
 
-    uint32_t read_offset = s - asset_index_size + sizeof(uint32_t);
-
-    if (!storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash) * asset_count, asset_hashes))
-    {
-        storage_api->CloseRead(storage_api, f);
-        return 0;
-    }
-    read_offset += sizeof(TLongtail_Hash) * asset_count;
-
-    if (!storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t) * asset_count, asset_sizes))
-    {
-        storage_api->CloseRead(storage_api, f);
-        return 0;
-    }
-    read_offset += sizeof(uint32_t) * asset_count;
-    
+    int ok = storage_api->Read(storage_api, f, s - block_index_data_size, block_index_data_size, &block_index[1]);
     storage_api->CloseRead(storage_api, f);
-    return asset_count;
+    if (!ok)
+    {
+        free(block_index);
+        return 0;
+    }
+    HashAPI::HContext hash_context = hash_api->BeginContext(hash_api);
+    hash_api->Hash(hash_api, hash_context, (uint32_t)(GetBlockIndexDataSize(asset_count)), (void*)&block_index[1]);
+    TLongtail_Hash block_hash = hash_api->EndContext(hash_api, hash_context);
+    block_index->m_BlockHash = block_hash;
+
+    return block_index;
 }
 
 ContentIndex* ReadContent(
     StorageAPI* storage_api,
+    HashAPI* hash_api,
     const char* content_path)
 {
     LONGTAIL_LOG("ReadContent from `%s`\n", content_path)
@@ -1948,37 +1942,52 @@ ContentIndex* ReadContent(
 	InitContentIndex(content_index);
 
     uint64_t asset_offset = 0;
-    for (uint32_t block_index = 0; block_index < block_count; ++block_index)
+    for (uint32_t b = 0; b < block_count; ++b)
     {
-        const char* block_path = &paths->m_Data[paths->m_Offsets[block_index]];
+        const char* block_path = &paths->m_Data[paths->m_Offsets[b]];
         char* full_block_path = storage_api->ConcatPath(storage_api, content_path, block_path);
 
         const char* last_delimiter = strrchr(full_block_path, '/');
         const char* file_name = last_delimiter ? last_delimiter + 1 : full_block_path;
-        TLongtail_Hash hash;
-        if (0 == sscanf(file_name, "0x%" PRIx64 ".", &hash))
+
+        BlockIndex* block_index = ReadBlock(
+            storage_api,
+            hash_api,
+            full_block_path);
+
+        free(full_block_path);
+        if (block_index == 0)
         {
-            free(full_block_path);
             free(content_index);
             return 0;
         }
 
-        TLongtail_Hash block_hash = 0;
-        content_index->m_BlockHash[block_index] = block_hash;
-        uint32_t added_count = ReadBlock(
-            storage_api,
-            full_block_path,
-            &content_index->m_AssetContentHash[asset_offset],
-            &content_index->m_AssetLength[asset_offset]);
-        free(full_block_path);
+		char* block_name = GetBlockName(block_index->m_BlockHash);
+		char verify_file_name[64];
+		sprintf(verify_file_name, "%s.lrb", block_name);
+		free(block_name);
+
+		if (strcmp(verify_file_name, file_name))
+		{
+			free(block_index);
+			free(content_index);
+			return 0;
+		}
+
+        uint32_t block_asset_count = *block_index->m_AssetCount;
         uint32_t block_offset = 0;
-        for (uint32_t a = 0; a < added_count; ++a)
+        for (uint32_t a = 0; a < block_asset_count; ++a)
         {
+            content_index->m_AssetContentHash[asset_offset + a] = block_index->m_AssetContentHashes[a];
+            content_index->m_AssetLength[asset_offset + a] = block_index->m_AssetSizes[a];
             content_index->m_AssetBlockOffset[asset_offset + a] = block_offset;
-            content_index->m_AssetBlockIndex[asset_offset + a] = block_index;
+            content_index->m_AssetBlockIndex[asset_offset + a] = b;
             block_offset += content_index->m_AssetLength[asset_offset + a];
         }
-        asset_offset += added_count;
+        content_index->m_BlockHash[b] = block_index->m_BlockHash;
+        asset_offset += block_asset_count;
+
+        free(block_index);
     }
     free(paths);
     return content_index;

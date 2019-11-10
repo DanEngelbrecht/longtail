@@ -1,4 +1,6 @@
 
+#define LONGTAIL_VERBOSE_LOGS
+
 #define KGFLAGS_IMPLEMENTATION
 #include "../third-party/kgflags/kgflags.h"
 
@@ -103,8 +105,10 @@ int main(int argc, char** argv)
         if (content && (!content_index && !merge_content_index))
         {
             TroveStorageAPI storage_api;
+            MeowHashAPI hash_api;
             ContentIndex* cindex = ReadContent(
                 &storage_api.m_StorageAPI,
+                &hash_api.m_HashAPI,
                 content);
             if (!cindex)
             {
@@ -351,6 +355,7 @@ int main(int argc, char** argv)
         {
             cindex = ReadContent(
                 &storage_api.m_StorageAPI,
+                &hash_api.m_HashAPI,
                 content);
             if (!cindex)
             {
