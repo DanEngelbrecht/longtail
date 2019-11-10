@@ -279,7 +279,6 @@ int main(int argc, char** argv)
 
     if (create_version && version_index && content)
     {
-        // Need this for Embark parity
         Shed shed;
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
@@ -305,16 +304,9 @@ int main(int argc, char** argv)
         }
         else
         {
-            cindex = CreateContentIndex(
-                &hash_api.m_HashAPI,
-                version,
-                *vindex->m_AssetCount,
-                vindex->m_AssetContentHash,
-                vindex->m_PathHash,
-                vindex->m_AssetSize,
-                vindex->m_NameOffset,
-                vindex->m_NameData,
-                GetContentTag);
+            cindex = ReadContent(
+                &storage_api.m_StorageAPI,
+                content);
             if (!cindex)
             {
                 free(vindex);

@@ -1627,7 +1627,7 @@ int ReconstructVersion(
         uint32_t* asset_index_ptr = content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
         if (!asset_index_ptr)
         {
-            LONGTAIL_LOG("Asset 0x%" PRIx64 " was not find in content index\n", version_index->m_AssetContentHash[i])
+			LONGTAIL_LOG("Asset 0x%" PRIx64 " for asset `%s` was not find in content index\n", version_index->m_AssetContentHash[i], &version_index->m_NameData[version_index->m_NameOffset[i]])
             free(content_hash_to_content_asset_index_mem);
             return 0;
         }
@@ -1798,13 +1798,12 @@ int ReconstructVersion(
 // Returns count of assets read
 uint32_t ReadBlock(
     StorageAPI* storage_api,
-    const char* content_path,
-    const char* block_path,
+    const char* full_block_path,
     TLongtail_Hash* asset_hashes,
     uint32_t* asset_sizes,
     uint32_t* asset_block_offsets)
 {
-    StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, block_path);
+    StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, full_block_path);
     if (!f)
     {
         return 0;
@@ -1896,11 +1895,13 @@ ContentIndex* ReadContent(
         StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, full_path);
         if (!f)
         {
+            free(full_path);
             return;
         }
         uint64_t block_size = storage_api->GetSize(storage_api, f);
         if (block_size < (sizeof(uint32_t)))
         {
+            free(full_path);
             storage_api->CloseRead(storage_api, f);
             return;
         }
@@ -1909,6 +1910,7 @@ ContentIndex* ReadContent(
 
         if (!ok)
         {
+            free(full_path);
             storage_api->CloseRead(storage_api, f);
             return;
         }
@@ -1918,6 +1920,7 @@ ContentIndex* ReadContent(
 
         if (!ok)
         {
+            free(full_path);
             return;
         }
 
@@ -1928,41 +1931,56 @@ ContentIndex* ReadContent(
         full_path = 0;
     };
 
-    Paths* paths = CreatePaths(default_path_count, default_path_count);
+    Paths* paths = CreatePaths(default_path_count, default_path_data_size);
     Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(content_path)), paths, 0};
     if(!RecurseTree(storage_api, content_path, on_path, &context))
     {
         free(context.m_Paths);
         return 0;
     }
+	paths = context.m_Paths;
 
-    uint32_t asset_count = *paths->m_PathCount;
-    uint64_t block_count = context.m_AssetCount;
+    uint32_t asset_count = context.m_AssetCount;
+    uint64_t block_count = *paths->m_PathCount;
     size_t content_index_data_size = GetContentIndexDataSize(block_count, asset_count);
     ContentIndex* content_index = (ContentIndex*)malloc(sizeof(ContentIndex) + content_index_data_size);
+	content_index->m_BlockCount = (uint64_t*) & ((char*)content_index)[sizeof(ContentIndex)];
+	content_index->m_AssetCount = (uint64_t*) & ((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
+	*content_index->m_BlockCount = block_count;
+	*content_index->m_AssetCount = asset_count;
+	InitContentIndex(content_index);
 
     uint64_t asset_offset = 0;
     for (uint32_t block_index = 0; block_index < block_count; ++block_index)
     {
         const char* block_path = &paths->m_Data[paths->m_Offsets[block_index]];
+        char* full_block_path = storage_api->ConcatPath(storage_api, content_path, block_path);
+
+        const char* last_delimiter = strrchr(full_block_path, '/');
+        const char* file_name = last_delimiter ? last_delimiter + 1 : full_block_path;
+        TLongtail_Hash hash;
+        if (0 == sscanf(file_name, "0x%" PRIx64 ".", &hash))
+        {
+            free(full_block_path);
+            continue;
+        }
+
         TLongtail_Hash block_hash = 0;
         content_index->m_BlockHash[block_index] = block_hash;
         uint32_t added_count = ReadBlock(
             storage_api,
-            content_path,
-            block_path,
+            full_block_path,
             &content_index->m_AssetContentHash[asset_offset],
             &content_index->m_AssetLength[asset_offset],
             &content_index->m_AssetBlockOffset[asset_offset]);
+        free(full_block_path);
         for (uint32_t a = 0; a < added_count; ++a)
         {
             content_index->m_AssetBlockIndex[asset_offset + a] = block_index;
         }
         asset_offset += added_count;
     }
-    *content_index->m_BlockCount = block_count;
-    *content_index->m_AssetCount = asset_count;
-    free(context.m_Paths);
+    free(paths);
     return content_index;
 }
 
