@@ -107,6 +107,20 @@ ContentIndex* ReadContentIndex(
     StorageAPI* storage_api,
     const char* path);
 
+int WriteContent(
+    StorageAPI* source_storage_api,
+    StorageAPI* target_storage_api,
+    CompressionAPI* compression_api,
+    Bikeshed shed,
+    ContentIndex* content_index,
+    PathLookup* asset_content_hash_to_path,
+    const char* assets_folder,
+    const char* content_folder);
+
+ContentIndex* ReadContent(
+    StorageAPI* storage_api,
+    const char* content_path);
+
 PathLookup* CreateContentHashToPathLookup(
     const VersionIndex* version_index,
     uint64_t* out_unique_asset_indexes);
@@ -1325,7 +1339,7 @@ Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-int WriteContentBlocks(
+int WriteContent(
     StorageAPI* source_storage_api,
     StorageAPI* target_storage_api,
     CompressionAPI* compression_api,
@@ -1335,7 +1349,7 @@ int WriteContentBlocks(
     const char* assets_folder,
     const char* content_folder)
 {
-    LONGTAIL_LOG("WriteContentBlocks from `%s` to `%s`\n", assets_folder, content_folder)
+    LONGTAIL_LOG("WriteContent from `%s` to `%s`\n", assets_folder, content_folder)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -1778,6 +1792,178 @@ int ReconstructVersion(
     free(version_index_to_content_index);
     free(asset_order);
     return success;
+}
+
+
+// Returns count of assets read
+uint32_t ReadBlock(
+    StorageAPI* storage_api,
+    const char* content_path,
+    const char* block_path,
+    TLongtail_Hash* asset_hashes,
+    uint32_t* asset_sizes,
+    uint32_t* asset_block_offsets)
+{
+    StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, block_path);
+    if (!f)
+    {
+        return 0;
+    }
+    uint64_t s = storage_api->GetSize(storage_api, f);
+    if (s < (sizeof(uint32_t)))
+    {
+        storage_api->CloseRead(storage_api, f);
+        return 0;
+    }
+    uint32_t asset_count = 0;
+    if (!storage_api->Read(storage_api, f, s - sizeof(uint32_t), sizeof(uint32_t), &asset_count))
+    {
+        storage_api->CloseRead(storage_api, f);
+        return 0;
+    }
+    uint32_t asset_index_size = (asset_count) * (sizeof(TLongtail_Hash) + sizeof(uint32_t));
+    if (s < asset_index_size + sizeof(uint32_t))
+    {
+        storage_api->CloseRead(storage_api, f);
+        return 0;
+    }
+
+    uint32_t block_offset = 0;
+    uint32_t read_offset = s - asset_index_size + sizeof(uint32_t);
+    for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
+    {
+        TLongtail_Hash asset_content_hash;
+        if (!storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash), &asset_content_hash))
+        {
+            storage_api->CloseRead(storage_api, f);
+            return 0;
+        }
+        read_offset += sizeof(TLongtail_Hash);
+
+        uint32_t asset_size;
+        if (!storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t), &asset_size))
+        {
+            storage_api->CloseRead(storage_api, f);
+            return 0;
+        }
+        asset_hashes[asset_index] = asset_content_hash;
+        asset_sizes[asset_index] = asset_size;
+        asset_block_offsets[asset_index] = block_offset;
+        block_offset += asset_size;
+        read_offset += sizeof(TLongtail_Hash);
+    }
+    storage_api->CloseWrite(storage_api, f);
+    return asset_count;
+}
+
+ContentIndex* ReadContent(
+    StorageAPI* storage_api,
+    const char* content_path)
+{
+    LONGTAIL_LOG("ReadContent from `%s`\n", content_path)
+
+    struct Context {
+        StorageAPI* m_StorageAPI;
+        uint32_t m_ReservedPathCount;
+        uint32_t m_ReservedPathSize;
+        uint32_t m_RootPathLength;
+        Paths* m_Paths;
+        uint64_t m_AssetCount;
+    };
+
+    const uint32_t default_path_count = 512;
+    const uint32_t default_path_data_size = default_path_count * 128;
+
+    auto on_path = [](void* context, const char* root_path, const char* file_name)
+    {
+        Context* paths_context = (Context*)context;
+        StorageAPI* storage_api = paths_context->m_StorageAPI;
+
+        char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
+        if (storage_api->IsDir(storage_api, full_path))
+        {
+            return;
+        }
+
+        Paths* paths = paths_context->m_Paths;
+        const uint32_t root_path_length = paths_context->m_RootPathLength;
+        const char* s = &full_path[root_path_length];
+        if (*s == '/')
+        {
+            ++s;
+        }
+
+        StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, full_path);
+        if (!f)
+        {
+            return;
+        }
+        uint64_t block_size = storage_api->GetSize(storage_api, f);
+        if (block_size < (sizeof(uint32_t)))
+        {
+            storage_api->CloseRead(storage_api, f);
+            return;
+        }
+        uint32_t asset_count = 0;
+        int ok = storage_api->Read(storage_api, f, block_size - sizeof(uint32_t), sizeof(uint32_t), &asset_count);
+
+        if (!ok)
+        {
+            storage_api->CloseRead(storage_api, f);
+            return;
+        }
+
+        uint32_t asset_index_size = sizeof(uint32_t) + (asset_count) * (sizeof(TLongtail_Hash) + sizeof(uint32_t));
+        ok = block_size >= asset_index_size;
+
+        if (!ok)
+        {
+            return;
+        }
+
+        paths_context->m_AssetCount += asset_count;
+        paths_context->m_Paths = AppendPath(paths_context->m_Paths, s, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
+
+        free(full_path);
+        full_path = 0;
+    };
+
+    Paths* paths = CreatePaths(default_path_count, default_path_count);
+    Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(content_path)), paths, 0};
+    if(!RecurseTree(storage_api, content_path, on_path, &context))
+    {
+        free(context.m_Paths);
+        return 0;
+    }
+
+    uint32_t asset_count = *paths->m_PathCount;
+    uint64_t block_count = context.m_AssetCount;
+    size_t content_index_data_size = GetContentIndexDataSize(block_count, asset_count);
+    ContentIndex* content_index = (ContentIndex*)malloc(sizeof(ContentIndex) + content_index_data_size);
+
+    uint64_t asset_offset = 0;
+    for (uint32_t block_index = 0; block_index < block_count; ++block_index)
+    {
+        const char* block_path = &paths->m_Data[paths->m_Offsets[block_index]];
+        TLongtail_Hash block_hash = 0;
+        content_index->m_BlockHash[block_index] = block_hash;
+        uint32_t added_count = ReadBlock(
+            storage_api,
+            content_path,
+            block_path,
+            &content_index->m_AssetContentHash[asset_offset],
+            &content_index->m_AssetLength[asset_offset],
+            &content_index->m_AssetBlockOffset[asset_offset]);
+        for (uint32_t a = 0; a < added_count; ++a)
+        {
+            content_index->m_AssetBlockIndex[asset_offset + a] = block_index;
+        }
+        asset_offset += added_count;
+    }
+    *content_index->m_BlockCount = block_count;
+    *content_index->m_AssetCount = asset_count;
+    free(context.m_Paths);
+    return content_index;
 }
 
 #endif

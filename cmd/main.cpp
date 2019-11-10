@@ -257,7 +257,7 @@ int main(int argc, char** argv)
         }
         
         PathLookup* path_lookup = CreateContentHashToPathLookup(vindex, 0);
-        int ok = WriteContentBlocks(
+        int ok = WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,

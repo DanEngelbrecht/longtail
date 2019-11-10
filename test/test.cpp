@@ -998,7 +998,7 @@ TEST(Longtail, MergeContentIndex)
     StoreCompressionAPI store_compression;
 
     PathLookup* local_path_lookup = CreateContentHashToPathLookup(local_version_index, 0);
-    ASSERT_EQ(1, WriteContentBlocks(
+    ASSERT_EQ(1, WriteContent(
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
@@ -1020,7 +1020,7 @@ TEST(Longtail, MergeContentIndex)
             GetContentTagFake);
 
     PathLookup* remote_path_lookup = CreateContentHashToPathLookup(remote_version_index, 0);
-    ASSERT_EQ(1, WriteContentBlocks(
+    ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
         &remote_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
@@ -1037,7 +1037,7 @@ TEST(Longtail, MergeContentIndex)
         remote_version_index,
         GetContentTagFake);
     ASSERT_NE((ContentIndex*)0, missing_content);
-    ASSERT_EQ(1, WriteContentBlocks(
+    ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
@@ -1178,7 +1178,7 @@ TEST(Longtail, ReconstructVersion)
     ASSERT_NE((ContentIndex*)0, content_index);
 
     LizardCompressionAPI compression_api;
-    ASSERT_EQ(1, WriteContentBlocks(
+    ASSERT_EQ(1, WriteContent(
         storage_api,
         storage_api,
         &compression_api.m_CompressionAPI,
@@ -1307,7 +1307,7 @@ void Bench()
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
-        ASSERT_NE(0, WriteContentBlocks(
+        ASSERT_NE(0, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
@@ -1458,7 +1458,7 @@ void LifelikeTest()
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
         PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
-        WriteContentBlocks(
+        WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
@@ -1500,7 +1500,7 @@ void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
         PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
         ASSERT_NE((PathLookup*)0, path_lookup);
-        ASSERT_EQ(1, WriteContentBlocks(
+        ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
@@ -1520,7 +1520,7 @@ void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
         PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
         ASSERT_NE((PathLookup*)0, path_lookup);
-        ASSERT_EQ(1, WriteContentBlocks(
+        ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
