@@ -1309,16 +1309,11 @@ Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t
             write_offset = aligned_size;
         }
 
-        for (uint32_t asset_index = block_start_asset_index; asset_index < block_start_asset_index + asset_count; ++asset_index)
-        {
-            TLongtail_Hash asset_content_hash = content_index->m_AssetContentHash[asset_index];
-            write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(TLongtail_Hash), &asset_content_hash);
-            write_offset += sizeof(TLongtail_Hash);
+        write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(TLongtail_Hash) * asset_count, &content_index->m_AssetContentHash[block_start_asset_index]);
+        write_offset += sizeof(TLongtail_Hash) * asset_count;
 
-            uint32_t asset_size = content_index->m_AssetLength[asset_index];
-            write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &asset_size);
-            write_offset += sizeof(uint32_t);
-        }
+        write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t) * asset_count, &content_index->m_AssetLength[block_start_asset_index]);
+        write_offset += sizeof(uint32_t) * asset_count;
 
         write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &asset_count);
         write_offset += sizeof(uint32_t);
@@ -1621,6 +1616,7 @@ int ReconstructVersion(
     uint64_t asset_count = *version_index->m_AssetCount;
     uint64_t* asset_order = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
     uint64_t* version_index_to_content_index = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
+    uint64_t asset_found_count = 0;
     for (uint64_t i = 0; i < asset_count; ++i)
     {
         asset_order[i] = i;
@@ -1628,10 +1624,16 @@ int ReconstructVersion(
         if (!asset_index_ptr)
         {
 			LONGTAIL_LOG("Asset 0x%" PRIx64 " for asset `%s` was not find in content index\n", version_index->m_AssetContentHash[i], &version_index->m_NameData[version_index->m_NameOffset[i]])
-            free(content_hash_to_content_asset_index_mem);
-            return 0;
+            continue;
         }
         version_index_to_content_index[i] = *asset_index_ptr;
+		++asset_found_count;
+    }
+
+    if (asset_found_count != asset_count)
+    {
+        free(content_hash_to_content_asset_index_mem);
+        return 0;
     }
 
     free(content_hash_to_content_asset_index_mem);
@@ -1800,8 +1802,7 @@ uint32_t ReadBlock(
     StorageAPI* storage_api,
     const char* full_block_path,
     TLongtail_Hash* asset_hashes,
-    uint32_t* asset_sizes,
-    uint32_t* asset_block_offsets)
+    uint32_t* asset_sizes)
 {
     StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, full_block_path);
     if (!f)
@@ -1827,31 +1828,23 @@ uint32_t ReadBlock(
         return 0;
     }
 
-    uint32_t block_offset = 0;
     uint32_t read_offset = s - asset_index_size + sizeof(uint32_t);
-    for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
-    {
-        TLongtail_Hash asset_content_hash;
-        if (!storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash), &asset_content_hash))
-        {
-            storage_api->CloseRead(storage_api, f);
-            return 0;
-        }
-        read_offset += sizeof(TLongtail_Hash);
 
-        uint32_t asset_size;
-        if (!storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t), &asset_size))
-        {
-            storage_api->CloseRead(storage_api, f);
-            return 0;
-        }
-        asset_hashes[asset_index] = asset_content_hash;
-        asset_sizes[asset_index] = asset_size;
-        asset_block_offsets[asset_index] = block_offset;
-        block_offset += asset_size;
-        read_offset += sizeof(TLongtail_Hash);
+    if (!storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash) * asset_count, asset_hashes))
+    {
+        storage_api->CloseRead(storage_api, f);
+        return 0;
     }
-    storage_api->CloseWrite(storage_api, f);
+    read_offset += sizeof(TLongtail_Hash) * asset_count;
+
+    if (!storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t) * asset_count, asset_sizes))
+    {
+        storage_api->CloseRead(storage_api, f);
+        return 0;
+    }
+    read_offset += sizeof(uint32_t) * asset_count;
+    
+    storage_api->CloseRead(storage_api, f);
     return asset_count;
 }
 
@@ -1962,7 +1955,8 @@ ContentIndex* ReadContent(
         if (0 == sscanf(file_name, "0x%" PRIx64 ".", &hash))
         {
             free(full_block_path);
-            continue;
+            free(content_index);
+            return 0;
         }
 
         TLongtail_Hash block_hash = 0;
@@ -1971,12 +1965,14 @@ ContentIndex* ReadContent(
             storage_api,
             full_block_path,
             &content_index->m_AssetContentHash[asset_offset],
-            &content_index->m_AssetLength[asset_offset],
-            &content_index->m_AssetBlockOffset[asset_offset]);
+            &content_index->m_AssetLength[asset_offset]);
         free(full_block_path);
+        uint32_t block_offset = 0;
         for (uint32_t a = 0; a < added_count; ++a)
         {
+            content_index->m_AssetBlockOffset[asset_offset + a] = block_offset;
             content_index->m_AssetBlockIndex[asset_offset + a] = block_index;
+            block_offset += content_index->m_AssetLength[asset_offset + a];
         }
         asset_offset += added_count;
     }
