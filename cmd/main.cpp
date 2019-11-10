@@ -280,12 +280,63 @@ int main(int argc, char** argv)
     if (create_version && version_index && content)
     {
         // Need this for Embark parity
-        const char* content_index_option = "<dynamic>";
+        Shed shed;
+        TroveStorageAPI storage_api;
+        MeowHashAPI hash_api;
+        LizardCompressionAPI compression_api;
+
+        VersionIndex* vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
+        if (!vindex)
+        {
+            printf("Failed to read version index from `%s`\n", version_index);
+            return 1;
+        }
+
+        ContentIndex* cindex = 0;
         if (content_index)
         {
-            content_index_option = content_index;
+            cindex = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
+            if (!cindex)
+            {
+                free(vindex);
+                printf("Failed to read content index from `%s`\n", content_index);
+                return 1;
+            }
         }
-        printf("Create version `%s` using version_index index `%s` with content `%s` using content index `%s`\n", create_content, version_index, content, content_index_option);
+        else
+        {
+            cindex = CreateContentIndex(
+                &hash_api.m_HashAPI,
+                version,
+                *vindex->m_AssetCount,
+                vindex->m_AssetContentHash,
+                vindex->m_PathHash,
+                vindex->m_AssetSize,
+                vindex->m_NameOffset,
+                vindex->m_NameData,
+                GetContentTag);
+            if (!cindex)
+            {
+                free(vindex);
+                printf("Failed to create content index for version `%s`\n", version);
+                return 1;
+            }
+        }
+        int ok = ReconstructVersion(
+            &storage_api.m_StorageAPI,
+            &compression_api.m_CompressionAPI,
+            shed.m_Shed,
+            cindex,
+            vindex,
+            content,
+            create_version);
+        free(vindex);
+        free(cindex);
+        if (!ok)
+        {
+            printf("Failed to create version `%s`\n", create_version);
+            return 1;
+        }
         return 0;
     }
 
