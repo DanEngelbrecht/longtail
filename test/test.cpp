@@ -140,47 +140,6 @@ ContentIndex* CreateMissingContent(HashAPI* hash_api, const ContentIndex* conten
     return diff_content_index;
 }
 
-ContentIndex* MergeContentIndex(ContentIndex* local_content_index, ContentIndex* remote_content_index)
-{
-    uint64_t local_block_count = *local_content_index->m_BlockCount;
-    uint64_t remote_block_count = *remote_content_index->m_BlockCount;
-    uint64_t local_asset_count = *local_content_index->m_AssetCount;
-    uint64_t remote_asset_count = *remote_content_index->m_AssetCount;
-    uint64_t block_count = local_block_count + remote_block_count;
-    uint64_t asset_count = local_asset_count + remote_asset_count;
-    size_t content_index_size = GetContentIndexSize(block_count, asset_count);
-    ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
-
-    content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex)];
-    content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
-    *content_index->m_BlockCount = block_count;
-    *content_index->m_AssetCount = asset_count;
-    InitContentIndex(content_index);
-
-    for (uint64_t b = 0; b < local_block_count; ++b)
-    {
-        content_index->m_BlockHash[b] = local_content_index->m_BlockHash[b];
-    }
-    for (uint64_t b = 0; b < remote_block_count; ++b)
-    {
-        content_index->m_BlockHash[local_block_count + b] = remote_content_index->m_BlockHash[b];
-    }
-    for (uint64_t a = 0; a < local_asset_count; ++a)
-    {
-        content_index->m_AssetContentHash[a] = local_content_index->m_AssetContentHash[a];
-        content_index->m_AssetBlockIndex[a] = local_content_index->m_AssetBlockIndex[a];
-        content_index->m_AssetBlockOffset[a] = local_content_index->m_AssetBlockOffset[a];
-        content_index->m_AssetLength[a] = local_content_index->m_AssetLength[a];
-    }
-    for (uint64_t a = 0; a < remote_asset_count; ++a)
-    {
-        content_index->m_AssetContentHash[local_asset_count + a] = remote_content_index->m_AssetContentHash[a];
-        content_index->m_AssetBlockIndex[local_asset_count + a] = local_block_count + remote_content_index->m_AssetBlockIndex[a];
-        content_index->m_AssetBlockOffset[local_asset_count + a] = remote_content_index->m_AssetBlockOffset[a];
-        content_index->m_AssetLength[local_asset_count + a] = remote_content_index->m_AssetLength[a];
-    }
-    return content_index;
-}
 
 ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t asset_count, const TLongtail_Hash* asset_hashes, uint64_t* out_missing_asset_count, uint64_t* out_missing_assets)
 {

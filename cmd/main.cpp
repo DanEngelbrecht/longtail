@@ -100,15 +100,60 @@ int main(int argc, char** argv)
 
     if (create_content_index && !version)
     {
-        // Need this for Embark parity, either merge or create index from content
         if (content && (!content_index && !merge_content_index))
         {
-            printf("Create content index `%s` with content `%s`\n", create_content_index, content);
+            TroveStorageAPI storage_api;
+            ContentIndex* cindex = ReadContent(
+                &storage_api.m_StorageAPI,
+                content);
+            if (!cindex)
+            {
+                printf("Failed to create content index for content `%s`\n", content);
+                return 1;
+            }
+            int ok = WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
+            free(cindex);
+            if (!ok)
+            {
+                printf("Failed to write content index to `%s`\n", create_content_index);
+                return 1;
+            }
             return 0;
         }
         if (content_index && merge_content_index)
         {
-            printf("Create content index `%s` with base content index `%s` overloaded with `%s`\n", create_content_index, content_index, merge_content_index);
+            TroveStorageAPI storage_api;
+            ContentIndex* cindex1 = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
+            if (!cindex1)
+            {
+                printf("Failed to read content index from `%s`\n", content_index);
+                return 1;
+            }
+            ContentIndex* cindex2 = ReadContentIndex(&storage_api.m_StorageAPI, merge_content_index);
+            if (!cindex2)
+            {
+                free(cindex1);
+                printf("Failed to read content index from `%s`\n", merge_content_index);
+                return 1;
+            }
+            ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
+            free(cindex2);
+            free(cindex1);
+
+            if (!cindex)
+            {
+                printf("Failed to merge content index `%s` with `%s`\n", content_index, merge_content_index);
+                return 1;
+            }
+
+            int ok = WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
+            free(cindex);
+
+            if (!ok)
+            {
+                printf("Failed to write content index to `%s`\n", create_content_index);
+                return 1;
+            }
             return 0;
         }
     }
