@@ -1,5 +1,6 @@
 #pragma once
 
+#define BIKESHED_IMPLEMENTATION
 #include "../third-party/bikeshed/bikeshed.h"
 #include "../third-party/lizard/lib/lizard_common.h"
 #include "../third-party/lizard/lib/lizard_decompress.h"
@@ -197,44 +198,6 @@ struct ThreadWorker
     Bikeshed            shed;
     nadir::HSema        semaphore;
     nadir::HThread      thread;
-};
-
-struct Shed
-{
-    Shed()
-        : m_Shed(0)
-        , m_WorkerCount(GetCPUCount() - 1)
-        , m_Workers(0)
-        , m_Stop(0)
-    {
-        m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &m_ReadyCallback.cb);
-        if (m_WorkerCount == 0)
-        {
-            m_WorkerCount = 1;
-        }
-        m_Workers = new ThreadWorker[m_WorkerCount];
-        for (uint32_t i = 0; i < m_WorkerCount; ++i)
-        {
-            m_Workers[i].CreateThread(m_Shed, m_ReadyCallback.m_Semaphore, &m_Stop);
-        }
-    }
-    ~Shed()
-    {
-        nadir::AtomicAdd32(&m_Stop, 1);
-        ReadyCallback::Ready(&m_ReadyCallback.cb, 0, m_WorkerCount);
-        for (uint32_t i = 0; i < m_WorkerCount; ++i)
-        {
-            m_Workers[i].JoinThread();
-        }
-        delete []m_Workers;
-    }
-
-    ReadyCallback m_ReadyCallback;
-
-    Bikeshed m_Shed;
-    uint32_t m_WorkerCount;
-    ThreadWorker* m_Workers;
-    int32_t volatile m_Stop;
 };
 
 struct MeowHashAPI
@@ -491,22 +454,50 @@ struct BikeshedJobAPI
         JobAPI::TJobFunc m_JobFunc;
         void* m_Context;
     };
+
+    ReadyCallback m_ReadyCallback;
     Bikeshed m_Shed;
+    uint32_t m_WorkerCount;
+    ThreadWorker* m_Workers;
+    int32_t volatile m_Stop;
     JobWrapper* m_ReservedJobs;
     uint32_t m_SubmittedJobCount;
     int32_t volatile m_PendingJobCount;
 
-    BikeshedJobAPI(Bikeshed shed)
+    BikeshedJobAPI()
         : m_JobAPI{
             ReserveJobs,
             SubmitJobs,
             WaitForAllJobs
-        },
-        m_Shed(shed),
-        m_ReservedJobs(0),
-        m_SubmittedJobCount(0),
-        m_PendingJobCount(0)
+            }
+        , m_Shed(0)
+        , m_WorkerCount(GetCPUCount() - 1)
+        , m_Workers(0)
+        , m_Stop(0)
+        , m_ReservedJobs(0)
+        , m_SubmittedJobCount(0)
+        , m_PendingJobCount(0)
     {
+        m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &m_ReadyCallback.cb);
+        if (m_WorkerCount == 0)
+        {
+            m_WorkerCount = 1;
+        }
+        m_Workers = new ThreadWorker[m_WorkerCount];
+        for (uint32_t i = 0; i < m_WorkerCount; ++i)
+        {
+            m_Workers[i].CreateThread(m_Shed, m_ReadyCallback.m_Semaphore, &m_Stop);
+        }
+    }
+    ~BikeshedJobAPI()
+    {
+        nadir::AtomicAdd32(&m_Stop, 1);
+        ReadyCallback::Ready(&m_ReadyCallback.cb, 0, m_WorkerCount);
+        for (uint32_t i = 0; i < m_WorkerCount; ++i)
+        {
+            m_Workers[i].JoinThread();
+        }
+        delete []m_Workers;
     }
 
     static int ReserveJobs(JobAPI* job_api, uint32_t job_count)
@@ -574,7 +565,6 @@ struct BikeshedJobAPI
             if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
             {
                 old_pending_count = bikeshed_job_api->m_PendingJobCount;
-//                PLATFORM_LOG("Files left to hash: %d\n", old_pending_count);
             }
             PLATFORM_SLEEP_PRIVATE(1000);
         }
@@ -592,3 +582,5 @@ struct BikeshedJobAPI
     }
 };
 
+#undef PLATFORM_ATOMICADD_PRIVATE
+#undef PLATFORM_SLEEP_PRIVATE

@@ -8,7 +8,6 @@
 #define LONGTAIL_IMPLEMENTATION
 #include "../src/longtail.h"
 
-#define BIKESHED_IMPLEMENTATION
 #include "../common/platform.h"
 
 #include <stdio.h>
@@ -73,10 +72,9 @@ int main(int argc, char** argv)
             printf("--filter option not yet supported\n");
             return 1;
         }
-        Shed shed;
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        BikeshedJobAPI job_api(shed.m_Shed);
+        BikeshedJobAPI job_api;
 
         Paths* version_paths = GetFilesRecursively(
             &storage_api.m_StorageAPI,
@@ -179,10 +177,9 @@ int main(int argc, char** argv)
 
     if (create_content_index && version)
     {
-        Shed shed;
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        BikeshedJobAPI job_api(shed.m_Shed);
+        BikeshedJobAPI job_api;
 
         VersionIndex* vindex = 0;
         if (version_index)
@@ -293,11 +290,10 @@ int main(int argc, char** argv)
 
     if (create_content && version)
     {
-        Shed shed;
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
-        BikeshedJobAPI job_api(shed.m_Shed);
+        BikeshedJobAPI job_api;
         VersionIndex* vindex = 0;
         if (version_index)
         {
@@ -387,7 +383,6 @@ int main(int argc, char** argv)
 
     if (list_missing_blocks && content_index)
     {
-        Shed shed;
         TroveStorageAPI storage_api;
         ContentIndex* have_content_index = ReadContentIndex(&storage_api.m_StorageAPI, list_missing_blocks);
         if (!have_content_index)
@@ -466,11 +461,10 @@ int main(int argc, char** argv)
 
     if (create_version && version_index && content)
     {
-        Shed shed;
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
-        BikeshedJobAPI job_api(shed.m_Shed);
+        BikeshedJobAPI job_api;
 
         VersionIndex* vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
         if (!vindex)

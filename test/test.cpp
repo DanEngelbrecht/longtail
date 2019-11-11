@@ -6,8 +6,6 @@
 #include "../src/longtail.h"
 #include "../src/longtail_array.h"
 
-#define BIKESHED_IMPLEMENTATION
-#include "../third-party/bikeshed/bikeshed.h"
 #include "../common/platform.h"
 
 
@@ -1164,10 +1162,9 @@ void Bench()
 
     const char* TARGET_VERSION_PREFIX = HOME "\\remote\\";
 
-    Shed shed;
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(shed.m_Shed);
+    BikeshedJobAPI job_api;
 
     ContentIndex* full_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
@@ -1302,8 +1299,6 @@ void LifelikeTest()
 {
     if (1) return;
 
-    Shed shed;
-
 //    #define HOME "test\\data"
     #define HOME "D:\\Temp\\longtail"
 
@@ -1335,7 +1330,7 @@ void LifelikeTest()
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
     LizardCompressionAPI compression_api;
-    BikeshedJobAPI job_api(shed.m_Shed);
+    BikeshedJobAPI job_api;
 
     Paths* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
     ASSERT_NE((Paths*)0, local_path_1_paths);
