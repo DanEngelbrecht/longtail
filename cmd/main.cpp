@@ -54,12 +54,15 @@ int main(int argc, char** argv)
     const char* create_version = NULL;
     kgflags_string("create-version", NULL, "Path to version index", false, &create_version);
 
+    const char* list_missing_blocks = NULL;
+    kgflags_string("list-missing-blocks", NULL, "Path to content index", false, &list_missing_blocks);
+
     if (!kgflags_parse(argc, argv)) {
         kgflags_print_errors();
         kgflags_print_usage();
         return 1;
     }
-    
+
     if (create_version_index && version)
     {
         if (filter)
@@ -85,6 +88,7 @@ int main(int argc, char** argv)
             version,
             version_paths);
         free(version_paths);
+        version_paths = 0;
         if (!version_index)
         {
             printf("Failed to create version index for `%s`\n", version);
@@ -92,6 +96,7 @@ int main(int argc, char** argv)
         }
         int ok = WriteVersionIndex(&storage_api.m_StorageAPI, version_index, create_version_index);
         free(version_index);
+        version_index = 0;
         if (!ok)
         {
             printf("Failed to create version index to `%s`\n", create_version_index);
@@ -117,6 +122,7 @@ int main(int argc, char** argv)
             }
             int ok = WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
             free(cindex);
+            cindex = 0;
             if (!ok)
             {
                 printf("Failed to write content index to `%s`\n", create_content_index);
@@ -137,12 +143,15 @@ int main(int argc, char** argv)
             if (!cindex2)
             {
                 free(cindex1);
+                cindex1 = 0;
                 printf("Failed to read content index from `%s`\n", merge_content_index);
                 return 1;
             }
             ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
             free(cindex2);
+            cindex2 = 0;
             free(cindex1);
+            cindex1 = 0;
 
             if (!cindex)
             {
@@ -152,6 +161,7 @@ int main(int argc, char** argv)
 
             int ok = WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
             free(cindex);
+            cindex = 0;
 
             if (!ok)
             {
@@ -195,6 +205,7 @@ int main(int argc, char** argv)
                 version,
                 version_paths);
             free(version_paths);
+            version_paths = 0;
             if (!vindex)
             {
                 printf("Failed to create version index for version `%s`\n", version);
@@ -209,6 +220,7 @@ int main(int argc, char** argv)
             if (!existing_cindex)
             {
                 free(vindex);
+                vindex = 0;
                 printf("Failed to read content index from `%s`\n", content_index);
                 return 1;
             }
@@ -222,6 +234,7 @@ int main(int argc, char** argv)
             if (!existing_cindex)
             {
                 free(vindex);
+                vindex = 0;
                 printf("Failed to read contents from `%s`\n", content);
                 return 1;
             }
@@ -259,6 +272,7 @@ int main(int argc, char** argv)
             GetContentTag);
 */
         free(vindex);
+        vindex = 0;
         if (!cindex)
         {
             printf("Failed to create content index for version `%s`\n", version);
@@ -271,6 +285,7 @@ int main(int argc, char** argv)
             create_content_index);
 
         free(cindex);
+        cindex = 0;
 
         if (!ok)
         {
@@ -314,6 +329,7 @@ int main(int argc, char** argv)
                 version,
                 version_paths);
             free(version_paths);
+            version_paths = 0;
             if (!vindex)
             {
                 printf("Failed to create version index for version `%s`\n", version);
@@ -361,7 +377,9 @@ int main(int argc, char** argv)
             version,
             create_content);
         free(vindex);
+        vindex = 0;
         free(cindex);
+        cindex = 0;
 
         if (!ok)
         {
@@ -370,6 +388,85 @@ int main(int argc, char** argv)
         }
         return 0;
     }
+
+    if (list_missing_blocks && content_index)
+    {
+        Shed shed;
+        TroveStorageAPI storage_api;
+        ContentIndex* have_content_index = ReadContentIndex(&storage_api.m_StorageAPI, list_missing_blocks);
+        if (!have_content_index)
+        {
+            return 1;
+        }
+        ContentIndex* need_content_index = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
+        if (!need_content_index)
+        {
+            free(have_content_index);
+            have_content_index = 0;
+            return 1;
+        }
+
+        // TODO: Move to longtail.h
+        uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)*have_content_index->m_AssetCount);
+        jc::HashTable<TLongtail_Hash, uint32_t> asset_hash_to_have_block_index;
+        void* asset_hash_to_have_block_index_mem = malloc(hash_size);
+        asset_hash_to_have_block_index.Create((uint32_t)*have_content_index->m_AssetCount, asset_hash_to_have_block_index_mem);
+
+        for (uint32_t i = 0; i < *have_content_index->m_AssetCount; ++i)
+        {
+            asset_hash_to_have_block_index.Put(have_content_index->m_AssetContentHash[i], have_content_index->m_AssetBlockIndex[i]);
+        }
+
+        hash_size = jc::HashTable<uint32_t, uint32_t>::CalcSize((uint32_t)*need_content_index->m_BlockCount);
+        jc::HashTable<uint32_t, uint32_t> need_block_index_to_asset_count;
+        void* need_block_index_to_asset_count_mem = malloc(hash_size);
+        need_block_index_to_asset_count.Create((uint32_t)*need_content_index->m_BlockCount, need_block_index_to_asset_count_mem);
+
+        for (uint32_t i = 0; i < *need_content_index->m_AssetCount; ++i)
+        {
+            uint32_t* have_block_index_ptr = asset_hash_to_have_block_index.Get(need_content_index->m_AssetContentHash[i]);
+            if (have_block_index_ptr)
+            {
+                continue;
+            }
+            uint32_t* need_block_index_ptr = need_block_index_to_asset_count.Get(need_content_index->m_AssetBlockIndex[i]);
+            if (need_block_index_ptr)
+            {
+                (*need_block_index_ptr)++;
+                continue;
+            }
+            need_block_index_to_asset_count.Put(need_content_index->m_AssetBlockIndex[i], 1u);
+        }
+
+        free(need_block_index_to_asset_count_mem);
+        need_block_index_to_asset_count_mem = 0;
+        uint32_t missing_block_count = need_block_index_to_asset_count.Size();
+        if (missing_block_count == 0)
+        {
+            free(asset_hash_to_have_block_index_mem);
+            asset_hash_to_have_block_index_mem = 0;
+            free(need_content_index);
+            need_content_index = 0;
+            free(have_content_index);
+            have_content_index = 0;
+            return 0;
+        }
+        TLongtail_Hash* missing_block_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * missing_block_count);
+        uint32_t block_index = 0;
+        for (jc::HashTable<uint32_t, uint32_t>::Iterator it = need_block_index_to_asset_count.Begin(); it != need_block_index_to_asset_count.End(); ++it)
+        {
+            uint32_t need_block_index = *it.GetValue();
+            TLongtail_Hash need_block_hash = need_content_index->m_BlockHash[need_block_index];
+            missing_block_hashes[block_index++] = need_block_hash;
+        }
+        free(need_block_index_to_asset_count_mem);
+        need_block_index_to_asset_count_mem = 0;
+
+        free(missing_block_hashes);
+        missing_block_hashes = 0;
+        return 0;
+    }
+
 
     if (create_version && version_index && content)
     {
@@ -392,6 +489,7 @@ int main(int argc, char** argv)
             if (!cindex)
             {
                 free(vindex);
+                vindex = 0;
                 printf("Failed to read content index from `%s`\n", content_index);
                 return 1;
             }
@@ -405,6 +503,7 @@ int main(int argc, char** argv)
             if (!cindex)
             {
                 free(vindex);
+                vindex = 0;
                 printf("Failed to create content index for version `%s`\n", version);
                 return 1;
             }
@@ -418,7 +517,9 @@ int main(int argc, char** argv)
             content,
             create_version);
         free(vindex);
+        vindex = 0;
         free(cindex);
+        cindex = 0;
         if (!ok)
         {
             printf("Failed to create version `%s`\n", create_version);

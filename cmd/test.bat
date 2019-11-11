@@ -12,3 +12,9 @@ call do_version.bat ..\build\longtail.exe D:\Temp\longtail git558af6b2a10d9ab5a2
 call do_version.bat ..\build\longtail.exe D:\Temp\longtail gitc2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c
 
 if %errorlevel% neq 0 echo "FAILED"
+
+rem ..\build\longtail_debug.exe --create-version-index base.lvi --version D:\Temp\longtail\local\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor
+rem ..\build\longtail_debug.exe --create-version-index target.lvi --version D:\Temp\longtail\local\git558af6b2a10d9ab5a267b219af4f795a17cc032f_Win64_Editor\
+rem ..\build\longtail_debug.exe --create-content-index base.lci --version-index base.lvi --version D:\Temp\longtail\local\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor
+rem ..\build\longtail_debug.exe --create-content-index target.lci --version-index target.lvi --version D:\Temp\longtail\local\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor --content-index base.lci
+rem ..\build\longtail_debug.exe --list-missing-blocks "base.lci" --content-index "target.lci"
