@@ -1,11 +1,7 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
-echo %1
-echo %2
-echo %3
-
-echo VERSION: %3
+echo -------------------- VERSION: %3 --------------------
 
 echo Indexing version %2/local/%3_Win64_Editor
 %1 --create-version-index "%2/%3_Win64_Editor.lvi" --version "%2/local/%3_Win64_Editor"
