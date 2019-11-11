@@ -598,7 +598,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
         {
             return 0;
         }
-        uint64_t content_size = 32000 + 1 + i;
+        uint64_t content_size = 64000 + 1 + i;
         char* data = new char[content_size];
         memset(data, i, content_size);
         int ok = storage_api->Write(storage_api, content_file, 0, content_size, data);
@@ -624,7 +624,7 @@ TEST(Longtail, VersionIndex)
 
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
-    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+    const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
 
     Paths* paths = MakePaths(5, asset_paths);
     size_t version_index_size = GetVersionIndexSize(5, paths->m_DataSize);
@@ -648,10 +648,9 @@ TEST(Longtail, ContentIndex)
     const uint64_t asset_count = 5;
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
-    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+    const uint32_t asset_sizes[5] = { 43593, 43593, 43592, 43591, 43591 };
     const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
-
     MeowHashAPI hash_api;
 
     ContentIndex* content_index = CreateContentIndex(
@@ -676,13 +675,13 @@ TEST(Longtail, ContentIndex)
     ASSERT_EQ(0u, content_index->m_AssetBlockIndex[1]);
     ASSERT_EQ(0u, content_index->m_AssetBlockIndex[2]);
     ASSERT_EQ(1u, content_index->m_AssetBlockIndex[3]);
-    ASSERT_EQ(1u, content_index->m_AssetBlockIndex[4]);
+	ASSERT_EQ(1u, content_index->m_AssetBlockIndex[4]);
 
     ASSERT_EQ(0u, content_index->m_AssetBlockOffset[0]);
-    ASSERT_EQ(32001u, content_index->m_AssetBlockOffset[1]);
-    ASSERT_EQ(64002u, content_index->m_AssetBlockOffset[2]);
+    ASSERT_EQ(43591, content_index->m_AssetBlockOffset[1]);
+    ASSERT_EQ(43591 * 2, content_index->m_AssetBlockOffset[2]);
     ASSERT_EQ(0u, content_index->m_AssetBlockOffset[3]);
-    ASSERT_EQ(32003u, content_index->m_AssetBlockOffset[4]);
+    ASSERT_EQ(43593, content_index->m_AssetBlockOffset[4]);
 
     free(content_index);
 }
@@ -766,7 +765,7 @@ TEST(Longtail, CreateMissingContent)
     const uint64_t asset_count = 5;
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
-    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+    const uint32_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
 
@@ -821,12 +820,12 @@ TEST(Longtail, CreateMissingContent)
     ASSERT_EQ(0u, missing_content_index->m_AssetBlockIndex[0]);
     ASSERT_EQ(asset_content_hashes[3], missing_content_index->m_AssetContentHash[1]);
     ASSERT_EQ(asset_sizes[3], missing_content_index->m_AssetLength[1]);
-    ASSERT_EQ(32001u, missing_content_index->m_AssetBlockOffset[1]);
+    ASSERT_EQ(43591, missing_content_index->m_AssetBlockOffset[1]);
 
     ASSERT_EQ(0u, missing_content_index->m_AssetBlockIndex[2]);
     ASSERT_EQ(asset_content_hashes[2], missing_content_index->m_AssetContentHash[2]);
     ASSERT_EQ(asset_sizes[2], missing_content_index->m_AssetLength[2]);
-    ASSERT_EQ(64002u, missing_content_index->m_AssetBlockOffset[2]);
+    ASSERT_EQ(43591 * 2, missing_content_index->m_AssetBlockOffset[2]);
 
     ASSERT_EQ(1u, missing_content_index->m_AssetBlockIndex[3]);
     ASSERT_EQ(asset_content_hashes[1], missing_content_index->m_AssetContentHash[3]);
@@ -967,7 +966,7 @@ TEST(Longtail, MergeContentIndex)
         StorageAPI::HOpenFile r = local_storage.m_StorageAPI.OpenReadFile(&local_storage.m_StorageAPI, path);
         ASSERT_NE((StorageAPI::HOpenFile)0, r);
         uint64_t size = local_storage.m_StorageAPI.GetSize(&local_storage.m_StorageAPI, r);
-        uint64_t expected_size = 32000 + 1 + i;
+        uint64_t expected_size = 64000 + 1 + i;
         ASSERT_EQ(expected_size, size);
         char* buffer = (char*)malloc(expected_size);
         local_storage.m_StorageAPI.Read(&local_storage.m_StorageAPI, r, 0, expected_size, buffer);
@@ -998,7 +997,7 @@ TEST(Longtail, ReconstructVersion)
         const uint64_t asset_count = 5;
         const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
         const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
-        const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+        const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
         const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
         const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
 
@@ -1024,7 +1023,7 @@ TEST(Longtail, ReconstructVersion)
     MeowHashAPI hash_api;
     TLongtail_Hash asset_path_hashes[5];// = {GetPathHash("10"), GetPathHash("20"), GetPathHash("30"), GetPathHash("40"), GetPathHash("50")};
     TLongtail_Hash asset_content_hashes[5];// = { 1, 2, 3, 4, 5};
-    const uint32_t asset_sizes[5] = {32003, 32003, 32002, 32001, 32001};
+    const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
     InMemStorageAPI source_storage;
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
     for (uint32_t i = 0; i < 5; ++i)

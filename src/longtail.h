@@ -428,7 +428,7 @@ Paths* GetFilesRecursively(StorageAPI* storage_api, const char* root_path)
         full_path = 0;
     };
 
-    Paths* paths = CreatePaths(default_path_count, default_path_data_size);//(Paths*)malloc(GetPathsSize(default_path_count, default_path_data_size));
+    Paths* paths = CreatePaths(default_path_count, default_path_data_size);
     Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths};
     paths = 0;
 
@@ -1004,27 +1004,56 @@ ContentIndex* CreateContentIndex(
 
     BlockIndex** block_indexes = (BlockIndex**)malloc(sizeof(BlockIndex*) * unique_asset_count);
 
-    static const uint32_t MAX_ASSETS_PER_BLOCK = 4096;
-    static const uint32_t MAX_BLOCK_SIZE = 65536;
+    static const uint32_t MAX_ASSETS_PER_BLOCK = 16384u;
+    static const uint32_t MAX_BLOCK_SIZE = 131072u;
     uint32_t stored_asset_indexes[MAX_ASSETS_PER_BLOCK];
 
     uint32_t current_size = 0;
-    TLongtail_Hash current_tag = content_tags[assets_index[0]];
     uint64_t i = 0;
     uint32_t asset_count_in_block = 0;
     uint32_t block_count = 0;
 
     while (i < unique_asset_count)
     {
+        asset_count_in_block = 0;
+
         uint64_t asset_index = assets_index[i];
-        while (i < unique_asset_count && current_size < MAX_BLOCK_SIZE && (current_tag == content_tags[asset_index] || current_size < (MAX_BLOCK_SIZE / 2)) && asset_count_in_block < MAX_ASSETS_PER_BLOCK)
+
+        uint32_t current_size = asset_sizes[asset_index];
+        TLongtail_Hash current_tag = content_tags[asset_index];
+
+        stored_asset_indexes[asset_count_in_block] = asset_index;
+        ++asset_count_in_block;
+
+		while((i + 1) < unique_asset_count)
         {
-            current_size += asset_sizes[asset_index];
+			asset_index = assets_index[(i + 1)];
+            uint32_t asset_size = asset_sizes[asset_index];
+
+            // Break if resulting asset count will exceed MAX_ASSETS_PER_BLOCK
+            if (asset_count_in_block == MAX_ASSETS_PER_BLOCK)
+            {
+                break;
+            }
+
+            // Break if resulting size will exceed MAX_BLOCK_SIZE and our block is bigger than one fourth of max size
+            if ((current_size > MAX_BLOCK_SIZE / 4) && ((asset_size + current_size) > MAX_BLOCK_SIZE))
+            {
+                break;
+            }
+
+            // Break on tag change when we are more than four fifths filled in the block
+            if (asset_size + current_size > (MAX_BLOCK_SIZE - (MAX_BLOCK_SIZE / 5) ) && current_tag != content_tags[asset_index])
+            {
+                break;
+            }
+
+            current_size += asset_size;
             stored_asset_indexes[asset_count_in_block] = asset_index;
-            ++i;
-            asset_index = assets_index[i];
             ++asset_count_in_block;
-        }
+
+			++i;
+		}
 
         block_indexes[block_count] = CreateBlockIndex(
             malloc(GetBlockIndexSize(asset_count_in_block)),
@@ -1035,9 +1064,7 @@ ContentIndex* CreateContentIndex(
             asset_sizes);
 
         ++block_count;
-        current_tag = i < unique_asset_count ? content_tags[asset_index] : 0;
-        current_size = 0;
-        asset_count_in_block = 0;
+        ++i;
     }
 
     if (current_size > 0)
