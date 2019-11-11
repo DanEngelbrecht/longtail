@@ -259,18 +259,7 @@ int main(int argc, char** argv)
             version,
             vindex,
             GetContentTag);
-/*
-        ContentIndex* cindex = CreateContentIndex(
-            &hash_api.m_HashAPI,
-            version,
-            *vindex->m_AssetCount,
-            vindex->m_AssetContentHash,
-            vindex->m_PathHash,
-            vindex->m_AssetSize,
-            vindex->m_NameOffset,
-            vindex->m_NameData,
-            GetContentTag);
-*/
+
         free(vindex);
         vindex = 0;
         if (!cindex)
