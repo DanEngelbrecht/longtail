@@ -4,9 +4,12 @@
 #define KGFLAGS_IMPLEMENTATION
 #include "../third-party/kgflags/kgflags.h"
 
+#include "../third-party/jc_containers/src/jc_hashtable.h"
+#define LONGTAIL_IMPLEMENTATION
+#include "../src/longtail.h"
+
 #define BIKESHED_IMPLEMENTATION
 #include "../common/platform.h"
-#include "../src/longtail.h"
 
 #include <stdio.h>
 
@@ -73,6 +76,8 @@ int main(int argc, char** argv)
         Shed shed;
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
+        BikeshedJobAPI job_api(shed.m_Shed);
+
         Paths* version_paths = GetFilesRecursively(
             &storage_api.m_StorageAPI,
             version);
@@ -84,7 +89,7 @@ int main(int argc, char** argv)
         VersionIndex* version_index = CreateVersionIndex(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             version,
             version_paths);
         free(version_paths);
@@ -177,6 +182,7 @@ int main(int argc, char** argv)
         Shed shed;
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
+        BikeshedJobAPI job_api(shed.m_Shed);
 
         VersionIndex* vindex = 0;
         if (version_index)
@@ -201,7 +207,7 @@ int main(int argc, char** argv)
             vindex = CreateVersionIndex(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
-                shed.m_Shed,
+                &job_api.m_JobAPI,
                 version,
                 version_paths);
             free(version_paths);
@@ -291,6 +297,7 @@ int main(int argc, char** argv)
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
+        BikeshedJobAPI job_api(shed.m_Shed);
         VersionIndex* vindex = 0;
         if (version_index)
         {
@@ -314,7 +321,7 @@ int main(int argc, char** argv)
             vindex = CreateVersionIndex(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
-                shed.m_Shed,
+                &job_api.m_JobAPI,
                 version,
                 version_paths);
             free(version_paths);
@@ -360,7 +367,7 @@ int main(int argc, char** argv)
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             cindex,
             path_lookup,
             version,
@@ -463,6 +470,7 @@ int main(int argc, char** argv)
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
+        BikeshedJobAPI job_api(shed.m_Shed);
 
         VersionIndex* vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
         if (!vindex)
@@ -500,7 +508,7 @@ int main(int argc, char** argv)
         int ok = ReconstructVersion(
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             cindex,
             vindex,
             content,

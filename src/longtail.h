@@ -59,6 +59,15 @@ struct CompressionAPI
     void (*DeleteDecompressionContext)(CompressionAPI* compression_api, HDecompressionContext context);
 };
 
+struct JobAPI
+{
+    typedef void (*TJobFunc)(void* context);
+
+    int (*ReserveJobs)(JobAPI* job_api, uint32_t job_count);
+    void (*SubmitJobs)(JobAPI* job_api, uint32_t job_count, TJobFunc job_funcs[], void* job_contexts[]);
+    void (*WaitForAllJobs)(JobAPI* job_api);
+};
+
 typedef uint64_t TLongtail_Hash;
 struct Paths;
 struct VersionIndex;
@@ -72,7 +81,7 @@ Paths* GetFilesRecursively(
 VersionIndex* CreateVersionIndex(
     StorageAPI* storage_api,
     HashAPI* hash_api,
-    Bikeshed shed,
+    JobAPI* job_api,
     const char* root_path,
     const Paths* paths);
 
@@ -111,7 +120,7 @@ int WriteContent(
     StorageAPI* source_storage_api,
     StorageAPI* target_storage_api,
     CompressionAPI* compression_api,
-    Bikeshed shed,
+    JobAPI* job_api,
     ContentIndex* content_index,
     PathLookup* asset_content_hash_to_path,
     const char* assets_folder,
@@ -140,7 +149,7 @@ PathLookup* CreateContentHashToPathLookup(
 int ReconstructVersion(
     StorageAPI* storage_api,
     CompressionAPI* compression_api,
-    Bikeshed shed,
+    JobAPI* job_api,
     const ContentIndex* content_index,
     const VersionIndex* version_index,
     const char* content_path,
@@ -153,41 +162,6 @@ int ReconstructVersion(
         printf("--- ");printf(fmt, __VA_ARGS__);
 #else
     #define LONGTAIL_LOG(fmr, ...)
-#endif
-
-#if !defined(LONGTAIL_ATOMICADD)
-    #if defined(__clang__) || defined(__GNUC__)
-        #define LONGTAIL_ATOMICADD_PRIVATE(value, amount) (__sync_add_and_fetch (value, amount))
-    #elif defined(_MSC_VER)
-        #if !defined(_WINDOWS_)
-            #define WIN32_LEAN_AND_MEAN
-            #include <Windows.h>
-            #undef WIN32_LEAN_AND_MEAN
-        #endif
-
-        #define LONGTAIL_ATOMICADD_PRIVATE(value, amount) (_InterlockedExchangeAdd((volatile LONG *)value, amount) + amount)
-    #else
-        inline int32_t Longtail_NonAtomicAdd(volatile int32_t* store, int32_t value) { *store += value; return *store; }
-        #define LONGTAIL_ATOMICADD_PRIVATE(value, amount) (Longtail_NonAtomicAdd(value, amount))
-    #endif
-#else
-    #define LONGTAIL_ATOMICADD_PRIVATE LONGTAIL_ATOMICADD
-#endif
-
-#if !defined(LONGTAIL_SLEEP)
-    #if defined(__clang__) || defined(__GNUC__)
-        #define LONGTAIL_SLEEP_PRIVATE(timeout_us) (::usleep((useconds_t)timeout_us))
-    #elif defined(_MSC_VER)
-        #if !defined(_WINDOWS_)
-            #define WIN32_LEAN_AND_MEAN
-            #include <Windows.h>
-            #undef WIN32_LEAN_AND_MEAN
-        #endif
-
-        #define LONGTAIL_SLEEP_PRIVATE(timeout_us) (::Sleep((DWORD)(timeout_us / 1000)))
-    #endif
-#else
-    #define LONGTAIL_SLEEP_PRIVATE LONGTAIL_SLEEP
 #endif
 
 #include <inttypes.h>
@@ -450,19 +424,10 @@ struct HashJob
     uint32_t* m_ContentSize;
     const char* m_RootPath;
     const char* m_Path;
-    int32_t volatile* m_PendingCount;
     int m_Success;
 };
 
-struct FileHashContext
-{
-    StorageAPI* m_StorageAPI;
-    Bikeshed m_Shed;
-    HashJob* m_HashJobs;
-    int32_t volatile* m_PendingCount;
-};
-
-Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
+void HashFile(void* context)
 {
     HashJob* hash_job = (HashJob*)context;
 
@@ -513,25 +478,25 @@ Bikeshed_TaskResult HashFile(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* cont
     }
     *hash_job->m_ContentHash = content_hash;
     *hash_job->m_PathHash = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path);
-    LONGTAIL_ATOMICADD_PRIVATE(hash_job->m_PendingCount, -1);
-    return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, Bikeshed shed, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
+int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
 {
     LONGTAIL_LOG("GetFileHashes in folder `%s` for %u assets\n", root_path, (uint32_t)*paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
-    FileHashContext context;
-    context.m_StorageAPI = storage_api;
-    context.m_Shed = shed;
-    context.m_HashJobs = new HashJob[asset_count];
-    int32_t volatile pendingCount = 0;
-    context.m_PendingCount = &pendingCount;
+
+    if (job_api)
+    {
+        if (!job_api->ReserveJobs(job_api, asset_count))
+        {
+            return 0;
+        }
+    }
+    HashJob* hash_jobs = new HashJob[asset_count];
 
     uint64_t assets_left = asset_count;
     static const uint32_t BATCH_SIZE = 64;
-    Bikeshed_TaskID task_ids[BATCH_SIZE];
-    BikeShed_TaskFunc func[BATCH_SIZE];
+    JobAPI::TJobFunc func[BATCH_SIZE];
     void* ctx[BATCH_SIZE];
     for (uint32_t i = 0; i < BATCH_SIZE; ++i)
     {
@@ -543,67 +508,45 @@ int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, Bikeshed shed, con
         uint32_t batch_count = assets_left > BATCH_SIZE ? BATCH_SIZE : (uint32_t)assets_left;
         for (uint32_t i = 0; i < batch_count; ++i)
         {
-            HashJob* job = &context.m_HashJobs[offset + i];
-            ctx[i] = &context.m_HashJobs[i + offset];
+            HashJob* job = &hash_jobs[offset + i];
+            ctx[i] = &hash_jobs[i + offset];
             job->m_StorageAPI = storage_api;
             job->m_HashAPI = hash_api;
             job->m_RootPath = root_path;
             job->m_Path = &paths->m_Data[paths->m_Offsets[i + offset]];
-            job->m_PendingCount = &pendingCount;
             job->m_PathHash = &pathHashes[i + offset];
             job->m_ContentHash = &contentHashes[i + offset];
             job->m_ContentSize = &contentSizes[i + offset];
-            if (!shed)
+            if (!job_api)
             {
-                LONGTAIL_ATOMICADD_PRIVATE(&pendingCount, 1);
-                HashFile(0, 0, 0, job);
+                HashFile(job);
             }
         }
 
-        if (shed)
+        if (job_api)
         {
-            while (!Bikeshed_CreateTasks(shed, batch_count, func, ctx, task_ids))
-            {
-                LONGTAIL_SLEEP_PRIVATE(1000);
-            }
-
-            {
-                LONGTAIL_ATOMICADD_PRIVATE(&pendingCount, batch_count);
-                Bikeshed_ReadyTasks(shed, batch_count, task_ids);
-            }
+            job_api->SubmitJobs(job_api, batch_count, func, ctx);
         }
+
         offset += batch_count;
     }
 
-    if (shed)
+    if (job_api)
     {
-        int32_t old_pending_count = 0;
-        while (pendingCount > 0)
-        {
-            if (Bikeshed_ExecuteOne(shed, 0))
-            {
-                continue;
-            }
-            if (old_pending_count != pendingCount)
-            {
-                old_pending_count = pendingCount;
-                LONGTAIL_LOG("Files left to hash: %d\n", old_pending_count);
-            }
-            LONGTAIL_SLEEP_PRIVATE(1000);
-        }
+        job_api->WaitForAllJobs(job_api);
     }
 
     int success = 1;
     for (uint32_t i = 0; i < asset_count; ++i)
     {
-        if (!context.m_HashJobs[i].m_Success)
+        if (!hash_jobs[i].m_Success)
         {
             success = 0;
-            LONGTAIL_LOG("Failed to hash `%s`\n", context.m_HashJobs[i].m_Path)
+            LONGTAIL_LOG("Failed to hash `%s`\n", hash_jobs[i].m_Path)
         }
     }
 
-    delete [] context.m_HashJobs;
+    delete [] hash_jobs;
     return success;
 }
 
@@ -696,14 +639,14 @@ VersionIndex* BuildVersionIndex(
     return version_index;
 }
 
-VersionIndex* CreateVersionIndex(StorageAPI* storage_api, HashAPI* hash_api, Bikeshed shed, const char* root_path, const Paths* paths)
+VersionIndex* CreateVersionIndex(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, const char* root_path, const Paths* paths)
 {
     uint32_t path_count = *paths->m_PathCount;
     uint32_t* contentSizes = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
     TLongtail_Hash* pathHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
     TLongtail_Hash* contentHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
     
-    if (!GetFileHashes(storage_api, hash_api, shed, root_path, paths, pathHashes, contentHashes, contentSizes))
+    if (!GetFileHashes(storage_api, hash_api, job_api, root_path, paths, pathHashes, contentHashes, contentSizes))
     {
         LONGTAIL_LOG("Failed to hash assets in `%s`\n", root_path);
         free(contentHashes);
@@ -1225,7 +1168,6 @@ struct WriteBlockJob
     const PathLookup* m_PathLookup;
     uint64_t m_FirstAssetIndex;
     uint32_t m_AssetCount;
-    int32_t volatile* m_PendingCount;
     uint32_t m_Success;
 };
 
@@ -1243,7 +1185,7 @@ char* GetBlockName(TLongtail_Hash block_hash)
     return name;
 }
 
-Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
+void WriteContentBlockJob(void* context)
 {
     WriteBlockJob* job = (WriteBlockJob*)context;
     StorageAPI* source_storage_api = job->m_SourceStorageAPI;
@@ -1286,8 +1228,7 @@ Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t
             LONGTAIL_LOG("Failed to get path for asset content 0x%" PRIx64 "\n", asset_content_hash)
             free(write_buffer);
             free(block_name);
-            LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-            return BIKESHED_TASK_RESULT_COMPLETE;
+            return;
         }
 
         if (!IsDirPath(asset_path))
@@ -1300,8 +1241,7 @@ Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t
                 free(write_buffer);
                 free(block_name);
                 source_storage_api->CloseRead(source_storage_api, file_handle);
-                LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-                return BIKESHED_TASK_RESULT_COMPLETE;
+                return;
             }
             //printf("Storing `%s` in block `%s` at offset %u, size %u\n", asset_path, block_name, (uint32_t)write_offset, (uint32_t)asset_size);
             source_storage_api->Read(source_storage_api, file_handle, 0, asset_size, write_ptr);
@@ -1329,16 +1269,14 @@ Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t
         {
             LONGTAIL_LOG("Failed to create parent path for `%s`\n", tmp_block_path)
             free(compressed_buffer);
-            LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-            return BIKESHED_TASK_RESULT_COMPLETE;
+            return;
         }
         StorageAPI::HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path);
         if (!block_file_handle)
         {
             LONGTAIL_LOG("Failed to create block file `%s`\n", tmp_block_path)
             free(compressed_buffer);
-            LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-            return BIKESHED_TASK_RESULT_COMPLETE;
+            return;
         }
         int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, (sizeof(uint32_t) * 2) + compressed_size, compressed_buffer);
         free(compressed_buffer);
@@ -1372,16 +1310,13 @@ Bikeshed_TaskResult WriteContentBlockJob(Bikeshed shed, Bikeshed_TaskID, uint8_t
 
     free((char*)tmp_block_path);
     tmp_block_path = 0;
-
-    LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-    return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
 int WriteContent(
     StorageAPI* source_storage_api,
     StorageAPI* target_storage_api,
     CompressionAPI* compression_api,
-    Bikeshed shed,
+    JobAPI* job_api,
     ContentIndex* content_index,
     PathLookup* asset_content_hash_to_path,
     const char* assets_folder,
@@ -1394,7 +1329,14 @@ int WriteContent(
         return 1;
     }
 
-    int32_t volatile pending_job_count = 0;
+    if (job_api)
+    {
+        if (!job_api->ReserveJobs(job_api, block_count))
+        {
+            return 0;
+        }
+    }
+
     WriteBlockJob** write_block_jobs = (WriteBlockJob**)malloc(sizeof(WriteBlockJob*) * block_count);
     uint32_t block_start_asset_index = 0;
     for (uint32_t block_index = 0; block_index < block_count; ++block_index)
@@ -1431,52 +1373,26 @@ int WriteContent(
         job->m_PathLookup = asset_content_hash_to_path;
         job->m_FirstAssetIndex = block_start_asset_index;
         job->m_AssetCount = asset_count;
-        job->m_PendingCount = &pending_job_count;
         job->m_Success = 0;
 
-        if (shed == 0)
+        if (job_api == 0)
         {
-            LONGTAIL_ATOMICADD_PRIVATE(&pending_job_count, 1);
-            Bikeshed_TaskResult result = WriteContentBlockJob(shed, 0, 0, job);
-            // TODO: Don't use assert!
-            assert(result == BIKESHED_TASK_RESULT_COMPLETE);
+            WriteContentBlockJob(job);
         }
         else
         {
-            Bikeshed_TaskID task_ids[1];
-            BikeShed_TaskFunc func[1] = { WriteContentBlockJob };
+            JobAPI::TJobFunc func[1] = { WriteContentBlockJob };
             void* ctx[1] = { job };
 
-            while (!Bikeshed_CreateTasks(shed, 1, func, ctx, task_ids))
-            {
-                LONGTAIL_SLEEP_PRIVATE(1000);
-            }
-
-            {
-                LONGTAIL_ATOMICADD_PRIVATE(&pending_job_count, 1);
-                Bikeshed_ReadyTasks(shed, 1, task_ids);
-            }
+            job_api->SubmitJobs(job_api, 1, func, ctx);
         }
 
         block_start_asset_index += asset_count;
     }
 
-    if (shed)
+    if (job_api)
     {
-        int32_t old_pending_count = 0;
-        while (pending_job_count > 0)
-        {
-            if (Bikeshed_ExecuteOne(shed, 0))
-            {
-                continue;
-            }
-            if (old_pending_count != pending_job_count)
-            {
-                old_pending_count = pending_job_count;
-                LONGTAIL_LOG("Blocks left to to write: %d\n", pending_job_count);
-            }
-            LONGTAIL_SLEEP_PRIVATE(1000);
-        }
+        job_api->WaitForAllJobs(job_api);
     }
 
     int success = 1;
@@ -1508,7 +1424,6 @@ struct ReconstructJob
     uint32_t m_AssetCount;
     uint32_t* m_AssetBlockOffsets;
     uint32_t* m_AssetLengths;
-    int32_t volatile* m_PendingCount;
     uint32_t m_Success;
 };
 
@@ -1533,10 +1448,7 @@ ReconstructJob* CreateReconstructJob(uint32_t asset_count)
     return job;
 }
 
-static Bikeshed_TaskResult ReconstructFromBlock(
-    Bikeshed shed,
-    Bikeshed_TaskID,
-    uint8_t, void* context)
+static void ReconstructFromBlock(void* context)
 {
     ReconstructJob* job = (ReconstructJob*)context;
     StorageAPI* storage_api = job->m_StorageAPI;
@@ -1546,7 +1458,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(
     if (!block_file_handle)
     {
         LONGTAIL_LOG("Failed to open block file `%s`\n", job->m_BlockPath)
-        return BIKESHED_TASK_RESULT_COMPLETE;
+        return;
     }
 
     uint64_t compressed_block_size = storage_api->GetSize(storage_api, block_file_handle);
@@ -1556,8 +1468,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(
         LONGTAIL_LOG("Failed to read block file `%s`\n", job->m_BlockPath)
         storage_api->CloseRead(storage_api, block_file_handle);
         free(compressed_block_content);
-        LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-        return BIKESHED_TASK_RESULT_COMPLETE;
+        return;
     }
     uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
     uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
@@ -1573,8 +1484,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(
         LONGTAIL_LOG("Block file is malformed (compression header) `%s`\n", job->m_BlockPath)
         free(decompressed_buffer);
         decompressed_buffer = 0;
-        LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-        return BIKESHED_TASK_RESULT_COMPLETE;
+        return;
     }
 
     for (uint32_t asset_index = 0; asset_index < job->m_AssetCount; ++asset_index)
@@ -1585,8 +1495,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(
             LONGTAIL_LOG("Failed to create parent path for `%s`\n", asset_path)
             free(decompressed_buffer);
             decompressed_buffer = 0;
-            LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-            return BIKESHED_TASK_RESULT_COMPLETE;
+            return;
         }
 
         if (IsDirPath(asset_path))
@@ -1596,8 +1505,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(
                 LONGTAIL_LOG("Failed to create asset folder `%s`\n", asset_path)
                 free(decompressed_buffer);
                 decompressed_buffer = 0;
-                LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-                return BIKESHED_TASK_RESULT_COMPLETE;
+                return;
             }
         }
         else
@@ -1608,8 +1516,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(
                 LONGTAIL_LOG("Failed to create asset file `%s`\n", asset_path)
                 free(decompressed_buffer);
                 decompressed_buffer = 0;
-                LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-                return BIKESHED_TASK_RESULT_COMPLETE;
+                return;
             }
             uint32_t asset_length = job->m_AssetLengths[asset_index];
             uint64_t read_offset = job->m_AssetBlockOffsets[asset_index];
@@ -1622,8 +1529,7 @@ static Bikeshed_TaskResult ReconstructFromBlock(
                 LONGTAIL_LOG("Failed to write asset file `%s`\n", asset_path)
                 free(decompressed_buffer);
                 decompressed_buffer = 0;
-                LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-                return BIKESHED_TASK_RESULT_COMPLETE;
+                return;
             }
         }
     }
@@ -1633,14 +1539,12 @@ static Bikeshed_TaskResult ReconstructFromBlock(
     decompressed_buffer = 0;
 
     job->m_Success = 1;
-    LONGTAIL_ATOMICADD_PRIVATE(job->m_PendingCount, -1);
-    return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
 int ReconstructVersion(
     StorageAPI* storage_api,
     CompressionAPI* compression_api,
-    Bikeshed shed,
+    JobAPI* job_api,
     const ContentIndex* content_index,
     const VersionIndex* version_index,
     const char* content_path,
@@ -1721,7 +1625,14 @@ int ReconstructVersion(
     };
     std::sort(&asset_order[0], &asset_order[asset_count], ReconstructOrder(content_index, version_index->m_AssetContentHash, version_index_to_content_index));
 
-    int32_t volatile pending_job_count = 0;
+	if (job_api)
+	{
+		if (!job_api->ReserveJobs(job_api, asset_count))
+		{
+			free(asset_order);
+			return 0;
+		}
+	}
     ReconstructJob** reconstruct_jobs = (ReconstructJob**)malloc(sizeof(ReconstructJob*) * asset_count);
     uint32_t job_count = 0;
     uint64_t i = 0;
@@ -1749,7 +1660,6 @@ int ReconstructVersion(
         reconstruct_jobs[job_count++] = job;
         job->m_StorageAPI = storage_api;
         job->m_CompressionAPI = compression_api;
-        job->m_PendingCount = &pending_job_count;
         job->m_Success = 0;
 
         TLongtail_Hash block_hash = content_index->m_BlockHash[block_index];
@@ -1770,49 +1680,23 @@ int ReconstructVersion(
             job->m_AssetLengths[j] = content_index->m_AssetLength[asset_index_in_content_index];
         }
 
-        if (shed == 0)
+        if (job_api == 0)
         {
-            LONGTAIL_ATOMICADD_PRIVATE(&pending_job_count, 1);
-            Bikeshed_TaskResult result = ReconstructFromBlock(shed, 0, 0, job);
-            // TODO: Don't use assert!
-            assert(result == BIKESHED_TASK_RESULT_COMPLETE);
+            ReconstructFromBlock(job);
         }
         else
         {
-            Bikeshed_TaskID task_ids[1];
-            BikeShed_TaskFunc func[1] = { ReconstructFromBlock };
+            JobAPI::TJobFunc func[1] = { ReconstructFromBlock };
             void* ctx[1] = { job };
-
-            while (!Bikeshed_CreateTasks(shed, 1, func, ctx, task_ids))
-            {
-                LONGTAIL_SLEEP_PRIVATE(1000);
-            }
-
-            {
-                LONGTAIL_ATOMICADD_PRIVATE(&pending_job_count, 1);
-                Bikeshed_ReadyTasks(shed, 1, task_ids);
-            }
+            job_api->SubmitJobs(job_api, 1, func, ctx);
         }
 
         i += asset_count_from_block;
     }
 
-    if (shed)
+    if (job_api)
     {
-        int32_t old_pending_count = 0;
-        while (pending_job_count > 0)
-        {
-            if (Bikeshed_ExecuteOne(shed, 0))
-            {
-                continue;
-            }
-            if (old_pending_count != pending_job_count)
-            {
-                old_pending_count = pending_job_count;
-                LONGTAIL_LOG("Blocks left to reconstruct from: %d\n", pending_job_count);
-            }
-            LONGTAIL_SLEEP_PRIVATE(1000);
-        }
+        job_api->WaitForAllJobs(job_api);
     }
 
     int success = 1;

@@ -1,12 +1,14 @@
 #include "../third-party/jctest/src/jc_test.h"
 
-#define BIKESHED_IMPLEMENTATION
-#include "../third-party/bikeshed/bikeshed.h"
+#include "../third-party/jc_containers/src/jc_hashtable.h"
 
-#include "../common/platform.h"
+#define LONGTAIL_IMPLEMENTATION
 #include "../src/longtail.h"
 #include "../src/longtail_array.h"
 
+#define BIKESHED_IMPLEMENTATION
+#include "../third-party/bikeshed/bikeshed.h"
+#include "../common/platform.h"
 
 
 
@@ -1165,6 +1167,7 @@ void Bench()
     Shed shed;
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
+    BikeshedJobAPI job_api(shed.m_Shed);
 
     ContentIndex* full_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
@@ -1186,7 +1189,7 @@ void Bench()
         printf("Indexing `%s`\n", version_source_folder);
         Paths* version_source_paths = GetFilesRecursively(&storage_api.m_StorageAPI, version_source_folder);
         ASSERT_NE((Paths*)0, version_source_paths);
-        VersionIndex* version_index = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, shed.m_Shed, version_source_folder, version_source_paths);
+        VersionIndex* version_index = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, &job_api.m_JobAPI, version_source_folder, version_source_paths);
         free(version_source_paths);
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
@@ -1213,7 +1216,7 @@ void Bench()
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             missing_content_index,
             path_lookup,
             version_source_folder,
@@ -1272,7 +1275,7 @@ void Bench()
         ASSERT_NE(0, ReconstructVersion(
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             full_content_index,
             version_index,
             CONTENT_FOLDER,
@@ -1332,10 +1335,11 @@ void LifelikeTest()
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
     LizardCompressionAPI compression_api;
+    BikeshedJobAPI job_api(shed.m_Shed);
 
     Paths* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
     ASSERT_NE((Paths*)0, local_path_1_paths);
-    VersionIndex* version1 = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, shed.m_Shed, local_path_1, local_path_1_paths);
+    VersionIndex* version1 = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, &job_api.m_JobAPI, local_path_1, local_path_1_paths);
     WriteVersionIndex(&storage_api.m_StorageAPI, version1, version_index_path_1);
     free(local_path_1_paths);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
@@ -1364,7 +1368,7 @@ void LifelikeTest()
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             local_content_index,
             path_lookup,
             local_path_1,
@@ -1375,13 +1379,13 @@ void LifelikeTest()
     }
 
     printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-    ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, shed.m_Shed, local_content_index, version1, local_content_path, remote_path_1));
+    ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, &job_api.m_JobAPI, local_content_index, version1, local_content_path, remote_path_1));
     printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
     Paths* local_path_2_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_2);
     ASSERT_NE((Paths*)0, local_path_2_paths);
-    VersionIndex* version2 = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, shed.m_Shed, local_path_2, local_path_2_paths);
+    VersionIndex* version2 = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, &job_api.m_JobAPI, local_path_2, local_path_2_paths);
     free(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(&storage_api.m_StorageAPI, version2, version_index_path_2));
@@ -1406,7 +1410,7 @@ void LifelikeTest()
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             missing_content,
             path_lookup,
             local_path_2,
@@ -1426,7 +1430,7 @@ void LifelikeTest()
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
-            shed.m_Shed,
+            &job_api.m_JobAPI,
             missing_content,
             path_lookup,
             local_path_2,
@@ -1482,7 +1486,7 @@ void LifelikeTest()
     local_content_index = 0;
 
     printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-    ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, shed.m_Shed, merged_local_content, version2, local_content_path, remote_path_2));
+    ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, &job_api.m_JobAPI, merged_local_content, version2, local_content_path, remote_path_2));
     printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
 //    free(existing_blocks);

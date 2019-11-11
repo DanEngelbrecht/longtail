@@ -7,16 +7,53 @@
 #include "../third-party/meow_hash/meow_hash_x64_aesni.h"
 #include "../third-party/nadir/src/nadir.h"
 #include "../third-party/trove/src/trove.h"
-#include "../third-party/jc_containers/src/jc_hashtable.h"
 #include "../src/longtail.h"
+
+#if !defined(PLATFORM_ATOMICADD)
+    #if defined(__clang__) || defined(__GNUC__)
+        #define PLATFORM_ATOMICADD_PRIVATE(value, amount) (__sync_add_and_fetch (value, amount))
+    #elif defined(_MSC_VER)
+        #if !defined(_WINDOWS_)
+            #define WIN32_LEAN_AND_MEAN
+            #include <Windows.h>
+            #undef WIN32_LEAN_AND_MEAN
+        #endif
+
+        #define PLATFORM_ATOMICADD_PRIVATE(value, amount) (_InterlockedExchangeAdd((volatile LONG *)value, amount) + amount)
+    #else
+        inline int32_t Platform_NonAtomicAdd(volatile int32_t* store, int32_t value) { *store += value; return *store; }
+        #define PLATFORM_ATOMICADD_PRIVATE(value, amount) (Platform_NonAtomicAdd(value, amount))
+    #endif
+#else
+    #define PLATFORM_ATOMICADD_PRIVATE PLATFORM_ATOMICADD
+#endif
+
+#if !defined(PLATFORM_SLEEP)
+    #if defined(__clang__) || defined(__GNUC__)
+        #define PLATFORM_SLEEP_PRIVATE(timeout_us) (::usleep((useconds_t)timeout_us))
+    #elif defined(_MSC_VER)
+        #if !defined(_WINDOWS_)
+            #define WIN32_LEAN_AND_MEAN
+            #include <Windows.h>
+            #undef WIN32_LEAN_AND_MEAN
+        #endif
+
+        #define PLATFORM_SLEEP_PRIVATE(timeout_us) (::Sleep((DWORD)(timeout_us / 1000)))
+    #endif
+#else
+    #define PLATFORM_SLEEP_PRIVATE PLATFORM_SLEEP
+#endif
 
 #if defined(_WIN32)
 
 #if !defined(_WINDOWS_)
-    #define WIN32_LEAN_AND_MEAN
-    #include <Windows.h>
-    #undef WIN32_LEAN_AND_MEAN
+    #if !defined(_WINDOWS_)
+        #define WIN32_LEAN_AND_MEAN
+        #include <Windows.h>
+        #undef WIN32_LEAN_AND_MEAN
+    #endif
 #endif
+
 
 inline int GetCPUCount()
 {
@@ -443,3 +480,115 @@ struct LizardCompressionAPI
 
 int LizardCompressionAPI::DefaultCompressionSetting = 44;
 int LizardCompressionAPI::MaxCompressionSetting = LIZARD_MAX_CLEVEL;
+
+struct BikeshedJobAPI
+{
+    JobAPI m_JobAPI;
+
+    struct JobWrapper
+    {
+        BikeshedJobAPI* m_JobAPI;
+        JobAPI::TJobFunc m_JobFunc;
+        void* m_Context;
+    };
+    Bikeshed m_Shed;
+    JobWrapper* m_ReservedJobs;
+    uint32_t m_SubmittedJobCount;
+    int32_t volatile m_PendingJobCount;
+
+    BikeshedJobAPI(Bikeshed shed)
+        : m_JobAPI{
+            ReserveJobs,
+            SubmitJobs,
+            WaitForAllJobs
+        },
+        m_Shed(shed),
+        m_ReservedJobs(0),
+        m_SubmittedJobCount(0),
+        m_PendingJobCount(0)
+    {
+    }
+
+    static int ReserveJobs(JobAPI* job_api, uint32_t job_count)
+    {
+        BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
+        if (bikeshed_job_api->m_PendingJobCount)
+        {
+            return 0;
+        }
+        if (bikeshed_job_api->m_SubmittedJobCount)
+        {
+            return 0;
+        }
+        if (bikeshed_job_api->m_ReservedJobs)
+        {
+            return 0;
+        }
+        bikeshed_job_api->m_ReservedJobs = (JobWrapper*)malloc(sizeof(JobWrapper) * job_count);
+        return bikeshed_job_api->m_ReservedJobs != 0;
+    }
+
+    static void SubmitJobs(JobAPI* job_api, uint32_t job_count, JobAPI::TJobFunc job_funcs[], void* job_contexts[])
+    {
+        BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
+
+        BikeShed_TaskFunc* func = (BikeShed_TaskFunc*)malloc(sizeof(BikeShed_TaskFunc) * job_count);
+        void** ctx = (void**)malloc(sizeof(void*) * job_count);
+        Bikeshed_TaskID* task_ids = (Bikeshed_TaskID*)malloc(sizeof(Bikeshed_TaskID) * job_count);
+        for (uint32_t i = 0; i < job_count; ++i)
+        {
+            JobWrapper* job_wrapper = &bikeshed_job_api->m_ReservedJobs[bikeshed_job_api->m_SubmittedJobCount + i];
+            job_wrapper->m_JobAPI = bikeshed_job_api;
+            job_wrapper->m_Context = job_contexts[i];
+            job_wrapper->m_JobFunc = job_funcs[i];
+            func[i] = Job;
+            ctx[i] = job_wrapper;
+        }
+
+        bikeshed_job_api->m_SubmittedJobCount += job_count;
+
+        while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, func, ctx, task_ids))
+        {
+            PLATFORM_SLEEP_PRIVATE(1000);
+        }
+
+        free(ctx);
+        free(func);
+
+        {
+            PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
+            Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, task_ids);
+        }
+		free(task_ids);
+	}
+    static void WaitForAllJobs(JobAPI* job_api)
+    {
+        BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
+        int32_t old_pending_count = 0;
+        while (bikeshed_job_api->m_PendingJobCount > 0)
+        {
+            if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
+            {
+                continue;
+            }
+            if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
+            {
+                old_pending_count = bikeshed_job_api->m_PendingJobCount;
+//                PLATFORM_LOG("Files left to hash: %d\n", old_pending_count);
+            }
+            PLATFORM_SLEEP_PRIVATE(1000);
+        }
+        bikeshed_job_api->m_SubmittedJobCount = 0;
+        free(bikeshed_job_api->m_ReservedJobs);
+        bikeshed_job_api->m_ReservedJobs = 0;
+    }
+
+    static Bikeshed_TaskResult Job(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)
+    {
+        JobWrapper* wrapper = (JobWrapper*)context;
+        wrapper->m_JobFunc(wrapper->m_Context);
+        PLATFORM_ATOMICADD_PRIVATE(&wrapper->m_JobAPI->m_PendingJobCount, -1);
+        return BIKESHED_TASK_RESULT_COMPLETE;
+    }
+};
+
