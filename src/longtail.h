@@ -122,6 +122,13 @@ ContentIndex* ReadContent(
     HashAPI* hash_api,
     const char* content_path);
 
+ContentIndex* CreateMissingContent(
+    HashAPI* hash_api,
+    const ContentIndex* content_index,
+    const char* version_assets_path,
+    const VersionIndex* version,
+    GetContentTagFunc get_content_tag);
+
 ContentIndex* MergeContentIndex(
     ContentIndex* local_content_index,
     ContentIndex* remote_content_index);
@@ -1091,7 +1098,7 @@ ContentIndex* CreateContentIndex(
 
 int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, const char* path)
 {
-    LONGTAIL_LOG("WriteContentIndex to `%s`\n", path)
+    LONGTAIL_LOG("WriteContentIndex to `%s`, assets %u, blocks %u\n", path, (uint32_t)*content_index->m_AssetCount, (uint32_t)*content_index->m_BlockCount)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_AssetCount);
 
     if (!EnsureParentPathExists(storage_api, path))
@@ -1353,7 +1360,7 @@ int WriteContent(
     const char* assets_folder,
     const char* content_folder)
 {
-    LONGTAIL_LOG("WriteContent from `%s` to `%s`\n", assets_folder, content_folder)
+    LONGTAIL_LOG("WriteContent from `%s` to `%s`, assets %u, blocks %u\n", assets_folder, content_folder, (uint32_t)*content_index->m_AssetCount, (uint32_t)*content_index->m_BlockCount)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -1612,7 +1619,7 @@ int ReconstructVersion(
     const char* content_path,
     const char* version_path)
 {
-    LONGTAIL_LOG("ReconstructVersion from `%s` to `%s`\n", content_path, version_path)
+    LONGTAIL_LOG("ReconstructVersion from `%s` to `%s`, assets %u\n", content_path, version_path, (uint32_t)*version_index->m_AssetCount)
     uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
     jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
     void* content_hash_to_content_asset_index_mem = malloc(hash_size);
@@ -1991,6 +1998,146 @@ ContentIndex* ReadContent(
     }
     free(paths);
     return content_index;
+}
+
+void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_count, const TLongtail_Hash* new_hashes, uint32_t new_hash_count, uint32_t* added_hash_count, TLongtail_Hash* added_hashes, uint32_t* removed_hash_count, TLongtail_Hash* removed_hashes)
+{
+    TLongtail_Hash* refs = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * reference_hash_count);
+    TLongtail_Hash* news = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * new_hash_count);
+    memmove(refs, reference_hashes, sizeof(TLongtail_Hash) * reference_hash_count);
+    memmove(news, new_hashes, sizeof(TLongtail_Hash) * new_hash_count);
+
+    std::sort(&refs[0], &refs[reference_hash_count]);
+    TLongtail_Hash* refs_end = std::unique(&refs[0], &refs[reference_hash_count]);
+    reference_hash_count = uint32_t(refs_end - refs);
+
+    std::sort(&news[0], &news[new_hash_count]);
+    TLongtail_Hash* news_end = std::unique(&news[0], &news[new_hash_count]);
+    new_hash_count = uint32_t(news_end - news);
+
+    uint32_t removed = 0;
+    uint32_t added = 0;
+    uint32_t ni = 0;
+    uint32_t ri = 0;
+    while (ri < reference_hash_count && ni < new_hash_count)
+    {
+        if (refs[ri] == news[ni])
+        {
+            ++ri;
+            ++ni;
+            continue;
+        }
+        else if (refs[ri] < news[ni])
+        {
+            if (removed_hashes)
+            {
+                removed_hashes[removed] = refs[ri];
+            }
+            ++removed;
+            ++ri;
+        }
+        else if (refs[ri] > news[ni])
+        {
+            added_hashes[added++] = news[ni++];
+        }
+    }
+    while (ni < new_hash_count)
+    {
+        added_hashes[added++] = news[ni++];
+    }
+    *added_hash_count = added;
+    while (ri < reference_hash_count)
+    {
+        if (removed_hashes)
+        {
+            removed_hashes[removed] = refs[ri];
+        }
+        ++removed;
+        ++ri;
+    }
+    if (removed_hash_count)
+    {
+        *removed_hash_count = removed;
+    }
+
+    free(news);
+    news = 0;
+    free(refs);
+    refs = 0;
+}
+
+ContentIndex* CreateMissingContent(
+    HashAPI* hash_api,
+    const ContentIndex* content_index,
+    const char* version_assets_path,
+    const VersionIndex* version,
+    GetContentTagFunc get_content_tag)
+{
+    LONGTAIL_LOG("CreateMissingContent from `%s`\n", version_assets_path)
+    uint64_t asset_count = *version->m_AssetCount;
+    TLongtail_Hash* removed_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
+    TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
+
+    uint32_t added_hash_count = 0;
+    uint32_t removed_hash_count = 0;
+    DiffHashes(content_index->m_AssetContentHash, *content_index->m_AssetCount, version->m_AssetContentHash, asset_count, &added_hash_count, added_hashes, &removed_hash_count, removed_hashes);
+
+    if (added_hash_count == 0)
+    {
+        ContentIndex* diff_content_index = CreateContentIndex(
+            hash_api,
+            version_assets_path,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            get_content_tag);
+        return diff_content_index;
+    }
+
+    uint32_t* diff_asset_sizes = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
+    uint32_t* diff_name_offsets = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
+
+    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)asset_count);
+    jc::HashTable<TLongtail_Hash, uint32_t> asset_index_lookup;
+    void* path_lookup_mem = malloc(hash_size);
+    asset_index_lookup.Create(asset_count, path_lookup_mem);
+    for (uint64_t i = 0; i < asset_count; ++i)
+    {
+        asset_index_lookup.Put(version->m_AssetContentHash[i], i);
+    }
+
+    for (uint32_t j = 0; j < added_hash_count; ++j)
+    {
+        uint32_t* asset_index_ptr = asset_index_lookup.Get(added_hashes[j]);
+        if (!asset_index_ptr)
+        {
+            free(path_lookup_mem);
+            free(removed_hashes);
+            free(added_hashes);
+            return 0;
+        }
+        uint64_t asset_index = *asset_index_ptr;
+        diff_asset_sizes[j] = version->m_AssetSize[asset_index];
+        diff_name_offsets[j] = version->m_NameOffset[asset_index];
+    }
+    free(path_lookup_mem);
+    path_lookup_mem = 0;
+
+    ContentIndex* diff_content_index = CreateContentIndex(
+        hash_api,
+        version_assets_path,
+        added_hash_count,
+        added_hashes,
+        added_hashes,
+        diff_asset_sizes,
+        diff_name_offsets,
+        version->m_NameData,
+        get_content_tag);
+
+    return diff_content_index;
 }
 
 ContentIndex* MergeContentIndex(

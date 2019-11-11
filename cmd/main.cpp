@@ -202,6 +202,51 @@ int main(int argc, char** argv)
             }
         }
 
+        ContentIndex* existing_cindex = 0;
+        if (content_index)
+        {
+            existing_cindex = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
+            if (!existing_cindex)
+            {
+                free(vindex);
+                printf("Failed to read content index from `%s`\n", content_index);
+                return 1;
+            }
+        }
+        else if (content)
+        {
+            existing_cindex = ReadContent(
+                &storage_api.m_StorageAPI,
+                &hash_api.m_HashAPI,
+                content);
+            if (!existing_cindex)
+            {
+                free(vindex);
+                printf("Failed to read contents from `%s`\n", content);
+                return 1;
+            }
+        }
+        else
+        {
+            existing_cindex = CreateContentIndex(
+                &hash_api.m_HashAPI,
+                "",
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                GetContentTag);
+        }
+
+        ContentIndex* cindex = CreateMissingContent(
+            &hash_api.m_HashAPI,
+            existing_cindex,
+            version,
+            vindex,
+            GetContentTag);
+/*
         ContentIndex* cindex = CreateContentIndex(
             &hash_api.m_HashAPI,
             version,
@@ -212,7 +257,7 @@ int main(int argc, char** argv)
             vindex->m_NameOffset,
             vindex->m_NameData,
             GetContentTag);
-
+*/
         free(vindex);
         if (!cindex)
         {
@@ -235,7 +280,7 @@ int main(int argc, char** argv)
 
         return 0;
     }
-    
+
     if (create_content && version)
     {
         Shed shed;
@@ -304,7 +349,7 @@ int main(int argc, char** argv)
                 return 1;
             }
         }
-        
+
         PathLookup* path_lookup = CreateContentHashToPathLookup(vindex, 0);
         int ok = WriteContent(
             &storage_api.m_StorageAPI,

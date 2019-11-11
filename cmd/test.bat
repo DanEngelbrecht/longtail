@@ -1,10 +1,14 @@
-..\build\longtail_debug.exe --create-version-index "C:\Temp\longtail\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor.lvi" --version "C:\Temp\longtail\local\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor"
+@echo off
+SetLocal EnableDelayedExpansion
 
-..\build\longtail_debug.exe --create-content-index "C:\Temp\longtail\chunks.lci" --version-index "C:\Temp\longtail\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor.lvi" --version "C:\Temp\longtail\local\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor"
+echo Indexing currently known chunks
+..\build\longtail.exe --create-content-index "D:\Temp\longtail\chunks.lci" --content "D:\Temp\longtail\chunks"
 
-..\build\longtail_debug.exe --create-content "C:\Temp\longtail\chunks" --content-index "C:\Temp\longtail\chunks.lci" --version "C:\Temp\longtail\local\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor" --version-index "C:\Temp\longtail\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor.lvi"
+call do_version.bat ..\build\longtail.exe D:\Temp\longtail git2f7f84a05fc290c717c8b5c0e59f8121481151e6
+call do_version.bat ..\build\longtail.exe D:\Temp\longtail git916600e1ecb9da13f75835cd1b2d2e6a67f1a92d
+call do_version.bat ..\build\longtail.exe D:\Temp\longtail gitfdeb1390885c2f426700ca653433730d1ca78dab
+call do_version.bat ..\build\longtail.exe D:\Temp\longtail git81cccf054b23a0b5a941612ef0a2a836b6e02fd6
+call do_version.bat ..\build\longtail.exe D:\Temp\longtail git558af6b2a10d9ab5a267b219af4f795a17cc032f
+call do_version.bat ..\build\longtail.exe D:\Temp\longtail gitc2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c
 
-..\build\longtail_debug.exe --create-version "C:\Temp\longtail\remote\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor" --version-index "C:\Temp\longtail\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor.lvi" --content "C:\Temp\longtail\chunks" --version "C:\Temp\longtail\remote\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor"
-
-
-rem --content-index "C:\Temp\longtail\chunks.lci"
+if %errorlevel% neq 0 echo "FAILED"

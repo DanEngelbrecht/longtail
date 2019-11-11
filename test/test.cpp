@@ -17,66 +17,6 @@
 
 // TODO: Move to longtail.h
 
-void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_count, const TLongtail_Hash* new_hashes, uint32_t new_hash_count, uint32_t* added_hash_count, TLongtail_Hash* added_hashes, uint32_t* removed_hash_count, TLongtail_Hash* removed_hashes)
-{
-    TLongtail_Hash* refs = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * reference_hash_count);
-    TLongtail_Hash* news = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * new_hash_count);
-    memmove(refs, reference_hashes, sizeof(TLongtail_Hash) * reference_hash_count);
-    memmove(news, new_hashes, sizeof(TLongtail_Hash) * new_hash_count);
-
-    std::sort(&refs[0], &refs[reference_hash_count]);
-    std::sort(&news[0], &news[new_hash_count]);
-
-    uint32_t removed = 0;
-    uint32_t added = 0;
-    uint32_t ni = 0;
-    uint32_t ri = 0;
-    while (ri < reference_hash_count && ni < new_hash_count)
-    {
-        if (refs[ri] == news[ni])
-        {
-            ++ri;
-            ++ni;
-            continue;
-        }
-        else if (refs[ri] < news[ni])
-        {
-            if (removed_hashes)
-            {
-                removed_hashes[removed] = refs[ri];
-            }
-            ++removed;
-            ++ri;
-        }
-        else if (refs[ri] > news[ni])
-        {
-            added_hashes[added++] = news[ni++];
-        }
-    }
-    while (ni < new_hash_count)
-    {
-        added_hashes[added++] = news[ni++];
-    }
-    *added_hash_count = added;
-    while (ri < reference_hash_count)
-    {
-        if (removed_hashes)
-        {
-            removed_hashes[removed] = refs[ri];
-        }
-        ++removed;
-        ++ri;
-    }
-    if (removed_hash_count)
-    {
-        *removed_hash_count = removed;
-    }
-
-    free(news);
-    news = 0;
-    free(refs);
-    refs = 0;
-}
 
 
 uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
@@ -86,59 +26,6 @@ uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex*
     return missing_hash_count;
 }
 
-ContentIndex* CreateMissingContent(HashAPI* hash_api, const ContentIndex* content_index, const char* content_path, const VersionIndex* version, GetContentTagFunc get_content_tag)
-{
-    LONGTAIL_LOG("CreateMissingContent in `%s`\n", content_path)
-    uint64_t asset_count = *version->m_AssetCount;
-    TLongtail_Hash* removed_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
-    TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * asset_count);
-
-    uint32_t added_hash_count = 0;
-    uint32_t removed_hash_count = 0;
-    DiffHashes(content_index->m_AssetContentHash, *content_index->m_AssetCount, version->m_AssetContentHash, asset_count, &added_hash_count, added_hashes, &removed_hash_count, removed_hashes);
-
-    uint32_t* diff_asset_sizes = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
-    uint32_t* diff_name_offsets = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
-
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)asset_count);
-    jc::HashTable<TLongtail_Hash, uint32_t> asset_index_lookup;
-    void* path_lookup_mem = malloc(hash_size);
-    asset_index_lookup.Create(asset_count, path_lookup_mem);
-    for (uint64_t i = 0; i < asset_count; ++i)
-    {
-        asset_index_lookup.Put(version->m_AssetContentHash[i], i);
-    }
-
-    for (uint32_t j = 0; j < added_hash_count; ++j)
-    {
-        uint32_t* asset_index_ptr = asset_index_lookup.Get(added_hashes[j]);
-        if (!asset_index_ptr)
-        {
-            free(path_lookup_mem);
-            free(removed_hashes);
-            free(added_hashes);
-            return 0;
-        }
-        uint64_t asset_index = *asset_index_ptr;
-        diff_asset_sizes[j] = version->m_AssetSize[asset_index];
-        diff_name_offsets[j] = version->m_NameOffset[asset_index];
-    }
-    free(path_lookup_mem);
-    path_lookup_mem = 0;
-
-    ContentIndex* diff_content_index = CreateContentIndex(
-        hash_api,
-        content_path,
-        added_hash_count,
-        added_hashes,
-        added_hashes,
-        diff_asset_sizes,
-        diff_name_offsets,
-        version->m_NameData,
-        get_content_tag);
-
-    return diff_content_index;
-}
 
 
 ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t asset_count, const TLongtail_Hash* asset_hashes, uint64_t* out_missing_asset_count, uint64_t* out_missing_assets)
