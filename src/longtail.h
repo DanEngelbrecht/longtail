@@ -2,8 +2,14 @@
 
 #include "longtail_array.h"
 
+#include <stdio.h>
 #include <stdint.h>
-#include <algorithm>
+#include <stdlib.h>
+#include <inttypes.h>
+
+// Need to kill this if we want to go C99!
+// Check out https://github.com/nothings/stb/blob/master/stb_ds.h
+#include "../third-party/jc_containers/src/jc_hashtable.h"
 
 struct HashAPI
 {
@@ -155,7 +161,65 @@ int ReconstructVersion(
     const char* content_path,
     const char* version_path);
 
-#if defined(LONGTAIL_IMPLEMENTATION) || 1
+
+
+
+///////////// Test functions
+
+size_t GetVersionIndexSize(
+    uint32_t asset_count,
+    uint32_t path_data_size);
+
+VersionIndex* BuildVersionIndex(
+    void* mem,
+    size_t mem_size,
+    const Paths* paths,
+    const TLongtail_Hash* pathHashes,
+    const TLongtail_Hash* contentHashes,
+    const uint32_t* contentSizes);
+
+struct Paths
+{
+    uint32_t m_DataSize;
+    uint32_t* m_PathCount;
+    uint32_t* m_Offsets;
+    char* m_Data;
+};
+
+struct ContentIndex
+{
+    uint64_t* m_BlockCount;
+    uint64_t* m_AssetCount;
+
+    TLongtail_Hash* m_BlockHash; // []
+    TLongtail_Hash* m_AssetContentHash; // []
+    uint64_t* m_AssetBlockIndex; // []
+    uint32_t* m_AssetBlockOffset; // []
+    uint32_t* m_AssetLength; // []
+};
+
+struct VersionIndex
+{
+    uint64_t* m_AssetCount;
+    TLongtail_Hash* m_PathHash;
+    TLongtail_Hash* m_AssetContentHash;
+    uint32_t* m_AssetSize;
+    // uint64_t m_CreationDate;
+    // uint64_t m_ModificationDate;
+    uint32_t* m_NameOffset;
+    uint32_t m_NameDataSize;
+    char* m_NameData;
+};
+
+Paths* MakePaths(
+    uint32_t path_count,
+    const char* const* path_names);
+
+TLongtail_Hash GetPathHash(HashAPI* hash_api, const char* path);
+
+char* GetBlockName(TLongtail_Hash block_hash);
+
+#if defined(LONGTAIL_IMPLEMENTATION)
 
 #ifdef LONGTAIL_VERBOSE_LOGS
     #define LONGTAIL_LOG(fmt, ...) \
@@ -294,14 +358,6 @@ int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry e
     return 1;
 }
 
-struct Paths
-{
-    uint32_t m_DataSize;
-    uint32_t* m_PathCount;
-    uint32_t* m_Offsets;
-    char* m_Data;
-};
-
 size_t GetPathsSize(uint32_t path_count, uint32_t path_data_size)
 {
     return sizeof(Paths) +
@@ -323,6 +379,27 @@ Paths* CreatePaths(uint32_t path_count, uint32_t path_data_size)
     *paths->m_PathCount = 0;
     return paths;
 };
+
+Paths* MakePaths(uint32_t path_count, const char* const* path_names)
+{
+    uint32_t name_data_size = 0;
+    for (uint32_t i = 0; i < path_count; ++i)
+    {
+        name_data_size += (uint32_t)strlen(path_names[i]) + 1;
+    }
+    Paths* paths = CreatePaths(path_count, name_data_size);
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < path_count; ++i)
+    {
+        uint32_t length = (uint32_t)strlen(path_names[i]) + 1;
+        paths->m_Offsets[i] = offset;
+        memmove(&paths->m_Data[offset], path_names[i], length);
+        offset += length;
+    }
+    paths->m_DataSize = offset;
+    *paths->m_PathCount = path_count;
+    return paths;
+}
 
 Paths* AppendPath(Paths* paths, const char* path, uint32_t* max_path_count, uint32_t* max_data_size, uint32_t path_count_increment, uint32_t data_size_increment)
 {
@@ -550,19 +627,6 @@ int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, c
     return success;
 }
 
-struct VersionIndex
-{
-    uint64_t* m_AssetCount;
-    TLongtail_Hash* m_PathHash;
-    TLongtail_Hash* m_AssetContentHash;
-    uint32_t* m_AssetSize;
-    // uint64_t m_CreationDate;
-    // uint64_t m_ModificationDate;
-    uint32_t* m_NameOffset;
-    uint32_t m_NameDataSize;
-    char* m_NameData;
-};
-
 size_t GetVersionIndexDataSize(uint32_t asset_count, uint32_t name_data_size)
 {
     size_t version_index_size = sizeof(uint64_t) +
@@ -785,18 +849,6 @@ BlockIndex* CreateBlockIndex(
     return block_index;
 }
 
-struct ContentIndex
-{
-    uint64_t* m_BlockCount;
-    uint64_t* m_AssetCount;
-
-    TLongtail_Hash* m_BlockHash; // []
-    TLongtail_Hash* m_AssetContentHash; // []
-    uint64_t* m_AssetBlockIndex; // []
-    uint32_t* m_AssetBlockOffset; // []
-    uint32_t* m_AssetLength; // []
-};
-
 size_t GetContentIndexDataSize(uint64_t block_count, uint64_t asset_count)
 {
     size_t block_index_data_size = sizeof(uint64_t) +
@@ -866,6 +918,60 @@ uint32_t GetUniqueAssets(uint64_t asset_count, const TLongtail_Hash* asset_conte
     return unique_asset_count;
 }
 
+struct CompareAssetEntry
+{
+    CompareAssetEntry(const TLongtail_Hash* asset_path_hashes, const uint32_t* asset_sizes, const TLongtail_Hash* asset_tags)
+        : asset_path_hashes(asset_path_hashes)
+        , asset_sizes(asset_sizes)
+        , asset_tags(asset_tags)
+    {
+
+    }
+
+    // This sorting algorithm is very arbitrary!
+    static int Compare(void* context, const void* a_ptr, const void* b_ptr)
+    {   
+        uint32_t a = *(uint32_t*)a_ptr;
+        uint32_t b = *(uint32_t*)b_ptr;
+        const CompareAssetEntry* c = (const CompareAssetEntry*)context;
+        TLongtail_Hash a_tag = c->asset_tags[a];
+        TLongtail_Hash b_tag = c->asset_tags[b];
+        if (a_tag > b_tag)
+        {
+            return 1;
+        }
+        else if (b_tag > a_tag)
+        {
+            return -1;
+        }
+        uint32_t a_size = c->asset_sizes[a];
+        uint32_t b_size = c->asset_sizes[b];
+        if (a_size > b_size)
+        {
+            return 1;
+        }
+        else if (b_size > a_size)
+        {
+            return -1;
+        }
+        TLongtail_Hash a_hash = c->asset_path_hashes[a];
+        TLongtail_Hash b_hash = c->asset_path_hashes[b];
+        if (a_hash > b_hash)
+        {
+            return 1;
+        }
+        else if (b_hash > a_hash)
+        {
+            return -1;
+        }
+        return 0;
+    }
+
+    const TLongtail_Hash* asset_path_hashes;
+    const uint32_t* asset_sizes;
+    const TLongtail_Hash* asset_tags;
+};
+
 ContentIndex* CreateContentIndex(
     HashAPI* hash_api,
     const char* assets_path,
@@ -900,50 +1006,8 @@ ContentIndex* CreateContentIndex(
         content_tags[asset_index] = get_content_tag(assets_path, &asset_name_data[asset_name_offsets[asset_index]]);
     }
 
-    struct CompareAssetEntry
-    {
-        CompareAssetEntry(const TLongtail_Hash* asset_path_hashes, const uint32_t* asset_sizes, const TLongtail_Hash* asset_tags)
-            : asset_path_hashes(asset_path_hashes)
-            , asset_sizes(asset_sizes)
-            , asset_tags(asset_tags)
-        {
-
-        }
-
-        // This sorting algorithm is very arbitrary!
-        bool operator()(uint32_t a, uint32_t b) const
-        {   
-            TLongtail_Hash a_tag = asset_tags[a];
-            TLongtail_Hash b_tag = asset_tags[b];
-            if (a_tag < b_tag)
-            {
-                return true;
-            }
-            else if (b_tag < a_tag)
-            {
-                return false;
-            }
-            uint32_t a_size = asset_sizes[a];
-            uint32_t b_size = asset_sizes[b];
-            if (a_size < b_size)
-            {
-                return true;
-            }
-            else if (b_size < a_size)
-            {
-                return false;
-            }
-            TLongtail_Hash a_hash = asset_path_hashes[a];
-            TLongtail_Hash b_hash = asset_path_hashes[b];
-            return (a_hash < b_hash);
-        }
-
-        const TLongtail_Hash* asset_path_hashes;
-        const uint32_t* asset_sizes;
-        const TLongtail_Hash* asset_tags;
-    };
-
-    std::sort(&assets_index[0], &assets_index[unique_asset_count], CompareAssetEntry(asset_path_hashes, asset_sizes, content_tags));
+    CompareAssetEntry compare_asset_entry(asset_path_hashes, asset_sizes, content_tags);
+    qsort_s(&assets_index[0], unique_asset_count, sizeof(uint32_t), CompareAssetEntry::Compare, &compare_asset_entry);
 
     BlockIndex** block_indexes = (BlockIndex**)malloc(sizeof(BlockIndex*) * unique_asset_count);
 
@@ -1541,6 +1605,55 @@ static void ReconstructFromBlock(void* context)
     job->m_Success = 1;
 }
 
+struct ReconstructOrder
+{
+    ReconstructOrder(const ContentIndex* content_index, const TLongtail_Hash* asset_hashes, const uint64_t* version_index_to_content_index)
+        : content_index(content_index)
+        , asset_hashes(asset_hashes)
+        , version_index_to_content_index(version_index_to_content_index)
+    {
+
+    }
+
+    static int Compare(void* context, const void* a_ptr, const void* b_ptr)
+    {   
+        ReconstructOrder* c = (ReconstructOrder*)context;
+        uint64_t a = *(uint64_t*)a_ptr;
+        uint64_t b = *(uint64_t*)b_ptr;
+        TLongtail_Hash a_hash = c->asset_hashes[a];
+        TLongtail_Hash b_hash = c->asset_hashes[b];
+        uint32_t a_asset_index_in_content_index = (uint32_t)c->version_index_to_content_index[a];
+        uint32_t b_asset_index_in_content_index = (uint32_t)c->version_index_to_content_index[b];
+
+        uint64_t a_block_index = c->content_index->m_AssetBlockIndex[a_asset_index_in_content_index];
+        uint64_t b_block_index = c->content_index->m_AssetBlockIndex[b_asset_index_in_content_index];
+        if (a_block_index > b_block_index)
+        {
+            return 1;
+        }
+        if (a_block_index > b_block_index)
+        {
+            return -1;
+        }
+
+        uint32_t a_offset_in_block = c->content_index->m_AssetBlockOffset[a_asset_index_in_content_index];
+        uint32_t b_offset_in_block = c->content_index->m_AssetBlockOffset[b_asset_index_in_content_index];
+        if (a_offset_in_block > b_offset_in_block)
+        {
+            return 1;
+        }
+        if (b_offset_in_block > a_offset_in_block)
+        {
+            return -1;
+        }
+        return 0;
+    }
+
+    const ContentIndex* content_index;
+    const TLongtail_Hash* asset_hashes;
+    const uint64_t* version_index_to_content_index;
+};
+
 int ReconstructVersion(
     StorageAPI* storage_api,
     CompressionAPI* compression_api,
@@ -1586,44 +1699,8 @@ int ReconstructVersion(
     free(content_hash_to_content_asset_index_mem);
     content_hash_to_content_asset_index_mem = 0;
 
-    struct ReconstructOrder
-    {
-        ReconstructOrder(const ContentIndex* content_index, const TLongtail_Hash* asset_hashes, const uint64_t* version_index_to_content_index)
-            : content_index(content_index)
-            , asset_hashes(asset_hashes)
-            , version_index_to_content_index(version_index_to_content_index)
-        {
-
-        }
-
-        bool operator()(uint32_t a, uint32_t b) const
-        {   
-            TLongtail_Hash a_hash = asset_hashes[a];
-            TLongtail_Hash b_hash = asset_hashes[b];
-            uint32_t a_asset_index_in_content_index = (uint32_t)version_index_to_content_index[a];
-            uint32_t b_asset_index_in_content_index = (uint32_t)version_index_to_content_index[b];
-
-            uint64_t a_block_index = content_index->m_AssetBlockIndex[a_asset_index_in_content_index];
-            uint64_t b_block_index = content_index->m_AssetBlockIndex[b_asset_index_in_content_index];
-            if (a_block_index < b_block_index)
-            {
-                return true;
-            }
-            if (a_block_index > b_block_index)
-            {
-                return false;
-            }
-
-            uint32_t a_offset_in_block = content_index->m_AssetBlockOffset[a_asset_index_in_content_index];
-            uint32_t b_offset_in_block = content_index->m_AssetBlockOffset[b_asset_index_in_content_index];
-            return a_offset_in_block < b_offset_in_block;
-        }
-
-        const ContentIndex* content_index;
-        const TLongtail_Hash* asset_hashes;
-        const uint64_t* version_index_to_content_index;
-    };
-    std::sort(&asset_order[0], &asset_order[asset_count], ReconstructOrder(content_index, version_index->m_AssetContentHash, version_index_to_content_index));
+    ReconstructOrder reconstruct_order(content_index, version_index->m_AssetContentHash, version_index_to_content_index);
+    qsort_s(&asset_order[0], asset_count, sizeof(uint64_t), ReconstructOrder::Compare, &reconstruct_order);
 
 	if (job_api)
 	{
@@ -1911,6 +1988,32 @@ ContentIndex* ReadContent(
     return content_index;
 }
 
+int CompareHash(const void* a_ptr, const void* b_ptr) 
+{
+    TLongtail_Hash a = *((TLongtail_Hash*)a_ptr);
+    TLongtail_Hash b = *((TLongtail_Hash*)b_ptr);
+    if (a > b) return  1;
+    if (a < b) return -1;
+    return 0;
+}
+
+uint32_t MakeUnique(TLongtail_Hash* hashes, uint32_t count)
+{
+    uint32_t w = 0;
+    uint32_t r = 0;
+    while (r < count)
+    {
+        hashes[w] = hashes[r];
+        ++r;
+        while (r < count && hashes[r - 1] == hashes[r])
+        {
+            ++r;
+        }
+        ++w;
+    }
+    return w;
+}
+
 void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_count, const TLongtail_Hash* new_hashes, uint32_t new_hash_count, uint32_t* added_hash_count, TLongtail_Hash* added_hashes, uint32_t* removed_hash_count, TLongtail_Hash* removed_hashes)
 {
     TLongtail_Hash* refs = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * reference_hash_count);
@@ -1918,13 +2021,11 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
     memmove(refs, reference_hashes, sizeof(TLongtail_Hash) * reference_hash_count);
     memmove(news, new_hashes, sizeof(TLongtail_Hash) * new_hash_count);
 
-    std::sort(&refs[0], &refs[reference_hash_count]);
-    TLongtail_Hash* refs_end = std::unique(&refs[0], &refs[reference_hash_count]);
-    reference_hash_count = uint32_t(refs_end - refs);
+    qsort(&refs[0], reference_hash_count, sizeof(TLongtail_Hash), CompareHash);
+    reference_hash_count = MakeUnique(&refs[0], reference_hash_count);
 
-    std::sort(&news[0], &news[new_hash_count]);
-    TLongtail_Hash* news_end = std::unique(&news[0], &news[new_hash_count]);
-    new_hash_count = uint32_t(news_end - news);
+    qsort(&news[0], new_hash_count, sizeof(TLongtail_Hash), CompareHash);
+    new_hash_count = MakeUnique(&news[0], new_hash_count);
 
     uint32_t removed = 0;
     uint32_t added = 0;

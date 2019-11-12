@@ -1,14 +1,14 @@
+#define LONGTAIL_IMPLEMENTATION
+#include "../src/longtail.h"
+
 #include "../third-party/jctest/src/jc_test.h"
 
 #include "../third-party/jc_containers/src/jc_hashtable.h"
 
-#define LONGTAIL_IMPLEMENTATION
-#include "../src/longtail.h"
-#include "../src/longtail_array.h"
-
 #include "../common/platform.h"
 
-
+#define TEST_LOG(fmt, ...) \
+    printf("--- ");printf(fmt, __VA_ARGS__);
 
 
 
@@ -18,14 +18,13 @@
 // TODO: Move to longtail.h
 
 
-
+/*
 uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
 {
     uint32_t missing_hash_count = 0;
     DiffHashes(content_index->m_AssetContentHash, *content_index->m_AssetCount, version->m_AssetContentHash, *version->m_AssetCount, &missing_hash_count, missing_assets, 0, 0);
     return missing_hash_count;
 }
-
 
 
 ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t asset_count, const TLongtail_Hash* asset_hashes, uint64_t* out_missing_asset_count, uint64_t* out_missing_assets)
@@ -145,6 +144,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
     return existing_content_index;
 }
 
+*/
 
 
 ///////////////
@@ -215,6 +215,15 @@ struct InMemStorageAPI
         free(m_PathHashToContentMem);
     }
 
+    static uint64_t GetPathHash(HashAPI* hash_api, const char* path)
+    {
+        meow_state state;
+        MeowBegin(&state, MeowDefaultSeed);
+        MeowAbsorb(&state, (uint32_t)strlen(path), (void*)path);
+        HashAPI::HContext context = hash_api->BeginContext(hash_api);
+        return MeowU64From(MeowEnd(&state, 0), 0);;
+    }
+
     static StorageAPI::HOpenFile OpenReadFile(StorageAPI* storage_api, const char* path)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
@@ -279,7 +288,7 @@ struct InMemStorageAPI
         TLongtail_Hash parent_path_hash = GetParentPathHash(instance, path);
         if (parent_path_hash != 0 && !instance->m_PathHashToContent.Get(parent_path_hash))
         {
-            LONGTAIL_LOG("InMemStorageAPI::OpenWriteFile `%s` failed - parent folder does not exist\n", path)
+            TEST_LOG("InMemStorageAPI::OpenWriteFile `%s` failed - parent folder does not exist\n", path)
             return 0;
         }
         TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
@@ -328,7 +337,7 @@ struct InMemStorageAPI
         TLongtail_Hash parent_path_hash = GetParentPathHash(instance, path);
         if (parent_path_hash && !instance->m_PathHashToContent.Get(parent_path_hash))
         {
-            LONGTAIL_LOG("InMemStorageAPI::CreateDir `%s` failed - parent folder does not exist\n", path)
+            TEST_LOG("InMemStorageAPI::CreateDir `%s` failed - parent folder does not exist\n", path)
             return 0;
         }
         TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
@@ -339,7 +348,7 @@ struct InMemStorageAPI
             {
                 return 1;
             }
-            LONGTAIL_LOG("InMemStorageAPI::CreateDir `%s` failed - path exists and is not a directory\n", path)
+            TEST_LOG("InMemStorageAPI::CreateDir `%s` failed - path exists and is not a directory\n", path)
             return 0;
         }
 
@@ -358,14 +367,14 @@ struct InMemStorageAPI
         PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(source_path_hash);
         if (!source_path_ptr)
         {
-            LONGTAIL_LOG("InMemStorageAPI::RenameFile from `%s` to `%s` failed - source path does not exist\n", source_path, target_path)
+            TEST_LOG("InMemStorageAPI::RenameFile from `%s` to `%s` failed - source path does not exist\n", source_path, target_path)
             return 0;
         }
         TLongtail_Hash target_path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, target_path);
         PathEntry** target_path_ptr = instance->m_PathHashToContent.Get(target_path_hash);
         if (target_path_ptr)
         {
-            LONGTAIL_LOG("InMemStorageAPI::RenameFile from `%s` to `%s` failed - target path does not exist\n", source_path, target_path)
+            TEST_LOG("InMemStorageAPI::RenameFile from `%s` to `%s` failed - target path does not exist\n", source_path, target_path)
             return 0;
         }
         (*source_path_ptr)->m_ParentHash = GetParentPathHash(instance, target_path);
@@ -546,26 +555,7 @@ struct StoreCompressionAPI
 int StoreCompressionAPI::DefaultCompressionSetting = 0;
 
 
-Paths* MakePaths(uint32_t path_count, const char* const* path_names)
-{
-    uint32_t name_data_size = 0;
-    for (uint32_t i = 0; i < path_count; ++i)
-    {
-        name_data_size += (uint32_t)strlen(path_names[i]) + 1;
-    }
-    Paths* paths = CreatePaths(path_count, name_data_size);
-    uint32_t offset = 0;
-    for (uint32_t i = 0; i < path_count; ++i)
-    {
-        uint32_t length = (uint32_t)strlen(path_names[i]) + 1;
-        paths->m_Offsets[i] = offset;
-        memmove(&paths->m_Data[offset], path_names[i], length);
-        offset += length;
-    }
-    paths->m_DataSize = offset;
-    *paths->m_PathCount = path_count;
-    return paths;
-}
+
 
 static TLongtail_Hash GetContentTag(const char* , const char* path)
 {
@@ -573,7 +563,7 @@ static TLongtail_Hash GetContentTag(const char* , const char* path)
     if (extension)
     {
         MeowHashAPI hash;
-        return GetPathHash(&hash.m_HashAPI, path);
+        return InMemStorageAPI::GetPathHash(&hash.m_HashAPI, path);
     }
     return (TLongtail_Hash)-1;
 }
@@ -583,13 +573,56 @@ TLongtail_Hash GetContentTagFake(const char* , const char* path)
     return 0u;
 }
 
+int MakePath(StorageAPI* storage_api, const char* path)
+{
+    char* dir_path = strdup(path);
+    char* last_path_delimiter = (char*)strrchr(dir_path, '/');
+    if (last_path_delimiter == 0)
+    {
+        return 1;
+    }
+    *last_path_delimiter = '\0';
+    if (storage_api->IsDir(storage_api, dir_path))
+    {
+        free(dir_path);
+        return 1;
+    }
+    else
+    {
+        if (!MakePath(storage_api, dir_path))
+        {
+            TEST_LOG("MakePath failed: `%s`\n", dir_path)
+            free(dir_path);
+            return 0;
+        }
+        if (storage_api->CreateDir(storage_api, path))
+        {
+            free(dir_path);
+            return 1;
+        }
+        if (storage_api->IsDir(storage_api, path))
+        {
+            free(dir_path);
+            return 1;
+        }
+        return 0;
+    }
+    int ok = MakePath(storage_api, dir_path);
+    if (!ok)
+    {
+        TEST_LOG("MakePath failed: `%s`\n", dir_path)
+    }
+    free(dir_path);
+    return ok;
+}
+
 static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, uint32_t count)
 {
     for (uint32_t i = 0; i < count; ++i)
     {
         char path[128];
         sprintf(path, "%s%s%u", parent_path ? parent_path : "", parent_path && parent_path[0] ? "/" : "", i);
-        if (0 == EnsureParentPathExists(storage_api, path))
+        if (0 == MakePath(storage_api, path))
         {
             return 0;
         }
@@ -850,7 +883,7 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "two_items", 2));
     local_storage.m_StorageAPI.CreateDir(&local_storage.m_StorageAPI, "no_items");
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));    // TODO: Bad whitespace!?
-    ASSERT_EQ(1, EnsureParentPathExists(&local_storage.m_StorageAPI, "deep/folders/with/nothing/in/menoexists.nop"));
+    ASSERT_EQ(1, MakePath(&local_storage.m_StorageAPI, "deep/folders/with/nothing/in/menoexists.nop"));
 
     Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
@@ -1030,7 +1063,7 @@ TEST(Longtail, ReconstructVersion)
     {
         asset_path_hashes[i] = GetPathHash(&hash_api.m_HashAPI, asset_paths[i]);
         char* path = storage_api->ConcatPath(storage_api, "source_path", asset_paths[i]);
-        ASSERT_NE(0, EnsureParentPathExists(storage_api, path));
+        ASSERT_NE(0, MakePath(storage_api, path));
         StorageAPI::HOpenFile f = storage_api->OpenWriteFile(storage_api, path);
         ASSERT_NE((StorageAPI::HOpenFile)0, f);
         free(path);
@@ -1244,7 +1277,7 @@ void Bench()
             StorageAPI::HOpenFile s = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, source_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, s);
 
-            ASSERT_NE(0, EnsureParentPathExists(&storage_api.m_StorageAPI, target_path));
+            ASSERT_NE(0, MakePath(&storage_api.m_StorageAPI, target_path));
             StorageAPI::HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path);
             ASSERT_NE((StorageAPI::HOpenFile)0, t);
 

@@ -1,12 +1,10 @@
 
 #define LONGTAIL_VERBOSE_LOGS
+#define LONGTAIL_IMPLEMENTATION
+#include "../src/longtail.h"
 
 #define KGFLAGS_IMPLEMENTATION
 #include "../third-party/kgflags/kgflags.h"
-
-#include "../third-party/jc_containers/src/jc_hashtable.h"
-#define LONGTAIL_IMPLEMENTATION
-#include "../src/longtail.h"
 
 #include "../common/platform.h"
 
