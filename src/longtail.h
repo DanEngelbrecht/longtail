@@ -5,67 +5,73 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct HashAPI_Context* HashAPI_HContext;
 struct HashAPI
 {
-    typedef struct Context* HContext;
-    HContext (*BeginContext)(HashAPI* hash_api);
-    void (*Hash)(HashAPI* hash_api, HContext context, uint32_t length, void* data);
-    uint64_t (*EndContext)(HashAPI* hash_api, HContext context);
+    HashAPI_HContext (*BeginContext)(struct HashAPI* hash_api);
+    void (*Hash)(struct HashAPI* hash_api, HashAPI_HContext context, uint32_t length, void* data);
+    uint64_t (*EndContext)(struct HashAPI* hash_api, HashAPI_HContext context);
 };
+
+typedef struct StorageAPI_OpenFile* StorageAPI_HOpenFile;
+typedef struct StorageAPI_Iterator* StorageAPI_HIterator;
 
 struct StorageAPI
 {
-    typedef struct OpenFile* HOpenFile;
-    HOpenFile (*OpenReadFile)(StorageAPI* storage_api, const char* path);
-    uint64_t (*GetSize)(StorageAPI* storage_api, HOpenFile f);
-    int (*Read)(StorageAPI* storage_api, HOpenFile f, uint64_t offset, uint64_t length, void* output);
-    void (*CloseRead)(StorageAPI* storage_api, HOpenFile f);
+    StorageAPI_HOpenFile (*OpenReadFile)(struct StorageAPI* storage_api, const char* path);
+    uint64_t (*GetSize)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f);
+    int (*Read)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output);
+    void (*CloseRead)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f);
 
-    HOpenFile (*OpenWriteFile)(StorageAPI* storage_api, const char* path);
-    int (*Write)(StorageAPI* storage_api, HOpenFile f, uint64_t offset, uint64_t length, const void* input);
-    void (*CloseWrite)(StorageAPI* storage_api, HOpenFile f);
+    StorageAPI_HOpenFile (*OpenWriteFile)(struct StorageAPI* storage_api, const char* path);
+    int (*Write)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
+    void (*CloseWrite)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f);
 
-    int (*CreateDir)(StorageAPI* storage_api, const char* path);
+    int (*CreateDir)(struct StorageAPI* storage_api, const char* path);
 
-    int (*RenameFile)(StorageAPI* storage_api, const char* source_path, const char* target_path);
-    char* (*ConcatPath)(StorageAPI* storage_api, const char* root_path, const char* sub_path);
+    int (*RenameFile)(struct StorageAPI* storage_api, const char* source_path, const char* target_path);
+    char* (*ConcatPath)(struct StorageAPI* storage_api, const char* root_path, const char* sub_path);
 
-    int (*IsDir)(StorageAPI* storage_api, const char* path);
-    int (*IsFile)(StorageAPI* storage_api, const char* path);
+    int (*IsDir)(struct StorageAPI* storage_api, const char* path);
+    int (*IsFile)(struct StorageAPI* storage_api, const char* path);
 
-    typedef struct Iterator* HIterator;
-    StorageAPI::HIterator (*StartFind)(StorageAPI* storage_api, const char* path);
-    int (*FindNext)(StorageAPI* storage_api, HIterator iterator);
-    void (*CloseFind)(StorageAPI* storage_api, HIterator iterator);
-    const char* (*GetFileName)(StorageAPI* storage_api, HIterator iterator);
-    const char* (*GetDirectoryName)(StorageAPI* storage_api, HIterator iterator);
+    StorageAPI_HIterator (*StartFind)(struct StorageAPI* storage_api, const char* path);
+    int (*FindNext)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
+    void (*CloseFind)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
+    const char* (*GetFileName)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
+    const char* (*GetDirectoryName)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
 };
+
+typedef struct CompressionAPI_CompressionContext* CompressionAPI_HCompressionContext;
+typedef struct CompressionAPI_DecompressionContext* CompressionAPI_HDecompressionContext;
+typedef struct CompressionAPI_Settings* CompressionAPI_HSettings;
 
 struct CompressionAPI
 {
-    typedef struct CompressionContext* HCompressionContext;
-    typedef struct DecompressionContext* HDecompressionContext;
-    typedef struct Settings* HSettings;
-    HSettings (*GetDefaultSettings)(CompressionAPI* compression_api);
-    HSettings (*GetMaxCompressionSetting)(CompressionAPI* compression_api);
+    CompressionAPI_HSettings (*GetDefaultSettings)(struct CompressionAPI* compression_api);
+    CompressionAPI_HSettings (*GetMaxCompressionSetting)(struct CompressionAPI* compression_api);
 
-    HCompressionContext (*CreateCompressionContext)(CompressionAPI* compression_api, HSettings settings);
-    size_t (*GetMaxCompressedSize)(CompressionAPI* compression_api, HCompressionContext context, size_t size);
-    size_t (*Compress)(CompressionAPI* compression_api, HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size);
-    void (*DeleteCompressionContext)(CompressionAPI* compression_api, HCompressionContext context);
+    CompressionAPI_HCompressionContext (*CreateCompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HSettings settings);
+    size_t (*GetMaxCompressedSize)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, size_t size);
+    size_t (*Compress)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size);
+    void (*DeleteCompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context);
 
-    HDecompressionContext (*CreateDecompressionContext)(CompressionAPI* compression_api);
-    size_t (*Decompress)(CompressionAPI* compression_api, HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size);
-    void (*DeleteDecompressionContext)(CompressionAPI* compression_api, HDecompressionContext context);
+    CompressionAPI_HDecompressionContext (*CreateDecompressionContext)(struct CompressionAPI* compression_api);
+    size_t (*Decompress)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size);
+    void (*DeleteDecompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context);
 };
+
+typedef void (*JobAPI_JobFunc)(void* context);
 
 struct JobAPI
 {
-    typedef void (*TJobFunc)(void* context);
-
-    int (*ReserveJobs)(JobAPI* job_api, uint32_t job_count);
-    void (*SubmitJobs)(JobAPI* job_api, uint32_t job_count, TJobFunc job_funcs[], void* job_contexts[]);
-    void (*WaitForAllJobs)(JobAPI* job_api);
+    int (*ReserveJobs)(struct JobAPI* job_api, uint32_t job_count);
+    void (*SubmitJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[]);
+    void (*WaitForAllJobs)(struct JobAPI* job_api);
 };
 
 typedef uint64_t TLongtail_Hash;
@@ -74,30 +80,30 @@ struct VersionIndex;
 struct ContentIndex;
 struct PathLookup;
 
-Paths* GetFilesRecursively(
-    StorageAPI* storage_api,
+struct Paths* GetFilesRecursively(
+    struct StorageAPI* storage_api,
     const char* root_path);
 
-VersionIndex* CreateVersionIndex(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
+struct VersionIndex* CreateVersionIndex(
+    struct StorageAPI* storage_api,
+    struct HashAPI* hash_api,
+    struct JobAPI* job_api,
     const char* root_path,
-    const Paths* paths);
+    const struct Paths* paths);
 
 int WriteVersionIndex(
-    StorageAPI* storage_api,
-    VersionIndex* version_index,
+    struct StorageAPI* storage_api,
+    struct VersionIndex* version_index,
     const char* path);
 
-VersionIndex* ReadVersionIndex(
-    StorageAPI* storage_api,
+struct VersionIndex* ReadVersionIndex(
+    struct StorageAPI* storage_api,
     const char* path);
 
 typedef TLongtail_Hash (*GetContentTagFunc)(const char* assets_path, const char* path);
 
-ContentIndex* CreateContentIndex(
-    HashAPI* hash_api,
+struct ContentIndex* CreateContentIndex(
+    struct HashAPI* hash_api,
     const char* assets_path,
     uint64_t asset_count,
     const TLongtail_Hash* asset_content_hashes,
@@ -108,50 +114,52 @@ ContentIndex* CreateContentIndex(
     GetContentTagFunc get_content_tag);
 
 int WriteContentIndex(
-    StorageAPI* storage_api,
-    ContentIndex* content_index,
+    struct StorageAPI* storage_api,
+    struct ContentIndex* content_index,
     const char* path);
 
-ContentIndex* ReadContentIndex(
-    StorageAPI* storage_api,
+struct ContentIndex* ReadContentIndex(
+    struct StorageAPI* storage_api,
     const char* path);
 
 int WriteContent(
-    StorageAPI* source_storage_api,
-    StorageAPI* target_storage_api,
-    CompressionAPI* compression_api,
-    JobAPI* job_api,
-    ContentIndex* content_index,
-    PathLookup* asset_content_hash_to_path,
+    struct StorageAPI* source_storage_api,
+    struct StorageAPI* target_storage_api,
+    struct CompressionAPI* compression_api,
+    struct JobAPI* job_api,
+    struct ContentIndex* content_index,
+    struct PathLookup* asset_content_hash_to_path,
     const char* assets_folder,
     const char* content_folder);
 
-ContentIndex* ReadContent(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
+struct ContentIndex* ReadContent(
+    struct StorageAPI* storage_api,
+    struct HashAPI* hash_api,
     const char* content_path);
 
-ContentIndex* CreateMissingContent(
-    HashAPI* hash_api,
-    const ContentIndex* content_index,
+struct ContentIndex* CreateMissingContent(
+    struct HashAPI* hash_api,
+    const struct ContentIndex* content_index,
     const char* version_assets_path,
-    const VersionIndex* version,
+    const struct VersionIndex* version,
     GetContentTagFunc get_content_tag);
 
-ContentIndex* MergeContentIndex(
-    ContentIndex* local_content_index,
-    ContentIndex* remote_content_index);
+struct ContentIndex* MergeContentIndex(
+    struct ContentIndex* local_content_index,
+    struct ContentIndex* remote_content_index);
 
-PathLookup* CreateContentHashToPathLookup(
-    const VersionIndex* version_index,
+struct PathLookup* CreateContentHashToPathLookup(
+    const struct VersionIndex* version_index,
     uint64_t* out_unique_asset_indexes);
 
+void FreePathLookup(struct PathLookup* path_lookup);
+
 int ReconstructVersion(
-    StorageAPI* storage_api,
-    CompressionAPI* compression_api,
-    JobAPI* job_api,
-    const ContentIndex* content_index,
-    const VersionIndex* version_index,
+    struct StorageAPI* storage_api,
+    struct CompressionAPI* compression_api,
+    struct JobAPI* job_api,
+    const struct ContentIndex* content_index,
+    const struct VersionIndex* version_index,
     const char* content_path,
     const char* version_path);
 
@@ -164,10 +172,10 @@ size_t GetVersionIndexSize(
     uint32_t asset_count,
     uint32_t path_data_size);
 
-VersionIndex* BuildVersionIndex(
+struct VersionIndex* BuildVersionIndex(
     void* mem,
     size_t mem_size,
-    const Paths* paths,
+    const struct Paths* paths,
     const TLongtail_Hash* pathHashes,
     const TLongtail_Hash* contentHashes,
     const uint32_t* contentSizes);
@@ -205,11 +213,11 @@ struct VersionIndex
     char* m_NameData;
 };
 
-Paths* MakePaths(
+struct Paths* MakePaths(
     uint32_t path_count,
     const char* const* path_names);
 
-TLongtail_Hash GetPathHash(HashAPI* hash_api, const char* path);
+TLongtail_Hash GetPathHash(struct HashAPI* hash_api, const char* path);
 
 char* GetBlockName(TLongtail_Hash block_hash);
 
@@ -232,14 +240,14 @@ int IsDirPath(const char* path)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 
-TLongtail_Hash GetPathHash(HashAPI* hash_api, const char* path)
+TLongtail_Hash GetPathHash(struct HashAPI* hash_api, const char* path)
 {
-    HashAPI::HContext context = hash_api->BeginContext(hash_api);
+    HashAPI_HContext context = hash_api->BeginContext(hash_api);
     hash_api->Hash(hash_api, context, (uint32_t)strlen(path), (void*)path);
     return (TLongtail_Hash)hash_api->EndContext(hash_api, context);
 }
 
-int SafeCreateDir(StorageAPI* storage_api, const char* path)
+int SafeCreateDir(struct StorageAPI* storage_api, const char* path)
 {
     if (storage_api->CreateDir(storage_api, path))
     {
@@ -252,7 +260,7 @@ int SafeCreateDir(StorageAPI* storage_api, const char* path)
     return 0;
 }
 
-int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
+int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
 {
     char* dir_path = strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
@@ -291,13 +299,13 @@ int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
 
 typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
 
-int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
+int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
     LONGTAIL_LOG("RecurseTree `%s`\n", root_folder)
 
     uint32_t folder_index = 0;
 
-    const char** folder_paths = 0;
+    char** folder_paths = 0;
     arrsetcap(folder_paths, 256);
 
     arrput(folder_paths, strdup(root_folder));
@@ -306,12 +314,13 @@ int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry e
     {
         const char* asset_folder = folder_paths[folder_index++];
 
-        StorageAPI::HIterator fs_iterator = storage_api->StartFind(storage_api, asset_folder);
+        StorageAPI_HIterator fs_iterator = storage_api->StartFind(storage_api, asset_folder);
         if (fs_iterator)
         {
             do
             {
-                if (const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator))
+                const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator);
+                if (dir_name)
                 {
                     entry_processor(context, asset_folder, dir_name);
                     if (arrlen(folder_paths) == arrcap(folder_paths))
@@ -326,9 +335,13 @@ int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry e
                     }
                     arrput(folder_paths, storage_api->ConcatPath(storage_api, asset_folder, dir_name));
                 }
-                else if(const char* file_name = storage_api->GetFileName(storage_api, fs_iterator))
+                else
                 {
-                    entry_processor(context, asset_folder, file_name);
+                    const char* file_name = storage_api->GetFileName(storage_api, fs_iterator);
+                    if (file_name)
+                    {
+                        entry_processor(context, asset_folder, file_name);
+                    }
                 }
             }while(storage_api->FindNext(storage_api, fs_iterator));
             storage_api->CloseFind(storage_api, fs_iterator);
@@ -342,15 +355,15 @@ int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry e
 
 size_t GetPathsSize(uint32_t path_count, uint32_t path_data_size)
 {
-    return sizeof(Paths) +
+    return sizeof(struct Paths) +
         sizeof(uint32_t) +
         sizeof(uint32_t) * path_count +
         path_data_size;
 };
 
-Paths* CreatePaths(uint32_t path_count, uint32_t path_data_size)
+struct Paths* CreatePaths(uint32_t path_count, uint32_t path_data_size)
 {
-    Paths* paths = (Paths*)malloc(GetPathsSize(path_count, path_data_size));
+    struct Paths* paths = (struct Paths*)malloc(GetPathsSize(path_count, path_data_size));
     char* p = (char*)&paths[1];
     paths->m_DataSize = 0;
     paths->m_PathCount = (uint32_t*)p;
@@ -362,14 +375,14 @@ Paths* CreatePaths(uint32_t path_count, uint32_t path_data_size)
     return paths;
 };
 
-Paths* MakePaths(uint32_t path_count, const char* const* path_names)
+struct Paths* MakePaths(uint32_t path_count, const char* const* path_names)
 {
     uint32_t name_data_size = 0;
     for (uint32_t i = 0; i < path_count; ++i)
     {
         name_data_size += (uint32_t)strlen(path_names[i]) + 1;
     }
-    Paths* paths = CreatePaths(path_count, name_data_size);
+    struct Paths* paths = CreatePaths(path_count, name_data_size);
     uint32_t offset = 0;
     for (uint32_t i = 0; i < path_count; ++i)
     {
@@ -383,7 +396,7 @@ Paths* MakePaths(uint32_t path_count, const char* const* path_names)
     return paths;
 }
 
-Paths* AppendPath(Paths* paths, const char* path, uint32_t* max_path_count, uint32_t* max_data_size, uint32_t path_count_increment, uint32_t data_size_increment)
+struct Paths* AppendPath(struct Paths* paths, const char* path, uint32_t* max_path_count, uint32_t* max_data_size, uint32_t path_count_increment, uint32_t data_size_increment)
 {
     uint32_t path_size = (uint32_t)(strlen(path) + 1);
 
@@ -396,7 +409,7 @@ Paths* AppendPath(Paths* paths, const char* path, uint32_t* max_path_count, uint
 
         const uint32_t new_path_count = *max_path_count + extra_path_count;
         const uint32_t new_path_data_size = *max_data_size + extra_path_data_size;
-        Paths* new_paths = CreatePaths(new_path_count, new_path_data_size);
+        struct Paths* new_paths = CreatePaths(new_path_count, new_path_data_size);
         *max_path_count = new_path_count;
         *max_data_size = new_path_data_size;
         new_paths->m_DataSize = paths->m_DataSize;
@@ -417,55 +430,55 @@ Paths* AppendPath(Paths* paths, const char* path, uint32_t* max_path_count, uint
     return paths;
 }
 
-Paths* GetFilesRecursively(StorageAPI* storage_api, const char* root_path)
+struct AddFile_Context {
+    struct StorageAPI* m_StorageAPI;
+    uint32_t m_ReservedPathCount;
+    uint32_t m_ReservedPathSize;
+    uint32_t m_RootPathLength;
+    struct Paths* m_Paths;
+};
+
+void AddFile(void* context, const char* root_path, const char* file_name)
+{
+    struct AddFile_Context* paths_context = (struct AddFile_Context*)context;
+    struct StorageAPI* storage_api = paths_context->m_StorageAPI;
+
+    char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
+    if (storage_api->IsDir(storage_api, full_path))
+    {
+        uint32_t path_length = (uint32_t)strlen(full_path);
+        char* full_dir_path = (char*)malloc(path_length + 1 + 1);
+        strcpy(full_dir_path, full_path);
+        strcpy(&full_dir_path[path_length], "/");
+        free(full_path);
+        full_path = full_dir_path;
+    }
+
+    struct Paths* paths = paths_context->m_Paths;
+    const uint32_t root_path_length = paths_context->m_RootPathLength;
+    const char* s = &full_path[root_path_length];
+    if (*s == '/')
+    {
+        ++s;
+    }
+
+    paths_context->m_Paths = AppendPath(paths_context->m_Paths, s, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
+
+    free(full_path);
+    full_path = 0;
+}
+
+struct Paths* GetFilesRecursively(struct StorageAPI* storage_api, const char* root_path)
 {
     LONGTAIL_LOG("GetFilesRecursively `%s`\n", root_path)
-    struct Context {
-        StorageAPI* m_StorageAPI;
-        uint32_t m_ReservedPathCount;
-        uint32_t m_ReservedPathSize;
-        uint32_t m_RootPathLength;
-        Paths* m_Paths;
-    };
-
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
 
-    auto add_file = [](void* context, const char* root_path, const char* file_name)
-    {
-        Context* paths_context = (Context*)context;
-        StorageAPI* storage_api = paths_context->m_StorageAPI;
-
-        char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
-        if (storage_api->IsDir(storage_api, full_path))
-        {
-            uint32_t path_length = (uint32_t)strlen(full_path);
-            char* full_dir_path = (char*)malloc(path_length + 1 + 1);
-            strcpy(full_dir_path, full_path);
-            strcpy(&full_dir_path[path_length], "/");
-            free(full_path);
-            full_path = full_dir_path;
-        }
-
-        Paths* paths = paths_context->m_Paths;
-        const uint32_t root_path_length = paths_context->m_RootPathLength;
-        const char* s = &full_path[root_path_length];
-        if (*s == '/')
-        {
-            ++s;
-        }
-
-        paths_context->m_Paths = AppendPath(paths_context->m_Paths, s, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
-
-        free(full_path);
-        full_path = 0;
-    };
-
-    Paths* paths = CreatePaths(default_path_count, default_path_data_size);
-    Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths};
+    struct Paths* paths = CreatePaths(default_path_count, default_path_data_size);
+    struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths};
     paths = 0;
 
-    if(!RecurseTree(storage_api, root_path, add_file, &context))
+    if(!RecurseTree(storage_api, root_path, AddFile, &context))
     {
         free(context.m_Paths);
         return 0;
@@ -476,8 +489,8 @@ Paths* GetFilesRecursively(StorageAPI* storage_api, const char* root_path)
 
 struct HashJob
 {
-    StorageAPI* m_StorageAPI;
-    HashAPI* m_HashAPI;
+    struct StorageAPI* m_StorageAPI;
+    struct HashAPI* m_HashAPI;
     TLongtail_Hash* m_PathHash;
     TLongtail_Hash* m_ContentHash;
     uint32_t* m_ContentSize;
@@ -488,18 +501,18 @@ struct HashJob
 
 void HashFile(void* context)
 {
-    HashJob* hash_job = (HashJob*)context;
+    struct HashJob* hash_job = (struct HashJob*)context;
 
     TLongtail_Hash content_hash = 0;
     hash_job->m_Success = 0;
 
     if (!IsDirPath(hash_job->m_Path))
     {
-        StorageAPI* storage_api = hash_job->m_StorageAPI;
+        struct StorageAPI* storage_api = hash_job->m_StorageAPI;
         char* path = storage_api->ConcatPath(storage_api, hash_job->m_RootPath, hash_job->m_Path);
 
-        StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
-        HashAPI::HContext hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
+        StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
+        HashAPI_HContext hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
         if(file_handle)
         {
             hash_job->m_Success = 1;
@@ -511,7 +524,7 @@ void HashFile(void* context)
             while (offset != file_size)
             {
                 uint32_t len = (uint32_t)((file_size - offset) < sizeof(batch_data) ? (file_size - offset) : sizeof(batch_data));
-                bool read_ok = storage_api->Read(storage_api, file_handle, offset, len, batch_data);
+                int read_ok = storage_api->Read(storage_api, file_handle, offset, len, batch_data);
                 if (!read_ok)
                 {
                     LONGTAIL_LOG("HashFile failed to read from `%s`\n", path)
@@ -539,7 +552,7 @@ void HashFile(void* context)
     *hash_job->m_PathHash = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path);
 }
 
-int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, const char* root_path, const Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
+int GetFileHashes(struct StorageAPI* storage_api, struct HashAPI* hash_api, struct JobAPI* job_api, const char* root_path, const struct Paths* paths, TLongtail_Hash* pathHashes, TLongtail_Hash* contentHashes, uint32_t* contentSizes)
 {
     LONGTAIL_LOG("GetFileHashes in folder `%s` for %u assets\n", root_path, (uint32_t)*paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
@@ -551,12 +564,12 @@ int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, c
             return 0;
         }
     }
-    HashJob* hash_jobs = new HashJob[asset_count];
+    struct HashJob* hash_jobs = (struct HashJob*)malloc(sizeof(struct HashJob) * asset_count);
 
     uint64_t assets_left = asset_count;
     static const uint32_t BATCH_SIZE = 64;
-    JobAPI::TJobFunc func[BATCH_SIZE];
-    void* ctx[BATCH_SIZE];
+    JobAPI_JobFunc* func = (JobAPI_JobFunc*)malloc(sizeof(JobAPI_JobFunc) * BATCH_SIZE);
+    void** ctx = (void*)malloc(sizeof(void*) * BATCH_SIZE);
     for (uint32_t i = 0; i < BATCH_SIZE; ++i)
     {
         func[i] = HashFile;
@@ -567,7 +580,7 @@ int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, c
         uint32_t batch_count = assets_left > BATCH_SIZE ? BATCH_SIZE : (uint32_t)assets_left;
         for (uint32_t i = 0; i < batch_count; ++i)
         {
-            HashJob* job = &hash_jobs[offset + i];
+            struct HashJob* job = &hash_jobs[offset + i];
             ctx[i] = &hash_jobs[i + offset];
             job->m_StorageAPI = storage_api;
             job->m_HashAPI = hash_api;
@@ -605,7 +618,12 @@ int GetFileHashes(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, c
         }
     }
 
-    delete [] hash_jobs;
+    free(ctx);
+    ctx = 0;
+    free(func);
+    func = 0;
+    free(hash_jobs);
+    hash_jobs = 0;
     return success;
 }
 
@@ -623,14 +641,14 @@ size_t GetVersionIndexDataSize(uint32_t asset_count, uint32_t name_data_size)
 
 size_t GetVersionIndexSize(uint32_t asset_count, uint32_t path_data_size)
 {
-    return sizeof(VersionIndex) +
+    return sizeof(struct VersionIndex) +
             GetVersionIndexDataSize(asset_count, path_data_size);
 }
 
-void InitVersionIndex(VersionIndex* version_index, size_t version_index_data_size)
+void InitVersionIndex(struct VersionIndex* version_index, size_t version_index_data_size)
 {
     char* p = (char*)version_index;
-    p += sizeof(VersionIndex);
+    p += sizeof(struct VersionIndex);
 
     size_t version_index_data_start = (size_t)p;
 
@@ -658,20 +676,20 @@ void InitVersionIndex(VersionIndex* version_index, size_t version_index_data_siz
     version_index->m_NameData = (char*)p;
 }
 
-VersionIndex* BuildVersionIndex(
+struct VersionIndex* BuildVersionIndex(
     void* mem,
     size_t mem_size,
-    const Paths* paths,
+    const struct Paths* paths,
     const TLongtail_Hash* pathHashes,
     const TLongtail_Hash* contentHashes,
     const uint32_t* contentSizes)
 {
     uint32_t asset_count = *paths->m_PathCount;
-    VersionIndex* version_index = (VersionIndex*)mem;
-    version_index->m_AssetCount = (uint64_t*)&((char*)mem)[sizeof(VersionIndex)];
+    struct VersionIndex* version_index = (struct VersionIndex*)mem;
+    version_index->m_AssetCount = (uint64_t*)&((char*)mem)[sizeof(struct VersionIndex)];
     *version_index->m_AssetCount = asset_count;
 
-    InitVersionIndex(version_index, mem_size - sizeof(VersionIndex));
+    InitVersionIndex(version_index, mem_size - sizeof(struct VersionIndex));
 
     for (uint32_t i = 0; i < asset_count; ++i)
     {
@@ -685,7 +703,7 @@ VersionIndex* BuildVersionIndex(
     return version_index;
 }
 
-VersionIndex* CreateVersionIndex(StorageAPI* storage_api, HashAPI* hash_api, JobAPI* job_api, const char* root_path, const Paths* paths)
+struct VersionIndex* CreateVersionIndex(struct StorageAPI* storage_api, struct HashAPI* hash_api, struct JobAPI* job_api, const char* root_path, const struct Paths* paths)
 {
     uint32_t path_count = *paths->m_PathCount;
     uint32_t* contentSizes = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
@@ -704,7 +722,7 @@ VersionIndex* CreateVersionIndex(StorageAPI* storage_api, HashAPI* hash_api, Job
     size_t version_index_size = GetVersionIndexSize(path_count, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
-    VersionIndex* version_index = BuildVersionIndex(
+    struct VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
         version_index_size,
         paths,
@@ -722,7 +740,7 @@ VersionIndex* CreateVersionIndex(StorageAPI* storage_api, HashAPI* hash_api, Job
     return version_index;
 }
 
-int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, const char* path)
+int WriteVersionIndex(struct StorageAPI* storage_api, struct VersionIndex* version_index, const char* path)
 {
     LONGTAIL_LOG("WriteVersionIndex to `%s`\n", path)
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), version_index->m_NameDataSize);
@@ -731,7 +749,7 @@ int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, cons
     {
         return 0;
     }
-    StorageAPI::HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path);
+    StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path);
     if (!file_handle)
     {
         return 0;
@@ -746,16 +764,16 @@ int WriteVersionIndex(StorageAPI* storage_api, VersionIndex* version_index, cons
     return 1;
 }
 
-VersionIndex* ReadVersionIndex(StorageAPI* storage_api, const char* path)
+struct VersionIndex* ReadVersionIndex(struct StorageAPI* storage_api, const char* path)
 {
     LONGTAIL_LOG("ReadVersionIndex from `%s`\n", path)
-    StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
+    StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
         return 0;
     }
     size_t version_index_data_size = storage_api->GetSize(storage_api, file_handle);
-    VersionIndex* version_index = (VersionIndex*)malloc(sizeof(VersionIndex) + version_index_data_size);
+    struct VersionIndex* version_index = (struct VersionIndex*)malloc(sizeof(struct VersionIndex) + version_index_data_size);
     if (!version_index)
     {
         storage_api->CloseRead(storage_api, file_handle);
@@ -786,9 +804,9 @@ size_t GetBlockIndexDataSize(uint32_t asset_count)
         sizeof(uint32_t);
 }
 
-BlockIndex* InitBlockIndex(void* mem, uint32_t asset_count)
+struct BlockIndex* InitBlockIndex(void* mem, uint32_t asset_count)
 {
-    BlockIndex* block_index = (BlockIndex*)mem;
+    struct BlockIndex* block_index = (struct BlockIndex*)mem;
     char* p = (char*)&block_index[1];
     block_index->m_AssetContentHashes = (TLongtail_Hash*)p;
     p += sizeof(TLongtail_Hash) * asset_count;
@@ -801,21 +819,21 @@ BlockIndex* InitBlockIndex(void* mem, uint32_t asset_count)
 size_t GetBlockIndexSize(uint32_t asset_count)
 {
     size_t block_index_size =
-        sizeof(BlockIndex) +
+        sizeof(struct BlockIndex) +
         GetBlockIndexDataSize(asset_count);
 
     return block_index_size;
 }
 
-BlockIndex* CreateBlockIndex(
+struct BlockIndex* CreateBlockIndex(
     void* mem,
-    HashAPI* hash_api,
+    struct HashAPI* hash_api,
     uint32_t asset_count_in_block,
     uint32_t* asset_indexes,
     const TLongtail_Hash* asset_content_hashes,
     const uint32_t* asset_sizes)
 {
-    BlockIndex* block_index = InitBlockIndex(mem, asset_count_in_block);
+    struct BlockIndex* block_index = InitBlockIndex(mem, asset_count_in_block);
     for (uint32_t i = 0; i < asset_count_in_block; ++i)
     {
         uint32_t asset_index = asset_indexes[i];
@@ -823,7 +841,7 @@ BlockIndex* CreateBlockIndex(
         block_index->m_AssetSizes[i] = asset_sizes[asset_index];
     }
 	*block_index->m_AssetCount = asset_count_in_block;
-	HashAPI::HContext hash_context = hash_api->BeginContext(hash_api);
+	HashAPI_HContext hash_context = hash_api->BeginContext(hash_api);
     hash_api->Hash(hash_api, hash_context, (uint32_t)(GetBlockIndexDataSize(asset_count_in_block)), (void*)&block_index[1]);
     TLongtail_Hash block_hash = hash_api->EndContext(hash_api, hash_context);
     block_index->m_BlockHash = block_hash;
@@ -846,11 +864,11 @@ size_t GetContentIndexDataSize(uint64_t block_count, uint64_t asset_count)
 
 size_t GetContentIndexSize(uint64_t block_count, uint64_t asset_count)
 {
-    return sizeof(ContentIndex) +
+    return sizeof(struct ContentIndex) +
         GetContentIndexDataSize(block_count, asset_count);
 }
 
-void InitContentIndex(ContentIndex* content_index)
+void InitContentIndex(struct ContentIndex* content_index)
 {
     char* p = (char*)&content_index[1];
     content_index->m_BlockCount = (uint64_t*)p;
@@ -881,7 +899,7 @@ struct HashToIndexItem
 
 uint32_t GetUniqueAssets(uint64_t asset_count, const TLongtail_Hash* asset_content_hashes, uint32_t* out_unique_asset_indexes)
 {
-    HashToIndexItem* lookup_table = 0;
+    struct HashToIndexItem* lookup_table = 0;
 
     uint32_t unique_asset_count = 0;
     for (uint32_t i = 0; i < asset_count; ++i)
@@ -906,60 +924,52 @@ uint32_t GetUniqueAssets(uint64_t asset_count, const TLongtail_Hash* asset_conte
 
 struct CompareAssetEntry
 {
-    CompareAssetEntry(const TLongtail_Hash* asset_path_hashes, const uint32_t* asset_sizes, const TLongtail_Hash* asset_tags)
-        : asset_path_hashes(asset_path_hashes)
-        , asset_sizes(asset_sizes)
-        , asset_tags(asset_tags)
-    {
-
-    }
-
     // This sorting algorithm is very arbitrary!
-    static int Compare(void* context, const void* a_ptr, const void* b_ptr)
-    {   
-        uint32_t a = *(uint32_t*)a_ptr;
-        uint32_t b = *(uint32_t*)b_ptr;
-        const CompareAssetEntry* c = (const CompareAssetEntry*)context;
-        TLongtail_Hash a_tag = c->asset_tags[a];
-        TLongtail_Hash b_tag = c->asset_tags[b];
-        if (a_tag > b_tag)
-        {
-            return 1;
-        }
-        else if (b_tag > a_tag)
-        {
-            return -1;
-        }
-        uint32_t a_size = c->asset_sizes[a];
-        uint32_t b_size = c->asset_sizes[b];
-        if (a_size > b_size)
-        {
-            return 1;
-        }
-        else if (b_size > a_size)
-        {
-            return -1;
-        }
-        TLongtail_Hash a_hash = c->asset_path_hashes[a];
-        TLongtail_Hash b_hash = c->asset_path_hashes[b];
-        if (a_hash > b_hash)
-        {
-            return 1;
-        }
-        else if (b_hash > a_hash)
-        {
-            return -1;
-        }
-        return 0;
-    }
-
     const TLongtail_Hash* asset_path_hashes;
     const uint32_t* asset_sizes;
     const TLongtail_Hash* asset_tags;
 };
 
-ContentIndex* CreateContentIndex(
-    HashAPI* hash_api,
+static int CompareAssetEntryCompare(void* context, const void* a_ptr, const void* b_ptr)
+{   
+    uint32_t a = *(uint32_t*)a_ptr;
+    uint32_t b = *(uint32_t*)b_ptr;
+    const struct CompareAssetEntry* c = (const struct CompareAssetEntry*)context;
+    TLongtail_Hash a_tag = c->asset_tags[a];
+    TLongtail_Hash b_tag = c->asset_tags[b];
+    if (a_tag > b_tag)
+    {
+        return 1;
+    }
+    else if (b_tag > a_tag)
+    {
+        return -1;
+    }
+    uint32_t a_size = c->asset_sizes[a];
+    uint32_t b_size = c->asset_sizes[b];
+    if (a_size > b_size)
+    {
+        return 1;
+    }
+    else if (b_size > a_size)
+    {
+        return -1;
+    }
+    TLongtail_Hash a_hash = c->asset_path_hashes[a];
+    TLongtail_Hash b_hash = c->asset_path_hashes[b];
+    if (a_hash > b_hash)
+    {
+        return 1;
+    }
+    else if (b_hash > a_hash)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+struct ContentIndex* CreateContentIndex(
+    struct HashAPI* hash_api,
     const char* assets_path,
     uint64_t asset_count,
     const TLongtail_Hash* asset_content_hashes,
@@ -973,10 +983,10 @@ ContentIndex* CreateContentIndex(
     if (asset_count == 0)
     {
         size_t content_index_size = GetContentIndexSize(0, 0);
-        ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
+        struct ContentIndex* content_index = (struct ContentIndex*)malloc(content_index_size);
 
-        content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex)];
-        content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
+        content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex)];
+        content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
         *content_index->m_BlockCount = 0;
         *content_index->m_AssetCount = 0;
         InitContentIndex(content_index);
@@ -992,13 +1002,13 @@ ContentIndex* CreateContentIndex(
         content_tags[asset_index] = get_content_tag(assets_path, &asset_name_data[asset_name_offsets[asset_index]]);
     }
 
-    CompareAssetEntry compare_asset_entry(asset_path_hashes, asset_sizes, content_tags);
-    qsort_s(&assets_index[0], unique_asset_count, sizeof(uint32_t), CompareAssetEntry::Compare, &compare_asset_entry);
+    struct CompareAssetEntry compare_asset_entry = {asset_path_hashes, asset_sizes, content_tags};
+    qsort_s(&assets_index[0], unique_asset_count, sizeof(uint32_t), CompareAssetEntryCompare, &compare_asset_entry);
 
-    BlockIndex** block_indexes = (BlockIndex**)malloc(sizeof(BlockIndex*) * unique_asset_count);
+    struct BlockIndex** block_indexes = (struct BlockIndex**)malloc(sizeof(struct BlockIndex*) * unique_asset_count);
 
-    static const uint32_t MAX_ASSETS_PER_BLOCK = 16384u;
-    static const uint32_t MAX_BLOCK_SIZE = 131072u;
+    #define MAX_ASSETS_PER_BLOCK 16384u
+    #define MAX_BLOCK_SIZE 131072u
     uint32_t stored_asset_indexes[MAX_ASSETS_PER_BLOCK];
 
     uint32_t current_size = 0;
@@ -1060,6 +1070,9 @@ ContentIndex* CreateContentIndex(
         ++i;
     }
 
+    #undef MAX_ASSETS_PER_BLOCK
+    #undef MAX_BLOCK_SIZE
+
     if (current_size > 0)
     {
         block_indexes[block_count] = CreateBlockIndex(
@@ -1079,10 +1092,10 @@ ContentIndex* CreateContentIndex(
 
     // Build Content Index (from block list)
     size_t content_index_size = GetContentIndexSize(block_count, unique_asset_count);
-    ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
+    struct ContentIndex* content_index = (struct ContentIndex*)malloc(content_index_size);
 
-    content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex)];
-    content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
+    content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex)];
+    content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
     *content_index->m_BlockCount = block_count;
     *content_index->m_AssetCount = unique_asset_count;
     InitContentIndex(content_index);
@@ -1090,7 +1103,7 @@ ContentIndex* CreateContentIndex(
     uint64_t asset_index = 0;
     for (uint32_t i = 0; i < block_count; ++i)
     {
-        BlockIndex* block_index = block_indexes[i];
+        struct BlockIndex* block_index = block_indexes[i];
         content_index->m_BlockHash[i] = block_index->m_BlockHash;
         uint64_t asset_offset = 0;
         for (uint32_t a = 0; a < *block_index->m_AssetCount; ++a)
@@ -1116,7 +1129,7 @@ ContentIndex* CreateContentIndex(
     return content_index;
 }
 
-int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, const char* path)
+int WriteContentIndex(struct StorageAPI* storage_api, struct ContentIndex* content_index, const char* path)
 {
     LONGTAIL_LOG("WriteContentIndex to `%s`, assets %u, blocks %u\n", path, (uint32_t)*content_index->m_AssetCount, (uint32_t)*content_index->m_BlockCount)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_AssetCount);
@@ -1125,7 +1138,7 @@ int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, cons
     {
         return 0;
     }
-    StorageAPI::HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path);
+    StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path);
     if (!file_handle)
     {
         return 0;
@@ -1139,16 +1152,16 @@ int WriteContentIndex(StorageAPI* storage_api, ContentIndex* content_index, cons
     return 1;
 }
 
-ContentIndex* ReadContentIndex(StorageAPI* storage_api, const char* path)
+struct ContentIndex* ReadContentIndex(struct StorageAPI* storage_api, const char* path)
 {
     LONGTAIL_LOG("ReadContentIndex from `%s`\n", path)
-    StorageAPI::HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
+    StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
         return 0;
     }
     size_t content_index_data_size = storage_api->GetSize(storage_api, file_handle);
-    ContentIndex* content_index = (ContentIndex*)malloc(sizeof(ContentIndex) + content_index_data_size);
+    struct ContentIndex* content_index = (struct ContentIndex*)malloc(sizeof(struct ContentIndex) + content_index_data_size);
     if (!content_index)
     {
         storage_api->CloseRead(storage_api, file_handle);
@@ -1166,14 +1179,14 @@ ContentIndex* ReadContentIndex(StorageAPI* storage_api, const char* path)
 
 struct PathLookup
 {
-    HashToIndexItem* m_HashToNameOffset;
+    struct HashToIndexItem* m_HashToNameOffset;
     const char* m_NameData;
 };
 
-PathLookup* CreateContentHashToPathLookup(const VersionIndex* version_index, uint64_t* out_unique_asset_indexes)
+struct PathLookup* CreateContentHashToPathLookup(const struct VersionIndex* version_index, uint64_t* out_unique_asset_indexes)
 {
     uint32_t asset_count = (uint32_t)(*version_index->m_AssetCount);
-    PathLookup* path_lookup = (PathLookup*)malloc(sizeof(PathLookup));
+    struct PathLookup* path_lookup = (struct PathLookup*)malloc(sizeof(struct PathLookup));
     path_lookup->m_HashToNameOffset = 0;
     path_lookup->m_NameData = version_index->m_NameData;
 
@@ -1196,18 +1209,19 @@ PathLookup* CreateContentHashToPathLookup(const VersionIndex* version_index, uin
     return path_lookup;
 }
 
-const char* GetPathFromAssetContentHash(const PathLookup* path_lookup, TLongtail_Hash asset_content_hash)
+const char* GetPathFromAssetContentHash(const struct PathLookup* path_lookup, TLongtail_Hash asset_content_hash)
 {
-    ptrdiff_t lookup_index = hmgeti((HashToIndexItem*)path_lookup->m_HashToNameOffset, asset_content_hash);
+    struct HashToIndexItem* lookup = (struct HashToIndexItem*)path_lookup->m_HashToNameOffset;
+    ptrdiff_t lookup_index = hmgeti(lookup, asset_content_hash);
     if (lookup_index == -1)
     {
         return 0;
     }
-    uint32_t offset = path_lookup->m_HashToNameOffset[lookup_index].value;
+    uint32_t offset = lookup[lookup_index].value;
     return &path_lookup->m_NameData[offset];
 }
 
-void FreePathLookup(PathLookup* path_lookup)
+void FreePathLookup(struct PathLookup* path_lookup)
 {
     if (!path_lookup)
     {
@@ -1219,22 +1233,22 @@ void FreePathLookup(PathLookup* path_lookup)
 
 struct WriteBlockJob
 {
-    StorageAPI* m_SourceStorageAPI;
-    StorageAPI* m_TargetStorageAPI;
-    CompressionAPI* m_CompressionAPI;
+    struct StorageAPI* m_SourceStorageAPI;
+    struct StorageAPI* m_TargetStorageAPI;
+    struct CompressionAPI* m_CompressionAPI;
     const char* m_ContentFolder;
     const char* m_AssetsFolder;
-    const ContentIndex* m_ContentIndex;
-    const PathLookup* m_PathLookup;
+    const struct ContentIndex* m_ContentIndex;
+    const struct PathLookup* m_PathLookup;
     uint64_t m_FirstAssetIndex;
     uint32_t m_AssetCount;
     uint32_t m_Success;
 };
 
-WriteBlockJob* CreateWriteContentBlockJob()
+struct WriteBlockJob* CreateWriteContentBlockJob()
 {
-    size_t job_size = sizeof(WriteBlockJob);
-    WriteBlockJob* job = (WriteBlockJob*)malloc(job_size);
+    size_t job_size = sizeof(struct WriteBlockJob);
+    struct WriteBlockJob* job = (struct WriteBlockJob*)malloc(job_size);
     return job;
 }
 
@@ -1247,12 +1261,12 @@ char* GetBlockName(TLongtail_Hash block_hash)
 
 void WriteContentBlockJob(void* context)
 {
-    WriteBlockJob* job = (WriteBlockJob*)context;
-    StorageAPI* source_storage_api = job->m_SourceStorageAPI;
-    StorageAPI* target_storage_api = job->m_TargetStorageAPI;
-    CompressionAPI* compression_api = job->m_CompressionAPI;
+    struct WriteBlockJob* job = (struct WriteBlockJob*)context;
+    struct StorageAPI* source_storage_api = job->m_SourceStorageAPI;
+    struct StorageAPI* target_storage_api = job->m_TargetStorageAPI;
+    struct CompressionAPI* compression_api = job->m_CompressionAPI;
 
-    const ContentIndex* content_index = job->m_ContentIndex;
+    const struct ContentIndex* content_index = job->m_ContentIndex;
     const char* content_folder = job->m_ContentFolder;
     uint64_t block_start_asset_index = job->m_FirstAssetIndex;
     uint32_t asset_count = job->m_AssetCount;
@@ -1294,7 +1308,7 @@ void WriteContentBlockJob(void* context)
         if (!IsDirPath(asset_path))
         {
             char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
-            StorageAPI::HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
+            StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
             if (!file_handle || (source_storage_api->GetSize(source_storage_api, file_handle) != asset_size))
             {
                 LONGTAIL_LOG("Missing or mismatching asset content `%s`\n", asset_path)
@@ -1313,7 +1327,7 @@ void WriteContentBlockJob(void* context)
         }
     }
 
-    CompressionAPI::HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api));
+    CompressionAPI_HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api));
     const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
     char* compressed_buffer = (char*)malloc((sizeof(uint32_t) * 2) + max_dst_size);
     ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
@@ -1331,7 +1345,7 @@ void WriteContentBlockJob(void* context)
             free(compressed_buffer);
             return;
         }
-        StorageAPI::HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path);
+        StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path);
         if (!block_file_handle)
         {
             LONGTAIL_LOG("Failed to create block file `%s`\n", tmp_block_path)
@@ -1373,12 +1387,12 @@ void WriteContentBlockJob(void* context)
 }
 
 int WriteContent(
-    StorageAPI* source_storage_api,
-    StorageAPI* target_storage_api,
-    CompressionAPI* compression_api,
-    JobAPI* job_api,
-    ContentIndex* content_index,
-    PathLookup* asset_content_hash_to_path,
+    struct StorageAPI* source_storage_api,
+    struct StorageAPI* target_storage_api,
+    struct CompressionAPI* compression_api,
+    struct JobAPI* job_api,
+    struct ContentIndex* content_index,
+    struct PathLookup* asset_content_hash_to_path,
     const char* assets_folder,
     const char* content_folder)
 {
@@ -1397,7 +1411,7 @@ int WriteContent(
         }
     }
 
-    WriteBlockJob** write_block_jobs = (WriteBlockJob**)malloc(sizeof(WriteBlockJob*) * block_count);
+    struct WriteBlockJob** write_block_jobs = (struct WriteBlockJob**)malloc(sizeof(struct WriteBlockJob*) * block_count);
     uint32_t block_start_asset_index = 0;
     for (uint32_t block_index = 0; block_index < block_count; ++block_index)
     {
@@ -1422,7 +1436,7 @@ int WriteContent(
             continue;
         }
 
-        WriteBlockJob* job = CreateWriteContentBlockJob();
+        struct WriteBlockJob* job = CreateWriteContentBlockJob();
         write_block_jobs[block_index] = job;
         job->m_SourceStorageAPI = source_storage_api;
         job->m_TargetStorageAPI = target_storage_api;
@@ -1441,7 +1455,7 @@ int WriteContent(
         }
         else
         {
-            JobAPI::TJobFunc func[1] = { WriteContentBlockJob };
+            JobAPI_JobFunc func[1] = { WriteContentBlockJob };
             void* ctx[1] = { job };
 
             job_api->SubmitJobs(job_api, 1, func, ctx);
@@ -1458,7 +1472,7 @@ int WriteContent(
     int success = 1;
     while (block_count--)
     {
-        WriteBlockJob* job = write_block_jobs[block_count];
+        struct WriteBlockJob* job = write_block_jobs[block_count];
         if (!job)
         {
             continue;
@@ -1477,8 +1491,8 @@ int WriteContent(
 
 struct ReconstructJob
 {
-    StorageAPI* m_StorageAPI;
-    CompressionAPI* m_CompressionAPI;
+    struct StorageAPI* m_StorageAPI;
+    struct CompressionAPI* m_CompressionAPI;
     char* m_BlockPath;
     char** m_AssetPaths;
     uint32_t m_AssetCount;
@@ -1487,14 +1501,14 @@ struct ReconstructJob
     uint32_t m_Success;
 };
 
-ReconstructJob* CreateReconstructJob(uint32_t asset_count)
+struct ReconstructJob* CreateReconstructJob(uint32_t asset_count)
 {
-    size_t job_size = sizeof(ReconstructJob) +
+    size_t job_size = sizeof(struct ReconstructJob) +
         sizeof(char*) * asset_count +
         sizeof(uint32_t) * asset_count +
         sizeof(uint32_t) * asset_count;
 
-    ReconstructJob* job = (ReconstructJob*)malloc(job_size);
+    struct ReconstructJob* job = (struct ReconstructJob*)malloc(job_size);
     char* p = (char*)&job[1];
     job->m_AssetPaths = (char**)p;
     p += sizeof(char*) * asset_count;
@@ -1510,11 +1524,11 @@ ReconstructJob* CreateReconstructJob(uint32_t asset_count)
 
 static void ReconstructFromBlock(void* context)
 {
-    ReconstructJob* job = (ReconstructJob*)context;
-    StorageAPI* storage_api = job->m_StorageAPI;
+    struct ReconstructJob* job = (struct ReconstructJob*)context;
+    struct StorageAPI* storage_api = job->m_StorageAPI;
 
-    CompressionAPI* compression_api = job->m_CompressionAPI;
-    StorageAPI::HOpenFile block_file_handle = storage_api->OpenReadFile(storage_api, job->m_BlockPath);
+    struct CompressionAPI* compression_api = job->m_CompressionAPI;
+    StorageAPI_HOpenFile block_file_handle = storage_api->OpenReadFile(storage_api, job->m_BlockPath);
     if (!block_file_handle)
     {
         LONGTAIL_LOG("Failed to open block file `%s`\n", job->m_BlockPath)
@@ -1533,7 +1547,7 @@ static void ReconstructFromBlock(void* context)
     uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
     uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
     char* decompressed_buffer = (char*)malloc(uncompressed_size);
-    CompressionAPI::HDecompressionContext compression_context = compression_api->CreateDecompressionContext(compression_api);
+    CompressionAPI_HDecompressionContext compression_context = compression_api->CreateDecompressionContext(compression_api);
     size_t result = compression_api->Decompress(compression_api, compression_context, &compressed_block_content[sizeof(uint32_t) * 2], decompressed_buffer, compressed_size, uncompressed_size);
     compression_api->DeleteDecompressionContext(compression_api, compression_context);
     free(compressed_block_content);
@@ -1570,7 +1584,7 @@ static void ReconstructFromBlock(void* context)
         }
         else
         {
-            StorageAPI::HOpenFile asset_file_handle = storage_api->OpenWriteFile(storage_api, asset_path);
+            StorageAPI_HOpenFile asset_file_handle = storage_api->OpenWriteFile(storage_api, asset_path);
             if(!asset_file_handle)
             {
                 LONGTAIL_LOG("Failed to create asset file `%s`\n", asset_path)
@@ -1581,7 +1595,7 @@ static void ReconstructFromBlock(void* context)
             uint32_t asset_length = job->m_AssetLengths[asset_index];
             uint64_t read_offset = job->m_AssetBlockOffsets[asset_index];
             uint64_t write_offset = 0;
-            bool write_ok = storage_api->Write(storage_api, asset_file_handle, write_offset, asset_length, &decompressed_buffer[read_offset]);
+            int write_ok = storage_api->Write(storage_api, asset_file_handle, write_offset, asset_length, &decompressed_buffer[read_offset]);
             storage_api->CloseWrite(storage_api, asset_file_handle);
             asset_file_handle = 0;
             if (!write_ok)
@@ -1603,64 +1617,56 @@ static void ReconstructFromBlock(void* context)
 
 struct ReconstructOrder
 {
-    ReconstructOrder(const ContentIndex* content_index, const TLongtail_Hash* asset_hashes, const uint64_t* version_index_to_content_index)
-        : content_index(content_index)
-        , asset_hashes(asset_hashes)
-        , version_index_to_content_index(version_index_to_content_index)
-    {
-
-    }
-
-    static int Compare(void* context, const void* a_ptr, const void* b_ptr)
-    {   
-        ReconstructOrder* c = (ReconstructOrder*)context;
-        uint64_t a = *(uint64_t*)a_ptr;
-        uint64_t b = *(uint64_t*)b_ptr;
-        TLongtail_Hash a_hash = c->asset_hashes[a];
-        TLongtail_Hash b_hash = c->asset_hashes[b];
-        uint32_t a_asset_index_in_content_index = (uint32_t)c->version_index_to_content_index[a];
-        uint32_t b_asset_index_in_content_index = (uint32_t)c->version_index_to_content_index[b];
-
-        uint64_t a_block_index = c->content_index->m_AssetBlockIndex[a_asset_index_in_content_index];
-        uint64_t b_block_index = c->content_index->m_AssetBlockIndex[b_asset_index_in_content_index];
-        if (a_block_index > b_block_index)
-        {
-            return 1;
-        }
-        if (a_block_index > b_block_index)
-        {
-            return -1;
-        }
-
-        uint32_t a_offset_in_block = c->content_index->m_AssetBlockOffset[a_asset_index_in_content_index];
-        uint32_t b_offset_in_block = c->content_index->m_AssetBlockOffset[b_asset_index_in_content_index];
-        if (a_offset_in_block > b_offset_in_block)
-        {
-            return 1;
-        }
-        if (b_offset_in_block > a_offset_in_block)
-        {
-            return -1;
-        }
-        return 0;
-    }
-
-    const ContentIndex* content_index;
+    const struct ContentIndex* content_index;
     const TLongtail_Hash* asset_hashes;
     const uint64_t* version_index_to_content_index;
 };
 
+int ReconstructOrderCompare(void* context, const void* a_ptr, const void* b_ptr)
+{   
+    struct ReconstructOrder* c = (struct ReconstructOrder*)context;
+    uint64_t a = *(uint64_t*)a_ptr;
+    uint64_t b = *(uint64_t*)b_ptr;
+    TLongtail_Hash a_hash = c->asset_hashes[a];
+    TLongtail_Hash b_hash = c->asset_hashes[b];
+    uint32_t a_asset_index_in_content_index = (uint32_t)c->version_index_to_content_index[a];
+    uint32_t b_asset_index_in_content_index = (uint32_t)c->version_index_to_content_index[b];
+
+    uint64_t a_block_index = c->content_index->m_AssetBlockIndex[a_asset_index_in_content_index];
+    uint64_t b_block_index = c->content_index->m_AssetBlockIndex[b_asset_index_in_content_index];
+    if (a_block_index > b_block_index)
+    {
+        return 1;
+    }
+    if (a_block_index > b_block_index)
+    {
+        return -1;
+    }
+
+    uint32_t a_offset_in_block = c->content_index->m_AssetBlockOffset[a_asset_index_in_content_index];
+    uint32_t b_offset_in_block = c->content_index->m_AssetBlockOffset[b_asset_index_in_content_index];
+    if (a_offset_in_block > b_offset_in_block)
+    {
+        return 1;
+    }
+    if (b_offset_in_block > a_offset_in_block)
+    {
+        return -1;
+    }
+    return 0;
+}
+
 int ReconstructVersion(
-    StorageAPI* storage_api,
-    CompressionAPI* compression_api,
-    JobAPI* job_api,
-    const ContentIndex* content_index,
-    const VersionIndex* version_index,
+    struct StorageAPI* storage_api,
+    struct CompressionAPI* compression_api,
+    struct JobAPI* job_api,
+    const struct ContentIndex* content_index,
+    const struct VersionIndex* version_index,
     const char* content_path,
     const char* version_path)
 {
     LONGTAIL_LOG("ReconstructVersion from `%s` to `%s`, assets %u\n", content_path, version_path, (uint32_t)*version_index->m_AssetCount)
-    HashToIndexItem* content_hash_to_content_asset_index = 0;
+    struct HashToIndexItem* content_hash_to_content_asset_index = 0;
     for (uint64_t i = 0; i < *content_index->m_AssetCount; ++i)
     {
         TLongtail_Hash content_hash = content_index->m_AssetContentHash[i];
@@ -1674,7 +1680,7 @@ int ReconstructVersion(
     for (uint64_t i = 0; i < asset_count; ++i)
     {
         asset_order[i] = i;
-        ptrdiff_t lookup_index = hmgeti((HashToIndexItem*)content_hash_to_content_asset_index, version_index->m_AssetContentHash[i]);
+        ptrdiff_t lookup_index = hmgeti(content_hash_to_content_asset_index, version_index->m_AssetContentHash[i]);
         if (lookup_index == -1)
         {
 			LONGTAIL_LOG("Asset 0x%" PRIx64 " for asset `%s` was not find in content index\n", version_index->m_AssetContentHash[i], &version_index->m_NameData[version_index->m_NameOffset[i]])
@@ -1692,8 +1698,8 @@ int ReconstructVersion(
         return 0;
     }
 
-    ReconstructOrder reconstruct_order(content_index, version_index->m_AssetContentHash, version_index_to_content_index);
-    qsort_s(&asset_order[0], asset_count, sizeof(uint64_t), ReconstructOrder::Compare, &reconstruct_order);
+    struct ReconstructOrder reconstruct_order = {content_index, version_index->m_AssetContentHash, version_index_to_content_index};
+    qsort_s(&asset_order[0], asset_count, sizeof(uint64_t), ReconstructOrderCompare, &reconstruct_order);
 
 	if (job_api)
 	{
@@ -1703,7 +1709,7 @@ int ReconstructVersion(
 			return 0;
 		}
 	}
-    ReconstructJob** reconstruct_jobs = (ReconstructJob**)malloc(sizeof(ReconstructJob*) * asset_count);
+    struct ReconstructJob** reconstruct_jobs = (struct ReconstructJob**)malloc(sizeof(struct ReconstructJob*) * asset_count);
     uint32_t job_count = 0;
     uint64_t i = 0;
     while (i < asset_count)
@@ -1726,7 +1732,7 @@ int ReconstructVersion(
             ++asset_count_from_block;
         }
 
-        ReconstructJob* job = CreateReconstructJob(asset_count_from_block);
+        struct ReconstructJob* job = CreateReconstructJob(asset_count_from_block);
         reconstruct_jobs[job_count++] = job;
         job->m_StorageAPI = storage_api;
         job->m_CompressionAPI = compression_api;
@@ -1756,7 +1762,7 @@ int ReconstructVersion(
         }
         else
         {
-            JobAPI::TJobFunc func[1] = { ReconstructFromBlock };
+            JobAPI_JobFunc func[1] = { ReconstructFromBlock };
             void* ctx[1] = { job };
             job_api->SubmitJobs(job_api, 1, func, ctx);
         }
@@ -1772,7 +1778,7 @@ int ReconstructVersion(
     int success = 1;
     while (job_count--)
     {
-        ReconstructJob* job = reconstruct_jobs[job_count];
+        struct ReconstructJob* job = reconstruct_jobs[job_count];
         if (!job->m_Success)
         {
             success = 0;
@@ -1793,12 +1799,12 @@ int ReconstructVersion(
     return success;
 }
 
-BlockIndex* ReadBlock(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
+struct BlockIndex* ReadBlock(
+    struct StorageAPI* storage_api,
+    struct HashAPI* hash_api,
     const char* full_block_path)
 {
-    StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, full_block_path);
+    StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, full_block_path);
     if (!f)
     {
         return 0;
@@ -1815,7 +1821,7 @@ BlockIndex* ReadBlock(
         storage_api->CloseRead(storage_api, f);
         return 0;
     }
-    BlockIndex* block_index = InitBlockIndex(malloc(GetBlockIndexSize(asset_count)), asset_count);
+    struct BlockIndex* block_index = InitBlockIndex(malloc(GetBlockIndexSize(asset_count)), asset_count);
     size_t block_index_data_size = GetBlockIndexDataSize(asset_count);
 
     int ok = storage_api->Read(storage_api, f, s - block_index_data_size, block_index_data_size, &block_index[1]);
@@ -1825,7 +1831,7 @@ BlockIndex* ReadBlock(
         free(block_index);
         return 0;
     }
-    HashAPI::HContext hash_context = hash_api->BeginContext(hash_api);
+    HashAPI_HContext hash_context = hash_api->BeginContext(hash_api);
     hash_api->Hash(hash_api, hash_context, (uint32_t)(GetBlockIndexDataSize(asset_count)), (void*)&block_index[1]);
     TLongtail_Hash block_hash = hash_api->EndContext(hash_api, hash_context);
     block_index->m_BlockHash = block_hash;
@@ -1833,86 +1839,87 @@ BlockIndex* ReadBlock(
     return block_index;
 }
 
-ContentIndex* ReadContent(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
+struct ReadContentContext {
+    struct StorageAPI* m_StorageAPI;
+    uint32_t m_ReservedPathCount;
+    uint32_t m_ReservedPathSize;
+    uint32_t m_RootPathLength;
+    struct Paths* m_Paths;
+    uint64_t m_AssetCount;
+};
+
+void ReadContentAddPath(void* context, const char* root_path, const char* file_name)
+{
+    struct ReadContentContext* paths_context = (struct ReadContentContext*)context;
+    struct StorageAPI* storage_api = paths_context->m_StorageAPI;
+
+    char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
+    if (storage_api->IsDir(storage_api, full_path))
+    {
+        return;
+    }
+
+    struct Paths* paths = paths_context->m_Paths;
+    const uint32_t root_path_length = paths_context->m_RootPathLength;
+    const char* s = &full_path[root_path_length];
+    if (*s == '/')
+    {
+        ++s;
+    }
+
+    StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, full_path);
+    if (!f)
+    {
+        free(full_path);
+        return;
+    }
+    uint64_t block_size = storage_api->GetSize(storage_api, f);
+    if (block_size < (sizeof(uint32_t)))
+    {
+        free(full_path);
+        storage_api->CloseRead(storage_api, f);
+        return;
+    }
+    uint32_t asset_count = 0;
+    int ok = storage_api->Read(storage_api, f, block_size - sizeof(uint32_t), sizeof(uint32_t), &asset_count);
+
+    if (!ok)
+    {
+        free(full_path);
+        storage_api->CloseRead(storage_api, f);
+        return;
+    }
+
+    uint32_t asset_index_size = sizeof(uint32_t) + (asset_count) * (sizeof(TLongtail_Hash) + sizeof(uint32_t));
+    ok = block_size >= asset_index_size;
+
+    if (!ok)
+    {
+        free(full_path);
+        return;
+    }
+
+    paths_context->m_AssetCount += asset_count;
+    paths_context->m_Paths = AppendPath(paths_context->m_Paths, s, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
+
+    free(full_path);
+    full_path = 0;
+};
+
+struct ContentIndex* ReadContent(
+    struct StorageAPI* storage_api,
+    struct HashAPI* hash_api,
     const char* content_path)
 {
     LONGTAIL_LOG("ReadContent from `%s`\n", content_path)
 
-    struct Context {
-        StorageAPI* m_StorageAPI;
-        uint32_t m_ReservedPathCount;
-        uint32_t m_ReservedPathSize;
-        uint32_t m_RootPathLength;
-        Paths* m_Paths;
-        uint64_t m_AssetCount;
-    };
-
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
 
-    auto on_path = [](void* context, const char* root_path, const char* file_name)
-    {
-        Context* paths_context = (Context*)context;
-        StorageAPI* storage_api = paths_context->m_StorageAPI;
 
-        char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
-        if (storage_api->IsDir(storage_api, full_path))
-        {
-            return;
-        }
-
-        Paths* paths = paths_context->m_Paths;
-        const uint32_t root_path_length = paths_context->m_RootPathLength;
-        const char* s = &full_path[root_path_length];
-        if (*s == '/')
-        {
-            ++s;
-        }
-
-        StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, full_path);
-        if (!f)
-        {
-            free(full_path);
-            return;
-        }
-        uint64_t block_size = storage_api->GetSize(storage_api, f);
-        if (block_size < (sizeof(uint32_t)))
-        {
-            free(full_path);
-            storage_api->CloseRead(storage_api, f);
-            return;
-        }
-        uint32_t asset_count = 0;
-        int ok = storage_api->Read(storage_api, f, block_size - sizeof(uint32_t), sizeof(uint32_t), &asset_count);
-
-        if (!ok)
-        {
-            free(full_path);
-            storage_api->CloseRead(storage_api, f);
-            return;
-        }
-
-        uint32_t asset_index_size = sizeof(uint32_t) + (asset_count) * (sizeof(TLongtail_Hash) + sizeof(uint32_t));
-        ok = block_size >= asset_index_size;
-
-        if (!ok)
-        {
-            free(full_path);
-            return;
-        }
-
-        paths_context->m_AssetCount += asset_count;
-        paths_context->m_Paths = AppendPath(paths_context->m_Paths, s, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
-
-        free(full_path);
-        full_path = 0;
-    };
-
-    Paths* paths = CreatePaths(default_path_count, default_path_data_size);
-    Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(content_path)), paths, 0};
-    if(!RecurseTree(storage_api, content_path, on_path, &context))
+    struct Paths* paths = CreatePaths(default_path_count, default_path_data_size);
+    struct ReadContentContext context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(content_path)), paths, 0};
+    if(!RecurseTree(storage_api, content_path, ReadContentAddPath, &context))
     {
         free(context.m_Paths);
         return 0;
@@ -1922,9 +1929,9 @@ ContentIndex* ReadContent(
     uint32_t asset_count = context.m_AssetCount;
     uint64_t block_count = *paths->m_PathCount;
     size_t content_index_data_size = GetContentIndexDataSize(block_count, asset_count);
-    ContentIndex* content_index = (ContentIndex*)malloc(sizeof(ContentIndex) + content_index_data_size);
-	content_index->m_BlockCount = (uint64_t*) & ((char*)content_index)[sizeof(ContentIndex)];
-	content_index->m_AssetCount = (uint64_t*) & ((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
+    struct ContentIndex* content_index = (struct ContentIndex*)malloc(sizeof(struct ContentIndex) + content_index_data_size);
+	content_index->m_BlockCount = (uint64_t*) & ((char*)content_index)[sizeof(struct ContentIndex)];
+	content_index->m_AssetCount = (uint64_t*) & ((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
 	*content_index->m_BlockCount = block_count;
 	*content_index->m_AssetCount = asset_count;
 	InitContentIndex(content_index);
@@ -1938,7 +1945,7 @@ ContentIndex* ReadContent(
         const char* last_delimiter = strrchr(full_block_path, '/');
         const char* file_name = last_delimiter ? last_delimiter + 1 : full_block_path;
 
-        BlockIndex* block_index = ReadBlock(
+        struct BlockIndex* block_index = ReadBlock(
             storage_api,
             hash_api,
             full_block_path);
@@ -2071,11 +2078,11 @@ void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_
     refs = 0;
 }
 
-ContentIndex* CreateMissingContent(
-    HashAPI* hash_api,
-    const ContentIndex* content_index,
+struct ContentIndex* CreateMissingContent(
+    struct HashAPI* hash_api,
+    const struct ContentIndex* content_index,
     const char* version_assets_path,
-    const VersionIndex* version,
+    const struct VersionIndex* version,
     GetContentTagFunc get_content_tag)
 {
     LONGTAIL_LOG("CreateMissingContent from `%s`\n", version_assets_path)
@@ -2089,7 +2096,7 @@ ContentIndex* CreateMissingContent(
 
     if (added_hash_count == 0)
     {
-        ContentIndex* diff_content_index = CreateContentIndex(
+        struct ContentIndex* diff_content_index = CreateContentIndex(
             hash_api,
             version_assets_path,
             0,
@@ -2105,7 +2112,7 @@ ContentIndex* CreateMissingContent(
     uint32_t* diff_asset_sizes = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
     uint32_t* diff_name_offsets = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
 
-    HashToIndexItem* asset_index_lookup = 0;
+    struct HashToIndexItem* asset_index_lookup = 0;
     for (uint64_t i = 0; i < asset_count; ++i)
     {
         hmput(asset_index_lookup, version->m_AssetContentHash[i], i);
@@ -2129,7 +2136,7 @@ ContentIndex* CreateMissingContent(
     hmfree(asset_index_lookup);
     asset_index_lookup = 0;
 
-    ContentIndex* diff_content_index = CreateContentIndex(
+    struct ContentIndex* diff_content_index = CreateContentIndex(
         hash_api,
         version_assets_path,
         added_hash_count,
@@ -2146,9 +2153,9 @@ ContentIndex* CreateMissingContent(
     return diff_content_index;
 }
 
-ContentIndex* MergeContentIndex(
-    ContentIndex* local_content_index,
-    ContentIndex* remote_content_index)
+struct ContentIndex* MergeContentIndex(
+    struct ContentIndex* local_content_index,
+    struct ContentIndex* remote_content_index)
 {
     uint64_t local_block_count = *local_content_index->m_BlockCount;
     uint64_t remote_block_count = *remote_content_index->m_BlockCount;
@@ -2157,10 +2164,10 @@ ContentIndex* MergeContentIndex(
     uint64_t block_count = local_block_count + remote_block_count;
     uint64_t asset_count = local_asset_count + remote_asset_count;
     size_t content_index_size = GetContentIndexSize(block_count, asset_count);
-    ContentIndex* content_index = (ContentIndex*)malloc(content_index_size);
+    struct ContentIndex* content_index = (struct ContentIndex*)malloc(content_index_size);
 
-    content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex)];
-    content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
+    content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex)];
+    content_index->m_AssetCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
     *content_index->m_BlockCount = block_count;
     *content_index->m_AssetCount = asset_count;
     InitContentIndex(content_index);
@@ -2191,3 +2198,7 @@ ContentIndex* MergeContentIndex(
 }
 
 #endif // LONGTAIL_IMPLEMENTATION
+
+#ifdef __cplusplus
+}
+#endif

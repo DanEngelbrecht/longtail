@@ -1,4 +1,3 @@
-#define LONGTAIL_IMPLEMENTATION
 #include "../src/longtail.h"
 #include "../src/longtail_array.h"
 
@@ -224,28 +223,28 @@ struct InMemStorageAPI
         meow_state state;
         MeowBegin(&state, MeowDefaultSeed);
         MeowAbsorb(&state, (uint32_t)strlen(path), (void*)path);
-        HashAPI::HContext context = hash_api->BeginContext(hash_api);
+        HashAPI_HContext context = hash_api->BeginContext(hash_api);
         return MeowU64From(MeowEnd(&state, 0), 0);;
     }
 
-    static StorageAPI::HOpenFile OpenReadFile(StorageAPI* storage_api, const char* path)
+    static StorageAPI_HOpenFile OpenReadFile(StorageAPI* storage_api, const char* path)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
         PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
         if (it)
         {
-            return (StorageAPI::HOpenFile)*it;
+            return (StorageAPI_HOpenFile)*it;
         }
         return 0;
     }
-    static uint64_t GetSize(StorageAPI* storage_api, StorageAPI::HOpenFile f)
+    static uint64_t GetSize(StorageAPI* storage_api, StorageAPI_HOpenFile f)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         PathEntry* path_entry = (PathEntry*)f;
         return GetSize_TContent(path_entry->m_Content);
     }
-    static int Read(StorageAPI* storage_api, StorageAPI::HOpenFile f, uint64_t offset, uint64_t length, void* output)
+    static int Read(StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         PathEntry* path_entry = (PathEntry*)f;
@@ -256,7 +255,7 @@ struct InMemStorageAPI
         memcpy(output, &path_entry->m_Content[offset], length);
         return 1;
     }
-    static void CloseRead(StorageAPI* , StorageAPI::HOpenFile)
+    static void CloseRead(StorageAPI* , StorageAPI_HOpenFile)
     {
     }
 
@@ -286,13 +285,13 @@ struct InMemStorageAPI
         return &file_name[1];
     }
 
-    static StorageAPI::HOpenFile OpenWriteFile(StorageAPI* storage_api, const char* path)
+    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* storage_api, const char* path)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash parent_path_hash = GetParentPathHash(instance, path);
         if (parent_path_hash != 0 && !instance->m_PathHashToContent.Get(parent_path_hash))
         {
-            TEST_LOG("InMemStorageAPI::OpenWriteFile `%s` failed - parent folder does not exist\n", path)
+            TEST_LOG("InMemStorageAPI_OpenWriteFile `%s` failed - parent folder does not exist\n", path)
             return 0;
         }
         TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
@@ -308,9 +307,9 @@ struct InMemStorageAPI
         path_entry->m_ParentHash = parent_path_hash;
         path_entry->m_FileName = strdup(GetFileName(path));
         instance->m_PathHashToContent.Put(path_hash, path_entry);
-        return (StorageAPI::HOpenFile)path_hash;
+        return (StorageAPI_HOpenFile)path_hash;
     }
-    static int Write(StorageAPI* storage_api, StorageAPI::HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+    static int Write(StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = (TLongtail_Hash)f;
@@ -331,7 +330,7 @@ struct InMemStorageAPI
         (*it)->m_Content = content;
         return 1;
     }
-    static void CloseWrite(StorageAPI* , StorageAPI::HOpenFile)
+    static void CloseWrite(StorageAPI* , StorageAPI_HOpenFile)
     {
     }
 
@@ -341,7 +340,7 @@ struct InMemStorageAPI
         TLongtail_Hash parent_path_hash = GetParentPathHash(instance, path);
         if (parent_path_hash && !instance->m_PathHashToContent.Get(parent_path_hash))
         {
-            TEST_LOG("InMemStorageAPI::CreateDir `%s` failed - parent folder does not exist\n", path)
+            TEST_LOG("InMemStorageAPI_CreateDir `%s` failed - parent folder does not exist\n", path)
             return 0;
         }
         TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
@@ -352,7 +351,7 @@ struct InMemStorageAPI
             {
                 return 1;
             }
-            TEST_LOG("InMemStorageAPI::CreateDir `%s` failed - path exists and is not a directory\n", path)
+            TEST_LOG("InMemStorageAPI_CreateDir `%s` failed - path exists and is not a directory\n", path)
             return 0;
         }
 
@@ -371,14 +370,14 @@ struct InMemStorageAPI
         PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(source_path_hash);
         if (!source_path_ptr)
         {
-            TEST_LOG("InMemStorageAPI::RenameFile from `%s` to `%s` failed - source path does not exist\n", source_path, target_path)
+            TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - source path does not exist\n", source_path, target_path)
             return 0;
         }
         TLongtail_Hash target_path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, target_path);
         PathEntry** target_path_ptr = instance->m_PathHashToContent.Get(target_path_hash);
         if (target_path_ptr)
         {
-            TEST_LOG("InMemStorageAPI::RenameFile from `%s` to `%s` failed - target path does not exist\n", source_path, target_path)
+            TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - target path does not exist\n", source_path, target_path)
             return 0;
         }
         (*source_path_ptr)->m_ParentHash = GetParentPathHash(instance, target_path);
@@ -425,7 +424,7 @@ struct InMemStorageAPI
         return (*source_path_ptr)->m_Content != 0;
     }
 
-    static StorageAPI::HIterator StartFind(StorageAPI* storage_api, const char* path)
+    static StorageAPI_HIterator StartFind(StorageAPI* storage_api, const char* path)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = path[0] ? GetPathHash(&instance->m_HashAPI.m_HashAPI, path) : 0;
@@ -436,14 +435,14 @@ struct InMemStorageAPI
             PathEntry* path_entry = *(*it_ptr).GetValue();
             if (path_entry->m_ParentHash == path_hash)
             {
-                return (StorageAPI::HIterator)it_ptr;
+                return (StorageAPI_HIterator)it_ptr;
             }
             ++(*it_ptr);
         }
         free(it_ptr);
-        return (StorageAPI::HIterator)0;
+        return (StorageAPI_HIterator)0;
     }
-    static int FindNext(StorageAPI* storage_api, StorageAPI::HIterator iterator)
+    static int FindNext(StorageAPI* storage_api, StorageAPI_HIterator iterator)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
@@ -460,12 +459,12 @@ struct InMemStorageAPI
         }
         return 0;
     }
-    static void CloseFind(StorageAPI* storage_api, StorageAPI::HIterator iterator)
+    static void CloseFind(StorageAPI* storage_api, StorageAPI_HIterator iterator)
     {
         jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
         free(it_ptr);
     }
-    static const char* GetFileName(StorageAPI* , StorageAPI::HIterator iterator)
+    static const char* GetFileName(StorageAPI* , StorageAPI_HIterator iterator)
     {
         jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
         PathEntry* path_entry = *(*it_ptr).GetValue();
@@ -479,7 +478,7 @@ struct InMemStorageAPI
         }
         return path_entry->m_FileName;
     }
-    static const char* GetDirectoryName(StorageAPI* , StorageAPI::HIterator iterator)
+    static const char* GetDirectoryName(StorageAPI* , StorageAPI_HIterator iterator)
     {
         jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
         PathEntry* path_entry = *(*it_ptr).GetValue();
@@ -518,40 +517,40 @@ struct StoreCompressionAPI
     }
 
     static int DefaultCompressionSetting;
-    static CompressionAPI::HSettings GetDefaultSettings(CompressionAPI*)
+    static CompressionAPI_HSettings GetDefaultSettings(CompressionAPI*)
     {
-        return (CompressionAPI::HSettings)&DefaultCompressionSetting;
+        return (CompressionAPI_HSettings)&DefaultCompressionSetting;
     }
-    static CompressionAPI::HSettings GetMaxCompressionSetting(CompressionAPI* compression_api)
+    static CompressionAPI_HSettings GetMaxCompressionSetting(CompressionAPI* compression_api)
     {
         return GetDefaultSettings(compression_api);
     }
-    static CompressionAPI::HCompressionContext CreateCompressionContext(CompressionAPI*, CompressionAPI::HSettings settings)
+    static CompressionAPI_HCompressionContext CreateCompressionContext(CompressionAPI*, CompressionAPI_HSettings settings)
     {
-        return (CompressionAPI::HCompressionContext)settings;
+        return (CompressionAPI_HCompressionContext)settings;
     }
-    static size_t GetMaxCompressedSize(CompressionAPI*, CompressionAPI::HCompressionContext , size_t size)
+    static size_t GetMaxCompressedSize(CompressionAPI*, CompressionAPI_HCompressionContext , size_t size)
     {
         return size;
     }
-    static size_t Compress(CompressionAPI*, CompressionAPI::HCompressionContext , const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
+    static size_t Compress(CompressionAPI*, CompressionAPI_HCompressionContext , const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
     {
         memmove(compressed, uncompressed, uncompressed_size);
         return uncompressed_size;
     }
-    static void DeleteCompressionContext(CompressionAPI*, CompressionAPI::HCompressionContext)
+    static void DeleteCompressionContext(CompressionAPI*, CompressionAPI_HCompressionContext)
     {
     }
-    static CompressionAPI::HDecompressionContext CreateDecompressionContext(CompressionAPI* compression_api)
+    static CompressionAPI_HDecompressionContext CreateDecompressionContext(CompressionAPI* compression_api)
     {
-        return (CompressionAPI::HDecompressionContext)GetDefaultSettings(compression_api);
+        return (CompressionAPI_HDecompressionContext)GetDefaultSettings(compression_api);
     }
-    static size_t Decompress(CompressionAPI*, CompressionAPI::HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
+    static size_t Decompress(CompressionAPI*, CompressionAPI_HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
     {
         memmove(uncompressed, compressed, uncompressed_size);
         return uncompressed_size;
     }
-    static void DeleteDecompressionContext(CompressionAPI*, CompressionAPI::HDecompressionContext)
+    static void DeleteDecompressionContext(CompressionAPI*, CompressionAPI_HDecompressionContext)
     {
     }
 };
@@ -623,7 +622,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
         {
             return 0;
         }
-        StorageAPI::HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path);
+        StorageAPI_HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path);
         if (!content_file)
         {
             return 0;
@@ -999,8 +998,8 @@ TEST(Longtail, MergeContentIndex)
     {
         char path[20];
         sprintf(path, "%u", i);
-        StorageAPI::HOpenFile r = local_storage.m_StorageAPI.OpenReadFile(&local_storage.m_StorageAPI, path);
-        ASSERT_NE((StorageAPI::HOpenFile)0, r);
+        StorageAPI_HOpenFile r = local_storage.m_StorageAPI.OpenReadFile(&local_storage.m_StorageAPI, path);
+        ASSERT_NE((StorageAPI_HOpenFile)0, r);
         uint64_t size = local_storage.m_StorageAPI.GetSize(&local_storage.m_StorageAPI, r);
         uint64_t expected_size = 64000 + 1 + i;
         ASSERT_EQ(expected_size, size);
@@ -1067,8 +1066,8 @@ TEST(Longtail, ReconstructVersion)
         asset_path_hashes[i] = GetPathHash(&hash_api.m_HashAPI, asset_paths[i]);
         char* path = storage_api->ConcatPath(storage_api, "source_path", asset_paths[i]);
         ASSERT_NE(0, MakePath(storage_api, path));
-        StorageAPI::HOpenFile f = storage_api->OpenWriteFile(storage_api, path);
-        ASSERT_NE((StorageAPI::HOpenFile)0, f);
+        StorageAPI_HOpenFile f = storage_api->OpenWriteFile(storage_api, path);
+        ASSERT_NE((StorageAPI_HOpenFile)0, f);
         free(path);
         char* data = (char*)malloc(asset_sizes[i]);
         for (uint32_t d = 0; d < asset_sizes[i]; ++d)
@@ -1142,8 +1141,8 @@ TEST(Longtail, ReconstructVersion)
     {
         char* path = (char*)storage_api->ConcatPath(storage_api, "target_path", asset_paths[i]);
         asset_path_hashes[i] = GetPathHash(&hash_api.m_HashAPI, path);
-        StorageAPI::HOpenFile f = storage_api->OpenReadFile(storage_api, path);
-        ASSERT_NE((StorageAPI::HOpenFile)0, f);
+        StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, path);
+        ASSERT_NE((StorageAPI_HOpenFile)0, f);
         free(path);
         ASSERT_EQ(asset_sizes[i], storage_api->GetSize(storage_api, f));
         char* data = (char*)malloc(asset_sizes[i]);
@@ -1270,7 +1269,7 @@ void Bench()
 
             free(block_name);
 
-            StorageAPI::HOpenFile v = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, target_path);
+            StorageAPI_HOpenFile v = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, target_path);
             if (v)
             {
                 storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, v);
@@ -1278,12 +1277,12 @@ void Bench()
                 continue;
             }
 
-            StorageAPI::HOpenFile s = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, source_path);
-            ASSERT_NE((StorageAPI::HOpenFile)0, s);
+            StorageAPI_HOpenFile s = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, source_path);
+            ASSERT_NE((StorageAPI_HOpenFile)0, s);
 
             ASSERT_NE(0, MakePath(&storage_api.m_StorageAPI, target_path));
-            StorageAPI::HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path);
-            ASSERT_NE((StorageAPI::HOpenFile)0, t);
+            StorageAPI_HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path);
+            ASSERT_NE((StorageAPI_HOpenFile)0, t);
 
             uint64_t block_file_size = storage_api.m_StorageAPI.GetSize(&storage_api.m_StorageAPI, s);
             void* buffer = malloc(block_file_size);
@@ -1498,9 +1497,9 @@ void LifelikeTest()
 //        char block_file_name[64];
 //        sprintf(block_file_name, "%s.lrb", block_name);
 //        char* source_path = storage_api.ConcatPath(remote_content_path, block_file_name);
-//        StorageAPI::HOpenFile s = storage_api.OpenReadFile(source_path);
+//        StorageAPI_HOpenFile s = storage_api.OpenReadFile(source_path);
 //        char* target_path = storage_api.ConcatPath(local_content_path, block_file_name);
-//        StorageAPI::HOpenFile t = storage_api.OpenWriteFile(target_path);
+//        StorageAPI_HOpenFile t = storage_api.OpenWriteFile(target_path);
 //        uint64_t size = storage_api.GetSize(s);
 //        char* buffer = (char*)malloc(size);
 //        storage_api.Read(s, 0, size, buffer);
