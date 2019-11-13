@@ -1,15 +1,9 @@
 #pragma once
 
-#include "longtail_array.h"
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <inttypes.h>
-
-// Need to kill this if we want to go C99!
-// Check out https://github.com/nothings/stb/blob/master/stb_ds.h
-#include "../third-party/jc_containers/src/jc_hashtable.h"
 
 struct HashAPI
 {
@@ -221,6 +215,9 @@ char* GetBlockName(TLongtail_Hash block_hash);
 
 #if defined(LONGTAIL_IMPLEMENTATION)
 
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"
+
 #ifdef LONGTAIL_VERBOSE_LOGS
     #define LONGTAIL_LOG(fmt, ...) \
         printf("--- ");printf(fmt, __VA_ARGS__);
@@ -292,21 +289,20 @@ int EnsureParentPathExists(StorageAPI* storage_api, const char* path)
     return ok;
 }
 
-typedef char* TFolderPaths;
-LONGTAIL_DECLARE_ARRAY_TYPE(TFolderPaths, malloc, free)
-
 typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
 
 int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
     LONGTAIL_LOG("RecurseTree `%s`\n", root_folder)
-    TFolderPaths* folder_paths = SetCapacity_TFolderPaths((TFolderPaths*)0, 256);
 
     uint32_t folder_index = 0;
 
-    *Push_TFolderPaths(folder_paths) = strdup(root_folder);
+    const char** folder_paths = 0;
+    arrsetcap(folder_paths, 256);
 
-    while (folder_index != GetSize_TFolderPaths(folder_paths))
+    arrput(folder_paths, strdup(root_folder));
+
+    while (folder_index < (uint32_t)arrlen(folder_paths))
     {
         const char* asset_folder = folder_paths[folder_index++];
 
@@ -318,32 +314,17 @@ int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry e
                 if (const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator))
                 {
                     entry_processor(context, asset_folder, dir_name);
-                    *Push_TFolderPaths(folder_paths) = storage_api->ConcatPath(storage_api, asset_folder, dir_name);
-                    if (GetSize_TFolderPaths(folder_paths) == GetCapacity_TFolderPaths(folder_paths))
+                    if (arrlen(folder_paths) == arrcap(folder_paths))
                     {
-                        uint32_t unprocessed_count = (GetSize_TFolderPaths(folder_paths) - folder_index);
                         if (folder_index > 0)
                         {
-                            if (unprocessed_count > 0)
-                            {
-                                memmove(folder_paths, &folder_paths[folder_index], sizeof(TFolderPaths) * unprocessed_count);
-                                SetSize_TFolderPaths(folder_paths, unprocessed_count);
-                            }
-                            folder_index = 0;
-                        }
-                        else
-                        {
-                            TFolderPaths* folder_paths_new = SetCapacity_TFolderPaths((TFolderPaths*)0, GetCapacity_TFolderPaths(folder_paths) + 256);
-                            if (unprocessed_count > 0)
-                            {
-                                SetSize_TFolderPaths(folder_paths_new, unprocessed_count);
-                                memcpy(folder_paths_new, &folder_paths[folder_index], sizeof(TFolderPaths) * unprocessed_count);
-                            }
-                            Free_TFolderPaths(folder_paths);
-                            folder_paths = folder_paths_new;
+                            uint32_t unprocessed_count = (uint32_t)(arrlen(folder_paths) - folder_index);
+                            memmove(folder_paths, &folder_paths[folder_index], sizeof(const char*) * unprocessed_count);
+                            arrsetlen(folder_paths, unprocessed_count);
                             folder_index = 0;
                         }
                     }
+                    arrput(folder_paths, storage_api->ConcatPath(storage_api, asset_folder, dir_name));
                 }
                 else if(const char* file_name = storage_api->GetFileName(storage_api, fs_iterator))
                 {
@@ -354,7 +335,8 @@ int RecurseTree(StorageAPI* storage_api, const char* root_folder, ProcessEntry e
         }
         free((void*)asset_folder);
     }
-    Free_TFolderPaths(folder_paths);
+    arrfree(folder_paths);
+    folder_paths = 0;
     return 1;
 }
 
@@ -891,30 +873,34 @@ void InitContentIndex(ContentIndex* content_index)
     p += (sizeof(uint32_t) * asset_count);
 }
 
+struct HashToIndexItem
+{
+    TLongtail_Hash key;
+    uint32_t value;
+};
+
 uint32_t GetUniqueAssets(uint64_t asset_count, const TLongtail_Hash* asset_content_hashes, uint32_t* out_unique_asset_indexes)
 {
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)asset_count);
-    void* hash_mem = malloc(hash_size);
-    jc::HashTable<TLongtail_Hash, uint32_t> lookup_table;
-    lookup_table.Create((uint32_t)asset_count, hash_mem);
+    HashToIndexItem* lookup_table = 0;
+
     uint32_t unique_asset_count = 0;
     for (uint32_t i = 0; i < asset_count; ++i)
     {
         TLongtail_Hash hash = asset_content_hashes[i];
-        uint32_t* existing_index = lookup_table.Get(hash);
-        if (existing_index)
+        ptrdiff_t lookup_index = hmgeti(lookup_table, hash);
+        if (lookup_index == -1)
         {
-            (*existing_index)++;
-        }
-        else
-        {
-            lookup_table.Put(hash, 1);
+            hmput(lookup_table, hash, 1);
             out_unique_asset_indexes[unique_asset_count] = i;
             ++unique_asset_count;
         }
+        else
+        {
+            ++lookup_table[lookup_index].value;
+        }
     }
-    free(hash_mem);
-    hash_mem = 0;
+    hmfree(lookup_table);
+    lookup_table = 0;
     return unique_asset_count;
 }
 
@@ -1180,16 +1166,15 @@ ContentIndex* ReadContentIndex(StorageAPI* storage_api, const char* path)
 
 struct PathLookup
 {
-    jc::HashTable<TLongtail_Hash, uint32_t> m_HashToNameOffset;
+    HashToIndexItem* m_HashToNameOffset;
     const char* m_NameData;
 };
 
 PathLookup* CreateContentHashToPathLookup(const VersionIndex* version_index, uint64_t* out_unique_asset_indexes)
 {
     uint32_t asset_count = (uint32_t)(*version_index->m_AssetCount);
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize(asset_count);
-    PathLookup* path_lookup = (PathLookup*)malloc(sizeof(PathLookup) + hash_size);
-    path_lookup->m_HashToNameOffset.Create(asset_count, &path_lookup[1]);
+    PathLookup* path_lookup = (PathLookup*)malloc(sizeof(PathLookup));
+    path_lookup->m_HashToNameOffset = 0;
     path_lookup->m_NameData = version_index->m_NameData;
 
     // Only pick up unique assets
@@ -1197,10 +1182,10 @@ PathLookup* CreateContentHashToPathLookup(const VersionIndex* version_index, uin
     for (uint32_t i = 0; i < asset_count; ++i)
     {
         TLongtail_Hash content_hash = version_index->m_AssetContentHash[i];
-        uint32_t* existing_index = path_lookup->m_HashToNameOffset.Get(content_hash);
-        if (existing_index == 0)
+        ptrdiff_t lookup_index = hmgeti(path_lookup->m_HashToNameOffset, content_hash);
+        if (lookup_index == -1)
         {
-            path_lookup->m_HashToNameOffset.Put(content_hash, version_index->m_NameOffset[i]);
+            hmput(path_lookup->m_HashToNameOffset, content_hash, version_index->m_NameOffset[i]);
             if (out_unique_asset_indexes)
             {
                 out_unique_asset_indexes[unique_asset_count] = i;
@@ -1213,12 +1198,23 @@ PathLookup* CreateContentHashToPathLookup(const VersionIndex* version_index, uin
 
 const char* GetPathFromAssetContentHash(const PathLookup* path_lookup, TLongtail_Hash asset_content_hash)
 {
-    const uint32_t* index_ptr = path_lookup->m_HashToNameOffset.Get(asset_content_hash);
-    if (index_ptr == 0)
+    ptrdiff_t lookup_index = hmgeti((HashToIndexItem*)path_lookup->m_HashToNameOffset, asset_content_hash);
+    if (lookup_index == -1)
     {
         return 0;
     }
-    return &path_lookup->m_NameData[*index_ptr];
+    uint32_t offset = path_lookup->m_HashToNameOffset[lookup_index].value;
+    return &path_lookup->m_NameData[offset];
+}
+
+void FreePathLookup(PathLookup* path_lookup)
+{
+    if (!path_lookup)
+    {
+        return;
+    }
+    hmfree(path_lookup->m_HashToNameOffset);
+    free(path_lookup);
 }
 
 struct WriteBlockJob
@@ -1664,13 +1660,11 @@ int ReconstructVersion(
     const char* version_path)
 {
     LONGTAIL_LOG("ReconstructVersion from `%s` to `%s`, assets %u\n", content_path, version_path, (uint32_t)*version_index->m_AssetCount)
-    uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
-    jc::HashTable<uint64_t, uint32_t> content_hash_to_content_asset_index;
-    void* content_hash_to_content_asset_index_mem = malloc(hash_size);
-    content_hash_to_content_asset_index.Create((uint32_t)*content_index->m_AssetCount, content_hash_to_content_asset_index_mem);
+    HashToIndexItem* content_hash_to_content_asset_index = 0;
     for (uint64_t i = 0; i < *content_index->m_AssetCount; ++i)
     {
-        content_hash_to_content_asset_index.Put(content_index->m_AssetContentHash[i], i);
+        TLongtail_Hash content_hash = content_index->m_AssetContentHash[i];
+        hmput(content_hash_to_content_asset_index, content_hash, i);
     }
 
     uint64_t asset_count = *version_index->m_AssetCount;
@@ -1680,24 +1674,23 @@ int ReconstructVersion(
     for (uint64_t i = 0; i < asset_count; ++i)
     {
         asset_order[i] = i;
-        uint32_t* asset_index_ptr = content_hash_to_content_asset_index.Get(version_index->m_AssetContentHash[i]);
-        if (!asset_index_ptr)
+        ptrdiff_t lookup_index = hmgeti((HashToIndexItem*)content_hash_to_content_asset_index, version_index->m_AssetContentHash[i]);
+        if (lookup_index == -1)
         {
 			LONGTAIL_LOG("Asset 0x%" PRIx64 " for asset `%s` was not find in content index\n", version_index->m_AssetContentHash[i], &version_index->m_NameData[version_index->m_NameOffset[i]])
             continue;
         }
-        version_index_to_content_index[i] = *asset_index_ptr;
+        version_index_to_content_index[i] = content_hash_to_content_asset_index[lookup_index].value;
 		++asset_found_count;
     }
 
+    hmfree(content_hash_to_content_asset_index);
+    content_hash_to_content_asset_index = 0;
+
     if (asset_found_count != asset_count)
     {
-        free(content_hash_to_content_asset_index_mem);
         return 0;
     }
-
-    free(content_hash_to_content_asset_index_mem);
-    content_hash_to_content_asset_index_mem = 0;
 
     ReconstructOrder reconstruct_order(content_index, version_index->m_AssetContentHash, version_index_to_content_index);
     qsort_s(&asset_order[0], asset_count, sizeof(uint64_t), ReconstructOrder::Compare, &reconstruct_order);
@@ -2112,31 +2105,29 @@ ContentIndex* CreateMissingContent(
     uint32_t* diff_asset_sizes = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
     uint32_t* diff_name_offsets = (uint32_t*)malloc(sizeof(uint32_t) * added_hash_count);
 
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)asset_count);
-    jc::HashTable<TLongtail_Hash, uint32_t> asset_index_lookup;
-    void* path_lookup_mem = malloc(hash_size);
-    asset_index_lookup.Create(asset_count, path_lookup_mem);
+    HashToIndexItem* asset_index_lookup = 0;
     for (uint64_t i = 0; i < asset_count; ++i)
     {
-        asset_index_lookup.Put(version->m_AssetContentHash[i], i);
+        hmput(asset_index_lookup, version->m_AssetContentHash[i], i);
     }
 
     for (uint32_t j = 0; j < added_hash_count; ++j)
     {
-        uint32_t* asset_index_ptr = asset_index_lookup.Get(added_hashes[j]);
-        if (!asset_index_ptr)
+        ptrdiff_t lookup_index = hmgeti(asset_index_lookup, added_hashes[j]);
+        if (lookup_index == -1)
         {
-            free(path_lookup_mem);
+            hmfree(asset_index_lookup);
             free(removed_hashes);
             free(added_hashes);
             return 0;
         }
-        uint64_t asset_index = *asset_index_ptr;
+
+        uint64_t asset_index = asset_index_lookup[lookup_index].value;
         diff_asset_sizes[j] = version->m_AssetSize[asset_index];
         diff_name_offsets[j] = version->m_NameOffset[asset_index];
     }
-    free(path_lookup_mem);
-    path_lookup_mem = 0;
+    hmfree(asset_index_lookup);
+    asset_index_lookup = 0;
 
     ContentIndex* diff_content_index = CreateContentIndex(
         hash_api,
@@ -2148,6 +2139,9 @@ ContentIndex* CreateMissingContent(
         diff_name_offsets,
         version->m_NameData,
         get_content_tag);
+
+    free(removed_hashes);
+    free(added_hashes);
 
     return diff_content_index;
 }

@@ -2,6 +2,7 @@
 #define LONGTAIL_VERBOSE_LOGS
 #define LONGTAIL_IMPLEMENTATION
 #include "../src/longtail.h"
+#include "../src/longtail_array.h"
 
 #define KGFLAGS_IMPLEMENTATION
 #include "../third-party/kgflags/kgflags.h"
@@ -366,6 +367,8 @@ int main(int argc, char** argv)
             path_lookup,
             version,
             create_content);
+        FreePathLookup(path_lookup);
+        path_lookup = 0;
         free(vindex);
         vindex = 0;
         free(cindex);
