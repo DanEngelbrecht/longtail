@@ -700,6 +700,162 @@ uint32_t GetUniqueAssets(uint64_t asset_count, const TLongtail_Hash* asset_conte
     return unique_asset_count;
 }
 
+struct ChunkedAssets* ChunkAssets(
+    struct StorageAPI* read_storage_api,
+    struct StorageAPI* write_storage_api,
+    struct HashAPI* hash_api,
+    struct VersionIndex* version_index,
+    const char* assets_path,
+    const char* chunks_path)
+{
+    struct HashToIndexItem* chunk_lookup_table = 0;
+
+    uint32_t* store_chunk_indexes = 0;
+    arrsetcap(store_chunk_indexes, 4096);
+    uint32_t* store_chunk_sizes = 0;
+    arrsetcap(store_chunk_sizes, 4096);
+    TLongtail_Hash* store_chunk_hashes = 0;
+    arrsetcap(store_chunk_hashes, 4096);
+    uint8_t* current_chunk_data = 0;
+
+    uint64_t asset_count = *version_index->m_AssetCount;
+    uint32_t* chunk_start_indexes = 0;
+    arrsetcap(chunk_start_indexes, asset_count);
+    uint32_t* chunk_counts = 0;
+    arrsetcap(chunk_counts, asset_count);
+    TLongtail_Hash* chunk_hashes = 0;
+    arrsetcap(chunk_hashes, asset_count);
+
+    uint32_t chunk_start_index = 0;
+    arrsetcap(current_chunk_data, 65536);
+    for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
+    {
+        arrput(chunk_start_indexes, chunk_start_index);
+        uint32_t asset_size = version_index->m_AssetSize[asset_index];
+        const char* asset_path = &version_index->m_NameData[version_index->m_NameOffset[asset_index]];
+        char* full_path = read_storage_api->ConcatPath(read_storage_api, assets_path, asset_path);
+        StorageAPI_HOpenFile f = read_storage_api->OpenReadFile(read_storage_api, full_path);
+        if (!f)
+        {
+            arrfree(chunk_hashes);
+            arrfree(chunk_counts);
+            arrfree(chunk_start_indexes);
+            hmfree(chunk_lookup_table);
+            return 0;
+        }
+
+        uint32_t asset_chunk_count = 0;
+
+        TLongtail_Hash chunk_hash = 0;
+        if (asset_size == 0)
+        {
+            arrput(chunk_hashes, 0);
+            ++asset_chunk_count;
+        }
+        else
+        {
+            uint8_t chunk_data[65536];
+            uint32_t size_left = asset_size;
+            while (size_left > 0)
+            {
+                uint32_t chunk_size = size_left < 65536 ? size_left : 65536;
+                read_storage_api->Read(read_storage_api, f, asset_size - size_left, chunk_size, chunk_data);
+                TLongtail_Hash chunk_hash = 0;
+
+                ptrdiff_t lookup_index = hmgeti(chunk_lookup_table, chunk_hash);
+                if (lookup_index == -1)
+                {
+                    if (arrcap(current_chunk_data) < (chunk_size + arrlen(current_chunk_data)))
+                    {
+                        arrsetcap(current_chunk_data, arrcap(current_chunk_data) + 65536);
+                    }
+                    memcpy(&current_chunk_data[arrlen(current_chunk_data)], chunk_data, chunk_size);
+                    arrsetlen(current_chunk_data, arrlen(current_chunk_data) + chunk_size);
+
+                    if (arrlen(current_chunk_data) > 262144 || arrlen(store_chunk_hashes) == 4096)
+                    {
+                        size_t block_mem_size = GetBlockIndexSize(arrlen(store_chunk_hashes));
+                        struct BlockIndex* block_index = CreateBlockIndex(
+                            malloc(block_mem_size),
+                            hash_api,
+                            arrlen(store_chunk_hashes),
+                            store_chunk_indexes,
+                            store_chunk_hashes,
+                            store_chunk_sizes);
+
+                        char name[64];
+                        sprintf(name, "0x%" PRIx64 ".ldb", block_index->m_BlockHash);
+                        char* block_path = write_storage_api->ConcatPath(write_storage_api, chunks_path, name);
+                        write_storage_api->OpenWriteFile(write_storage_api, block_path);
+                        StorageAPI_HOpenFile w = write_storage_api->OpenWriteFile(write_storage_api, block_path);
+                        uint64_t write_offset = 0;
+                        write_storage_api->Write(write_storage_api, w, write_offset, arrlen(store_chunk_hashes), current_chunk_data);
+                        write_offset += arrlen(store_chunk_hashes);
+
+                        write_storage_api->Write(write_storage_api, w, write_offset, sizeof(TLongtail_Hash) * *block_index->m_AssetCount, block_index->m_AssetContentHashes);
+                        write_offset += sizeof(TLongtail_Hash) * *block_index->m_AssetCount;
+                        write_storage_api->Write(write_storage_api, w, write_offset, sizeof(uint32_t) * *block_index->m_AssetCount, block_index->m_AssetSizes);
+                        write_offset += sizeof(uint32_t) * *block_index->m_AssetCount;
+                        write_storage_api->Write(write_storage_api, w, write_offset, sizeof(uint32_t), block_index->m_AssetCount);
+                        write_offset += sizeof(uint32_t);
+                        write_storage_api->CloseWrite(write_storage_api, w);
+
+                        free(block_index);
+                    }
+                    hmput(chunk_lookup_table, chunk_hash, 1);
+                }
+                ++asset_chunk_count;
+                size_left -= chunk_size;
+                arrput(chunk_hashes, chunk_hash);
+
+                arrput(store_chunk_indexes, (uint32_t)arrlen(store_chunk_hashes));
+                arrput(store_chunk_sizes, chunk_size);
+                arrput(store_chunk_hashes, chunk_hash);
+
+                arrsetlen(store_chunk_indexes, 0);
+                arrsetlen(store_chunk_sizes, 0);
+                arrsetlen(store_chunk_hashes, 0);
+            }
+        }
+
+        chunk_start_index += asset_chunk_count;
+        arrput(chunk_counts, asset_chunk_count);
+
+        read_storage_api->CloseRead(read_storage_api, f);
+        f = 0;
+    }
+
+    size_t chunked_assets_size =
+        sizeof(struct ChunkedAssets) +
+        sizeof(TLongtail_Hash) * asset_count +
+        sizeof(uint32_t) * asset_count +
+        sizeof(uint32_t) * asset_count +
+        sizeof(TLongtail_Hash) * chunk_start_index;
+    struct ChunkedAssets* chunked_assets = (struct ChunkedAssets*)malloc(chunked_assets_size);
+    char* p = (char*)&chunked_assets[1];
+    chunked_assets->m_AssetContentHash = (TLongtail_Hash*)p;
+    p += sizeof(TLongtail_Hash) * asset_count;
+    chunked_assets->m_ChunkStartIndex = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_count;
+    chunked_assets->m_ChunkCount = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_count;
+    chunked_assets->m_ChunkHashes = (TLongtail_Hash*)p;
+
+    memcpy(chunked_assets->m_AssetContentHash, version_index->m_AssetContentHash, sizeof(TLongtail_Hash) * asset_count);
+    memcpy(chunked_assets->m_ChunkStartIndex, chunk_start_indexes, sizeof(uint32_t) * asset_count);
+    memcpy(chunked_assets->m_ChunkCount, chunk_counts, sizeof(uint32_t) * asset_count);
+    memcpy(chunked_assets->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_start_index);
+
+    arrfree(chunk_hashes);
+    arrfree(chunk_counts);
+    arrfree(chunk_start_indexes);
+
+    hmfree(chunk_lookup_table);
+    chunk_lookup_table = 0;
+
+    return chunked_assets;
+};
+
 struct CompareAssetEntry
 {
     // This sorting algorithm is very arbitrary!

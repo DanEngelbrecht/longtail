@@ -202,12 +202,20 @@ struct VersionIndex
     uint64_t* m_AssetCount;
     TLongtail_Hash* m_PathHash;
     TLongtail_Hash* m_AssetContentHash;
-    uint32_t* m_AssetSize;
+    uint32_t* m_AssetSize;  // []
     // uint64_t m_CreationDate;
     // uint64_t m_ModificationDate;
     uint32_t* m_NameOffset;
     uint32_t m_NameDataSize;
     char* m_NameData;
+};
+
+struct ChunkedAssets
+{
+    TLongtail_Hash* m_AssetContentHash;
+    uint32_t* m_ChunkStartIndex;    // []
+    uint32_t* m_ChunkCount; // []
+    TLongtail_Hash* m_ChunkHashes;  // []
 };
 
 struct Paths* MakePaths(
