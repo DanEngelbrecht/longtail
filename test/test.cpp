@@ -7,6 +7,10 @@
 
 #include "../common/platform.h"
 
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #define TEST_LOG(fmt, ...) \
     printf("--- ");printf(fmt, __VA_ARGS__);
 

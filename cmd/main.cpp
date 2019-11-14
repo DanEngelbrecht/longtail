@@ -1,11 +1,11 @@
 
-#define LONGTAIL_VERBOSE_LOGS
-#define LONGTAIL_IMPLEMENTATION
 #include "../src/longtail.h"
-#include "../src/longtail_array.h"
 
 #define KGFLAGS_IMPLEMENTATION
 #include "../third-party/kgflags/kgflags.h"
+
+#define STB_DS_IMPLEMENTATION
+#include "../src/stb_ds.h"
 
 #include "../common/platform.h"
 
