@@ -188,34 +188,28 @@ struct Paths
 struct ContentIndex
 {
     uint64_t* m_BlockCount;
-    uint64_t* m_AssetCount;
+    uint64_t* m_ChunkCount;
 
-    TLongtail_Hash* m_BlockHash; // []
-    TLongtail_Hash* m_AssetContentHash; // []
-    uint64_t* m_AssetBlockIndex; // []
-    uint32_t* m_AssetBlockOffset; // []
-    uint32_t* m_AssetLength; // []
+    TLongtail_Hash* m_BlockHashes;  // []
+    TLongtail_Hash* m_ChunkHashes;  // []
+    uint64_t* m_ChunkBlockIndexes;  // []
+    uint32_t* m_ChunkBlockOffsets;  // []
+    uint32_t* m_ChunkLengths;       // []
 };
 
 struct VersionIndex
 {
     uint64_t* m_AssetCount;
-    TLongtail_Hash* m_PathHash;
-    TLongtail_Hash* m_AssetContentHash;
-    uint32_t* m_AssetSize;  // []
+    TLongtail_Hash* m_PathHashes;           // []
+    TLongtail_Hash* m_AssetContentHashes;   // []
+    uint32_t* m_AssetSizes;                 // []
+//    uint32_t* m_AssetChunkCounts;           // [] If m_AssetChunkCounts[asset_index] == 1, chunk hash is same as m_AssetContentHashes[asset_index]
+//    TLongtail_Hash* m_AssetChunkHashes;     // []
     // uint64_t m_CreationDate;
     // uint64_t m_ModificationDate;
-    uint32_t* m_NameOffset;
+    uint32_t* m_NameOffsets;                // []
     uint32_t m_NameDataSize;
     char* m_NameData;
-};
-
-struct ChunkedAssets
-{
-    TLongtail_Hash* m_AssetContentHash;
-    uint32_t* m_ChunkStartIndex;    // []
-    uint32_t* m_ChunkCount; // []
-    TLongtail_Hash* m_ChunkHashes;  // []
 };
 
 struct Paths* MakePaths(
