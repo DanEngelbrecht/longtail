@@ -26,7 +26,7 @@
 uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
 {
     uint32_t missing_hash_count = 0;
-    DiffHashes(content_index->m_AssetContentHashes, *content_index->m_AssetCount, version->m_AssetContentHashes, *version->m_AssetCount, &missing_hash_count, missing_assets, 0, 0);
+    DiffHashes(content_index->m_ContentHashes, *content_index->m_AssetCount, version->m_ContentHashes, *version->m_AssetCount, &missing_hash_count, missing_assets, 0, 0);
     return missing_hash_count;
 }
 
@@ -44,7 +44,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
         content_hash_to_asset_index.Create(content_index_asset_count, content_hash_to_asset_index_mem);
         for (uint64_t i = 0; i < content_index_asset_count; ++i)
         {
-            TLongtail_Hash asset_content_hash = content_index->m_AssetContentHashes[i];
+            TLongtail_Hash asset_content_hash = content_index->m_ContentHashes[i];
             content_hash_to_asset_index.Put(asset_content_hash, i);
         }
 
@@ -127,7 +127,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
         {
             uint64_t source_asset_index = asset_start_in_blocks[block_index] + j;
             uint64_t target_asset_index = asset_offset + j;
-            existing_content_index->m_AssetContentHashes[target_asset_index] = content_index->m_ChunkBlockOffsets[source_asset_index];
+            existing_content_index->m_ContentHashes[target_asset_index] = content_index->m_ChunkBlockOffsets[source_asset_index];
             existing_content_index->m_ChunkBlockIndexes[target_asset_index] = block_index;
             existing_content_index->m_ChunkBlockOffsets[target_asset_index] = content_index->m_ChunkBlockOffsets[source_asset_index];
             existing_content_index->m_AssetLengths[target_asset_index] = content_index->m_AssetLengths[source_asset_index];
@@ -212,14 +212,14 @@ struct InMemStorageAPI
         {
             PathEntry* path_entry = *it.GetValue();
             free(path_entry->m_FileName);
-			path_entry->m_FileName = 0;
+            path_entry->m_FileName = 0;
             Free_TContent(path_entry->m_Content);
-			path_entry->m_Content = 0;
+            path_entry->m_Content = 0;
             free(path_entry);
             ++it;
         }
         free(m_PathHashToContentMem);
-		m_PathHashToContentMem = 0;
+        m_PathHashToContentMem = 0;
     }
 
     static uint64_t GetPathHash(HashAPI* hash_api, const char* path)
@@ -385,8 +385,8 @@ struct InMemStorageAPI
             return 0;
         }
         (*source_path_ptr)->m_ParentHash = GetParentPathHash(instance, target_path);
-		free((*source_path_ptr)->m_FileName);
-		(*source_path_ptr)->m_FileName = strdup(GetFileName(target_path));
+        free((*source_path_ptr)->m_FileName);
+        (*source_path_ptr)->m_FileName = strdup(GetFileName(target_path));
         instance->m_PathHashToContent.Put(target_path_hash, *source_path_ptr);
         instance->m_PathHashToContent.Erase(source_path_hash);
         return 1;
@@ -640,7 +640,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
         {
             return 0;
         }
-		storage_api->CloseWrite(storage_api, content_file);
+        storage_api->CloseWrite(storage_api, content_file);
     }
     return 1;
 }
@@ -658,9 +658,11 @@ TEST(Longtail, VersionIndex)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
+    const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
+    const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
 
     Paths* paths = MakePaths(5, asset_paths);
-    size_t version_index_size = GetVersionIndexSize(5, paths->m_DataSize);
+    size_t version_index_size = GetVersionIndexSize(5, 5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
@@ -669,7 +671,12 @@ TEST(Longtail, VersionIndex)
         paths,
         asset_path_hashes,
         asset_content_hashes,
-        asset_sizes);
+        asset_sizes,
+        asset_chunk_start_index,
+        asset_chunk_counts,
+        *paths->m_PathCount,
+        asset_sizes,
+        asset_content_hashes);
 
     free(version_index);
     free(paths);
@@ -686,35 +693,34 @@ TEST(Longtail, ContentIndex)
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     MeowHashAPI hash_api;
 
+    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
-        assets_path,
         asset_count,
         asset_content_hashes,
-        asset_path_hashes,
         asset_sizes,
-        asset_name_offsets,
-        asset_name_data,
-        GetContentTagFake);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
 
     ASSERT_EQ(2u, *content_index->m_BlockCount);
     ASSERT_EQ(5u, *content_index->m_ChunkCount);
     for (uint32_t i = 0; i < *content_index->m_ChunkCount; ++i)
     {
-        ASSERT_EQ(asset_content_hashes[4 - i], content_index->m_ChunkHashes[i]);
-        ASSERT_EQ(asset_sizes[4 - i], content_index->m_ChunkLengths[i]);
+        ASSERT_EQ(asset_content_hashes[i], content_index->m_ChunkHashes[i]);
+        ASSERT_EQ(asset_sizes[i], content_index->m_ChunkLengths[i]);
     }
     ASSERT_EQ(0u, content_index->m_ChunkBlockIndexes[0]);
     ASSERT_EQ(0u, content_index->m_ChunkBlockIndexes[1]);
     ASSERT_EQ(0u, content_index->m_ChunkBlockIndexes[2]);
     ASSERT_EQ(1u, content_index->m_ChunkBlockIndexes[3]);
-	ASSERT_EQ(1u, content_index->m_ChunkBlockIndexes[4]);
+    ASSERT_EQ(1u, content_index->m_ChunkBlockIndexes[4]);
 
     ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[0]);
-    ASSERT_EQ(43591, content_index->m_ChunkBlockOffsets[1]);
-    ASSERT_EQ(43591 * 2, content_index->m_ChunkBlockOffsets[2]);
+    ASSERT_EQ(43593, content_index->m_ChunkBlockOffsets[1]);
+    ASSERT_EQ(43593 * 2, content_index->m_ChunkBlockOffsets[2]);
     ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[3]);
-    ASSERT_EQ(43593, content_index->m_ChunkBlockOffsets[4]);
+    ASSERT_EQ(43591, content_index->m_ChunkBlockOffsets[4]);
 
     free(content_index);
 }
@@ -737,16 +743,15 @@ TEST(Longtail, ContentIndexSerialization)
         version1_paths);
     ASSERT_NE((VersionIndex*)0, vindex);
 
+    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
-        "source/version1",
         *vindex->m_AssetCount,
-        vindex->m_AssetContentHashes,
-        vindex->m_PathHashes,
+        vindex->m_ContentHashes,
         vindex->m_AssetSizes,
-        vindex->m_NameOffsets,
-        vindex->m_NameData,
-        GetContentTag);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
 
     PathLookup* path_lookup = CreateContentHashToPathLookup(vindex, 0);
@@ -761,15 +766,15 @@ TEST(Longtail, ContentIndexSerialization)
         "source/version1",
         "chunks");
 
-	ContentIndex* cindex2 = ReadContent(
-		&local_storage.m_StorageAPI,
-		&hash_api.m_HashAPI,
-		"chunks");
-	ASSERT_NE((ContentIndex*)0, cindex2);
-	ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
-	ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
+    ContentIndex* cindex2 = ReadContent(
+        &local_storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        "chunks");
+    ASSERT_NE((ContentIndex*)0, cindex2);
+    ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
+    ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
 
-	free(cindex2);
+    free(cindex2);
     FreePathLookup(path_lookup);
     path_lookup = 0;
     free(cindex);
@@ -803,19 +808,20 @@ TEST(Longtail, CreateMissingContent)
     const uint32_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+    const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
+    const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
 
     MeowHashAPI hash_api;
 
+    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
-        assets_path,
         asset_count - 4,
         asset_content_hashes,
-        asset_path_hashes,
         asset_sizes,
-        asset_name_offsets,
-        asset_name_data,
-        GetContentTagFake);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
 
     const char* asset_paths[5] = {
         "fifth_",
@@ -826,7 +832,7 @@ TEST(Longtail, CreateMissingContent)
     };
 
     Paths* paths = MakePaths(5, asset_paths);
-    size_t version_index_size = GetVersionIndexSize(5, paths->m_DataSize);
+    size_t version_index_size = GetVersionIndexSize(5, 5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
@@ -835,15 +841,20 @@ TEST(Longtail, CreateMissingContent)
         paths,
         asset_path_hashes,
         asset_content_hashes,
-        asset_sizes);
+        asset_sizes,
+        asset_chunk_start_index,
+        asset_chunk_counts,
+        *paths->m_PathCount,
+        asset_sizes,
+        asset_content_hashes);
     free(paths);
 
     ContentIndex* missing_content_index = CreateMissingContent(
         &hash_api.m_HashAPI,
         content_index,
-        "",
         version_index,
-        GetContentTagFake);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
 
     ASSERT_EQ(2u, *missing_content_index->m_BlockCount);
     ASSERT_EQ(4u, *missing_content_index->m_ChunkCount);
@@ -921,16 +932,16 @@ TEST(Longtail, MergeContentIndex)
     ASSERT_NE((VersionIndex*)0, remote_version_index);
     ASSERT_EQ(10, *remote_version_index->m_AssetCount);
 
+    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+
     ContentIndex* local_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
-            "",
             * local_version_index->m_AssetCount,
-            local_version_index->m_AssetContentHashes,
-            local_version_index->m_PathHashes,
+            local_version_index->m_ContentHashes,
             local_version_index->m_AssetSizes,
-            local_version_index->m_NameOffsets,
-            local_version_index->m_NameData,
-            GetContentTagFake);
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK);
 
     StoreCompressionAPI store_compression;
 
@@ -949,14 +960,11 @@ TEST(Longtail, MergeContentIndex)
 
     ContentIndex* remote_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
-            "",
             * remote_version_index->m_AssetCount,
-            remote_version_index->m_AssetContentHashes,
-            remote_version_index->m_PathHashes,
+            remote_version_index->m_ContentHashes,
             remote_version_index->m_AssetSizes,
-            remote_version_index->m_NameOffsets,
-            remote_version_index->m_NameData,
-            GetContentTagFake);
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK);
 
     PathLookup* remote_path_lookup = CreateContentHashToPathLookup(remote_version_index, 0);
     ASSERT_EQ(1, WriteContent(
@@ -972,9 +980,9 @@ TEST(Longtail, MergeContentIndex)
     ContentIndex* missing_content = CreateMissingContent(
         &hash_api.m_HashAPI,
         local_content_index,
-        "",
         remote_version_index,
-        GetContentTagFake);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, missing_content);
     ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
@@ -985,8 +993,8 @@ TEST(Longtail, MergeContentIndex)
         remote_path_lookup,
         "",
         ""));
-	FreePathLookup(remote_path_lookup);
-	remote_path_lookup = 0;
+    FreePathLookup(remote_path_lookup);
+    remote_path_lookup = 0;
 
     ContentIndex* merged_content_index = MergeContentIndex(local_content_index, missing_content);
     ASSERT_EQ(1, ReconstructVersion(
@@ -1063,6 +1071,8 @@ TEST(Longtail, ReconstructVersion)
     TLongtail_Hash asset_path_hashes[5];// = {GetPathHash("10"), GetPathHash("20"), GetPathHash("30"), GetPathHash("40"), GetPathHash("50")};
     TLongtail_Hash asset_content_hashes[5];// = { 1, 2, 3, 4, 5};
     const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
+    const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
+    const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
     InMemStorageAPI source_storage;
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
     for (uint32_t i = 0; i < 5; ++i)
@@ -1090,7 +1100,7 @@ TEST(Longtail, ReconstructVersion)
     }
 
     Paths* paths = MakePaths(5, asset_paths);
-    size_t version_index_size = GetVersionIndexSize(5, paths->m_DataSize);
+    size_t version_index_size = GetVersionIndexSize(5, 5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
@@ -1099,23 +1109,27 @@ TEST(Longtail, ReconstructVersion)
         paths,
         asset_path_hashes,
         asset_content_hashes,
-        asset_sizes);
+        asset_sizes,
+        asset_chunk_start_index,
+        asset_chunk_counts,
+        *paths->m_PathCount,
+        asset_sizes,
+        asset_content_hashes);
     ASSERT_NE((VersionIndex*)0, version_index);
     free(paths);
 
     PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
     ASSERT_NE((PathLookup*)0, path_lookup);
 
+    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
-        "source_path",
         *version_index->m_AssetCount,
-        version_index->m_AssetContentHashes,
-        version_index->m_PathHashes,
+        version_index->m_ContentHashes,
         version_index->m_AssetSizes,
-        version_index->m_NameOffsets,
-        version_index->m_NameData,
-        GetContentTagFake);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, content_index);
 
     LizardCompressionAPI compression_api;
@@ -1206,16 +1220,15 @@ void Bench()
     MeowHashAPI hash_api;
     BikeshedJobAPI job_api;
 
+    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* full_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
-            "",
             0,
             0,
             0,
-            0,
-            0,
-            0,
-            0);
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, full_content_index);
     VersionIndex* version_indexes[VERSION_COUNT];
 
@@ -1239,9 +1252,9 @@ void Bench()
         ContentIndex* missing_content_index = CreateMissingContent(
             &hash_api.m_HashAPI,
             full_content_index,
-            version_source_folder,
             version_index,
-            GetContentTag);
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK);
         ASSERT_NE((ContentIndex*)0, missing_content_index);
 
         LizardCompressionAPI compression_api;
@@ -1380,16 +1393,15 @@ void LifelikeTest()
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     printf("Creating local content index...\n");
+    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* local_content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
-        local_path_1,
         *version1->m_AssetCount,
-        version1->m_AssetContentHashes,
-        version1->m_PathHashes,
+        version1->m_ContentHashes,
         version1->m_AssetSizes,
-        version1->m_NameOffsets,
-        version1->m_NameData,
-        GetContentTag);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
 
     printf("Writing local content index...\n");
     WriteContentIndex(&storage_api.m_StorageAPI, local_content_index, local_content_index_path);
@@ -1430,9 +1442,9 @@ void LifelikeTest()
     ContentIndex* missing_content = CreateMissingContent(
         &hash_api.m_HashAPI,
         local_content_index,
-        local_path_2,
         version2,
-        GetContentTag);
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, missing_content);
     printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
 
@@ -1478,7 +1490,7 @@ void LifelikeTest()
 //    ContentIndex* remote_content_index = CreateContentIndex(
 //        local_path_2,
 //        *version2->m_AssetCount,
-//        version2->m_AssetContentHashes,
+//        version2->m_ContentHashes,
 //        version2->m_PathHashes,
 //        version2->m_AssetSize,
 //        version2->m_NameOffsets,
@@ -1556,70 +1568,70 @@ TEST(Longtail, LifelikeTest)
 
 
 static uint32_t hashTable[] = {
-	0x458be752, 0xc10748cc, 0xfbbcdbb8, 0x6ded5b68,
-	0xb10a82b5, 0x20d75648, 0xdfc5665f, 0xa8428801,
-	0x7ebf5191, 0x841135c7, 0x65cc53b3, 0x280a597c,
-	0x16f60255, 0xc78cbc3e, 0x294415f5, 0xb938d494,
-	0xec85c4e6, 0xb7d33edc, 0xe549b544, 0xfdeda5aa,
-	0x882bf287, 0x3116737c, 0x05569956, 0xe8cc1f68,
-	0x0806ac5e, 0x22a14443, 0x15297e10, 0x50d090e7,
-	0x4ba60f6f, 0xefd9f1a7, 0x5c5c885c, 0x82482f93,
-	0x9bfd7c64, 0x0b3e7276, 0xf2688e77, 0x8fad8abc,
-	0xb0509568, 0xf1ada29f, 0xa53efdfe, 0xcb2b1d00,
-	0xf2a9e986, 0x6463432b, 0x95094051, 0x5a223ad2,
-	0x9be8401b, 0x61e579cb, 0x1a556a14, 0x5840fdc2,
-	0x9261ddf6, 0xcde002bb, 0x52432bb0, 0xbf17373e,
-	0x7b7c222f, 0x2955ed16, 0x9f10ca59, 0xe840c4c9,
-	0xccabd806, 0x14543f34, 0x1462417a, 0x0d4a1f9c,
-	0x087ed925, 0xd7f8f24c, 0x7338c425, 0xcf86c8f5,
-	0xb19165cd, 0x9891c393, 0x325384ac, 0x0308459d,
-	0x86141d7e, 0xc922116a, 0xe2ffa6b6, 0x53f52aed,
-	0x2cd86197, 0xf5b9f498, 0xbf319c8f, 0xe0411fae,
-	0x977eb18c, 0xd8770976, 0x9833466a, 0xc674df7f,
-	0x8c297d45, 0x8ca48d26, 0xc49ed8e2, 0x7344f874,
-	0x556f79c7, 0x6b25eaed, 0xa03e2b42, 0xf68f66a4,
-	0x8e8b09a2, 0xf2e0e62a, 0x0d3a9806, 0x9729e493,
-	0x8c72b0fc, 0x160b94f6, 0x450e4d3d, 0x7a320e85,
-	0xbef8f0e1, 0x21d73653, 0x4e3d977a, 0x1e7b3929,
-	0x1cc6c719, 0xbe478d53, 0x8d752809, 0xe6d8c2c6,
-	0x275f0892, 0xc8acc273, 0x4cc21580, 0xecc4a617,
-	0xf5f7be70, 0xe795248a, 0x375a2fe9, 0x425570b6,
-	0x8898dcf8, 0xdc2d97c4, 0x0106114b, 0x364dc22f,
-	0x1e0cad1f, 0xbe63803c, 0x5f69fac2, 0x4d5afa6f,
-	0x1bc0dfb5, 0xfb273589, 0x0ea47f7b, 0x3c1c2b50,
-	0x21b2a932, 0x6b1223fd, 0x2fe706a8, 0xf9bd6ce2,
-	0xa268e64e, 0xe987f486, 0x3eacf563, 0x1ca2018c,
-	0x65e18228, 0x2207360a, 0x57cf1715, 0x34c37d2b,
-	0x1f8f3cde, 0x93b657cf, 0x31a019fd, 0xe69eb729,
-	0x8bca7b9b, 0x4c9d5bed, 0x277ebeaf, 0xe0d8f8ae,
-	0xd150821c, 0x31381871, 0xafc3f1b0, 0x927db328,
-	0xe95effac, 0x305a47bd, 0x426ba35b, 0x1233af3f,
-	0x686a5b83, 0x50e072e5, 0xd9d3bb2a, 0x8befc475,
-	0x487f0de6, 0xc88dff89, 0xbd664d5e, 0x971b5d18,
-	0x63b14847, 0xd7d3c1ce, 0x7f583cf3, 0x72cbcb09,
-	0xc0d0a81c, 0x7fa3429b, 0xe9158a1b, 0x225ea19a,
-	0xd8ca9ea3, 0xc763b282, 0xbb0c6341, 0x020b8293,
-	0xd4cd299d, 0x58cfa7f8, 0x91b4ee53, 0x37e4d140,
-	0x95ec764c, 0x30f76b06, 0x5ee68d24, 0x679c8661,
-	0xa41979c2, 0xf2b61284, 0x4fac1475, 0x0adb49f9,
-	0x19727a23, 0x15a7e374, 0xc43a18d5, 0x3fb1aa73,
-	0x342fc615, 0x924c0793, 0xbee2d7f0, 0x8a279de9,
-	0x4aa2d70c, 0xe24dd37f, 0xbe862c0b, 0x177c22c2,
-	0x5388e5ee, 0xcd8a7510, 0xf901b4fd, 0xdbc13dbc,
-	0x6c0bae5b, 0x64efe8c7, 0x48b02079, 0x80331a49,
-	0xca3d8ae6, 0xf3546190, 0xfed7108b, 0xc49b941b,
-	0x32baf4a9, 0xeb833a4a, 0x88a3f1a5, 0x3a91ce0a,
-	0x3cc27da1, 0x7112e684, 0x4a3096b1, 0x3794574c,
-	0xa3c8b6f3, 0x1d213941, 0x6e0a2e00, 0x233479f1,
-	0x0f4cd82f, 0x6093edd2, 0x5d7d209e, 0x464fe319,
-	0xd4dcac9e, 0x0db845cb, 0xfb5e4bc3, 0xe0256ce1,
-	0x09fb4ed1, 0x0914be1e, 0xa5bdb2c3, 0xc6eb57bb,
-	0x30320350, 0x3f397e91, 0xa67791bc, 0x86bc0e2c,
-	0xefa0a7e2, 0xe9ff7543, 0xe733612c, 0xd185897b,
-	0x329e5388, 0x91dd236b, 0x2ecb0d93, 0xf4d82a3d,
-	0x35b5c03f, 0xe4e606f0, 0x05b21843, 0x37b45964,
-	0x5eff22f4, 0x6027f4cc, 0x77178b3c, 0xae507131,
-	0x7bf7cabc, 0xf9c18d66, 0x593ade65, 0xd95ddf11,
+    0x458be752, 0xc10748cc, 0xfbbcdbb8, 0x6ded5b68,
+    0xb10a82b5, 0x20d75648, 0xdfc5665f, 0xa8428801,
+    0x7ebf5191, 0x841135c7, 0x65cc53b3, 0x280a597c,
+    0x16f60255, 0xc78cbc3e, 0x294415f5, 0xb938d494,
+    0xec85c4e6, 0xb7d33edc, 0xe549b544, 0xfdeda5aa,
+    0x882bf287, 0x3116737c, 0x05569956, 0xe8cc1f68,
+    0x0806ac5e, 0x22a14443, 0x15297e10, 0x50d090e7,
+    0x4ba60f6f, 0xefd9f1a7, 0x5c5c885c, 0x82482f93,
+    0x9bfd7c64, 0x0b3e7276, 0xf2688e77, 0x8fad8abc,
+    0xb0509568, 0xf1ada29f, 0xa53efdfe, 0xcb2b1d00,
+    0xf2a9e986, 0x6463432b, 0x95094051, 0x5a223ad2,
+    0x9be8401b, 0x61e579cb, 0x1a556a14, 0x5840fdc2,
+    0x9261ddf6, 0xcde002bb, 0x52432bb0, 0xbf17373e,
+    0x7b7c222f, 0x2955ed16, 0x9f10ca59, 0xe840c4c9,
+    0xccabd806, 0x14543f34, 0x1462417a, 0x0d4a1f9c,
+    0x087ed925, 0xd7f8f24c, 0x7338c425, 0xcf86c8f5,
+    0xb19165cd, 0x9891c393, 0x325384ac, 0x0308459d,
+    0x86141d7e, 0xc922116a, 0xe2ffa6b6, 0x53f52aed,
+    0x2cd86197, 0xf5b9f498, 0xbf319c8f, 0xe0411fae,
+    0x977eb18c, 0xd8770976, 0x9833466a, 0xc674df7f,
+    0x8c297d45, 0x8ca48d26, 0xc49ed8e2, 0x7344f874,
+    0x556f79c7, 0x6b25eaed, 0xa03e2b42, 0xf68f66a4,
+    0x8e8b09a2, 0xf2e0e62a, 0x0d3a9806, 0x9729e493,
+    0x8c72b0fc, 0x160b94f6, 0x450e4d3d, 0x7a320e85,
+    0xbef8f0e1, 0x21d73653, 0x4e3d977a, 0x1e7b3929,
+    0x1cc6c719, 0xbe478d53, 0x8d752809, 0xe6d8c2c6,
+    0x275f0892, 0xc8acc273, 0x4cc21580, 0xecc4a617,
+    0xf5f7be70, 0xe795248a, 0x375a2fe9, 0x425570b6,
+    0x8898dcf8, 0xdc2d97c4, 0x0106114b, 0x364dc22f,
+    0x1e0cad1f, 0xbe63803c, 0x5f69fac2, 0x4d5afa6f,
+    0x1bc0dfb5, 0xfb273589, 0x0ea47f7b, 0x3c1c2b50,
+    0x21b2a932, 0x6b1223fd, 0x2fe706a8, 0xf9bd6ce2,
+    0xa268e64e, 0xe987f486, 0x3eacf563, 0x1ca2018c,
+    0x65e18228, 0x2207360a, 0x57cf1715, 0x34c37d2b,
+    0x1f8f3cde, 0x93b657cf, 0x31a019fd, 0xe69eb729,
+    0x8bca7b9b, 0x4c9d5bed, 0x277ebeaf, 0xe0d8f8ae,
+    0xd150821c, 0x31381871, 0xafc3f1b0, 0x927db328,
+    0xe95effac, 0x305a47bd, 0x426ba35b, 0x1233af3f,
+    0x686a5b83, 0x50e072e5, 0xd9d3bb2a, 0x8befc475,
+    0x487f0de6, 0xc88dff89, 0xbd664d5e, 0x971b5d18,
+    0x63b14847, 0xd7d3c1ce, 0x7f583cf3, 0x72cbcb09,
+    0xc0d0a81c, 0x7fa3429b, 0xe9158a1b, 0x225ea19a,
+    0xd8ca9ea3, 0xc763b282, 0xbb0c6341, 0x020b8293,
+    0xd4cd299d, 0x58cfa7f8, 0x91b4ee53, 0x37e4d140,
+    0x95ec764c, 0x30f76b06, 0x5ee68d24, 0x679c8661,
+    0xa41979c2, 0xf2b61284, 0x4fac1475, 0x0adb49f9,
+    0x19727a23, 0x15a7e374, 0xc43a18d5, 0x3fb1aa73,
+    0x342fc615, 0x924c0793, 0xbee2d7f0, 0x8a279de9,
+    0x4aa2d70c, 0xe24dd37f, 0xbe862c0b, 0x177c22c2,
+    0x5388e5ee, 0xcd8a7510, 0xf901b4fd, 0xdbc13dbc,
+    0x6c0bae5b, 0x64efe8c7, 0x48b02079, 0x80331a49,
+    0xca3d8ae6, 0xf3546190, 0xfed7108b, 0xc49b941b,
+    0x32baf4a9, 0xeb833a4a, 0x88a3f1a5, 0x3a91ce0a,
+    0x3cc27da1, 0x7112e684, 0x4a3096b1, 0x3794574c,
+    0xa3c8b6f3, 0x1d213941, 0x6e0a2e00, 0x233479f1,
+    0x0f4cd82f, 0x6093edd2, 0x5d7d209e, 0x464fe319,
+    0xd4dcac9e, 0x0db845cb, 0xfb5e4bc3, 0xe0256ce1,
+    0x09fb4ed1, 0x0914be1e, 0xa5bdb2c3, 0xc6eb57bb,
+    0x30320350, 0x3f397e91, 0xa67791bc, 0x86bc0e2c,
+    0xefa0a7e2, 0xe9ff7543, 0xe733612c, 0xd185897b,
+    0x329e5388, 0x91dd236b, 0x2ecb0d93, 0xf4d82a3d,
+    0x35b5c03f, 0xe4e606f0, 0x05b21843, 0x37b45964,
+    0x5eff22f4, 0x6027f4cc, 0x77178b3c, 0xae507131,
+    0x7bf7cabc, 0xf9c18d66, 0x593ade65, 0xd95ddf11,
 };
 
 typedef struct VersionFeeder_Context* VersionFeeder_HContext;

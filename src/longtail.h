@@ -101,14 +101,11 @@ typedef TLongtail_Hash (*GetContentTagFunc)(const char* assets_path, const char*
 
 struct ContentIndex* CreateContentIndex(
     struct HashAPI* hash_api,
-    const char* assets_path,
-    uint64_t asset_count,
-    const TLongtail_Hash* asset_content_hashes,
-    const TLongtail_Hash* asset_path_hashes,
-    const uint32_t* asset_sizes,
-    const uint32_t* asset_name_offsets,
-    const char* asset_name_data,
-    GetContentTagFunc get_content_tag);
+    uint64_t chunk_count,
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* chunk_sizes,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block);
 
 int WriteContentIndex(
     struct StorageAPI* storage_api,
@@ -137,9 +134,9 @@ struct ContentIndex* ReadContent(
 struct ContentIndex* CreateMissingContent(
     struct HashAPI* hash_api,
     const struct ContentIndex* content_index,
-    const char* version_assets_path,
     const struct VersionIndex* version,
-    GetContentTagFunc get_content_tag);
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block);
 
 struct ContentIndex* MergeContentIndex(
     struct ContentIndex* local_content_index,
@@ -167,6 +164,7 @@ int ReconstructVersion(
 
 size_t GetVersionIndexSize(
     uint32_t asset_count,
+    uint32_t chunk_count,
     uint32_t path_data_size);
 
 struct VersionIndex* BuildVersionIndex(
@@ -175,7 +173,12 @@ struct VersionIndex* BuildVersionIndex(
     const struct Paths* paths,
     const TLongtail_Hash* pathHashes,
     const TLongtail_Hash* contentHashes,
-    const uint32_t* contentSizes);
+    const uint32_t* contentSizes,
+    const uint32_t* asset_chunk_start_index,
+    const uint32_t* asset_chunk_counts,
+    uint64_t chunk_count,
+    const uint32_t* chunk_sizes,
+    const TLongtail_Hash* chunk_hashes);
 
 struct Paths
 {
@@ -200,14 +203,17 @@ struct ContentIndex
 struct VersionIndex
 {
     uint64_t* m_AssetCount;
-    TLongtail_Hash* m_PathHashes;           // []
-    TLongtail_Hash* m_AssetContentHashes;   // []
-    uint32_t* m_AssetSizes;                 // []
-//    uint32_t* m_AssetChunkCounts;           // [] If m_AssetChunkCounts[asset_index] == 1, chunk hash is same as m_AssetContentHashes[asset_index]
-//    TLongtail_Hash* m_AssetChunkHashes;     // []
-    // uint64_t m_CreationDate;
-    // uint64_t m_ModificationDate;
-    uint32_t* m_NameOffsets;                // []
+    uint64_t* m_ChunkCount;
+    TLongtail_Hash* m_PathHashes;       // []
+    TLongtail_Hash* m_ContentHashes;    // []
+    uint32_t* m_AssetSizes;             // []
+    uint32_t* m_AssetChunkCounts;       // []
+    // uint64_t* m_CreationDates;       // []
+    // uint64_t* m_ModificationDates;   // []
+    uint32_t* m_ChunkSizes;             // []
+    TLongtail_Hash* m_ChunkHashes;      // []
+
+    uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
     char* m_NameData;
 };
