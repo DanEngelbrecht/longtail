@@ -84,13 +84,9 @@ int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
             return 1;
         }
     }
-    int ok = EnsureParentPathExists(storage_api, dir_path);
-    if (!ok)
-    {
-        LONGTAIL_LOG("EnsureParentPathExists failed: `%s`\n", dir_path)
-    }
+    LONGTAIL_LOG("EnsureParentPathExists failed: `%s`\n", dir_path)
     free(dir_path);
-    return ok;
+    return 0;
 }
 
 typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
