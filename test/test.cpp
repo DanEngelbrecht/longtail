@@ -740,31 +740,34 @@ TEST(Longtail, ContentIndexSerialization)
         &hash_api.m_HashAPI,
         0,
         "source/version1",
-        version1_paths);
+        version1_paths,
+        16384);
     ASSERT_NE((VersionIndex*)0, vindex);
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
-        *vindex->m_AssetCount,
+        *vindex->m_ChunkCount,
         vindex->m_ContentHashes,
-        vindex->m_AssetSizes,
+        vindex->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
 
-    PathLookup* path_lookup = CreateContentHashToPathLookup(vindex, 0);
-    ASSERT_NE((PathLookup*)0, path_lookup);
+    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
+    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
     int ok = WriteContent(
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &compression_api.m_CompressionAPI,
         0,
         cindex,
-        path_lookup,
+        asset_part_lookup,
         "source/version1",
         "chunks");
+    FreeAssetPartLookup(asset_part_lookup);
+    asset_part_lookup = 0;
 
     ContentIndex* cindex2 = ReadContent(
         &local_storage.m_StorageAPI,
@@ -775,8 +778,6 @@ TEST(Longtail, ContentIndexSerialization)
     ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
 
     free(cindex2);
-    FreePathLookup(path_lookup);
-    path_lookup = 0;
     free(cindex);
     free(vindex);
     free(version1_paths);
@@ -895,13 +896,19 @@ TEST(Longtail, VersionIndexDirectories)
     MeowHashAPI hash_api;
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "two_items", 2));
     local_storage.m_StorageAPI.CreateDir(&local_storage.m_StorageAPI, "no_items");
-    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));    // TODO: Bad whitespace!?
+    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));
     ASSERT_EQ(1, MakePath(&local_storage.m_StorageAPI, "deep/folders/with/nothing/in/menoexists.nop"));
 
     Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
 
-    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, &hash_api.m_HashAPI, 0, "", local_paths);
+    VersionIndex* local_version_index = CreateVersionIndex(
+        &local_storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        0,
+        "",
+        local_paths,
+        16384);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(16, *local_version_index->m_AssetCount);
 
@@ -922,13 +929,25 @@ TEST(Longtail, MergeContentIndex)
     Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
 
-    VersionIndex* local_version_index = CreateVersionIndex(&local_storage.m_StorageAPI, &hash_api.m_HashAPI, 0, "", local_paths);
+    VersionIndex* local_version_index = CreateVersionIndex(
+        &local_storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        0,
+        "",
+        local_paths,
+        16384);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(5, *local_version_index->m_AssetCount);
 
     Paths* remote_paths = GetFilesRecursively(&remote_storage.m_StorageAPI, "");
     ASSERT_NE((Paths*)0, local_paths);
-    VersionIndex* remote_version_index = CreateVersionIndex(&remote_storage.m_StorageAPI, &hash_api.m_HashAPI, 0, "", remote_paths);
+    VersionIndex* remote_version_index = CreateVersionIndex(
+        &remote_storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        0,
+        "",
+        remote_paths,
+        16384);
     ASSERT_NE((VersionIndex*)0, remote_version_index);
     ASSERT_EQ(10, *remote_version_index->m_AssetCount);
 
@@ -937,43 +956,43 @@ TEST(Longtail, MergeContentIndex)
 
     ContentIndex* local_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
-            * local_version_index->m_AssetCount,
-            local_version_index->m_ContentHashes,
-            local_version_index->m_AssetSizes,
+            * local_version_index->m_ChunkCount,
+            local_version_index->m_ChunkHashes,
+            local_version_index->m_ChunkSizes,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
     StoreCompressionAPI store_compression;
 
-    PathLookup* local_path_lookup = CreateContentHashToPathLookup(local_version_index, 0);
+    struct ChunkHashToAssetPart* local_asset_part_lookup = CreateAssetPartLookup(local_version_index);
     ASSERT_EQ(1, WriteContent(
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
         0,
         local_content_index,
-        local_path_lookup,
+        local_asset_part_lookup,
         "",
         ""));
-    FreePathLookup(local_path_lookup);
-    local_path_lookup = 0;
+    FreeAssetPartLookup(local_asset_part_lookup);
+    local_asset_part_lookup = 0;
 
     ContentIndex* remote_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
-            * remote_version_index->m_AssetCount,
-            remote_version_index->m_ContentHashes,
-            remote_version_index->m_AssetSizes,
+            * remote_version_index->m_ChunkCount,
+            remote_version_index->m_ChunkHashes,
+            remote_version_index->m_ChunkSizes,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
-    PathLookup* remote_path_lookup = CreateContentHashToPathLookup(remote_version_index, 0);
+    struct ChunkHashToAssetPart* remote_asset_part_lookup = CreateAssetPartLookup(remote_version_index);
     ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
         &remote_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
         0,
         remote_content_index,
-        remote_path_lookup,
+        remote_asset_part_lookup,
         "",
         ""));
 
@@ -990,11 +1009,11 @@ TEST(Longtail, MergeContentIndex)
         &store_compression.m_CompressionAPI,
         0,
         missing_content,
-        remote_path_lookup,
+        remote_asset_part_lookup,
         "",
         ""));
-    FreePathLookup(remote_path_lookup);
-    remote_path_lookup = 0;
+    FreeAssetPartLookup(remote_asset_part_lookup);
+    remote_asset_part_lookup = 0;
 
     ContentIndex* merged_content_index = MergeContentIndex(local_content_index, missing_content);
     ASSERT_EQ(1, ReconstructVersion(
@@ -1118,20 +1137,19 @@ TEST(Longtail, ReconstructVersion)
     ASSERT_NE((VersionIndex*)0, version_index);
     free(paths);
 
-    PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
-    ASSERT_NE((PathLookup*)0, path_lookup);
-
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
-        *version_index->m_AssetCount,
-        version_index->m_ContentHashes,
-        version_index->m_AssetSizes,
+        *version_index->m_ChunkCount,
+        version_index->m_ChunkHashes,
+        version_index->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, content_index);
 
+    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version_index);
+    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
     LizardCompressionAPI compression_api;
     ASSERT_EQ(1, WriteContent(
         storage_api,
@@ -1139,12 +1157,12 @@ TEST(Longtail, ReconstructVersion)
         &compression_api.m_CompressionAPI,
         0,
         content_index,
-        path_lookup,
+        asset_part_lookup,
         "source_path",
         "local_content"));
 
-    FreePathLookup(path_lookup);
-    path_lookup = 0;
+    FreeAssetPartLookup(asset_part_lookup);
+    asset_part_lookup = 0;
 
     ASSERT_EQ(1, ReconstructVersion(
         storage_api,
@@ -1239,7 +1257,13 @@ void Bench()
         printf("Indexing `%s`\n", version_source_folder);
         Paths* version_source_paths = GetFilesRecursively(&storage_api.m_StorageAPI, version_source_folder);
         ASSERT_NE((Paths*)0, version_source_paths);
-        VersionIndex* version_index = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, &job_api.m_JobAPI, version_source_folder, version_source_paths);
+        VersionIndex* version_index = CreateVersionIndex(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            version_source_folder,
+            version_source_paths,
+            16384);
         free(version_source_paths);
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
@@ -1258,7 +1282,7 @@ void Bench()
         ASSERT_NE((ContentIndex*)0, missing_content_index);
 
         LizardCompressionAPI compression_api;
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version_index, 0);
+        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version_index);
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
@@ -1268,9 +1292,11 @@ void Bench()
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,
             missing_content_index,
-            path_lookup,
+            asset_part_lookup,
             version_source_folder,
             delta_upload_content_folder));
+        FreeAssetPartLookup(asset_part_lookup);
+        asset_part_lookup = 0;
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
         for (uint64_t b = 0; b < *missing_content_index->m_BlockCount; ++b)
@@ -1331,9 +1357,6 @@ void Bench()
             CONTENT_FOLDER,
             version_target_folder));
 
-        FreePathLookup(path_lookup);
-        path_lookup = 0;
-
         version_indexes[i] = version_index;
         version_index = 0;
     }
@@ -1387,7 +1410,13 @@ void LifelikeTest()
 
     Paths* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
     ASSERT_NE((Paths*)0, local_path_1_paths);
-    VersionIndex* version1 = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, &job_api.m_JobAPI, local_path_1, local_path_1_paths);
+    VersionIndex* version1 = CreateVersionIndex(
+        &storage_api.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        &job_api.m_JobAPI,
+        local_path_1,
+        local_path_1_paths,
+        16384);
     WriteVersionIndex(&storage_api.m_StorageAPI, version1, version_index_path_1);
     free(local_path_1_paths);
     printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
@@ -1397,9 +1426,9 @@ void LifelikeTest()
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* local_content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
-        *version1->m_AssetCount,
-        version1->m_ContentHashes,
-        version1->m_AssetSizes,
+        *version1->m_ChunkCount,
+        version1->m_ChunkHashes,
+        version1->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
 
@@ -1410,19 +1439,19 @@ void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version1, 0);
+        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version1);
         WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,
             local_content_index,
-            path_lookup,
+            asset_part_lookup,
             local_path_1,
             local_content_path);
 
-        FreePathLookup(path_lookup);
-        path_lookup = 0;
+        FreeAssetPartLookup(asset_part_lookup);
+        asset_part_lookup = 0;
     }
 
     printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
@@ -1432,7 +1461,13 @@ void LifelikeTest()
     printf("Indexing `%s`...\n", local_path_2);
     Paths* local_path_2_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_2);
     ASSERT_NE((Paths*)0, local_path_2_paths);
-    VersionIndex* version2 = CreateVersionIndex(&storage_api.m_StorageAPI, &hash_api.m_HashAPI, &job_api.m_JobAPI, local_path_2, local_path_2_paths);
+    VersionIndex* version2 = CreateVersionIndex(
+        &storage_api.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        &job_api.m_JobAPI,
+        local_path_2,
+        local_path_2_paths,
+        16384);
     free(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(&storage_api.m_StorageAPI, version2, version_index_path_2));
@@ -1451,40 +1486,40 @@ void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
-        ASSERT_NE((PathLookup*)0, path_lookup);
+        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version2);
+        ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
         ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,
             missing_content,
-            path_lookup,
+            asset_part_lookup,
             local_path_2,
             local_content_path));
 
-        FreePathLookup(path_lookup);
-        path_lookup = 0;
+        FreeAssetPartLookup(asset_part_lookup);
+        asset_part_lookup = 0;
     }
 
     if (1)
     {
         // Write this to disk for reference to see how big the diff is...
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
-        PathLookup* path_lookup = CreateContentHashToPathLookup(version2, 0);
-        ASSERT_NE((PathLookup*)0, path_lookup);
+        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version2);
+        ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
         ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,
             missing_content,
-            path_lookup,
+            asset_part_lookup,
             local_path_2,
             remote_content_path));
 
-        FreePathLookup(path_lookup);
-        path_lookup = 0;
+        FreeAssetPartLookup(asset_part_lookup);
+        asset_part_lookup = 0;
     }
 
 //    ContentIndex* remote_content_index = CreateContentIndex(

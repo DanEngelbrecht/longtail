@@ -88,7 +88,8 @@ int main(int argc, char** argv)
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
             version,
-            version_paths);
+            version_paths,
+            65536);
         free(version_paths);
         version_paths = 0;
         if (!version_index)
@@ -205,7 +206,8 @@ int main(int argc, char** argv)
                 &hash_api.m_HashAPI,
                 &job_api.m_JobAPI,
                 version,
-                version_paths);
+                version_paths,
+                65536);
             free(version_paths);
             version_paths = 0;
             if (!vindex)
@@ -245,22 +247,19 @@ int main(int argc, char** argv)
         {
             existing_cindex = CreateContentIndex(
                 &hash_api.m_HashAPI,
-                "",
                 0,
                 0,
                 0,
                 0,
-                0,
-                0,
-                GetContentTag);
+                0);
         }
 
         ContentIndex* cindex = CreateMissingContent(
             &hash_api.m_HashAPI,
             existing_cindex,
-            version,
             vindex,
-            GetContentTag);
+            65536,
+            4096);
 
         free(vindex);
         vindex = 0;
@@ -318,7 +317,8 @@ int main(int argc, char** argv)
                 &hash_api.m_HashAPI,
                 &job_api.m_JobAPI,
                 version,
-                version_paths);
+                version_paths,
+                65536);
             free(version_paths);
             version_paths = 0;
             if (!vindex)
@@ -342,14 +342,11 @@ int main(int argc, char** argv)
         {
             cindex = CreateContentIndex(
                 &hash_api.m_HashAPI,
-                version,
-                *vindex->m_AssetCount,
-                vindex->m_AssetContentHash,
-                vindex->m_PathHash,
-                vindex->m_AssetSize,
-                vindex->m_NameOffset,
-                vindex->m_NameData,
-                GetContentTag);
+                *vindex->m_ChunkCount,
+                vindex->m_ChunkHashes,
+                vindex->m_ChunkSizes,
+                65536,
+                4096);
             if (!cindex)
             {
                 printf("Failed to create content index for version `%s`\n", version);
@@ -357,18 +354,18 @@ int main(int argc, char** argv)
             }
         }
 
-        PathLookup* path_lookup = CreateContentHashToPathLookup(vindex, 0);
+        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
         int ok = WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,
             cindex,
-            path_lookup,
+            asset_part_lookup,
             version,
             create_content);
-        FreePathLookup(path_lookup);
-        path_lookup = 0;
+        FreeAssetPartLookup(asset_part_lookup);
+        asset_part_lookup = 0;
         free(vindex);
         vindex = 0;
         free(cindex);
@@ -399,14 +396,14 @@ int main(int argc, char** argv)
         }
 
         // TODO: Move to longtail.h
-        uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)*have_content_index->m_AssetCount);
+        uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)*have_content_index->m_ChunkCount);
         jc::HashTable<TLongtail_Hash, uint32_t> asset_hash_to_have_block_index;
         void* asset_hash_to_have_block_index_mem = malloc(hash_size);
-        asset_hash_to_have_block_index.Create((uint32_t)*have_content_index->m_AssetCount, asset_hash_to_have_block_index_mem);
+        asset_hash_to_have_block_index.Create((uint32_t)*have_content_index->m_ChunkCount, asset_hash_to_have_block_index_mem);
 
-        for (uint32_t i = 0; i < *have_content_index->m_AssetCount; ++i)
+        for (uint32_t i = 0; i < *have_content_index->m_ChunkCount; ++i)
         {
-            asset_hash_to_have_block_index.Put(have_content_index->m_AssetContentHash[i], have_content_index->m_AssetBlockIndex[i]);
+            asset_hash_to_have_block_index.Put(have_content_index->m_ChunkHashes[i], have_content_index->m_ChunkHashes[i]);
         }
 
         hash_size = jc::HashTable<uint32_t, uint32_t>::CalcSize((uint32_t)*need_content_index->m_BlockCount);
@@ -414,20 +411,20 @@ int main(int argc, char** argv)
         void* need_block_index_to_asset_count_mem = malloc(hash_size);
         need_block_index_to_asset_count.Create((uint32_t)*need_content_index->m_BlockCount, need_block_index_to_asset_count_mem);
 
-        for (uint32_t i = 0; i < *need_content_index->m_AssetCount; ++i)
+        for (uint32_t i = 0; i < *need_content_index->m_ChunkCount; ++i)
         {
-            uint32_t* have_block_index_ptr = asset_hash_to_have_block_index.Get(need_content_index->m_AssetContentHash[i]);
+            uint32_t* have_block_index_ptr = asset_hash_to_have_block_index.Get(need_content_index->m_ChunkHashes[i]);
             if (have_block_index_ptr)
             {
                 continue;
             }
-            uint32_t* need_block_index_ptr = need_block_index_to_asset_count.Get(need_content_index->m_AssetBlockIndex[i]);
+            uint32_t* need_block_index_ptr = need_block_index_to_asset_count.Get(need_content_index->m_ChunkBlockIndexes[i]);
             if (need_block_index_ptr)
             {
                 (*need_block_index_ptr)++;
                 continue;
             }
-            need_block_index_to_asset_count.Put(need_content_index->m_AssetBlockIndex[i], 1u);
+            need_block_index_to_asset_count.Put(need_content_index->m_ChunkBlockIndexes[i], 1u);
         }
 
         free(need_block_index_to_asset_count_mem);
@@ -448,7 +445,7 @@ int main(int argc, char** argv)
         for (jc::HashTable<uint32_t, uint32_t>::Iterator it = need_block_index_to_asset_count.Begin(); it != need_block_index_to_asset_count.End(); ++it)
         {
             uint32_t need_block_index = *it.GetValue();
-            TLongtail_Hash need_block_hash = need_content_index->m_BlockHash[need_block_index];
+            TLongtail_Hash need_block_hash = need_content_index->m_BlockHashes[need_block_index];
             missing_block_hashes[block_index++] = need_block_hash;
         }
         free(need_block_index_to_asset_count_mem);

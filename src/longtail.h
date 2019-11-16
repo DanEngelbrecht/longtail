@@ -76,6 +76,7 @@ struct Paths;
 struct VersionIndex;
 struct ContentIndex;
 struct PathLookup;
+struct ChunkHashToAssetPart;
 
 struct Paths* GetFilesRecursively(
     struct StorageAPI* storage_api,
@@ -86,7 +87,8 @@ struct VersionIndex* CreateVersionIndex(
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
     const char* root_path,
-    const struct Paths* paths);
+    const struct Paths* paths,
+    uint32_t max_chunk_size);
 
 int WriteVersionIndex(
     struct StorageAPI* storage_api,
@@ -122,7 +124,7 @@ int WriteContent(
     struct CompressionAPI* compression_api,
     struct JobAPI* job_api,
     struct ContentIndex* content_index,
-    struct PathLookup* asset_content_hash_to_path,
+    struct ChunkHashToAssetPart* asset_part_lookup,
     const char* assets_folder,
     const char* content_folder);
 
@@ -147,6 +149,9 @@ struct PathLookup* CreateContentHashToPathLookup(
     uint64_t* out_unique_asset_indexes);
 
 void FreePathLookup(struct PathLookup* path_lookup);
+
+struct ChunkHashToAssetPart* CreateAssetPartLookup(struct VersionIndex* version_index);
+void FreeAssetPartLookup(struct ChunkHashToAssetPart* asset_part_lookup);
 
 int ReconstructVersion(
     struct StorageAPI* storage_api,

@@ -2,7 +2,21 @@
 SetLocal EnableDelayedExpansion
 
 echo Indexing currently known chunks
-..\build\longtail --create-content-index "C:\Temp\longtail\chunks.lci" --content "C:\Temp\longtail\chunks"
+..\build\longtail_debug --create-content-index "C:\Temp\longtail\chunks.lci" --content "C:\Temp\longtail\chunks"
+
+call do_version.bat ..\build\longtail_debug C:\Temp\longtail git75a99408249875e875f8fba52b75ea0f5f12a00e
+if %errorlevel% neq 0 (
+    echo "FAILED:" %errorlevel%
+    exit /b %errorlevel%
+)
+
+call do_version.bat ..\build\longtail_debug C:\Temp\longtail gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59
+if %errorlevel% neq 0 (
+    echo "FAILED:" %errorlevel%
+    exit /b %errorlevel%
+)
+
+exit 0
 
 call do_version.bat ..\build\longtail.exe C:\Temp\longtail git2f7f84a05fc290c717c8b5c0e59f8121481151e6
 if %errorlevel% neq 0 (
@@ -40,16 +54,4 @@ if %errorlevel% neq 0 (
     exit /b %errorlevel%
 )
 
-exit 0
 
-call do_version.bat ..\build\longtail C:\Temp\longtail git75a99408249875e875f8fba52b75ea0f5f12a00e
-if %errorlevel% neq 0 (
-    echo "FAILED:" %errorlevel%
-    exit /b %errorlevel%
-)
-
-call do_version.bat ..\build\longtail C:\Temp\longtail gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59
-if %errorlevel% neq 0 (
-    echo "FAILED:" %errorlevel%
-    exit /b %errorlevel%
-)
