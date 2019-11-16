@@ -1195,27 +1195,88 @@ TEST(Longtail, MergeContentIndex)
 
 TEST(Longtail, ReconstructVersion)
 {
-/*    ContentIndex* content_index = 0;
+    InMemStorageAPI source_storage;
+    StorageAPI* storage_api = &source_storage.m_StorageAPI;
+
+    const char* TEST_FILENAMES[5] = {
+        "local/TheLongFile.txt",
+        "local/ShortString.txt",
+        "local/AnotherSample.txt",
+        "local/folder/ShortString.txt",
+        "local/AlsoShortString.txt"
+    };
+
+    const char* TEST_STRINGS[5] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "Short string"
+    };
+
+    for (uint32_t i = 0; i < 5; ++i)
     {
-        const char* assets_path = "";
-        const uint64_t asset_count = 5;
-        const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
-        const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
-        const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
-        const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
-        const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+        ASSERT_NE(0, CreateParentPath(storage_api, TEST_FILENAMES[i]));
+        StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, TEST_FILENAMES[i]);
+        ASSERT_NE((StorageAPI_HOpenFile)0, w);
+        ASSERT_NE(0, storage_api->Write(storage_api, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        storage_api->CloseWrite(storage_api, w);
+        w = 0;
+    }
 
-        content_index = CreateContentIndex(
-            assets_path,
-            asset_count,
-            asset_content_hashes,
-            asset_path_hashes,
-            asset_sizes,
-            asset_name_offsets,
-            asset_name_data,
-            GetContentTagFake);
-    }*/
+    MeowHashAPI hash_api;
+    Paths* version1_paths = GetFilesRecursively(storage_api, "local");
+    ASSERT_NE((Paths*)0, version1_paths);
+    VersionIndex* vindex = CreateVersionIndex(
+        storage_api,
+        &hash_api.m_HashAPI,
+        0,
+        "local",
+        version1_paths,
+        16);
+    ASSERT_NE((VersionIndex*)0, vindex);
 
+    static const uint32_t MAX_BLOCK_SIZE = 32;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
+    ContentIndex* cindex = CreateContentIndex(
+        &hash_api.m_HashAPI,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
+    ASSERT_NE((ContentIndex*)0, cindex);
+
+    StoreCompressionAPI store_compression;
+    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
+    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
+	ASSERT_NE(0, WriteContent(
+        storage_api,
+        storage_api,
+        &store_compression.m_CompressionAPI,
+        0,
+        cindex,
+        asset_part_lookup,
+        "local",
+        "chunks"));
+    FreeAssetPartLookup(asset_part_lookup);
+    asset_part_lookup = 0;
+
+    ASSERT_NE(0, ReconstructVersion(
+        storage_api,
+        &store_compression.m_CompressionAPI,
+        0,
+        cindex,
+        vindex,
+        "chunks",
+        "remote"));
+
+    free(vindex);
+    vindex = 0;
+    free(cindex);
+    cindex = 0;
+
+#if 0
     const char* asset_paths[5] = {
         "first_",
         "second",
@@ -1331,7 +1392,7 @@ TEST(Longtail, ReconstructVersion)
         storage_api->CloseRead(storage_api, f);
         free(data);
     }
-
+#endif // 0
 }
 
 void Bench()
