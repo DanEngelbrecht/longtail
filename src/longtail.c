@@ -2146,6 +2146,8 @@ struct ContentIndex* CreateMissingContent(
     return diff_content_index;
 }
 
+// TODO: This could be more efficient - if a block exists in both local_content_index and remote_content_index it will
+// be present twice in the resulting content index. This is fine but a waste.
 struct ContentIndex* MergeContentIndex(
     struct ContentIndex* local_content_index,
     struct ContentIndex* remote_content_index)
@@ -2155,14 +2157,14 @@ struct ContentIndex* MergeContentIndex(
     uint64_t local_chunk_count = *local_content_index->m_ChunkCount;
     uint64_t remote_chunk_count = *remote_content_index->m_ChunkCount;
     uint64_t block_count = local_block_count + remote_block_count;
-    uint64_t asset_count = local_chunk_count + remote_chunk_count;
-    size_t content_index_size = GetContentIndexSize(block_count, asset_count);
+    uint64_t chunk_count = local_chunk_count + remote_chunk_count;
+    size_t content_index_size = GetContentIndexSize(block_count, chunk_count);
     struct ContentIndex* content_index = (struct ContentIndex*)malloc(content_index_size);
 
     content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex)];
     content_index->m_ChunkCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
     *content_index->m_BlockCount = block_count;
-    *content_index->m_ChunkCount = asset_count;
+    *content_index->m_ChunkCount = chunk_count;
     InitContentIndex(content_index);
 
     for (uint64_t b = 0; b < local_block_count; ++b)

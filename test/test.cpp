@@ -1056,6 +1056,70 @@ TEST(Longtail, VersionIndexDirectories)
 
 TEST(Longtail, MergeContentIndex)
 {
+    MeowHashAPI hash_api;
+    ContentIndex* cindex1 = CreateContentIndex(
+        &hash_api.m_HashAPI,
+        0,
+        0,
+        0,
+        16,
+        8);
+    ASSERT_NE((ContentIndex*)0, cindex1);
+    ContentIndex* cindex2 = CreateContentIndex(
+        &hash_api.m_HashAPI,
+        0,
+        0,
+        0,
+        16,
+        8);
+    ASSERT_NE((ContentIndex*)0, cindex2);
+    ContentIndex* cindex3 = MergeContentIndex(cindex1, cindex2);
+    ASSERT_NE((ContentIndex*)0, cindex3);
+
+    TLongtail_Hash chunk_hashes_4[] = {5, 6, 7};
+    uint32_t chunk_sizes_4[] = {10, 20, 10};
+    ContentIndex* cindex4 = CreateContentIndex(
+        &hash_api.m_HashAPI,
+        3,
+        chunk_hashes_4,
+        chunk_sizes_4,
+        30,
+        2);
+    ASSERT_NE((ContentIndex*)0, cindex4);
+
+    TLongtail_Hash chunk_hashes_5[] = {8, 7, 6};
+    uint32_t chunk_sizes_5[] = {20, 10, 20};
+
+    ContentIndex* cindex5 = CreateContentIndex(
+        &hash_api.m_HashAPI,
+        3,
+        chunk_hashes_5,
+        chunk_sizes_5,
+        30,
+        2);
+    ASSERT_NE((ContentIndex*)0, cindex5);
+
+    ContentIndex* cindex6 = MergeContentIndex(cindex4, cindex5);
+    ASSERT_NE((ContentIndex*)0, cindex6);
+    ASSERT_EQ(4, *cindex6->m_BlockCount);
+    ASSERT_EQ(6, *cindex6->m_ChunkCount);
+
+    ContentIndex* cindex7 = MergeContentIndex(cindex6, cindex1);
+    ASSERT_NE((ContentIndex*)0, cindex7);
+    ASSERT_EQ(4, *cindex7->m_BlockCount);
+    ASSERT_EQ(6, *cindex7->m_ChunkCount);
+
+    free(cindex7);
+    free(cindex6);
+    free(cindex5);
+    free(cindex3);
+    free(cindex2);
+    free(cindex1);
+}
+
+TEST(Longtail, FullScale)
+{
+    return;
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
 
