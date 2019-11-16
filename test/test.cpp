@@ -498,6 +498,38 @@ struct InMemStorageAPI
     }
 };
 
+int CreateParentPath(struct StorageAPI* storage_api, const char* path)
+{
+    char* dir_path = strdup(path);
+    char* last_path_delimiter = (char*)strrchr(dir_path, '/');
+    if (last_path_delimiter == 0)
+    {
+        return 1;
+    }
+    *last_path_delimiter = '\0';
+    if (storage_api->IsDir(storage_api, dir_path))
+    {
+        free(dir_path);
+        return 1;
+    }
+    else
+    {
+        if (!CreateParentPath(storage_api, dir_path))
+        {
+            TEST_LOG("CreateParentPath failed: `%s`\n", dir_path)
+            free(dir_path);
+            return 0;
+        }
+        if (storage_api->CreateDir(storage_api, dir_path))
+        {
+            free(dir_path);
+            return 1;
+        }
+    }
+    TEST_LOG("CreateParentPath failed: `%s`\n", dir_path)
+    free(dir_path);
+    return 0;
+}
 
 
 struct StoreCompressionAPI
@@ -727,7 +759,6 @@ TEST(Longtail, ContentIndex)
 
 TEST(Longtail, ContentIndexSerialization)
 {
-    return;
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
     LizardCompressionAPI compression_api;
@@ -743,6 +774,7 @@ TEST(Longtail, ContentIndexSerialization)
         version1_paths,
         16384);
     ASSERT_NE((VersionIndex*)0, vindex);
+    free(version1_paths);
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
@@ -755,27 +787,133 @@ TEST(Longtail, ContentIndexSerialization)
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
 
+    free(vindex);
+    vindex = 0;
+
+    ASSERT_NE(0, WriteContentIndex(&local_storage.m_StorageAPI, cindex, "cindex.lci"));
+
+    ContentIndex* cindex2 = ReadContentIndex(&local_storage.m_StorageAPI, "cindex.lci");
+    ASSERT_NE((ContentIndex*)0, cindex2);
+
+    ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
+    for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
+    {
+        ASSERT_EQ(cindex->m_BlockHashes[i], cindex2->m_BlockHashes[i]);
+    }
+    ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
+    for (uint64_t i = 0; i < *cindex->m_ChunkCount; ++i)
+    {
+        ASSERT_EQ(cindex->m_ChunkBlockIndexes[i], cindex2->m_ChunkBlockIndexes[i]);
+        ASSERT_EQ(cindex->m_ChunkBlockOffsets[i], cindex2->m_ChunkBlockOffsets[i]);
+        ASSERT_EQ(cindex->m_ChunkLengths[i], cindex2->m_ChunkLengths[i]);
+    }
+
+    free(cindex);
+    cindex = 0;
+
+    free(cindex2);
+    cindex2 = 0;
+}
+
+TEST(Longtail, WriteContent)
+{
+    InMemStorageAPI source_storage;
+    InMemStorageAPI target_storage;
+    MeowHashAPI hash_api;
+    LizardCompressionAPI compression_api;
+
+    const char* TEST_FILENAMES[5] = {
+        "local/TheLongFile.txt",
+        "local/ShortString.txt",
+        "local/AnotherSample.txt",
+        "local/folder/ShortString.txt",
+        "local/AlsoShortString.txt"
+    };
+
+    const char* TEST_STRINGS[5] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "Short string"
+    };
+
+    for (uint32_t i = 0; i < 5; ++i)
+    {
+        ASSERT_NE(0, CreateParentPath(&source_storage.m_StorageAPI, TEST_FILENAMES[i]));
+        StorageAPI_HOpenFile w = source_storage.m_StorageAPI.OpenWriteFile(&source_storage.m_StorageAPI, TEST_FILENAMES[i]);
+        ASSERT_NE((StorageAPI_HOpenFile)0, w);
+        ASSERT_NE(0, source_storage.m_StorageAPI.Write(&source_storage.m_StorageAPI, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        source_storage.m_StorageAPI.CloseWrite(&source_storage.m_StorageAPI, w);
+        w = 0;
+    }
+
+    Paths* version1_paths = GetFilesRecursively(&source_storage.m_StorageAPI, "local");
+    ASSERT_NE((Paths*)0, version1_paths);
+    VersionIndex* vindex = CreateVersionIndex(
+        &source_storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        0,
+        "local",
+        version1_paths,
+        16);
+    ASSERT_NE((VersionIndex*)0, vindex);
+
+    static const uint32_t MAX_BLOCK_SIZE = 32;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
+    ContentIndex* cindex = CreateContentIndex(
+        &hash_api.m_HashAPI,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK);
+    ASSERT_NE((ContentIndex*)0, cindex);
+
     struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
     ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
-    int ok = WriteContent(
-        &local_storage.m_StorageAPI,
-        &local_storage.m_StorageAPI,
+	ASSERT_NE(0, WriteContent(
+        &source_storage.m_StorageAPI,
+        &target_storage.m_StorageAPI,
         &compression_api.m_CompressionAPI,
         0,
         cindex,
         asset_part_lookup,
-        "source/version1",
-        "chunks");
+        "local",
+        "chunks"));
     FreeAssetPartLookup(asset_part_lookup);
     asset_part_lookup = 0;
 
     ContentIndex* cindex2 = ReadContent(
-        &local_storage.m_StorageAPI,
+        &target_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
         "chunks");
     ASSERT_NE((ContentIndex*)0, cindex2);
-    ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
-    ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
+
+	ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
+	for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
+	{
+		uint64_t i2 = 0;
+		while (cindex->m_BlockHashes[i] != cindex2->m_BlockHashes[i2])
+		{
+			++i2;
+			ASSERT_NE(i2, *cindex2->m_BlockCount);
+		}
+		ASSERT_EQ(cindex->m_BlockHashes[i], cindex2->m_BlockHashes[i2]);
+	}
+	ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
+	for (uint64_t i = 0; i < *cindex->m_ChunkCount; ++i)
+	{
+		uint64_t i2 = 0;
+		while (cindex->m_ChunkHashes[i] != cindex2->m_ChunkHashes[i2])
+		{
+			++i2;
+			ASSERT_NE(i2, *cindex2->m_ChunkCount);
+		}
+		ASSERT_EQ(cindex->m_BlockHashes[cindex->m_ChunkBlockIndexes[i]], cindex2->m_BlockHashes[cindex2->m_ChunkBlockIndexes[i2]]);
+		ASSERT_EQ(cindex->m_ChunkBlockOffsets[i], cindex2->m_ChunkBlockOffsets[i2]);
+		ASSERT_EQ(cindex->m_ChunkLengths[i], cindex2->m_ChunkLengths[i2]);
+	}
 
     free(cindex2);
     free(cindex);
