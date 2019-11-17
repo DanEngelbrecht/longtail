@@ -694,7 +694,7 @@ TEST(Longtail, VersionIndex)
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
 
     Paths* paths = MakePaths(5, asset_paths);
-    size_t version_index_size = GetVersionIndexSize(5, 5, paths->m_DataSize);
+    size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
@@ -706,6 +706,7 @@ TEST(Longtail, VersionIndex)
         asset_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
+        *paths->m_PathCount,
         asset_chunk_start_index,
         *paths->m_PathCount,
         asset_sizes,
@@ -782,8 +783,8 @@ TEST(Longtail, ContentIndexSerialization)
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
         *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes_XXX,
-        vindex->m_ChunkSizes_XXX,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -865,8 +866,8 @@ TEST(Longtail, WriteContent)
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
         *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes_XXX,
-        vindex->m_ChunkSizes_XXX,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -972,7 +973,7 @@ TEST(Longtail, CreateMissingContent)
     };
 
     Paths* paths = MakePaths(5, asset_paths);
-    size_t version_index_size = GetVersionIndexSize(5, 5, paths->m_DataSize);
+    size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
@@ -984,6 +985,7 @@ TEST(Longtail, CreateMissingContent)
         asset_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
+        *paths->m_PathCount,
         asset_chunk_start_index,
         *paths->m_PathCount,
         asset_sizes,
@@ -1161,8 +1163,8 @@ TEST(Longtail, FullScale)
     ContentIndex* local_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
             * local_version_index->m_ChunkCount,
-            local_version_index->m_ChunkHashes_XXX,
-            local_version_index->m_ChunkSizes_XXX,
+            local_version_index->m_ChunkHashes,
+            local_version_index->m_ChunkSizes,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
@@ -1184,8 +1186,8 @@ TEST(Longtail, FullScale)
     ContentIndex* remote_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
             * remote_version_index->m_ChunkCount,
-            remote_version_index->m_ChunkHashes_XXX,
-            remote_version_index->m_ChunkSizes_XXX,
+            remote_version_index->m_ChunkHashes,
+            remote_version_index->m_ChunkSizes,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
@@ -1307,8 +1309,8 @@ TEST(Longtail, ReconstructVersion)
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
         *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes_XXX,
-        vindex->m_ChunkSizes_XXX,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -1384,7 +1386,7 @@ TEST(Longtail, ReconstructVersion)
     }
 
     Paths* paths = MakePaths(5, asset_paths);
-    size_t version_index_size = GetVersionIndexSize(5, 5, paths->m_DataSize);
+    size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
@@ -1397,6 +1399,8 @@ TEST(Longtail, ReconstructVersion)
         asset_chunk_start_index,
         asset_chunk_counts,
         *paths->m_PathCount,
+        asset_chunk_start_index,
+        *paths->m_PathCount,
         asset_sizes,
         asset_content_hashes);
     ASSERT_NE((VersionIndex*)0, version_index);
@@ -1407,8 +1411,8 @@ TEST(Longtail, ReconstructVersion)
     ContentIndex* content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
         *version_index->m_ChunkCount,
-        version_index->m_ChunkHashes_XXX,
-        version_index->m_ChunkSizes_XXX,
+        version_index->m_ChunkHashes,
+        version_index->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, content_index);
@@ -1692,8 +1696,8 @@ void LifelikeTest()
     ContentIndex* local_content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
         *version1->m_ChunkCount,
-        version1->m_ChunkHashes_XXX,
-        version1->m_ChunkSizes_XXX,
+        version1->m_ChunkHashes,
+        version1->m_ChunkSizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
 

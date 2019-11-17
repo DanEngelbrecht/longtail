@@ -392,9 +392,9 @@ int ChunkAssets(
     struct JobAPI* job_api,
     const char* root_path,
     const struct Paths* paths,
-    TLongtail_Hash* pathHashes,
-    TLongtail_Hash* contentHashes,
-    uint32_t* contentSizes,
+    TLongtail_Hash* path_hashes,
+    TLongtail_Hash* content_hashes,
+    uint32_t* content_sizes,
     uint32_t* asset_chunk_start_index,
     uint32_t* asset_chunk_counts,
     uint32_t** chunk_sizes,
@@ -434,9 +434,9 @@ int ChunkAssets(
             job->m_HashAPI = hash_api;
             job->m_RootPath = root_path;
             job->m_Path = &paths->m_Data[paths->m_Offsets[i + offset]];
-            job->m_PathHash = &pathHashes[i + offset];
-            job->m_ContentHash = &contentHashes[i + offset];
-            job->m_ContentSize = &contentSizes[i + offset];
+            job->m_PathHash = &path_hashes[i + offset];
+            job->m_ContentHash = &content_hashes[i + offset];
+            job->m_ContentSize = &content_sizes[i + offset];
             job->m_AssetChunkCount = &asset_chunk_counts[i + offset];
             job->m_ChunkHashes = 0;
             job->m_ChunkSizes = 0;
@@ -519,29 +519,37 @@ int ChunkAssets(
     return success;
 }
 
-size_t GetVersionIndexDataSize(uint32_t asset_count, uint32_t chunk_count, uint32_t name_data_size)
+size_t GetVersionIndexDataSize(
+    uint32_t asset_count,
+    uint32_t chunk_count,
+    uint32_t asset_chunk_index_count,
+    uint32_t path_data_size)
 {
-    size_t version_index_size =
-        sizeof(uint32_t) +                            // m_AssetCount
-        sizeof(uint32_t) +                            // m_ChunkCount
-        (sizeof(TLongtail_Hash) * asset_count) +      // m_PathHashes
-        (sizeof(TLongtail_Hash) * asset_count) +      // m_ContentHashes
-        (sizeof(uint32_t) * asset_count) +            // m_AssetSizes
-        (sizeof(uint32_t) * asset_count) +            // m_AssetChunkCounts
-        (sizeof(uint32_t) * asset_count) +            // m_AssetChunkIndexes
-        (sizeof(TLongtail_Hash) * chunk_count) +      // m_ChunkHashes_XXX
-        (sizeof(uint32_t) * chunk_count) +            // m_ChunkSizes
-        (sizeof(TLongtail_Hash) * chunk_count) +      // m_ChunkHashes
-        (sizeof(uint32_t) * asset_count) +            // m_NameOffsets
-        name_data_size;
+    size_t version_index_data_size =
+        sizeof(uint32_t) +                              // m_AssetCount
+        sizeof(uint32_t) +                              // m_ChunkCount
+        sizeof(uint32_t) +                              // m_AssetChunkIndexCount
+        (sizeof(TLongtail_Hash) * asset_count) +        // m_PathHashes
+        (sizeof(TLongtail_Hash) * asset_count) +        // m_ContentHashes
+        (sizeof(uint32_t) * asset_count) +              // m_AssetSizes
+        (sizeof(uint32_t) * asset_count) +              // m_AssetChunkCounts
+        (sizeof(uint32_t) * asset_chunk_index_count) +  // m_AssetChunkIndexes
+        (sizeof(TLongtail_Hash) * chunk_count) +        // m_ChunkHashes
+        (sizeof(uint32_t) * chunk_count) +              // m_ChunkSizes
+        (sizeof(uint32_t) * asset_count) +              // m_NameOffsets
+        path_data_size;
 
-    return version_index_size;
+    return version_index_data_size;
 }
 
-size_t GetVersionIndexSize(uint32_t asset_count, uint32_t chunk_count, uint32_t path_data_size)
+size_t GetVersionIndexSize(
+    uint32_t asset_count,
+    uint32_t chunk_count,
+    uint32_t asset_chunk_index_count,
+    uint32_t path_data_size)
 {
     return sizeof(struct VersionIndex) +
-            GetVersionIndexDataSize(asset_count, chunk_count, path_data_size);
+            GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, path_data_size);
 }
 
 void InitVersionIndex(struct VersionIndex* version_index, size_t version_index_data_size)
@@ -561,6 +569,11 @@ void InitVersionIndex(struct VersionIndex* version_index, size_t version_index_d
 
     uint32_t chunk_count = *version_index->m_ChunkCount;
 
+    version_index->m_AssetChunkIndexCount = (uint32_t*)p;
+    p += sizeof(uint32_t);
+
+    uint32_t asset_chunk_index_count = *version_index->m_AssetChunkIndexCount;
+
     version_index->m_PathHashes = (TLongtail_Hash*)p;
     p += (sizeof(TLongtail_Hash) * asset_count);
 
@@ -574,12 +587,12 @@ void InitVersionIndex(struct VersionIndex* version_index, size_t version_index_d
     p += (sizeof(uint32_t) * asset_count);
 
     version_index->m_AssetChunkIndexes = (uint32_t*)p;
-    p += (sizeof(uint32_t) * asset_count);
+    p += (sizeof(uint32_t) * asset_chunk_index_count);
 
-    version_index->m_ChunkHashes_XXX = (TLongtail_Hash*)p;
+    version_index->m_ChunkHashes = (TLongtail_Hash*)p;
     p += (sizeof(TLongtail_Hash) * chunk_count);
 
-    version_index->m_ChunkSizes_XXX = (uint32_t*)p;
+    version_index->m_ChunkSizes = (uint32_t*)p;
     p += (sizeof(uint32_t) * chunk_count);
 
     version_index->m_NameOffsets = (uint32_t*)p;
@@ -596,11 +609,12 @@ struct VersionIndex* BuildVersionIndex(
     void* mem,
     size_t mem_size,
     const struct Paths* paths,
-    const TLongtail_Hash* pathHashes,
-    const TLongtail_Hash* contentHashes,
-    const uint32_t* contentSizes,
+    const TLongtail_Hash* path_hashes,
+    const TLongtail_Hash* content_hashes,
+    const uint32_t* content_sizes,
     const uint32_t* asset_chunk_start_index,
     const uint32_t* asset_chunk_counts,
+    uint32_t asset_chunk_index_count,
     const uint32_t* asset_chunk_indexes,
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
@@ -610,28 +624,22 @@ struct VersionIndex* BuildVersionIndex(
     struct VersionIndex* version_index = (struct VersionIndex*)mem;
     version_index->m_AssetCount = (uint32_t*)&((char*)mem)[sizeof(struct VersionIndex)];
     version_index->m_ChunkCount = (uint32_t*)&((char*)mem)[sizeof(struct VersionIndex) + sizeof(uint32_t)];
+    version_index->m_AssetChunkIndexCount = (uint32_t*)&((char*)mem)[sizeof(struct VersionIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
     *version_index->m_AssetCount = asset_count;
     *version_index->m_ChunkCount = chunk_count;
+    *version_index->m_AssetChunkIndexCount = asset_chunk_index_count;
 
     InitVersionIndex(version_index, mem_size - sizeof(struct VersionIndex));
 
-    uint32_t chunk_offset = 0;
-
-    for (uint32_t i = 0; i < asset_count; ++i)
-    {
-        version_index->m_PathHashes[i] = pathHashes[i];
-        version_index->m_ContentHashes[i] = contentHashes[i];
-        version_index->m_AssetSizes[i] = contentSizes[i];
-        version_index->m_NameOffsets[i] = paths->m_Offsets[i];
-        version_index->m_AssetChunkCounts[i] = asset_chunk_counts[i];
-        for (uint32_t j = 0; j < asset_chunk_counts[i]; ++j)
-        {
-            version_index->m_AssetChunkIndexes[chunk_offset] = asset_chunk_indexes[asset_chunk_start_index[i] + j];
-            ++chunk_offset;
-        }
-    }
-    memmove(version_index->m_ChunkHashes_XXX, chunk_sizes, sizeof(TLongtail_Hash) * chunk_count);
-    memmove(version_index->m_ChunkSizes_XXX, chunk_hashes, sizeof(uint32_t) * chunk_count);
+    memmove(version_index->m_PathHashes, path_hashes, sizeof(TLongtail_Hash) * asset_count);
+    memmove(version_index->m_ContentHashes, content_hashes, sizeof(TLongtail_Hash) * asset_count);
+    memmove(version_index->m_AssetSizes, content_sizes, sizeof(uint32_t) * asset_count);
+    memmove(version_index->m_NameOffsets, paths, sizeof(uint32_t) * asset_count);
+    memmove(version_index->m_AssetChunkCounts, asset_chunk_counts, sizeof(uint32_t) * asset_count);
+    memmove(version_index->m_AssetChunkIndexes, asset_chunk_indexes, sizeof(uint32_t) * asset_chunk_index_count);
+    memmove(version_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    memmove(version_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
+    memmove(version_index->m_NameOffsets, paths->m_Offsets, sizeof(uint32_t) * asset_count);
     memmove(version_index->m_NameData, paths->m_Data, paths->m_DataSize);
 
     return version_index;
@@ -646,12 +654,12 @@ struct VersionIndex* CreateVersionIndex(
     uint32_t max_chunk_size)
 {
     uint32_t path_count = *paths->m_PathCount;
-    uint32_t* contentSizes = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
-    TLongtail_Hash* pathHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
-    TLongtail_Hash* contentHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
+    uint32_t* content_sizes = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
+    TLongtail_Hash* path_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
+    TLongtail_Hash* content_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * path_count);
     uint32_t* asset_chunk_counts = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
 
-    uint32_t assets_chunk_count = 0;
+    uint32_t assets_chunk_index_count = 0;
     uint32_t* asset_chunk_sizes = 0;
     TLongtail_Hash* asset_chunk_hashes = 0;
     uint32_t* asset_chunk_start_index = (uint32_t*)malloc(sizeof(uint32_t) * path_count);
@@ -662,33 +670,33 @@ struct VersionIndex* CreateVersionIndex(
         job_api,
         root_path,
         paths,
-        pathHashes,
-        contentHashes,
-        contentSizes,
+        path_hashes,
+        content_hashes,
+        content_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
         &asset_chunk_sizes,
         &asset_chunk_hashes,
         max_chunk_size,
-        &assets_chunk_count))
+        &assets_chunk_index_count))
     {
         LONGTAIL_LOG("Failed to hash assets in `%s`\n", root_path);
         free(asset_chunk_start_index);
         free(asset_chunk_hashes);
         free(asset_chunk_sizes);
-        free(contentHashes);
-        free(pathHashes);
-        free(contentSizes);
+        free(content_hashes);
+        free(path_hashes);
+        free(content_sizes);
         return 0;
     }
 
-    uint32_t* asset_chunk_indexes = (uint32_t*)malloc(sizeof(uint32_t) * assets_chunk_count);
-    TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * assets_chunk_count);
-    uint32_t* compact_chunk_sizes =  (uint32_t*)malloc(sizeof(uint32_t) * assets_chunk_count);
+    uint32_t* asset_chunk_indexes = (uint32_t*)malloc(sizeof(uint32_t) * assets_chunk_index_count);
+    TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * assets_chunk_index_count);
+    uint32_t* compact_chunk_sizes =  (uint32_t*)malloc(sizeof(uint32_t) * assets_chunk_index_count);
 
     uint32_t unique_chunk_count = 0;
     struct HashToIndexItem* chunk_hash_to_index = 0;
-    for (uint32_t c = 0; c < assets_chunk_count; ++c)
+    for (uint32_t c = 0; c < assets_chunk_index_count; ++c)
     {
         TLongtail_Hash h = asset_chunk_hashes[c];
         intptr_t i = hmgeti(chunk_hash_to_index, h);
@@ -734,18 +742,19 @@ struct VersionIndex* CreateVersionIndex(
     free(chunk_hashes);
     chunk_hashes = 0;
 */
-    size_t version_index_size = GetVersionIndexSize(path_count, unique_chunk_count, paths->m_DataSize);
+    size_t version_index_size = GetVersionIndexSize(path_count, unique_chunk_count, assets_chunk_index_count, paths->m_DataSize);
     void* version_index_mem = malloc(version_index_size);
 
     struct VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
         version_index_size,
         paths,
-        pathHashes,
-        contentHashes,
-        contentSizes,
+        path_hashes,
+        content_hashes,
+        content_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
+        assets_chunk_index_count,
         asset_chunk_indexes,
         unique_chunk_count,
         compact_chunk_sizes,
@@ -765,12 +774,12 @@ struct VersionIndex* CreateVersionIndex(
     asset_chunk_start_index = 0;
     free(asset_chunk_counts);
     asset_chunk_counts = 0;
-    free(contentHashes);
-    contentHashes = 0;
-    free(pathHashes);
-    pathHashes = 0;
-    free(contentSizes);
-    contentSizes = 0;
+    free(content_hashes);
+    content_hashes = 0;
+    free(path_hashes);
+    path_hashes = 0;
+    free(content_sizes);
+    content_sizes = 0;
 
     return version_index;
 }
@@ -778,7 +787,7 @@ struct VersionIndex* CreateVersionIndex(
 int WriteVersionIndex(struct StorageAPI* storage_api, struct VersionIndex* version_index, const char* path)
 {
     LONGTAIL_LOG("WriteVersionIndex to `%s`\n", path)
-    size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (uint32_t)(*version_index->m_ChunkCount), version_index->m_NameDataSize);
+    size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (uint32_t)(*version_index->m_ChunkCount), (uint32_t)(*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
 
     if (!EnsureParentPathExists(storage_api, path))
     {
@@ -1266,8 +1275,8 @@ struct ChunkHashToAssetPart* CreateAssetPartLookup(
         for (uint32_t asset_chunk_index = 0; asset_chunk_index < asset_chunk_count; ++asset_chunk_index)
         {
             uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_offset];
-            uint32_t chunk_size = version_index->m_ChunkSizes_XXX[chunk_index];
-            TLongtail_Hash chunk_hash = version_index->m_ChunkHashes_XXX[chunk_index];
+            uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
+            TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
             if (hmgeti(asset_part_lookup, chunk_hash) == -1)
             {
                 struct AssetPart asset_part = { path, asset_chunk_offset };
@@ -1374,8 +1383,7 @@ void WriteContentBlockJob(void* context)
         char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
         uint64_t asset_content_offset = job->m_AssetPartLookup[asset_part_index].value.m_Start;
         StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
-        uint64_t asset_size = source_storage_api->GetSize(source_storage_api, file_handle);
-        if (!file_handle || (asset_size < (asset_offset + chunk_size)))
+        if (!file_handle || (source_storage_api->GetSize(source_storage_api, file_handle) < (asset_offset + chunk_size)))
         {
             LONGTAIL_LOG("Missing or mismatching asset content `%s`\n", asset_path)
             free(write_buffer);
@@ -1799,7 +1807,7 @@ int ReconstructVersion(
             continue;
         }
         uint32_t chunk_index = version_index->m_AssetChunkIndexes[asset_chunk_offset];
-        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes_XXX[chunk_index];
+        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
         intptr_t content_chunk_index_i = hmgeti(chunk_hash_to_content_chunk_index, chunk_hash);
         if (-1 == content_chunk_index_i)
         {
@@ -1824,7 +1832,7 @@ int ReconstructVersion(
         for (uint32_t c = 1; c < chunk_count; ++c)
         {
             uint32_t chunk_index = version_index->m_AssetChunkIndexes[asset_chunk_offset + c];
-            chunk_hash = version_index->m_ChunkHashes_XXX[chunk_index];
+            chunk_hash = version_index->m_ChunkHashes[chunk_index];
             intptr_t content_chunk_index_i = hmgeti(chunk_hash_to_content_chunk_index, chunk_hash);
             if (-1 == content_chunk_index_i)
             {
@@ -1887,7 +1895,7 @@ int ReconstructVersion(
         ptrdiff_t lookup_index = hmgeti(content_hash_to_content_asset_index, version_index->m_ContentHashes[i]);
         if (lookup_index == -1)
         {
-            LONGTAIL_LOG("Asset 0x%" PRIx64 " for asset `%s` was not find in content index\n", version_index->m_ContentHashes[i], &version_index->m_NameData[version_index->m_NameOffsets[i]])
+            LONGTAIL_LOG("Asset 0x%" PRIx64 " for asset `%s` was not find in content index\n", version_index->m_Conten_hHashes[i], &version_index->m_NameData[version_index->m_NameOffsets[i]])
             continue;
         }
         version_index_to_content_index[i] = content_hash_to_content_asset_index[lookup_index].value;
@@ -2306,7 +2314,7 @@ struct ContentIndex* CreateMissingContent(
 
     uint32_t added_hash_count = 0;
     uint32_t removed_hash_count = 0;
-    DiffHashes(content_index->m_ChunkHashes, *content_index->m_ChunkCount, version->m_ChunkHashes_XXX, chunk_count, &added_hash_count, added_hashes, &removed_hash_count, removed_hashes);
+    DiffHashes(content_index->m_ChunkHashes, *content_index->m_ChunkCount, version->m_ChunkHashes, chunk_count, &added_hash_count, added_hashes, &removed_hash_count, removed_hashes);
 
     if (added_hash_count == 0)
     {
@@ -2325,7 +2333,7 @@ struct ContentIndex* CreateMissingContent(
     struct HashToIndexItem* chunk_index_lookup = 0;
     for (uint64_t i = 0; i < chunk_count; ++i)
     {
-        hmput(chunk_index_lookup, version->m_ChunkHashes_XXX[i], i);
+        hmput(chunk_index_lookup, version->m_ChunkHashes[i], i);
     }
 
     for (uint32_t j = 0; j < added_hash_count; ++j)
@@ -2340,7 +2348,7 @@ struct ContentIndex* CreateMissingContent(
         }
 
         uint64_t chunk_index = chunk_index_lookup[lookup_index].value;
-        diff_chunk_sizes[j] = version->m_ChunkSizes_XXX[chunk_index];
+        diff_chunk_sizes[j] = version->m_ChunkSizes[chunk_index];
     }
     hmfree(chunk_index_lookup);
     chunk_index_lookup = 0;
