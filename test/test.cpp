@@ -706,6 +706,7 @@ TEST(Longtail, VersionIndex)
         asset_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
+        asset_chunk_start_index,
         *paths->m_PathCount,
         asset_sizes,
         asset_content_hashes);
@@ -781,8 +782,8 @@ TEST(Longtail, ContentIndexSerialization)
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
         *vindex->m_ChunkCount,
-        vindex->m_ContentHashes,
-        vindex->m_ChunkSizes,
+        vindex->m_ChunkHashes_XXX,
+        vindex->m_ChunkSizes_XXX,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -864,8 +865,8 @@ TEST(Longtail, WriteContent)
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
         *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes,
-        vindex->m_ChunkSizes,
+        vindex->m_ChunkHashes_XXX,
+        vindex->m_ChunkSizes_XXX,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -983,6 +984,7 @@ TEST(Longtail, CreateMissingContent)
         asset_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
+        asset_chunk_start_index,
         *paths->m_PathCount,
         asset_sizes,
         asset_content_hashes);
@@ -1159,8 +1161,8 @@ TEST(Longtail, FullScale)
     ContentIndex* local_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
             * local_version_index->m_ChunkCount,
-            local_version_index->m_ChunkHashes,
-            local_version_index->m_ChunkSizes,
+            local_version_index->m_ChunkHashes_XXX,
+            local_version_index->m_ChunkSizes_XXX,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
@@ -1182,8 +1184,8 @@ TEST(Longtail, FullScale)
     ContentIndex* remote_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
             * remote_version_index->m_ChunkCount,
-            remote_version_index->m_ChunkHashes,
-            remote_version_index->m_ChunkSizes,
+            remote_version_index->m_ChunkHashes_XXX,
+            remote_version_index->m_ChunkSizes_XXX,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
@@ -1305,8 +1307,8 @@ TEST(Longtail, ReconstructVersion)
     ContentIndex* cindex = CreateContentIndex(
         &hash_api.m_HashAPI,
         *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes,
-        vindex->m_ChunkSizes,
+        vindex->m_ChunkHashes_XXX,
+        vindex->m_ChunkSizes_XXX,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -1405,8 +1407,8 @@ TEST(Longtail, ReconstructVersion)
     ContentIndex* content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
         *version_index->m_ChunkCount,
-        version_index->m_ChunkHashes,
-        version_index->m_ChunkSizes,
+        version_index->m_ChunkHashes_XXX,
+        version_index->m_ChunkSizes_XXX,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, content_index);
@@ -1610,7 +1612,7 @@ void Bench()
 
         char version_target_folder[256];
         sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
-        printf("Reconstructing %" PRIu64 " assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
+        printf("Reconstructing %u assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
         ASSERT_NE(0, ReconstructVersion(
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
@@ -1682,7 +1684,7 @@ void LifelikeTest()
         16384);
     WriteVersionIndex(&storage_api.m_StorageAPI, version1, version_index_path_1);
     free(local_path_1_paths);
-    printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
+    printf("%u assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     printf("Creating local content index...\n");
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
@@ -1690,8 +1692,8 @@ void LifelikeTest()
     ContentIndex* local_content_index = CreateContentIndex(
         &hash_api.m_HashAPI,
         *version1->m_ChunkCount,
-        version1->m_ChunkHashes,
-        version1->m_ChunkSizes,
+        version1->m_ChunkHashes_XXX,
+        version1->m_ChunkSizes_XXX,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
 
@@ -1717,9 +1719,9 @@ void LifelikeTest()
         asset_part_lookup = 0;
     }
 
-    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
+    printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
     ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, &job_api.m_JobAPI, local_content_index, version1, local_content_path, remote_path_1));
-    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
+    printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
     Paths* local_path_2_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_2);
@@ -1734,7 +1736,7 @@ void LifelikeTest()
     free(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(&storage_api.m_StorageAPI, version2, version_index_path_2));
-    printf("%" PRIu64 " assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
+    printf("%u assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
     
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
     ContentIndex* missing_content = CreateMissingContent(
@@ -1830,9 +1832,9 @@ void LifelikeTest()
     free(local_content_index);
     local_content_index = 0;
 
-    printf("Reconstructing %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
+    printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
     ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, &job_api.m_JobAPI, merged_local_content, version2, local_content_path, remote_path_2));
-    printf("Reconstructed %" PRIu64 " assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
+    printf("Reconstructed %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
 //    free(existing_blocks);
 //    existing_blocks = 0;

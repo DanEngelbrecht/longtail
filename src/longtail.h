@@ -182,7 +182,8 @@ struct VersionIndex* BuildVersionIndex(
     const uint32_t* contentSizes,
     const uint32_t* asset_chunk_start_index,
     const uint32_t* asset_chunk_counts,
-    uint64_t chunk_count,
+    const uint32_t* asset_chunk_indexes,
+    uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes);
 
@@ -208,16 +209,18 @@ struct ContentIndex
 
 struct VersionIndex
 {
-    uint64_t* m_AssetCount;
-    uint64_t* m_ChunkCount;
+    uint32_t* m_AssetCount;
+    uint32_t* m_ChunkCount;
     TLongtail_Hash* m_PathHashes;       // []
     TLongtail_Hash* m_ContentHashes;    // []
     uint32_t* m_AssetSizes;             // []
     uint32_t* m_AssetChunkCounts;       // []
     // uint64_t* m_CreationDates;       // []
     // uint64_t* m_ModificationDates;   // []
-    uint32_t* m_ChunkSizes;             // []
-    TLongtail_Hash* m_ChunkHashes;      // []
+    uint32_t* m_AssetChunkIndexes;      // []
+
+    TLongtail_Hash* m_ChunkHashes_XXX;   // []
+    uint32_t* m_ChunkSizes_XXX;          // []
 
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
