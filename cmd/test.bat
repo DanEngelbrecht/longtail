@@ -16,7 +16,7 @@ if %errorlevel% neq 0 (
     exit /b %errorlevel%
 )
 
-exit 0
+GOTO End
 
 call do_version.bat ..\build\longtail.exe C:\Temp\longtail git2f7f84a05fc290c717c8b5c0e59f8121481151e6
 if %errorlevel% neq 0 (
@@ -54,4 +54,5 @@ if %errorlevel% neq 0 (
     exit /b %errorlevel%
 )
 
-
+:End
+echo "Done"
