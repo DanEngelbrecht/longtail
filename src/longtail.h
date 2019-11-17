@@ -150,7 +150,8 @@ struct PathLookup* CreateContentHashToPathLookup(
 
 void FreePathLookup(struct PathLookup* path_lookup);
 
-struct ChunkHashToAssetPart* CreateAssetPartLookup(struct VersionIndex* version_index);
+struct ChunkHashToAssetPart* CreateAssetPartLookup(
+    struct VersionIndex* version_index);
 void FreeAssetPartLookup(struct ChunkHashToAssetPart* asset_part_lookup);
 
 int ReconstructVersion(

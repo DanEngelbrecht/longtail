@@ -89,7 +89,7 @@ int main(int argc, char** argv)
             &job_api.m_JobAPI,
             version,
             version_paths,
-            65536);
+            32768);
         free(version_paths);
         version_paths = 0;
         if (!version_index)
@@ -207,7 +207,7 @@ int main(int argc, char** argv)
                 &job_api.m_JobAPI,
                 version,
                 version_paths,
-                65536);
+                32768);
             free(version_paths);
             version_paths = 0;
             if (!vindex)
@@ -258,8 +258,8 @@ int main(int argc, char** argv)
             &hash_api.m_HashAPI,
             existing_cindex,
             vindex,
-            65536,
-            4096);
+            65536 * 2,
+            8192);
 
         free(vindex);
         vindex = 0;
@@ -318,7 +318,7 @@ int main(int argc, char** argv)
                 &job_api.m_JobAPI,
                 version,
                 version_paths,
-                65536);
+                32768);
             free(version_paths);
             version_paths = 0;
             if (!vindex)
@@ -345,8 +345,8 @@ int main(int argc, char** argv)
                 *vindex->m_ChunkCount,
                 vindex->m_ChunkHashes,
                 vindex->m_ChunkSizes,
-                65536,
-                4096);
+                65536 * 4,
+                8192);
             if (!cindex)
             {
                 printf("Failed to create content index for version `%s`\n", version);

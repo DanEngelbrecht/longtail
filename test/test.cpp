@@ -872,7 +872,7 @@ TEST(Longtail, WriteContent)
 
     struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
     ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
-	ASSERT_NE(0, WriteContent(
+    ASSERT_NE(0, WriteContent(
         &source_storage.m_StorageAPI,
         &target_storage.m_StorageAPI,
         &compression_api.m_CompressionAPI,
@@ -890,30 +890,30 @@ TEST(Longtail, WriteContent)
         "chunks");
     ASSERT_NE((ContentIndex*)0, cindex2);
 
-	ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
-	for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
-	{
-		uint64_t i2 = 0;
-		while (cindex->m_BlockHashes[i] != cindex2->m_BlockHashes[i2])
-		{
-			++i2;
-			ASSERT_NE(i2, *cindex2->m_BlockCount);
-		}
-		ASSERT_EQ(cindex->m_BlockHashes[i], cindex2->m_BlockHashes[i2]);
-	}
-	ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
-	for (uint64_t i = 0; i < *cindex->m_ChunkCount; ++i)
-	{
-		uint64_t i2 = 0;
-		while (cindex->m_ChunkHashes[i] != cindex2->m_ChunkHashes[i2])
-		{
-			++i2;
-			ASSERT_NE(i2, *cindex2->m_ChunkCount);
-		}
-		ASSERT_EQ(cindex->m_BlockHashes[cindex->m_ChunkBlockIndexes[i]], cindex2->m_BlockHashes[cindex2->m_ChunkBlockIndexes[i2]]);
-		ASSERT_EQ(cindex->m_ChunkBlockOffsets[i], cindex2->m_ChunkBlockOffsets[i2]);
-		ASSERT_EQ(cindex->m_ChunkLengths[i], cindex2->m_ChunkLengths[i2]);
-	}
+    ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
+    for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
+    {
+        uint64_t i2 = 0;
+        while (cindex->m_BlockHashes[i] != cindex2->m_BlockHashes[i2])
+        {
+            ++i2;
+            ASSERT_NE(i2, *cindex2->m_BlockCount);
+        }
+        ASSERT_EQ(cindex->m_BlockHashes[i], cindex2->m_BlockHashes[i2]);
+    }
+    ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
+    for (uint64_t i = 0; i < *cindex->m_ChunkCount; ++i)
+    {
+        uint64_t i2 = 0;
+        while (cindex->m_ChunkHashes[i] != cindex2->m_ChunkHashes[i2])
+        {
+            ++i2;
+            ASSERT_NE(i2, *cindex2->m_ChunkCount);
+        }
+        ASSERT_EQ(cindex->m_BlockHashes[cindex->m_ChunkBlockIndexes[i]], cindex2->m_BlockHashes[cindex2->m_ChunkBlockIndexes[i2]]);
+        ASSERT_EQ(cindex->m_ChunkBlockOffsets[i], cindex2->m_ChunkBlockOffsets[i2]);
+        ASSERT_EQ(cindex->m_ChunkLengths[i], cindex2->m_ChunkLengths[i2]);
+    }
 
     free(cindex2);
     free(cindex);
@@ -1275,7 +1275,7 @@ TEST(Longtail, ReconstructVersion)
         "Short string",
         "Another sample string that does not match any other string but -reconstructed properly, than you very much",
         "Short string",
-        "Short string"
+        "More than chunk less than block"
     };
 
     for (uint32_t i = 0; i < 5; ++i)
@@ -1314,7 +1314,7 @@ TEST(Longtail, ReconstructVersion)
     StoreCompressionAPI store_compression;
     struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
     ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
-	ASSERT_NE(0, WriteContent(
+    ASSERT_NE(0, WriteContent(
         storage_api,
         storage_api,
         &store_compression.m_CompressionAPI,
