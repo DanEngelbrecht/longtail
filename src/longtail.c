@@ -2393,6 +2393,7 @@ void ReadContentAddPath(void* context, const char* root_path, const char* file_n
 struct ContentIndex* ReadContent(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
+    struct JobAPI* job_api,
     const char* content_path)
 {
     LONGTAIL_LOG("ReadContent from `%s`\n", content_path)
@@ -2420,6 +2421,7 @@ struct ContentIndex* ReadContent(
     uint32_t* chunk_block_offsets = 0;
     chunk_block_offsets = arrsetcap(chunk_block_offsets, *paths->m_PathCount * 16);
 
+    // TODO: use job api!
     LONGTAIL_LOG("Scanning %u files from `%s`\n", *paths->m_PathCount, content_path);
     for (uint32_t path_index = 0; path_index < *paths->m_PathCount; ++path_index)
     {

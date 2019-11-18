@@ -890,6 +890,7 @@ TEST(Longtail, WriteContent)
     ContentIndex* cindex2 = ReadContent(
         &target_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
+        0,
         "chunks");
     ASSERT_NE((ContentIndex*)0, cindex2);
 

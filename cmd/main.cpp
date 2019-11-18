@@ -209,9 +209,11 @@ int main(int argc, char** argv)
         {
             TroveStorageAPI storage_api;
             MeowHashAPI hash_api;
+            BikeshedJobAPI job_api;
             ContentIndex* cindex = ReadContent(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
+                &job_api.m_JobAPI,
                 content);
             if (!cindex)
             {
@@ -329,6 +331,7 @@ int main(int argc, char** argv)
             existing_cindex = ReadContent(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
+                &job_api.m_JobAPI,
                 content);
             if (!existing_cindex)
             {
@@ -583,6 +586,7 @@ int main(int argc, char** argv)
             cindex = ReadContent(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
+                &job_api.m_JobAPI,
                 content);
             if (!cindex)
             {
@@ -593,6 +597,7 @@ int main(int argc, char** argv)
             }
         }
         int ok = CreatePath(&storage_api.m_StorageAPI, create_version) && WriteVersion(
+            &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,

@@ -131,6 +131,7 @@ int WriteContent(
 struct ContentIndex* ReadContent(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
+    struct JobAPI* job_api,
     const char* content_path);
 
 struct ContentIndex* CreateMissingContent(
