@@ -2043,8 +2043,14 @@ struct BlockIndex* ReadBlock(
         storage_api->CloseRead(storage_api, f);
         return 0;
     }
-    struct BlockIndex* block_index = InitBlockIndex(malloc(GetBlockIndexSize(chunk_count)), chunk_count);
     size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
+    if (s < block_index_data_size)
+    {
+        storage_api->CloseRead(storage_api, f);
+        return 0;
+    }
+
+    struct BlockIndex* block_index = InitBlockIndex(malloc(GetBlockIndexSize(chunk_count)), chunk_count);
 
     int ok = storage_api->Read(storage_api, f, s - block_index_data_size, block_index_data_size, &block_index[1]);
     storage_api->CloseRead(storage_api, f);
@@ -2078,6 +2084,7 @@ void ReadContentAddPath(void* context, const char* root_path, const char* file_n
     char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
     if (storage_api->IsDir(storage_api, full_path))
     {
+        free(full_path);
         return;
     }
 
@@ -2088,6 +2095,7 @@ void ReadContentAddPath(void* context, const char* root_path, const char* file_n
     {
         ++s;
     }
+/*
 
     StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, full_path);
     if (!f)
@@ -2122,6 +2130,7 @@ void ReadContentAddPath(void* context, const char* root_path, const char* file_n
     }
 
     paths_context->m_ChunkCount += chunk_count;
+*/
     paths_context->m_Paths = AppendPath(paths_context->m_Paths, s, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
 
     free(full_path);
@@ -2138,7 +2147,6 @@ struct ContentIndex* ReadContent(
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
 
-
     struct Paths* paths = CreatePaths(default_path_count, default_path_data_size);
     struct ReadContentContext context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(content_path)), paths, 0};
     if(!RecurseTree(storage_api, content_path, ReadContentAddPath, &context))
@@ -2148,8 +2156,69 @@ struct ContentIndex* ReadContent(
     }
     paths = context.m_Paths;
 
-    uint32_t chunk_count = context.m_ChunkCount;
-    uint64_t block_count = *paths->m_PathCount;
+    TLongtail_Hash* block_hashes = 0;
+    block_hashes = arrsetcap(block_hashes, *paths->m_PathCount);
+    TLongtail_Hash* chunk_hashes = 0;
+    chunk_hashes = arrsetcap(chunk_hashes, *paths->m_PathCount);
+    uint32_t* chunk_lengths = 0;
+    chunk_lengths = arrsetcap(chunk_lengths, *paths->m_PathCount);
+    uint64_t* chunk_block_indexes = 0;
+    chunk_block_indexes = arrsetcap(chunk_block_indexes, *paths->m_PathCount * 16);
+    uint32_t* chunk_block_offsets = 0;
+    chunk_block_offsets = arrsetcap(chunk_block_offsets, *paths->m_PathCount * 16);
+
+    LONGTAIL_LOG("Scanning %u files from `%s`\n", *paths->m_PathCount, content_path);
+    for (uint32_t path_index = 0; path_index < *paths->m_PathCount; ++path_index)
+    {
+        const char* block_path = &paths->m_Data[paths->m_Offsets[path_index]];
+        char* full_block_path = storage_api->ConcatPath(storage_api, content_path, block_path);
+
+        struct BlockIndex* block_index = ReadBlock(
+            storage_api,
+            hash_api,
+            full_block_path);
+
+        free(full_block_path);
+        full_block_path = 0;
+
+        if (!block_index)
+        {
+            // Not a valid block
+            continue;
+        }
+
+        uint64_t block_count = (uint64_t)arrlen(block_hashes);
+        uint64_t chunk_count = (uint64_t)arrlen(chunk_hashes);
+        uint32_t block_chunk_count = *block_index->m_ChunkCount;
+
+        arrsetlen(chunk_hashes, chunk_count + block_chunk_count);
+        arrsetlen(chunk_lengths, chunk_count + block_chunk_count);
+        arrsetlen(chunk_block_indexes, chunk_count + block_chunk_count);
+        arrsetlen(chunk_block_offsets, chunk_count + block_chunk_count);
+
+        uint32_t block_offset = 0;
+        for (uint32_t a = 0; a < block_chunk_count; ++a)
+        {
+            chunk_hashes[chunk_count + a] = block_index->m_ChunkHashes[a];
+            chunk_lengths[chunk_count + a] = block_index->m_ChunkSizes[a];
+            chunk_block_indexes[chunk_count + a] = block_count;
+            chunk_block_offsets[chunk_count + a] = block_offset;
+            block_offset += block_index->m_ChunkSizes[a];
+        }
+        arrpush(block_hashes, block_index->m_BlockHash);
+
+        free(block_index);
+        block_index = 0;
+    }
+
+    free(paths);
+    paths = 0;
+
+    uint64_t block_count = (uint64_t)arrlen(block_hashes);
+    uint64_t chunk_count = (uint64_t)arrlen(chunk_hashes);
+
+    LONGTAIL_LOG("Found 0x%" PRIx64 " chunks in 0x%" PRIx64 " blocks from `%s`\n", chunk_count, block_count, content_path);
+
     size_t content_index_data_size = GetContentIndexDataSize(block_count, chunk_count);
     struct ContentIndex* content_index = (struct ContentIndex*)malloc(sizeof(struct ContentIndex) + content_index_data_size);
     content_index->m_BlockCount = (uint64_t*) & ((char*)content_index)[sizeof(struct ContentIndex)];
@@ -2158,55 +2227,23 @@ struct ContentIndex* ReadContent(
     *content_index->m_ChunkCount = chunk_count;
     InitContentIndex(content_index);
 
-    uint64_t asset_offset = 0;
-    for (uint32_t b = 0; b < block_count; ++b)
-    {
-        const char* block_path = &paths->m_Data[paths->m_Offsets[b]];
-        char* full_block_path = storage_api->ConcatPath(storage_api, content_path, block_path);
+    memmove(content_index->m_BlockHashes, block_hashes, sizeof(TLongtail_Hash) * block_count);
+    memmove(content_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    memmove(content_index->m_ChunkBlockIndexes, chunk_block_indexes, sizeof(uint64_t) * chunk_count);
+    memmove(content_index->m_ChunkBlockOffsets, chunk_block_offsets, sizeof(uint32_t) * chunk_count);
+    memmove(content_index->m_ChunkLengths, chunk_lengths, sizeof(uint32_t) * chunk_count);
 
-        const char* last_delimiter = strrchr(full_block_path, '/');
-        const char* file_name = last_delimiter ? last_delimiter + 1 : full_block_path;
+    arrfree(block_hashes);
+    block_hashes = 0;
+    arrfree(chunk_hashes);
+    chunk_hashes = 0;
+    arrfree(chunk_block_indexes);
+    chunk_block_indexes = 0;
+    arrfree(chunk_block_offsets);
+    chunk_block_offsets = 0;
+    arrfree(chunk_lengths);
+    chunk_lengths = 0;
 
-        struct BlockIndex* block_index = ReadBlock(
-            storage_api,
-            hash_api,
-            full_block_path);
-
-        free(full_block_path);
-        if (block_index == 0)
-        {
-            free(content_index);
-            return 0;
-        }
-
-        char* block_name = GetBlockName(block_index->m_BlockHash);
-        char verify_file_name[64];
-        sprintf(verify_file_name, "%s.lrb", block_name);
-        free(block_name);
-
-        if (strcmp(verify_file_name, file_name))
-        {
-            free(block_index);
-            free(content_index);
-            return 0;
-        }
-
-        uint32_t block_chunk_count = *block_index->m_ChunkCount;
-        uint32_t block_offset = 0;
-        for (uint32_t a = 0; a < block_chunk_count; ++a)
-        {
-            content_index->m_ChunkHashes[asset_offset + a] = block_index->m_ChunkHashes[a];
-            content_index->m_ChunkLengths[asset_offset + a] = block_index->m_ChunkSizes[a];
-            content_index->m_ChunkBlockOffsets[asset_offset + a] = block_offset;
-            content_index->m_ChunkBlockIndexes[asset_offset + a] = b;
-            block_offset += content_index->m_ChunkLengths[asset_offset + a];
-        }
-        content_index->m_BlockHashes[b] = block_index->m_BlockHash;
-        asset_offset += block_chunk_count;
-
-        free(block_index);
-    }
-    free(paths);
     return content_index;
 }
 

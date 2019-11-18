@@ -11,58 +11,152 @@
 
 #include <stdio.h>
 
-// Temporary content tag
-static TLongtail_Hash GetContentTag(const char* , const char* path)
+int CreateParentPath(struct StorageAPI* storage_api, const char* path);
+
+int CreatePath(struct StorageAPI* storage_api, const char* path)
 {
-    const char * extension = strrchr(path, '.');
-    if (extension)
+    if (storage_api->IsDir(storage_api, path))
     {
-        MeowHashAPI hash;
-        return GetPathHash(&hash.m_HashAPI, path);
+        return 1;
     }
-    return (TLongtail_Hash)-1;
+    else
+    {
+        if (!CreateParentPath(storage_api, path))
+        {
+            return 0;
+        }
+        if (storage_api->CreateDir(storage_api, path))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int CreateParentPath(struct StorageAPI* storage_api, const char* path)
+{
+    char* dir_path = strdup(path);
+    char* last_path_delimiter = (char*)strrchr(dir_path, '/');
+    if (last_path_delimiter == 0)
+    {
+        return 1;
+    }
+    while (last_path_delimiter > dir_path && last_path_delimiter[-1] == '/')
+    {
+        --last_path_delimiter;
+    }
+    *last_path_delimiter = '\0';
+    int ok = CreatePath(storage_api, dir_path);
+    free(dir_path);
+    return ok;
+}
+
+char* NormalizePath(const char* path)
+{
+    if (!path)
+    {
+        return 0;
+    }
+    char* normalized_path = strdup(path);
+    size_t wi = 0;
+    size_t ri = 0;
+    while (path[ri])
+    {
+        switch (path[ri])
+        {
+        case '/':
+            if (wi && normalized_path[wi - 1] == '/')
+            {
+                ++ri;
+            }
+            else
+            {
+                normalized_path[wi++] = path[ri++];
+            }
+            break;
+        case '\\':
+            if (wi && normalized_path[wi - 1] == '/')
+            {
+                ++ri;
+            }
+            else
+            {
+                normalized_path[wi++] = '/';
+                ++ri;
+            }
+            break;
+        default:
+            normalized_path[wi++] = path[ri++];
+            break;
+        }
+    }
+    normalized_path[wi] = '\0';
+    return normalized_path;
 }
 
 int main(int argc, char** argv)
 {
-    const char* create_version_index = NULL;
-    kgflags_string("create-version-index", NULL, "Path to version index output", false, &create_version_index);
+    int32_t target_chunk_size = 32768;
+    kgflags_int("target-chunk-size", target_chunk_size, "Target chunk size", false, &target_chunk_size);
 
-    const char* version = NULL;
-    kgflags_string("version", NULL, "Path to version assets input", false, &version);
+    int32_t max_chunks_per_block = 8192;
+    kgflags_int("max-chunks-per-block", max_chunks_per_block, "Max chunks per block", false, &max_chunks_per_block);
 
-    const char* filter = NULL;
-    kgflags_string("filter", NULL, "Path to filter file input", false, &filter);
+    int32_t target_block_size = 65536 * 8;
+    kgflags_int("target-block-size", target_block_size, "Target block size", false, &target_block_size);
 
-    const char* create_content_index = NULL;
-    kgflags_string("create-content-index", NULL, "Path to content index output", false, &create_content_index);
+    const char* create_version_index_raw = NULL;
+    kgflags_string("create-version-index", NULL, "Path to version index output", false, &create_version_index_raw);
 
-    const char* version_index = NULL;
-    kgflags_string("version-index", NULL, "Path to version index input", false, &version_index);
+    const char* version_raw = NULL;
+    kgflags_string("version", NULL, "Path to version assets input", false, &version_raw);
 
-    const char* content = NULL;
-    kgflags_string("content", NULL, "Path to content block input", false, &content);
+    const char* filter_raw = NULL;
+    kgflags_string("filter", NULL, "Path to filter file input", false, &filter_raw);
+
+    const char* create_content_index_raw = NULL;
+    kgflags_string("create-content-index", NULL, "Path to content index output", false, &create_content_index_raw);
+
+    const char* version_index_raw = NULL;
+    kgflags_string("version-index", NULL, "Path to version index input", false, &version_index_raw);
+
+    const char* content_raw = NULL;
+    kgflags_string("content", NULL, "Path to content block input", false, &content_raw);
     
-    const char* create_content = NULL;
-    kgflags_string("create-content", NULL, "Path to content block output", false, &create_content);
+    const char* create_content_raw = NULL;
+    kgflags_string("create-content", NULL, "Path to content block output", false, &create_content_raw);
 
-    const char* content_index = NULL;
-    kgflags_string("content-index", NULL, "Path to content index input", false, &content_index);
+    const char* content_index_raw = NULL;
+    kgflags_string("content-index", NULL, "Path to content index input", false, &content_index_raw);
 
-    const char* merge_content_index = NULL;
-    kgflags_string("merge-content-index", NULL, "Path to base content index", false, &merge_content_index);
+    const char* merge_content_index_raw = NULL;
+    kgflags_string("merge-content-index", NULL, "Path to base content index", false, &merge_content_index_raw);
 
-    const char* create_version = NULL;
-    kgflags_string("create-version", NULL, "Path to version index", false, &create_version);
+    const char* create_version_raw = NULL;
+    kgflags_string("create-version", NULL, "Path to version index", false, &create_version_raw);
 
-    const char* list_missing_blocks = NULL;
-    kgflags_string("list-missing-blocks", NULL, "Path to content index", false, &list_missing_blocks);
+    const char* list_missing_blocks_raw = NULL;
+    kgflags_string("list-missing-blocks", NULL, "Path to content index", false, &list_missing_blocks_raw);
 
     if (!kgflags_parse(argc, argv)) {
         kgflags_print_errors();
         kgflags_print_usage();
         return 1;
     }
+
+    const char* create_version_index = NormalizePath(create_version_index_raw);
+    const char* version = NormalizePath(version_raw);
+    const char* filter = NormalizePath(filter_raw);
+    const char* create_content_index = NormalizePath(create_content_index_raw);
+    const char* version_index = NormalizePath(version_index_raw);
+    const char* content = NormalizePath(content_raw);
+    const char* create_content = NormalizePath(create_content_raw);
+    const char* content_index = NormalizePath(content_index_raw);
+    const char* merge_content_index = NormalizePath(merge_content_index_raw);
+    const char* create_version = NormalizePath(create_version_raw);
+    const char* list_missing_blocks = NormalizePath(list_missing_blocks_raw);
+
+    // These *should* all be freed, but we don't care since we exit the application :)
 
     if (create_version_index && version)
     {
@@ -89,7 +183,7 @@ int main(int argc, char** argv)
             &job_api.m_JobAPI,
             version,
             version_paths,
-            32768);
+            target_chunk_size);
         free(version_paths);
         version_paths = 0;
         if (!version_index)
@@ -97,7 +191,8 @@ int main(int argc, char** argv)
             printf("Failed to create version index for `%s`\n", version);
             return 1;
         }
-        int ok = WriteVersionIndex(&storage_api.m_StorageAPI, version_index, create_version_index);
+        
+        int ok = CreateParentPath(&storage_api.m_StorageAPI, create_version_index) && WriteVersionIndex(&storage_api.m_StorageAPI, version_index, create_version_index);
         free(version_index);
         version_index = 0;
         if (!ok)
@@ -123,7 +218,7 @@ int main(int argc, char** argv)
                 printf("Failed to create content index for content `%s`\n", content);
                 return 1;
             }
-            int ok = WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
+            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
             free(cindex);
             cindex = 0;
             if (!ok)
@@ -162,7 +257,7 @@ int main(int argc, char** argv)
                 return 1;
             }
 
-            int ok = WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
+            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
             free(cindex);
             cindex = 0;
 
@@ -207,7 +302,7 @@ int main(int argc, char** argv)
                 &job_api.m_JobAPI,
                 version,
                 version_paths,
-                32768);
+                target_chunk_size);
             free(version_paths);
             version_paths = 0;
             if (!vindex)
@@ -258,8 +353,8 @@ int main(int argc, char** argv)
             &hash_api.m_HashAPI,
             existing_cindex,
             vindex,
-            65536 * 2,
-            8192);
+            target_block_size,
+            max_chunks_per_block);
 
         free(vindex);
         vindex = 0;
@@ -269,7 +364,7 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        int ok = WriteContentIndex(
+        int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(
             &storage_api.m_StorageAPI,
             cindex,
             create_content_index);
@@ -318,7 +413,7 @@ int main(int argc, char** argv)
                 &job_api.m_JobAPI,
                 version,
                 version_paths,
-                32768);
+                target_chunk_size);
             free(version_paths);
             version_paths = 0;
             if (!vindex)
@@ -345,8 +440,8 @@ int main(int argc, char** argv)
                 *vindex->m_ChunkCount,
                 vindex->m_ChunkHashes,
                 vindex->m_ChunkSizes,
-                65536 * 4,
-                8192);
+                target_block_size,
+                max_chunks_per_block);
             if (!cindex)
             {
                 printf("Failed to create content index for version `%s`\n", version);
@@ -355,7 +450,7 @@ int main(int argc, char** argv)
         }
 
         struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-        int ok = WriteContent(
+        int ok = CreatePath(&storage_api.m_StorageAPI, create_content) && WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
@@ -497,7 +592,7 @@ int main(int argc, char** argv)
                 return 1;
             }
         }
-        int ok = ReconstructVersion(
+        int ok = CreatePath(&storage_api.m_StorageAPI, create_version) && ReconstructVersion(
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,

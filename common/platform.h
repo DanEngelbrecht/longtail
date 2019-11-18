@@ -551,8 +551,8 @@ struct BikeshedJobAPI
             PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
             Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, task_ids);
         }
-		free(task_ids);
-	}
+        free(task_ids);
+    }
     static void WaitForAllJobs(JobAPI* job_api)
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
