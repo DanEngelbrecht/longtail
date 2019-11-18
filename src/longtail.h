@@ -154,8 +154,9 @@ struct ChunkHashToAssetPart* CreateAssetPartLookup(
     struct VersionIndex* version_index);
 void FreeAssetPartLookup(struct ChunkHashToAssetPart* asset_part_lookup);
 
-int ReconstructVersion(
-    struct StorageAPI* storage_api,
+int WriteVersion(
+    struct StorageAPI* content_storage_api,
+    struct StorageAPI* version_storage_api,
     struct CompressionAPI* compression_api,
     struct JobAPI* job_api,
     const struct ContentIndex* content_index,
@@ -178,11 +179,12 @@ struct VersionIndex* BuildVersionIndex(
     void* mem,
     size_t mem_size,
     const struct Paths* paths,
-    const TLongtail_Hash* pathHashes,
-    const TLongtail_Hash* contentHashes,
-    const uint32_t* contentSizes,
+    const TLongtail_Hash* path_hashes,
+    const TLongtail_Hash* content_hashes,
+    const uint32_t* content_sizes,
     const uint32_t* asset_chunk_start_index,
     const uint32_t* asset_chunk_counts,
+    const uint32_t* asset_chunk_index_starts,
     uint32_t asset_chunk_index_count,
     const uint32_t* asset_chunk_indexes,
     uint32_t chunk_count,
@@ -220,6 +222,7 @@ struct VersionIndex
     uint32_t* m_AssetChunkCounts;       // []
     // uint64_t* m_CreationDates;       // []
     // uint64_t* m_ModificationDates;   // []
+    uint32_t* m_AssetChunkIndexStarts;  // []
     uint32_t* m_AssetChunkIndexes;      // []
 
     TLongtail_Hash* m_ChunkHashes;      // []

@@ -592,7 +592,7 @@ int main(int argc, char** argv)
                 return 1;
             }
         }
-        int ok = CreatePath(&storage_api.m_StorageAPI, create_version) && ReconstructVersion(
+        int ok = CreatePath(&storage_api.m_StorageAPI, create_version) && WriteVersion(
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,

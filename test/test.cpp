@@ -706,6 +706,7 @@ TEST(Longtail, VersionIndex)
         asset_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
+        asset_chunk_start_index,
         *paths->m_PathCount,
         asset_chunk_start_index,
         *paths->m_PathCount,
@@ -985,6 +986,7 @@ TEST(Longtail, CreateMissingContent)
         asset_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
+        asset_chunk_start_index,
         *paths->m_PathCount,
         asset_chunk_start_index,
         *paths->m_PathCount,
@@ -1222,7 +1224,8 @@ TEST(Longtail, FullScale)
     remote_asset_part_lookup = 0;
 
     ContentIndex* merged_content_index = MergeContentIndex(local_content_index, missing_content);
-    ASSERT_EQ(1, ReconstructVersion(
+    ASSERT_EQ(1, WriteVersion(
+        &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
         0,
@@ -1261,7 +1264,7 @@ TEST(Longtail, FullScale)
 }
 
 
-TEST(Longtail, ReconstructVersion)
+TEST(Longtail, WriteVersion)
 {
     InMemStorageAPI source_storage;
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
@@ -1330,7 +1333,8 @@ TEST(Longtail, ReconstructVersion)
     FreeAssetPartLookup(asset_part_lookup);
     asset_part_lookup = 0;
 
-    ASSERT_NE(0, ReconstructVersion(
+    ASSERT_NE(0, WriteVersion(
+        storage_api,
         storage_api,
         &store_compression.m_CompressionAPI,
         0,
@@ -1433,7 +1437,8 @@ TEST(Longtail, ReconstructVersion)
     FreeAssetPartLookup(asset_part_lookup);
     asset_part_lookup = 0;
 
-    ASSERT_EQ(1, ReconstructVersion(
+    ASSERT_EQ(1, WriteVersion(
+        storage_api,
         storage_api,
         &compression_api.m_CompressionAPI,
         0,
@@ -1617,7 +1622,8 @@ void Bench()
         char version_target_folder[256];
         sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
         printf("Reconstructing %u assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
-        ASSERT_NE(0, ReconstructVersion(
+        ASSERT_NE(0, WriteVersion(
+            &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &compression_api.m_CompressionAPI,
             &job_api.m_JobAPI,
@@ -1724,7 +1730,15 @@ void LifelikeTest()
     }
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-    ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, &job_api.m_JobAPI, local_content_index, version1, local_content_path, remote_path_1));
+    ASSERT_EQ(1, WriteVersion(
+        &storage_api.m_StorageAPI,
+        &storage_api.m_StorageAPI,
+        &compression_api.m_CompressionAPI,
+        &job_api.m_JobAPI,
+        local_content_index,
+        version1,
+        local_content_path,
+        remote_path_1));
     printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
@@ -1837,7 +1851,15 @@ void LifelikeTest()
     local_content_index = 0;
 
     printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-    ASSERT_EQ(1, ReconstructVersion(&storage_api.m_StorageAPI, &compression_api.m_CompressionAPI, &job_api.m_JobAPI, merged_local_content, version2, local_content_path, remote_path_2));
+    ASSERT_EQ(1, WriteVersion(
+        &storage_api.m_StorageAPI,
+        &storage_api.m_StorageAPI,
+        &compression_api.m_CompressionAPI,
+        &job_api.m_JobAPI,
+        merged_local_content,
+        version2,
+        local_content_path,
+        remote_path_2));
     printf("Reconstructed %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
 //    free(existing_blocks);
