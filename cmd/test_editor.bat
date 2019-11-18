@@ -22,18 +22,6 @@ if %errorlevel% neq 0 (
 
 GOTO End
 
-call do_version.bat ..\build\longtail_debug.exe C:\Temp\longtail WinEditor\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor
-if %errorlevel% neq 0 (
-    echo "FAILED:" %errorlevel%
-    exit /b %errorlevel%
-)
-
-call do_version.bat ..\build\longtail_debug.exe C:\Temp\longtail WinEditor\git916600e1ecb9da13f75835cd1b2d2e6a67f1a92d_Win64_Editor
-if %errorlevel% neq 0 (
-    echo "FAILED:" %errorlevel%
-    exit /b %errorlevel%
-)
-
 :Office
 
 call do_version.bat ..\build\longtail_debug.exe C:\Temp\longtail WinEditor\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor

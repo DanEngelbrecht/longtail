@@ -2217,7 +2217,7 @@ struct ContentIndex* ReadContent(
     uint64_t block_count = (uint64_t)arrlen(block_hashes);
     uint64_t chunk_count = (uint64_t)arrlen(chunk_hashes);
 
-    LONGTAIL_LOG("Found 0x%" PRIx64 " chunks in 0x%" PRIx64 " blocks from `%s`\n", chunk_count, block_count, content_path);
+    LONGTAIL_LOG("Found %" PRIu64 " chunks in %" PRIu64 " blocks from `%s`\n", chunk_count, block_count, content_path);
 
     size_t content_index_data_size = GetContentIndexDataSize(block_count, chunk_count);
     struct ContentIndex* content_index = (struct ContentIndex*)malloc(sizeof(struct ContentIndex) + content_index_data_size);
@@ -2273,7 +2273,15 @@ uint32_t MakeUnique(TLongtail_Hash* hashes, uint32_t count)
     return w;
 }
 
-void DiffHashes(const TLongtail_Hash* reference_hashes, uint32_t reference_hash_count, const TLongtail_Hash* new_hashes, uint32_t new_hash_count, uint32_t* added_hash_count, TLongtail_Hash* added_hashes, uint32_t* removed_hash_count, TLongtail_Hash* removed_hashes)
+void DiffHashes(
+    const TLongtail_Hash* reference_hashes,
+    uint32_t reference_hash_count,
+    const TLongtail_Hash* new_hashes,
+    uint32_t new_hash_count,
+    uint32_t* added_hash_count,
+    TLongtail_Hash* added_hashes,
+    uint32_t* removed_hash_count,
+    TLongtail_Hash* removed_hashes)
 {
     TLongtail_Hash* refs = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * reference_hash_count);
     TLongtail_Hash* news = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * new_hash_count);
@@ -2346,15 +2354,15 @@ struct ContentIndex* CreateMissingContent(
 {
     LONGTAIL_LOG("CreateMissingContent\n")
     uint64_t chunk_count = *version->m_ChunkCount;
-    TLongtail_Hash* removed_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * chunk_count);
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * chunk_count);
 
     uint32_t added_hash_count = 0;
-    uint32_t removed_hash_count = 0;
-    DiffHashes(content_index->m_ChunkHashes, *content_index->m_ChunkCount, version->m_ChunkHashes, chunk_count, &added_hash_count, added_hashes, &removed_hash_count, removed_hashes);
+    DiffHashes(content_index->m_ChunkHashes, *content_index->m_ChunkCount, version->m_ChunkHashes, chunk_count, &added_hash_count, added_hashes, 0, 0);
 
     if (added_hash_count == 0)
     {
+        free(added_hashes);
+        added_hashes = 0;
         struct ContentIndex* diff_content_index = CreateContentIndex(
             hash_api,
             0,
@@ -2379,7 +2387,6 @@ struct ContentIndex* CreateMissingContent(
         if (lookup_index == -1)
         {
             hmfree(chunk_index_lookup);
-            free(removed_hashes);
             free(added_hashes);
             return 0;
         }
@@ -2398,8 +2405,8 @@ struct ContentIndex* CreateMissingContent(
         max_block_size,
         max_chunks_per_block);
 
-    free(removed_hashes);
     free(added_hashes);
+    added_hashes = 0;
 
     return diff_content_index;
 }
