@@ -99,8 +99,6 @@ struct VersionIndex* ReadVersionIndex(
     struct StorageAPI* storage_api,
     const char* path);
 
-typedef TLongtail_Hash (*GetContentTagFunc)(const char* assets_path, const char* path);
-
 struct ContentIndex* CreateContentIndex(
     struct HashAPI* hash_api,
     uint64_t chunk_count,
