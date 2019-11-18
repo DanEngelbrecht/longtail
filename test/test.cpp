@@ -162,7 +162,7 @@ ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t ass
 
 
 
-
+// TODO: Replace with stb_ds array!
 typedef char TContent;
 LONGTAIL_DECLARE_ARRAY_TYPE(TContent, malloc, free)
 
@@ -498,6 +498,38 @@ struct InMemStorageAPI
     }
 };
 
+
+struct SingleThreadedJobAPI
+{
+    JobAPI m_JobAPI;
+
+    SingleThreadedJobAPI()
+        : m_JobAPI{
+            ReserveJobs,
+            SubmitJobs,
+            WaitForAllJobs
+            }
+    {
+    }
+
+    static int ReserveJobs(struct JobAPI* , uint32_t )
+    {
+        return 1;
+    }
+    static void SubmitJobs(struct JobAPI* , uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
+    {
+        for (uint32_t j = 0; j < job_count; ++j)
+        {
+            job_funcs[j](job_contexts[j]);
+        }
+    }
+    static void WaitForAllJobs(struct JobAPI* )
+    {
+
+    }
+};
+
+
 int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 {
     char* dir_path = strdup(path);
@@ -765,6 +797,7 @@ TEST(Longtail, ContentIndexSerialization)
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
     LizardCompressionAPI compression_api;
+    SingleThreadedJobAPI job_api;
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/five_items", 5));
     Paths* version1_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "source/version1");
@@ -772,7 +805,7 @@ TEST(Longtail, ContentIndexSerialization)
     VersionIndex* vindex = CreateVersionIndex(
         &local_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
-        0,
+        &job_api.m_JobAPI,
         "source/version1",
         version1_paths,
         16384);
@@ -823,6 +856,7 @@ TEST(Longtail, WriteContent)
     InMemStorageAPI source_storage;
     InMemStorageAPI target_storage;
     MeowHashAPI hash_api;
+    SingleThreadedJobAPI job_api;
     LizardCompressionAPI compression_api;
 
     const char* TEST_FILENAMES[5] = {
@@ -856,7 +890,7 @@ TEST(Longtail, WriteContent)
     VersionIndex* vindex = CreateVersionIndex(
         &source_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
-        0,
+        &job_api.m_JobAPI,
         "local",
         version1_paths,
         16);
@@ -879,7 +913,7 @@ TEST(Longtail, WriteContent)
         &source_storage.m_StorageAPI,
         &target_storage.m_StorageAPI,
         &compression_api.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         cindex,
         asset_part_lookup,
         "local",
@@ -890,7 +924,7 @@ TEST(Longtail, WriteContent)
     ContentIndex* cindex2 = ReadContent(
         &target_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
-        0,
+        &job_api.m_JobAPI,
         "chunks");
     ASSERT_NE((ContentIndex*)0, cindex2);
 
@@ -1039,6 +1073,7 @@ TEST(Longtail, VersionIndexDirectories)
 {
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
+    SingleThreadedJobAPI job_api;
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "two_items", 2));
     local_storage.m_StorageAPI.CreateDir(&local_storage.m_StorageAPI, "no_items");
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));
@@ -1050,7 +1085,7 @@ TEST(Longtail, VersionIndexDirectories)
     VersionIndex* local_version_index = CreateVersionIndex(
         &local_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
-        0,
+        &job_api.m_JobAPI,
         "",
         local_paths,
         16384);
@@ -1129,6 +1164,7 @@ TEST(Longtail, FullScale)
     return;
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
+    SingleThreadedJobAPI job_api;
 
     CreateFakeContent(&local_storage.m_StorageAPI, 0, 5);
 
@@ -1141,7 +1177,7 @@ TEST(Longtail, FullScale)
     VersionIndex* local_version_index = CreateVersionIndex(
         &local_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
-        0,
+        &job_api.m_JobAPI,
         "",
         local_paths,
         16384);
@@ -1153,7 +1189,7 @@ TEST(Longtail, FullScale)
     VersionIndex* remote_version_index = CreateVersionIndex(
         &remote_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
-        0,
+        &job_api.m_JobAPI,
         "",
         remote_paths,
         16384);
@@ -1178,7 +1214,7 @@ TEST(Longtail, FullScale)
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         local_content_index,
         local_asset_part_lookup,
         "",
@@ -1199,7 +1235,7 @@ TEST(Longtail, FullScale)
         &remote_storage.m_StorageAPI,
         &remote_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         remote_content_index,
         remote_asset_part_lookup,
         "",
@@ -1216,7 +1252,7 @@ TEST(Longtail, FullScale)
         &remote_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         missing_content,
         remote_asset_part_lookup,
         "",
@@ -1229,7 +1265,7 @@ TEST(Longtail, FullScale)
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
         &store_compression.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         merged_content_index,
         remote_version_index,
         "",
@@ -1269,16 +1305,19 @@ TEST(Longtail, WriteVersion)
 {
     InMemStorageAPI source_storage;
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
+    SingleThreadedJobAPI job_api;
 
-    const char* TEST_FILENAMES[5] = {
-        "local/TheLongFile.txt",
-        "local/ShortString.txt",
-        "local/AnotherSample.txt",
-        "local/folder/ShortString.txt",
-        "local/AlsoShortString.txt"
+	const uint32_t asset_count = 5;
+
+    const char* TEST_FILENAMES[] = {
+        "TheLongFile.txt",
+        "ShortString.txt",
+        "AnotherSample.txt",
+        "folder/ShortString.txt",
+        "WATCHIOUT.txt"
     };
 
-    const char* TEST_STRINGS[5] = {
+    const char* TEST_STRINGS[] = {
         "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
         "Short string",
         "Another sample string that does not match any other string but -reconstructed properly, than you very much",
@@ -1286,12 +1325,22 @@ TEST(Longtail, WriteVersion)
         "More than chunk less than block"
     };
 
-    for (uint32_t i = 0; i < 5; ++i)
+	const size_t TEST_SIZES[] = {
+		strlen(TEST_STRINGS[0]) + 1,
+		strlen(TEST_STRINGS[1]) + 1,
+		strlen(TEST_STRINGS[2]) + 1,
+		strlen(TEST_STRINGS[3]) + 1,
+		strlen(TEST_STRINGS[4]) + 1
+	};
+
+    for (uint32_t i = 0; i < asset_count; ++i)
     {
-        ASSERT_NE(0, CreateParentPath(storage_api, TEST_FILENAMES[i]));
-        StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, TEST_FILENAMES[i]);
+		char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(storage_api, file_name));
+        StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, file_name);
+		free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
-        ASSERT_NE(0, storage_api->Write(storage_api, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        ASSERT_NE(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
         storage_api->CloseWrite(storage_api, w);
         w = 0;
     }
@@ -1302,7 +1351,7 @@ TEST(Longtail, WriteVersion)
     VersionIndex* vindex = CreateVersionIndex(
         storage_api,
         &hash_api.m_HashAPI,
-        0,
+        &job_api.m_JobAPI,
         "local",
         version1_paths,
         16);
@@ -1326,7 +1375,7 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         &store_compression.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         cindex,
         asset_part_lookup,
         "local",
@@ -1338,11 +1387,28 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         &store_compression.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         cindex,
         vindex,
         "chunks",
         "remote"));
+
+	for (uint32_t i = 0; i < asset_count; ++i)
+	{
+		char* file_name = storage_api->ConcatPath(storage_api, "remote", TEST_FILENAMES[i]);
+		StorageAPI_HOpenFile r = storage_api->OpenReadFile(storage_api, file_name);
+		free(file_name);
+		ASSERT_NE((StorageAPI_HOpenFile)0, r);
+		uint64_t size = storage_api->GetSize(storage_api, r);
+		char* test_data = (char*)malloc(sizeof(char) * size);
+		ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
+		ASSERT_EQ(TEST_SIZES[i], size);
+		storage_api->CloseWrite(storage_api, r);
+		r = 0;
+		ASSERT_STREQ(TEST_STRINGS[i], test_data);
+		free(test_data);
+		test_data = 0;
+	}
 
     free(vindex);
     vindex = 0;
@@ -1429,7 +1495,7 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         &compression_api.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         content_index,
         asset_part_lookup,
         "source_path",
@@ -1442,7 +1508,7 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         &compression_api.m_CompressionAPI,
-        0,
+        &job_api.m_JobAPI,
         content_index,
         version_index,
         "local_content",
