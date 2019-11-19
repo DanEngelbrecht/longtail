@@ -94,7 +94,7 @@ inline int Trove_MoveFile(const char* source, const char* target)
 
 int Trove_IsDir(const char* path)
 {
-    DWORD attrs = ::GetFileAttributesA(tmp_path);
+    DWORD attrs = ::GetFileAttributesA(path);
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         return 0;
@@ -104,7 +104,7 @@ int Trove_IsDir(const char* path)
 
 int Trove_IsFile(const char* path)
 {
-    DWORD attrs = ::GetFileAttributesA(tmp_path);
+    DWORD attrs = ::GetFileAttributesA(path);
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         return 0;

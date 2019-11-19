@@ -1309,14 +1309,15 @@ TEST(Longtail, WriteVersion)
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
     SingleThreadedJobAPI job_api;
 
-    const uint32_t asset_count = 5;
+    const uint32_t asset_count = 6;
 
     const char* TEST_FILENAMES[] = {
         "TheLongFile.txt",
         "ShortString.txt",
         "AnotherSample.txt",
         "folder/ShortString.txt",
-        "WATCHIOUT.txt"
+        "WATCHIOUT.txt",
+        "empty/.init.py"
     };
 
     const char* TEST_STRINGS[] = {
@@ -1324,7 +1325,8 @@ TEST(Longtail, WriteVersion)
         "Short string",
         "Another sample string that does not match any other string but -reconstructed properly, than you very much",
         "Short string",
-        "More than chunk less than block"
+        "More than chunk less than block",
+        ""
     };
 
     const size_t TEST_SIZES[] = {
@@ -1332,7 +1334,8 @@ TEST(Longtail, WriteVersion)
         strlen(TEST_STRINGS[1]) + 1,
         strlen(TEST_STRINGS[2]) + 1,
         strlen(TEST_STRINGS[3]) + 1,
-        strlen(TEST_STRINGS[4]) + 1
+        strlen(TEST_STRINGS[4]) + 1,
+        0
     };
 
     for (uint32_t i = 0; i < asset_count; ++i)
@@ -1342,7 +1345,10 @@ TEST(Longtail, WriteVersion)
         StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, file_name);
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
-        ASSERT_NE(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+        if (TEST_SIZES[i])
+        {
+            ASSERT_NE(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+        }
         storage_api->CloseWrite(storage_api, w);
         w = 0;
     }
@@ -1374,7 +1380,7 @@ TEST(Longtail, WriteVersion)
 
     StoreCompressionAPI store_compression;
     struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
+//    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
     ASSERT_NE(0, WriteContent(
         storage_api,
         storage_api,
@@ -1404,12 +1410,15 @@ TEST(Longtail, WriteVersion)
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
         uint64_t size = storage_api->GetSize(storage_api, r);
-        char* test_data = (char*)malloc(sizeof(char) * size);
-        ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
         ASSERT_EQ(TEST_SIZES[i], size);
+        char* test_data = (char*)malloc(sizeof(char) * size);
+        if (size)
+        {
+            ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
+            ASSERT_STREQ(TEST_STRINGS[i], test_data);
+        }
         storage_api->CloseWrite(storage_api, r);
         r = 0;
-        ASSERT_STREQ(TEST_STRINGS[i], test_data);
         free(test_data);
         test_data = 0;
     }
@@ -1418,127 +1427,6 @@ TEST(Longtail, WriteVersion)
     vindex = 0;
     free(cindex);
     cindex = 0;
-
-#if 0
-    const char* asset_paths[5] = {
-        "first_",
-        "second",
-        "third_",
-        "fourth",
-        "fifth_"
-    };
-
-    MeowHashAPI hash_api;
-    TLongtail_Hash asset_path_hashes[5];// = {GetPathHash("10"), GetPathHash("20"), GetPathHash("30"), GetPathHash("40"), GetPathHash("50")};
-    TLongtail_Hash asset_content_hashes[5];// = { 1, 2, 3, 4, 5};
-    const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
-    const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
-    const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
-    InMemStorageAPI source_storage;
-    StorageAPI* storage_api = &source_storage.m_StorageAPI;
-    for (uint32_t i = 0; i < 5; ++i)
-    {
-        asset_path_hashes[i] = GetPathHash(&hash_api.m_HashAPI, asset_paths[i]);
-        char* path = storage_api->ConcatPath(storage_api, "source_path", asset_paths[i]);
-        ASSERT_NE(0, MakePath(storage_api, path));
-        StorageAPI_HOpenFile f = storage_api->OpenWriteFile(storage_api, path);
-        ASSERT_NE((StorageAPI_HOpenFile)0, f);
-        free(path);
-        char* data = (char*)malloc(asset_sizes[i]);
-        for (uint32_t d = 0; d < asset_sizes[i]; ++d)
-        {
-            data[d] = (char)(i + 1);
-        }
-        ASSERT_EQ(1, storage_api->Write(storage_api, f, 0, asset_sizes[i], data));
-        storage_api->CloseWrite(storage_api, f);
-
-        meow_state state;
-        MeowBegin(&state, MeowDefaultSeed);
-        MeowAbsorb(&state, (meow_umm)(asset_sizes[i]), (void*)data);
-        uint64_t data_hash = MeowU64From(MeowEnd(&state, 0), 0);
-        asset_content_hashes[i] = data_hash;
-        free(data);
-    }
-
-    Paths* paths = MakePaths(5, asset_paths);
-    size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
-    void* version_index_mem = malloc(version_index_size);
-
-    VersionIndex* version_index = BuildVersionIndex(
-        version_index_mem,
-        version_index_size,
-        paths,
-        asset_path_hashes,
-        asset_content_hashes,
-        asset_sizes,
-        asset_chunk_start_index,
-        asset_chunk_counts,
-        *paths->m_PathCount,
-        asset_chunk_start_index,
-        *paths->m_PathCount,
-        asset_sizes,
-        asset_content_hashes);
-    ASSERT_NE((VersionIndex*)0, version_index);
-    free(paths);
-
-    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
-    ContentIndex* content_index = CreateContentIndex(
-        &hash_api.m_HashAPI,
-        *version_index->m_ChunkCount,
-        version_index->m_ChunkHashes,
-        version_index->m_ChunkSizes,
-        MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
-    ASSERT_NE((ContentIndex*)0, content_index);
-
-    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version_index);
-    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
-    LizardCompressionAPI compression_api;
-    ASSERT_EQ(1, WriteContent(
-        storage_api,
-        storage_api,
-        &compression_api.m_CompressionAPI,
-        &job_api.m_JobAPI,
-        content_index,
-        asset_part_lookup,
-        "source_path",
-        "local_content"));
-
-    FreeAssetPartLookup(asset_part_lookup);
-    asset_part_lookup = 0;
-
-    ASSERT_EQ(1, WriteVersion(
-        storage_api,
-        storage_api,
-        &compression_api.m_CompressionAPI,
-        &job_api.m_JobAPI,
-        content_index,
-        version_index,
-        "local_content",
-        "target_path"));
-
-    for (uint32_t i = 0; i < 5; ++i)
-    {
-        char* path = (char*)storage_api->ConcatPath(storage_api, "target_path", asset_paths[i]);
-        asset_path_hashes[i] = GetPathHash(&hash_api.m_HashAPI, path);
-        StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, path);
-        ASSERT_NE((StorageAPI_HOpenFile)0, f);
-        free(path);
-        ASSERT_EQ(asset_sizes[i], storage_api->GetSize(storage_api, f));
-        char* data = (char*)malloc(asset_sizes[i]);
-        storage_api->Read(storage_api, f, 0, asset_sizes[i], data);
-        for (uint32_t d = 0; d < asset_sizes[i]; ++d)
-        {
-            if ((char)(i + 1) != data[d])
-            {
-                ASSERT_EQ((char)(i + 1), data[d]);
-            }
-        }
-        storage_api->CloseRead(storage_api, f);
-        free(data);
-    }
-#endif // 0
 }
 
 void Bench()
