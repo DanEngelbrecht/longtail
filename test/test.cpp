@@ -1307,7 +1307,7 @@ TEST(Longtail, WriteVersion)
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
     SingleThreadedJobAPI job_api;
 
-	const uint32_t asset_count = 5;
+    const uint32_t asset_count = 5;
 
     const char* TEST_FILENAMES[] = {
         "TheLongFile.txt",
@@ -1325,20 +1325,20 @@ TEST(Longtail, WriteVersion)
         "More than chunk less than block"
     };
 
-	const size_t TEST_SIZES[] = {
-		strlen(TEST_STRINGS[0]) + 1,
-		strlen(TEST_STRINGS[1]) + 1,
-		strlen(TEST_STRINGS[2]) + 1,
-		strlen(TEST_STRINGS[3]) + 1,
-		strlen(TEST_STRINGS[4]) + 1
-	};
+    const size_t TEST_SIZES[] = {
+        strlen(TEST_STRINGS[0]) + 1,
+        strlen(TEST_STRINGS[1]) + 1,
+        strlen(TEST_STRINGS[2]) + 1,
+        strlen(TEST_STRINGS[3]) + 1,
+        strlen(TEST_STRINGS[4]) + 1
+    };
 
     for (uint32_t i = 0; i < asset_count; ++i)
     {
-		char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
+        char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage_api, file_name));
         StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, file_name);
-		free(file_name);
+        free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         ASSERT_NE(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
         storage_api->CloseWrite(storage_api, w);
@@ -1393,22 +1393,22 @@ TEST(Longtail, WriteVersion)
         "chunks",
         "remote"));
 
-	for (uint32_t i = 0; i < asset_count; ++i)
-	{
-		char* file_name = storage_api->ConcatPath(storage_api, "remote", TEST_FILENAMES[i]);
-		StorageAPI_HOpenFile r = storage_api->OpenReadFile(storage_api, file_name);
-		free(file_name);
-		ASSERT_NE((StorageAPI_HOpenFile)0, r);
-		uint64_t size = storage_api->GetSize(storage_api, r);
-		char* test_data = (char*)malloc(sizeof(char) * size);
-		ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
-		ASSERT_EQ(TEST_SIZES[i], size);
-		storage_api->CloseWrite(storage_api, r);
-		r = 0;
-		ASSERT_STREQ(TEST_STRINGS[i], test_data);
-		free(test_data);
-		test_data = 0;
-	}
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        char* file_name = storage_api->ConcatPath(storage_api, "remote", TEST_FILENAMES[i]);
+        StorageAPI_HOpenFile r = storage_api->OpenReadFile(storage_api, file_name);
+        free(file_name);
+        ASSERT_NE((StorageAPI_HOpenFile)0, r);
+        uint64_t size = storage_api->GetSize(storage_api, r);
+        char* test_data = (char*)malloc(sizeof(char) * size);
+        ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
+        ASSERT_EQ(TEST_SIZES[i], size);
+        storage_api->CloseWrite(storage_api, r);
+        r = 0;
+        ASSERT_STREQ(TEST_STRINGS[i], test_data);
+        free(test_data);
+        test_data = 0;
+    }
 
     free(vindex);
     vindex = 0;
