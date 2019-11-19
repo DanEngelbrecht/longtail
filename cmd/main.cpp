@@ -135,7 +135,16 @@ int main(int argc, char** argv)
     kgflags_string("merge-content-index", NULL, "Path to base content index", false, &merge_content_index_raw);
 
     const char* create_version_raw = NULL;
-    kgflags_string("create-version", NULL, "Path to version index", false, &create_version_raw);
+    kgflags_string("create-version", NULL, "Path to version", false, &create_version_raw);
+
+    const char* update_version_raw = NULL;
+    kgflags_string("update-version", NULL, "Path to version", false, &update_version_raw);
+
+    const char* target_version_raw = NULL;
+    kgflags_string("target-version", NULL, "Path to target version", false, &target_version_raw);
+
+    const char* target_version_index_raw = NULL;
+    kgflags_string("target-version-index", NULL, "Path to target version index", false, &target_version_index_raw);
 
     const char* list_missing_blocks_raw = NULL;
     kgflags_string("list-missing-blocks", NULL, "Path to content index", false, &list_missing_blocks_raw);
@@ -156,6 +165,9 @@ int main(int argc, char** argv)
     const char* content_index = NormalizePath(content_index_raw);
     const char* merge_content_index = NormalizePath(merge_content_index_raw);
     const char* create_version = NormalizePath(create_version_raw);
+    const char* update_version = NormalizePath(update_version_raw);
+    const char* target_version = NormalizePath(target_version_raw);
+    const char* target_version_index = NormalizePath(target_version_index_raw);
     const char* list_missing_blocks = NormalizePath(list_missing_blocks_raw);
 
     if (create_version_index && version)
@@ -222,7 +234,7 @@ int main(int argc, char** argv)
                 content);
             if (!cindex)
             {
-                printf("Failed to create content index for content `%s`\n", content);
+                printf("Failed to create content index for `%s`\n", content);
                 result = 1;
                 goto end;
             }
@@ -639,7 +651,7 @@ int main(int argc, char** argv)
             {
                 free(vindex);
                 vindex = 0;
-                printf("Failed to create content index for version `%s`\n", version);
+                printf("Failed to create content index for `%s`\n", content);
                 result = 1;
                 goto end;
             }
@@ -667,6 +679,144 @@ int main(int argc, char** argv)
         goto end;
     }
 
+    if (update_version && content && target_version_index)
+    {
+        TroveStorageAPI storage_api;
+        MeowHashAPI hash_api;
+        LizardCompressionAPI compression_api;
+        BikeshedJobAPI job_api;
+
+        VersionIndex* source_vindex = 0;
+        if (version_index)
+        {
+            source_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
+            if (!source_vindex)
+            {
+                printf("Failed to read version index from `%s`\n", version_index);
+                result = 1;
+                goto end;
+            }
+        }
+        else
+        {
+            Paths* version_paths = GetFilesRecursively(
+                &storage_api.m_StorageAPI,
+                update_version);
+            if (!version_paths)
+            {
+                printf("Failed to scan folder `%s`\n", update_version);
+                result = 1;
+                goto end;
+            }
+            source_vindex = CreateVersionIndex(
+                &storage_api.m_StorageAPI,
+                &hash_api.m_HashAPI,
+                &job_api.m_JobAPI,
+                update_version,
+                version_paths,
+                target_chunk_size);
+            free(version_paths);
+            version_paths = 0;
+            if (!source_vindex)
+            {
+                printf("Failed to create version index for version `%s`\n", update_version);
+                result = 1;
+                goto end;
+            }
+        }
+
+        VersionIndex* target_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, target_version_index);
+        if (!target_vindex)
+        {
+            free(source_vindex);
+            source_vindex = 0;
+            printf("Failed to read version index from `%s`\n", target_version_index);
+            result = 1;
+            goto end;
+        }
+
+        ContentIndex* cindex = 0;
+        if (content_index)
+        {
+            cindex = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
+            if (!cindex)
+            {
+                free(target_vindex);
+                target_vindex = 0;
+                free(source_vindex);
+                source_vindex = 0;
+                printf("Failed to read content index from `%s`\n", content_index);
+                result = 1;
+                goto end;
+            }
+        }
+        else
+        {
+            cindex = ReadContent(
+                &storage_api.m_StorageAPI,
+                &hash_api.m_HashAPI,
+                &job_api.m_JobAPI,
+                content);
+            if (!cindex)
+            {
+                free(target_vindex);
+                target_vindex = 0;
+                free(source_vindex);
+                source_vindex = 0;
+                printf("Failed to create content index for `%s`\n", content);
+                result = 1;
+                goto end;
+            }
+        }
+
+        struct VersionDiff* version_diff = CreateVersionDiff(
+            source_vindex,
+            target_vindex);
+        if (!version_diff)
+        {
+            free(cindex);
+            cindex = 0;
+            free(target_vindex);
+            target_vindex = 0;
+            free(source_vindex);
+            source_vindex = 0;
+            printf("Failed to create version diff from `%s` to `%s`\n", version, target_version_index);
+            result = 1;
+            goto end;
+        }
+
+        int ok = CreatePath(&storage_api.m_StorageAPI, update_version) && ChangeVersion(
+            &storage_api.m_StorageAPI,
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            &compression_api.m_CompressionAPI,
+            cindex,
+            source_vindex,
+            target_vindex,
+            version_diff,
+            content,
+            update_version);
+
+        free(cindex);
+        cindex = 0;
+        free(target_vindex);
+        target_vindex = 0;
+        free(source_vindex);
+        source_vindex = 0;
+        free(version_diff);
+        version_diff = 0;
+
+        if (!ok)
+        {
+            printf("Failed to update version `%s` to `%s`\n", update_version, target_version_index);
+            result = 1;
+            goto end;
+        }
+        result = 0;
+        goto end;
+    }
+
     kgflags_print_usage();
     return 1;
 
@@ -680,6 +830,9 @@ end: free((void*)create_version_index);
     free((void*)content_index);
     free((void*)merge_content_index);
     free((void*)create_version);
+    free((void*)update_version);
+    free((void*)target_version);
+    free((void*)target_version_index);
     free((void*)list_missing_blocks);
     return result;
 }

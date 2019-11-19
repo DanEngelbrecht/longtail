@@ -175,10 +175,14 @@ struct VersionDiff* CreateVersionDiff(
 int ChangeVersion(
     struct StorageAPI* content_storage_api,
     struct StorageAPI* version_storage_api,
+    struct HashAPI* hash_api,
+    struct JobAPI* job_api,
+    struct CompressionAPI* compression_api,
     const struct ContentIndex* content_index,
     const struct VersionIndex* source_version,
     const struct VersionIndex* target_version,
     const struct VersionDiff* version_diff,
+    const char* content_path,
     const char* version_path);
 
 ///////////// Test functions

@@ -9,8 +9,8 @@ echo on
 !LONGTAIL! --create-content-index "!BASEPATH!\chunks.lci" --content "!BASEPATH!\chunks"
 echo off
 
-GOTO Office
 GOTO Home
+GOTO Office
 
 :Home
 call do_version.bat !LONGTAIL! !BASEPATH! WinEditor\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor

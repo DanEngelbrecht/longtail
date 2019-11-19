@@ -305,14 +305,20 @@ struct TroveStorageAPI
 
     static int RemoveDir(struct StorageAPI* storage_api, const char* path)
     {
-        // TODO: Implement in trove!
-        return 0;
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        BOOL ok = ::RemoveDirectoryA(tmp_path);
+        free(tmp_path);
+        return ok == TRUE;
     }
 
     static int RemoveFile(struct StorageAPI* storage_api, const char* path)
     {
-        // TODO: Implement in trove!
-        return 0;
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        BOOL ok = ::DeleteFileA(tmp_path);
+        free(tmp_path);
+        return ok == TRUE;
     }
 
     static StorageAPI_HIterator StartFind(StorageAPI* , const char* path)

@@ -302,8 +302,11 @@ struct InMemStorageAPI
         PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
         if (it)
         {
-            Free_TContent((*it)->m_Content);
-            free(*it);
+            PathEntry* path_entry = *it;
+			free(path_entry->m_FileName);
+			path_entry->m_FileName = 0;
+			Free_TContent((*it)->m_Content);
+			free(path_entry);
             *it = 0;
         }
         PathEntry* path_entry = (PathEntry*)malloc(sizeof(PathEntry));
@@ -1239,7 +1242,7 @@ TEST(Longtail, VersionDiff)
     InMemStorageAPI storage;
     MeowHashAPI hash_api;
     SingleThreadedJobAPI job_api;
-    LizardCompressionAPI compression_api;
+    StoreCompressionAPI compression_api;
 
     const uint32_t OLD_ASSET_COUNT = 7;
 
@@ -1368,13 +1371,11 @@ TEST(Longtail, VersionDiff)
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
-    StoreCompressionAPI store_compression;
-
     struct ChunkHashToAssetPart* new_asset_part_lookup = CreateAssetPartLookup(new_vindex);
     ASSERT_EQ(1, WriteContent(
         &storage.m_StorageAPI,
         &storage.m_StorageAPI,
-        &store_compression.m_CompressionAPI,
+        &compression_api.m_CompressionAPI,
         &job_api.m_JobAPI,
         content_index,
         new_asset_part_lookup,
@@ -1395,10 +1396,14 @@ TEST(Longtail, VersionDiff)
     ASSERT_NE(0, ChangeVersion(
         &storage.m_StorageAPI,
         &storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        &job_api.m_JobAPI,
+        &compression_api.m_CompressionAPI,
         content_index,
         old_vindex,
         new_vindex,
         version_diff,
+        "chunks",
         "old"));
 
 	free(content_index);

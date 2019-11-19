@@ -2762,14 +2762,28 @@ struct VersionDiff* CreateVersionDiff(
 int ChangeVersion(
     struct StorageAPI* content_storage_api,
     struct StorageAPI* version_storage_api,
+    struct HashAPI* hash_api,
+    struct JobAPI* job_api,
+    struct CompressionAPI* compression_api,
     const struct ContentIndex* content_index,
     const struct VersionIndex* source_version,
     const struct VersionIndex* target_version,
     const struct VersionDiff* version_diff,
+    const char* content_path,
     const char* version_path)
 {
-    LONGTAIL_LOG("ChangeVersion removing %u assets, adding %u assets and modifying %u assets", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedAssetIndexes, *version_diff->m_ModifiedCount);
+    LONGTAIL_LOG("ChangeVersion removing %u assets, adding %u assets and modifying %u assets", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount);
 
+    if (!EnsureParentPathExists(version_storage_api, version_path))
+    {
+        LONGTAIL_LOG("ChangeVersion: Failed to create parent path for `%s`\n", version_path);
+        return 0;
+    }
+    if (!SafeCreateDir(version_storage_api, version_path))
+    {
+        LONGTAIL_LOG("ChangeVersion: Failed to create folder `%s`\n", version_path);
+        return 0;
+    }
     struct HashToIndexItem* chunk_hash_to_content_chunk_index = 0;
     for (uint64_t i = 0; i < *content_index->m_ChunkCount; ++i)
     {
@@ -2783,14 +2797,13 @@ int ChangeVersion(
         uint32_t asset_index = version_diff->m_SourceRemovedAssetIndexes[r];
         const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
         char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-        LONGTAIL_LOG("Removing asset `%s`\n", full_asset_path);
         if (IsDirPath(asset_path))
         {
             full_asset_path[strlen(full_asset_path) - 1] = '\0';
             int ok = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
             if (!ok)
             {
-                LONGTAIL_LOG("ChangeVersion: Failed to remove directory `%s`\n");
+                LONGTAIL_LOG("ChangeVersion: Failed to remove directory `%s`\n", full_asset_path);
                 free(full_asset_path);
                 full_asset_path = 0;
                 hmfree(chunk_hash_to_content_chunk_index);
@@ -2803,7 +2816,7 @@ int ChangeVersion(
             int ok = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
             if (!ok)
             {
-                LONGTAIL_LOG("ChangeVersion: Failed to remove file `%s`\n");
+                LONGTAIL_LOG("ChangeVersion: Failed to remove file `%s`\n", full_asset_path);
                 free(full_asset_path);
                 full_asset_path = 0;
                 hmfree(chunk_hash_to_content_chunk_index);
@@ -2816,17 +2829,49 @@ int ChangeVersion(
     }
 
     uint32_t added_count = *version_diff->m_TargetAddedCount;
+    uint32_t modified_count = *version_diff->m_ModifiedCount;
+
+    if (!job_api->ReserveJobs(job_api, added_count + modified_count))
+    {
+        hmfree(chunk_hash_to_content_chunk_index);
+        chunk_hash_to_content_chunk_index = 0;
+        return 0;
+    }
+
+    // TODO: Could be more efficient by either sorting out the block jobs just as WriteVersion
+    // or we could refactor WriteVersion slightly to be callable from this function
+
+    struct WriteAssetFromBlocksJob* asset_jobs = (struct WriteAssetFromBlocksJob*)malloc(sizeof(struct WriteAssetFromBlocksJob) * (added_count + modified_count));
+
+    uint32_t job_count = 0;
     for (uint32_t a = 0; a < added_count; ++a)
     {
         uint32_t asset_index = version_diff->m_TargetAddedAssetIndexes[a];
         const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
         char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-        LONGTAIL_LOG("Adding asset `%s`\n", full_asset_path);
+
+        struct WriteAssetFromBlocksJob* job = &asset_jobs[job_count];
+        job->m_ContentStorageAPI = content_storage_api;
+        job->m_VersionStorageAPI = version_storage_api;
+        job->m_CompressionAPI = compression_api;
+        job->m_ContentIndex = content_index;
+        job->m_VersionIndex = target_version;
+        job->m_ContentFolder = content_path;
+        job->m_VersionFolder = version_path;
+        job->m_ContentChunkLookup = chunk_hash_to_content_chunk_index;
+        job->m_AssetIndex = asset_index;
+
+        JobAPI_JobFunc func[1] = { WriteAssetFromBlocks };
+        void* ctx[1] = { job };
+
+        job_api->SubmitJobs(job_api, 1, func, ctx);
+
+        ++job_count;
+
         free(full_asset_path);
         full_asset_path = 0;
     }
 
-    uint32_t modified_count = *version_diff->m_ModifiedCount;
     for (uint32_t m = 0; m < modified_count; ++m)
     {
         uint32_t source_asset_index = version_diff->m_SourceModifiedAssetIndexes[m];
@@ -2841,13 +2886,45 @@ int ChangeVersion(
             return 0;
         }
         char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, source_asset_path);
-        LONGTAIL_LOG("Modifying `%s` \n", full_asset_path);
+
+        struct WriteAssetFromBlocksJob* job = &asset_jobs[job_count];
+        job->m_ContentStorageAPI = content_storage_api;
+        job->m_VersionStorageAPI = version_storage_api;
+        job->m_CompressionAPI = compression_api;
+        job->m_ContentIndex = content_index;
+        job->m_VersionIndex = target_version;
+        job->m_ContentFolder = content_path;
+        job->m_VersionFolder = version_path;
+        job->m_ContentChunkLookup = chunk_hash_to_content_chunk_index;
+        job->m_AssetIndex = target_asset_index;
+
+        JobAPI_JobFunc func[1] = { WriteAssetFromBlocks };
+        void* ctx[1] = { job };
+
+        job_api->SubmitJobs(job_api, 1, func, ctx);
+
+        ++job_count;
+
         free(full_asset_path);
         full_asset_path = 0;
     }
 
+    job_api->WaitForAllJobs(job_api);
+
+    int success = 1;
+    for (uint32_t a = 0; a < job_count; ++a)
+    {
+        struct WriteAssetFromBlocksJob* job = &asset_jobs[a];
+        if (!job)
+        {
+            success = 0;
+        }
+    }
+
+    free(asset_jobs);
+
     hmfree(chunk_hash_to_content_chunk_index);
     chunk_hash_to_content_chunk_index = 0;
 
-    return 1;
+    return success;
 }
