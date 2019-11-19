@@ -117,6 +117,7 @@ int Trove_IsFile(const char* path)
 #if defined(__APPLE__) || defined(__linux__)
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 inline int GetCPUCount()
 {
@@ -125,32 +126,36 @@ inline int GetCPUCount()
 
 inline void Trove_NormalizePath(char* )
 {
-
+    // Nothing to do
 }
 
 inline void Trove_DenormalizePath(char* )
 {
-
+    // Nothing to do
 }
 
 inline int Trove_CreateDirectory(const char* path)
 {
-    return 0;
+    return mkdir(path, 0700) == 0;
 }
 
 inline int Trove_MoveFile(const char* source, const char* target)
 {
-    return 0;
+    return rename(source, target) == 0;
 }
 
 int Trove_IsDir(const char* path)
 {
-    return 0;
+    struct stat path_stat;
+    stat(path, &path_stat);
+    return S_ISDIR(path_stat.st_mode);
 }
 
 int Trove_IsFile(const char* path)
 {
-    return 0;
+    struct stat path_stat;
+    stat(path, &path_stat);
+    return S_ISREG(path_stat.st_mode);
 }
 
 
