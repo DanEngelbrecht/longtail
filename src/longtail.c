@@ -768,7 +768,7 @@ struct VersionIndex* CreateVersionIndex(
 
 int WriteVersionIndex(struct StorageAPI* storage_api, struct VersionIndex* version_index, const char* path)
 {
-    LONGTAIL_LOG("WriteVersionIndex to `%s`\n", path)
+    LONGTAIL_LOG("WriteVersionIndex to `%s` containing `%u` assets.\n", path, *version_index->m_AssetCount);
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (uint32_t)(*version_index->m_ChunkCount), (uint32_t)(*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
 
     if (!EnsureParentPathExists(storage_api, path))
