@@ -92,9 +92,31 @@ inline int Trove_MoveFile(const char* source, const char* target)
     return ok ? 1 : 0;
 }
 
+int Trove_IsDir(const char* path)
+{
+    DWORD attrs = ::GetFileAttributesA(tmp_path);
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+    {
+        return 0;
+    }
+    return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+}
+
+int Trove_IsFile(const char* path)
+{
+    DWORD attrs = ::GetFileAttributesA(tmp_path);
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+    {
+        return 0;
+    }
+    return (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)
+
+#include <unistd.h>
 
 inline int GetCPUCount()
 {
@@ -120,6 +142,17 @@ inline int Trove_MoveFile(const char* source, const char* target)
 {
     return 0;
 }
+
+int Trove_IsDir(const char* path)
+{
+    return 0;
+}
+
+int Trove_IsFile(const char* path)
+{
+    return 0;
+}
+
 
 #endif
 
@@ -327,25 +360,19 @@ struct TroveStorageAPI
 
     static int IsDir(StorageAPI* , const char* path)
     {
-        DWORD attrs = GetFileAttributesA(path);
-        if (attrs == INVALID_FILE_ATTRIBUTES)
-        {
-            return 0;
-        }
-        return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+        char* tmp_path = strdup(path);
+        Trove_DenormalizePath(tmp_path);
+        int is_dir = Trove_IsDir(tmp_path);
+        free(tmp_path);
+        return is_dir;
     }
 
     static int IsFile(StorageAPI* , const char* path)
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        DWORD attrs = GetFileAttributesA(tmp_path);
-        free(tmp_path);
-        if (attrs == INVALID_FILE_ATTRIBUTES)
-        {
-            return 0;
-        }
-        return (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
+        int is_file = Trove_IsFile(tmp_path);
+        return is_file;
     }
 
     static StorageAPI_HIterator StartFind(StorageAPI* , const char* path)

@@ -26,7 +26,7 @@ else
     export ARCH="-m64 -maes -mssse3"
 
     . ./build_options.sh
-    export OUTPUT=$TARGET_debug
+    export OUTPUT=${TARGET}_debug
     export THIRD_PARTY_LIB="$TARGET-third-party-debug.a"
 
     export CXXFLAGS="$CXXFLAGS $CXXFLAGS_DEBUG"
@@ -39,7 +39,6 @@ fi
 mkdir -p ../build
 
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
-    echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     pushd ../third-party
     clang++ -c $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
     popd

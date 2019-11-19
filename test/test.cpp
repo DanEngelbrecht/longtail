@@ -224,11 +224,9 @@ struct InMemStorageAPI
 
     static uint64_t GetPathHash(HashAPI* hash_api, const char* path)
     {
-        meow_state state;
-        MeowBegin(&state, MeowDefaultSeed);
-        MeowAbsorb(&state, (uint32_t)strlen(path), (void*)path);
         HashAPI_HContext context = hash_api->BeginContext(hash_api);
-        return MeowU64From(MeowEnd(&state, 0), 0);;
+        hash_api->Hash(hash_api, context, (uint32_t)strlen(path), (void*)path);
+        return hash_api->EndContext(hash_api, context);
     }
 
     static StorageAPI_HOpenFile OpenReadFile(StorageAPI* storage_api, const char* path)
@@ -536,6 +534,7 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
+        free(dir_path);
         return 1;
     }
     *last_path_delimiter = '\0';
@@ -650,6 +649,8 @@ int MakePath(StorageAPI* storage_api, const char* path)
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
+        free(dir_path);
+        dir_path = 0;
         return 1;
     }
     *last_path_delimiter = '\0';
@@ -696,7 +697,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
             return 0;
         }
         uint64_t content_size = 64000 + 1 + i;
-        char* data = new char[content_size];
+        char* data = (char*)malloc(sizeof(char) * content_size);
         memset(data, i, content_size);
         int ok = storage_api->Write(storage_api, content_file, 0, content_size, data);
         free(data);
@@ -1154,6 +1155,7 @@ TEST(Longtail, MergeContentIndex)
     free(cindex7);
     free(cindex6);
     free(cindex5);
+    free(cindex4);
     free(cindex3);
     free(cindex2);
     free(cindex1);
@@ -1356,6 +1358,8 @@ TEST(Longtail, WriteVersion)
         version1_paths,
         16);
     ASSERT_NE((VersionIndex*)0, vindex);
+    free(version1_paths);
+    version1_paths = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;

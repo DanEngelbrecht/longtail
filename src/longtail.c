@@ -62,6 +62,8 @@ int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
+        free(dir_path);
+        dir_path = 0;
         return 1;
     }
     *last_path_delimiter = '\0';
@@ -339,7 +341,7 @@ void HashFile(void* context)
     }
 
     uint32_t asset_size = (uint32_t)storage_api->GetSize(storage_api, file_handle);
-    uint8_t* batch_data = (uint8_t*)malloc(hash_job->m_MaxChunkSize);
+    uint8_t* batch_data = (uint8_t*)malloc(asset_size < hash_job->m_MaxChunkSize ? asset_size : hash_job->m_MaxChunkSize);
     uint32_t max_chunks = (asset_size + hash_job->m_MaxChunkSize - 1) / hash_job->m_MaxChunkSize;
 
     hash_job->m_ChunkHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * max_chunks);
@@ -360,6 +362,8 @@ void HashFile(void* context)
             hash_job->m_ChunkSizes = 0;
             free(hash_job->m_ChunkHashes);
             hash_job->m_ChunkHashes = 0;
+            free(batch_data);
+            batch_data = 0;
             storage_api->CloseRead(storage_api, file_handle);
             file_handle = 0;
             free(path);
@@ -379,6 +383,9 @@ void HashFile(void* context)
         offset += len;
         hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, asset_hash_context, len, batch_data);
     }
+
+    free(batch_data);
+    batch_data = 0;
 
     TLongtail_Hash content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
 
@@ -950,7 +957,7 @@ struct ContentIndex* CreateContentIndex(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block)
 {
-    LONGTAIL_LOG("CreateContentIndex\n")
+    LONGTAIL_LOG("CreateContentIndex for %" PRIu64 " chunks\n", chunk_count)
     if (chunk_count == 0)
     {
         size_t content_index_size = GetContentIndexSize(0, 0);
@@ -1192,13 +1199,6 @@ struct WriteBlockJob
     uint32_t m_Success;
 };
 
-struct WriteBlockJob* CreateWriteContentBlockJob()
-{
-    size_t job_size = sizeof(struct WriteBlockJob);
-    struct WriteBlockJob* job = (struct WriteBlockJob*)malloc(job_size);
-    return job;
-}
-
 char* GetBlockName(TLongtail_Hash block_hash)
 {
     char* name = (char*)malloc(64);
@@ -1249,6 +1249,8 @@ void WriteContentBlockJob(void* context)
             LONGTAIL_LOG("WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 "\n", chunk_hash)
             free(write_buffer);
             write_buffer = 0;
+            free((char*)block_path);
+            block_path = 0;
             free(block_name);
             block_name = 0;
             return;
@@ -1261,6 +1263,10 @@ void WriteContentBlockJob(void* context)
             LONGTAIL_LOG("WriteContentBlockJob: Directory should not have any chunks `%s`\n", asset_path)
             free(write_buffer);
             write_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            free((char*)block_path);
+            block_path = 0;
             free(block_name);
             block_name = 0;
             return;
@@ -1274,6 +1280,10 @@ void WriteContentBlockJob(void* context)
             LONGTAIL_LOG("WriteContentBlockJob: Missing or mismatching asset content `%s`\n", asset_path)
             free(write_buffer);
             write_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            free((char*)block_path);
+            block_path = 0;
             free(block_name);
             block_name = 0;
             source_storage_api->CloseRead(source_storage_api, file_handle);
@@ -1297,50 +1307,73 @@ void WriteContentBlockJob(void* context)
     compression_api->DeleteCompressionContext(compression_api, compression_context);
     free(write_buffer);
     write_buffer = 0;
-    if (compressed_size > 0)
+    if (compressed_size <= 0)
     {
-        ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
-
-        if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Failed to create parent path for `%s`\n", tmp_block_path)
-            free(compressed_buffer);
-            compressed_buffer = 0;
-            return;
-        }
-        StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path);
-        if (!block_file_handle)
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Failed to create block file `%s`\n", tmp_block_path)
-            free(compressed_buffer);
-            compressed_buffer = 0;
-            return;
-        }
-        int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, (sizeof(uint32_t) * 2) + compressed_size, compressed_buffer);
+        LONGTAIL_LOG("WriteContentBlockJob: Failed to compress data for block for `%s`\n", tmp_block_path)
         free(compressed_buffer);
         compressed_buffer = 0;
-        uint64_t write_offset = (sizeof(uint32_t) * 2) + compressed_size;
-
-        uint32_t aligned_size = (((write_offset + 15) / 16) * 16);
-        uint32_t padding = aligned_size - write_offset;
-        if (padding)
-        {
-            target_storage_api->Write(target_storage_api, block_file_handle, write_offset, padding, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0");
-            write_offset = aligned_size;
-        }
-
-        write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(TLongtail_Hash) * chunk_count, &content_index->m_ChunkHashes[first_chunk_index]);
-        write_offset += sizeof(TLongtail_Hash) * chunk_count;
-
-        write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t) * chunk_count, &content_index->m_ChunkLengths[first_chunk_index]);
-        write_offset += sizeof(uint32_t) * chunk_count;
-
-        write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &chunk_count);
-        write_offset += sizeof(uint32_t);
-        target_storage_api->CloseWrite(target_storage_api, block_file_handle);
-        write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, block_path);
-        job->m_Success = write_ok;
+        free((char*)tmp_block_path);
+        tmp_block_path = 0;
+        free((char*)block_path);
+        block_path = 0;
+        free(block_name);
+        block_name = 0;
+        return;
     }
+
+    ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
+    if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
+    {
+        LONGTAIL_LOG("WriteContentBlockJob: Failed to create parent path for `%s`\n", tmp_block_path)
+        free(compressed_buffer);
+        compressed_buffer = 0;
+        free((char*)tmp_block_path);
+        tmp_block_path = 0;
+        free((char*)block_path);
+        block_path = 0;
+        free(block_name);
+        block_name = 0;
+        return;
+    }
+    StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path);
+    if (!block_file_handle)
+    {
+        LONGTAIL_LOG("WriteContentBlockJob: Failed to create block file `%s`\n", tmp_block_path)
+        free(compressed_buffer);
+        compressed_buffer = 0;
+        free((char*)tmp_block_path);
+        tmp_block_path = 0;
+        free((char*)block_path);
+        block_path = 0;
+        free(block_name);
+        block_name = 0;
+        return;
+    }
+    int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, (sizeof(uint32_t) * 2) + compressed_size, compressed_buffer);
+    free(compressed_buffer);
+    compressed_buffer = 0;
+    uint64_t write_offset = (sizeof(uint32_t) * 2) + compressed_size;
+
+    uint32_t aligned_size = (((write_offset + 15) / 16) * 16);
+    uint32_t padding = aligned_size - write_offset;
+    if (padding)
+    {
+        target_storage_api->Write(target_storage_api, block_file_handle, write_offset, padding, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0");
+        write_offset = aligned_size;
+    }
+
+    write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(TLongtail_Hash) * chunk_count, &content_index->m_ChunkHashes[first_chunk_index]);
+    write_offset += sizeof(TLongtail_Hash) * chunk_count;
+
+    write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t) * chunk_count, &content_index->m_ChunkLengths[first_chunk_index]);
+    write_offset += sizeof(uint32_t) * chunk_count;
+
+    write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &chunk_count);
+    write_offset += sizeof(uint32_t);
+    target_storage_api->CloseWrite(target_storage_api, block_file_handle);
+    write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, block_path);
+    job->m_Success = write_ok;
+
     free(block_name);
     block_name = 0;
 
@@ -1374,8 +1407,9 @@ int WriteContent(
         return 0;
     }
 
-    struct WriteBlockJob** write_block_jobs = (struct WriteBlockJob**)malloc(sizeof(struct WriteBlockJob*) * block_count);
+    struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)malloc(sizeof(struct WriteBlockJob) * block_count);
     uint32_t block_start_chunk_index = 0;
+    uint32_t job_count = 0;
     for (uint32_t block_index = 0; block_index < block_count; ++block_index)
     {
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
@@ -1393,15 +1427,15 @@ int WriteContent(
         char* block_path = target_storage_api->ConcatPath(target_storage_api, content_folder, file_name);
         if (target_storage_api->IsFile(target_storage_api, block_path))
         {
-            write_block_jobs[block_index] = 0;
             free((char*)block_path);
             block_path = 0;
             block_start_chunk_index += chunk_count;
             continue;
         }
+        free((char*)block_path);
+        block_path = 0;
 
-        struct WriteBlockJob* job = CreateWriteContentBlockJob();
-        write_block_jobs[block_index] = job;
+        struct WriteBlockJob* job = &write_block_jobs[job_count++];
         job->m_SourceStorageAPI = source_storage_api;
         job->m_TargetStorageAPI = target_storage_api;
         job->m_CompressionAPI = compression_api;
@@ -1431,9 +1465,9 @@ int WriteContent(
     job_api->WaitForAllJobs(job_api);
 
     int success = 1;
-    while (block_count--)
+    while (job_count--)
     {
-        struct WriteBlockJob* job = write_block_jobs[block_count];
+        struct WriteBlockJob* job = &write_block_jobs[job_count];
         if (!job)
         {
             continue;
@@ -1446,8 +1480,6 @@ int WriteContent(
             LONGTAIL_LOG("WriteContent: to write content for block 0x%" PRIx64 "\n", block_hash)
             success = 0;
         }
-        free(job);
-        job = 0;
     }
 
     free(write_block_jobs);
@@ -1777,7 +1809,7 @@ struct BlockJobCompareContext
     struct HashToIndexItem* m_ChunkHashToBlockIndex;
 };
 
-static int BlockJobCompare(void* context, const void* a_ptr, const void* b_ptr)
+static int BlockJobCompare(const void* a_ptr, const void* b_ptr, void* context)
 {
     struct BlockJobCompareContext* c = (struct BlockJobCompareContext*)context;
     const struct VersionIndex* version_index = c->m_VersionIndex;
@@ -1945,7 +1977,7 @@ int WriteVersion(
     }
 
     struct BlockJobCompareContext block_job_compare_context = { version_index, chunk_hash_to_block_index };
-    qsort_s(block_job_asset_indexes, block_job_count, sizeof(uint64_t), BlockJobCompare, &block_job_compare_context);
+    qsort_r(block_job_asset_indexes, block_job_count, sizeof(uint64_t), BlockJobCompare, &block_job_compare_context);
 
     struct WriteAssetsFromBlockJob* block_jobs = (struct WriteAssetsFromBlockJob*)malloc(sizeof(struct WriteAssetsFromBlockJob) * block_job_count);
     uint32_t b = 0;
@@ -2051,6 +2083,9 @@ int WriteVersion(
 
     free(block_job_asset_indexes);
     block_job_asset_indexes = 0;
+
+    hmfree(chunk_hash_to_block_index);
+    chunk_hash_to_block_index = 0;
 
     hmfree(chunk_hash_to_content_chunk_index);
     chunk_hash_to_content_chunk_index = 0;
@@ -2196,12 +2231,13 @@ struct ContentIndex* ReadContent(
         return 0;
     }
     paths = context.m_Paths;
+    context.m_Paths = 0;
 
     if (!job_api->ReserveJobs(job_api, *paths->m_PathCount))
     {
         LONGTAIL_LOG("ReadContent: Failed to reserve jobs for `%s`\n", content_path)
-        free(context.m_Paths);
-        context.m_Paths = 0;
+        free(paths);
+        paths = 0;
         return 0;
     }
 
@@ -2279,6 +2315,9 @@ struct ContentIndex* ReadContent(
 
     free(jobs);
     jobs = 0;
+
+    free(paths);
+    paths = 0;
 
     return content_index;
 }
@@ -2388,7 +2427,7 @@ struct ContentIndex* CreateMissingContent(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block)
 {
-    LONGTAIL_LOG("CreateMissingContent\n")
+    LONGTAIL_LOG("CreateMissingContent%s\n", "")
     uint64_t chunk_count = *version->m_ChunkCount;
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * chunk_count);
 
@@ -2433,6 +2472,8 @@ struct ContentIndex* CreateMissingContent(
         max_block_size,
         max_chunks_per_block);
 
+    free(diff_chunk_sizes);
+    diff_chunk_sizes = 0;
     free(added_hashes);
     added_hashes = 0;
 
