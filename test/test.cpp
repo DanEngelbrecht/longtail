@@ -1184,6 +1184,129 @@ TEST(Longtail, MergeContentIndex)
     free(cindex1);
 }
 
+TEST(Longtail, VersionDiff)
+{
+    InMemStorageAPI storage;
+    MeowHashAPI hash_api;
+    SingleThreadedJobAPI job_api;
+    LizardCompressionAPI compression_api;
+
+    const uint32_t OLD_ASSET_COUNT = 6;
+
+    const char* OLD_TEST_FILENAMES[] = {
+        "TheLongFile.txt",
+        "ShortString.txt",
+        "AnotherSample.txt",
+        "folder/ShortString.txt",
+        "WATCHIOUT.txt",
+        "empty/.init.py"
+    };
+
+    const char* OLD_TEST_STRINGS[] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "More than chunk less than block",
+        ""
+    };
+
+    const size_t OLD_TEST_SIZES[] = {
+        strlen(OLD_TEST_STRINGS[0]) + 1,
+        strlen(OLD_TEST_STRINGS[1]) + 1,
+        strlen(OLD_TEST_STRINGS[2]) + 1,
+        strlen(OLD_TEST_STRINGS[3]) + 1,
+        strlen(OLD_TEST_STRINGS[4]) + 1,
+        0
+    };
+
+    const uint32_t NEW_ASSET_COUNT = 6;
+
+    const char* NEW_TEST_FILENAMES[] = {
+        "TheLongFile.txt",
+        "NewShortString.txt",
+        "AnotherSample.txt",
+        "folder/ShortString.txt",
+        "WATCHIOUT.txt",
+        "empty/.init.py"
+    };
+
+    const char* NEW_TEST_STRINGS[] = {
+        "This is the first test string which is fairly long and *will* - reconstructed properly, than you very much",   // Content changed, same length
+        "Short string", // Renamed
+        "Another sample string that does not match any other string but -reconstructed properly.",   // Shorter, same base content
+        "Short string but with added stuff",    // Longer, same base content
+        "I wish I was a baller.", // Just different
+        "" // Unchanged
+    };
+
+    const size_t NEW_TEST_SIZES[] = {
+        strlen(NEW_TEST_STRINGS[0]) + 1,
+        strlen(NEW_TEST_STRINGS[1]) + 1,
+        strlen(NEW_TEST_STRINGS[2]) + 1,
+        strlen(NEW_TEST_STRINGS[3]) + 1,
+        strlen(NEW_TEST_STRINGS[4]) + 1,
+        0
+    };
+
+    for (uint32_t i = 0; i < OLD_ASSET_COUNT; ++i)
+    {
+        char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "old", OLD_TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(&storage.m_StorageAPI, file_name));
+        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name);
+        free(file_name);
+        ASSERT_NE((StorageAPI_HOpenFile)0, w);
+        if (OLD_TEST_SIZES[i])
+        {
+            ASSERT_NE(0, storage.m_StorageAPI.Write(&storage.m_StorageAPI, w, 0, OLD_TEST_SIZES[i], OLD_TEST_STRINGS[i]));
+        }
+        storage.m_StorageAPI.CloseWrite(&storage.m_StorageAPI, w);
+        w = 0;
+    }
+
+    for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
+    {
+        char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "new", NEW_TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(&storage.m_StorageAPI, file_name));
+        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name);
+        free(file_name);
+        ASSERT_NE((StorageAPI_HOpenFile)0, w);
+        if (NEW_TEST_SIZES[i])
+        {
+            ASSERT_NE(0, storage.m_StorageAPI.Write(&storage.m_StorageAPI, w, 0, NEW_TEST_SIZES[i], NEW_TEST_STRINGS[i]));
+        }
+        storage.m_StorageAPI.CloseWrite(&storage.m_StorageAPI, w);
+        w = 0;
+    }
+
+    Paths* old_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "old");
+    ASSERT_NE((Paths*)0, old_version_paths);
+    VersionIndex* old_vindex = CreateVersionIndex(
+        &storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        &job_api.m_JobAPI,
+        "old",
+        old_version_paths,
+        16);
+    ASSERT_NE((VersionIndex*)0, old_vindex);
+
+    Paths* new_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "new");
+    ASSERT_NE((Paths*)0, new_version_paths);
+    VersionIndex* new_vindex = CreateVersionIndex(
+        &storage.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        &job_api.m_JobAPI,
+        "new",
+        new_version_paths,
+        16);
+    ASSERT_NE((VersionIndex*)0, new_vindex);
+
+    free(new_vindex);
+    free(new_version_paths);
+    free(old_vindex);
+    free(old_version_paths);
+}
+
 TEST(Longtail, FullScale)
 {
     return;
