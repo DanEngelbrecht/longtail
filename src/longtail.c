@@ -786,9 +786,11 @@ int WriteVersionIndex(struct StorageAPI* storage_api, struct VersionIndex* versi
     {
         LONGTAIL_LOG("WriteVersionIndex: Failed to write to `%s`\n", path);
         storage_api->CloseWrite(storage_api, file_handle);
+        file_handle = 0;
         return 0;
     }
     storage_api->CloseWrite(storage_api, file_handle);
+    file_handle = 0;
 
     return 1;
 }
@@ -807,12 +809,17 @@ struct VersionIndex* ReadVersionIndex(struct StorageAPI* storage_api, const char
     if (!version_index)
     {
         LONGTAIL_LOG("ReadVersionIndex: Failed to allocate memory for `%s`\n", path);
+        free(version_index);
+        version_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
+        file_handle = 0;
         return 0;
     }
     if (!storage_api->Read(storage_api, file_handle, 0, version_index_data_size, &version_index[1]))
     {
         LONGTAIL_LOG("ReadVersionIndex: Failed to read from `%s`\n", path);
+        free(version_index);
+        version_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
         return 0;
     }
@@ -1106,6 +1113,8 @@ int WriteContentIndex(struct StorageAPI* storage_api, struct ContentIndex* conte
     if (!storage_api->Write(storage_api, file_handle, 0, index_data_size, &content_index[1]))
     {
         LONGTAIL_LOG("WriteContentIndex: Failed to write to `%s`\n", path);
+        storage_api->CloseWrite(storage_api, file_handle);
+        file_handle = 0;
         return 0;
     }
     storage_api->CloseWrite(storage_api, file_handle);
@@ -1127,7 +1136,10 @@ struct ContentIndex* ReadContentIndex(struct StorageAPI* storage_api, const char
     if (!content_index)
     {
         LONGTAIL_LOG("ReadContentIndex: Failed allocate memory for `%s`\n", path);
+        free(content_index);
+        content_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
+        file_handle = 0;
         return 0;
     }
     if (!storage_api->Read(storage_api, file_handle, 0, content_index_data_size, &content_index[1]))
@@ -1136,6 +1148,7 @@ struct ContentIndex* ReadContentIndex(struct StorageAPI* storage_api, const char
         free(content_index);
         content_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
+        file_handle = 0;
         return 0;
     }
     InitContentIndex(content_index);
@@ -1615,85 +1628,85 @@ void WriteAssetFromBlocks(void* context)
         return;
     }
 
-	uint32_t* chunk_indexes = &version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]];
-	uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
-	if (chunk_count)
-	{
-		uint32_t chunk_index = 0;
+    uint32_t* chunk_indexes = &version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]];
+    uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
+    if (chunk_count)
+    {
+        uint32_t chunk_index = 0;
 
-		TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_indexes[chunk_index]];
-		uint64_t chunk_content_index = hmget(content_chunk_lookup, chunk_hash);
-		TLongtail_Hash block_hash = content_index->m_BlockHashes[content_index->m_ChunkBlockIndexes[chunk_content_index]];
-		char* block_data = ReadBlockData(content_storage_api, compression_api, content_folder, block_hash);
-		if (!block_data)
-		{
-			LONGTAIL_LOG("WriteAssetFromBlocks: Failed to read block 0x%" PRIx64 " to asset `%s`\n", block_hash, full_asset_path)
-				version_storage_api->CloseWrite(version_storage_api, asset_file);
-			asset_file = 0;
-			free(full_asset_path);
-			full_asset_path = 0;
-			return;
-		}
+        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_indexes[chunk_index]];
+        uint64_t chunk_content_index = hmget(content_chunk_lookup, chunk_hash);
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[content_index->m_ChunkBlockIndexes[chunk_content_index]];
+        char* block_data = ReadBlockData(content_storage_api, compression_api, content_folder, block_hash);
+        if (!block_data)
+        {
+            LONGTAIL_LOG("WriteAssetFromBlocks: Failed to read block 0x%" PRIx64 " to asset `%s`\n", block_hash, full_asset_path)
+            version_storage_api->CloseWrite(version_storage_api, asset_file);
+            asset_file = 0;
+            free(full_asset_path);
+            full_asset_path = 0;
+            return;
+        }
 
-		uint64_t asset_offset = 0;
-		uint32_t chunk_size = content_index->m_ChunkLengths[chunk_content_index];
-		uint32_t chunk_offset = content_index->m_ChunkBlockOffsets[chunk_content_index];
-		int ok = version_storage_api->Write(version_storage_api, asset_file, asset_offset, chunk_size, &block_data[chunk_offset]);
-		if (!ok)
-		{
-			LONGTAIL_LOG("WriteAssetFromBlocks: Failed to write chunk 0x%" PRIx64 " to asset `%s`\n", chunk_hash, full_asset_path)
-				free(block_data);
-			block_data = 0;
-			version_storage_api->CloseWrite(version_storage_api, asset_file);
-			asset_file = 0;
-			free(full_asset_path);
-			full_asset_path = 0;
-			return;
-		}
-		asset_offset += chunk_size;
+        uint64_t asset_offset = 0;
+        uint32_t chunk_size = content_index->m_ChunkLengths[chunk_content_index];
+        uint32_t chunk_offset = content_index->m_ChunkBlockOffsets[chunk_content_index];
+        int ok = version_storage_api->Write(version_storage_api, asset_file, asset_offset, chunk_size, &block_data[chunk_offset]);
+        if (!ok)
+        {
+            LONGTAIL_LOG("WriteAssetFromBlocks: Failed to write chunk 0x%" PRIx64 " to asset `%s`\n", chunk_hash, full_asset_path)
+            free(block_data);
+            block_data = 0;
+            version_storage_api->CloseWrite(version_storage_api, asset_file);
+            asset_file = 0;
+            free(full_asset_path);
+            full_asset_path = 0;
+            return;
+        }
+        asset_offset += chunk_size;
 
-		++chunk_index;
-		while (chunk_index < chunk_count)
-		{
-			chunk_hash = version_index->m_ChunkHashes[chunk_indexes[chunk_index]];
-			chunk_content_index = hmget(content_chunk_lookup, chunk_hash);
-			TLongtail_Hash next_block_hash = content_index->m_BlockHashes[content_index->m_ChunkBlockIndexes[chunk_content_index]];
-			if (next_block_hash != block_hash)
-			{
-				free(block_data);
-				block_data = 0;
-				block_hash = next_block_hash;
-				block_data = ReadBlockData(content_storage_api, compression_api, content_folder, block_hash);
-				if (!block_data)
-				{
-					LONGTAIL_LOG("WriteAssetFromBlocks: Failed to read block 0x%" PRIx64 " from `%s`\n", block_hash, content_folder)
-						version_storage_api->CloseWrite(version_storage_api, asset_file);
-					asset_file = 0;
-					free(full_asset_path);
-					full_asset_path = 0;
-					return;
-				}
-			}
-			chunk_size = content_index->m_ChunkLengths[chunk_content_index];
-			chunk_offset = content_index->m_ChunkBlockOffsets[chunk_content_index];
-			int ok = version_storage_api->Write(version_storage_api, asset_file, asset_offset, chunk_size, &block_data[chunk_offset]);
-			if (!ok)
-			{
-				LONGTAIL_LOG("WriteAssetFromBlocks: Failed to write chunk 0x%" PRIx64 " to asset `%s`\n", chunk_hash, full_asset_path)
-					free(block_data);
-				block_data = 0;
-				version_storage_api->CloseWrite(version_storage_api, asset_file);
-				asset_file = 0;
-				free(full_asset_path);
-				full_asset_path = 0;
-				return;
-			}
-			asset_offset += chunk_size;
-			++chunk_index;
-		}
-		free(block_data);
-		block_data = 0;
-	}
+        ++chunk_index;
+        while (chunk_index < chunk_count)
+        {
+            chunk_hash = version_index->m_ChunkHashes[chunk_indexes[chunk_index]];
+            chunk_content_index = hmget(content_chunk_lookup, chunk_hash);
+            TLongtail_Hash next_block_hash = content_index->m_BlockHashes[content_index->m_ChunkBlockIndexes[chunk_content_index]];
+            if (next_block_hash != block_hash)
+            {
+                free(block_data);
+                block_data = 0;
+                block_hash = next_block_hash;
+                block_data = ReadBlockData(content_storage_api, compression_api, content_folder, block_hash);
+                if (!block_data)
+                {
+                    LONGTAIL_LOG("WriteAssetFromBlocks: Failed to read block 0x%" PRIx64 " from `%s`\n", block_hash, content_folder)
+                    version_storage_api->CloseWrite(version_storage_api, asset_file);
+                    asset_file = 0;
+                    free(full_asset_path);
+                    full_asset_path = 0;
+                    return;
+                }
+            }
+            chunk_size = content_index->m_ChunkLengths[chunk_content_index];
+            chunk_offset = content_index->m_ChunkBlockOffsets[chunk_content_index];
+            int ok = version_storage_api->Write(version_storage_api, asset_file, asset_offset, chunk_size, &block_data[chunk_offset]);
+            if (!ok)
+            {
+                LONGTAIL_LOG("WriteAssetFromBlocks: Failed to write chunk 0x%" PRIx64 " to asset `%s`\n", chunk_hash, full_asset_path)
+                free(block_data);
+                block_data = 0;
+                version_storage_api->CloseWrite(version_storage_api, asset_file);
+                asset_file = 0;
+                free(full_asset_path);
+                full_asset_path = 0;
+                return;
+            }
+            asset_offset += chunk_size;
+            ++chunk_index;
+        }
+        free(block_data);
+        block_data = 0;
+    }
     version_storage_api->CloseWrite(version_storage_api, asset_file);
     asset_file = 0;
     free(full_asset_path);
@@ -2019,7 +2032,7 @@ int WriteVersion(
             ++b;
         }
 
-		JobAPI_JobFunc func[1] = { WriteAssetsFromBlock };
+        JobAPI_JobFunc func[1] = { WriteAssetsFromBlock };
         void* ctx[1] = { job };
 
         job_api->SubmitJobs(job_api, 1, func, ctx);
@@ -2039,7 +2052,7 @@ int WriteVersion(
         job->m_ContentChunkLookup = chunk_hash_to_content_chunk_index;
         job->m_AssetIndex = asset_index_jobs[a];
 
-		JobAPI_JobFunc func[1] = { WriteAssetFromBlocks };
+        JobAPI_JobFunc func[1] = { WriteAssetFromBlocks };
         void* ctx[1] = { job };
 
         job_api->SubmitJobs(job_api, 1, func, ctx);

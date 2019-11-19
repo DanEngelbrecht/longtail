@@ -226,7 +226,12 @@ int main(int argc, char** argv)
                 result = 1;
                 goto end;
             }
-            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
+            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) &&
+                WriteContentIndex(
+                    &storage_api.m_StorageAPI,
+                    cindex,
+                    create_content_index);
+
             free(cindex);
             cindex = 0;
             if (!ok)
@@ -270,7 +275,12 @@ int main(int argc, char** argv)
                 goto end;
             }
 
-            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
+            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) &&
+                WriteContentIndex(
+                    &storage_api.m_StorageAPI,
+                    cindex,
+                    create_content_index);
+
             free(cindex);
             cindex = 0;
 
@@ -388,10 +398,11 @@ int main(int argc, char** argv)
             goto end;
         }
 
-        int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(
-            &storage_api.m_StorageAPI,
-            cindex,
-            create_content_index);
+        int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) &&
+            WriteContentIndex(
+                &storage_api.m_StorageAPI,
+                cindex,
+                create_content_index);
 
         free(cindex);
         cindex = 0;
