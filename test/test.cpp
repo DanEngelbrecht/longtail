@@ -961,6 +961,27 @@ TEST(Longtail, WriteContent)
     free(version1_paths);
 }
 
+#if 0
+TEST(Longtail, TestVeryLargeFile)
+{
+    const char* assets_path = "C:\\Temp\\longtail\\local\\WinClient\\CL6332_WindowsClient\\WindowsClient\\PioneerGame\\Content\\Paks";
+    TroveStorageAPI storage_api;
+    MeowHashAPI hash_api;
+    SingleThreadedJobAPI job_api;
+
+    Paths* paths = GetFilesRecursively(&storage_api.m_StorageAPI, assets_path);
+    VersionIndex* version_index = CreateVersionIndex(
+        &storage_api.m_StorageAPI,
+        &hash_api.m_HashAPI,
+        &job_api.m_JobAPI,
+        assets_path,
+        paths,
+        32758u);
+
+    free(version_index);
+}
+#endif // 0
+
 TEST(Longtail, DiffHashes)
 {
 
