@@ -377,6 +377,8 @@ int main(int argc, char** argv)
             target_block_size,
             max_chunks_per_block);
 
+        free(existing_cindex);
+        existing_cindex = 0;
         free(vindex);
         vindex = 0;
         if (!cindex)

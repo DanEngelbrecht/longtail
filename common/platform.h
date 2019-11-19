@@ -297,6 +297,7 @@ struct TroveStorageAPI
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
         int is_file = Trove_IsFile(tmp_path);
+        free(tmp_path);
         return is_file;
     }
 

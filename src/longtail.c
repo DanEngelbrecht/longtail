@@ -1133,6 +1133,8 @@ struct ContentIndex* ReadContentIndex(struct StorageAPI* storage_api, const char
     if (!storage_api->Read(storage_api, file_handle, 0, content_index_data_size, &content_index[1]))
     {
         LONGTAIL_LOG("ReadContentIndex: Failed to read from `%s`\n", path);
+        free(content_index);
+        content_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
         return 0;
     }
@@ -1537,8 +1539,6 @@ static char* ReadBlockData(
     compression_api->DeleteDecompressionContext(compression_api, compression_context);
     free(compressed_block_content);
     compressed_block_content = 0;
-    storage_api->CloseRead(storage_api, block_file);
-    block_file = 0;
 
     if (!ok)
     {
@@ -1749,6 +1749,8 @@ void WriteAssetsFromBlock(void* context)
         if (!ok)
         {
             LONGTAIL_LOG("WriteAssetsFromBlock: Failed to create parent folder for `%s`\n", full_asset_path)
+            free(full_asset_path);
+            full_asset_path = 0;
             free(block_data);
             block_data = 0;
             return;
