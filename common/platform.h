@@ -208,6 +208,8 @@ struct TroveStorageAPI
             ConcatPath,
             IsDir,
             IsFile,
+            RemoveDir,
+            RemoveFile,
             StartFind,
             FindNext,
             CloseFind,
@@ -299,6 +301,18 @@ struct TroveStorageAPI
         int is_file = Trove_IsFile(tmp_path);
         free(tmp_path);
         return is_file;
+    }
+
+    static int RemoveDir(struct StorageAPI* storage_api, const char* path)
+    {
+        // TODO: Implement in trove!
+        return 0;
+    }
+
+    static int RemoveFile(struct StorageAPI* storage_api, const char* path)
+    {
+        // TODO: Implement in trove!
+        return 0;
     }
 
     static StorageAPI_HIterator StartFind(StorageAPI* , const char* path)

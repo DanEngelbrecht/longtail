@@ -2553,6 +2553,39 @@ static int CompareIndexs(const void* a_ptr, const void* b_ptr)
     return a - b;
 }
 
+#if defined(_MSC_VER)
+static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_ptr)
+#else
+static int SortPathShortToLong(const void* a_ptr, const void* b_ptr, void* context)
+#endif
+{
+    const struct VersionIndex* version_index = (const struct VersionIndex*)context;
+    uint32_t a = *(uint32_t*)a_ptr;
+    uint32_t b = *(uint32_t*)b_ptr;
+    const char* a_path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
+    const char* b_path = &version_index->m_NameData[version_index->m_NameOffsets[b]];
+    int64_t a_len = (int64_t)strlen(a_path);
+    int64_t b_len = (int64_t)strlen(b_path);
+    return a_len - b_len;
+}
+
+#if defined(_MSC_VER)
+static int SortPathLongToShort(void* context, const void* a_ptr, const void* b_ptr)
+#else
+static int SortPathLongToShort(const void* a_ptr, const void* b_ptr, void* context)
+#endif
+{
+    const struct VersionIndex* version_index = (const struct VersionIndex*)context;
+    uint32_t a = *(uint32_t*)a_ptr;
+    uint32_t b = *(uint32_t*)b_ptr;
+    const char* a_path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
+    const char* b_path = &version_index->m_NameData[version_index->m_NameOffsets[b]];
+    int64_t a_len = (int64_t)strlen(a_path);
+    int64_t b_len = (int64_t)strlen(b_path);
+    return b_len - a_len;
+
+}
+
 size_t GetVersionDiffDataSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_count)
 {
     return
@@ -2708,8 +2741,8 @@ struct VersionDiff* CreateVersionDiff(
     memmove(version_diff->m_SourceModifiedAssetIndexes, modified_source_indexes, sizeof(uint32_t) * modified_count);
     memmove(version_diff->m_TargetModifiedAssetIndexes, modified_target_indexes, sizeof(uint32_t) * modified_count);
 
-    qsort(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), CompareIndexs);
-    qsort(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), CompareIndexs);
+    qsort_r(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
+    qsort_r(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
 
     free(target_path_hashes);
     target_path_hashes = 0;
@@ -2751,6 +2784,33 @@ int ChangeVersion(
         const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
         char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
         LONGTAIL_LOG("Removing asset `%s`\n", full_asset_path);
+        if (IsDirPath(asset_path))
+        {
+            full_asset_path[strlen(full_asset_path) - 1] = '\0';
+            int ok = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
+            if (!ok)
+            {
+                LONGTAIL_LOG("ChangeVersion: Failed to remove directory `%s`\n");
+                free(full_asset_path);
+                full_asset_path = 0;
+                hmfree(chunk_hash_to_content_chunk_index);
+                chunk_hash_to_content_chunk_index = 0;
+                return 0;
+            }
+        }
+        else
+        {
+            int ok = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
+            if (!ok)
+            {
+                LONGTAIL_LOG("ChangeVersion: Failed to remove file `%s`\n");
+                free(full_asset_path);
+                full_asset_path = 0;
+                hmfree(chunk_hash_to_content_chunk_index);
+                chunk_hash_to_content_chunk_index = 0;
+                return 0;
+            }
+        }
         free(full_asset_path);
         full_asset_path = 0;
     }
@@ -2775,6 +2835,7 @@ int ChangeVersion(
         const char* target_asset_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
         if (0 != strcmp(source_asset_path, target_asset_path))
         {
+            LONGTAIL_LOG("ChangeVersion: Modified asset path `%s` does not match `%s`\n", source_asset_path, target_asset_path);
             hmfree(chunk_hash_to_content_chunk_index);
             chunk_hash_to_content_chunk_index = 0;
             return 0;

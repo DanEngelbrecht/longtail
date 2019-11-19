@@ -37,6 +37,9 @@ struct StorageAPI
     int (*IsDir)(struct StorageAPI* storage_api, const char* path);
     int (*IsFile)(struct StorageAPI* storage_api, const char* path);
 
+    int (*RemoveDir)(struct StorageAPI* storage_api, const char* path);
+    int (*RemoveFile)(struct StorageAPI* storage_api, const char* path);
+
     StorageAPI_HIterator (*StartFind)(struct StorageAPI* storage_api, const char* path);
     int (*FindNext)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
     void (*CloseFind)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);

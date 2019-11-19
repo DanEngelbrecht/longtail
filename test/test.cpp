@@ -193,6 +193,8 @@ struct InMemStorageAPI
             ConcatPath,
             IsDir,
             IsFile,
+            RemoveDir,
+            RemoveFile,
             StartFind,
             FindNext,
             CloseFind,
@@ -424,6 +426,54 @@ struct InMemStorageAPI
             return 0;
         }
         return (*source_path_ptr)->m_Content != 0;
+    }
+
+    static int RemoveDir(struct StorageAPI* storage_api, const char* path)
+    {
+        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
+        TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
+        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(path_hash);
+        if (!source_path_ptr)
+        {
+            return 0;
+        }
+        PathEntry* path_entry = *source_path_ptr;
+        if (path_entry->m_Content)
+        {
+            // Not a directory
+            return 0;
+        }
+        free(path_entry->m_FileName);
+        path_entry->m_FileName = 0;
+        Free_TContent(path_entry->m_Content);
+        path_entry->m_Content = 0;
+        free(path_entry);
+        instance->m_PathHashToContent.Erase(path_hash);
+        return 1;
+    }
+
+    static int RemoveFile(struct StorageAPI* storage_api, const char* path)
+    {
+        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
+        TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
+        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(path_hash);
+        if (!source_path_ptr)
+        {
+            return 0;
+        }
+        PathEntry* path_entry = *source_path_ptr;
+        if (!path_entry->m_Content)
+        {
+            // Not a file
+            return 0;
+        }
+        free(path_entry->m_FileName);
+        path_entry->m_FileName = 0;
+        Free_TContent(path_entry->m_Content);
+        path_entry->m_Content = 0;
+        free(path_entry);
+        instance->m_PathHashToContent.Erase(path_hash);
+        return 1;
     }
 
     static StorageAPI_HIterator StartFind(StorageAPI* storage_api, const char* path)
@@ -1191,13 +1241,14 @@ TEST(Longtail, VersionDiff)
     SingleThreadedJobAPI job_api;
     LizardCompressionAPI compression_api;
 
-    const uint32_t OLD_ASSET_COUNT = 6;
+    const uint32_t OLD_ASSET_COUNT = 7;
 
     const char* OLD_TEST_FILENAMES[] = {
         "TheLongFile.txt",
         "ShortString.txt",
         "AnotherSample.txt",
         "folder/ShortString.txt",
+        "old_folder/understanding.txt",
         "WATCHIOUT.txt",
         "empty/.init.py"
     };
@@ -1207,6 +1258,7 @@ TEST(Longtail, VersionDiff)
         "Short string",
         "Another sample string that does not match any other string but -reconstructed properly, than you very much",
         "Short string",
+        "This is the documentation we are all craving to understand the complexities of life",
         "More than chunk less than block",
         ""
     };
@@ -1217,6 +1269,7 @@ TEST(Longtail, VersionDiff)
         strlen(OLD_TEST_STRINGS[2]) + 1,
         strlen(OLD_TEST_STRINGS[3]) + 1,
         strlen(OLD_TEST_STRINGS[4]) + 1,
+        strlen(OLD_TEST_STRINGS[5]) + 1,
         0
     };
 
@@ -1227,6 +1280,7 @@ TEST(Longtail, VersionDiff)
         "NewShortString.txt",
         "AnotherSample.txt",
         "folder/ShortString.txt",
+        "new_folder/understanding.txt",
         "WATCHIOUT.txt",
         "empty/.init.py"
     };
@@ -1236,6 +1290,7 @@ TEST(Longtail, VersionDiff)
         "Short string", // Renamed
         "Another sample string that does not match any other string but -reconstructed properly.",   // Shorter, same base content
         "Short string but with added stuff",    // Longer, same base content
+        "This is the documentation we are all craving to understand the complexities of life",  // Same but moved to different folder
         "I wish I was a baller.", // Just different
         "" // Unchanged
     };
@@ -1246,6 +1301,7 @@ TEST(Longtail, VersionDiff)
         strlen(NEW_TEST_STRINGS[2]) + 1,
         strlen(NEW_TEST_STRINGS[3]) + 1,
         strlen(NEW_TEST_STRINGS[4]) + 1,
+        strlen(NEW_TEST_STRINGS[5]) + 1,
         0
     };
 
@@ -1332,8 +1388,8 @@ TEST(Longtail, VersionDiff)
         new_vindex);
     ASSERT_NE((VersionDiff*)0, version_diff);
 
-    ASSERT_EQ(1, *version_diff->m_SourceRemovedCount);
-    ASSERT_EQ(1, *version_diff->m_TargetAddedCount);
+    ASSERT_EQ(5, *version_diff->m_SourceRemovedCount);
+    ASSERT_EQ(3, *version_diff->m_TargetAddedCount);
     ASSERT_EQ(4, *version_diff->m_ModifiedCount);
 
     ASSERT_NE(0, ChangeVersion(
@@ -1353,6 +1409,28 @@ TEST(Longtail, VersionDiff)
     free(new_version_paths);
     free(old_vindex);
     free(old_version_paths);
+
+    // Verify that our old folder now matches the new folder data
+    for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
+    {
+        char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "old", NEW_TEST_FILENAMES[i]);
+        StorageAPI_HOpenFile r = storage.m_StorageAPI.OpenReadFile(&storage.m_StorageAPI, file_name);
+        free(file_name);
+        ASSERT_NE((StorageAPI_HOpenFile)0, r);
+        uint64_t size = storage.m_StorageAPI.GetSize(&storage.m_StorageAPI, r);
+        ASSERT_EQ(NEW_TEST_SIZES[i], size);
+        char* test_data = (char*)malloc(sizeof(char) * size);
+        if (size)
+        {
+            ASSERT_NE(0, storage.m_StorageAPI.Read(&storage.m_StorageAPI, r, 0, size, test_data));
+            ASSERT_STREQ(NEW_TEST_STRINGS[i], test_data);
+        }
+        storage.m_StorageAPI.CloseWrite(&storage.m_StorageAPI, r);
+        r = 0;
+        free(test_data);
+        test_data = 0;
+    }
+
 }
 
 TEST(Longtail, FullScale)
