@@ -1,7 +1,7 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
-set LONGTAIL=..\build\longtail.exe
+set LONGTAIL=..\build\longtail_debug.exe
 
 echo Indexing currently known chunks
 !LONGTAIL! --create-content-index "C:\Temp\longtail\chunks.lci" --content "C:\Temp\longtail\chunks"
