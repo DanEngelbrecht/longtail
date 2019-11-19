@@ -2,9 +2,10 @@
 SetLocal EnableDelayedExpansion
 
 set LONGTAIL=..\build\longtail_debug.exe
+set BASEPATH=C:\Temp\longtail
 
-echo Indexing currently known chunks in "C:\Temp\longtail\chunks"
-!LONGTAIL! --create-content-index "C:\Temp\longtail\chunks.lci" --content "C:\Temp\longtail\chunks"
+echo Indexing currently known chunks in "!BASEBATH!\chunks"
+!LONGTAIL! --create-content-index "!BASEBATH!\chunks.lci" --content "!BASEBATH!\chunks"
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
@@ -19,31 +20,31 @@ GOTO End
 
 :Office
 
-call do_version.bat !LONGTAIL! C:\Temp\longtail WinClient\CL6332_WindowsClient
+call do_version.bat !LONGTAIL! !BASEBATH! WinClient\CL6332_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! C:\Temp\longtail WinClient\CL6333_WindowsClient
+call do_version.bat !LONGTAIL! !BASEBATH! WinClient\CL6333_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! C:\Temp\longtail WinClient\CL6336_WindowsClient
+call do_version.bat !LONGTAIL! !BASEBATH! WinClient\CL6336_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! C:\Temp\longtail WinClient\CL6338_WindowsClient
+call do_version.bat !LONGTAIL! !BASEBATH! WinClient\CL6338_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! C:\Temp\longtail WinClient\CL6339_WindowsClient
+call do_version.bat !LONGTAIL! !BASEBATH! WinClient\CL6339_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
