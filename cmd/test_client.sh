@@ -6,7 +6,7 @@ BASEPATH=/mnt/c/Temp/longtail/
 echo Indexing currently known chunks "$BASEPATH/chunks"
 $LONGTAIL --create-content-index "$BASEPATH/chunks.lci" --content "$BASEPATH/chunks"
 
-$Office=true
+Office=true
 
 if $Home; then
 fi

@@ -96,6 +96,8 @@ char* NormalizePath(const char* path)
 
 int main(int argc, char** argv)
 {
+    int result = 0;
+
     int32_t target_chunk_size = 32768;
     kgflags_int("target-chunk-size", target_chunk_size, "Target chunk size", false, &target_chunk_size);
 
@@ -156,14 +158,13 @@ int main(int argc, char** argv)
     const char* create_version = NormalizePath(create_version_raw);
     const char* list_missing_blocks = NormalizePath(list_missing_blocks_raw);
 
-    // These *should* all be freed, but we don't care since we exit the application :)
-
     if (create_version_index && version)
     {
         if (filter)
         {
             printf("--filter option not yet supported\n");
-            return 1;
+            result = 1;
+            goto end;
         }
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
@@ -175,7 +176,8 @@ int main(int argc, char** argv)
         if (!version_paths)
         {
             printf("Failed to scan folder `%s`\n", version);
-            return 1;
+            result = 1;
+            goto end;
         }
         VersionIndex* version_index = CreateVersionIndex(
             &storage_api.m_StorageAPI,
@@ -189,7 +191,8 @@ int main(int argc, char** argv)
         if (!version_index)
         {
             printf("Failed to create version index for `%s`\n", version);
-            return 1;
+            result = 1;
+            goto end;
         }
         
         int ok = CreateParentPath(&storage_api.m_StorageAPI, create_version_index) && WriteVersionIndex(&storage_api.m_StorageAPI, version_index, create_version_index);
@@ -198,9 +201,11 @@ int main(int argc, char** argv)
         if (!ok)
         {
             printf("Failed to create version index to `%s`\n", create_version_index);
-            return 1;
+            result = 1;
+            goto end;
         }
-        return 0;
+        result = 0;
+        goto end;
     }
 
     if (create_content_index && !version)
@@ -218,7 +223,8 @@ int main(int argc, char** argv)
             if (!cindex)
             {
                 printf("Failed to create content index for content `%s`\n", content);
-                return 1;
+                result = 1;
+                goto end;
             }
             int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
             free(cindex);
@@ -226,9 +232,11 @@ int main(int argc, char** argv)
             if (!ok)
             {
                 printf("Failed to write content index to `%s`\n", create_content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
-            return 0;
+            result = 0;
+            goto end;
         }
         if (content_index && merge_content_index)
         {
@@ -237,7 +245,8 @@ int main(int argc, char** argv)
             if (!cindex1)
             {
                 printf("Failed to read content index from `%s`\n", content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
             ContentIndex* cindex2 = ReadContentIndex(&storage_api.m_StorageAPI, merge_content_index);
             if (!cindex2)
@@ -245,7 +254,8 @@ int main(int argc, char** argv)
                 free(cindex1);
                 cindex1 = 0;
                 printf("Failed to read content index from `%s`\n", merge_content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
             ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
             free(cindex2);
@@ -256,7 +266,8 @@ int main(int argc, char** argv)
             if (!cindex)
             {
                 printf("Failed to merge content index `%s` with `%s`\n", content_index, merge_content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
 
             int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(&storage_api.m_StorageAPI, cindex, create_content_index);
@@ -266,9 +277,11 @@ int main(int argc, char** argv)
             if (!ok)
             {
                 printf("Failed to write content index to `%s`\n", create_content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
-            return 0;
+            result = 0;
+            goto end;
         }
     }
 
@@ -285,7 +298,8 @@ int main(int argc, char** argv)
             if (!vindex)
             {
                 printf("Failed to read version index from `%s`\n", version_index);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
         else
@@ -296,7 +310,8 @@ int main(int argc, char** argv)
             if (!version_paths)
             {
                 printf("Failed to scan folder `%s`\n", version);
-                return 1;
+                result = 1;
+                goto end;
             }
             vindex = CreateVersionIndex(
                 &storage_api.m_StorageAPI,
@@ -310,7 +325,8 @@ int main(int argc, char** argv)
             if (!vindex)
             {
                 printf("Failed to create version index for version `%s`\n", version);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
 
@@ -323,7 +339,8 @@ int main(int argc, char** argv)
                 free(vindex);
                 vindex = 0;
                 printf("Failed to read content index from `%s`\n", content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
         else if (content)
@@ -338,7 +355,8 @@ int main(int argc, char** argv)
                 free(vindex);
                 vindex = 0;
                 printf("Failed to read contents from `%s`\n", content);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
         else
@@ -364,7 +382,8 @@ int main(int argc, char** argv)
         if (!cindex)
         {
             printf("Failed to create content index for version `%s`\n", version);
-            return 1;
+            result = 1;
+            goto end;
         }
 
         int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) && WriteContentIndex(
@@ -378,10 +397,12 @@ int main(int argc, char** argv)
         if (!ok)
         {
             printf("Failed to write content index to `%s`\n", create_content_index);
-            return 1;
+            result = 1;
+            goto end;
         }
 
-        return 0;
+        result = 0;
+        goto end;
     }
 
     if (create_content && version)
@@ -397,7 +418,8 @@ int main(int argc, char** argv)
             if (!vindex)
             {
                 printf("Failed to read version index from `%s`\n", version_index);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
         else
@@ -408,7 +430,8 @@ int main(int argc, char** argv)
             if (!version_paths)
             {
                 printf("Failed to scan folder `%s`\n", version);
-                return 1;
+                result = 1;
+                goto end;
             }
             vindex = CreateVersionIndex(
                 &storage_api.m_StorageAPI,
@@ -422,7 +445,8 @@ int main(int argc, char** argv)
             if (!vindex)
             {
                 printf("Failed to create version index for version `%s`\n", version);
-                return 1;
+            result = 1;
+            goto end;
             }
         }
 
@@ -433,7 +457,8 @@ int main(int argc, char** argv)
             if (!cindex)
             {
                 printf("Failed to read content index from `%s`\n", content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
         else
@@ -448,7 +473,8 @@ int main(int argc, char** argv)
             if (!cindex)
             {
                 printf("Failed to create content index for version `%s`\n", version);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
 
@@ -472,9 +498,11 @@ int main(int argc, char** argv)
         if (!ok)
         {
             printf("Failed to write content to `%s`\n", create_content);
-            return 1;
+            result = 1;
+            goto end;
         }
-        return 0;
+        result = 0;
+        goto end;
     }
 
     if (list_missing_blocks && content_index)
@@ -483,14 +511,16 @@ int main(int argc, char** argv)
         ContentIndex* have_content_index = ReadContentIndex(&storage_api.m_StorageAPI, list_missing_blocks);
         if (!have_content_index)
         {
-            return 1;
+            result = 1;
+            goto end;
         }
         ContentIndex* need_content_index = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
         if (!need_content_index)
         {
             free(have_content_index);
             have_content_index = 0;
-            return 1;
+            result = 1;
+            goto end;
         }
 
         // TODO: Move to longtail.h
@@ -536,7 +566,8 @@ int main(int argc, char** argv)
             need_content_index = 0;
             free(have_content_index);
             have_content_index = 0;
-            return 0;
+            result = 0;
+            goto end;
         }
         TLongtail_Hash* missing_block_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * missing_block_count);
         uint32_t block_index = 0;
@@ -551,7 +582,8 @@ int main(int argc, char** argv)
 
         free(missing_block_hashes);
         missing_block_hashes = 0;
-        return 0;
+        result = 0;
+        goto end;
     }
 
 
@@ -566,7 +598,8 @@ int main(int argc, char** argv)
         if (!vindex)
         {
             printf("Failed to read version index from `%s`\n", version_index);
-            return 1;
+            result = 1;
+            goto end;
         }
 
         ContentIndex* cindex = 0;
@@ -578,7 +611,8 @@ int main(int argc, char** argv)
                 free(vindex);
                 vindex = 0;
                 printf("Failed to read content index from `%s`\n", content_index);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
         else
@@ -593,7 +627,8 @@ int main(int argc, char** argv)
                 free(vindex);
                 vindex = 0;
                 printf("Failed to create content index for version `%s`\n", version);
-                return 1;
+                result = 1;
+                goto end;
             }
         }
         int ok = CreatePath(&storage_api.m_StorageAPI, create_version) && WriteVersion(
@@ -612,11 +647,26 @@ int main(int argc, char** argv)
         if (!ok)
         {
             printf("Failed to create version `%s`\n", create_version);
-            return 1;
+            result = 1;
+            goto end;
         }
-        return 0;
+        result = 0;
+        goto end;
     }
 
     kgflags_print_usage();
     return 1;
+
+end: free((void*)create_version_index);
+    free((void*)version);
+    free((void*)filter);
+    free((void*)create_content_index);
+    free((void*)version_index);
+    free((void*)content);
+    free((void*)create_content);
+    free((void*)content_index);
+    free((void*)merge_content_index);
+    free((void*)create_version);
+    free((void*)list_missing_blocks);
+    return result;
 }

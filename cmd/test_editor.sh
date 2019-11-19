@@ -6,7 +6,7 @@ BASEPATH=/mnt/c/Temp/longtail/
 echo Indexing currently known chunks in "$BASEPATH/chunks"
 $LONGTAIL --create-content-index "$BASEPATH/chunks.lci" --content "$BASEPATH/chunks"
 
-$Office=true
+Office=true
 
 if $Home; then
 ./do_version.sh $LONGTAIL $BASEPATH WinEditor/git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor

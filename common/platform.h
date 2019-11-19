@@ -450,7 +450,12 @@ struct BikeshedJobAPI
         {
             m_Workers[i].JoinThread();
         }
+        for (uint32_t i = 0; i < m_WorkerCount; ++i)
+        {
+            m_Workers[i].DisposeThread();
+        }
         delete []m_Workers;
+        free(m_Shed);
     }
 
     static int ReserveJobs(JobAPI* job_api, uint32_t job_count)
