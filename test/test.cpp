@@ -722,7 +722,8 @@ TEST(Longtail, VersionIndex)
 
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
-    const uint32_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
+    const uint64_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
+    const uint32_t chunk_sizes[5] = {64003, 64003, 64002, 64001, 64001};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
 
@@ -743,7 +744,7 @@ TEST(Longtail, VersionIndex)
         *paths->m_PathCount,
         asset_chunk_start_index,
         *paths->m_PathCount,
-        asset_sizes,
+        chunk_sizes,
         asset_content_hashes);
 
     free(version_index);
@@ -983,7 +984,8 @@ TEST(Longtail, CreateMissingContent)
     const uint64_t asset_count = 5;
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
-    const uint32_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
+    const uint64_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
+    const uint32_t chunk_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
@@ -997,7 +999,7 @@ TEST(Longtail, CreateMissingContent)
         &hash_api.m_HashAPI,
         asset_count - 4,
         asset_content_hashes,
-        asset_sizes,
+        chunk_sizes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
 
@@ -1026,7 +1028,7 @@ TEST(Longtail, CreateMissingContent)
         *paths->m_PathCount,
         asset_chunk_start_index,
         *paths->m_PathCount,
-        asset_sizes,
+        chunk_sizes,
         asset_content_hashes);
     free(paths);
 
