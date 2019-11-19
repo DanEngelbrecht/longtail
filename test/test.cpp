@@ -1301,6 +1301,32 @@ TEST(Longtail, VersionDiff)
         16);
     ASSERT_NE((VersionIndex*)0, new_vindex);
 
+    static const uint32_t MAX_BLOCK_SIZE = 32;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
+
+    ContentIndex* content_index = CreateContentIndex(
+            &hash_api.m_HashAPI,
+            *new_vindex->m_ChunkCount,
+            new_vindex->m_ChunkHashes,
+            new_vindex->m_ChunkSizes,
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK);
+
+    StoreCompressionAPI store_compression;
+
+    struct ChunkHashToAssetPart* new_asset_part_lookup = CreateAssetPartLookup(new_vindex);
+    ASSERT_EQ(1, WriteContent(
+        &storage.m_StorageAPI,
+        &storage.m_StorageAPI,
+        &store_compression.m_CompressionAPI,
+        &job_api.m_JobAPI,
+        content_index,
+        new_asset_part_lookup,
+        "new",
+        "chunks"));
+    FreeAssetPartLookup(new_asset_part_lookup);
+    new_asset_part_lookup = 0;
+
     VersionDiff* version_diff = CreateVersionDiff(
         old_vindex,
         new_vindex);
@@ -1309,6 +1335,17 @@ TEST(Longtail, VersionDiff)
     ASSERT_EQ(1, *version_diff->m_SourceRemovedCount);
     ASSERT_EQ(1, *version_diff->m_TargetAddedCount);
     ASSERT_EQ(4, *version_diff->m_ModifiedCount);
+
+    ASSERT_NE(0, ChangeVersion(
+        &storage.m_StorageAPI,
+        &storage.m_StorageAPI,
+        content_index,
+        old_vindex,
+        new_vindex,
+        version_diff,
+        "old"));
+
+	free(content_index);
 
     free(version_diff);
 

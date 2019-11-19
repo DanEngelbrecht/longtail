@@ -2725,3 +2725,68 @@ struct VersionDiff* CreateVersionDiff(
 
     return version_diff;
 }
+
+int ChangeVersion(
+    struct StorageAPI* content_storage_api,
+    struct StorageAPI* version_storage_api,
+    const struct ContentIndex* content_index,
+    const struct VersionIndex* source_version,
+    const struct VersionIndex* target_version,
+    const struct VersionDiff* version_diff,
+    const char* version_path)
+{
+    LONGTAIL_LOG("ChangeVersion removing %u assets, adding %u assets and modifying %u assets", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedAssetIndexes, *version_diff->m_ModifiedCount);
+
+    struct HashToIndexItem* chunk_hash_to_content_chunk_index = 0;
+    for (uint64_t i = 0; i < *content_index->m_ChunkCount; ++i)
+    {
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
+        hmput(chunk_hash_to_content_chunk_index, chunk_hash, i);
+    }
+
+    uint32_t removed_count = *version_diff->m_SourceRemovedCount;
+    for (uint32_t r = 0; r < removed_count; ++r)
+    {
+        uint32_t asset_index = version_diff->m_SourceRemovedAssetIndexes[r];
+        const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
+        char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+        LONGTAIL_LOG("Removing asset `%s`\n", full_asset_path);
+        free(full_asset_path);
+        full_asset_path = 0;
+    }
+
+    uint32_t added_count = *version_diff->m_TargetAddedCount;
+    for (uint32_t a = 0; a < added_count; ++a)
+    {
+        uint32_t asset_index = version_diff->m_TargetAddedAssetIndexes[a];
+        const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
+        char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+        LONGTAIL_LOG("Adding asset `%s`\n", full_asset_path);
+        free(full_asset_path);
+        full_asset_path = 0;
+    }
+
+    uint32_t modified_count = *version_diff->m_ModifiedCount;
+    for (uint32_t m = 0; m < modified_count; ++m)
+    {
+        uint32_t source_asset_index = version_diff->m_SourceModifiedAssetIndexes[m];
+        uint32_t target_asset_index = version_diff->m_TargetModifiedAssetIndexes[m];
+        const char* source_asset_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
+        const char* target_asset_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
+        if (0 != strcmp(source_asset_path, target_asset_path))
+        {
+            hmfree(chunk_hash_to_content_chunk_index);
+            chunk_hash_to_content_chunk_index = 0;
+            return 0;
+        }
+        char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, source_asset_path);
+        LONGTAIL_LOG("Modifying `%s` \n", full_asset_path);
+        free(full_asset_path);
+        full_asset_path = 0;
+    }
+
+    hmfree(chunk_hash_to_content_chunk_index);
+    chunk_hash_to_content_chunk_index = 0;
+
+    return 1;
+}
