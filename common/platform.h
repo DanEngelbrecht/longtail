@@ -64,53 +64,6 @@ inline int GetCPUCount()
     return sysinfo.dwNumberOfProcessors;
 }
 
-inline void Trove_NormalizePath(char* path)
-{
-    while (*path)
-    {
-        *path++ = *path == '\\' ? '/' : *path;
-    }
-}
-
-inline void Trove_DenormalizePath(char* path)
-{
-    while (*path)
-    {
-        *path++ = *path == '/' ? '\\' : *path;
-    }
-}
-
-inline int Trove_CreateDirectory(const char* path)
-{
-    BOOL ok = ::CreateDirectoryA(path, NULL);
-    return ok;
-}
-
-inline int Trove_MoveFile(const char* source, const char* target)
-{
-    BOOL ok = ::MoveFileA(source, target);
-    return ok ? 1 : 0;
-}
-
-int Trove_IsDir(const char* path)
-{
-    DWORD attrs = ::GetFileAttributesA(path);
-    if (attrs == INVALID_FILE_ATTRIBUTES)
-    {
-        return 0;
-    }
-    return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
-}
-
-int Trove_IsFile(const char* path)
-{
-    DWORD attrs = ::GetFileAttributesA(path);
-    if (attrs == INVALID_FILE_ATTRIBUTES)
-    {
-        return 0;
-    }
-    return (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
-}
 
 #endif
 
@@ -124,39 +77,6 @@ inline int GetCPUCount()
    return sysconf(_SC_NPROCESSORS_ONLN);
 }
 
-inline void Trove_NormalizePath(char* )
-{
-    // Nothing to do
-}
-
-inline void Trove_DenormalizePath(char* )
-{
-    // Nothing to do
-}
-
-inline int Trove_CreateDirectory(const char* path)
-{
-    return mkdir(path, 0700) == 0;
-}
-
-inline int Trove_MoveFile(const char* source, const char* target)
-{
-    return rename(source, target) == 0;
-}
-
-int Trove_IsDir(const char* path)
-{
-    struct stat path_stat;
-    stat(path, &path_stat);
-    return S_ISDIR(path_stat.st_mode);
-}
-
-int Trove_IsFile(const char* path)
-{
-    struct stat path_stat;
-    stat(path, &path_stat);
-    return S_ISREG(path_stat.st_mode);
-}
 
 
 #endif
