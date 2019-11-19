@@ -2530,3 +2530,126 @@ struct ContentIndex* MergeContentIndex(
     }
     return content_index;
 }
+
+static int CompareHashes(const void* a_ptr, const void* b_ptr)
+{
+    TLongtail_Hash a = *(TLongtail_Hash*)a_ptr;
+    TLongtail_Hash b = *(TLongtail_Hash*)b_ptr;
+    if (a > b)
+    {
+        return 1;
+    }
+    if (a < b)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+
+void GetUpdateInfo(
+    const struct VersionIndex* source_version,
+    const struct VersionIndex* target_version)
+{
+    struct HashToIndexItem* source_path_hash_to_index = 0;
+    struct HashToIndexItem* target_path_hash_to_index = 0;
+
+    uint32_t source_asset_count = *source_version->m_AssetCount;
+    uint32_t target_asset_count = *target_version->m_AssetCount;
+
+    TLongtail_Hash* source_path_hashes = (TLongtail_Hash*)malloc(sizeof (TLongtail_Hash) * source_asset_count);
+    TLongtail_Hash* target_path_hashes = (TLongtail_Hash*)malloc(sizeof (TLongtail_Hash) * target_asset_count);
+
+    for (uint32_t i = 0; i < source_asset_count; ++i)
+    {
+        TLongtail_Hash path_hash = source_version->m_PathHashes[i];
+        source_path_hashes[i] = path_hash;
+        hmput(source_path_hash_to_index, path_hash, i);
+    }
+
+    for (uint32_t i = 0; i < target_asset_count; ++i)
+    {
+        TLongtail_Hash path_hash = target_version->m_PathHashes[i];
+        target_path_hashes[i] = path_hash;
+        hmput(target_path_hash_to_index, path_hash, i);
+    }
+
+    qsort(source_path_hashes, source_asset_count, sizeof(TLongtail_Hash), CompareHashes);
+    qsort(target_path_hashes, target_asset_count, sizeof(TLongtail_Hash), CompareHashes);
+
+    uint32_t* removed_source_asset_indexes = (uint32_t*)malloc(sizeof(uint32_t) * source_asset_count);
+    uint32_t* added_target_asset_indexes = (uint32_t*)malloc(sizeof(uint32_t) * target_asset_count);
+
+    const uint32_t max_modified_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
+    uint32_t* modified_source_indexes = (uint32_t*)malloc(sizeof(uint32_t) * max_modified_count);
+    uint32_t* modified_target_indexes = (uint32_t*)malloc(sizeof(uint32_t) * max_modified_count);
+
+    uint32_t source_removed_count = 0;
+    uint32_t target_added_count = 0;
+    uint32_t modified_count = 0;
+
+    uint32_t source_index = 0;
+    uint32_t target_index = 0;
+    while (source_index < source_asset_count && target_index < target_asset_count)
+    {
+        TLongtail_Hash source_path_hash = source_path_hashes[source_index];
+        TLongtail_Hash target_path_hash = target_path_hashes[target_index];
+        if (source_path_hash == target_path_hash)
+        {
+            uint32_t source_asset_index = hmget(source_path_hash_to_index, source_path_hash);
+            TLongtail_Hash source_content_hash = source_version->m_ContentHashes[source_asset_index];
+            uint32_t target_asset_index = hmget(target_path_hash_to_index, target_path_hash);
+            TLongtail_Hash target_content_hash = target_version->m_ContentHashes[target_asset_index];
+            if (source_content_hash != target_content_hash)
+            {
+                modified_source_indexes[modified_count] = source_asset_index;
+                modified_target_indexes[modified_count] = target_asset_index;
+                ++modified_count;
+            }
+            ++source_index;
+            ++target_index;
+        } else if (source_path_hash < target_path_hash)
+        {
+            uint32_t source_asset_index = hmget(source_path_hash_to_index, source_path_hash);
+            removed_source_asset_indexes[source_removed_count] = source_asset_index;
+            ++source_removed_count;
+            ++source_index;
+        } else
+        {
+            uint32_t target_asset_index = hmget(target_path_hash_to_index, target_path_hash);
+            added_target_asset_indexes[target_added_count] = target_asset_index;
+            ++target_added_count;
+            ++target_index;
+        } 
+    }
+    while (source_index < source_asset_count)
+    {
+        // source_path_hash removed
+        TLongtail_Hash source_path_hash = source_path_hashes[source_index];
+        uint32_t source_asset_index = hmget(source_path_hash_to_index, source_path_hash);
+        removed_source_asset_indexes[source_removed_count] = source_asset_index;
+        ++source_removed_count;
+        ++source_index;
+    }
+    while (target_index < target_asset_count)
+    {
+        // target_path_hash added
+        TLongtail_Hash target_path_hash = target_path_hashes[target_index];
+        uint32_t target_asset_index = hmget(target_path_hash_to_index, target_path_hash);
+        added_target_asset_indexes[target_added_count] = target_asset_index;
+        ++target_added_count;
+        ++target_index;
+    }
+
+    free(target_path_hashes);
+    target_path_hashes = 0;
+
+    free(target_path_hashes);
+    target_path_hashes = 0;
+
+    hmfree(target_path_hash_to_index);
+    target_path_hash_to_index = 0;
+
+    hmfree(source_path_hash_to_index);
+    source_path_hash_to_index = 0;
+}
