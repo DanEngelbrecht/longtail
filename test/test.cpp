@@ -1301,6 +1301,17 @@ TEST(Longtail, VersionDiff)
         16);
     ASSERT_NE((VersionIndex*)0, new_vindex);
 
+    VersionDiff* version_diff = CreateVersionDiff(
+        old_vindex,
+        new_vindex);
+    ASSERT_NE((VersionDiff*)0, version_diff);
+
+    ASSERT_EQ(1, *version_diff->m_SourceRemovedCount);
+    ASSERT_EQ(1, *version_diff->m_TargetAddedCount);
+    ASSERT_EQ(4, *version_diff->m_ModifiedCount);
+
+    free(version_diff);
+
     free(new_vindex);
     free(new_version_paths);
     free(old_vindex);

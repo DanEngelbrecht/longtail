@@ -78,6 +78,7 @@ struct VersionIndex;
 struct ContentIndex;
 struct PathLookup;
 struct ChunkHashToAssetPart;
+struct VersionDiff;
 
 struct Paths* GetFilesRecursively(
     struct StorageAPI* storage_api,
@@ -164,7 +165,9 @@ int WriteVersion(
     const char* content_path,
     const char* version_path);
 
-
+struct VersionDiff* CreateVersionDiff(
+    const struct VersionIndex* source_version,
+    const struct VersionIndex* target_version);
 
 
 ///////////// Test functions
@@ -231,6 +234,17 @@ struct VersionIndex
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
     char* m_NameData;
+};
+
+struct VersionDiff
+{
+    uint32_t* m_SourceRemovedCount;
+    uint32_t* m_TargetAddedCount;
+    uint32_t* m_ModifiedCount;
+    uint32_t* m_SourceRemovedAssetIndexes;
+    uint32_t* m_TargetAddedAssetIndexes;
+    uint32_t* m_SourceModifiedAssetIndexes;
+    uint32_t* m_TargetModifiedAssetIndexes;
 };
 
 struct Paths* MakePaths(

@@ -2546,8 +2546,63 @@ static int CompareHashes(const void* a_ptr, const void* b_ptr)
     return 0;
 }
 
+static int CompareIndexs(const void* a_ptr, const void* b_ptr)
+{
+    int64_t a = *(uint32_t*)a_ptr;
+    int64_t b = *(uint32_t*)b_ptr;
+    return a - b;
+}
 
-void GetUpdateInfo(
+size_t GetVersionDiffDataSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_count)
+{
+    return
+        sizeof(uint32_t) +                  // m_SourceRemovedCount
+        sizeof(uint32_t) +                  // m_TargetAddedCount
+        sizeof(uint32_t) +                  // m_ModifiedCount
+        sizeof(uint32_t) * removed_count +  // m_SourceRemovedAssetIndexes
+        sizeof(uint32_t) * added_count +    // m_TargetAddedAssetIndexes
+        sizeof(uint32_t) * modified_count + // m_SourceModifiedAssetIndexes
+        sizeof(uint32_t) * modified_count;  // m_TargetModifiedAssetIndexes
+}
+
+size_t GetVersionDiffSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_count)
+{
+    return sizeof(struct VersionDiff) +
+        GetVersionDiffDataSize(removed_count, added_count, modified_count);
+}
+
+void InitVersionDiff(struct VersionDiff* version_diff)
+{
+    char* p = (char*)version_diff;
+    p += sizeof(struct VersionDiff);
+
+    version_diff->m_SourceRemovedCount = (uint32_t*)p;
+    p += sizeof(uint32_t);
+
+    version_diff->m_TargetAddedCount = (uint32_t*)p;
+    p += sizeof(uint32_t);
+
+    version_diff->m_ModifiedCount = (uint32_t*)p;
+    p += sizeof(uint32_t);
+
+    uint32_t removed_count = *version_diff->m_SourceRemovedCount;
+    uint32_t added_count = *version_diff->m_TargetAddedCount;
+    uint32_t modified_count = *version_diff->m_ModifiedCount;
+
+    version_diff->m_SourceRemovedAssetIndexes = (uint32_t*)p;
+    p += sizeof(uint32_t) * removed_count;
+
+    version_diff->m_TargetAddedAssetIndexes = (uint32_t*)p;
+    p += sizeof(uint32_t) * added_count;
+
+    version_diff->m_SourceModifiedAssetIndexes = (uint32_t*)p;
+    p += sizeof(uint32_t) * modified_count;
+
+    version_diff->m_TargetModifiedAssetIndexes = (uint32_t*)p;
+    p += sizeof(uint32_t) * modified_count;
+}
+
+struct VersionDiff* CreateVersionDiff(
     const struct VersionIndex* source_version,
     const struct VersionIndex* target_version)
 {
@@ -2641,6 +2696,21 @@ void GetUpdateInfo(
         ++target_index;
     }
 
+    struct VersionDiff* version_diff = (struct VersionDiff*)malloc(GetVersionDiffSize(source_removed_count, target_added_count, modified_count));
+    uint32_t* counts_ptr = (uint32_t*)&version_diff[1];
+    counts_ptr[0] = source_removed_count;
+    counts_ptr[1] = target_added_count;
+    counts_ptr[2] = modified_count;
+    InitVersionDiff(version_diff);
+
+    memmove(version_diff->m_SourceRemovedAssetIndexes, removed_source_asset_indexes, sizeof(uint32_t) * source_removed_count);
+    memmove(version_diff->m_TargetAddedAssetIndexes, added_target_asset_indexes, sizeof(uint32_t) * target_added_count);
+    memmove(version_diff->m_SourceModifiedAssetIndexes, modified_source_indexes, sizeof(uint32_t) * modified_count);
+    memmove(version_diff->m_TargetModifiedAssetIndexes, modified_target_indexes, sizeof(uint32_t) * modified_count);
+
+    qsort(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), CompareIndexs);
+    qsort(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), CompareIndexs);
+
     free(target_path_hashes);
     target_path_hashes = 0;
 
@@ -2652,4 +2722,6 @@ void GetUpdateInfo(
 
     hmfree(source_path_hash_to_index);
     source_path_hash_to_index = 0;
+
+    return version_diff;
 }
