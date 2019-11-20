@@ -28,6 +28,12 @@ if %errorlevel% neq 0 (
     exit /b %errorlevel%
 )
 
+call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6469_WindowsClient
+if %errorlevel% neq 0 (
+    echo "FAILED:" %errorlevel%
+    exit /b %errorlevel%
+)
+
 GOTO End
 
 :Office
