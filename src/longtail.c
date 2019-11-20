@@ -106,7 +106,7 @@ typedef void (*ProcessEntry)(void* context, const char* root_path, const char* f
 
 int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
-    LONGTAIL_LOG("RecurseTree `%s`\n", root_folder)
+    LONGTAIL_LOG("RecurseTree: Scanning folder `%s`\n", root_folder)
 
     uint32_t folder_index = 0;
 
@@ -276,7 +276,7 @@ void AddFile(void* context, const char* root_path, const char* file_name)
 
 struct Paths* GetFilesRecursively(struct StorageAPI* storage_api, const char* root_path)
 {
-    LONGTAIL_LOG("GetFilesRecursively `%s`\n", root_path)
+    LONGTAIL_LOG("GetFilesRecursively: Scanning `%s`\n", root_path)
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
 
@@ -286,7 +286,7 @@ struct Paths* GetFilesRecursively(struct StorageAPI* storage_api, const char* ro
 
     if(!RecurseTree(storage_api, root_path, AddFile, &context))
     {
-        LONGTAIL_LOG("Failed get files in folder `%s`\n", root_path)
+        LONGTAIL_LOG("GetFilesRecursively: Failed get files in folder `%s`\n", root_path)
         free(context.m_Paths);
         context.m_Paths = 0;
         return 0;
@@ -419,7 +419,7 @@ int ChunkAssets(
     uint32_t max_chunk_size,
     uint32_t* chunk_count)
 {
-    LONGTAIL_LOG("ChunkAssets in folder `%s` for %u assets\n", root_path, (uint32_t)*paths->m_PathCount)
+    LONGTAIL_LOG("ChunkAssets: Hashing and chunking folder `%s` with %u assets\n", root_path, (uint32_t)*paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
 
     if (!job_api->ReserveJobs(job_api, asset_count))
@@ -673,7 +673,7 @@ struct VersionIndex* CreateVersionIndex(
         max_chunk_size,
         &assets_chunk_index_count))
     {
-        LONGTAIL_LOG("CreateVersionIndex: Failed to hash assets in `%s`\n", root_path);
+        LONGTAIL_LOG("CreateVersionIndex: Failed to chunk and hash assets in `%s`\n", root_path);
         free(asset_chunk_start_index);
         asset_chunk_start_index = 0;
         free(asset_chunk_hashes);
@@ -768,7 +768,7 @@ struct VersionIndex* CreateVersionIndex(
 
 int WriteVersionIndex(struct StorageAPI* storage_api, struct VersionIndex* version_index, const char* path)
 {
-    LONGTAIL_LOG("WriteVersionIndex to `%s` containing `%u` assets.\n", path, *version_index->m_AssetCount);
+    LONGTAIL_LOG("WriteVersionIndex: Writing index to `%s` containing `%u` assets in  `%u` chunks.\n", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (uint32_t)(*version_index->m_ChunkCount), (uint32_t)(*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
 
     if (!EnsureParentPathExists(storage_api, path))
@@ -797,7 +797,7 @@ int WriteVersionIndex(struct StorageAPI* storage_api, struct VersionIndex* versi
 
 struct VersionIndex* ReadVersionIndex(struct StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_LOG("ReadVersionIndex from `%s`\n", path)
+    LONGTAIL_LOG("ReadVersionIndex: Reading from `%s`\n", path)
     StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
@@ -965,7 +965,7 @@ struct ContentIndex* CreateContentIndex(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block)
 {
-    LONGTAIL_LOG("CreateContentIndex for %" PRIu64 " chunks\n", chunk_count)
+    LONGTAIL_LOG("CreateContentIndex: Creating index for %" PRIu64 " chunks\n", chunk_count)
     if (chunk_count == 0)
     {
         size_t content_index_size = GetContentIndexSize(0, 0);
@@ -1096,7 +1096,7 @@ struct ContentIndex* CreateContentIndex(
 
 int WriteContentIndex(struct StorageAPI* storage_api, struct ContentIndex* content_index, const char* path)
 {
-    LONGTAIL_LOG("WriteContentIndex to `%s`, assets %u, blocks %u\n", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    LONGTAIL_LOG("WriteContentIndex: Write index to `%s`, chunks %u, blocks %u\n", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
 
     if (!EnsureParentPathExists(storage_api, path))
@@ -1262,7 +1262,7 @@ void WriteContentBlockJob(void* context)
         intptr_t asset_part_index = hmgeti(job->m_AssetPartLookup, chunk_hash);
         if (asset_part_index == -1)
         {
-            LONGTAIL_LOG("WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 "\n", chunk_hash)
+            LONGTAIL_LOG("WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 " in `%s`\n", chunk_hash, content_folder)
             free(write_buffer);
             write_buffer = 0;
             free((char*)block_path);
@@ -1293,7 +1293,7 @@ void WriteContentBlockJob(void* context)
         StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
         if (!file_handle || (source_storage_api->GetSize(source_storage_api, file_handle) < (asset_offset + chunk_size)))
         {
-            LONGTAIL_LOG("WriteContentBlockJob: Missing or mismatching asset content `%s`\n", asset_path)
+            LONGTAIL_LOG("WriteContentBlockJob: Missing or mismatching asset content `%s` in `%s`\n", asset_path, content_folder)
             free(write_buffer);
             write_buffer = 0;
             free((char*)tmp_block_path);
@@ -1410,7 +1410,7 @@ int WriteContent(
     const char* assets_folder,
     const char* content_folder)
 {
-    LONGTAIL_LOG("WriteContent from `%s` to `%s`, chunks %u, blocks %u\n", assets_folder, content_folder, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    LONGTAIL_LOG("WriteContent: Writing content from `%s` to `%s`, chunks %u, blocks %u\n", assets_folder, content_folder, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -1486,7 +1486,7 @@ int WriteContent(
             uint64_t first_chunk_index = job->m_FirstChunkIndex;
             uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
             TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-            LONGTAIL_LOG("WriteContent: to write content for block 0x%" PRIx64 "\n", block_hash)
+            LONGTAIL_LOG("WriteContent: Failed to write content for block 0x%" PRIx64 "\n", block_hash)
             success = 0;
         }
     }
@@ -1884,7 +1884,7 @@ int WriteVersion(
     const char* content_path,
     const char* version_path)
 {
-    LONGTAIL_LOG("WriteVersion from `%s` to `%s`, assets %u\n", content_path, version_path, (uint32_t)*version_index->m_AssetCount);
+    LONGTAIL_LOG("WriteVersion: Write version from `%s` to `%s`, assets %u, chunks %u\n", content_path, version_path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     struct HashToIndexItem* block_hash_to_block_index = 0;
     for (uint64_t i = 0; i < *content_index->m_BlockCount; ++i)
     {
@@ -2240,7 +2240,7 @@ struct ContentIndex* ReadContent(
     struct JobAPI* job_api,
     const char* content_path)
 {
-    LONGTAIL_LOG("ReadContent from `%s`\n", content_path)
+    LONGTAIL_LOG("ReadContent: Reading from `%s`\n", content_path)
 
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
@@ -2451,7 +2451,7 @@ struct ContentIndex* CreateMissingContent(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block)
 {
-    LONGTAIL_LOG("CreateMissingContent%s\n", "")
+    LONGTAIL_LOG("CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks\n", *version->m_ChunkCount, *content_index->m_ChunkCount)
     uint64_t chunk_count = *version->m_ChunkCount;
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * chunk_count);
 
@@ -2791,7 +2791,7 @@ int ChangeVersion(
     const char* content_path,
     const char* version_path)
 {
-    LONGTAIL_LOG("ChangeVersion removing %u assets, adding %u assets and modifying %u assets\n", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount);
+    LONGTAIL_LOG("ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`\n", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount, version_path, content_path);
 
     if (!EnsureParentPathExists(version_storage_api, version_path))
     {
