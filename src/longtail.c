@@ -295,6 +295,39 @@ struct Paths* GetFilesRecursively(struct StorageAPI* storage_api, const char* ro
     return context.m_Paths;
 }
 
+struct StorageChunkFeederContext
+{
+    struct StorageAPI* m_StorageAPI;
+    StorageAPI_HOpenFile m_AssetFile;
+    const char* m_AssetPath;
+    uint64_t m_Size;
+    uint64_t m_Offset;
+};
+
+static uint32_t StorageChunkFeederFunc(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer)
+{
+    struct StorageChunkFeederContext* c = (struct StorageChunkFeederContext*)context;
+    uint64_t read_count = c->m_Size - c->m_Offset;
+    if (read_count > 0)
+    {
+        if (requested_size < read_count)
+        {
+            read_count = requested_size;
+        }
+        if (!c->m_StorageAPI->Read(c->m_StorageAPI, c->m_AssetFile, c->m_Offset, (uint32_t)read_count, buffer))
+        {
+            LONGTAIL_LOG("StorageChunkFeederFunc: Failed to read from asset file `%s`\n", c->m_AssetPath)
+            return 0;
+        }
+        c->m_Offset += read_count;
+    }
+    return read_count;
+}
+
+// ChunkerWindowSize is the number of bytes in the rolling hash window
+//const uint32_t ChunkerWindowSize = 48;
+#define ChunkerWindowSize 48
+
 struct HashJob
 {
     struct StorageAPI* m_StorageAPI;
@@ -342,29 +375,23 @@ void HashFile(void* context)
     }
 
     uint64_t asset_size = (uint64_t)storage_api->GetSize(storage_api, file_handle);
-    uint8_t* batch_data = (uint8_t*)malloc(asset_size < hash_job->m_MaxChunkSize ? asset_size : hash_job->m_MaxChunkSize);
-    uint32_t max_chunks = (asset_size + hash_job->m_MaxChunkSize - 1) / hash_job->m_MaxChunkSize;
-
-    hash_job->m_ChunkHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * max_chunks);
-    hash_job->m_ChunkSizes = (uint32_t*)malloc(sizeof(uint32_t) * max_chunks);
-
-    HashAPI_HContext asset_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
-
-    uint64_t offset = 0;
-    while (offset != asset_size)
+    if (asset_size > 1024*1024*1024)
     {
-        uint32_t len = (uint32_t)((asset_size - offset) < hash_job->m_MaxChunkSize ? (asset_size - offset) : hash_job->m_MaxChunkSize);
-        int read_ok = storage_api->Read(storage_api, file_handle, offset, len, batch_data);
-        if (!read_ok)
+        LONGTAIL_LOG("HashFile: Hashing a very large file `%s`\n", path);
+    }
+
+    TLongtail_Hash content_hash = 0;
+    if (asset_size <= ChunkerWindowSize || hash_job->m_MaxChunkSize <= ChunkerWindowSize)
+    {
+        hash_job->m_ChunkHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * 1);
+        hash_job->m_ChunkSizes = (uint32_t*)malloc(sizeof(uint32_t) * 1);
+
+        char* buffer = (char*)malloc(asset_size);
+        if (!storage_api->Read(storage_api, file_handle, 0, asset_size, buffer))
         {
-            LONGTAIL_LOG("HashFile: Failed to read from `%s`\n", path)
-            hash_job->m_Success = 0;
-            free(hash_job->m_ChunkSizes);
-            hash_job->m_ChunkSizes = 0;
-            free(hash_job->m_ChunkHashes);
-            hash_job->m_ChunkHashes = 0;
-            free(batch_data);
-            batch_data = 0;
+            LONGTAIL_LOG("HashFile: Failed to read from file `%s`\n", path)
+            free(buffer);
+            buffer = 0;
             storage_api->CloseRead(storage_api, file_handle);
             file_handle = 0;
             free(path);
@@ -372,23 +399,120 @@ void HashFile(void* context)
             return;
         }
 
-        {
-            HashAPI_HContext chunk_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
-            hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, chunk_hash_context, len, batch_data);
-            TLongtail_Hash chunk_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, chunk_hash_context);
-            hash_job->m_ChunkHashes[chunk_count] = chunk_hash;
-            hash_job->m_ChunkSizes[chunk_count] = len;
-        }
+        HashAPI_HContext asset_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
+        hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, asset_hash_context, asset_size, buffer);
+        content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
+
+        free(buffer);
+        buffer = 0;
+
+        hash_job->m_ChunkHashes[chunk_count] = content_hash;
+        hash_job->m_ChunkSizes[chunk_count] = asset_size;
+
         ++chunk_count;
-
-        offset += len;
-        hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, asset_hash_context, len, batch_data);
     }
+    else
+    {
+        uint32_t min_chunk_size = hash_job->m_MaxChunkSize / 4;
+        uint32_t avg_chunk_size = hash_job->m_MaxChunkSize / 2;
+        uint32_t max_chunk_size = hash_job->m_MaxChunkSize;
 
-    free(batch_data);
-    batch_data = 0;
+        uint32_t max_chunks = (asset_size + min_chunk_size - 1) / min_chunk_size;
+        hash_job->m_ChunkHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * max_chunks);
+        hash_job->m_ChunkSizes = (uint32_t*)malloc(sizeof(uint32_t) * max_chunks);
 
-    TLongtail_Hash content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
+        struct StorageChunkFeederContext feeder_context =
+        {
+            storage_api,
+            file_handle,
+            path,
+            asset_size,
+            0
+        };
+
+        struct ChunkerParams chunker_params = { min_chunk_size, avg_chunk_size, max_chunk_size };
+
+        struct Chunker* chunker = CreateChunker(
+            &chunker_params,
+            StorageChunkFeederFunc,
+            &feeder_context);
+
+        if (!chunker)
+        {
+            LONGTAIL_LOG("HashFile: Failed to create chunker for asset `%s`\n", path)
+            hash_job->m_Success = 0;
+            free(hash_job->m_ChunkSizes);
+            hash_job->m_ChunkSizes = 0;
+            free(hash_job->m_ChunkHashes);
+            hash_job->m_ChunkHashes = 0;
+            storage_api->CloseRead(storage_api, file_handle);
+            file_handle = 0;
+            free(path);
+            path = 0;
+            return;
+        }
+
+        HashAPI_HContext asset_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
+
+        uint64_t remaining = asset_size;
+        struct ChunkRange r = NextChunk(chunker);
+        while (r.len)
+        {
+            if(remaining < r.len)
+            {
+                LONGTAIL_LOG("HashFile: Chunking size is larger than remaining file size for asset `%s`\n", path)
+                free(chunker);
+                chunker = 0;
+                hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
+                hash_job->m_Success = 0;
+                free(hash_job->m_ChunkSizes);
+                hash_job->m_ChunkSizes = 0;
+                free(hash_job->m_ChunkHashes);
+                hash_job->m_ChunkHashes = 0;
+                storage_api->CloseRead(storage_api, file_handle);
+                file_handle = 0;
+                free(path);
+                path = 0;
+                return;
+            }
+
+            {
+                HashAPI_HContext chunk_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
+                hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, chunk_hash_context, r.len, (void*)r.buf);
+                TLongtail_Hash chunk_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, chunk_hash_context);
+                hash_job->m_ChunkHashes[chunk_count] = chunk_hash;
+                hash_job->m_ChunkSizes[chunk_count] = r.len;
+            }
+
+            ++chunk_count;
+
+            hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, asset_hash_context, r.len, (void*)r.buf);
+
+            remaining -= r.len;
+            r = NextChunk(chunker);
+        }
+        if(remaining != 0)
+        {
+            LONGTAIL_LOG("HashFile: Chunking stopped before end of file size for asset `%s`\n", path)
+            free(chunker);
+            chunker = 0;
+            hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
+            hash_job->m_Success = 0;
+            free(hash_job->m_ChunkSizes);
+            hash_job->m_ChunkSizes = 0;
+            free(hash_job->m_ChunkHashes);
+            hash_job->m_ChunkHashes = 0;
+            storage_api->CloseRead(storage_api, file_handle);
+            file_handle = 0;
+            free(path);
+            path = 0;
+            return;
+        }
+
+        content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
+        free(chunker);
+        chunker = 0;
+    }
 
     storage_api->CloseRead(storage_api, file_handle);
     file_handle = 0;
@@ -1643,6 +1767,8 @@ void WriteAssetFromBlocks(void* context)
     uint64_t base_asset_offset = 0;
     char* block_data = 0;
     uint32_t base_c = 0;
+    uint32_t written_block_count = 0;
+    uint32_t skipped_block_count = 0;
     for (uint32_t c = 0; c < chunk_count; ++c)
     {
         uint32_t chunk_index = chunk_indexes[c];
@@ -1652,12 +1778,11 @@ void WriteAssetFromBlocks(void* context)
         while (base_c < base_chunk_count && base_asset_offset < asset_offset)
         {
             uint32_t base_chunk_index = base_chunk_indexes[base_c];
-            uint32_t base_chunk_length = base_version_index->m_ChunkSizes[base_chunk_index];
-            base_asset_offset += base_chunk_length;
+            base_asset_offset += base_version_index->m_ChunkSizes[base_chunk_index];
             ++base_c;
         }
 
-        if (base_c < base_chunk_count)
+        if (base_c < base_chunk_count && base_asset_offset == asset_offset)
         {
             uint32_t base_chunk_index = base_chunk_indexes[base_c];
             TLongtail_Hash base_chunk_hash = base_version_index->m_ChunkHashes[base_chunk_index];
@@ -1666,9 +1791,11 @@ void WriteAssetFromBlocks(void* context)
                 asset_offset += chunk_size;
                 base_asset_offset += chunk_size;
                 ++base_c;
-				continue;
-			}
+                ++skipped_block_count;
+                continue;
+            }
         }
+        ++written_block_count;
 
         uint64_t chunk_content_index = hmget(content_chunk_lookup, chunk_hash);
         TLongtail_Hash block_hash = content_index->m_BlockHashes[content_index->m_ChunkBlockIndexes[chunk_content_index]];
@@ -1726,6 +1853,12 @@ void WriteAssetFromBlocks(void* context)
         LONGTAIL_LOG("WriteAssetFromBlocks: Failed to set size of asset `%s`\n", full_asset_path)
     }
     version_storage_api->CloseWrite(version_storage_api, asset_file);
+
+    if (written_block_count + skipped_block_count > 1000)
+    {
+        LONGTAIL_LOG("WriteAssetFromBlocks: Wrote %u blocks of %u, skipping %u of asset `%s`\n", written_block_count, written_block_count + skipped_block_count, skipped_block_count, full_asset_path);
+    }
+
     asset_file = 0;
     free(full_asset_path);
     full_asset_path = 0;
@@ -2875,8 +3008,8 @@ int ChangeVersion(
         job->m_CompressionAPI = compression_api;
         job->m_ContentIndex = content_index;
         job->m_VersionIndex = target_version;
-		job->m_BaseVersionIndex = 0;
-		job->m_ContentFolder = content_path;
+        job->m_BaseVersionIndex = 0;
+        job->m_ContentFolder = content_path;
         job->m_VersionFolder = version_path;
         job->m_ContentChunkLookup = chunk_hash_to_content_chunk_index;
         job->m_AssetIndex = asset_index;
@@ -2949,4 +3082,236 @@ int ChangeVersion(
     chunk_hash_to_content_chunk_index = 0;
 
     return success;
+}
+
+static uint32_t hashTable[] = {
+    0x458be752, 0xc10748cc, 0xfbbcdbb8, 0x6ded5b68,
+    0xb10a82b5, 0x20d75648, 0xdfc5665f, 0xa8428801,
+    0x7ebf5191, 0x841135c7, 0x65cc53b3, 0x280a597c,
+    0x16f60255, 0xc78cbc3e, 0x294415f5, 0xb938d494,
+    0xec85c4e6, 0xb7d33edc, 0xe549b544, 0xfdeda5aa,
+    0x882bf287, 0x3116737c, 0x05569956, 0xe8cc1f68,
+    0x0806ac5e, 0x22a14443, 0x15297e10, 0x50d090e7,
+    0x4ba60f6f, 0xefd9f1a7, 0x5c5c885c, 0x82482f93,
+    0x9bfd7c64, 0x0b3e7276, 0xf2688e77, 0x8fad8abc,
+    0xb0509568, 0xf1ada29f, 0xa53efdfe, 0xcb2b1d00,
+    0xf2a9e986, 0x6463432b, 0x95094051, 0x5a223ad2,
+    0x9be8401b, 0x61e579cb, 0x1a556a14, 0x5840fdc2,
+    0x9261ddf6, 0xcde002bb, 0x52432bb0, 0xbf17373e,
+    0x7b7c222f, 0x2955ed16, 0x9f10ca59, 0xe840c4c9,
+    0xccabd806, 0x14543f34, 0x1462417a, 0x0d4a1f9c,
+    0x087ed925, 0xd7f8f24c, 0x7338c425, 0xcf86c8f5,
+    0xb19165cd, 0x9891c393, 0x325384ac, 0x0308459d,
+    0x86141d7e, 0xc922116a, 0xe2ffa6b6, 0x53f52aed,
+    0x2cd86197, 0xf5b9f498, 0xbf319c8f, 0xe0411fae,
+    0x977eb18c, 0xd8770976, 0x9833466a, 0xc674df7f,
+    0x8c297d45, 0x8ca48d26, 0xc49ed8e2, 0x7344f874,
+    0x556f79c7, 0x6b25eaed, 0xa03e2b42, 0xf68f66a4,
+    0x8e8b09a2, 0xf2e0e62a, 0x0d3a9806, 0x9729e493,
+    0x8c72b0fc, 0x160b94f6, 0x450e4d3d, 0x7a320e85,
+    0xbef8f0e1, 0x21d73653, 0x4e3d977a, 0x1e7b3929,
+    0x1cc6c719, 0xbe478d53, 0x8d752809, 0xe6d8c2c6,
+    0x275f0892, 0xc8acc273, 0x4cc21580, 0xecc4a617,
+    0xf5f7be70, 0xe795248a, 0x375a2fe9, 0x425570b6,
+    0x8898dcf8, 0xdc2d97c4, 0x0106114b, 0x364dc22f,
+    0x1e0cad1f, 0xbe63803c, 0x5f69fac2, 0x4d5afa6f,
+    0x1bc0dfb5, 0xfb273589, 0x0ea47f7b, 0x3c1c2b50,
+    0x21b2a932, 0x6b1223fd, 0x2fe706a8, 0xf9bd6ce2,
+    0xa268e64e, 0xe987f486, 0x3eacf563, 0x1ca2018c,
+    0x65e18228, 0x2207360a, 0x57cf1715, 0x34c37d2b,
+    0x1f8f3cde, 0x93b657cf, 0x31a019fd, 0xe69eb729,
+    0x8bca7b9b, 0x4c9d5bed, 0x277ebeaf, 0xe0d8f8ae,
+    0xd150821c, 0x31381871, 0xafc3f1b0, 0x927db328,
+    0xe95effac, 0x305a47bd, 0x426ba35b, 0x1233af3f,
+    0x686a5b83, 0x50e072e5, 0xd9d3bb2a, 0x8befc475,
+    0x487f0de6, 0xc88dff89, 0xbd664d5e, 0x971b5d18,
+    0x63b14847, 0xd7d3c1ce, 0x7f583cf3, 0x72cbcb09,
+    0xc0d0a81c, 0x7fa3429b, 0xe9158a1b, 0x225ea19a,
+    0xd8ca9ea3, 0xc763b282, 0xbb0c6341, 0x020b8293,
+    0xd4cd299d, 0x58cfa7f8, 0x91b4ee53, 0x37e4d140,
+    0x95ec764c, 0x30f76b06, 0x5ee68d24, 0x679c8661,
+    0xa41979c2, 0xf2b61284, 0x4fac1475, 0x0adb49f9,
+    0x19727a23, 0x15a7e374, 0xc43a18d5, 0x3fb1aa73,
+    0x342fc615, 0x924c0793, 0xbee2d7f0, 0x8a279de9,
+    0x4aa2d70c, 0xe24dd37f, 0xbe862c0b, 0x177c22c2,
+    0x5388e5ee, 0xcd8a7510, 0xf901b4fd, 0xdbc13dbc,
+    0x6c0bae5b, 0x64efe8c7, 0x48b02079, 0x80331a49,
+    0xca3d8ae6, 0xf3546190, 0xfed7108b, 0xc49b941b,
+    0x32baf4a9, 0xeb833a4a, 0x88a3f1a5, 0x3a91ce0a,
+    0x3cc27da1, 0x7112e684, 0x4a3096b1, 0x3794574c,
+    0xa3c8b6f3, 0x1d213941, 0x6e0a2e00, 0x233479f1,
+    0x0f4cd82f, 0x6093edd2, 0x5d7d209e, 0x464fe319,
+    0xd4dcac9e, 0x0db845cb, 0xfb5e4bc3, 0xe0256ce1,
+    0x09fb4ed1, 0x0914be1e, 0xa5bdb2c3, 0xc6eb57bb,
+    0x30320350, 0x3f397e91, 0xa67791bc, 0x86bc0e2c,
+    0xefa0a7e2, 0xe9ff7543, 0xe733612c, 0xd185897b,
+    0x329e5388, 0x91dd236b, 0x2ecb0d93, 0xf4d82a3d,
+    0x35b5c03f, 0xe4e606f0, 0x05b21843, 0x37b45964,
+    0x5eff22f4, 0x6027f4cc, 0x77178b3c, 0xae507131,
+    0x7bf7cabc, 0xf9c18d66, 0x593ade65, 0xd95ddf11,
+};
+
+struct ChunkerWindow
+{
+    uint8_t* buf;
+    uint32_t len;
+    uint32_t m_ScanPosition;
+};
+
+struct Array
+{
+    uint8_t* data;
+    uint32_t len;
+};
+
+struct Chunker
+{
+    struct ChunkerParams params;
+    struct Array buf;
+    uint32_t off;
+    uint32_t hValue;
+    uint8_t hWindow[ChunkerWindowSize];
+    int32_t hIdx;
+    uint32_t hDiscriminator;
+    Chunker_Feeder fFeeder;
+    void* cFeederContext;
+    uint64_t processed_count;
+};
+
+uint32_t discriminatorFromAvg(double avg)
+{
+    return (uint32_t)(avg / (-1.42888852e-7*avg + 1.33237515));
+}
+
+struct Chunker* CreateChunker(
+    struct ChunkerParams* params,
+    Chunker_Feeder feeder,
+    void* context)
+{
+    if (params->min < ChunkerWindowSize)
+    {
+        LONGTAIL_LOG("Chunker: Min chunk size too small, must be over %u", ChunkerWindowSize);
+        return 0;
+    }
+    if (params->min > params->max)
+    {
+        LONGTAIL_LOG("Chunker: Min chunk size must not be greater than max");
+        return 0;
+    }
+    if (params->min > params->avg)
+    {
+        LONGTAIL_LOG("Chunker: Min chunk size must not be greater than avg");
+        return 0;
+    }
+    if (params->avg > params->max)
+    {
+        LONGTAIL_LOG("Chunker: Avg chunk size must not be greater than max");
+        return 0;
+    }
+    struct Chunker* c = (struct Chunker*)malloc(sizeof(struct Chunker) + params->max);
+    c->params = *params;
+    c->buf.data = (uint8_t*)&c[1];
+    c->buf.len = 0;
+    c->off = 0;
+    c->hValue = 0;
+    c->hIdx = 0;
+    c->hDiscriminator = discriminatorFromAvg(params->avg);
+    c->fFeeder = feeder,
+    c->cFeederContext = context;
+    c->processed_count = 0;
+    return c;
+}
+
+int ChunkerConsume(struct Chunker* chunker, uint32_t size)
+{
+    if (size > chunker->off)
+    {
+        return 0;
+    }
+    chunker->off -= size;
+    return 1;
+}
+
+void FeedChunker(struct Chunker* c)
+{
+    if (c->off != 0)
+    {
+        memmove(c->buf.data, &c->buf.data[c->off], c->buf.len - c->off);
+        c->processed_count += c->off;
+        c->buf.len -= c->off;
+        c->off = 0;
+    }
+    uint32_t feed_max = c->params.max - c->buf.len;
+    uint32_t feed_count = c->fFeeder(c->cFeederContext, c, feed_max, &c->buf.data[c->buf.len]);
+    c->buf.len += feed_count;
+}
+
+struct ChunkRange NextChunk(struct Chunker* c)
+{
+    if (c->buf.len - c->off < c->params.max)
+    {
+        FeedChunker(c);
+    }
+    if (c->off == c->buf.len)
+    {
+        // All done
+        struct ChunkRange r = {0, c->processed_count + c->off, 0};
+        c->hIdx = 0;
+        c->hValue = 0;
+        return r;
+    }
+
+    uint32_t left = c->buf.len - c->off;
+    if (left <= c->params.min)
+    {
+        // Less than min-size left, just consume it all
+        struct ChunkRange r = {&c->buf.data[c->off], c->processed_count + c->off, left};
+        c->off += left;
+        c->hIdx = 0;
+        c->hValue = 0;
+        return r;
+    }
+
+    struct ChunkRange scoped_data = {&c->buf.data[c->off], c->processed_count + c->off, left};
+    {
+        struct ChunkRange window = {&scoped_data.buf[c->params.min - ChunkerWindowSize], c->processed_count + c->off + c->params.min - ChunkerWindowSize, ChunkerWindowSize};
+        for (uint32_t i = 0; i < ChunkerWindowSize; ++i)
+        {
+            uint8_t b = window.buf[i];
+            c->hValue ^= _rotl(hashTable[b], ChunkerWindowSize-i-1);
+            c->hWindow[i] = b;
+        }
+    }
+
+    uint32_t pos = c->params.min;
+    while(1)
+    {
+        uint8_t in = scoped_data.buf[pos];
+        uint8_t out = c->hWindow[c->hIdx];
+        c->hWindow[c->hIdx] = in;
+        c->hIdx = (c->hIdx + 1) % ChunkerWindowSize;
+        c->hValue = _rotl(c->hValue, 1) ^
+            _rotl(hashTable[out], ChunkerWindowSize) ^
+            hashTable[in];
+
+        ++pos;
+
+        if (pos >= scoped_data.len)
+        {
+            struct ChunkRange r = {scoped_data.buf, c->processed_count + c->off, pos};
+            c->off += pos;
+            c->hIdx = 0;
+            c->hValue = 0;
+            return r;
+        }
+
+        if ((c->hValue % c->hDiscriminator) == (c->hDiscriminator - 1))
+        {
+            struct ChunkRange r = {scoped_data.buf, c->processed_count + c->off, pos};
+            c->off += pos;
+            c->hIdx = 0;
+            c->hValue = 0;
+            return r;
+        }
+    }
 }

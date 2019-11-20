@@ -271,6 +271,30 @@ TLongtail_Hash GetPathHash(struct HashAPI* hash_api, const char* path);
 
 char* GetBlockName(TLongtail_Hash block_hash);
 
+struct Chunker;
+
+struct ChunkerParams
+{
+    uint64_t min;
+    uint64_t avg;
+    uint64_t max;
+};
+
+struct ChunkRange
+{
+    const uint8_t* buf;
+    uint64_t offset;
+    uint32_t len;
+};
+
+struct ChunkRange NextChunk(struct Chunker* c);
+
+typedef uint32_t (*Chunker_Feeder)(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer);
+
+struct Chunker* CreateChunker(
+    struct ChunkerParams* params,
+    Chunker_Feeder feeder,
+    void* context);
 
 #ifdef __cplusplus
 }

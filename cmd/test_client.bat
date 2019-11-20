@@ -38,31 +38,37 @@ GOTO End
 
 :Office
 
-call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6332_WindowsClient
+call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6135_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6333_WindowsClient
+call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6157_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6336_WindowsClient
+call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6203_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6338_WindowsClient
+call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6226_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
 )
 
-call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6339_WindowsClient
+call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6308_WindowsClient
+if %errorlevel% neq 0 (
+    echo "FAILED:" %errorlevel%
+    exit /b %errorlevel%
+)
+
+call do_version.bat !LONGTAIL! !BASEPATH! WinClient\CL6382_WindowsClient
 if %errorlevel% neq 0 (
     echo "FAILED:" %errorlevel%
     exit /b %errorlevel%
