@@ -202,6 +202,7 @@ struct TroveStorageAPI
             CloseRead,
             OpenWriteFile,
             Write,
+            SetSize,
             CloseWrite,
             CreateDir,
             RenameFile,
@@ -240,11 +241,11 @@ struct TroveStorageAPI
         Trove_CloseReadFile((HTroveOpenReadFile)f);
     }
 
-    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* , const char* path)
+    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* , const char* path, int truncate)
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Trove_OpenWriteFile(tmp_path);
+        StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Trove_OpenWriteFile(tmp_path, truncate);
         free(tmp_path);
         return r;
     }
@@ -252,6 +253,12 @@ struct TroveStorageAPI
     {
         return Trove_Write((HTroveOpenWriteFile)f, offset,length, input);
     }
+
+    static int SetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length)
+    {
+        return Trove_SetFileSize((HTroveOpenWriteFile)f, length);
+    }
+
     static void CloseWrite(StorageAPI* , StorageAPI_HOpenFile f)
     {
         Trove_CloseWriteFile((HTroveOpenWriteFile)f);

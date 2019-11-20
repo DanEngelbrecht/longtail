@@ -25,8 +25,9 @@ struct StorageAPI
     int (*Read)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output);
     void (*CloseRead)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f);
 
-    StorageAPI_HOpenFile (*OpenWriteFile)(struct StorageAPI* storage_api, const char* path);
+    StorageAPI_HOpenFile (*OpenWriteFile)(struct StorageAPI* storage_api, const char* path, int truncate);
     int (*Write)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
+    int (*SetSize)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length);
     void (*CloseWrite)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f);
 
     int (*CreateDir)(struct StorageAPI* storage_api, const char* path);
