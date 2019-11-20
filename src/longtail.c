@@ -37,6 +37,32 @@ int IsDirPath(const char* path)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 
+int IsCompressedFileType(const char* path)
+{
+    const char* extension = strrchr(path, '.');
+    if (!extension)
+    {
+        return 0;
+    }
+    if (stricmp(path, ".pak"))
+    {
+        return 1;
+    }
+    if (stricmp(path, ".zip"))
+    {
+        return 1;
+    }
+    if (stricmp(path, ".rar"))
+    {
+        return 1;
+    }
+    if (stricmp(path, ".7z"))
+    {
+        return 1;
+    }
+    return 0;
+}
+
 TLongtail_Hash GetPathHash(struct HashAPI* hash_api, const char* path)
 {
     HashAPI_HContext context = hash_api->BeginContext(hash_api);
@@ -344,7 +370,7 @@ struct HashJob
     int m_Success;
 };
 
-void HashFile(void* context)
+void LinearChunking(void* context)
 {
     struct HashJob* hash_job = (struct HashJob*)context;
 
@@ -368,7 +394,7 @@ void HashFile(void* context)
     StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
-        LONGTAIL_LOG("HashFile: Failed to open file `%s`\n", path)
+        LONGTAIL_LOG("LinearChunking: Failed to open file `%s`\n", path)
         free(path);
         path = 0;
         return;
@@ -377,7 +403,104 @@ void HashFile(void* context)
     uint64_t asset_size = (uint64_t)storage_api->GetSize(storage_api, file_handle);
     if (asset_size > 1024*1024*1024)
     {
-        LONGTAIL_LOG("HashFile: Hashing a very large file `%s`\n", path);
+        LONGTAIL_LOG("LinearChunking: Hashing a very large file `%s`\n", path);
+    }
+
+    uint8_t* batch_data = (uint8_t*)malloc(asset_size < hash_job->m_MaxChunkSize ? asset_size : hash_job->m_MaxChunkSize);
+    uint32_t max_chunks = (asset_size + hash_job->m_MaxChunkSize - 1) / hash_job->m_MaxChunkSize;
+
+    hash_job->m_ChunkHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * max_chunks);
+    hash_job->m_ChunkSizes = (uint32_t*)malloc(sizeof(uint32_t) * max_chunks);
+
+    HashAPI_HContext asset_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
+
+    uint64_t offset = 0;
+    while (offset != asset_size)
+    {
+        uint32_t len = (uint32_t)((asset_size - offset) < hash_job->m_MaxChunkSize ? (asset_size - offset) : hash_job->m_MaxChunkSize);
+        int read_ok = storage_api->Read(storage_api, file_handle, offset, len, batch_data);
+        if (!read_ok)
+        {
+            LONGTAIL_LOG("LinearChunking: Failed to read from `%s`\n", path)
+            hash_job->m_Success = 0;
+            free(hash_job->m_ChunkSizes);
+            hash_job->m_ChunkSizes = 0;
+            free(hash_job->m_ChunkHashes);
+            hash_job->m_ChunkHashes = 0;
+            free(batch_data);
+            batch_data = 0;
+            storage_api->CloseRead(storage_api, file_handle);
+            file_handle = 0;
+            free(path);
+            path = 0;
+            return;
+        }
+
+        {
+            HashAPI_HContext chunk_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
+            hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, chunk_hash_context, len, batch_data);
+            TLongtail_Hash chunk_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, chunk_hash_context);
+            hash_job->m_ChunkHashes[chunk_count] = chunk_hash;
+            hash_job->m_ChunkSizes[chunk_count] = len;
+        }
+        ++chunk_count;
+
+        offset += len;
+        hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, asset_hash_context, len, batch_data);
+    }
+
+    free(batch_data);
+    batch_data = 0;
+
+    TLongtail_Hash content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
+
+    storage_api->CloseRead(storage_api, file_handle);
+    file_handle = 0;
+
+    *hash_job->m_ContentHash = content_hash;
+    *hash_job->m_ContentSize = asset_size;
+    *hash_job->m_AssetChunkCount = chunk_count;
+
+    free((char*)path);
+    path = 0;
+
+    hash_job->m_Success = 1;
+}
+
+void DynamicChunking(void* context)
+{
+    struct HashJob* hash_job = (struct HashJob*)context;
+
+    hash_job->m_Success = 0;
+
+    *hash_job->m_AssetChunkCount = 0;
+    *hash_job->m_ContentSize = 0;
+    *hash_job->m_ContentHash = 0;
+
+    *hash_job->m_PathHash = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path);
+
+    if (IsDirPath(hash_job->m_Path))
+    {
+        hash_job->m_Success = 1;
+        return;
+    }
+    uint32_t chunk_count = 0;
+
+    struct StorageAPI* storage_api = hash_job->m_StorageAPI;
+    char* path = storage_api->ConcatPath(storage_api, hash_job->m_RootPath, hash_job->m_Path);
+    StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
+    if (!file_handle)
+    {
+        LONGTAIL_LOG("DynamicChunking: Failed to open file `%s`\n", path)
+        free(path);
+        path = 0;
+        return;
+    }
+
+    uint64_t asset_size = (uint64_t)storage_api->GetSize(storage_api, file_handle);
+    if (asset_size > 1024*1024*1024)
+    {
+        LONGTAIL_LOG("DynamicChunking: Hashing a very large file `%s`\n", path);
     }
 
     TLongtail_Hash content_hash = 0;
@@ -389,7 +512,7 @@ void HashFile(void* context)
         char* buffer = (char*)malloc(asset_size);
         if (!storage_api->Read(storage_api, file_handle, 0, asset_size, buffer))
         {
-            LONGTAIL_LOG("HashFile: Failed to read from file `%s`\n", path)
+            LONGTAIL_LOG("DynamicChunking: Failed to read from file `%s`\n", path)
             free(buffer);
             buffer = 0;
             storage_api->CloseRead(storage_api, file_handle);
@@ -439,7 +562,7 @@ void HashFile(void* context)
 
         if (!chunker)
         {
-            LONGTAIL_LOG("HashFile: Failed to create chunker for asset `%s`\n", path)
+            LONGTAIL_LOG("DynamicChunking: Failed to create chunker for asset `%s`\n", path)
             hash_job->m_Success = 0;
             free(hash_job->m_ChunkSizes);
             hash_job->m_ChunkSizes = 0;
@@ -460,7 +583,7 @@ void HashFile(void* context)
         {
             if(remaining < r.len)
             {
-                LONGTAIL_LOG("HashFile: Chunking size is larger than remaining file size for asset `%s`\n", path)
+                LONGTAIL_LOG("DynamicChunking: Chunking size is larger than remaining file size for asset `%s`\n", path)
                 free(chunker);
                 chunker = 0;
                 hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
@@ -493,7 +616,7 @@ void HashFile(void* context)
         }
         if(remaining != 0)
         {
-            LONGTAIL_LOG("HashFile: Chunking stopped before end of file size for asset `%s`\n", path)
+            LONGTAIL_LOG("DynamicChunking: Chunking stopped before end of file size for asset `%s`\n", path)
             free(chunker);
             chunker = 0;
             hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
@@ -557,7 +680,6 @@ int ChunkAssets(
     uint64_t offset = 0;
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
-        JobAPI_JobFunc func = HashFile;
         struct HashJob* job = &hash_jobs[asset_index];
         void* ctx = &hash_jobs[asset_index];
         job->m_StorageAPI = storage_api;
@@ -571,6 +693,13 @@ int ChunkAssets(
         job->m_ChunkHashes = 0;
         job->m_ChunkSizes = 0;
         job->m_MaxChunkSize = max_chunk_size;
+
+        JobAPI_JobFunc func = DynamicChunking;
+//        if (IsCompressedFileType(job->m_Path))
+//        {
+//            func = LinearChunking;
+//        }
+
         job_api->SubmitJobs(job_api, 1, &func, &ctx);
     }
 
@@ -892,7 +1021,7 @@ struct VersionIndex* CreateVersionIndex(
 
 int WriteVersionIndex(struct StorageAPI* storage_api, struct VersionIndex* version_index, const char* path)
 {
-    LONGTAIL_LOG("WriteVersionIndex: Writing index to `%s` containing `%u` assets in  `%u` chunks.\n", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
+    LONGTAIL_LOG("WriteVersionIndex: Writing index to `%s` containing %u assets in  %u chunks.\n", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (uint32_t)(*version_index->m_ChunkCount), (uint32_t)(*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
 
     if (!EnsureParentPathExists(storage_api, path))
@@ -1767,8 +1896,8 @@ void WriteAssetFromBlocks(void* context)
     uint64_t base_asset_offset = 0;
     char* block_data = 0;
     uint32_t base_c = 0;
-    uint32_t written_block_count = 0;
-    uint32_t skipped_block_count = 0;
+    uint32_t written_chunk_count = 0;
+    uint32_t skipped_chunk_count = 0;
     for (uint32_t c = 0; c < chunk_count; ++c)
     {
         uint32_t chunk_index = chunk_indexes[c];
@@ -1791,11 +1920,11 @@ void WriteAssetFromBlocks(void* context)
                 asset_offset += chunk_size;
                 base_asset_offset += chunk_size;
                 ++base_c;
-                ++skipped_block_count;
+                ++skipped_chunk_count;
                 continue;
             }
         }
-        ++written_block_count;
+        ++written_chunk_count;
 
         uint64_t chunk_content_index = hmget(content_chunk_lookup, chunk_hash);
         TLongtail_Hash block_hash = content_index->m_BlockHashes[content_index->m_ChunkBlockIndexes[chunk_content_index]];
@@ -1854,9 +1983,9 @@ void WriteAssetFromBlocks(void* context)
     }
     version_storage_api->CloseWrite(version_storage_api, asset_file);
 
-    if (written_block_count + skipped_block_count > 1000)
+    if ((written_chunk_count + skipped_chunk_count) / 10 < skipped_chunk_count)
     {
-        LONGTAIL_LOG("WriteAssetFromBlocks: Wrote %u blocks of %u, skipping %u of asset `%s`\n", written_block_count, written_block_count + skipped_block_count, skipped_block_count, full_asset_path);
+        LONGTAIL_LOG("WriteAssetFromBlocks: Wrote %u chunks of %u, skipping %u of asset `%s`\n", written_chunk_count, written_chunk_count + skipped_chunk_count, skipped_chunk_count, full_asset_path);
     }
 
     asset_file = 0;
@@ -2943,41 +3072,74 @@ int ChangeVersion(
         hmput(chunk_hash_to_content_chunk_index, chunk_hash, i);
     }
 
+    uint32_t retry_count = 10;
+    uint32_t successful_remove_count = 0;
     uint32_t removed_count = *version_diff->m_SourceRemovedCount;
-    for (uint32_t r = 0; r < removed_count; ++r)
+    while (successful_remove_count < removed_count)
     {
-        uint32_t asset_index = version_diff->m_SourceRemovedAssetIndexes[r];
-        const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
-        char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-        if (IsDirPath(asset_path))
+        --retry_count;
+        for (uint32_t r = 0; r < removed_count; ++r)
         {
-            full_asset_path[strlen(full_asset_path) - 1] = '\0';
-            int ok = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
-            if (!ok)
+            uint32_t asset_index = version_diff->m_SourceRemovedAssetIndexes[r];
+            const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
+            char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+            if (IsDirPath(asset_path))
             {
-                LONGTAIL_LOG("ChangeVersion: Failed to remove directory `%s`\n", full_asset_path);
-                free(full_asset_path);
-                full_asset_path = 0;
-                hmfree(chunk_hash_to_content_chunk_index);
-                chunk_hash_to_content_chunk_index = 0;
-                return 0;
+                full_asset_path[strlen(full_asset_path) - 1] = '\0';
+                int ok = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
+                if (!ok)
+                {
+                    if (version_storage_api->IsDir(version_storage_api, full_asset_path))
+                    {
+                        if (!retry_count)
+                        {
+                            LONGTAIL_LOG("ChangeVersion: Failed to remove directory `%s`\n", full_asset_path);
+                            free(full_asset_path);
+                            full_asset_path = 0;
+                            hmfree(chunk_hash_to_content_chunk_index);
+                            chunk_hash_to_content_chunk_index = 0;
+                            return 0;
+                        }
+                        free(full_asset_path);
+                        full_asset_path = 0;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                int ok = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
+                if (!ok)
+                {
+                    if (version_storage_api->IsFile(version_storage_api, full_asset_path))
+                    {
+                        if (!retry_count)
+                        {
+                            LONGTAIL_LOG("ChangeVersion: Failed to remove file `%s`\n", full_asset_path);
+                            free(full_asset_path);
+                            full_asset_path = 0;
+                            hmfree(chunk_hash_to_content_chunk_index);
+                            chunk_hash_to_content_chunk_index = 0;
+                            return 0;
+                        }
+                        free(full_asset_path);
+                        full_asset_path = 0;
+                        break;
+                    }
+                }
+            }
+            ++successful_remove_count;
+            free(full_asset_path);
+            full_asset_path = 0;
+        }
+        if (successful_remove_count < removed_count)
+        {
+            --retry_count;
+            if (retry_count == 1)
+            {
+                LONGTAIL_LOG("ChangeVersion: Retrying removal of remaning %u assets in `%s`\n", removed_count - successful_remove_count, version_path);
             }
         }
-        else
-        {
-            int ok = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
-            if (!ok)
-            {
-                LONGTAIL_LOG("ChangeVersion: Failed to remove file `%s`\n", full_asset_path);
-                free(full_asset_path);
-                full_asset_path = 0;
-                hmfree(chunk_hash_to_content_chunk_index);
-                chunk_hash_to_content_chunk_index = 0;
-                return 0;
-            }
-        }
-        free(full_asset_path);
-        full_asset_path = 0;
     }
 
     uint32_t added_count = *version_diff->m_TargetAddedCount;
