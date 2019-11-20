@@ -413,9 +413,9 @@ void HashFile(void* context)
     }
     else
     {
-        uint32_t min_chunk_size = hash_job->m_MaxChunkSize / 4;
+        uint32_t min_chunk_size = hash_job->m_MaxChunkSize / 8;
         uint32_t avg_chunk_size = hash_job->m_MaxChunkSize / 2;
-        uint32_t max_chunk_size = hash_job->m_MaxChunkSize;
+        uint32_t max_chunk_size = hash_job->m_MaxChunkSize * 2;
 
         uint32_t max_chunks = (asset_size + min_chunk_size - 1) / min_chunk_size;
         hash_job->m_ChunkHashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * max_chunks);

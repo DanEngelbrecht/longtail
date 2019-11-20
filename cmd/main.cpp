@@ -101,10 +101,10 @@ int main(int argc, char** argv)
     int32_t target_chunk_size = 32768;
     kgflags_int("target-chunk-size", target_chunk_size, "Target chunk size", false, &target_chunk_size);
 
-    int32_t max_chunks_per_block = 8192;
+    int32_t max_chunks_per_block = 512;
     kgflags_int("max-chunks-per-block", max_chunks_per_block, "Max chunks per block", false, &max_chunks_per_block);
 
-    int32_t target_block_size = 65536 * 8;
+    int32_t target_block_size = target_chunk_size * 12;
     kgflags_int("target-block-size", target_block_size, "Target block size", false, &target_block_size);
 
     const char* create_version_index_raw = NULL;
