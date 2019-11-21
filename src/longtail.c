@@ -1083,7 +1083,7 @@ struct VersionIndex* ReadVersionIndex(struct StorageAPI* storage_api, const char
 
 struct BlockIndex
 {
-    TLongtail_Hash m_BlockHash;
+    TLongtail_Hash* m_BlockHash;
     TLongtail_Hash* m_ChunkHashes; //[]
     uint32_t* m_ChunkSizes; // []
     uint32_t* m_ChunkCount;
@@ -1092,20 +1092,28 @@ struct BlockIndex
 size_t GetBlockIndexDataSize(uint32_t chunk_count)
 {
     return
+        sizeof(TLongtail_Hash) +                    // m_BlockHash
         (sizeof(TLongtail_Hash) * chunk_count) +    // m_ChunkHashes
         (sizeof(uint32_t) * chunk_count) +          // m_ChunkSizes
         sizeof(uint32_t);                           // m_ChunkCount
 }
 
-struct BlockIndex* InitBlockIndex(void* mem, uint32_t asset_count)
+struct BlockIndex* InitBlockIndex(void* mem, uint32_t chunk_count)
 {
     struct BlockIndex* block_index = (struct BlockIndex*)mem;
     char* p = (char*)&block_index[1];
+
+    block_index->m_BlockHash = (TLongtail_Hash*)p;
+    p += sizeof(TLongtail_Hash);
+
     block_index->m_ChunkHashes = (TLongtail_Hash*)p;
-    p += sizeof(TLongtail_Hash) * asset_count;
+    p += sizeof(TLongtail_Hash) * chunk_count;
+
     block_index->m_ChunkSizes = (uint32_t*)p;
-    p += sizeof(uint32_t) * asset_count;
+    p += sizeof(uint32_t) * chunk_count;
+
     block_index->m_ChunkCount = (uint32_t*)p;
+    p += sizeof(uint32_t);
     return block_index;
 }
 
@@ -1133,11 +1141,10 @@ struct BlockIndex* CreateBlockIndex(
         block_index->m_ChunkHashes[i] = chunk_hashes[asset_index];
         block_index->m_ChunkSizes[i] = chunk_sizes[asset_index];
     }
-    *block_index->m_ChunkCount = chunk_count_in_block;
     HashAPI_HContext hash_context = hash_api->BeginContext(hash_api);
     hash_api->Hash(hash_api, hash_context, (uint32_t)(GetBlockIndexDataSize(chunk_count_in_block)), (void*)&block_index[1]);
-    TLongtail_Hash block_hash = hash_api->EndContext(hash_api, hash_context);
-    block_index->m_BlockHash = block_hash;
+    *block_index->m_BlockHash = hash_api->EndContext(hash_api, hash_context);
+    *block_index->m_ChunkCount = chunk_count_in_block;
 
     return block_index;
 }
@@ -1322,7 +1329,7 @@ struct ContentIndex* CreateContentIndex(
     for (uint32_t i = 0; i < block_count; ++i)
     {
         struct BlockIndex* block_index = block_indexes[i];
-        content_index->m_BlockHashes[i] = block_index->m_BlockHash;
+        content_index->m_BlockHashes[i] = *block_index->m_BlockHash;
         uint64_t asset_offset = 0;
         for (uint32_t a = 0; a < *block_index->m_ChunkCount; ++a)
         {
@@ -1544,9 +1551,23 @@ void WriteContentBlockJob(void* context)
         char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
         uint64_t asset_content_offset = job->m_AssetPartLookup[asset_part_index].value.m_Start;
         StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
-        if (!file_handle || (source_storage_api->GetSize(source_storage_api, file_handle) < (asset_offset + chunk_size)))
+        if (!file_handle)
         {
-            LONGTAIL_LOG("WriteContentBlockJob: Missing or mismatching asset content `%s` in `%s`\n", asset_path, content_folder)
+            LONGTAIL_LOG("WriteContentBlockJob: Failed to open asset file `%s`\n", full_path);
+            free(write_buffer);
+            write_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            free((char*)block_path);
+            block_path = 0;
+            free(block_name);
+            block_name = 0;
+            return;
+        }
+        uint64_t asset_file_size = source_storage_api->GetSize(source_storage_api, file_handle);
+        if (asset_file_size < (asset_offset + chunk_size))
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Missmatching asset size in asset `%s`, size is %" PRIu64 ", but expecting at least %" PRIu64 "\n", full_path, asset_offset + chunk_size, asset_file_size);
             free(write_buffer);
             write_buffer = 0;
             free((char*)tmp_block_path);
@@ -1631,14 +1652,17 @@ void WriteContentBlockJob(void* context)
         write_offset = aligned_size;
     }
 
-    write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(TLongtail_Hash) * chunk_count, &content_index->m_ChunkHashes[first_chunk_index]);
-    write_offset += sizeof(TLongtail_Hash) * chunk_count;
+    struct BlockIndex* block_index_ptr = (struct BlockIndex*)malloc(GetBlockIndexSize(chunk_count));
+    InitBlockIndex(block_index_ptr, chunk_count);
+    memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
+    memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
+    *block_index_ptr->m_BlockHash = block_hash;
+    *block_index_ptr->m_ChunkCount = chunk_count;
+    size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
+    write_ok = target_storage_api->Write(target_storage_api, block_file_handle, write_offset, block_index_data_size, &block_index_ptr[1]);
+    free(block_index_ptr);
+    block_index_ptr = 0;
 
-    write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t) * chunk_count, &content_index->m_ChunkLengths[first_chunk_index]);
-    write_offset += sizeof(uint32_t) * chunk_count;
-
-    write_ok = write_ok & target_storage_api->Write(target_storage_api, block_file_handle, write_offset, sizeof(uint32_t), &chunk_count);
-    write_offset += sizeof(uint32_t);
     target_storage_api->CloseWrite(target_storage_api, block_file_handle);
     write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, block_path);
     job->m_Success = write_ok;
@@ -2384,7 +2408,6 @@ int WriteVersion(
 
 struct BlockIndex* ReadBlock(
     struct StorageAPI* storage_api,
-    struct HashAPI* hash_api,
     const char* full_block_path)
 {
     StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, full_block_path);
@@ -2423,10 +2446,6 @@ struct BlockIndex* ReadBlock(
         block_index = 0;
         return 0;
     }
-    HashAPI_HContext hash_context = hash_api->BeginContext(hash_api);
-    hash_api->Hash(hash_api, hash_context, (uint32_t)(GetBlockIndexDataSize(chunk_count)), (void*)&block_index[1]);
-    TLongtail_Hash block_hash = hash_api->EndContext(hash_api, hash_context);
-    block_index->m_BlockHash = block_hash;
 
     return block_index;
 }
@@ -2480,7 +2499,6 @@ void ScanBlock(void* context)
 {
     struct ScanBlockJob* job = (struct ScanBlockJob*)context;
     struct StorageAPI* storage_api = job->m_StorageAPI;
-    struct HashAPI* hash_api = job->m_HashAPI;
     const char* content_path = job->m_ContentPath;
     const char* block_path = job->m_BlockPath;
     char* full_block_path = storage_api->ConcatPath(storage_api, content_path, block_path);
@@ -2489,7 +2507,6 @@ void ScanBlock(void* context)
 
     job->m_BlockIndex = ReadBlock(
         storage_api,
-        hash_api,
         full_block_path);
 
     free(full_block_path);
@@ -2579,7 +2596,7 @@ struct ContentIndex* ReadContent(
         struct ScanBlockJob* job = &jobs[path_index];
         if (job->m_BlockIndex)
         {
-            content_index->m_BlockHashes[block_offset] = job->m_BlockIndex->m_BlockHash;
+            content_index->m_BlockHashes[block_offset] = *job->m_BlockIndex->m_BlockHash;
             uint32_t block_chunk_count = *job->m_BlockIndex->m_ChunkCount;
             memmove(&content_index->m_ChunkHashes[chunk_offset], job->m_BlockIndex->m_ChunkHashes, sizeof(TLongtail_Hash) * block_chunk_count);
             memmove(&content_index->m_ChunkLengths[chunk_offset], job->m_BlockIndex->m_ChunkSizes, sizeof(uint32_t) * block_chunk_count);

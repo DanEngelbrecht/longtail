@@ -98,14 +98,14 @@ int main(int argc, char** argv)
 {
     int result = 0;
 
-    int32_t target_chunk_size = 32768;
-    kgflags_int("target-chunk-size", target_chunk_size, "Target chunk size", false, &target_chunk_size);
+    int32_t target_chunk_size = 8;
+    kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
 
-    int32_t max_chunks_per_block = 512;
-    kgflags_int("max-chunks-per-block", max_chunks_per_block, "Max chunks per block", false, &max_chunks_per_block);
+    int32_t max_chunks_per_block = 0;
+    kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
 
-    int32_t target_block_size = target_chunk_size * 12;
-    kgflags_int("target-block-size", target_block_size, "Target block size", false, &target_block_size);
+    int32_t target_block_size = 0;
+    kgflags_int("target-block-size", 32768 * 8, "Target block size", false, &target_block_size);
 
     const char* create_version_index_raw = NULL;
     kgflags_string("create-version-index", NULL, "Path to version index output", false, &create_version_index_raw);
