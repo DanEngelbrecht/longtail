@@ -112,7 +112,7 @@ int Cmd_CreateVersionIndex(
         printf("Failed to scan folder `%s`\n", version);
         return 1;
     }
-    VersionIndex* version_index = CreateVersionIndex(
+    VersionIndex* vindex = CreateVersionIndex(
         storage_api,
         hash_api,
         job_api,
@@ -121,15 +121,15 @@ int Cmd_CreateVersionIndex(
         target_chunk_size);
     free(version_paths);
     version_paths = 0;
-    if (!version_index)
+    if (!vindex)
     {
         printf("Failed to create version index for `%s`\n", version);
         return 0;
     }
 
-    int ok = CreateParentPath(storage_api, create_version_index) && WriteVersionIndex(storage_api, version_index, create_version_index);
-    free(version_index);
-    version_index = 0;
+    int ok = CreateParentPath(storage_api, create_version_index) && WriteVersionIndex(storage_api, vindex, create_version_index);
+    free(vindex);
+    vindex = 0;
     if (!ok)
     {
         printf("Failed to create version index to `%s`\n", create_version_index);
@@ -426,6 +426,7 @@ int Cmd_CreateContent(
         asset_part_lookup,
         version,
         create_content);
+
     FreeAssetPartLookup(asset_part_lookup);
     asset_part_lookup = 0;
     free(vindex);
@@ -775,10 +776,119 @@ int main(int argc, char** argv)
     const char* list_missing_blocks_raw = NULL;
     kgflags_string("list-missing-blocks", NULL, "Path to content index", false, &list_missing_blocks_raw);
 
+    const char* test_version_raw = NULL;
+    kgflags_string("test-version", NULL, "Test everything", false, &test_version_raw);
+
+    const char* test_base_path_raw = NULL;
+    kgflags_string("test-base-path", NULL, "Base path for test everything", false, &test_base_path_raw);
+
     if (!kgflags_parse(argc, argv)) {
         kgflags_print_errors();
         kgflags_print_usage();
         return 1;
+    }
+
+    if (test_version_raw && test_base_path_raw)
+    {
+        const char* test_version = NormalizePath(test_version_raw);
+        const char* test_base_path = NormalizePath(test_base_path_raw);
+
+        TroveStorageAPI storage_api;
+        MeowHashAPI hash_api;
+        LizardCompressionAPI compression_api;
+        BikeshedJobAPI job_api;
+
+        char create_content_index[512];
+        sprintf(create_content_index, "%s/chunks.lci", test_base_path);
+        char content[512];
+        sprintf(content, "%s/chunks", test_base_path);
+        int ok = Cmd_CreateContentIndex(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            create_content_index,
+            content);
+
+        char create_version_index[512];
+        sprintf(create_version_index, "%s/%s.lvi", test_base_path, test_version);
+        char version[512];
+        sprintf(version, "%s/local/%s", test_base_path, test_version);
+        ok = ok & Cmd_CreateVersionIndex(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            create_version_index,
+            version,
+            0,
+            target_chunk_size);
+
+        sprintf(create_content_index, "%s/%s.lci", test_base_path, test_version);
+        char content_index[512];
+        sprintf(content_index, "%s/chunks.lci", test_base_path);
+        char version_index[512];
+        sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
+        sprintf(version, "%s/local/%s", test_base_path, test_version);
+        ok = ok & Cmd_CreateMissingContentIndex(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            create_content_index,
+            content_index,
+            content,
+            version_index,
+            version,
+            target_block_size,
+            max_chunks_per_block,
+            target_chunk_size);
+
+
+        char create_content[512];
+        sprintf(create_content, "%s/chunks", test_base_path);
+        sprintf(content_index, "%s/%s.lci", test_base_path, test_version);
+        ok = ok & Cmd_CreateContent(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            &compression_api.m_CompressionAPI,
+            create_content,
+            content_index,
+            version,
+            version_index,
+            target_block_size,
+            max_chunks_per_block,
+            target_chunk_size);
+
+        sprintf(create_content_index, "%s/chunks.lci", test_base_path);
+        sprintf(content_index, "%s/chunks.lci", test_base_path);
+        char merge_content_index[512];
+        sprintf(merge_content_index, "%s/%s.lci", test_base_path, test_version);
+        ok = ok & Cmd_MergeContentIndex(
+            &storage_api.m_StorageAPI,
+            create_content_index,
+            content_index,
+            merge_content_index);
+
+        char update_version[512];
+        sprintf(update_version, "%s/remote/incremental", test_base_path);
+        sprintf(content, "%s/chunks", test_base_path);
+        sprintf(content_index, "%s/chunks.lci", test_base_path);
+        char target_version_index[512];
+        sprintf(target_version_index, "%s/%s.lvi", test_base_path, test_version);
+        ok = ok & Cmd_UpdateVersion(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            &compression_api.m_CompressionAPI,
+            update_version,
+            0,
+            content,
+            content_index,
+            target_version_index,
+            target_chunk_size);
+
+        free((char*)test_version);
+        free((char*)test_base_path);
+        return ok ? 0 : 1;
     }
 
     const char* create_version_index = NormalizePath(create_version_index_raw);
