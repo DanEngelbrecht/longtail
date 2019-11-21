@@ -76,6 +76,23 @@ struct JobAPI
     void (*WaitForAllJobs)(struct JobAPI* job_api);
 };
 
+typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
+void Longtail_SetAssert(Longtail_Assert assert_func);
+
+#if defined(LONGTAIL_ASSERTS)
+void* Longtail_NukeMalloc(size_t s);
+void Longtail_NukeFree(void* p);
+#    define LONGTAIL_MALLOC(s) \
+        Longtail_NukeMalloc(s)
+#    define LONGTAIL_FREE(p) \
+        Longtail_NukeFree(p)
+#else
+#    define LONGTAIL_MALLOC(s) \
+        malloc(s)
+#    define LONGTAIL_FREE(p) \
+        free(p)
+#endif // defined(LONGTAIL_ASSERTS)
+
 typedef uint64_t TLongtail_Hash;
 struct Paths;
 struct VersionIndex;
