@@ -94,6 +94,632 @@ char* NormalizePath(const char* path)
     return normalized_path;
 }
 
+
+int Cmd_CreateVersionIndex(
+    StorageAPI* storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    const char* create_version_index,
+    const char* version,
+    const char* filter,
+    int target_chunk_size)
+{
+    Paths* version_paths = GetFilesRecursively(
+        storage_api,
+        version);
+    if (!version_paths)
+    {
+        printf("Failed to scan folder `%s`\n", version);
+        return 1;
+    }
+    VersionIndex* version_index = CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        version,
+        version_paths,
+        target_chunk_size);
+    free(version_paths);
+    version_paths = 0;
+    if (!version_index)
+    {
+        printf("Failed to create version index for `%s`\n", version);
+        return 0;
+    }
+
+    int ok = CreateParentPath(storage_api, create_version_index) && WriteVersionIndex(storage_api, version_index, create_version_index);
+    free(version_index);
+    version_index = 0;
+    if (!ok)
+    {
+        printf("Failed to create version index to `%s`\n", create_version_index);
+        return 0;
+    }
+    return 1;
+}
+
+int Cmd_CreateContentIndex(
+    StorageAPI* storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    const char* create_content_index,
+    const char* content)
+{
+    ContentIndex* cindex = ReadContent(
+        storage_api,
+        hash_api,
+        job_api,
+        content);
+    if (!cindex)
+    {
+        printf("Failed to create content index for `%s`\n", content);
+        return 0;
+    }
+    int ok = CreateParentPath(storage_api, create_content_index) &&
+        WriteContentIndex(
+            storage_api,
+            cindex,
+            create_content_index);
+
+    free(cindex);
+    cindex = 0;
+    if (!ok)
+    {
+        printf("Failed to write content index to `%s`\n", create_content_index);
+        return 0;
+    }
+    return 1;
+}
+
+int Cmd_MergeContentIndex(
+    StorageAPI* storage_api,
+    const char* create_content_index,
+    const char* content_index,
+    const char* merge_content_index)
+{
+    ContentIndex* cindex1 = ReadContentIndex(storage_api, content_index);
+    if (!cindex1)
+    {
+        printf("Failed to read content index from `%s`\n", content_index);
+        return 0;
+    }
+    ContentIndex* cindex2 = ReadContentIndex(storage_api, merge_content_index);
+    if (!cindex2)
+    {
+        free(cindex1);
+        cindex1 = 0;
+        printf("Failed to read content index from `%s`\n", merge_content_index);
+        return 0;
+    }
+    ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
+    free(cindex2);
+    cindex2 = 0;
+    free(cindex1);
+    cindex1 = 0;
+
+    if (!cindex)
+    {
+        printf("Failed to merge content index `%s` with `%s`\n", content_index, merge_content_index);
+        return 0;
+    }
+
+    int ok = CreateParentPath(storage_api, create_content_index) &&
+        WriteContentIndex(
+            storage_api,
+            cindex,
+            create_content_index);
+
+    free(cindex);
+    cindex = 0;
+
+    if (!ok)
+    {
+        printf("Failed to write content index to `%s`\n", create_content_index);
+        return 0;
+    }
+    return 1;
+}
+
+int Cmd_CreateMissingContentIndex(
+    StorageAPI* storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    const char* create_content_index,
+    const char* content_index,
+    const char* content,
+    const char* version_index,
+    const char* version,
+    int target_block_size,
+    int max_chunks_per_block,
+    int target_chunk_size)
+{
+    VersionIndex* vindex = 0;
+    if (version_index)
+    {
+        vindex = ReadVersionIndex(storage_api, version_index);
+        if (!vindex)
+        {
+            printf("Failed to read version index from `%s`\n", version_index);
+            return 0;
+        }
+    }
+    else
+    {
+        Paths* version_paths = GetFilesRecursively(
+            storage_api,
+            version);
+        if (!version_paths)
+        {
+            printf("Failed to scan folder `%s`\n", version);
+            return 0;
+        }
+        vindex = CreateVersionIndex(
+            storage_api,
+            hash_api,
+            job_api,
+            version,
+            version_paths,
+            target_chunk_size);
+        free(version_paths);
+        version_paths = 0;
+        if (!vindex)
+        {
+            printf("Failed to create version index for version `%s`\n", version);
+            return 0;
+        }
+    }
+
+    ContentIndex* existing_cindex = 0;
+    if (content_index)
+    {
+        existing_cindex = ReadContentIndex(storage_api, content_index);
+        if (!existing_cindex)
+        {
+            free(vindex);
+            vindex = 0;
+            printf("Failed to read content index from `%s`\n", content_index);
+            return 0;
+        }
+    }
+    else if (content)
+    {
+        existing_cindex = ReadContent(
+            storage_api,
+            hash_api,
+            job_api,
+            content);
+        if (!existing_cindex)
+        {
+            free(vindex);
+            vindex = 0;
+            printf("Failed to read contents from `%s`\n", content);
+            return 0;
+        }
+    }
+    else
+    {
+        existing_cindex = CreateContentIndex(
+            0,
+            0,
+            0,
+            0,
+            0,
+            0);
+    }
+
+    ContentIndex* cindex = CreateMissingContent(
+        hash_api,
+        existing_cindex,
+        vindex,
+        target_block_size,
+        max_chunks_per_block);
+
+    free(existing_cindex);
+    existing_cindex = 0;
+    free(vindex);
+    vindex = 0;
+    if (!cindex)
+    {
+        printf("Failed to create content index for version `%s`\n", version);
+        return 0;
+    }
+
+    int ok = CreateParentPath(storage_api, create_content_index) &&
+        WriteContentIndex(
+            storage_api,
+            cindex,
+            create_content_index);
+
+    free(cindex);
+    cindex = 0;
+
+    if (!ok)
+    {
+        printf("Failed to write content index to `%s`\n", create_content_index);
+        return 0;
+    }
+    return 1;
+}
+
+int Cmd_CreateContent(
+    StorageAPI* storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    CompressionAPI* compression_api,
+    const char* create_content,
+    const char* content_index,
+    const char* version,
+    const char* version_index,
+    int target_block_size,
+    int max_chunks_per_block,
+    int target_chunk_size)
+{
+    VersionIndex* vindex = 0;
+    if (version_index)
+    {
+        vindex = ReadVersionIndex(storage_api, version_index);
+        if (!vindex)
+        {
+            printf("Failed to read version index from `%s`\n", version_index);
+            return 0;
+        }
+    }
+    else
+    {
+        Paths* version_paths = GetFilesRecursively(
+            storage_api,
+            version);
+        if (!version_paths)
+        {
+            printf("Failed to scan folder `%s`\n", version);
+            return 0;
+        }
+        vindex = CreateVersionIndex(
+            storage_api,
+            hash_api,
+            job_api,
+            version,
+            version_paths,
+            target_chunk_size);
+        free(version_paths);
+        version_paths = 0;
+        if (!vindex)
+        {
+            printf("Failed to create version index for version `%s`\n", version);
+            return 0;
+        }
+    }
+
+    ContentIndex* cindex = 0;
+    if (content_index)
+    {
+        cindex = ReadContentIndex(storage_api, content_index);
+        if (!cindex)
+        {
+            printf("Failed to read content index from `%s`\n", content_index);
+            return 0;
+        }
+    }
+    else
+    {
+        cindex = CreateContentIndex(
+            hash_api,
+            *vindex->m_ChunkCount,
+            vindex->m_ChunkHashes,
+            vindex->m_ChunkSizes,
+            target_block_size,
+            max_chunks_per_block);
+        if (!cindex)
+        {
+            printf("Failed to create content index for version `%s`\n", version);
+            return 0;
+        }
+    }
+
+    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
+    int ok = CreatePath(storage_api, create_content) && WriteContent(
+        storage_api,
+        storage_api,
+        compression_api,
+        job_api,
+        cindex,
+        asset_part_lookup,
+        version,
+        create_content);
+    FreeAssetPartLookup(asset_part_lookup);
+    asset_part_lookup = 0;
+    free(vindex);
+    vindex = 0;
+    free(cindex);
+    cindex = 0;
+
+    if (!ok)
+    {
+        printf("Failed to write content to `%s`\n", create_content);
+        return 0;
+    }
+    return 1;
+}
+
+int Cmd_ListMissingBlocks(
+    StorageAPI* storage_api,
+    const char* list_missing_blocks,
+    const char* content_index)
+{
+    ContentIndex* have_content_index = ReadContentIndex(storage_api, list_missing_blocks);
+    if (!have_content_index)
+    {
+        return 0;
+    }
+    ContentIndex* need_content_index = ReadContentIndex(storage_api, content_index);
+    if (!need_content_index)
+    {
+        free(have_content_index);
+        have_content_index = 0;
+        return 0;
+    }
+
+    // TODO: Move to longtail.h
+    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)*have_content_index->m_ChunkCount);
+    jc::HashTable<TLongtail_Hash, uint32_t> asset_hash_to_have_block_index;
+    void* asset_hash_to_have_block_index_mem = malloc(hash_size);
+    asset_hash_to_have_block_index.Create((uint32_t)*have_content_index->m_ChunkCount, asset_hash_to_have_block_index_mem);
+
+    for (uint32_t i = 0; i < *have_content_index->m_ChunkCount; ++i)
+    {
+        asset_hash_to_have_block_index.Put(have_content_index->m_ChunkHashes[i], have_content_index->m_ChunkHashes[i]);
+    }
+
+    hash_size = jc::HashTable<uint32_t, uint32_t>::CalcSize((uint32_t)*need_content_index->m_BlockCount);
+    jc::HashTable<uint32_t, uint32_t> need_block_index_to_asset_count;
+    void* need_block_index_to_asset_count_mem = malloc(hash_size);
+    need_block_index_to_asset_count.Create((uint32_t)*need_content_index->m_BlockCount, need_block_index_to_asset_count_mem);
+
+    for (uint32_t i = 0; i < *need_content_index->m_ChunkCount; ++i)
+    {
+        uint32_t* have_block_index_ptr = asset_hash_to_have_block_index.Get(need_content_index->m_ChunkHashes[i]);
+        if (have_block_index_ptr)
+        {
+            continue;
+        }
+        uint32_t* need_block_index_ptr = need_block_index_to_asset_count.Get(need_content_index->m_ChunkBlockIndexes[i]);
+        if (need_block_index_ptr)
+        {
+            (*need_block_index_ptr)++;
+            continue;
+        }
+        need_block_index_to_asset_count.Put(need_content_index->m_ChunkBlockIndexes[i], 1u);
+    }
+
+    free(need_block_index_to_asset_count_mem);
+    need_block_index_to_asset_count_mem = 0;
+    uint32_t missing_block_count = need_block_index_to_asset_count.Size();
+    if (missing_block_count == 0)
+    {
+        free(asset_hash_to_have_block_index_mem);
+        asset_hash_to_have_block_index_mem = 0;
+        free(need_content_index);
+        need_content_index = 0;
+        free(have_content_index);
+        have_content_index = 0;
+        return 0;
+    }
+    TLongtail_Hash* missing_block_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * missing_block_count);
+    uint32_t block_index = 0;
+    for (jc::HashTable<uint32_t, uint32_t>::Iterator it = need_block_index_to_asset_count.Begin(); it != need_block_index_to_asset_count.End(); ++it)
+    {
+        uint32_t need_block_index = *it.GetValue();
+        TLongtail_Hash need_block_hash = need_content_index->m_BlockHashes[need_block_index];
+        missing_block_hashes[block_index++] = need_block_hash;
+    }
+    free(need_block_index_to_asset_count_mem);
+    need_block_index_to_asset_count_mem = 0;
+
+    free(missing_block_hashes);
+    missing_block_hashes = 0;
+
+    return 1;
+}
+
+int Cmd_CreateVersion(
+    StorageAPI* storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    CompressionAPI* compression_api,
+    const char* create_version,
+    const char* version_index,
+    const char* content,
+    const char* content_index)
+{
+    VersionIndex* vindex = ReadVersionIndex(storage_api, version_index);
+    if (!vindex)
+    {
+        printf("Failed to read version index from `%s`\n", version_index);
+        return 0;
+    }
+
+    ContentIndex* cindex = 0;
+    if (content_index)
+    {
+        cindex = ReadContentIndex(storage_api, content_index);
+        if (!cindex)
+        {
+            free(vindex);
+            vindex = 0;
+            printf("Failed to read content index from `%s`\n", content_index);
+            return 0;
+        }
+    }
+    else
+    {
+        cindex = ReadContent(
+            storage_api,
+            hash_api,
+            job_api,
+            content);
+        if (!cindex)
+        {
+            free(vindex);
+            vindex = 0;
+            printf("Failed to create content index for `%s`\n", content);
+            return 0;
+        }
+    }
+    int ok = CreatePath(storage_api, create_version) && WriteVersion(
+        storage_api,
+        storage_api,
+        compression_api,
+        job_api,
+        cindex,
+        vindex,
+        content,
+        create_version);
+    free(vindex);
+    vindex = 0;
+    free(cindex);
+    cindex = 0;
+    if (!ok)
+    {
+        printf("Failed to create version `%s`\n", create_version);
+        return 0;
+    }
+    return 1;
+}
+
+int Cmd_UpdateVersion(
+    StorageAPI* storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    CompressionAPI* compression_api,
+    const char* update_version,
+    const char* version_index,
+    const char* content,
+    const char* content_index,
+    const char* target_version_index,
+    int target_chunk_size)
+{
+    VersionIndex* source_vindex = 0;
+    if (version_index)
+    {
+        source_vindex = ReadVersionIndex(storage_api, version_index);
+        if (!source_vindex)
+        {
+            printf("Failed to read version index from `%s`\n", version_index);
+            return 0;
+        }
+    }
+    else
+    {
+        Paths* version_paths = GetFilesRecursively(
+            storage_api,
+            update_version);
+        if (!version_paths)
+        {
+            printf("Failed to scan folder `%s`\n", update_version);
+            return 0;
+        }
+        source_vindex = CreateVersionIndex(
+            storage_api,
+            hash_api,
+            job_api,
+            update_version,
+            version_paths,
+            target_chunk_size);
+        free(version_paths);
+        version_paths = 0;
+        if (!source_vindex)
+        {
+            printf("Failed to create version index for version `%s`\n", update_version);
+            return 0;
+        }
+    }
+
+    VersionIndex* target_vindex = ReadVersionIndex(storage_api, target_version_index);
+    if (!target_vindex)
+    {
+        free(source_vindex);
+        source_vindex = 0;
+        printf("Failed to read version index from `%s`\n", target_version_index);
+        return 0;
+    }
+
+    ContentIndex* cindex = 0;
+    if (content_index)
+    {
+        cindex = ReadContentIndex(storage_api, content_index);
+        if (!cindex)
+        {
+            free(target_vindex);
+            target_vindex = 0;
+            free(source_vindex);
+            source_vindex = 0;
+            printf("Failed to read content index from `%s`\n", content_index);
+            return 0;
+        }
+    }
+    else
+    {
+        cindex = ReadContent(
+            storage_api,
+            hash_api,
+            job_api,
+            content);
+        if (!cindex)
+        {
+            free(target_vindex);
+            target_vindex = 0;
+            free(source_vindex);
+            source_vindex = 0;
+            printf("Failed to create content index for `%s`\n", content);
+            return 0;
+        }
+    }
+
+    struct VersionDiff* version_diff = CreateVersionDiff(
+        source_vindex,
+        target_vindex);
+    if (!version_diff)
+    {
+        free(cindex);
+        cindex = 0;
+        free(target_vindex);
+        target_vindex = 0;
+        free(source_vindex);
+        source_vindex = 0;
+        printf("Failed to create version diff from `%s` to `%s`\n", version_index, target_version_index);
+        return 0;
+    }
+
+    int ok = CreatePath(storage_api, update_version) && ChangeVersion(
+        storage_api,
+        storage_api,
+        hash_api,
+        job_api,
+        compression_api,
+        cindex,
+        source_vindex,
+        target_vindex,
+        version_diff,
+        content,
+        update_version);
+
+    free(cindex);
+    cindex = 0;
+    free(target_vindex);
+    target_vindex = 0;
+    free(source_vindex);
+    source_vindex = 0;
+    free(version_diff);
+    version_diff = 0;
+
+    if (!ok)
+    {
+        printf("Failed to update version `%s` to `%s`\n", update_version, target_version_index);
+        return 0;
+    }
+    return 1;
+}
+
 int main(int argc, char** argv)
 {
     int result = 0;
@@ -178,45 +804,20 @@ int main(int argc, char** argv)
             result = 1;
             goto end;
         }
+
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         BikeshedJobAPI job_api;
 
-        Paths* version_paths = GetFilesRecursively(
-            &storage_api.m_StorageAPI,
-            version);
-        if (!version_paths)
-        {
-            printf("Failed to scan folder `%s`\n", version);
-            result = 1;
-            goto end;
-        }
-        VersionIndex* version_index = CreateVersionIndex(
+        int ok = Cmd_CreateVersionIndex(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
+            create_version_index,
             version,
-            version_paths,
+            filter,
             target_chunk_size);
-        free(version_paths);
-        version_paths = 0;
-        if (!version_index)
-        {
-            printf("Failed to create version index for `%s`\n", version);
-            result = 1;
-            goto end;
-        }
-        
-        int ok = CreateParentPath(&storage_api.m_StorageAPI, create_version_index) && WriteVersionIndex(&storage_api.m_StorageAPI, version_index, create_version_index);
-        free(version_index);
-        version_index = 0;
-        if (!ok)
-        {
-            printf("Failed to create version index to `%s`\n", create_version_index);
-            result = 1;
-            goto end;
-        }
-        result = 0;
+        result = ok ? 0 : 1;
         goto end;
     }
 
@@ -227,82 +828,24 @@ int main(int argc, char** argv)
             TroveStorageAPI storage_api;
             MeowHashAPI hash_api;
             BikeshedJobAPI job_api;
-            ContentIndex* cindex = ReadContent(
+            int ok = Cmd_CreateContentIndex(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
                 &job_api.m_JobAPI,
+                create_content_index,
                 content);
-            if (!cindex)
-            {
-                printf("Failed to create content index for `%s`\n", content);
-                result = 1;
-                goto end;
-            }
-            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) &&
-                WriteContentIndex(
-                    &storage_api.m_StorageAPI,
-                    cindex,
-                    create_content_index);
-
-            free(cindex);
-            cindex = 0;
-            if (!ok)
-            {
-                printf("Failed to write content index to `%s`\n", create_content_index);
-                result = 1;
-                goto end;
-            }
-            result = 0;
+            result = ok ? 0 : 1;
             goto end;
         }
         if (content_index && merge_content_index)
         {
             TroveStorageAPI storage_api;
-            ContentIndex* cindex1 = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
-            if (!cindex1)
-            {
-                printf("Failed to read content index from `%s`\n", content_index);
-                result = 1;
-                goto end;
-            }
-            ContentIndex* cindex2 = ReadContentIndex(&storage_api.m_StorageAPI, merge_content_index);
-            if (!cindex2)
-            {
-                free(cindex1);
-                cindex1 = 0;
-                printf("Failed to read content index from `%s`\n", merge_content_index);
-                result = 1;
-                goto end;
-            }
-            ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
-            free(cindex2);
-            cindex2 = 0;
-            free(cindex1);
-            cindex1 = 0;
-
-            if (!cindex)
-            {
-                printf("Failed to merge content index `%s` with `%s`\n", content_index, merge_content_index);
-                result = 1;
-                goto end;
-            }
-
-            int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) &&
-                WriteContentIndex(
-                    &storage_api.m_StorageAPI,
-                    cindex,
-                    create_content_index);
-
-            free(cindex);
-            cindex = 0;
-
-            if (!ok)
-            {
-                printf("Failed to write content index to `%s`\n", create_content_index);
-                result = 1;
-                goto end;
-            }
-            result = 0;
+            int ok = Cmd_MergeContentIndex(
+                &storage_api.m_StorageAPI,
+                create_content_index,
+                content_index,
+                merge_content_index);
+            result = ok ? 0 : 1;
             goto end;
         }
     }
@@ -313,120 +856,19 @@ int main(int argc, char** argv)
         MeowHashAPI hash_api;
         BikeshedJobAPI job_api;
 
-        VersionIndex* vindex = 0;
-        if (version_index)
-        {
-            vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
-            if (!vindex)
-            {
-                printf("Failed to read version index from `%s`\n", version_index);
-                result = 1;
-                goto end;
-            }
-        }
-        else
-        {
-            Paths* version_paths = GetFilesRecursively(
-                &storage_api.m_StorageAPI,
-                version);
-            if (!version_paths)
-            {
-                printf("Failed to scan folder `%s`\n", version);
-                result = 1;
-                goto end;
-            }
-            vindex = CreateVersionIndex(
-                &storage_api.m_StorageAPI,
-                &hash_api.m_HashAPI,
-                &job_api.m_JobAPI,
-                version,
-                version_paths,
-                target_chunk_size);
-            free(version_paths);
-            version_paths = 0;
-            if (!vindex)
-            {
-                printf("Failed to create version index for version `%s`\n", version);
-                result = 1;
-                goto end;
-            }
-        }
-
-        ContentIndex* existing_cindex = 0;
-        if (content_index)
-        {
-            existing_cindex = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
-            if (!existing_cindex)
-            {
-                free(vindex);
-                vindex = 0;
-                printf("Failed to read content index from `%s`\n", content_index);
-                result = 1;
-                goto end;
-            }
-        }
-        else if (content)
-        {
-            existing_cindex = ReadContent(
-                &storage_api.m_StorageAPI,
-                &hash_api.m_HashAPI,
-                &job_api.m_JobAPI,
-                content);
-            if (!existing_cindex)
-            {
-                free(vindex);
-                vindex = 0;
-                printf("Failed to read contents from `%s`\n", content);
-                result = 1;
-                goto end;
-            }
-        }
-        else
-        {
-            existing_cindex = CreateContentIndex(
-                &hash_api.m_HashAPI,
-                0,
-                0,
-                0,
-                0,
-                0);
-        }
-
-        ContentIndex* cindex = CreateMissingContent(
+        int ok = Cmd_CreateMissingContentIndex(
+            &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
-            existing_cindex,
-            vindex,
+            &job_api.m_JobAPI,
+            create_content_index,
+            content_index,
+            content,
+            version_index,
+            version,
             target_block_size,
-            max_chunks_per_block);
-
-        free(existing_cindex);
-        existing_cindex = 0;
-        free(vindex);
-        vindex = 0;
-        if (!cindex)
-        {
-            printf("Failed to create content index for version `%s`\n", version);
-            result = 1;
-            goto end;
-        }
-
-        int ok = CreateParentPath(&storage_api.m_StorageAPI, create_content_index) &&
-            WriteContentIndex(
-                &storage_api.m_StorageAPI,
-                cindex,
-                create_content_index);
-
-        free(cindex);
-        cindex = 0;
-
-        if (!ok)
-        {
-            printf("Failed to write content index to `%s`\n", create_content_index);
-            result = 1;
-            goto end;
-        }
-
-        result = 0;
+            max_chunks_per_block,
+            target_chunk_size);
+        result = ok ? 0 : 1;
         goto end;
     }
 
@@ -436,181 +878,32 @@ int main(int argc, char** argv)
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
         BikeshedJobAPI job_api;
-        VersionIndex* vindex = 0;
-        if (version_index)
-        {
-            vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
-            if (!vindex)
-            {
-                printf("Failed to read version index from `%s`\n", version_index);
-                result = 1;
-                goto end;
-            }
-        }
-        else
-        {
-            Paths* version_paths = GetFilesRecursively(
-                &storage_api.m_StorageAPI,
-                version);
-            if (!version_paths)
-            {
-                printf("Failed to scan folder `%s`\n", version);
-                result = 1;
-                goto end;
-            }
-            vindex = CreateVersionIndex(
+        int ok = Cmd_CreateContent(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
                 &job_api.m_JobAPI,
+                &compression_api.m_CompressionAPI,
+                create_content,
+                content_index,
                 version,
-                version_paths,
-                target_chunk_size);
-            free(version_paths);
-            version_paths = 0;
-            if (!vindex)
-            {
-                printf("Failed to create version index for version `%s`\n", version);
-            result = 1;
-            goto end;
-            }
-        }
-
-        ContentIndex* cindex = 0;
-        if (content_index)
-        {
-            cindex = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
-            if (!cindex)
-            {
-                printf("Failed to read content index from `%s`\n", content_index);
-                result = 1;
-                goto end;
-            }
-        }
-        else
-        {
-            cindex = CreateContentIndex(
-                &hash_api.m_HashAPI,
-                *vindex->m_ChunkCount,
-                vindex->m_ChunkHashes,
-                vindex->m_ChunkSizes,
+                version_index,
                 target_block_size,
-                max_chunks_per_block);
-            if (!cindex)
-            {
-                printf("Failed to create content index for version `%s`\n", version);
-                result = 1;
-                goto end;
-            }
-        }
-
-        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-        int ok = CreatePath(&storage_api.m_StorageAPI, create_content) && WriteContent(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
-            &compression_api.m_CompressionAPI,
-            &job_api.m_JobAPI,
-            cindex,
-            asset_part_lookup,
-            version,
-            create_content);
-        FreeAssetPartLookup(asset_part_lookup);
-        asset_part_lookup = 0;
-        free(vindex);
-        vindex = 0;
-        free(cindex);
-        cindex = 0;
-
-        if (!ok)
-        {
-            printf("Failed to write content to `%s`\n", create_content);
-            result = 1;
-            goto end;
-        }
-        result = 0;
+                max_chunks_per_block,
+                target_chunk_size);
+        result = ok ? 0 : 1;
         goto end;
     }
 
     if (list_missing_blocks && content_index)
     {
         TroveStorageAPI storage_api;
-        ContentIndex* have_content_index = ReadContentIndex(&storage_api.m_StorageAPI, list_missing_blocks);
-        if (!have_content_index)
-        {
-            result = 1;
-            goto end;
-        }
-        ContentIndex* need_content_index = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
-        if (!need_content_index)
-        {
-            free(have_content_index);
-            have_content_index = 0;
-            result = 1;
-            goto end;
-        }
-
-        // TODO: Move to longtail.h
-        uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)*have_content_index->m_ChunkCount);
-        jc::HashTable<TLongtail_Hash, uint32_t> asset_hash_to_have_block_index;
-        void* asset_hash_to_have_block_index_mem = malloc(hash_size);
-        asset_hash_to_have_block_index.Create((uint32_t)*have_content_index->m_ChunkCount, asset_hash_to_have_block_index_mem);
-
-        for (uint32_t i = 0; i < *have_content_index->m_ChunkCount; ++i)
-        {
-            asset_hash_to_have_block_index.Put(have_content_index->m_ChunkHashes[i], have_content_index->m_ChunkHashes[i]);
-        }
-
-        hash_size = jc::HashTable<uint32_t, uint32_t>::CalcSize((uint32_t)*need_content_index->m_BlockCount);
-        jc::HashTable<uint32_t, uint32_t> need_block_index_to_asset_count;
-        void* need_block_index_to_asset_count_mem = malloc(hash_size);
-        need_block_index_to_asset_count.Create((uint32_t)*need_content_index->m_BlockCount, need_block_index_to_asset_count_mem);
-
-        for (uint32_t i = 0; i < *need_content_index->m_ChunkCount; ++i)
-        {
-            uint32_t* have_block_index_ptr = asset_hash_to_have_block_index.Get(need_content_index->m_ChunkHashes[i]);
-            if (have_block_index_ptr)
-            {
-                continue;
-            }
-            uint32_t* need_block_index_ptr = need_block_index_to_asset_count.Get(need_content_index->m_ChunkBlockIndexes[i]);
-            if (need_block_index_ptr)
-            {
-                (*need_block_index_ptr)++;
-                continue;
-            }
-            need_block_index_to_asset_count.Put(need_content_index->m_ChunkBlockIndexes[i], 1u);
-        }
-
-        free(need_block_index_to_asset_count_mem);
-        need_block_index_to_asset_count_mem = 0;
-        uint32_t missing_block_count = need_block_index_to_asset_count.Size();
-        if (missing_block_count == 0)
-        {
-            free(asset_hash_to_have_block_index_mem);
-            asset_hash_to_have_block_index_mem = 0;
-            free(need_content_index);
-            need_content_index = 0;
-            free(have_content_index);
-            have_content_index = 0;
-            result = 0;
-            goto end;
-        }
-        TLongtail_Hash* missing_block_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * missing_block_count);
-        uint32_t block_index = 0;
-        for (jc::HashTable<uint32_t, uint32_t>::Iterator it = need_block_index_to_asset_count.Begin(); it != need_block_index_to_asset_count.End(); ++it)
-        {
-            uint32_t need_block_index = *it.GetValue();
-            TLongtail_Hash need_block_hash = need_content_index->m_BlockHashes[need_block_index];
-            missing_block_hashes[block_index++] = need_block_hash;
-        }
-        free(need_block_index_to_asset_count_mem);
-        need_block_index_to_asset_count_mem = 0;
-
-        free(missing_block_hashes);
-        missing_block_hashes = 0;
-        result = 0;
+        int ok = Cmd_ListMissingBlocks(
+            &storage_api.m_StorageAPI,
+            list_missing_blocks,
+            content_index);
+        result = ok ? 0 : 1;
         goto end;
     }
-
 
     if (create_version && version_index && content)
     {
@@ -619,63 +912,16 @@ int main(int argc, char** argv)
         LizardCompressionAPI compression_api;
         BikeshedJobAPI job_api;
 
-        VersionIndex* vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
-        if (!vindex)
-        {
-            printf("Failed to read version index from `%s`\n", version_index);
-            result = 1;
-            goto end;
-        }
-
-        ContentIndex* cindex = 0;
-        if (content_index)
-        {
-            cindex = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
-            if (!cindex)
-            {
-                free(vindex);
-                vindex = 0;
-                printf("Failed to read content index from `%s`\n", content_index);
-                result = 1;
-                goto end;
-            }
-        }
-        else
-        {
-            cindex = ReadContent(
-                &storage_api.m_StorageAPI,
-                &hash_api.m_HashAPI,
-                &job_api.m_JobAPI,
-                content);
-            if (!cindex)
-            {
-                free(vindex);
-                vindex = 0;
-                printf("Failed to create content index for `%s`\n", content);
-                result = 1;
-                goto end;
-            }
-        }
-        int ok = CreatePath(&storage_api.m_StorageAPI, create_version) && WriteVersion(
+        int ok = Cmd_CreateVersion(
             &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
-            &compression_api.m_CompressionAPI,
+            &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            cindex,
-            vindex,
+            &compression_api.m_CompressionAPI,
+            create_version,
+            version_index,
             content,
-            create_version);
-        free(vindex);
-        vindex = 0;
-        free(cindex);
-        cindex = 0;
-        if (!ok)
-        {
-            printf("Failed to create version `%s`\n", create_version);
-            result = 1;
-            goto end;
-        }
-        result = 0;
+            content_index);
+        result = ok ? 0 : 1;
         goto end;
     }
 
@@ -686,134 +932,19 @@ int main(int argc, char** argv)
         LizardCompressionAPI compression_api;
         BikeshedJobAPI job_api;
 
-        VersionIndex* source_vindex = 0;
-        if (version_index)
-        {
-            source_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, version_index);
-            if (!source_vindex)
-            {
-                printf("Failed to read version index from `%s`\n", version_index);
-                result = 1;
-                goto end;
-            }
-        }
-        else
-        {
-            Paths* version_paths = GetFilesRecursively(
-                &storage_api.m_StorageAPI,
-                update_version);
-            if (!version_paths)
-            {
-                printf("Failed to scan folder `%s`\n", update_version);
-                result = 1;
-                goto end;
-            }
-            source_vindex = CreateVersionIndex(
-                &storage_api.m_StorageAPI,
-                &hash_api.m_HashAPI,
-                &job_api.m_JobAPI,
-                update_version,
-                version_paths,
-                target_chunk_size);
-            free(version_paths);
-            version_paths = 0;
-            if (!source_vindex)
-            {
-                printf("Failed to create version index for version `%s`\n", update_version);
-                result = 1;
-                goto end;
-            }
-        }
-
-        VersionIndex* target_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, target_version_index);
-        if (!target_vindex)
-        {
-            free(source_vindex);
-            source_vindex = 0;
-            printf("Failed to read version index from `%s`\n", target_version_index);
-            result = 1;
-            goto end;
-        }
-
-        ContentIndex* cindex = 0;
-        if (content_index)
-        {
-            cindex = ReadContentIndex(&storage_api.m_StorageAPI, content_index);
-            if (!cindex)
-            {
-                free(target_vindex);
-                target_vindex = 0;
-                free(source_vindex);
-                source_vindex = 0;
-                printf("Failed to read content index from `%s`\n", content_index);
-                result = 1;
-                goto end;
-            }
-        }
-        else
-        {
-            cindex = ReadContent(
-                &storage_api.m_StorageAPI,
-                &hash_api.m_HashAPI,
-                &job_api.m_JobAPI,
-                content);
-            if (!cindex)
-            {
-                free(target_vindex);
-                target_vindex = 0;
-                free(source_vindex);
-                source_vindex = 0;
-                printf("Failed to create content index for `%s`\n", content);
-                result = 1;
-                goto end;
-            }
-        }
-
-        struct VersionDiff* version_diff = CreateVersionDiff(
-            source_vindex,
-            target_vindex);
-        if (!version_diff)
-        {
-            free(cindex);
-            cindex = 0;
-            free(target_vindex);
-            target_vindex = 0;
-            free(source_vindex);
-            source_vindex = 0;
-            printf("Failed to create version diff from `%s` to `%s`\n", version, target_version_index);
-            result = 1;
-            goto end;
-        }
-
-        int ok = CreatePath(&storage_api.m_StorageAPI, update_version) && ChangeVersion(
-            &storage_api.m_StorageAPI,
+        int ok = Cmd_UpdateVersion(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
             &compression_api.m_CompressionAPI,
-            cindex,
-            source_vindex,
-            target_vindex,
-            version_diff,
+            update_version,
+            version_index,
             content,
-            update_version);
+            content_index,
+            target_version_index,
+            target_chunk_size);
 
-        free(cindex);
-        cindex = 0;
-        free(target_vindex);
-        target_vindex = 0;
-        free(source_vindex);
-        source_vindex = 0;
-        free(version_diff);
-        version_diff = 0;
-
-        if (!ok)
-        {
-            printf("Failed to update version `%s` to `%s`\n", update_version, target_version_index);
-            result = 1;
-            goto end;
-        }
-        result = 0;
+        result = ok ? 0 : 1;
         goto end;
     }
 
