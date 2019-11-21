@@ -22,7 +22,7 @@ static Longtail_Assert Longtail_Assert_private = 0;
         {
             size_t aligned_size = ((s + sizeof(size_t) - 1) / sizeof(size_t)) * sizeof(size_t);
             size_t dbg_size = sizeof(size_t) + aligned_size + sizeof(size_t);
-            char* r = malloc(dbg_size);
+            char* r = (char*)malloc(dbg_size);
             LONGTAIL_FATAL_ASSERT_PRIVATE(r !=0, return 0)
             *(size_t*)r = dbg_size;
             *(size_t*)&r[dbg_size - sizeof(size_t)] = dbg_size;
@@ -97,32 +97,32 @@ int IsDirPath(const char* path)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 
-int IsCompressedFileType(const char* path)
-{
-    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
-    const char* extension = strrchr(path, '.');
-    if (!extension)
-    {
-        return 0;
-    }
-    if (stricmp(path, ".pak"))
-    {
-        return 1;
-    }
-    if (stricmp(path, ".zip"))
-    {
-        return 1;
-    }
-    if (stricmp(path, ".rar"))
-    {
-        return 1;
-    }
-    if (stricmp(path, ".7z"))
-    {
-        return 1;
-    }
-    return 0;
-}
+//int IsCompressedFileType(const char* path)
+//{
+//    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
+//    const char* extension = strrchr(path, '.');
+//    if (!extension)
+//    {
+//        return 0;
+//    }
+//    if (stricmp(path, ".pak"))
+//    {
+//        return 1;
+//    }
+//    if (stricmp(path, ".zip"))
+//    {
+//        return 1;
+//    }
+//    if (stricmp(path, ".rar"))
+//    {
+//        return 1;
+//    }
+//    if (stricmp(path, ".7z"))
+//    {
+//        return 1;
+//    }
+//    return 0;
+//}
 
 TLongtail_Hash GetPathHash(struct HashAPI* hash_api, const char* path)
 {
@@ -3761,22 +3761,22 @@ struct Chunker* CreateChunker(
 
     if (params->min < ChunkerWindowSize)
     {
-        LONGTAIL_LOG("Chunker: Min chunk size too small, must be over %u", ChunkerWindowSize);
+        LONGTAIL_LOG("Chunker: Min chunk size too small, must be over %u\n", ChunkerWindowSize);
         return 0;
     }
     if (params->min > params->max)
     {
-        LONGTAIL_LOG("Chunker: Min chunk size must not be greater than max");
+        LONGTAIL_LOG("Chunker: Min (%u) chunk size must not be greater than max (%u)\n", (uint32_t)params->min, (uint32_t)params->max);
         return 0;
     }
     if (params->min > params->avg)
     {
-        LONGTAIL_LOG("Chunker: Min chunk size must not be greater than avg");
+        LONGTAIL_LOG("Chunker: Min (%u) chunk size must not be greater than avg (%u)\n", (uint32_t)params->min, (uint32_t)params->avg);
         return 0;
     }
     if (params->avg > params->max)
     {
-        LONGTAIL_LOG("Chunker: Avg chunk size must not be greater than max");
+        LONGTAIL_LOG("Chunker: Avg (%u) chunk size must not be greater than max (%u)\n", (uint32_t)params->avg, (uint32_t)params->max);
         return 0;
     }
     struct Chunker* c = (struct Chunker*)LONGTAIL_MALLOC(sizeof(struct Chunker) + params->max);
@@ -3805,9 +3805,17 @@ void FeedChunker(struct Chunker* c)
         c->off = 0;
     }
     uint32_t feed_max = c->params.max - c->buf.len;
-    uint32_t feed_count = c->fFeeder(c->cFeederContext, c, feed_max, &c->buf.data[c->buf.len]);
+    uint32_t feed_count = c->fFeeder(c->cFeederContext, c, feed_max, (char*)&c->buf.data[c->buf.len]);
     c->buf.len += feed_count;
 }
+
+#ifndef _rotl
+inline uint32_t _rotl(uint32_t x, int shift) {
+	shift &= 31;
+	if (!shift) return x;
+	return (x << shift) | (x >> (32 - shift));
+}
+#endif
 
 struct ChunkRange NextChunk(struct Chunker* c)
 {

@@ -10,6 +10,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #define TEST_LOG(fmt, ...) \
     printf("--- ");printf(fmt, __VA_ARGS__);

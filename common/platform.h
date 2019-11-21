@@ -314,18 +314,26 @@ struct TroveStorageAPI
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        BOOL ok = ::RemoveDirectoryA(tmp_path);
+        #ifdef _WIN32
+        int ok = ::RemoveDirectoryA(tmp_path) == TRUE;
+        #else
+        int ok = rmdir(path) == 0;
+        #endif
         free(tmp_path);
-        return ok == TRUE;
+        return ok;
     }
 
     static int RemoveFile(struct StorageAPI* storage_api, const char* path)
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        BOOL ok = ::DeleteFileA(tmp_path);
+        #ifdef _WIN32
+        int ok = ::DeleteFileA(tmp_path) == TRUE;
+        #else
+        int ok = unlink(path) == 0;
+        #endif
         free(tmp_path);
-        return ok == TRUE;
+        return ok;
     }
 
     static StorageAPI_HIterator StartFind(StorageAPI* , const char* path)
