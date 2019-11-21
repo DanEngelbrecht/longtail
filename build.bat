@@ -87,7 +87,7 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo "Compiling third party dependencies to library" %THIRD_PARTY_LIB%
     del /s ..\build\!THIRD_PARTY_LIB! >nul 2>&1
     pushd ..\third-party
-    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% /Fd:..\build\test_vc.pdb
+    cl.exe /MDd /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% /Fd:..\build\test_vc.pdb
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
     popd
     if !LIB_COMPILE_ERROR! neq 0 exit /b !LIB_COMPILE_ERROR!
@@ -95,6 +95,6 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     del ..\third-party\*.obj
 )
 
-cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fo:..\build\ /Fd:..\build\test_vc.pdb /link /out:..\build\%OUTPUT%.exe /pdb:..\build\%OUTPUT%.pdb ..\build\!THIRD_PARTY_LIB!
+cl.exe /MDd %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fo:..\build\ /Fd:..\build\test_vc.pdb /link /out:..\build\%OUTPUT%.exe /pdb:..\build\%OUTPUT%.pdb ..\build\!THIRD_PARTY_LIB!
 
 exit /B %ERRORLEVEL%
