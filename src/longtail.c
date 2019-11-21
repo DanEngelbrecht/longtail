@@ -3208,16 +3208,6 @@ int ChangeVersion(
         const char* target_name = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
         uint32_t target_chunk_count = target_version->m_AssetChunkCounts[target_asset_index];
         uint32_t target_chunk_index_start = target_version->m_AssetChunkIndexStarts[target_asset_index];
-		if (target_chunk_count)
-		{
-			if ((target_chunk_index_start + target_chunk_count) > * target_version->m_ChunkCount)
-			{
-				LONGTAIL_LOG("ChangeVersion: Malformed version diff version in `%s` is available in content folder `%s`\n", version_path, content_path);
-				DeleteContentLookup(cl);
-				cl = 0;
-				return 0;
-			}
-		}
         for (uint32_t i = 0; i < target_chunk_count; ++i)
         {
             uint32_t target_chunk = target_version->m_AssetChunkIndexes[target_chunk_index_start + i];
