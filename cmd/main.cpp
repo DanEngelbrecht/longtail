@@ -483,7 +483,7 @@ int Cmd_CreateContent(
     }
 
     Progress progress;
-    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
+    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(storage_api, version, vindex);
     int ok = CreatePath(storage_api, create_content) && WriteContent(
         storage_api,
         storage_api,
@@ -967,6 +967,24 @@ int main(int argc, char** argv)
             return 1;
         }
 
+        char create_version[512];
+        sprintf(create_version, "%s/remote/%s", test_base_path, test_version);
+        sprintf(content, "%s/chunks", test_base_path);
+        sprintf(content_index, "%s/chunks.lci", test_base_path);
+        sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
+        if (!Cmd_CreateVersion(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            &compression_api.m_CompressionAPI,
+            create_version,
+            version_index,
+            content,
+            content_index))
+        {
+            return 1;
+        }
+
         char update_version[512];
         sprintf(update_version, "%s/remote/incremental", test_base_path);
         sprintf(content, "%s/chunks", test_base_path);
@@ -983,6 +1001,22 @@ int main(int argc, char** argv)
             content,
             content_index,
             target_version_index,
+            target_chunk_size))
+        {
+            printf("Failed to update version `%s` to `%s`\n", update_version, target_version_index);
+        }
+
+        char incremental_version_index[512];
+        sprintf(incremental_version_index, "%s/remote/%s.lvi", test_base_path, test_version);
+        char incremental_version[512];
+        sprintf(incremental_version, "%s/remote/incremental", test_base_path);
+        if (!Cmd_CreateVersionIndex(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            incremental_version_index,
+            incremental_version,
+            0,
             target_chunk_size))
         {
             return 1;

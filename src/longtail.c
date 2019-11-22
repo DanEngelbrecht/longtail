@@ -1217,6 +1217,7 @@ struct VersionIndex* ReadVersionIndex(
     }
     InitVersionIndex(version_index, (size_t)version_index_data_size);
     storage_api->CloseRead(storage_api, file_handle);
+    LONGTAIL_LOG("ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks.\n", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     return version_index;
 }
 
@@ -1601,6 +1602,8 @@ struct ChunkHashToAssetPart
 };
 
 struct ChunkHashToAssetPart* CreateAssetPartLookup(
+    struct StorageAPI* storage_api,
+    const char* version,
     struct VersionIndex* version_index)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return 0);
@@ -1621,10 +1624,29 @@ struct ChunkHashToAssetPart* CreateAssetPartLookup(
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
             if (hmgeti(asset_part_lookup, chunk_hash) == -1)
             {
+                // Validate that we point to the same thing!
+                const char* full_path = storage_api->ConcatPath(storage_api, version, path);
+                StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, full_path);
+                free((char*)full_path);
+                full_path = 0;
+                if (!f)
+                {
+                    LONGTAIL_LOG("CreateAssetPartLookup: Missing source data in version `%s` for `%s`\n", version, path);
+                    hmfree(asset_part_lookup);
+                    return 0;
+                }
+                size_t s = storage_api->GetSize(storage_api, f);
+                storage_api->CloseRead(storage_api, f);
+                f = 0;
+                if (s < asset_chunk_offset + chunk_size)
+                {
+                    LONGTAIL_LOG("CreateAssetPartLookup: Mismatching size in version `%s` for `%s`\n", version, path);
+                    hmfree(asset_part_lookup);
+                    return 0;
+                }
                 struct AssetPart asset_part = { path, asset_chunk_offset };
                 hmput(asset_part_lookup, chunk_hash, asset_part);
             }
-
             asset_chunk_offset += chunk_size;
         }
     }
@@ -3393,6 +3415,10 @@ struct VersionDiff* CreateVersionDiff(
                 modified_source_indexes[modified_count] = source_asset_index;
                 modified_target_indexes[modified_count] = target_asset_index;
                 ++modified_count;
+                if (modified_count < 10)
+                {
+                    LONGTAIL_LOG("CreateVersionDiff: Missmatching content for asset `%s`\n", &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]])
+                }
             }
             ++source_index;
             ++target_index;
@@ -3427,6 +3453,18 @@ struct VersionDiff* CreateVersionDiff(
         added_target_asset_indexes[target_added_count] = target_asset_index;
         ++target_added_count;
         ++target_index;
+    }
+    if (source_removed_count > 0)
+    {
+        LONGTAIL_LOG("CreateVersionDiff: Found %u removed assets\n", source_removed_count)
+    }
+    if (target_added_count > 0)
+    {
+        LONGTAIL_LOG("CreateVersionDiff: Found %u added assets\n", target_added_count)
+    }
+    if (modified_count > 0)
+    {
+        LONGTAIL_LOG("CreateVersionDiff: Missmatching content for `%u` assets found\n", modified_count)
     }
 
     struct VersionDiff* version_diff = (struct VersionDiff*)LONGTAIL_MALLOC(GetVersionDiffSize(source_removed_count, target_added_count, modified_count));
