@@ -68,12 +68,13 @@ struct CompressionAPI
 };
 
 typedef void (*JobAPI_JobFunc)(void* context);
+typedef void (*JobAPI_ProgressFunc)(void* context, uint32_t total_count, uint32_t done_count);
 
 struct JobAPI
 {
     int (*ReserveJobs)(struct JobAPI* job_api, uint32_t job_count);
     void (*SubmitJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[]);
-    void (*WaitForAllJobs)(struct JobAPI* job_api);
+    void (*WaitForAllJobs)(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func);
 };
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
@@ -109,6 +110,8 @@ struct VersionIndex* CreateVersionIndex(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const char* root_path,
     const struct Paths* paths,
     uint32_t max_chunk_size);
@@ -144,6 +147,8 @@ int WriteContent(
     struct StorageAPI* target_storage_api,
     struct CompressionAPI* compression_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     struct ContentIndex* content_index,
     struct ChunkHashToAssetPart* asset_part_lookup,
     const char* assets_folder,
@@ -153,6 +158,8 @@ struct ContentIndex* ReadContent(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const char* content_path);
 
 struct ContentIndex* CreateMissingContent(
@@ -181,6 +188,8 @@ int WriteVersion(
     struct StorageAPI* version_storage_api,
     struct CompressionAPI* compression_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const struct ContentIndex* content_index,
     const struct VersionIndex* version_index,
     const char* content_path,
@@ -195,6 +204,8 @@ int ChangeVersion(
     struct StorageAPI* version_storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     struct CompressionAPI* compression_api,
     const struct ContentIndex* content_index,
     const struct VersionIndex* source_version,

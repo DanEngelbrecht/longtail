@@ -745,6 +745,8 @@ int ChunkAssets(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const char* root_path,
     const struct Paths* paths,
     TLongtail_Hash* path_hashes,
@@ -778,7 +780,7 @@ int ChunkAssets(
 
     if (!job_api->ReserveJobs(job_api, asset_count))
     {
-        LONGTAIL_LOG("ChunkAssets: Failed to reserve jobs for folder `%s`\n", root_path)
+        LONGTAIL_LOG("ChunkAssets: Failed to reserve %u jobs for folder `%s`\n", (uint32_t)*paths->m_PathCount, root_path)
         return 0;
     }
     struct HashJob* hash_jobs = (struct HashJob*)LONGTAIL_MALLOC(sizeof(struct HashJob) * asset_count);
@@ -810,7 +812,7 @@ int ChunkAssets(
         job_api->SubmitJobs(job_api, 1, &func, &ctx);
     }
 
-    job_api->WaitForAllJobs(job_api);
+    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
 
     int success = 1;
     for (uint32_t i = 0; i < asset_count; ++i)
@@ -1018,6 +1020,8 @@ struct VersionIndex* CreateVersionIndex(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const char* root_path,
     const struct Paths* paths,
     uint32_t max_chunk_size)
@@ -1039,11 +1043,13 @@ struct VersionIndex* CreateVersionIndex(
     uint32_t* asset_chunk_sizes = 0;
     TLongtail_Hash* asset_chunk_hashes = 0;
     uint32_t* asset_chunk_start_index = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * path_count);
-    
+
     if (!ChunkAssets(
         storage_api,
         hash_api,
         job_api,
+        job_progress_func,
+        job_progress_context,
         root_path,
         paths,
         path_hashes,
@@ -1084,27 +1090,21 @@ struct VersionIndex* CreateVersionIndex(
         intptr_t i = hmgeti(chunk_hash_to_index, h);
         if (i == -1)
         {
-            i = unique_chunk_count;
             hmput(chunk_hash_to_index, h, unique_chunk_count);
             compact_chunk_hashes[unique_chunk_count] = h;
             compact_chunk_sizes[unique_chunk_count] = asset_chunk_sizes[c];
+            asset_chunk_indexes[c] = unique_chunk_count;
             ++unique_chunk_count;
         }
-        asset_chunk_indexes[c] = chunk_hash_to_index[i].value;
+        else
+        {
+            asset_chunk_indexes[c] = chunk_hash_to_index[i].value;
+        }
     }
 
     hmfree(chunk_hash_to_index);
     chunk_hash_to_index = 0;
 
-    uint32_t* asset_chunk_index_starts = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * path_count);
-    uint32_t asset_chunk_index_start_offset = 0;
-    for (uint32_t asset_index = 0; asset_index < path_count; ++asset_index)
-    {
-        asset_chunk_index_starts[asset_index] = asset_chunk_index_start_offset;
-        asset_chunk_index_start_offset += asset_chunk_counts[asset_index];
-    }
-
-    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_index_start_offset == assets_chunk_index_count, return 0)
     size_t version_index_size = GetVersionIndexSize(path_count, unique_chunk_count, assets_chunk_index_count, paths->m_DataSize);
     void* version_index_mem = LONGTAIL_MALLOC(version_index_size);
 
@@ -1115,7 +1115,7 @@ struct VersionIndex* CreateVersionIndex(
         path_hashes,                    // path_hashes
         content_hashes,                 // content_hashes
         content_sizes,                  // content_sizes
-        asset_chunk_index_starts,       // asset_chunk_index_starts
+        asset_chunk_start_index,        // asset_chunk_index_starts
         asset_chunk_counts,             // asset_chunk_counts
         assets_chunk_index_count,       // asset_chunk_index_count
         asset_chunk_indexes,            // asset_chunk_indexes
@@ -1123,8 +1123,6 @@ struct VersionIndex* CreateVersionIndex(
         compact_chunk_sizes,            // chunk_sizes
         compact_chunk_hashes);          // chunk_hashes
 
-    LONGTAIL_FREE(asset_chunk_index_starts);
-    asset_chunk_index_starts = 0;
     LONGTAIL_FREE(compact_chunk_sizes);
     compact_chunk_sizes = 0;
     LONGTAIL_FREE(compact_chunk_hashes);
@@ -1876,6 +1874,8 @@ int WriteContent(
     struct StorageAPI* target_storage_api,
     struct CompressionAPI* compression_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     struct ContentIndex* content_index,
     struct ChunkHashToAssetPart* asset_part_lookup,
     const char* assets_folder,
@@ -1951,7 +1951,7 @@ int WriteContent(
         block_start_chunk_index += chunk_count;
     }
 
-    job_api->WaitForAllJobs(job_api);
+    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
 
     int success = 1;
     while (job_count--)
@@ -2537,6 +2537,8 @@ int WriteAssets(
     struct StorageAPI* version_storage_api,
     struct CompressionAPI* compression_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const struct ContentIndex* content_index,
     const struct VersionIndex* version_index,
     const struct VersionIndex* optional_base_version,
@@ -2558,7 +2560,7 @@ int WriteAssets(
 
     if (!job_api->ReserveJobs(job_api, awl->m_BlockJobCount + awl->m_AssetJobCount))
     {
-        LONGTAIL_LOG("WriteAssets: Failed to reserve jobs for folder `%s`\n", version_path)
+        LONGTAIL_LOG("WriteAssets: Failed to reserve %u jobs for folder `%s`\n", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path)
         LONGTAIL_FREE(awl);
         awl = 0;
         DeleteContentLookup(cl);
@@ -2646,7 +2648,7 @@ int WriteAssets(
         job_api->SubmitJobs(job_api, 1, func, ctx);
     }
 
-    job_api->WaitForAllJobs(job_api);
+    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
 
     int success = 1;
     for (uint32_t b = 0; b < block_job_count; ++b)
@@ -2682,6 +2684,8 @@ int WriteVersion(
     struct StorageAPI* version_storage_api,
     struct CompressionAPI* compression_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const struct ContentIndex* content_index,
     const struct VersionIndex* version_index,
     const char* content_path,
@@ -2739,6 +2743,8 @@ int WriteVersion(
         version_storage_api,
         compression_api,
         job_api,
+        job_progress_func,
+        job_progress_context,
         content_index,
         version_index,
         0,
@@ -2876,6 +2882,8 @@ struct ContentIndex* ReadContent(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     const char* content_path)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
@@ -2929,7 +2937,7 @@ struct ContentIndex* ReadContent(
         job_api->SubmitJobs(job_api, 1, job_func, ctx);
     }
 
-    job_api->WaitForAllJobs(job_api);
+    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
 
     uint64_t block_count = 0;
     uint64_t chunk_count = 0;
@@ -3456,6 +3464,8 @@ int ChangeVersion(
     struct StorageAPI* version_storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
     struct CompressionAPI* compression_api,
     const struct ContentIndex* content_index,
     const struct VersionIndex* source_version,
@@ -3642,6 +3652,8 @@ int ChangeVersion(
         version_storage_api,
         compression_api,
         job_api,
+        job_progress_func,
+        job_progress_context,
         content_index,
         target_version,
         source_version,

@@ -450,6 +450,7 @@ struct BikeshedJobAPI
     ThreadWorker* m_Workers;
     int32_t volatile m_Stop;
     JobWrapper* m_ReservedJobs;
+    uint32_t m_ReservedJobCount;
     uint32_t m_SubmittedJobCount;
     int32_t volatile m_PendingJobCount;
 
@@ -464,6 +465,7 @@ struct BikeshedJobAPI
         , m_Workers(0)
         , m_Stop(0)
         , m_ReservedJobs(0)
+        , m_ReservedJobCount(0)
         , m_SubmittedJobCount(0)
         , m_PendingJobCount(0)
     {
@@ -509,13 +511,27 @@ struct BikeshedJobAPI
         {
             return 0;
         }
+        if (bikeshed_job_api->m_ReservedJobCount)
+        {
+            return 0;
+        }
         bikeshed_job_api->m_ReservedJobs = (JobWrapper*)malloc(sizeof(JobWrapper) * job_count);
-        return bikeshed_job_api->m_ReservedJobs != 0;
+        if (bikeshed_job_api->m_ReservedJobs)
+        {
+            bikeshed_job_api->m_ReservedJobCount = job_count;
+            return 1;
+        }
+        return 0;
     }
 
     static void SubmitJobs(JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
+        if (bikeshed_job_api->m_SubmittedJobCount + job_count > bikeshed_job_api->m_ReservedJobCount)
+        {
+            printf("******************** SubmitJobs failure!!!!\n");
+            return;
+        }
 
         BikeShed_TaskFunc* func = (BikeShed_TaskFunc*)malloc(sizeof(BikeShed_TaskFunc) * job_count);
         void** ctx = (void**)malloc(sizeof(void*) * job_count);
@@ -546,25 +562,38 @@ struct BikeshedJobAPI
         }
         free(task_ids);
     }
-    static void WaitForAllJobs(JobAPI* job_api)
+    static void WaitForAllJobs(JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func)
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
-        int32_t old_pending_count = 0;
-        while (bikeshed_job_api->m_PendingJobCount > 0)
+        if (bikeshed_job_api->m_SubmittedJobCount > 0)
+		{
+			int32_t old_pending_count = 0;
+			while (bikeshed_job_api->m_PendingJobCount > 0)
+			{
+				if (process_func)
+				{
+					uint32_t jobs_done = bikeshed_job_api->m_SubmittedJobCount - bikeshed_job_api->m_PendingJobCount;
+					process_func(context, bikeshed_job_api->m_SubmittedJobCount, jobs_done);
+				}
+				if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
+				{
+					continue;
+				}
+				if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
+				{
+					old_pending_count = bikeshed_job_api->m_PendingJobCount;
+				}
+				PLATFORM_SLEEP_PRIVATE(1000);
+			}
+		}
+        if (process_func)
         {
-            if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
-            {
-                continue;
-            }
-            if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
-            {
-                old_pending_count = bikeshed_job_api->m_PendingJobCount;
-            }
-            PLATFORM_SLEEP_PRIVATE(1000);
+            process_func(context, bikeshed_job_api->m_SubmittedJobCount, bikeshed_job_api->m_SubmittedJobCount);
         }
         bikeshed_job_api->m_SubmittedJobCount = 0;
         free(bikeshed_job_api->m_ReservedJobs);
         bikeshed_job_api->m_ReservedJobs = 0;
+        bikeshed_job_api->m_ReservedJobCount = 0;
     }
 
     static Bikeshed_TaskResult Job(Bikeshed shed, Bikeshed_TaskID, uint8_t, void* context)

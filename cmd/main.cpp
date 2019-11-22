@@ -94,6 +94,33 @@ char* NormalizePath(const char* path)
     return normalized_path;
 }
 
+struct Progress
+{
+    Progress() : m_OldPercent(0) {}
+    uint32_t m_OldPercent;
+    static void ProgressFunc(void* context, uint32_t total, uint32_t jobs_done)
+    {
+        Progress* p = (Progress*)context;
+        if (jobs_done < total)
+        {
+            uint32_t percent_done = (100 * jobs_done) / total;
+            if (percent_done - p->m_OldPercent >= 5)
+            {
+                printf("%u%% ", percent_done);
+                p->m_OldPercent = percent_done;
+            }
+            return;
+        }
+        if (p->m_OldPercent != 0)
+        {
+            if (p->m_OldPercent != 100)
+            {
+                printf("100%%");
+            }
+            printf("\n");
+        }
+    }
+};
 
 int Cmd_CreateVersionIndex(
     StorageAPI* storage_api,
@@ -112,10 +139,14 @@ int Cmd_CreateVersionIndex(
         printf("Failed to scan folder `%s`\n", version);
         return 1;
     }
+
+    Progress progress;
     VersionIndex* vindex = CreateVersionIndex(
         storage_api,
         hash_api,
         job_api,
+        Progress::ProgressFunc,
+        &progress,
         version,
         version_paths,
         target_chunk_size);
@@ -128,6 +159,26 @@ int Cmd_CreateVersionIndex(
     }
 
     int ok = CreateParentPath(storage_api, create_version_index) && WriteVersionIndex(storage_api, vindex, create_version_index);
+
+    VersionIndex* target_vindex = ReadVersionIndex(storage_api, create_version_index);
+    if (!target_vindex)
+    {
+        free(vindex);
+        vindex = 0;
+        printf("Failed to read version index from `%s`\n", create_version_index);
+        return 0;
+    }
+
+    struct VersionDiff* version_diff = CreateVersionDiff(
+        vindex,
+        target_vindex);
+
+    free(version_diff);
+    version_diff = 0;
+
+    free(target_vindex);
+    target_vindex = 0;
+
     free(vindex);
     vindex = 0;
     if (!ok)
@@ -135,6 +186,9 @@ int Cmd_CreateVersionIndex(
         printf("Failed to create version index to `%s`\n", create_version_index);
         return 0;
     }
+
+
+
     return 1;
 }
 
@@ -145,10 +199,13 @@ int Cmd_CreateContentIndex(
     const char* create_content_index,
     const char* content)
 {
+    Progress progress;
     ContentIndex* cindex = ReadContent(
         storage_api,
         hash_api,
         job_api,
+        Progress::ProgressFunc,
+        &progress,
         content);
     if (!cindex)
     {
@@ -253,10 +310,13 @@ int Cmd_CreateMissingContentIndex(
             printf("Failed to scan folder `%s`\n", version);
             return 0;
         }
+        Progress progress;
         vindex = CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
+            Progress::ProgressFunc,
+            &progress,
             version,
             version_paths,
             target_chunk_size);
@@ -283,10 +343,13 @@ int Cmd_CreateMissingContentIndex(
     }
     else if (content)
     {
+        Progress progress;
         existing_cindex = ReadContent(
             storage_api,
             hash_api,
             job_api,
+            Progress::ProgressFunc,
+            &progress,
             content);
         if (!existing_cindex)
         {
@@ -374,10 +437,13 @@ int Cmd_CreateContent(
             printf("Failed to scan folder `%s`\n", version);
             return 0;
         }
+        Progress progress;
         vindex = CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
+            Progress::ProgressFunc,
+            &progress,
             version,
             version_paths,
             target_chunk_size);
@@ -416,12 +482,15 @@ int Cmd_CreateContent(
         }
     }
 
+    Progress progress;
     struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
     int ok = CreatePath(storage_api, create_content) && WriteContent(
         storage_api,
         storage_api,
         compression_api,
         job_api,
+        Progress::ProgressFunc,
+        &progress,
         cindex,
         asset_part_lookup,
         version,
@@ -466,7 +535,7 @@ int Cmd_ListMissingBlocks(
     void* asset_hash_to_have_block_index_mem = malloc(hash_size);
     asset_hash_to_have_block_index.Create((uint32_t)*have_content_index->m_ChunkCount, asset_hash_to_have_block_index_mem);
 
-    for (uint32_t i = 0; i < *have_content_index->m_ChunkCount; ++i)
+    for (uint32_t i = 0; i < (uint32_t)*have_content_index->m_ChunkCount; ++i)
     {
         asset_hash_to_have_block_index.Put(have_content_index->m_ChunkHashes[i], have_content_index->m_ChunkHashes[i]);
     }
@@ -553,10 +622,13 @@ int Cmd_CreateVersion(
     }
     else
     {
+        Progress progress;
         cindex = ReadContent(
             storage_api,
             hash_api,
             job_api,
+            Progress::ProgressFunc,
+            &progress,
             content);
         if (!cindex)
         {
@@ -566,11 +638,15 @@ int Cmd_CreateVersion(
             return 0;
         }
     }
+
+    Progress progress;
     int ok = CreatePath(storage_api, create_version) && WriteVersion(
         storage_api,
         storage_api,
         compression_api,
         job_api,
+        Progress::ProgressFunc,
+        &progress,
         cindex,
         vindex,
         content,
@@ -619,10 +695,13 @@ int Cmd_UpdateVersion(
             printf("Failed to scan folder `%s`\n", update_version);
             return 0;
         }
+        Progress progress;
         source_vindex = CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
+            Progress::ProgressFunc,
+            &progress,
             update_version,
             version_paths,
             target_chunk_size);
@@ -660,10 +739,13 @@ int Cmd_UpdateVersion(
     }
     else
     {
+        Progress progress;
         cindex = ReadContent(
             storage_api,
             hash_api,
             job_api,
+            Progress::ProgressFunc,
+            &progress,
             content);
         if (!cindex)
         {
@@ -691,11 +773,14 @@ int Cmd_UpdateVersion(
         return 0;
     }
 
+    Progress progress;
     int ok = CreatePath(storage_api, update_version) && ChangeVersion(
         storage_api,
         storage_api,
         hash_api,
         job_api,
+        Progress::ProgressFunc,
+        &progress,
         compression_api,
         cindex,
         source_vindex,
@@ -802,25 +887,31 @@ int main(int argc, char** argv)
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         char content[512];
         sprintf(content, "%s/chunks", test_base_path);
-        int ok = Cmd_CreateContentIndex(
+        if (!Cmd_CreateContentIndex(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
             create_content_index,
-            content);
+            content))
+        {
+            return 1;
+        }
 
         char create_version_index[512];
         sprintf(create_version_index, "%s/%s.lvi", test_base_path, test_version);
         char version[512];
         sprintf(version, "%s/local/%s", test_base_path, test_version);
-        ok = ok & Cmd_CreateVersionIndex(
+        if (!Cmd_CreateVersionIndex(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
             create_version_index,
             version,
             0,
-            target_chunk_size);
+            target_chunk_size))
+        {
+            return 1;
+        }
 
         sprintf(create_content_index, "%s/%s.lci", test_base_path, test_version);
         char content_index[512];
@@ -828,7 +919,7 @@ int main(int argc, char** argv)
         char version_index[512];
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         sprintf(version, "%s/local/%s", test_base_path, test_version);
-        ok = ok & Cmd_CreateMissingContentIndex(
+        if (!Cmd_CreateMissingContentIndex(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
@@ -839,13 +930,15 @@ int main(int argc, char** argv)
             version,
             target_block_size,
             max_chunks_per_block,
-            target_chunk_size);
-
+            target_chunk_size))
+        {
+            return 1;
+        }
 
         char create_content[512];
         sprintf(create_content, "%s/chunks", test_base_path);
         sprintf(content_index, "%s/%s.lci", test_base_path, test_version);
-        ok = ok & Cmd_CreateContent(
+        if (!Cmd_CreateContent(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
@@ -856,17 +949,23 @@ int main(int argc, char** argv)
             version_index,
             target_block_size,
             max_chunks_per_block,
-            target_chunk_size);
+            target_chunk_size))
+        {
+            return 1;
+        }
 
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         sprintf(content_index, "%s/chunks.lci", test_base_path);
         char merge_content_index[512];
         sprintf(merge_content_index, "%s/%s.lci", test_base_path, test_version);
-        ok = ok & Cmd_MergeContentIndex(
+        if (!Cmd_MergeContentIndex(
             &storage_api.m_StorageAPI,
             create_content_index,
             content_index,
-            merge_content_index);
+            merge_content_index))
+        {
+            return 1;
+        }
 
         char update_version[512];
         sprintf(update_version, "%s/remote/incremental", test_base_path);
@@ -874,7 +973,7 @@ int main(int argc, char** argv)
         sprintf(content_index, "%s/chunks.lci", test_base_path);
         char target_version_index[512];
         sprintf(target_version_index, "%s/%s.lvi", test_base_path, test_version);
-        ok = ok & Cmd_UpdateVersion(
+        if (!Cmd_UpdateVersion(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
@@ -884,11 +983,14 @@ int main(int argc, char** argv)
             content,
             content_index,
             target_version_index,
-            target_chunk_size);
+            target_chunk_size))
+        {
+            return 1;
+        }
 
         free((char*)test_version);
         free((char*)test_base_path);
-        return ok ? 0 : 1;
+        return 0;
     }
 
     const char* create_version_index = NormalizePath(create_version_index_raw);
