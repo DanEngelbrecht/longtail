@@ -1850,7 +1850,6 @@ void WriteContentBlockJob(void* context)
     target_storage_api->CloseWrite(target_storage_api, block_file_handle);
     write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, block_path);
     job->m_Success = write_ok;
-    LONGTAIL_LOG("Wrote block `%s`\n", block_path);
 
     LONGTAIL_FREE(block_name);
     block_name = 0;
@@ -1983,7 +1982,6 @@ static char* ReadBlockData(
     LONGTAIL_FREE(block_name);
     block_name = 0;
 
-    LONGTAIL_LOG("Reading block `%s`\n", block_path);
     StorageAPI_HOpenFile block_file = storage_api->OpenReadFile(storage_api, block_path);
     if (!block_file)
     {
