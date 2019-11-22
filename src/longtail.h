@@ -291,9 +291,9 @@ struct Chunker;
 
 struct ChunkerParams
 {
-    uint64_t min;
-    uint64_t avg;
-    uint64_t max;
+    uint32_t min;
+    uint32_t avg;
+    uint32_t max;
 };
 
 struct ChunkRange

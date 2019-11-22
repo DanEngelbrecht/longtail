@@ -460,7 +460,7 @@ struct BikeshedJobAPI
             WaitForAllJobs
             }
         , m_Shed(0)
-        , m_WorkerCount(GetCPUCount() - 1)
+        , m_WorkerCount(GetCPUCount())	// We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO
         , m_Workers(0)
         , m_Stop(0)
         , m_ReservedJobs(0)
