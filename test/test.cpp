@@ -792,9 +792,9 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
 
 TEST(Longtail, LongtailMalloc)
 {
-	void* p = LONGTAIL_MALLOC(77);
-	ASSERT_NE((void*)0, p);
-	LONGTAIL_FREE(p);
+    void* p = LONGTAIL_MALLOC(77);
+    ASSERT_NE((void*)0, p);
+    LONGTAIL_FREE(p);
 }
 
 TEST(Longtail, VersionIndex)
@@ -834,7 +834,7 @@ TEST(Longtail, VersionIndex)
         asset_content_hashes);
 
     LONGTAIL_FREE(version_index);
-	LONGTAIL_FREE(paths);
+    LONGTAIL_FREE(paths);
 }
 
 TEST(Longtail, ContentIndex)
@@ -877,7 +877,7 @@ TEST(Longtail, ContentIndex)
     ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[3]);
     ASSERT_EQ(43591, content_index->m_ChunkBlockOffsets[4]);
 
-	LONGTAIL_FREE(content_index);
+    LONGTAIL_FREE(content_index);
 }
 
 TEST(Longtail, ContentIndexSerialization)
@@ -898,7 +898,7 @@ TEST(Longtail, ContentIndexSerialization)
         version1_paths,
         16384);
     ASSERT_NE((VersionIndex*)0, vindex);
-	LONGTAIL_FREE(version1_paths);
+    LONGTAIL_FREE(version1_paths);
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
@@ -911,7 +911,7 @@ TEST(Longtail, ContentIndexSerialization)
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
 
-	LONGTAIL_FREE(vindex);
+    LONGTAIL_FREE(vindex);
     vindex = 0;
 
     ASSERT_NE(0, WriteContentIndex(&local_storage.m_StorageAPI, cindex, "cindex.lci"));
@@ -932,10 +932,10 @@ TEST(Longtail, ContentIndexSerialization)
         ASSERT_EQ(cindex->m_ChunkLengths[i], cindex2->m_ChunkLengths[i]);
     }
 
-	LONGTAIL_FREE(cindex);
+    LONGTAIL_FREE(cindex);
     cindex = 0;
 
-	LONGTAIL_FREE(cindex2);
+    LONGTAIL_FREE(cindex2);
     cindex2 = 0;
 }
 
@@ -1064,7 +1064,7 @@ TEST(Longtail, TestVeryLargeFile)
         paths,
         32758u);
 
-	LONGTAIL_FREE(version_index);
+    LONGTAIL_FREE(version_index);
 }
 #endif // 0
 
@@ -1136,7 +1136,7 @@ TEST(Longtail, CreateMissingContent)
         *paths->m_PathCount,
         chunk_sizes,
         asset_content_hashes);
-	LONGTAIL_FREE(paths);
+    LONGTAIL_FREE(paths);
 
     ContentIndex* missing_content_index = CreateMissingContent(
         &hash_api.m_HashAPI,
@@ -1167,10 +1167,10 @@ TEST(Longtail, CreateMissingContent)
     ASSERT_EQ(asset_sizes[1], missing_content_index->m_ChunkLengths[3]);
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockOffsets[3]);
 
-	LONGTAIL_FREE(version_index);
-	LONGTAIL_FREE(content_index);
+    LONGTAIL_FREE(version_index);
+    LONGTAIL_FREE(content_index);
 
-	LONGTAIL_FREE(missing_content_index);
+    LONGTAIL_FREE(missing_content_index);
 }
 
 TEST(Longtail, GetMissingAssets)
@@ -1201,8 +1201,8 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(16, *local_version_index->m_AssetCount);
 
-	LONGTAIL_FREE(local_version_index);
-	LONGTAIL_FREE(local_paths);
+    LONGTAIL_FREE(local_version_index);
+    LONGTAIL_FREE(local_paths);
 }
 
 TEST(Longtail, MergeContentIndex)
@@ -1438,9 +1438,9 @@ TEST(Longtail, VersionDiff)
         "chunks",
         "old"));
 
-	LONGTAIL_FREE(content_index);
+    LONGTAIL_FREE(content_index);
 
-	LONGTAIL_FREE(version_diff);
+    LONGTAIL_FREE(version_diff);
 
     LONGTAIL_FREE(new_vindex);
     LONGTAIL_FREE(new_version_paths);
@@ -1464,7 +1464,7 @@ TEST(Longtail, VersionDiff)
         }
         storage.m_StorageAPI.CloseWrite(&storage.m_StorageAPI, r);
         r = 0;
-		LONGTAIL_FREE(test_data);
+        LONGTAIL_FREE(test_data);
         test_data = 0;
     }
 
@@ -1599,7 +1599,7 @@ TEST(Longtail, FullScale)
             ASSERT_EQ((int)i, (int)buffer[j]);
         }
 
-		LONGTAIL_FREE(buffer);
+        LONGTAIL_FREE(buffer);
         local_storage.m_StorageAPI.CloseRead(&local_storage.m_StorageAPI, r);
     }
 
@@ -1673,7 +1673,7 @@ TEST(Longtail, WriteVersion)
         version1_paths,
         16);
     ASSERT_NE((VersionIndex*)0, vindex);
-	LONGTAIL_FREE(version1_paths);
+    LONGTAIL_FREE(version1_paths);
     version1_paths = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
@@ -1689,7 +1689,7 @@ TEST(Longtail, WriteVersion)
 
     StoreCompressionAPI store_compression;
     struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-//    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
+    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
     ASSERT_NE(0, WriteContent(
         storage_api,
         storage_api,
@@ -1728,13 +1728,13 @@ TEST(Longtail, WriteVersion)
         }
         storage_api->CloseWrite(storage_api, r);
         r = 0;
-		LONGTAIL_FREE(test_data);
+        LONGTAIL_FREE(test_data);
         test_data = 0;
     }
 
-	LONGTAIL_FREE(vindex);
+    LONGTAIL_FREE(vindex);
     vindex = 0;
-	LONGTAIL_FREE(cindex);
+    LONGTAIL_FREE(cindex);
     cindex = 0;
 }
 
@@ -1806,7 +1806,7 @@ void Bench()
             version_source_folder,
             version_source_paths,
             16384);
-		LONGTAIL_FREE(version_source_paths);
+        LONGTAIL_FREE(version_source_paths);
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
 
@@ -1875,8 +1875,8 @@ void Bench()
             ASSERT_NE(0, storage_api.m_StorageAPI.Read(&storage_api.m_StorageAPI, s, 0, block_file_size, buffer));
             ASSERT_NE(0, storage_api.m_StorageAPI.Write(&storage_api.m_StorageAPI, t, 0, block_file_size, buffer));
 
-			LONGTAIL_FREE(buffer);
-			buffer = 0,
+            LONGTAIL_FREE(buffer);
+            buffer = 0,
 
             storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, s);
             storage_api.m_StorageAPI.CloseWrite(&storage_api.m_StorageAPI, t);
@@ -1884,9 +1884,9 @@ void Bench()
 
         ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);
         ASSERT_NE((ContentIndex*)0, merged_content_index);
-		LONGTAIL_FREE(missing_content_index);
+        LONGTAIL_FREE(missing_content_index);
         missing_content_index = 0;
-		LONGTAIL_FREE(full_content_index);
+        LONGTAIL_FREE(full_content_index);
         full_content_index = merged_content_index;
         merged_content_index = 0;
 
@@ -1909,10 +1909,10 @@ void Bench()
 
     for (uint32_t i = 0; i < VERSION_COUNT; ++i)
     {
-		LONGTAIL_FREE(version_indexes[i]);
+        LONGTAIL_FREE(version_indexes[i]);
     }
 
-	LONGTAIL_FREE(full_content_index);
+    LONGTAIL_FREE(full_content_index);
 
     #undef HOME
 }
@@ -1964,7 +1964,7 @@ void LifelikeTest()
         local_path_1_paths,
         16384);
     WriteVersionIndex(&storage_api.m_StorageAPI, version1, version_index_path_1);
-	LONGTAIL_FREE(local_path_1_paths);
+    LONGTAIL_FREE(local_path_1_paths);
     printf("%u assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     printf("Creating local content index...\n");
@@ -2022,7 +2022,7 @@ void LifelikeTest()
         local_path_2,
         local_path_2_paths,
         16384);
-	LONGTAIL_FREE(local_path_2_paths);
+    LONGTAIL_FREE(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(&storage_api.m_StorageAPI, version2, version_index_path_2));
     printf("%u assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
@@ -2116,9 +2116,9 @@ void LifelikeTest()
 
     ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
     ASSERT_NE((ContentIndex*)0, merged_local_content);
-	LONGTAIL_FREE(missing_content);
+    LONGTAIL_FREE(missing_content);
     missing_content = 0;
-	LONGTAIL_FREE(local_content_index);
+    LONGTAIL_FREE(local_content_index);
     local_content_index = 0;
 
     printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
@@ -2142,10 +2142,10 @@ void LifelikeTest()
 //    LONGTAIL_FREE(remote_content_index);
 //    remote_content_index = 0;
 
-	LONGTAIL_FREE(merged_local_content);
+    LONGTAIL_FREE(merged_local_content);
     merged_local_content = 0;
 
-	LONGTAIL_FREE(version1);
+    LONGTAIL_FREE(version1);
     version1 = 0;
 
     return;
@@ -2255,7 +2255,7 @@ TEST(Longtail, ChunkerLargeFile)
     ASSERT_EQ((const uint8_t*)0, r.buf);
     ASSERT_EQ(0, r.len);
 
-	LONGTAIL_FREE(chunker);
+    LONGTAIL_FREE(chunker);
     chunker = 0;
 
     fclose(large_file);
