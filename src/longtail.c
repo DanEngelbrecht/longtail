@@ -2303,6 +2303,7 @@ void WriteAssetsFromBlock(void* context)
     if (!block_data)
     {
         LONGTAIL_LOG("WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 "\n", block_hash)
+        return;
     }
 
     for (uint32_t i = 0; i < asset_count; ++i)
@@ -2554,13 +2555,13 @@ int WriteAssets(
 
     struct WriteAssetsFromBlockJob* block_jobs = (struct WriteAssetsFromBlockJob*)LONGTAIL_MALLOC(sizeof(struct WriteAssetsFromBlockJob) * awl->block_job_count);
     uint32_t b = 0;
-    uint32_t j = 0;
+    uint32_t block_job_count = 0;
     while (b < awl->block_job_count)
     {
         uint32_t asset_index = awl->block_job_asset_indexes[b];
         TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
         uint64_t block_index = hmget(cl->chunk_hash_to_block_index, first_chunk_hash);
-        struct WriteAssetsFromBlockJob* job = &block_jobs[j++];
+        struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
         job->m_ContentStorageAPI = content_storage_api;
         job->m_VersionStorageAPI = version_storage_api;
         job->m_CompressionAPI = compression_api;
@@ -2621,12 +2622,12 @@ int WriteAssets(
     job_api->WaitForAllJobs(job_api);
 
     int success = 1;
-    for (uint32_t b = 0; b < awl->block_job_count; ++b)
+    for (uint32_t b = 0; b < block_job_count; ++b)
     {
         struct WriteAssetsFromBlockJob* job = &block_jobs[b];
         if (!job->m_Success)
         {
-            LONGTAIL_LOG("WriteAssets: Failed to write content from `%s` to folder `%s`\n", content_path, version_path)
+            LONGTAIL_LOG("WriteAssets: Failed to write single block assets content from `%s` to folder `%s`\n", content_path, version_path)
             success = 0;
         }
     }
@@ -2635,7 +2636,7 @@ int WriteAssets(
         struct WriteAssetFromBlocksJob* job = &asset_jobs[a];
         if (!job->m_Success)
         {
-            LONGTAIL_LOG("WriteAssets: Failed to write content from `%s` to folder `%s`\n", content_path, version_path)
+            LONGTAIL_LOG("WriteAssets: Failed to write multi block assets content from `%s` to folder `%s`\n", content_path, version_path)
             success = 0;
         }
     }
