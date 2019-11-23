@@ -292,6 +292,14 @@ struct VersionDiff
     uint32_t* m_TargetModifiedAssetIndexes;
 };
 
+int ValidateContent(
+    const struct ContentIndex* content_index,
+    const struct VersionIndex* version_index);
+
+int ValidateVersion(
+    const struct ContentIndex* content_index,
+    const struct VersionIndex* version_index);
+
 struct Paths* MakePaths(
     uint32_t path_count,
     const char* const* path_names);
