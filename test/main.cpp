@@ -12,7 +12,7 @@
 void TestAssert(const char* expression, const char* file, int line)
 {
     printf("%s(%d): Assert failed `%s`\n", file, line, expression);
-    abort();
+    exit(-1);
 }
 
 int main(int argc, char** argv)

@@ -1,4 +1,4 @@
-/* stb_ds.h - v0.62 - public domain data structures - Sean Barrett 2019
+/* stb_ds.h - v0.62b - public domain data structures - Sean Barrett 2019
   
    This is a single-header-file library that provides easy-to-use
    dynamic arrays and hash tables for C (also works in C++).
@@ -368,9 +368,13 @@ CREDITS
 #define hmput       stbds_hmput
 #define hmputs      stbds_hmputs
 #define hmget       stbds_hmget
+#define hmget_ts    stbds_hmget_ts
 #define hmgets      stbds_hmgets
 #define hmgetp      stbds_hmgetp
+#define hmgetp_ts   stbds_hmgetp_ts
+#define hmgetp_null stbds_hmgetp_null
 #define hmgeti      stbds_hmgeti
+#define hmgeti_ts   stbds_hmgeti_ts
 #define hmdel       stbds_hmdel
 #define hmlen       stbds_hmlen
 #define hmlenu      stbds_hmlenu
@@ -383,6 +387,7 @@ CREDITS
 #define shget       stbds_shget
 #define shgets      stbds_shgets
 #define shgetp      stbds_shgetp
+#define shgetp_null stbds_shgetp_null
 #define shgeti      stbds_shgeti
 #define shdel       stbds_shdel
 #define shlen       stbds_shlen
@@ -433,6 +438,7 @@ extern void stbds_unit_tests(void);
 extern void * stbds_arrgrowf(void *a, size_t elemsize, size_t addlen, size_t min_cap);
 extern void   stbds_hmfree_func(void *p, size_t elemsize, size_t keyoff);
 extern void * stbds_hmget_key(void *a, size_t elemsize, void *key, size_t keysize, int mode);
+extern void * stbds_hmget_key_ts(void *a, size_t elemsize, void *key, size_t keysize, ptrdiff_t *temp, int mode);
 extern void * stbds_hmput_default(void *a, size_t elemsize);
 extern void * stbds_hmput_key(void *a, size_t elemsize, void *key, size_t keysize, int mode);
 extern void * stbds_hmdel_key(void *a, size_t elemsize, void *key, size_t keysize, size_t keyoffset, int mode);
@@ -506,8 +512,15 @@ extern void * stbds_shmode_func(size_t elemsize, int mode);
     ((t) = stbds_hmget_key_wrapper((t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, STBDS_HM_BINARY), \
       stbds_temp((t)-1))
 
+#define stbds_hmgeti_ts(t,k,temp) \
+    ((t) = stbds_hmget_key_ts_wrapper((t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, &(temp), STBDS_HM_BINARY), \
+      (temp))
+
 #define stbds_hmgetp(t, k) \
     ((void) stbds_hmgeti(t,k), &(t)[stbds_temp((t)-1)])
+
+#define stbds_hmgetp_ts(t, k, temp) \
+    ((void) stbds_hmgeti_ts(t,k,temp), &(t)[temp])
 
 #define stbds_hmdel(t,k) \
     (((t) = stbds_hmdel_key_wrapper((t),sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, STBDS_OFFSETOF((t),key), STBDS_HM_BINARY)),(t)?stbds_temp((t)-1):0)
@@ -521,10 +534,12 @@ extern void * stbds_shmode_func(size_t elemsize, int mode);
 #define stbds_hmfree(p)        \
     ((void) ((p) != NULL ? stbds_hmfree_func((p)-1,sizeof*(p),STBDS_OFFSETOF((p),key)),0 : 0),(p)=NULL)
 
-#define stbds_hmgets(t, k) (*stbds_hmgetp(t,k))
-#define stbds_hmget(t, k)  (stbds_hmgetp(t,k)->value)
-#define stbds_hmlen(t)     ((t) ? (ptrdiff_t) stbds_header((t)-1)->length-1 : 0)
-#define stbds_hmlenu(t)    ((t) ?             stbds_header((t)-1)->length-1 : 0)
+#define stbds_hmgets(t, k)    (*stbds_hmgetp(t,k))
+#define stbds_hmget(t, k)     (stbds_hmgetp(t,k)->value)
+#define stbds_hmget_ts(t, k, temp)  (stbds_hmgetp_ts(t,k,temp)->value)
+#define stbds_hmlen(t)        ((t) ? (ptrdiff_t) stbds_header((t)-1)->length-1 : 0)
+#define stbds_hmlenu(t)       ((t) ?             stbds_header((t)-1)->length-1 : 0)
+#define stbds_hmgetp_null(t,k)  (stbds_hmgeti(t,k) == -1 ? NULL : &(t)[stbds_temp(t)-1])
 
 #define stbds_shput(t, k, v) \
     ((t) = stbds_hmput_key_wrapper((t), sizeof *(t), (void*) (k), sizeof (t)->key, STBDS_HM_STRING),   \
@@ -557,6 +572,7 @@ extern void * stbds_shmode_func(size_t elemsize, int mode);
 
 #define stbds_shgets(t, k) (*stbds_shgetp(t,k))
 #define stbds_shget(t, k)  (stbds_shgetp(t,k)->value)
+#define stbds_shgetp_null(t,k)  (stbds_shgeti(t,k) == -1 ? NULL : &(t)[stbds_temp(t)-1])
 #define stbds_shlen        stbds_hmlen
 
 typedef struct
@@ -600,6 +616,9 @@ template<class T> static T * stbds_arrgrowf_wrapper(T *a, size_t elemsize, size_
 template<class T> static T * stbds_hmget_key_wrapper(T *a, size_t elemsize, void *key, size_t keysize, int mode) {
   return (T*)stbds_hmget_key((void*)a, elemsize, key, keysize, mode);
 }
+template<class T> static T * stbds_hmget_key_ts_wrapper(T *a, size_t elemsize, void *key, size_t keysize, ptrdiff_t *temp, int mode) {
+  return (T*)stbds_hmget_key((void*)a, elemsize, key, keysize, temp, mode);
+}
 template<class T> static T * stbds_hmput_default_wrapper(T *a, size_t elemsize) {
   return (T*)stbds_hmput_default((void *)a, elemsize);
 }
@@ -615,6 +634,7 @@ template<class T> static T * stbds_shmode_func_wrapper(T *, size_t elemsize, int
 #else
 #define stbds_arrgrowf_wrapper            stbds_arrgrowf
 #define stbds_hmget_key_wrapper           stbds_hmget_key
+#define stbds_hmget_key_ts_wrapper        stbds_hmget_key_ts
 #define stbds_hmput_default_wrapper       stbds_hmput_default
 #define stbds_hmput_key_wrapper           stbds_hmput_key
 #define stbds_hmdel_key_wrapper           stbds_hmdel_key
@@ -1151,14 +1171,14 @@ static ptrdiff_t stbds_hm_find_slot(void *a, size_t elemsize, void *key, size_t 
   return -1;
 }
 
-void * stbds_hmget_key(void *a, size_t elemsize, void *key, size_t keysize, int mode)
+void * stbds_hmget_key_ts(void *a, size_t elemsize, void *key, size_t keysize, ptrdiff_t *temp, int mode)
 {
   if (a == NULL) {
     // make it non-empty so we can return a temp
     a = stbds_arrgrowf(0, elemsize, 0, 1);
     stbds_header(a)->length += 1;
     memset(a, 0, elemsize);
-    stbds_temp(a) = STBDS_INDEX_EMPTY;
+    *temp = STBDS_INDEX_EMPTY;
     // adjust a to point after the default element
     return STBDS_ARR_TO_HASH(a,elemsize);
   } else {
@@ -1167,18 +1187,26 @@ void * stbds_hmget_key(void *a, size_t elemsize, void *key, size_t keysize, int 
     // adjust a to point to the default element
     table = (stbds_hash_index *) stbds_header(raw_a)->hash_table;
     if (table == 0) {
-      stbds_temp(raw_a) = -1;
+      *temp = -1;
     } else {
       ptrdiff_t slot = stbds_hm_find_slot(a, elemsize, key, keysize, mode);
       if (slot < 0) {
-        stbds_temp(raw_a) = STBDS_INDEX_EMPTY;
+        *temp = STBDS_INDEX_EMPTY;
       } else {
         stbds_hash_bucket *b = &table->storage[slot >> STBDS_BUCKET_SHIFT];
-        stbds_temp(raw_a) = b->index[slot & STBDS_BUCKET_MASK];
+        *temp = b->index[slot & STBDS_BUCKET_MASK];
       }
     }
     return a;
   }
+}
+
+void * stbds_hmget_key(void *a, size_t elemsize, void *key, size_t keysize, int mode)
+{
+  ptrdiff_t temp;
+  void *p = stbds_hmget_key_ts(a, elemsize, key, keysize, &temp, mode);
+  stbds_temp(STBDS_HASH_TO_ARR(p,elemsize)) = temp;
+  return p;
 }
 
 void * stbds_hmput_default(void *a, size_t elemsize)
@@ -1492,6 +1520,7 @@ void stbds_strreset(stbds_string_arena *a)
 #endif
 
 typedef struct { int key,b,c,d; } stbds_struct;
+typedef struct { int key[2],b,c,d; } stbds_struct2;
 
 static char buffer[256];
 char *strkey(int n)
@@ -1516,7 +1545,10 @@ void stbds_unit_tests(void)
   struct { char *key;        int value; } *strmap = NULL;
   struct { stbds_struct key; int value; } *map    = NULL;
   stbds_struct                            *map2   = NULL;
+  stbds_struct2                           *map3   = NULL;
   stbds_string_arena                       sa     = { 0 };
+  int key3[2] = { 1,2 };
+  ptrdiff_t temp;
 
   int i,j;
 
@@ -1552,9 +1584,12 @@ void stbds_unit_tests(void)
   STBDS_ASSERT(hmget (intmap, i) == -2);
   for (i=0; i < testsize; i+=2)
     hmput(intmap, i, i*5);
-  for (i=0; i < testsize; i+=1)
+  for (i=0; i < testsize; i+=1) {
     if (i & 1) STBDS_ASSERT(hmget(intmap, i) == -2 );
     else       STBDS_ASSERT(hmget(intmap, i) == i*5);
+    if (i & 1) STBDS_ASSERT(hmget_ts(intmap, i, temp) == -2 );
+    else       STBDS_ASSERT(hmget_ts(intmap, i, temp) == i*5);
+  }
   for (i=0; i < testsize; i+=2)
     hmput(intmap, i, i*3);
   for (i=0; i < testsize; i+=1)
@@ -1639,7 +1674,9 @@ void stbds_unit_tests(void)
     stbds_struct t = { i,i*2,i*3+1,i*4 };
     if (i & 1) STBDS_ASSERT(hmget(map, s) == 0);
     else       STBDS_ASSERT(hmget(map, s) == i*5);
-    STBDS_ASSERT(hmget(map, t) == 0);
+    if (i & 1) STBDS_ASSERT(hmget_ts(map, s, temp) == 0);
+    else       STBDS_ASSERT(hmget_ts(map, s, temp) == i*5);
+    //STBDS_ASSERT(hmget(map, t.key) == 0);
   }
 
   for (i=0; i < testsize; i += 2) {
@@ -1653,9 +1690,21 @@ void stbds_unit_tests(void)
     stbds_struct t = { i,i*2,i*3+1,i*4 };
     if (i & 1) STBDS_ASSERT(hmgets(map2, s.key).d == 0);
     else       STBDS_ASSERT(hmgets(map2, s.key).d == i*4);
-    STBDS_ASSERT(hmget(map, t) == 0);
+    //STBDS_ASSERT(hmgetp(map2, t.key) == 0);
   }
   hmfree(map2);
+
+  for (i=0; i < testsize; i += 2) {
+    stbds_struct2 s = { { i,i*2 }, i*3,i*4, i*5 };
+    hmputs(map3, s);
+  }
+  for (i=0; i < testsize; i += 1) {
+    stbds_struct2 s = { { i,i*2}, i*3, i*4, i*5 };
+    stbds_struct2 t = { { i,i*2}, i*3+1, i*4, i*5 };
+    if (i & 1) STBDS_ASSERT(hmgets(map3, s.key).d == 0);
+    else       STBDS_ASSERT(hmgets(map3, s.key).d == i*5);
+    //STBDS_ASSERT(hmgetp(map3, t.key) == 0);
+  }
 #endif
 }
 #endif

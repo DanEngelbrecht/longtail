@@ -503,7 +503,7 @@ int Cmd_CreateContent(
     }
 
     Progress progress;
-    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(storage_api, version, vindex);
+    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
     if (!asset_part_lookup)
     {
         printf("Failed to create source lookup table for version `%s`\n", version);
@@ -1081,6 +1081,8 @@ int main(int argc, char** argv)
 
 		free((char*)test_version);
         free((char*)test_base_path);
+
+        printf("********* SUCCESS *********\n");
         return 0;
     }
 
