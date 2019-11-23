@@ -24,9 +24,17 @@ echo Merging the new chunks from %2/local/%3.lci into %2/chunks.lci
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo Updating %2/remote/incremental
-%1 --update-version "%2/remote/incremental" --content "%2/chunks" --content-index "%2/chunks.lci" --target-version-index "%2/%3.lvi"
+IF NOT EXIST "%2\remote\incremental.lvi" (
+    echo Creating index for %2/remote/incremental
+    %1 --create-version-index "%2\remote\incremental.lvi" --version "%2\remote\incremental"
+)
+
+%1 --update-version "%2/remote/incremental" --version-index "%2/remote/incremental.lvi" --content "%2/chunks" --content-index "%2/chunks.lci" --target-version-index "%2/%3.lvi"
 if %errorlevel% neq 0 exit /b %errorlevel%
 
+echo Updating index "%2/remote/incremental.lvi" from "%2/%3.lvi"
+copy "%2/%3.lvi" "%2/remote/incremental.lvi"
+
 echo Creating %2/remote/%3
-%1 --create-version "%2/remote/%3" --version-index "%2/%3.lvi" --content "%2/chunks" --content-index "%2/chunks.lci" --version "%2/remote/%3"
+rem %1 --create-version "%2/remote/%3" --version-index "%2/%3.lvi" --content "%2/chunks" --content-index "%2/chunks.lci" --version "%2/remote/%3"
 if %errorlevel% neq 0 exit /b %errorlevel%
