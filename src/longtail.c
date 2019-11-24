@@ -397,6 +397,7 @@ struct FileInfos* GetFilesRecursively(struct StorageAPI* storage_api, const char
     struct Paths* paths = CreatePaths(default_path_count, default_path_data_size);
     struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths, 0};
     paths = 0;
+    arrsetcap(context.m_FileSizes, 4096);
 
     if(!RecurseTree(storage_api, root_path, AddFile, &context))
     {
@@ -806,8 +807,21 @@ int ChunkAssets(
         LONGTAIL_LOG("ChunkAssets: Failed to reserve %u jobs for folder `%s`\n", (uint32_t)*paths->m_PathCount, root_path)
         return 0;
     }
+
+    const int linear_chunking = 0;
+    uint64_t min_chunk_size = linear_chunking ? max_chunk_size : (max_chunk_size / 8);
+    uint64_t max_chunk_count = 0;
+    for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
+    {
+        max_chunk_count += content_sizes[asset_index] == 0 ? 0 : 1 + (content_sizes[asset_index] / min_chunk_size);
+    }
+
+    TLongtail_Hash* hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * max_chunk_count);
+    uint32_t* sizes = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * max_chunk_count);
+
     struct HashJob* hash_jobs = (struct HashJob*)LONGTAIL_MALLOC(sizeof(struct HashJob) * asset_count);
 
+    uint64_t chunks_offset = 0;
     uint64_t assets_left = asset_count;
     uint64_t offset = 0;
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
@@ -822,17 +836,15 @@ int ChunkAssets(
         job->m_ContentHash = &content_hashes[asset_index];
         job->m_ContentSize = content_sizes[asset_index];
         job->m_AssetChunkCount = &asset_chunk_counts[asset_index];
-        job->m_ChunkHashes = 0;
-        job->m_ChunkSizes = 0;
+        job->m_ChunkHashes = &hashes[chunks_offset];
+        job->m_ChunkSizes = &sizes[chunks_offset];
         job->m_MaxChunkSize = max_chunk_size;
 
-        JobAPI_JobFunc func = DynamicChunking;
-//        if (IsCompressedFileType(job->m_Path))
-//        {
-//            func = LinearChunking;
-//        }
+        JobAPI_JobFunc func = linear_chunking ? LinearChunking : DynamicChunking;
 
         job_api->SubmitJobs(job_api, 1, &func, &ctx);
+
+        chunks_offset += content_sizes[asset_index] == 0 ? 0 : 1 + (content_sizes[asset_index] / min_chunk_size);
     }
 
     job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
@@ -877,13 +889,11 @@ int ChunkAssets(
         *chunk_hashes = 0;
     }
 
-    for (uint32_t i = 0; i < asset_count; ++i)
-    {
-        LONGTAIL_FREE(hash_jobs[i].m_ChunkHashes);
-        hash_jobs[i].m_ChunkHashes = 0;
-        LONGTAIL_FREE(hash_jobs[i].m_ChunkSizes);
-        hash_jobs[i].m_ChunkSizes = 0;
-    }
+    LONGTAIL_FREE(hashes);
+    hashes = 0;
+
+    LONGTAIL_FREE(sizes);
+    sizes = 0;
 
     LONGTAIL_FREE(hash_jobs);
     hash_jobs = 0;
