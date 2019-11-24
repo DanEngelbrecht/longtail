@@ -201,7 +201,8 @@ struct InMemStorageAPI
             FindNext,
             CloseFind,
             GetFileName,
-            GetDirectoryName
+            GetDirectoryName,
+            GetEntrySize
             }
     {
         uint32_t hash_size = jc::HashTable<TLongtail_Hash, PathEntry*>::CalcSize(65536);
@@ -574,6 +575,21 @@ struct InMemStorageAPI
         }
         return path_entry->m_FileName;
     }
+
+    static uint64_t GetEntrySize(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+    {
+        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
+        PathEntry* path_entry = *(*it_ptr).GetValue();
+        if (path_entry == 0)
+        {
+            return 0;
+        }
+        if (path_entry->m_Content == 0)
+        {
+            return 0;
+        }
+        return GetSize_TContent(path_entry->m_Content);
+    }
 };
 
 
@@ -888,8 +904,8 @@ TEST(Longtail, ContentIndexSerialization)
     SingleThreadedJobAPI job_api;
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/five_items", 5));
-    Paths* version1_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "source/version1");
-    ASSERT_NE((Paths*)0, version1_paths);
+    FileInfos* version1_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "source/version1");
+    ASSERT_NE((FileInfos*)0, version1_paths);
     VersionIndex* vindex = CreateVersionIndex(
         &local_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -897,8 +913,10 @@ TEST(Longtail, ContentIndexSerialization)
         0,
         0,
         "source/version1",
-        version1_paths,
+        &version1_paths->m_Paths,
+        version1_paths->m_FileSizes,
         16384);
+    // TODO: Memory corruption!
     ASSERT_NE((VersionIndex*)0, vindex);
     LONGTAIL_FREE(version1_paths);
 
@@ -975,8 +993,8 @@ TEST(Longtail, WriteContent)
         w = 0;
     }
 
-    Paths* version1_paths = GetFilesRecursively(&source_storage.m_StorageAPI, "local");
-    ASSERT_NE((Paths*)0, version1_paths);
+    FileInfos* version1_paths = GetFilesRecursively(&source_storage.m_StorageAPI, "local");
+    ASSERT_NE((FileInfos*)0, version1_paths);
     VersionIndex* vindex = CreateVersionIndex(
         &source_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -984,7 +1002,8 @@ TEST(Longtail, WriteContent)
         0,
         0,
         "local",
-        version1_paths,
+        &version1_paths->m_Paths,
+        version1_paths->m_FileSizes,
         16);
     ASSERT_NE((VersionIndex*)0, vindex);
 
@@ -1063,7 +1082,7 @@ TEST(Longtail, TestVeryLargeFile)
     MeowHashAPI hash_api;
     SingleThreadedJobAPI job_api;
 
-    Paths* paths = GetFilesRecursively(&storage_api.m_StorageAPI, assets_path);
+    FileInfos* paths = GetFilesRecursively(&storage_api.m_StorageAPI, assets_path);
     VersionIndex* version_index = CreateVersionIndex(
         &storage_api.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -1071,7 +1090,8 @@ TEST(Longtail, TestVeryLargeFile)
         0,
         0,
         assets_path,
-        paths,
+        &paths->m_Paths,
+        paths->m_FileSizes,
         32758u);
 
     LONGTAIL_FREE(version_index);
@@ -1198,8 +1218,8 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));
     ASSERT_EQ(1, MakePath(&local_storage.m_StorageAPI, "deep/folders/with/nothing/in/menoexists.nop"));
 
-    Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
-    ASSERT_NE((Paths*)0, local_paths);
+    FileInfos* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
+    ASSERT_NE((FileInfos*)0, local_paths);
 
     VersionIndex* local_version_index = CreateVersionIndex(
         &local_storage.m_StorageAPI,
@@ -1208,7 +1228,8 @@ TEST(Longtail, VersionIndexDirectories)
         0,
         0,
         "",
-        local_paths,
+        &local_paths->m_Paths,
+        local_paths->m_FileSizes,
         16384);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(16, *local_version_index->m_AssetCount);
@@ -1382,8 +1403,8 @@ TEST(Longtail, VersionDiff)
         w = 0;
     }
 
-    Paths* old_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "old");
-    ASSERT_NE((Paths*)0, old_version_paths);
+    FileInfos* old_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "old");
+    ASSERT_NE((FileInfos*)0, old_version_paths);
     VersionIndex* old_vindex = CreateVersionIndex(
         &storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -1391,12 +1412,13 @@ TEST(Longtail, VersionDiff)
         0,
         0,
         "old",
-        old_version_paths,
+        &old_version_paths->m_Paths,
+        old_version_paths->m_FileSizes,
         16);
     ASSERT_NE((VersionIndex*)0, old_vindex);
 
-    Paths* new_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "new");
-    ASSERT_NE((Paths*)0, new_version_paths);
+    FileInfos* new_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "new");
+    ASSERT_NE((FileInfos*)0, new_version_paths);
     VersionIndex* new_vindex = CreateVersionIndex(
         &storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -1404,7 +1426,8 @@ TEST(Longtail, VersionDiff)
         0,
         0,
         "new",
-        new_version_paths,
+        &new_version_paths->m_Paths,
+        new_version_paths->m_FileSizes,
         16);
     ASSERT_NE((VersionIndex*)0, new_vindex);
 
@@ -1502,8 +1525,8 @@ TEST(Longtail, FullScale)
     InMemStorageAPI remote_storage;
     CreateFakeContent(&remote_storage.m_StorageAPI, 0, 10);
 
-    Paths* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
-    ASSERT_NE((Paths*)0, local_paths);
+    FileInfos* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
+    ASSERT_NE((FileInfos*)0, local_paths);
 
     VersionIndex* local_version_index = CreateVersionIndex(
         &local_storage.m_StorageAPI,
@@ -1512,13 +1535,14 @@ TEST(Longtail, FullScale)
         0,
         0,
         "",
-        local_paths,
+        &local_paths->m_Paths,
+        local_paths->m_FileSizes,
         16384);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(5, *local_version_index->m_AssetCount);
 
-    Paths* remote_paths = GetFilesRecursively(&remote_storage.m_StorageAPI, "");
-    ASSERT_NE((Paths*)0, local_paths);
+    FileInfos* remote_paths = GetFilesRecursively(&remote_storage.m_StorageAPI, "");
+    ASSERT_NE((FileInfos*)0, local_paths);
     VersionIndex* remote_version_index = CreateVersionIndex(
         &remote_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -1526,7 +1550,8 @@ TEST(Longtail, FullScale)
         0,
         0,
         "",
-        remote_paths,
+        &remote_paths->m_Paths,
+        remote_paths->m_FileSizes,
         16384);
     ASSERT_NE((VersionIndex*)0, remote_version_index);
     ASSERT_EQ(10, *remote_version_index->m_AssetCount);
@@ -1695,8 +1720,8 @@ TEST(Longtail, WriteVersion)
     }
 
     MeowHashAPI hash_api;
-    Paths* version1_paths = GetFilesRecursively(storage_api, "local");
-    ASSERT_NE((Paths*)0, version1_paths);
+    FileInfos* version1_paths = GetFilesRecursively(storage_api, "local");
+    ASSERT_NE((FileInfos*)0, version1_paths);
     VersionIndex* vindex = CreateVersionIndex(
         storage_api,
         &hash_api.m_HashAPI,
@@ -1704,7 +1729,8 @@ TEST(Longtail, WriteVersion)
         0,
         0,
         "local",
-        version1_paths,
+        &version1_paths->m_Paths,
+        version1_paths->m_FileSizes,
         16);
     ASSERT_NE((VersionIndex*)0, vindex);
     LONGTAIL_FREE(version1_paths);
@@ -1835,8 +1861,8 @@ void Bench()
         char version_source_folder[256];
         sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
         printf("Indexing `%s`\n", version_source_folder);
-        Paths* version_source_paths = GetFilesRecursively(&storage_api.m_StorageAPI, version_source_folder);
-        ASSERT_NE((Paths*)0, version_source_paths);
+        FileInfos* version_source_paths = GetFilesRecursively(&storage_api.m_StorageAPI, version_source_folder);
+        ASSERT_NE((FileInfos*)0, version_source_paths);
         VersionIndex* version_index = CreateVersionIndex(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
@@ -1844,7 +1870,8 @@ void Bench()
             0,
             0,
             version_source_folder,
-            version_source_paths,
+            &version_source_paths->m_Paths,
+            version_source_paths->m_FileSizes,
             16384);
         LONGTAIL_FREE(version_source_paths);
         ASSERT_NE((VersionIndex*)0, version_index);
@@ -1998,8 +2025,8 @@ void LifelikeTest()
     LizardCompressionAPI compression_api;
     BikeshedJobAPI job_api;
 
-    Paths* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
-    ASSERT_NE((Paths*)0, local_path_1_paths);
+    FileInfos* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
+    ASSERT_NE((FileInfos*)0, local_path_1_paths);
     VersionIndex* version1 = CreateVersionIndex(
         &storage_api.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -2007,7 +2034,8 @@ void LifelikeTest()
         0,
         0,
         local_path_1,
-        local_path_1_paths,
+        &local_path_1_paths->m_Paths,
+        local_path_1_paths->m_FileSizes,
         16384);
     WriteVersionIndex(&storage_api.m_StorageAPI, version1, version_index_path_1);
     LONGTAIL_FREE(local_path_1_paths);
@@ -2063,8 +2091,8 @@ void LifelikeTest()
     printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
-    Paths* local_path_2_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_2);
-    ASSERT_NE((Paths*)0, local_path_2_paths);
+    FileInfos* local_path_2_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_2);
+    ASSERT_NE((FileInfos*)0, local_path_2_paths);
     VersionIndex* version2 = CreateVersionIndex(
         &storage_api.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -2072,7 +2100,8 @@ void LifelikeTest()
         0,
         0,
         local_path_2,
-        local_path_2_paths,
+        &local_path_2_paths->m_Paths,
+        local_path_2_paths->m_FileSizes,
         16384);
     LONGTAIL_FREE(local_path_2_paths);
     ASSERT_NE((VersionIndex*)0, version2);

@@ -137,10 +137,10 @@ int Cmd_CreateVersionIndex(
     const char* filter,
     int target_chunk_size)
 {
-    Paths* version_paths = GetFilesRecursively(
+    struct FileInfos* file_infos = GetFilesRecursively(
         storage_api,
         version);
-    if (!version_paths)
+    if (!file_infos)
     {
         printf("Failed to scan folder `%s`\n", version);
         return 1;
@@ -154,10 +154,11 @@ int Cmd_CreateVersionIndex(
         Progress::ProgressFunc,
         &progress,
         version,
-        version_paths,
+        &file_infos->m_Paths,
+        file_infos->m_FileSizes,
         target_chunk_size);
-	LONGTAIL_FREE(version_paths);
-    version_paths = 0;
+    LONGTAIL_FREE(file_infos);
+    file_infos = 0;
     if (!vindex)
     {
         printf("Failed to create version index for `%s`\n", version);
@@ -169,7 +170,7 @@ int Cmd_CreateVersionIndex(
     VersionIndex* target_vindex = ReadVersionIndex(storage_api, create_version_index);
     if (!target_vindex)
     {
-		LONGTAIL_FREE(vindex);
+        LONGTAIL_FREE(vindex);
         vindex = 0;
         printf("Failed to read version index from `%s`\n", create_version_index);
         return 0;
@@ -179,13 +180,13 @@ int Cmd_CreateVersionIndex(
         vindex,
         target_vindex);
 
-	LONGTAIL_FREE(version_diff);
+    LONGTAIL_FREE(version_diff);
     version_diff = 0;
 
-	LONGTAIL_FREE(target_vindex);
+    LONGTAIL_FREE(target_vindex);
     target_vindex = 0;
 
-	LONGTAIL_FREE(vindex);
+    LONGTAIL_FREE(vindex);
     vindex = 0;
     if (!ok)
     {
@@ -249,15 +250,15 @@ int Cmd_MergeContentIndex(
     ContentIndex* cindex2 = ReadContentIndex(storage_api, merge_content_index);
     if (!cindex2)
     {
-		LONGTAIL_FREE(cindex1);
+        LONGTAIL_FREE(cindex1);
         cindex1 = 0;
         printf("Failed to read content index from `%s`\n", merge_content_index);
         return 0;
     }
     ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
-	LONGTAIL_FREE(cindex2);
+    LONGTAIL_FREE(cindex2);
     cindex2 = 0;
-	LONGTAIL_FREE(cindex1);
+    LONGTAIL_FREE(cindex1);
     cindex1 = 0;
 
     if (!cindex)
@@ -272,7 +273,7 @@ int Cmd_MergeContentIndex(
             cindex,
             create_content_index);
 
-	LONGTAIL_FREE(cindex);
+    LONGTAIL_FREE(cindex);
     cindex = 0;
 
     if (!ok)
@@ -308,10 +309,10 @@ int Cmd_CreateMissingContentIndex(
     }
     else
     {
-        Paths* version_paths = GetFilesRecursively(
+        struct FileInfos* file_infos = GetFilesRecursively(
             storage_api,
             version);
-        if (!version_paths)
+        if (!file_infos)
         {
             printf("Failed to scan folder `%s`\n", version);
             return 0;
@@ -324,10 +325,11 @@ int Cmd_CreateMissingContentIndex(
             Progress::ProgressFunc,
             &progress,
             version,
-            version_paths,
+            &file_infos->m_Paths,
+            file_infos->m_FileSizes,
             target_chunk_size);
-		LONGTAIL_FREE(version_paths);
-        version_paths = 0;
+        LONGTAIL_FREE(file_infos);
+        file_infos = 0;
         if (!vindex)
         {
             printf("Failed to create version index for version `%s`\n", version);
@@ -341,7 +343,7 @@ int Cmd_CreateMissingContentIndex(
         existing_cindex = ReadContentIndex(storage_api, content_index);
         if (!existing_cindex)
         {
-			LONGTAIL_FREE(vindex);
+            LONGTAIL_FREE(vindex);
             vindex = 0;
             printf("Failed to read content index from `%s`\n", content_index);
             return 0;
@@ -359,7 +361,7 @@ int Cmd_CreateMissingContentIndex(
             content);
         if (!existing_cindex)
         {
-			LONGTAIL_FREE(vindex);
+            LONGTAIL_FREE(vindex);
             vindex = 0;
             printf("Failed to read contents from `%s`\n", content);
             return 0;
@@ -383,9 +385,9 @@ int Cmd_CreateMissingContentIndex(
         target_block_size,
         max_chunks_per_block);
 
-	LONGTAIL_FREE(existing_cindex);
+    LONGTAIL_FREE(existing_cindex);
     existing_cindex = 0;
-	LONGTAIL_FREE(vindex);
+    LONGTAIL_FREE(vindex);
     vindex = 0;
     if (!cindex)
     {
@@ -399,7 +401,7 @@ int Cmd_CreateMissingContentIndex(
             cindex,
             create_content_index);
 
-	LONGTAIL_FREE(cindex);
+    LONGTAIL_FREE(cindex);
     cindex = 0;
 
     if (!ok)
@@ -435,10 +437,10 @@ int Cmd_CreateContent(
     }
     else
     {
-        Paths* version_paths = GetFilesRecursively(
+        struct FileInfos* file_infos = GetFilesRecursively(
             storage_api,
             version);
-        if (!version_paths)
+        if (!file_infos)
         {
             printf("Failed to scan folder `%s`\n", version);
             return 0;
@@ -451,10 +453,11 @@ int Cmd_CreateContent(
             Progress::ProgressFunc,
             &progress,
             version,
-            version_paths,
+            &file_infos->m_Paths,
+            file_infos->m_FileSizes,
             target_chunk_size);
-		LONGTAIL_FREE(version_paths);
-        version_paths = 0;
+        LONGTAIL_FREE(file_infos);
+        file_infos = 0;
         if (!vindex)
         {
             printf("Failed to create version index for version `%s`\n", version);
@@ -494,7 +497,7 @@ int Cmd_CreateContent(
         cindex,
         vindex))
     {
-		LONGTAIL_FREE(cindex);
+        LONGTAIL_FREE(cindex);
         cindex = 0;
         LONGTAIL_FREE(vindex);
         vindex = 0;
@@ -507,9 +510,9 @@ int Cmd_CreateContent(
     if (!asset_part_lookup)
     {
         printf("Failed to create source lookup table for version `%s`\n", version);
-		LONGTAIL_FREE(vindex);
+        LONGTAIL_FREE(vindex);
         vindex = 0;
-		LONGTAIL_FREE(cindex);
+        LONGTAIL_FREE(cindex);
         cindex = 0;
         return 0;
     }
@@ -527,9 +530,9 @@ int Cmd_CreateContent(
 
     FreeAssetPartLookup(asset_part_lookup);
     asset_part_lookup = 0;
-	LONGTAIL_FREE(vindex);
+    LONGTAIL_FREE(vindex);
     vindex = 0;
-	LONGTAIL_FREE(cindex);
+    LONGTAIL_FREE(cindex);
     cindex = 0;
 
     if (!ok)
@@ -553,7 +556,7 @@ int Cmd_ListMissingBlocks(
     ContentIndex* need_content_index = ReadContentIndex(storage_api, content_index);
     if (!need_content_index)
     {
-		LONGTAIL_FREE(have_content_index);
+        LONGTAIL_FREE(have_content_index);
         have_content_index = 0;
         return 0;
     }
@@ -597,9 +600,9 @@ int Cmd_ListMissingBlocks(
     {
         free(asset_hash_to_have_block_index_mem);
         asset_hash_to_have_block_index_mem = 0;
-		LONGTAIL_FREE(need_content_index);
+        LONGTAIL_FREE(need_content_index);
         need_content_index = 0;
-		LONGTAIL_FREE(have_content_index);
+        LONGTAIL_FREE(have_content_index);
         have_content_index = 0;
         return 0;
     }
@@ -643,7 +646,7 @@ int Cmd_CreateVersion(
         cindex = ReadContentIndex(storage_api, content_index);
         if (!cindex)
         {
-			LONGTAIL_FREE(vindex);
+            LONGTAIL_FREE(vindex);
             vindex = 0;
             printf("Failed to read content index from `%s`\n", content_index);
             return 0;
@@ -661,7 +664,7 @@ int Cmd_CreateVersion(
             content);
         if (!cindex)
         {
-			LONGTAIL_FREE(vindex);
+            LONGTAIL_FREE(vindex);
             vindex = 0;
             printf("Failed to create content index for `%s`\n", content);
             return 0;
@@ -692,9 +695,9 @@ int Cmd_CreateVersion(
         vindex,
         content,
         create_version);
-	LONGTAIL_FREE(vindex);
+    LONGTAIL_FREE(vindex);
     vindex = 0;
-	LONGTAIL_FREE(cindex);
+    LONGTAIL_FREE(cindex);
     cindex = 0;
     if (!ok)
     {
@@ -728,10 +731,10 @@ int Cmd_UpdateVersion(
     }
     else
     {
-        Paths* version_paths = GetFilesRecursively(
+        struct FileInfos* file_infos = GetFilesRecursively(
             storage_api,
             update_version);
-        if (!version_paths)
+        if (!file_infos)
         {
             printf("Failed to scan folder `%s`\n", update_version);
             return 0;
@@ -744,10 +747,11 @@ int Cmd_UpdateVersion(
             Progress::ProgressFunc,
             &progress,
             update_version,
-            version_paths,
+            &file_infos->m_Paths,
+            file_infos->m_FileSizes,
             target_chunk_size);
-		LONGTAIL_FREE(version_paths);
-        version_paths = 0;
+        LONGTAIL_FREE(file_infos);
+        file_infos = 0;
         if (!source_vindex)
         {
             printf("Failed to create version index for version `%s`\n", update_version);
@@ -758,7 +762,7 @@ int Cmd_UpdateVersion(
     VersionIndex* target_vindex = ReadVersionIndex(storage_api, target_version_index);
     if (!target_vindex)
     {
-		LONGTAIL_FREE(source_vindex);
+        LONGTAIL_FREE(source_vindex);
         source_vindex = 0;
         printf("Failed to read version index from `%s`\n", target_version_index);
         return 0;
@@ -770,9 +774,9 @@ int Cmd_UpdateVersion(
         cindex = ReadContentIndex(storage_api, content_index);
         if (!cindex)
         {
-			LONGTAIL_FREE(target_vindex);
+            LONGTAIL_FREE(target_vindex);
             target_vindex = 0;
-			LONGTAIL_FREE(source_vindex);
+            LONGTAIL_FREE(source_vindex);
             source_vindex = 0;
             printf("Failed to read content index from `%s`\n", content_index);
             return 0;
@@ -790,9 +794,9 @@ int Cmd_UpdateVersion(
             content);
         if (!cindex)
         {
-			LONGTAIL_FREE(target_vindex);
+            LONGTAIL_FREE(target_vindex);
             target_vindex = 0;
-			LONGTAIL_FREE(source_vindex);
+            LONGTAIL_FREE(source_vindex);
             source_vindex = 0;
             printf("Failed to create content index for `%s`\n", content);
             return 0;
@@ -807,8 +811,8 @@ int Cmd_UpdateVersion(
         target_vindex = 0;
         LONGTAIL_FREE(cindex);
         cindex = 0;
-		printf("Content `%s` does not fully encompass version `%s`\n", content, target_version_index);
-		return 0;
+        printf("Content `%s` does not fully encompass version `%s`\n", content, target_version_index);
+        return 0;
     }
 
     struct VersionDiff* version_diff = CreateVersionDiff(
@@ -816,11 +820,11 @@ int Cmd_UpdateVersion(
         target_vindex);
     if (!version_diff)
     {
-		LONGTAIL_FREE(cindex);
+        LONGTAIL_FREE(cindex);
         cindex = 0;
-		LONGTAIL_FREE(target_vindex);
+        LONGTAIL_FREE(target_vindex);
         target_vindex = 0;
-		LONGTAIL_FREE(source_vindex);
+        LONGTAIL_FREE(source_vindex);
         source_vindex = 0;
         printf("Failed to create version diff from `%s` to `%s`\n", version_index, target_version_index);
         return 0;
@@ -842,13 +846,13 @@ int Cmd_UpdateVersion(
         content,
         update_version);
 
-	LONGTAIL_FREE(cindex);
+    LONGTAIL_FREE(cindex);
     cindex = 0;
-	LONGTAIL_FREE(target_vindex);
+    LONGTAIL_FREE(target_vindex);
     target_vindex = 0;
-	LONGTAIL_FREE(source_vindex);
+    LONGTAIL_FREE(source_vindex);
     source_vindex = 0;
-	LONGTAIL_FREE(version_diff);
+    LONGTAIL_FREE(version_diff);
     version_diff = 0;
 
     if (!ok)
@@ -937,7 +941,7 @@ int main(int argc, char** argv)
         LizardCompressionAPI compression_api;
         BikeshedJobAPI job_api;
 
-		char create_content_index[512];
+        char create_content_index[512];
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         char content[512];
         sprintf(content, "%s/chunks", test_base_path);
@@ -1007,7 +1011,7 @@ int main(int argc, char** argv)
         {
             return 1;
         }
-		
+
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         sprintf(content_index, "%s/chunks.lci", test_base_path);
         char merge_content_index[512];
@@ -1021,14 +1025,14 @@ int main(int argc, char** argv)
             return 1;
         }
 
-		char create_version[512];
+        char create_version[512];
         sprintf(create_version, "%s/remote/%s", test_base_path, test_version);
-//		char content[512];
-		sprintf(content, "%s/chunks", test_base_path);
-//		char content_index[512];
-		sprintf(content_index, "%s/chunks.lci", test_base_path);
-//		char version_index[512];
-		sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
+//        char content[512];
+        sprintf(content, "%s/chunks", test_base_path);
+//        char content_index[512];
+        sprintf(content_index, "%s/chunks.lci", test_base_path);
+//        char version_index[512];
+        sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         if (!Cmd_CreateVersion(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
@@ -1042,7 +1046,7 @@ int main(int argc, char** argv)
             return 1;
         }
 
-		char update_version[512];
+        char update_version[512];
         sprintf(update_version, "%s/remote/incremental", test_base_path);
         sprintf(content, "%s/chunks", test_base_path);
         sprintf(content_index, "%s/chunks.lci", test_base_path);
@@ -1079,7 +1083,7 @@ int main(int argc, char** argv)
             return 1;
         }
 
-		free((char*)test_version);
+        free((char*)test_version);
         free((char*)test_base_path);
 
         printf("********* SUCCESS *********\n");

@@ -196,7 +196,7 @@ struct HashToIndexItem
     uint64_t value;
 };
 
-typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name);
+typedef void (*ProcessEntry)(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size);
 
 int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
@@ -225,7 +225,7 @@ int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, Process
                 const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator);
                 if (dir_name)
                 {
-                    entry_processor(context, asset_folder, dir_name);
+                    entry_processor(context, asset_folder, dir_name, 1, 0);
                     if (arrlen(folder_paths) == arrcap(folder_paths))
                     {
                         if (folder_index > 0)
@@ -243,7 +243,8 @@ int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, Process
                     const char* file_name = storage_api->GetFileName(storage_api, fs_iterator);
                     if (file_name)
                     {
-                        entry_processor(context, asset_folder, file_name);
+                        uint64_t size = storage_api->GetEntrySize(storage_api, fs_iterator);
+                        entry_processor(context, asset_folder, file_name, 0, size);
                     }
                 }
             }while(storage_api->FindNext(storage_api, fs_iterator));
@@ -347,9 +348,10 @@ struct AddFile_Context {
     uint32_t m_ReservedPathSize;
     uint32_t m_RootPathLength;
     struct Paths* m_Paths;
+    uint64_t* m_FileSizes;
 };
 
-void AddFile(void* context, const char* root_path, const char* file_name)
+void AddFile(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return);
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return);
@@ -358,7 +360,7 @@ void AddFile(void* context, const char* root_path, const char* file_name)
     struct StorageAPI* storage_api = paths_context->m_StorageAPI;
 
     char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
-    if (storage_api->IsDir(storage_api, full_path))
+    if (is_dir)
     {
         uint32_t path_length = (uint32_t)strlen(full_path);
         char* full_dir_path = (char*)malloc(path_length + 1 + 1);
@@ -378,11 +380,13 @@ void AddFile(void* context, const char* root_path, const char* file_name)
 
     paths_context->m_Paths = AppendPath(paths_context->m_Paths, s, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
 
+    arrpush(paths_context->m_FileSizes, size);
+
     free(full_path);
     full_path = 0;
 }
 
-struct Paths* GetFilesRecursively(struct StorageAPI* storage_api, const char* root_path)
+struct FileInfos* GetFilesRecursively(struct StorageAPI* storage_api, const char* root_path)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return 0);
@@ -391,7 +395,7 @@ struct Paths* GetFilesRecursively(struct StorageAPI* storage_api, const char* ro
     const uint32_t default_path_data_size = default_path_count * 128;
 
     struct Paths* paths = CreatePaths(default_path_count, default_path_data_size);
-    struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths};
+    struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths, 0};
     paths = 0;
 
     if(!RecurseTree(storage_api, root_path, AddFile, &context))
@@ -399,10 +403,33 @@ struct Paths* GetFilesRecursively(struct StorageAPI* storage_api, const char* ro
         LONGTAIL_LOG("GetFilesRecursively: Failed get files in folder `%s`\n", root_path)
         LONGTAIL_FREE(context.m_Paths);
         context.m_Paths = 0;
+        arrfree(context.m_FileSizes);
+        context.m_FileSizes = 0;
         return 0;
     }
 
-    return context.m_Paths;
+    uint32_t asset_count = *context.m_Paths->m_PathCount;
+    struct FileInfos* result = (struct FileInfos*)LONGTAIL_MALLOC(
+        sizeof(struct FileInfos) +
+        sizeof(uint64_t) * asset_count +
+        GetPathsSize(asset_count, context.m_Paths->m_DataSize));
+
+    result->m_Paths.m_DataSize = context.m_Paths->m_DataSize;
+    result->m_Paths.m_PathCount = (uint32_t*)&result[1];
+    *result->m_Paths.m_PathCount = asset_count;
+    result->m_FileSizes = (uint64_t*)&result->m_Paths.m_PathCount[1];
+    result->m_Paths.m_Offsets = (uint32_t*)(&result->m_FileSizes[asset_count]);
+    result->m_Paths.m_Data = (char*)&result->m_Paths.m_Offsets[asset_count];
+    memmove(result->m_FileSizes, context.m_FileSizes, sizeof(uint64_t) * asset_count);
+    memmove(result->m_Paths.m_Offsets, context.m_Paths->m_Offsets, sizeof(uint32_t) * asset_count);
+    memmove(result->m_Paths.m_Data, context.m_Paths->m_Data, result->m_Paths.m_DataSize);
+
+    LONGTAIL_FREE(context.m_Paths);
+    context.m_Paths = 0;
+    arrfree(context.m_FileSizes);
+    context.m_FileSizes = 0;
+
+    return result;
 }
 
 struct StorageChunkFeederContext
@@ -448,7 +475,7 @@ struct HashJob
     struct HashAPI* m_HashAPI;
     TLongtail_Hash* m_PathHash;
     TLongtail_Hash* m_ContentHash;
-    uint64_t* m_ContentSize;
+    uint64_t m_ContentSize;
     uint32_t* m_AssetChunkCount;
     const char* m_RootPath;
     const char* m_Path;
@@ -466,7 +493,7 @@ void LinearChunking(void* context)
     hash_job->m_Success = 0;
 
     *hash_job->m_AssetChunkCount = 0;
-    *hash_job->m_ContentSize = 0;
+//    *hash_job->m_ContentSize = 0;
     *hash_job->m_ContentHash = 0;
 
     *hash_job->m_PathHash = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path);
@@ -547,7 +574,7 @@ void LinearChunking(void* context)
     file_handle = 0;
 
     *hash_job->m_ContentHash = content_hash;
-    *hash_job->m_ContentSize = asset_size;
+//    *hash_job->m_ContentSize = asset_size;
     *hash_job->m_AssetChunkCount = chunk_count;
 
     free((char*)path);
@@ -564,7 +591,6 @@ void DynamicChunking(void* context)
     hash_job->m_Success = 0;
 
     *hash_job->m_AssetChunkCount = 0;
-    *hash_job->m_ContentSize = 0;
     *hash_job->m_ContentHash = 0;
 
     *hash_job->m_PathHash = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path);
@@ -587,7 +613,7 @@ void DynamicChunking(void* context)
         return;
     }
 
-    uint64_t asset_size = (uint64_t)storage_api->GetSize(storage_api, file_handle);
+    uint64_t asset_size = hash_job->m_ContentSize;
     if (asset_size > 1024*1024*1024)
     {
         LONGTAIL_LOG("DynamicChunking: Hashing a very large file `%s`\n", path);
@@ -730,7 +756,6 @@ void DynamicChunking(void* context)
     file_handle = 0;
     
     *hash_job->m_ContentHash = content_hash;
-    *hash_job->m_ContentSize = asset_size;
     *hash_job->m_AssetChunkCount = chunk_count;
 
     free((char*)path);
@@ -749,7 +774,7 @@ int ChunkAssets(
     const struct Paths* paths,
     TLongtail_Hash* path_hashes,
     TLongtail_Hash* content_hashes,
-    uint64_t* content_sizes,
+    const uint64_t* content_sizes,
     uint32_t* asset_chunk_start_index,
     uint32_t* asset_chunk_counts,
     uint32_t** chunk_sizes,
@@ -795,7 +820,7 @@ int ChunkAssets(
         job->m_Path = &paths->m_Data[paths->m_Offsets[asset_index]];
         job->m_PathHash = &path_hashes[asset_index];
         job->m_ContentHash = &content_hashes[asset_index];
-        job->m_ContentSize = &content_sizes[asset_index];
+        job->m_ContentSize = content_sizes[asset_index];
         job->m_AssetChunkCount = &asset_chunk_counts[asset_index];
         job->m_ChunkHashes = 0;
         job->m_ChunkSizes = 0;
@@ -1021,6 +1046,7 @@ struct VersionIndex* CreateVersionIndex(
     void* job_progress_context,
     const char* root_path,
     const struct Paths* paths,
+    const uint64_t* asset_sizes,
     uint32_t max_chunk_size)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
@@ -1031,7 +1057,6 @@ struct VersionIndex* CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return 0);
 
     uint32_t path_count = *paths->m_PathCount;
-    uint64_t* content_sizes = (uint64_t*)LONGTAIL_MALLOC(sizeof(uint64_t) * path_count);
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * path_count);
     TLongtail_Hash* content_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * path_count);
     uint32_t* asset_chunk_counts = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * path_count);
@@ -1051,7 +1076,7 @@ struct VersionIndex* CreateVersionIndex(
         paths,
         path_hashes,
         content_hashes,
-        content_sizes,
+        asset_sizes,
         asset_chunk_start_index,
         asset_chunk_counts,
         &asset_chunk_sizes,
@@ -1070,8 +1095,6 @@ struct VersionIndex* CreateVersionIndex(
         content_hashes = 0;
         LONGTAIL_FREE(path_hashes);
         path_hashes = 0;
-        LONGTAIL_FREE(content_sizes);
-        content_sizes = 0;
         return 0;
     }
 
@@ -1111,7 +1134,7 @@ struct VersionIndex* CreateVersionIndex(
         paths,                          // paths
         path_hashes,                    // path_hashes
         content_hashes,                 // content_hashes
-        content_sizes,                  // content_sizes
+        asset_sizes,                    // content_sizes
         asset_chunk_start_index,        // asset_chunk_index_starts
         asset_chunk_counts,             // asset_chunk_counts
         assets_chunk_index_count,       // asset_chunk_index_count
@@ -1138,8 +1161,6 @@ struct VersionIndex* CreateVersionIndex(
     content_hashes = 0;
     LONGTAIL_FREE(path_hashes);
     path_hashes = 0;
-    LONGTAIL_FREE(content_sizes);
-    content_sizes = 0;
 
     return version_index;
 }
@@ -2231,16 +2252,16 @@ void WriteAssetFromBlocks(void* context)
         return;
     }
 
-	const uint32_t* base_chunk_indexes = 0;
-	uint32_t base_chunk_count = 0;
-	if (base_version_index)
-	{
-		uint32_t asset_chunk_index_start = base_version_index->m_AssetChunkIndexStarts[base_asset_index];
-		base_chunk_indexes = &base_version_index->m_AssetChunkIndexes[asset_chunk_index_start];
-		base_chunk_count = base_version_index->m_AssetChunkCounts[base_asset_index];
-	}
+    const uint32_t* base_chunk_indexes = 0;
+    uint32_t base_chunk_count = 0;
+    if (base_version_index)
+    {
+        uint32_t asset_chunk_index_start = base_version_index->m_AssetChunkIndexStarts[base_asset_index];
+        base_chunk_indexes = &base_version_index->m_AssetChunkIndexes[asset_chunk_index_start];
+        base_chunk_count = base_version_index->m_AssetChunkCounts[base_asset_index];
+    }
 
-	uint32_t asset_chunk_start_index = version_index->m_AssetChunkIndexStarts[asset_index];
+    uint32_t asset_chunk_start_index = version_index->m_AssetChunkIndexStarts[asset_index];
     const uint32_t* chunk_indexes = &version_index->m_AssetChunkIndexes[asset_chunk_start_index];
     uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
     TLongtail_Hash prev_block_hash = 0;
@@ -2251,7 +2272,7 @@ void WriteAssetFromBlocks(void* context)
     uint32_t written_chunk_count = 0;
     uint32_t skipped_chunk_count = 0;
 #ifdef SLOW_VALIDATION
-	struct BlockIndex* test_slow_block_data_index = 0;
+    struct BlockIndex* test_slow_block_data_index = 0;
 #endif // SLOW_VALIDATION
     for (uint32_t c = 0; c < chunk_count; ++c)
     {
@@ -2282,70 +2303,70 @@ void WriteAssetFromBlocks(void* context)
 
         ptrdiff_t tmp;
         uint64_t chunk_content_index = hmget_ts(content_chunk_lookup, chunk_hash, tmp);
-		if (content_index->m_ChunkHashes[chunk_content_index] != chunk_hash)
-		{
+        if (content_index->m_ChunkHashes[chunk_content_index] != chunk_hash)
+        {
 #ifdef SLOW_VALIDATION
-			LONGTAIL_FREE(test_slow_block_data_index);
-			test_slow_block_data_index = 0;
+            LONGTAIL_FREE(test_slow_block_data_index);
+            test_slow_block_data_index = 0;
 #endif // SLOW_VALIDATION
-			LONGTAIL_FREE(block_data);
-			block_data = 0;
-			version_storage_api->CloseWrite(version_storage_api, asset_file);
-			asset_file = 0;
-			free(full_asset_path);
-			full_asset_path = 0;
-			return;
-		}
-		uint64_t block_index = content_index->m_ChunkBlockIndexes[chunk_content_index];
-		TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-		uint32_t chunk_offset = content_index->m_ChunkBlockOffsets[chunk_content_index];
+            LONGTAIL_FREE(block_data);
+            block_data = 0;
+            version_storage_api->CloseWrite(version_storage_api, asset_file);
+            asset_file = 0;
+            free(full_asset_path);
+            full_asset_path = 0;
+            return;
+        }
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[chunk_content_index];
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        uint32_t chunk_offset = content_index->m_ChunkBlockOffsets[chunk_content_index];
 
-		if (block_hash != prev_block_hash)
-		{
-			LONGTAIL_FREE(block_data);
-			block_data = 0;
+        if (block_hash != prev_block_hash)
+        {
+            LONGTAIL_FREE(block_data);
+            block_data = 0;
 #ifdef SLOW_VALIDATION
-			LONGTAIL_FREE(test_slow_block_data_index);
-			test_slow_block_data_index = 0;
+            LONGTAIL_FREE(test_slow_block_data_index);
+            test_slow_block_data_index = 0;
 #endif // SLOW_VALIDATION
-		}
+        }
 #ifdef SLOW_VALIDATION
-		if (!test_slow_block_data_index)
-		{
-			char* block_name = GetBlockName(block_hash);
-			char file_name[64];
-			sprintf(file_name, "%s.lrb", block_name);
-			char* block_path = version_storage_api->ConcatPath(content_storage_api, content_folder, file_name);
+        if (!test_slow_block_data_index)
+        {
+            char* block_name = GetBlockName(block_hash);
+            char file_name[64];
+            sprintf(file_name, "%s.lrb", block_name);
+            char* block_path = version_storage_api->ConcatPath(content_storage_api, content_folder, file_name);
 
-			test_slow_block_data_index = ReadBlockIndex(content_storage_api, block_path);
+            test_slow_block_data_index = ReadBlockIndex(content_storage_api, block_path);
 
             free(block_path);
             block_path = 0;
             LONGTAIL_FREE(block_name);
             block_name = 0;
 
-			if (test_slow_block_data_index == 0)
-			{
-				LONGTAIL_LOG("WriteAssetFromBlocks: Block 0x%" PRIx64 " could not be opened\n", block_hash)
-				LONGTAIL_FREE(block_data);
-				block_data = 0;
-				version_storage_api->CloseWrite(version_storage_api, asset_file);
-				asset_file = 0;
-				free(full_asset_path);
-				full_asset_path = 0;
-				return;
-			}
-		}
-		{
-			uint32_t offset_in_block = 0;
-			uint32_t b = 0;
+            if (test_slow_block_data_index == 0)
+            {
+                LONGTAIL_LOG("WriteAssetFromBlocks: Block 0x%" PRIx64 " could not be opened\n", block_hash)
+                LONGTAIL_FREE(block_data);
+                block_data = 0;
+                version_storage_api->CloseWrite(version_storage_api, asset_file);
+                asset_file = 0;
+                free(full_asset_path);
+                full_asset_path = 0;
+                return;
+            }
+        }
+        {
+            uint32_t offset_in_block = 0;
+            uint32_t b = 0;
             while (b < *test_slow_block_data_index->m_ChunkCount)
             {
                 if (test_slow_block_data_index->m_ChunkHashes[b] == chunk_hash)
                 {
                     break;
                 }
-				offset_in_block += test_slow_block_data_index->m_ChunkSizes[b];
+                offset_in_block += test_slow_block_data_index->m_ChunkSizes[b];
                 ++b;
             }
             
@@ -2377,33 +2398,33 @@ void WriteAssetFromBlocks(void* context)
                 return;
             }
 
-			if (chunk_offset != offset_in_block)
-			{
-				LONGTAIL_LOG("WriteAssetFromBlocks: Block 0x%" PRIx64 " has mismatching chunk offset for chunk 0x%" PRIx64 "\n", block_hash, chunk_hash)
-				LONGTAIL_FREE(test_slow_block_data_index);
-				test_slow_block_data_index = 0;
-				LONGTAIL_FREE(block_data);
-				block_data = 0;
-				version_storage_api->CloseWrite(version_storage_api, asset_file);
-				asset_file = 0;
-				free(full_asset_path);
-				full_asset_path = 0;
-				return;
-			}
-		}
+            if (chunk_offset != offset_in_block)
+            {
+                LONGTAIL_LOG("WriteAssetFromBlocks: Block 0x%" PRIx64 " has mismatching chunk offset for chunk 0x%" PRIx64 "\n", block_hash, chunk_hash)
+                LONGTAIL_FREE(test_slow_block_data_index);
+                test_slow_block_data_index = 0;
+                LONGTAIL_FREE(block_data);
+                block_data = 0;
+                version_storage_api->CloseWrite(version_storage_api, asset_file);
+                asset_file = 0;
+                free(full_asset_path);
+                full_asset_path = 0;
+                return;
+            }
+        }
 #endif // SLOW_VALIDATION
-		if (content_index->m_ChunkHashes[chunk_content_index] != chunk_hash)
-		{
-			LONGTAIL_LOG("WriteAssetFromBlocks: Chunk hash mismatch in content index for chunk 0x%" PRIx64 " in `%s`\n", chunk_hash, asset_path)
-			LONGTAIL_FREE(block_data);
-			block_data = 0;
-			version_storage_api->CloseWrite(version_storage_api, asset_file);
-			asset_file = 0;
-			free(full_asset_path);
-			full_asset_path = 0;
-			return;
-		}
-		if (content_index->m_ChunkLengths[chunk_content_index] != chunk_size)
+        if (content_index->m_ChunkHashes[chunk_content_index] != chunk_hash)
+        {
+            LONGTAIL_LOG("WriteAssetFromBlocks: Chunk hash mismatch in content index for chunk 0x%" PRIx64 " in `%s`\n", chunk_hash, asset_path)
+            LONGTAIL_FREE(block_data);
+            block_data = 0;
+            version_storage_api->CloseWrite(version_storage_api, asset_file);
+            asset_file = 0;
+            free(full_asset_path);
+            full_asset_path = 0;
+            return;
+        }
+        if (content_index->m_ChunkLengths[chunk_content_index] != chunk_size)
         {
             LONGTAIL_LOG("WriteAssetFromBlocks: Chunk size mismatch in content index for chunk 0x%" PRIx64 "  in `%s`\n", chunk_hash, asset_path)
             LONGTAIL_FREE(block_data);
@@ -2414,7 +2435,7 @@ void WriteAssetFromBlocks(void* context)
             full_asset_path = 0;
             return;
         }
-		if (!block_data)
+        if (!block_data)
         {
             block_data = ReadBlockData(content_storage_api, compression_api, content_folder, block_hash);
             if (!block_data)
@@ -2442,15 +2463,15 @@ void WriteAssetFromBlocks(void* context)
             return;
         }
         asset_offset += chunk_size;
-		++written_chunk_count;
-	}
+        ++written_chunk_count;
+    }
     LONGTAIL_FREE(block_data);
     block_data = 0;
 #ifdef SLOW_VALIDATION
-	LONGTAIL_FREE(test_slow_block_data_index);
-	test_slow_block_data_index = 0;
+    LONGTAIL_FREE(test_slow_block_data_index);
+    test_slow_block_data_index = 0;
 #endif // SLOW_VALIDATION
-	if (version_storage_api->SetSize(version_storage_api, asset_file, asset_offset))
+    if (version_storage_api->SetSize(version_storage_api, asset_file, asset_offset))
     {
         job->m_Success = 1;
     }
@@ -2828,20 +2849,20 @@ int WriteAssets(
         job->m_VersionFolder = version_path;
         job->m_ContentChunkLookup = cl->m_ChunkHashToChunkIndex;
         job->m_AssetIndex = awl->m_AssetIndexJobs[a];
-		job->m_BaseVersionIndex = 0;
+        job->m_BaseVersionIndex = 0;
         job->m_BaseAssetIndex = 0;
         intptr_t base_asset_ptr = hmgeti(base_asset_lookup, version_index->m_ContentHashes[job->m_AssetIndex]);
         if (base_asset_ptr != -1)
         {
-			job->m_BaseVersionIndex = optional_base_version;
-			job->m_BaseAssetIndex = base_asset_lookup[base_asset_ptr].value;
-		}
+            job->m_BaseVersionIndex = optional_base_version;
+            job->m_BaseAssetIndex = base_asset_lookup[base_asset_ptr].value;
+        }
 
         JobAPI_JobFunc func[1] = { WriteAssetFromBlocks };
         void* ctx[1] = { job };
 
-		job_api->SubmitJobs(job_api, 1, func, ctx);
-		//WriteAssetFromBlocks(job);
+        job_api->SubmitJobs(job_api, 1, func, ctx);
+        //WriteAssetFromBlocks(job);
     }
 
     job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
@@ -2967,7 +2988,7 @@ struct ReadContentContext {
     uint64_t m_ChunkCount;
 };
 
-void ReadContentAddPath(void* context, const char* root_path, const char* file_name)
+void ReadContentAddPath(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return);
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return);
@@ -2976,14 +2997,12 @@ void ReadContentAddPath(void* context, const char* root_path, const char* file_n
     struct ReadContentContext* paths_context = (struct ReadContentContext*)context;
     struct StorageAPI* storage_api = paths_context->m_StorageAPI;
 
-    char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
-    if (storage_api->IsDir(storage_api, full_path))
+    if (is_dir)
     {
-        free(full_path);
-        full_path = 0;
         return;
     }
 
+    char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
     struct Paths* paths = paths_context->m_Paths;
     const uint32_t root_path_length = paths_context->m_RootPathLength;
     const char* s = &full_path[root_path_length];

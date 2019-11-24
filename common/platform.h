@@ -215,7 +215,8 @@ struct TroveStorageAPI
             FindNext,
             CloseFind,
             GetFileName,
-            GetDirectoryName
+            GetDirectoryName,
+            GetEntrySize
         }
     {
 
@@ -368,6 +369,10 @@ struct TroveStorageAPI
         return Trove_GetDirectoryName((HTrove_FSIterator)iterator);
     }
 
+    static uint64_t GetEntrySize(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+    {
+        return Trove_GetEntrySize((HTrove_FSIterator)iterator);
+    }
 };
 
 struct LizardCompressionAPI
@@ -461,7 +466,7 @@ struct BikeshedJobAPI
             WaitForAllJobs
             }
         , m_Shed(0)
-        , m_WorkerCount(GetCPUCount())	// We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO
+        , m_WorkerCount(GetCPUCount())    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO
         , m_Workers(0)
         , m_Stop(0)
         , m_ReservedJobs(0)
@@ -566,26 +571,26 @@ struct BikeshedJobAPI
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
         if (bikeshed_job_api->m_SubmittedJobCount > 0)
-		{
-			int32_t old_pending_count = 0;
-			while (bikeshed_job_api->m_PendingJobCount > 0)
-			{
-				if (process_func)
-				{
-					uint32_t jobs_done = bikeshed_job_api->m_SubmittedJobCount - bikeshed_job_api->m_PendingJobCount;
-					process_func(context, bikeshed_job_api->m_SubmittedJobCount, jobs_done);
-				}
-				if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
-				{
-					continue;
-				}
-				if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
-				{
-					old_pending_count = bikeshed_job_api->m_PendingJobCount;
-				}
-				PLATFORM_SLEEP_PRIVATE(1000);
-			}
-		}
+        {
+            int32_t old_pending_count = 0;
+            while (bikeshed_job_api->m_PendingJobCount > 0)
+            {
+                if (process_func)
+                {
+                    uint32_t jobs_done = bikeshed_job_api->m_SubmittedJobCount - bikeshed_job_api->m_PendingJobCount;
+                    process_func(context, bikeshed_job_api->m_SubmittedJobCount, jobs_done);
+                }
+                if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
+                {
+                    continue;
+                }
+                if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
+                {
+                    old_pending_count = bikeshed_job_api->m_PendingJobCount;
+                }
+                PLATFORM_SLEEP_PRIVATE(1000);
+            }
+        }
         if (process_func)
         {
             process_func(context, bikeshed_job_api->m_SubmittedJobCount, bikeshed_job_api->m_SubmittedJobCount);

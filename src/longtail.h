@@ -46,6 +46,7 @@ struct StorageAPI
     void (*CloseFind)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
     const char* (*GetFileName)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
     const char* (*GetDirectoryName)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
+    uint64_t (*GetEntrySize)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
 };
 
 typedef struct CompressionAPI_CompressionContext* CompressionAPI_HCompressionContext;
@@ -96,13 +97,14 @@ void Longtail_NukeFree(void* p);
 
 typedef uint64_t TLongtail_Hash;
 struct Paths;
+struct FileInfos;
 struct VersionIndex;
 struct ContentIndex;
 struct PathLookup;
 struct ChunkHashToAssetPart;
 struct VersionDiff;
 
-struct Paths* GetFilesRecursively(
+struct FileInfos* GetFilesRecursively(
     struct StorageAPI* storage_api,
     const char* root_path);
 
@@ -114,6 +116,7 @@ struct VersionIndex* CreateVersionIndex(
     void* job_progress_context,
     const char* root_path,
     const struct Paths* paths,
+    const uint64_t* asset_sizes,
     uint32_t max_chunk_size);
 
 int WriteVersionIndex(
@@ -243,6 +246,12 @@ struct Paths
     uint32_t* m_PathCount;
     uint32_t* m_Offsets;
     char* m_Data;
+};
+
+struct FileInfos
+{
+    struct Paths m_Paths;
+    uint64_t* m_FileSizes;
 };
 
 struct ContentIndex
