@@ -593,36 +593,6 @@ struct InMemStorageAPI
 };
 
 
-struct SingleThreadedJobAPI
-{
-    JobAPI m_JobAPI;
-
-    SingleThreadedJobAPI()
-        : m_JobAPI{
-            ReserveJobs,
-            SubmitJobs,
-            WaitForAllJobs
-            }
-    {
-    }
-
-    static int ReserveJobs(struct JobAPI* , uint32_t )
-    {
-        return 1;
-    }
-    static void SubmitJobs(struct JobAPI* , uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
-    {
-        for (uint32_t j = 0; j < job_count; ++j)
-        {
-            job_funcs[j](job_contexts[j]);
-        }
-    }
-    static void WaitForAllJobs(struct JobAPI*, void*, JobAPI_ProgressFunc)
-    {
-
-    }
-};
-
 
 int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 {
@@ -901,7 +871,7 @@ TEST(Longtail, ContentIndexSerialization)
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
     LizardCompressionAPI compression_api;
-    SingleThreadedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/five_items", 5));
     FileInfos* version1_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "source/version1");
@@ -964,7 +934,7 @@ TEST(Longtail, WriteContent)
     InMemStorageAPI source_storage;
     InMemStorageAPI target_storage;
     MeowHashAPI hash_api;
-    SingleThreadedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
     LizardCompressionAPI compression_api;
 
     const char* TEST_FILENAMES[5] = {
@@ -1080,7 +1050,7 @@ TEST(Longtail, TestVeryLargeFile)
     const char* assets_path = "C:\\Temp\\longtail\\local\\WinClient\\CL6332_WindowsClient\\WindowsClient\\PioneerGame\\Content\\Paks";
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
-    SingleThreadedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
 
     FileInfos* paths = GetFilesRecursively(&storage_api.m_StorageAPI, assets_path);
     VersionIndex* version_index = CreateVersionIndex(
@@ -1212,7 +1182,7 @@ TEST(Longtail, VersionIndexDirectories)
 {
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
-    SingleThreadedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "two_items", 2));
     local_storage.m_StorageAPI.CreateDir(&local_storage.m_StorageAPI, "no_items");
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));
@@ -1306,7 +1276,7 @@ TEST(Longtail, VersionDiff)
 {
     InMemStorageAPI storage;
     MeowHashAPI hash_api;
-    SingleThreadedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
     StoreCompressionAPI compression_api;
 
     const uint32_t OLD_ASSET_COUNT = 7;
@@ -1518,7 +1488,7 @@ TEST(Longtail, FullScale)
     return;
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
-    SingleThreadedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
 
     CreateFakeContent(&local_storage.m_StorageAPI, 0, 5);
 
@@ -1673,9 +1643,9 @@ TEST(Longtail, WriteVersion)
 {
     InMemStorageAPI source_storage;
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
-    SingleThreadedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
 
-    const uint32_t asset_count = 6;
+    const uint32_t asset_count = 8;
 
     const char* TEST_FILENAMES[] = {
         "TheLongFile.txt",
@@ -1683,7 +1653,9 @@ TEST(Longtail, WriteVersion)
         "AnotherSample.txt",
         "folder/ShortString.txt",
         "WATCHIOUT.txt",
-        "empty/.init.py"
+        "empty/.init.py",
+        "TheVeryLongFile.txt",
+        "AnotherVeryLongFile.txt"
     };
 
     const char* TEST_STRINGS[] = {
@@ -1692,7 +1664,53 @@ TEST(Longtail, WriteVersion)
         "Another sample string that does not match any other string but -reconstructed properly, than you very much",
         "Short string",
         "More than chunk less than block",
-        ""
+        "",
+        "A very long string that should go over multiple blocks so we can test our super funky multi-threading version"
+            "restore function that spawns a bunch of decompress jobs and makes the writes to disc sequentially using dependecies"
+            "so we write in good order but still use all our cores in a reasonable fashion. So this should be a long long string"
+            "longer than seems reasonable, and here is a lot of rambling in this string. Because it is late and I just need to fill"
+            "the string but make sure it actually comes back fine"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "this is the end...",
+        "Another very long string that should go over multiple blocks so we can test our super funky multi-threading version"
+            "restore function that spawns a bunch of decompress jobs and makes the writes to disc sequentially using dependecies"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "so we write in good order but still use all our cores in a reasonable fashion. So this should be a long long string"
+            "longer than seems reasonable, and here is a lot of rambling in this string. Because it is late and I just need to fill"
+            "the string but make sure it actually comes back fine"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "this is the end..."
     };
 
     const size_t TEST_SIZES[] = {
@@ -1701,7 +1719,9 @@ TEST(Longtail, WriteVersion)
         strlen(TEST_STRINGS[2]) + 1,
         strlen(TEST_STRINGS[3]) + 1,
         strlen(TEST_STRINGS[4]) + 1,
-        0
+        0,
+        strlen(TEST_STRINGS[6]) + 1,
+        strlen(TEST_STRINGS[7]) + 1
     };
 
     for (uint32_t i = 0; i < asset_count; ++i)
@@ -1731,7 +1751,7 @@ TEST(Longtail, WriteVersion)
         "local",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
-        16);
+        50);
     ASSERT_NE((VersionIndex*)0, vindex);
     LONGTAIL_FREE(version1_paths);
     version1_paths = 0;
@@ -1842,7 +1862,7 @@ void Bench()
 
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
-    BikeshedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
@@ -2023,7 +2043,7 @@ void LifelikeTest()
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
     LizardCompressionAPI compression_api;
-    BikeshedJobAPI job_api;
+    BikeshedJobAPI job_api(0);
 
     FileInfos* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
     ASSERT_NE((FileInfos*)0, local_path_1_paths);

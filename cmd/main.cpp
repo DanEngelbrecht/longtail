@@ -939,8 +939,7 @@ int main(int argc, char** argv)
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
-        BikeshedJobAPI job_api;
-
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
         char create_content_index[512];
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         char content[512];
@@ -1116,7 +1115,7 @@ int main(int argc, char** argv)
 
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        BikeshedJobAPI job_api;
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_CreateVersionIndex(
             &storage_api.m_StorageAPI,
@@ -1136,7 +1135,7 @@ int main(int argc, char** argv)
         {
             TroveStorageAPI storage_api;
             MeowHashAPI hash_api;
-            BikeshedJobAPI job_api;
+            BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
             int ok = Cmd_CreateContentIndex(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
@@ -1163,7 +1162,7 @@ int main(int argc, char** argv)
     {
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        BikeshedJobAPI job_api;
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_CreateMissingContentIndex(
             &storage_api.m_StorageAPI,
@@ -1186,7 +1185,7 @@ int main(int argc, char** argv)
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
-        BikeshedJobAPI job_api;
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
         int ok = Cmd_CreateContent(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
@@ -1219,7 +1218,7 @@ int main(int argc, char** argv)
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
-        BikeshedJobAPI job_api;
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_CreateVersion(
             &storage_api.m_StorageAPI,
@@ -1239,7 +1238,7 @@ int main(int argc, char** argv)
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
         LizardCompressionAPI compression_api;
-        BikeshedJobAPI job_api;
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_UpdateVersion(
             &storage_api.m_StorageAPI,

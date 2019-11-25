@@ -455,26 +455,30 @@ struct BikeshedJobAPI
     ThreadWorker* m_Workers;
     int32_t volatile m_Stop;
     JobWrapper* m_ReservedJobs;
+    Bikeshed_TaskID* m_ReservedTasksIDs;
     uint32_t m_ReservedJobCount;
     uint32_t m_SubmittedJobCount;
     int32_t volatile m_PendingJobCount;
 
-    BikeshedJobAPI()
+    BikeshedJobAPI(uint32_t worker_count)
         : m_JobAPI{
             ReserveJobs,
-            SubmitJobs,
+            CreateJobs,
+            AddDependecies,
+            ReadyJobs,
             WaitForAllJobs
             }
         , m_Shed(0)
-        , m_WorkerCount(GetCPUCount())    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO
+        , m_WorkerCount(worker_count)//
         , m_Workers(0)
         , m_Stop(0)
         , m_ReservedJobs(0)
+        , m_ReservedTasksIDs(0)
         , m_ReservedJobCount(0)
         , m_SubmittedJobCount(0)
         , m_PendingJobCount(0)
     {
-        m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 0, 1)), 65536, 0, 1, &m_ReadyCallback.cb);
+        m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 65536, 1)), 65536, 65536, 1, &m_ReadyCallback.cb);
         if (m_WorkerCount == 0)
         {
             m_WorkerCount = 1;
@@ -521,26 +525,29 @@ struct BikeshedJobAPI
             return 0;
         }
         bikeshed_job_api->m_ReservedJobs = (JobWrapper*)malloc(sizeof(JobWrapper) * job_count);
-        if (bikeshed_job_api->m_ReservedJobs)
+        bikeshed_job_api->m_ReservedTasksIDs = (Bikeshed_TaskID*)malloc(sizeof(Bikeshed_TaskID) * job_count);
+        if (bikeshed_job_api->m_ReservedJobs && bikeshed_job_api->m_ReservedTasksIDs)
         {
             bikeshed_job_api->m_ReservedJobCount = job_count;
             return 1;
         }
+        free(bikeshed_job_api->m_ReservedTasksIDs);
+        free(bikeshed_job_api->m_ReservedJobs);
         return 0;
     }
 
-    static void SubmitJobs(JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
+    static JobAPI_Jobs CreateJobs(JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
         if (bikeshed_job_api->m_SubmittedJobCount + job_count > bikeshed_job_api->m_ReservedJobCount)
         {
             printf("******************** SubmitJobs failure!!!!\n");
-            return;
+            return 0;
         }
 
         BikeShed_TaskFunc* func = (BikeShed_TaskFunc*)malloc(sizeof(BikeShed_TaskFunc) * job_count);
         void** ctx = (void**)malloc(sizeof(void*) * job_count);
-        Bikeshed_TaskID* task_ids = (Bikeshed_TaskID*)malloc(sizeof(Bikeshed_TaskID) * job_count);
+        Bikeshed_TaskID* task_ids = &bikeshed_job_api->m_ReservedTasksIDs[bikeshed_job_api->m_SubmittedJobCount];
         for (uint32_t i = 0; i < job_count; ++i)
         {
             JobWrapper* job_wrapper = &bikeshed_job_api->m_ReservedJobs[bikeshed_job_api->m_SubmittedJobCount + i];
@@ -555,18 +562,30 @@ struct BikeshedJobAPI
 
         while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, func, ctx, task_ids))
         {
-            PLATFORM_SLEEP_PRIVATE(1000);
+            Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
         }
 
         free(ctx);
         free(func);
-
-        {
-            PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
-            Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, task_ids);
-        }
-        free(task_ids);
+        return task_ids;
     }
+
+    static void AddDependecies(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs)
+    {
+        BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
+        while (!Bikeshed_AddDependencies(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs, dependency_job_count, (Bikeshed_TaskID*)dependency_jobs))
+        {
+            Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
+        }
+    }
+
+    static void ReadyJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs)
+    {
+        BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
+        PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
+        Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs);
+    }
+
     static void WaitForAllJobs(JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func)
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
@@ -596,6 +615,8 @@ struct BikeshedJobAPI
             process_func(context, bikeshed_job_api->m_SubmittedJobCount, bikeshed_job_api->m_SubmittedJobCount);
         }
         bikeshed_job_api->m_SubmittedJobCount = 0;
+        free(bikeshed_job_api->m_ReservedTasksIDs);
+        bikeshed_job_api->m_ReservedTasksIDs = 0;
         free(bikeshed_job_api->m_ReservedJobs);
         bikeshed_job_api->m_ReservedJobs = 0;
         bikeshed_job_api->m_ReservedJobCount = 0;

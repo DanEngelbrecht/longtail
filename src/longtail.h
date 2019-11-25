@@ -70,11 +70,14 @@ struct CompressionAPI
 
 typedef void (*JobAPI_JobFunc)(void* context);
 typedef void (*JobAPI_ProgressFunc)(void* context, uint32_t total_count, uint32_t done_count);
+typedef void* JobAPI_Jobs;
 
 struct JobAPI
 {
     int (*ReserveJobs)(struct JobAPI* job_api, uint32_t job_count);
-    void (*SubmitJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[]);
+    JobAPI_Jobs (*CreateJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[]);
+    void (*AddDependecies)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs);
+    void (*ReadyJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs);
     void (*WaitForAllJobs)(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func);
 };
 
