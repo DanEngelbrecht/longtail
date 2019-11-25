@@ -334,6 +334,10 @@ struct InMemStorageAPI
         }
         TContent* content = (*it)->m_Content;
         size_t size = GetSize_TContent(content);
+        if (offset > size)
+        {
+            return 0;
+        }
         if (offset + length > size)
         {
             size = offset + length;

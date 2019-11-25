@@ -1,7 +1,7 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
-set LONGTAIL=..\build\longtail_debug.exe
+set LONGTAIL=..\build\longtail.exe
 set BASEPATH=C:\Temp\longtail
 
 echo Indexing currently known chunks in "!BASEPATH!\chunks"

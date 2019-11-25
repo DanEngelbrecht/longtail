@@ -460,8 +460,9 @@ struct BikeshedJobAPI
     uint32_t m_SubmittedJobCount;
     int32_t volatile m_PendingJobCount;
 
-    BikeshedJobAPI(uint32_t worker_count)
+    explicit BikeshedJobAPI(uint32_t worker_count)
         : m_JobAPI{
+            GetWorkerCount,
             ReserveJobs,
             CreateJobs,
             AddDependecies,
@@ -478,11 +479,7 @@ struct BikeshedJobAPI
         , m_SubmittedJobCount(0)
         , m_PendingJobCount(0)
     {
-        m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(65536, 65536, 1)), 65536, 65536, 1, &m_ReadyCallback.cb);
-        if (m_WorkerCount == 0)
-        {
-            m_WorkerCount = 1;
-        }
+        m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(1048576, 7340032, 1)), 1048576, 7340032, 1, &m_ReadyCallback.cb);
         m_Workers = new ThreadWorker[m_WorkerCount];
         for (uint32_t i = 0; i < m_WorkerCount; ++i)
         {
@@ -503,6 +500,12 @@ struct BikeshedJobAPI
         }
         delete []m_Workers;
         free(m_Shed);
+    }
+
+    static int GetWorkerCount(struct JobAPI* job_api)
+    {
+        BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
+        return bikeshed_job_api->m_WorkerCount;
     }
 
     static int ReserveJobs(JobAPI* job_api, uint32_t job_count)
@@ -558,12 +561,13 @@ struct BikeshedJobAPI
             ctx[i] = job_wrapper;
         }
 
-        bikeshed_job_api->m_SubmittedJobCount += job_count;
-
         while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, func, ctx, task_ids))
         {
             Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
         }
+
+        bikeshed_job_api->m_SubmittedJobCount += job_count;
+        PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
 
         free(ctx);
         free(func);
@@ -582,7 +586,6 @@ struct BikeshedJobAPI
     static void ReadyJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs)
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
-        PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
         Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs);
     }
 
@@ -626,6 +629,11 @@ struct BikeshedJobAPI
     {
         JobWrapper* wrapper = (JobWrapper*)context;
         wrapper->m_JobFunc(wrapper->m_Context);
+        if (wrapper->m_JobAPI->m_PendingJobCount <= 0)
+        {
+            // TODO! Error handling!
+            return BIKESHED_TASK_RESULT_COMPLETE;
+        }
         PLATFORM_ATOMICADD_PRIVATE(&wrapper->m_JobAPI->m_PendingJobCount, -1);
         return BIKESHED_TASK_RESULT_COMPLETE;
     }
