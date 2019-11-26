@@ -803,6 +803,7 @@ TEST(Longtail, VersionIndex)
     const uint32_t chunk_sizes[5] = {64003, 64003, 64002, 64001, 64001};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
+    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
 
     Paths* paths = MakePaths(5, asset_paths);
     size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
@@ -821,7 +822,8 @@ TEST(Longtail, VersionIndex)
         asset_chunk_start_index,
         *paths->m_PathCount,
         chunk_sizes,
-        asset_content_hashes);
+        asset_content_hashes,
+        asset_compression_types);
 
     LONGTAIL_FREE(version_index);
     LONGTAIL_FREE(paths);
@@ -834,6 +836,7 @@ TEST(Longtail, ContentIndex)
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint32_t asset_sizes[5] = { 43593, 43593, 43592, 43591, 43591 };
+    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
     const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     MeowHashAPI hash_api;
@@ -845,6 +848,7 @@ TEST(Longtail, ContentIndex)
         asset_count,
         asset_content_hashes,
         asset_sizes,
+        asset_compression_types,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
 
@@ -870,6 +874,17 @@ TEST(Longtail, ContentIndex)
     LONGTAIL_FREE(content_index);
 }
 
+static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
+{
+    uint32_t count = *file_infos->m_Paths.m_PathCount;
+    uint32_t* result = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        result[i] = 0;
+    }
+    return result;
+}
+
 TEST(Longtail, ContentIndexSerialization)
 {
     InMemStorageAPI local_storage;
@@ -880,6 +895,8 @@ TEST(Longtail, ContentIndexSerialization)
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/five_items", 5));
     FileInfos* version1_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "source/version1");
     ASSERT_NE((FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
     VersionIndex* vindex = CreateVersionIndex(
         &local_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -889,9 +906,10 @@ TEST(Longtail, ContentIndexSerialization)
         "source/version1",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
+        compression_types,
         16384);
-    // TODO: Memory corruption!
     ASSERT_NE((VersionIndex*)0, vindex);
+    LONGTAIL_FREE(compression_types);
     LONGTAIL_FREE(version1_paths);
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
@@ -901,6 +919,7 @@ TEST(Longtail, ContentIndexSerialization)
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
+        vindex->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -969,6 +988,8 @@ TEST(Longtail, WriteContent)
 
     FileInfos* version1_paths = GetFilesRecursively(&source_storage.m_StorageAPI, "local");
     ASSERT_NE((FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetCompressionTypes(&source_storage.m_StorageAPI, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
     VersionIndex* vindex = CreateVersionIndex(
         &source_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -978,8 +999,13 @@ TEST(Longtail, WriteContent)
         "local",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
+        compression_types,
         16);
     ASSERT_NE((VersionIndex*)0, vindex);
+    LONGTAIL_FREE(compression_types);
+    compression_types = 0;
+    LONGTAIL_FREE(version1_paths);
+    version1_paths = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
@@ -988,6 +1014,7 @@ TEST(Longtail, WriteContent)
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
+        vindex->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -1045,7 +1072,6 @@ TEST(Longtail, WriteContent)
     LONGTAIL_FREE(cindex2);
     LONGTAIL_FREE(cindex);
     LONGTAIL_FREE(vindex);
-    LONGTAIL_FREE(version1_paths);
 }
 
 #if 0
@@ -1101,6 +1127,7 @@ TEST(Longtail, CreateMissingContent)
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
+    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
 
     MeowHashAPI hash_api;
 
@@ -1111,6 +1138,7 @@ TEST(Longtail, CreateMissingContent)
         asset_count - 4,
         asset_content_hashes,
         chunk_sizes,
+        asset_compression_types,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
 
@@ -1139,7 +1167,8 @@ TEST(Longtail, CreateMissingContent)
         asset_chunk_start_index,
         *paths->m_PathCount,
         chunk_sizes,
-        asset_content_hashes);
+        asset_content_hashes,
+        asset_compression_types);
     LONGTAIL_FREE(paths);
 
     ContentIndex* missing_content_index = CreateMissingContent(
@@ -1194,6 +1223,8 @@ TEST(Longtail, VersionIndexDirectories)
 
     FileInfos* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((FileInfos*)0, local_paths);
+    uint32_t* compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, local_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
 
     VersionIndex* local_version_index = CreateVersionIndex(
         &local_storage.m_StorageAPI,
@@ -1204,10 +1235,12 @@ TEST(Longtail, VersionIndexDirectories)
         "",
         &local_paths->m_Paths,
         local_paths->m_FileSizes,
+        compression_types,
         16384);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(16, *local_version_index->m_AssetCount);
 
+    LONGTAIL_FREE(compression_types);
     LONGTAIL_FREE(local_version_index);
     LONGTAIL_FREE(local_paths);
 }
@@ -1220,11 +1253,13 @@ TEST(Longtail, MergeContentIndex)
         0,
         0,
         0,
+        0,
         16,
         8);
     ASSERT_NE((ContentIndex*)0, cindex1);
     ContentIndex* cindex2 = CreateContentIndex(
         &hash_api.m_HashAPI,
+        0,
         0,
         0,
         0,
@@ -1236,23 +1271,27 @@ TEST(Longtail, MergeContentIndex)
 
     TLongtail_Hash chunk_hashes_4[] = {5, 6, 7};
     uint32_t chunk_sizes_4[] = {10, 20, 10};
+    uint32_t chunk_compression_types_4[] = {0, 0, 0};
     ContentIndex* cindex4 = CreateContentIndex(
         &hash_api.m_HashAPI,
         3,
         chunk_hashes_4,
         chunk_sizes_4,
+        chunk_compression_types_4,
         30,
         2);
     ASSERT_NE((ContentIndex*)0, cindex4);
 
     TLongtail_Hash chunk_hashes_5[] = {8, 7, 6};
     uint32_t chunk_sizes_5[] = {20, 10, 20};
+    uint32_t chunk_compression_types_5[] = {0, 0, 0};
 
     ContentIndex* cindex5 = CreateContentIndex(
         &hash_api.m_HashAPI,
         3,
         chunk_hashes_5,
         chunk_sizes_5,
+        chunk_compression_types_5,
         30,
         2);
     ASSERT_NE((ContentIndex*)0, cindex5);
@@ -1379,6 +1418,8 @@ TEST(Longtail, VersionDiff)
 
     FileInfos* old_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "old");
     ASSERT_NE((FileInfos*)0, old_version_paths);
+    uint32_t* old_compression_types = GetCompressionTypes(&storage.m_StorageAPI, old_version_paths);
+    ASSERT_NE((uint32_t*)0, old_compression_types);
     VersionIndex* old_vindex = CreateVersionIndex(
         &storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -1388,11 +1429,18 @@ TEST(Longtail, VersionDiff)
         "old",
         &old_version_paths->m_Paths,
         old_version_paths->m_FileSizes,
+        old_compression_types,
         16);
     ASSERT_NE((VersionIndex*)0, old_vindex);
+    LONGTAIL_FREE(old_compression_types);
+    old_compression_types = 0;
+    LONGTAIL_FREE(old_version_paths);
+    old_version_paths = 0;
 
     FileInfos* new_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "new");
     ASSERT_NE((FileInfos*)0, new_version_paths);
+    uint32_t* new_compression_types = GetCompressionTypes(&storage.m_StorageAPI, new_version_paths);
+    ASSERT_NE((uint32_t*)0, new_compression_types);
     VersionIndex* new_vindex = CreateVersionIndex(
         &storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -1402,8 +1450,13 @@ TEST(Longtail, VersionDiff)
         "new",
         &new_version_paths->m_Paths,
         new_version_paths->m_FileSizes,
+        new_compression_types,
         16);
     ASSERT_NE((VersionIndex*)0, new_vindex);
+    LONGTAIL_FREE(new_compression_types);
+    new_compression_types = 0;
+    LONGTAIL_FREE(new_version_paths);
+    new_version_paths = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
@@ -1413,6 +1466,7 @@ TEST(Longtail, VersionDiff)
             *new_vindex->m_ChunkCount,
             new_vindex->m_ChunkHashes,
             new_vindex->m_ChunkSizes,
+            new_vindex->m_ChunkCompressionTypes,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
@@ -1460,9 +1514,7 @@ TEST(Longtail, VersionDiff)
     LONGTAIL_FREE(version_diff);
 
     LONGTAIL_FREE(new_vindex);
-    LONGTAIL_FREE(new_version_paths);
     LONGTAIL_FREE(old_vindex);
-    LONGTAIL_FREE(old_version_paths);
 
     // Verify that our old folder now matches the new folder data
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
@@ -1501,6 +1553,8 @@ TEST(Longtail, FullScale)
 
     FileInfos* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
     ASSERT_NE((FileInfos*)0, local_paths);
+    uint32_t* local_compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, local_paths);
+    ASSERT_NE((uint32_t*)0, local_compression_types);
 
     VersionIndex* local_version_index = CreateVersionIndex(
         &local_storage.m_StorageAPI,
@@ -1511,12 +1565,17 @@ TEST(Longtail, FullScale)
         "",
         &local_paths->m_Paths,
         local_paths->m_FileSizes,
+        local_compression_types,
         16384);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(5, *local_version_index->m_AssetCount);
+    LONGTAIL_FREE(local_compression_types);
+    local_compression_types = 0;
 
     FileInfos* remote_paths = GetFilesRecursively(&remote_storage.m_StorageAPI, "");
     ASSERT_NE((FileInfos*)0, local_paths);
+    uint32_t* remote_compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, remote_paths);
+    ASSERT_NE((uint32_t*)0, remote_compression_types);
     VersionIndex* remote_version_index = CreateVersionIndex(
         &remote_storage.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -1526,9 +1585,12 @@ TEST(Longtail, FullScale)
         "",
         &remote_paths->m_Paths,
         remote_paths->m_FileSizes,
+        remote_compression_types,
         16384);
     ASSERT_NE((VersionIndex*)0, remote_version_index);
     ASSERT_EQ(10, *remote_version_index->m_AssetCount);
+    LONGTAIL_FREE(remote_compression_types);
+    remote_compression_types = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
@@ -1538,6 +1600,7 @@ TEST(Longtail, FullScale)
             * local_version_index->m_ChunkCount,
             local_version_index->m_ChunkHashes,
             local_version_index->m_ChunkSizes,
+            local_version_index->m_ChunkCompressionTypes,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
@@ -1563,6 +1626,7 @@ TEST(Longtail, FullScale)
             * remote_version_index->m_ChunkCount,
             remote_version_index->m_ChunkHashes,
             remote_version_index->m_ChunkSizes,
+            remote_version_index->m_ChunkCompressionTypes,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
@@ -1746,6 +1810,8 @@ TEST(Longtail, WriteVersion)
     MeowHashAPI hash_api;
     FileInfos* version1_paths = GetFilesRecursively(storage_api, "local");
     ASSERT_NE((FileInfos*)0, version1_paths);
+    uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
+    ASSERT_NE((uint32_t*)0, version1_compression_types);
     VersionIndex* vindex = CreateVersionIndex(
         storage_api,
         &hash_api.m_HashAPI,
@@ -1755,8 +1821,11 @@ TEST(Longtail, WriteVersion)
         "local",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
+        version1_compression_types,
         50);
     ASSERT_NE((VersionIndex*)0, vindex);
+    LONGTAIL_FREE(version1_compression_types);
+    version1_compression_types = 0;
     LONGTAIL_FREE(version1_paths);
     version1_paths = 0;
 
@@ -1767,6 +1836,7 @@ TEST(Longtail, WriteVersion)
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
+        vindex->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
@@ -1875,6 +1945,7 @@ void Bench()
             0,
             0,
             0,
+            0,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, full_content_index);
@@ -1887,6 +1958,8 @@ void Bench()
         printf("Indexing `%s`\n", version_source_folder);
         FileInfos* version_source_paths = GetFilesRecursively(&storage_api.m_StorageAPI, version_source_folder);
         ASSERT_NE((FileInfos*)0, version_source_paths);
+        uint32_t* version_compression_types = GetCompressionTypes(&storage_api.m_StorageAPI, version_source_paths);
+        ASSERT_NE((uint32_t*)0, version_compression_types);
         VersionIndex* version_index = CreateVersionIndex(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
@@ -1896,8 +1969,12 @@ void Bench()
             version_source_folder,
             &version_source_paths->m_Paths,
             version_source_paths->m_FileSizes,
+            version_compression_types,
             16384);
+        LONGTAIL_FREE(version_compression_types);
+        version_compression_types = 0;
         LONGTAIL_FREE(version_source_paths);
+        version_source_paths = 0;
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
 
@@ -2051,6 +2128,8 @@ void LifelikeTest()
 
     FileInfos* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
     ASSERT_NE((FileInfos*)0, local_path_1_paths);
+    uint32_t* local_compression_types = GetCompressionTypes(&storage_api.m_StorageAPI, local_path_1_paths);
+    ASSERT_NE((uint32_t*)0, local_compression_types);
     VersionIndex* version1 = CreateVersionIndex(
         &storage_api.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -2060,9 +2139,13 @@ void LifelikeTest()
         local_path_1,
         &local_path_1_paths->m_Paths,
         local_path_1_paths->m_FileSizes,
+        local_compression_types,
         16384);
     WriteVersionIndex(&storage_api.m_StorageAPI, version1, version_index_path_1);
+    LONGTAIL_FREE(local_compression_types);
+    local_compression_types = 0;
     LONGTAIL_FREE(local_path_1_paths);
+    local_path_1_paths = 0;
     printf("%u assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     printf("Creating local content index...\n");
@@ -2073,6 +2156,7 @@ void LifelikeTest()
         *version1->m_ChunkCount,
         version1->m_ChunkHashes,
         version1->m_ChunkSizes,
+        version1->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
 
@@ -2117,6 +2201,8 @@ void LifelikeTest()
     printf("Indexing `%s`...\n", local_path_2);
     FileInfos* local_path_2_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_2);
     ASSERT_NE((FileInfos*)0, local_path_2_paths);
+    uint32_t* local_2_compression_types = GetCompressionTypes(&storage_api.m_StorageAPI, local_path_2_paths);
+    ASSERT_NE((uint32_t*)0, local_2_compression_types);
     VersionIndex* version2 = CreateVersionIndex(
         &storage_api.m_StorageAPI,
         &hash_api.m_HashAPI,
@@ -2126,8 +2212,12 @@ void LifelikeTest()
         local_path_2,
         &local_path_2_paths->m_Paths,
         local_path_2_paths->m_FileSizes,
+        local_2_compression_types,
         16384);
+    LONGTAIL_FREE(local_2_compression_types);
+    local_2_compression_types = 0;
     LONGTAIL_FREE(local_path_2_paths);
+    local_path_2_paths = 0;
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(&storage_api.m_StorageAPI, version2, version_index_path_2));
     printf("%u assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);

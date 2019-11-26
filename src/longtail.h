@@ -121,6 +121,7 @@ struct VersionIndex* CreateVersionIndex(
     const char* root_path,
     const struct Paths* paths,
     const uint64_t* asset_sizes,
+    const uint32_t* asset_compression_types,
     uint32_t max_chunk_size);
 
 int WriteVersionIndex(
@@ -137,6 +138,7 @@ struct ContentIndex* CreateContentIndex(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
+    const uint32_t* chunk_compression_types,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block);
 
@@ -242,7 +244,8 @@ struct VersionIndex* BuildVersionIndex(
     const uint32_t* asset_chunk_indexes,
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
-    const TLongtail_Hash* chunk_hashes);
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* chunk_compression_types);
 
 struct Paths
 {
@@ -263,11 +266,11 @@ struct ContentIndex
     uint64_t* m_BlockCount;
     uint64_t* m_ChunkCount;
 
-    TLongtail_Hash* m_BlockHashes;  // []
-    TLongtail_Hash* m_ChunkHashes;  // []
-    uint64_t* m_ChunkBlockIndexes;  // []
-    uint32_t* m_ChunkBlockOffsets;  // []
-    uint32_t* m_ChunkLengths;       // []
+    TLongtail_Hash* m_BlockHashes;      // []
+    TLongtail_Hash* m_ChunkHashes;      // []
+    uint64_t* m_ChunkBlockIndexes;      // []
+    uint32_t* m_ChunkBlockOffsets;      // []
+    uint32_t* m_ChunkLengths;           // []
 };
 
 struct VersionIndex
@@ -285,7 +288,8 @@ struct VersionIndex
     uint32_t* m_AssetChunkIndexes;      // []
 
     TLongtail_Hash* m_ChunkHashes;      // []
-    uint32_t* m_ChunkSizes;         // []
+    uint32_t* m_ChunkSizes;             // []   -- This is just for convenience when creating content index? Would be nice to be able to skip
+    uint32_t* m_ChunkCompressionTypes;  // [] -- This is for convenience so we know how to WriteContent
 
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;

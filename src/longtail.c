@@ -477,10 +477,13 @@ struct HashJob
     TLongtail_Hash* m_PathHash;
     TLongtail_Hash* m_ContentHash;
     uint64_t m_ContentSize;
-    uint32_t* m_AssetChunkCount;
+    uint32_t m_ContentCompressionType;
     const char* m_RootPath;
     const char* m_Path;
+    uint32_t m_MaxChunkCount;
+    uint32_t* m_AssetChunkCount;
     TLongtail_Hash* m_ChunkHashes;
+    uint32_t* m_ChunkCompressionTypes;
     uint32_t* m_ChunkSizes;
     uint32_t m_MaxChunkSize;
     int m_Success;
@@ -517,18 +520,13 @@ void LinearChunking(void* context)
         return;
     }
 
-    uint64_t asset_size = (uint64_t)storage_api->GetSize(storage_api, file_handle);
+    uint64_t asset_size = hash_job->m_ContentSize;
     if (asset_size > 1024*1024*1024)
     {
         LONGTAIL_LOG("LinearChunking: Hashing a very large file `%s`\n", path);
     }
 
     uint8_t* batch_data = (uint8_t*)LONGTAIL_MALLOC((size_t)(asset_size < hash_job->m_MaxChunkSize ? asset_size : hash_job->m_MaxChunkSize));
-    uint32_t max_chunks = (uint32_t)((asset_size + hash_job->m_MaxChunkSize - 1) / hash_job->m_MaxChunkSize);
-
-    hash_job->m_ChunkHashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * max_chunks);
-    hash_job->m_ChunkSizes = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * max_chunks);
-
     HashAPI_HContext asset_hash_context = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI);
 
     uint64_t offset = 0;
@@ -540,10 +538,6 @@ void LinearChunking(void* context)
         {
             LONGTAIL_LOG("LinearChunking: Failed to read from `%s`\n", path)
             hash_job->m_Success = 0;
-            LONGTAIL_FREE(hash_job->m_ChunkSizes);
-            hash_job->m_ChunkSizes = 0;
-            LONGTAIL_FREE(hash_job->m_ChunkHashes);
-            hash_job->m_ChunkHashes = 0;
             LONGTAIL_FREE(batch_data);
             batch_data = 0;
             storage_api->CloseRead(storage_api, file_handle);
@@ -559,6 +553,7 @@ void LinearChunking(void* context)
             TLongtail_Hash chunk_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, chunk_hash_context);
             hash_job->m_ChunkHashes[chunk_count] = chunk_hash;
             hash_job->m_ChunkSizes[chunk_count] = len;
+            hash_job->m_ChunkCompressionTypes[chunk_count] = hash_job->m_ContentCompressionType;
         }
         ++chunk_count;
 
@@ -576,6 +571,7 @@ void LinearChunking(void* context)
 
     *hash_job->m_ContentHash = content_hash;
 //    *hash_job->m_ContentSize = asset_size;
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count <= hash_job->m_MaxChunkCount, return);
     *hash_job->m_AssetChunkCount = chunk_count;
 
     free((char*)path);
@@ -621,11 +617,12 @@ void DynamicChunking(void* context)
     }
 
     TLongtail_Hash content_hash = 0;
-    if (asset_size <= ChunkerWindowSize || hash_job->m_MaxChunkSize <= ChunkerWindowSize)
+    if (asset_size == 0)
     {
-        hash_job->m_ChunkHashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * 1);
-        hash_job->m_ChunkSizes = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * 1);
-
+        content_hash = 0;
+    }
+    else if (asset_size <= ChunkerWindowSize || hash_job->m_MaxChunkSize <= ChunkerWindowSize)
+    {
         char* buffer = (char*)LONGTAIL_MALLOC((size_t)asset_size);
         if (!storage_api->Read(storage_api, file_handle, 0, asset_size, buffer))
         {
@@ -648,6 +645,7 @@ void DynamicChunking(void* context)
 
         hash_job->m_ChunkHashes[chunk_count] = content_hash;
         hash_job->m_ChunkSizes[chunk_count] = (uint32_t)asset_size;
+        hash_job->m_ChunkCompressionTypes[chunk_count] = hash_job->m_ContentCompressionType;
 
         ++chunk_count;
     }
@@ -658,10 +656,6 @@ void DynamicChunking(void* context)
         uint32_t avg_chunk_size = hash_job->m_MaxChunkSize / 2;
         avg_chunk_size = avg_chunk_size < ChunkerWindowSize ? ChunkerWindowSize : avg_chunk_size;
         uint32_t max_chunk_size = hash_job->m_MaxChunkSize * 2;
-
-        uint32_t max_chunks = (uint32_t)((asset_size + min_chunk_size - 1) / min_chunk_size);
-        hash_job->m_ChunkHashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * max_chunks);
-        hash_job->m_ChunkSizes = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * max_chunks);
 
         struct StorageChunkFeederContext feeder_context =
         {
@@ -683,10 +677,6 @@ void DynamicChunking(void* context)
         {
             LONGTAIL_LOG("DynamicChunking: Failed to create chunker for asset `%s`\n", path)
             hash_job->m_Success = 0;
-            LONGTAIL_FREE(hash_job->m_ChunkSizes);
-            hash_job->m_ChunkSizes = 0;
-            LONGTAIL_FREE(hash_job->m_ChunkHashes);
-            hash_job->m_ChunkHashes = 0;
             storage_api->CloseRead(storage_api, file_handle);
             file_handle = 0;
             free(path);
@@ -707,10 +697,6 @@ void DynamicChunking(void* context)
                 chunker = 0;
                 hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
                 hash_job->m_Success = 0;
-                LONGTAIL_FREE(hash_job->m_ChunkSizes);
-                hash_job->m_ChunkSizes = 0;
-                LONGTAIL_FREE(hash_job->m_ChunkHashes);
-                hash_job->m_ChunkHashes = 0;
                 storage_api->CloseRead(storage_api, file_handle);
                 file_handle = 0;
                 free(path);
@@ -724,6 +710,7 @@ void DynamicChunking(void* context)
                 TLongtail_Hash chunk_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, chunk_hash_context);
                 hash_job->m_ChunkHashes[chunk_count] = chunk_hash;
                 hash_job->m_ChunkSizes[chunk_count] = r.len;
+                hash_job->m_ChunkCompressionTypes[chunk_count] = hash_job->m_ContentCompressionType;
             }
 
             ++chunk_count;
@@ -739,10 +726,6 @@ void DynamicChunking(void* context)
             chunker = 0;
             hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
             hash_job->m_Success = 0;
-            LONGTAIL_FREE(hash_job->m_ChunkSizes);
-            hash_job->m_ChunkSizes = 0;
-            LONGTAIL_FREE(hash_job->m_ChunkHashes);
-            hash_job->m_ChunkHashes = 0;
             storage_api->CloseRead(storage_api, file_handle);
             file_handle = 0;
             free(path);
@@ -759,6 +742,7 @@ void DynamicChunking(void* context)
     file_handle = 0;
     
     *hash_job->m_ContentHash = content_hash;
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count <= hash_job->m_MaxChunkCount, return);
     *hash_job->m_AssetChunkCount = chunk_count;
 
     free((char*)path);
@@ -778,10 +762,12 @@ int ChunkAssets(
     TLongtail_Hash* path_hashes,
     TLongtail_Hash* content_hashes,
     const uint64_t* content_sizes,
+    const uint32_t* content_compression_types,
     uint32_t* asset_chunk_start_index,
     uint32_t* asset_chunk_counts,
     uint32_t** chunk_sizes,
     TLongtail_Hash** chunk_hashes,
+    uint32_t** chunk_compression_types,
     uint32_t max_chunk_size,
     uint32_t* chunk_count)
 {
@@ -798,6 +784,7 @@ int ChunkAssets(
     LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_counts != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_sizes != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_hashes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_compression_types != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count != 0, return 0);
 
@@ -815,11 +802,13 @@ int ChunkAssets(
     uint64_t max_chunk_count = 0;
     for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
-        max_chunk_count += content_sizes[asset_index] == 0 ? 0 : 1 + (content_sizes[asset_index] / min_chunk_size);
+        uint32_t max_count = content_sizes[asset_index] == 0 ? 0 : 1 + (content_sizes[asset_index] / min_chunk_size);
+        max_chunk_count += max_count;
     }
 
     TLongtail_Hash* hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * max_chunk_count);
     uint32_t* sizes = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * max_chunk_count);
+    uint32_t* compression_types = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * max_chunk_count);
 
     struct HashJob* hash_jobs = (struct HashJob*)LONGTAIL_MALLOC(sizeof(struct HashJob) * asset_count);
 
@@ -828,6 +817,7 @@ int ChunkAssets(
     uint64_t offset = 0;
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
+        uint32_t max_chunk_count = content_sizes[asset_index] == 0 ? 0 : 1 + (content_sizes[asset_index] / min_chunk_size);
         struct HashJob* job = &hash_jobs[asset_index];
         void* ctx = &hash_jobs[asset_index];
         job->m_StorageAPI = storage_api;
@@ -837,9 +827,12 @@ int ChunkAssets(
         job->m_PathHash = &path_hashes[asset_index];
         job->m_ContentHash = &content_hashes[asset_index];
         job->m_ContentSize = content_sizes[asset_index];
+        job->m_ContentCompressionType = content_compression_types[asset_index];
+        job->m_MaxChunkCount = max_chunk_count;
         job->m_AssetChunkCount = &asset_chunk_counts[asset_index];
         job->m_ChunkHashes = &hashes[chunks_offset];
         job->m_ChunkSizes = &sizes[chunks_offset];
+        job->m_ChunkCompressionTypes = &compression_types[chunks_offset];
         job->m_MaxChunkSize = max_chunk_size;
 
         JobAPI_JobFunc func = linear_chunking ? LinearChunking : DynamicChunking;
@@ -848,7 +841,7 @@ int ChunkAssets(
         LONGTAIL_FATAL_ASSERT_PRIVATE(jobs != 0, return 0)
         job_api->ReadyJobs(job_api, 1, jobs);
 
-        chunks_offset += content_sizes[asset_index] == 0 ? 0 : 1 + (content_sizes[asset_index] / min_chunk_size);
+        chunks_offset += max_chunk_count;
     }
 
     job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
@@ -873,6 +866,7 @@ int ChunkAssets(
         *chunk_count = built_chunk_count;
         *chunk_sizes = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * *chunk_count);
         *chunk_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * *chunk_count);
+        *chunk_compression_types = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * *chunk_count);
 
         uint32_t chunk_offset = 0;
         for (uint32_t i = 0; i < asset_count; ++i)
@@ -882,6 +876,7 @@ int ChunkAssets(
             {
                 (*chunk_sizes)[chunk_offset] = hash_jobs[i].m_ChunkSizes[chunk_index];
                 (*chunk_hashes)[chunk_offset] = hash_jobs[i].m_ChunkHashes[chunk_index];
+                (*chunk_compression_types)[chunk_offset] = hash_jobs[i].m_ChunkCompressionTypes[chunk_index];
                 ++chunk_offset;
             }
         }
@@ -891,7 +886,11 @@ int ChunkAssets(
         *chunk_count = 0;
         *chunk_sizes = 0;
         *chunk_hashes = 0;
+        *chunk_compression_types = 0;
     }
+
+    LONGTAIL_FREE(compression_types);
+    compression_types = 0;
 
     LONGTAIL_FREE(hashes);
     hashes = 0;
@@ -923,6 +922,7 @@ size_t GetVersionIndexDataSize(
         (sizeof(uint32_t) * asset_chunk_index_count) +  // m_AssetChunkIndexes
         (sizeof(TLongtail_Hash) * chunk_count) +        // m_ChunkHashes
         (sizeof(uint32_t) * chunk_count) +              // m_ChunkSizes
+        (sizeof(uint32_t) * chunk_count) +              // m_ChunkCompressionTypes
         (sizeof(uint32_t) * asset_count) +              // m_NameOffsets
         path_data_size;
 
@@ -987,6 +987,9 @@ void InitVersionIndex(struct VersionIndex* version_index, size_t version_index_d
     version_index->m_ChunkSizes = (uint32_t*)p;
     p += (sizeof(uint32_t) * chunk_count);
 
+    version_index->m_ChunkCompressionTypes = (uint32_t*)p;
+    p += (sizeof(uint32_t) * chunk_count);
+
     version_index->m_NameOffsets = (uint32_t*)p;
     p += (sizeof(uint32_t) * asset_count);
 
@@ -1010,7 +1013,8 @@ struct VersionIndex* BuildVersionIndex(
     const uint32_t* asset_chunk_indexes,
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
-    const TLongtail_Hash* chunk_hashes)
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* chunk_compression_types)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(mem != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(mem_size != 0, return 0);
@@ -1024,6 +1028,7 @@ struct VersionIndex* BuildVersionIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || asset_chunk_indexes != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || chunk_sizes != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || chunk_hashes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || chunk_compression_types != 0, return 0);
 
     uint32_t asset_count = *paths->m_PathCount;
     struct VersionIndex* version_index = (struct VersionIndex*)mem;
@@ -1046,6 +1051,7 @@ struct VersionIndex* BuildVersionIndex(
     memmove(version_index->m_AssetChunkIndexes, asset_chunk_indexes, sizeof(uint32_t) * asset_chunk_index_count);
     memmove(version_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
     memmove(version_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
+    memmove(version_index->m_ChunkCompressionTypes, chunk_compression_types, sizeof(uint32_t) * chunk_count);
     memmove(version_index->m_NameOffsets, paths->m_Offsets, sizeof(uint32_t) * asset_count);
     memmove(version_index->m_NameData, paths->m_Data, paths->m_DataSize);
 
@@ -1061,6 +1067,7 @@ struct VersionIndex* CreateVersionIndex(
     const char* root_path,
     const struct Paths* paths,
     const uint64_t* asset_sizes,
+    const uint32_t* asset_compression_types,
     uint32_t max_chunk_size)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
@@ -1077,6 +1084,7 @@ struct VersionIndex* CreateVersionIndex(
 
     uint32_t assets_chunk_index_count = 0;
     uint32_t* asset_chunk_sizes = 0;
+    uint32_t* asset_chunk_compression_types = 0;
     TLongtail_Hash* asset_chunk_hashes = 0;
     uint32_t* asset_chunk_start_index = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * path_count);
 
@@ -1091,14 +1099,18 @@ struct VersionIndex* CreateVersionIndex(
         path_hashes,
         content_hashes,
         asset_sizes,
+        asset_compression_types,
         asset_chunk_start_index,
         asset_chunk_counts,
         &asset_chunk_sizes,
         &asset_chunk_hashes,
+        &asset_chunk_compression_types,
         max_chunk_size,
         &assets_chunk_index_count))
     {
         LONGTAIL_LOG("CreateVersionIndex: Failed to chunk and hash assets in `%s`\n", root_path);
+        LONGTAIL_FREE(asset_chunk_compression_types);
+        asset_chunk_compression_types = 0;
         LONGTAIL_FREE(asset_chunk_start_index);
         asset_chunk_start_index = 0;
         LONGTAIL_FREE(asset_chunk_hashes);
@@ -1115,6 +1127,7 @@ struct VersionIndex* CreateVersionIndex(
     uint32_t* asset_chunk_indexes = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * assets_chunk_index_count);
     TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * assets_chunk_index_count);
     uint32_t* compact_chunk_sizes =  (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * assets_chunk_index_count);
+    uint32_t* compact_chunk_compression_types =  (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * assets_chunk_index_count);
 
     uint32_t unique_chunk_count = 0;
     struct HashToIndexItem* chunk_hash_to_index = 0;
@@ -1127,6 +1140,7 @@ struct VersionIndex* CreateVersionIndex(
             hmput(chunk_hash_to_index, h, unique_chunk_count);
             compact_chunk_hashes[unique_chunk_count] = h;
             compact_chunk_sizes[unique_chunk_count] = asset_chunk_sizes[c];
+            compact_chunk_compression_types[unique_chunk_count] = asset_chunk_compression_types[c];
             asset_chunk_indexes[c] = unique_chunk_count;
             ++unique_chunk_count;
         }
@@ -1155,14 +1169,19 @@ struct VersionIndex* CreateVersionIndex(
         asset_chunk_indexes,            // asset_chunk_indexes
         unique_chunk_count,             // chunk_count
         compact_chunk_sizes,            // chunk_sizes
-        compact_chunk_hashes);          // chunk_hashes
+        compact_chunk_hashes,           // chunk_hashes
+        compact_chunk_compression_types); // chunk_compression_types
 
+    LONGTAIL_FREE(compact_chunk_compression_types);
+    compact_chunk_compression_types = 0;
     LONGTAIL_FREE(compact_chunk_sizes);
     compact_chunk_sizes = 0;
     LONGTAIL_FREE(compact_chunk_hashes);
     compact_chunk_hashes = 0;
     LONGTAIL_FREE(asset_chunk_indexes);
     asset_chunk_indexes = 0;
+    LONGTAIL_FREE(asset_chunk_compression_types);
+    asset_chunk_compression_types = 0;
     LONGTAIL_FREE(asset_chunk_sizes);
     asset_chunk_sizes = 0;
     LONGTAIL_FREE(asset_chunk_hashes);
@@ -1256,6 +1275,7 @@ struct VersionIndex* ReadVersionIndex(
 struct BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
+    uint32_t* m_ChunkCompressionType;
     TLongtail_Hash* m_ChunkHashes; //[]
     uint32_t* m_ChunkSizes; // []
     uint32_t* m_ChunkCount;
@@ -1265,9 +1285,10 @@ size_t GetBlockIndexDataSize(uint32_t chunk_count)
 {
     return
         sizeof(TLongtail_Hash) +                    // m_BlockHash
+        sizeof(uint32_t) +                          // m_ChunkCompressionType
         (sizeof(TLongtail_Hash) * chunk_count) +    // m_ChunkHashes
         (sizeof(uint32_t) * chunk_count) +          // m_ChunkSizes
-        sizeof(uint32_t);                           // m_ChunkCount
+        sizeof(uint32_t);                          // m_ChunkCount
 }
 
 struct BlockIndex* InitBlockIndex(void* mem, uint32_t chunk_count)
@@ -1280,6 +1301,9 @@ struct BlockIndex* InitBlockIndex(void* mem, uint32_t chunk_count)
     block_index->m_BlockHash = (TLongtail_Hash*)p;
     p += sizeof(TLongtail_Hash);
 
+    block_index->m_ChunkCompressionType = (uint32_t*)p;
+    p += sizeof(uint32_t);
+
     block_index->m_ChunkHashes = (TLongtail_Hash*)p;
     p += sizeof(TLongtail_Hash) * chunk_count;
 
@@ -1288,6 +1312,7 @@ struct BlockIndex* InitBlockIndex(void* mem, uint32_t chunk_count)
 
     block_index->m_ChunkCount = (uint32_t*)p;
     p += sizeof(uint32_t);
+
     return block_index;
 }
 
@@ -1303,6 +1328,7 @@ size_t GetBlockIndexSize(uint32_t chunk_count)
 struct BlockIndex* CreateBlockIndex(
     void* mem,
     struct HashAPI* hash_api,
+    uint64_t chunk_compression_nethod,
     uint32_t chunk_count_in_block,
     uint64_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
@@ -1323,7 +1349,8 @@ struct BlockIndex* CreateBlockIndex(
         block_index->m_ChunkSizes[i] = chunk_sizes[chunk_index];
     }
     HashAPI_HContext hash_context = hash_api->BeginContext(hash_api);
-    hash_api->Hash(hash_api, hash_context, (uint32_t)(GetBlockIndexDataSize(chunk_count_in_block)), (void*)&block_index[1]);
+    hash_api->Hash(hash_api, hash_context, (uint32_t)(sizeof(TLongtail_Hash) * chunk_count_in_block), (void*)block_index->m_ChunkHashes);
+    *block_index->m_ChunkCompressionType = chunk_compression_nethod;
     *block_index->m_BlockHash = hash_api->EndContext(hash_api, hash_context);
     *block_index->m_ChunkCount = chunk_count_in_block;
 
@@ -1409,12 +1436,14 @@ struct ContentIndex* CreateContentIndex(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
+    const uint32_t* chunk_compression_types,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(hash_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || chunk_hashes != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || chunk_sizes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || chunk_compression_types != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_block_size != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunks_per_block != 0, return 0);
 
@@ -1443,6 +1472,7 @@ struct ContentIndex* CreateContentIndex(
     uint64_t i = 0;
     uint32_t chunk_count_in_block = 0;
     uint32_t block_count = 0;
+    uint32_t current_compression_type = 0;
 
     while (i < unique_chunk_count)
     {
@@ -1451,6 +1481,7 @@ struct ContentIndex* CreateContentIndex(
         uint64_t chunk_index = chunk_indexes[i];
 
         uint32_t current_size = chunk_sizes[chunk_index];
+        current_compression_type = chunk_compression_types[chunk_index];
 
         stored_chunk_indexes[chunk_count_in_block] = chunk_index;
         ++chunk_count_in_block;
@@ -1459,6 +1490,12 @@ struct ContentIndex* CreateContentIndex(
         {
             chunk_index = chunk_indexes[(i + 1)];
             uint32_t chunk_size = chunk_sizes[chunk_index];
+            uint32_t compression_type = chunk_compression_types[chunk_index];
+
+            if (compression_type != current_compression_type)
+            {
+                break;
+            }
 
             // Break if resulting chunk count will exceed MAX_ASSETS_PER_BLOCK
             if (chunk_count_in_block == max_chunks_per_block)
@@ -1482,6 +1519,7 @@ struct ContentIndex* CreateContentIndex(
         block_indexes[block_count] = CreateBlockIndex(
             LONGTAIL_MALLOC(GetBlockIndexSize(chunk_count_in_block)),
             hash_api,
+            current_compression_type,
             chunk_count_in_block,
             stored_chunk_indexes,
             chunk_hashes,
@@ -1496,6 +1534,7 @@ struct ContentIndex* CreateContentIndex(
         block_indexes[block_count] = CreateBlockIndex(
             LONGTAIL_MALLOC(GetBlockIndexSize(chunk_count_in_block)),
             hash_api,
+            current_compression_type,
             chunk_count_in_block,
             stored_chunk_indexes,
             chunk_hashes,
@@ -1625,6 +1664,7 @@ struct AssetPart
 {
     const char* m_Path;
     uint64_t m_Start;
+    uint32_t m_CompressionType;
 #ifdef SLOW_VALIDATION
     uint32_t m_CunkSize;    // TODO: Just for validation, remove
 #endif // SLOW_VALIDATION
@@ -1655,12 +1695,14 @@ struct ChunkHashToAssetPart* CreateAssetPartLookup(
             LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_index < *version_index->m_ChunkCount, return 0);
             uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
+            uint32_t compression_type = version_index->m_ChunkCompressionTypes[chunk_index];
             intptr_t lookup_ptr = hmgeti(asset_part_lookup, chunk_hash);
             if (lookup_ptr == -1)
             {
                 struct AssetPart asset_part = {
                     path,
-                    asset_chunk_offset
+                    asset_chunk_offset,
+                    compression_type,
 #ifdef SLOW_VALIDATION
                     , chunk_size
 #endif // SLOW_VALIDATION
@@ -1725,11 +1767,6 @@ void WriteContentBlockJob(void* context)
     uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
     TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
 
-//    char* block_name = GetBlockName(block_hash);
-//    char file_name[64];
-//    sprintf(file_name, "%s.lrb", job->m_BlockName);
-//    char* block_path = target_storage_api->ConcatPath(target_storage_api, content_folder, job->m_BlockName);
-
     char tmp_block_name[64];
     sprintf(tmp_block_name, "%s.tmp", job->m_BlockName);
 
@@ -1741,19 +1778,20 @@ void WriteContentBlockJob(void* context)
         if (content_index->m_ChunkBlockIndexes[chunk_index] != block_index)
         {
             LONGTAIL_LOG("WriteContentBlockJob: Invalid chunk order! 0x%" PRIx64 " in `%s`\n", block_hash, content_folder)
-//            free((char*)block_path);
-//            block_path = 0;
-//            LONGTAIL_FREE(block_name);
-//            block_name = 0;
             return;
         }
         uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
         block_data_size += chunk_size;
     }
 
-    char* write_buffer = (char*)LONGTAIL_MALLOC(block_data_size);
+    uint64_t block_data_buffer_size = sizeof(uint32_t) + sizeof(uint32_t) + block_data_size;
+    char* block_data_buffer = (char*)LONGTAIL_MALLOC(block_data_buffer_size);
+    ((uint32_t*)block_data_buffer)[0] = (uint32_t)block_data_size;
+    ((uint32_t*)block_data_buffer)[1] = (uint32_t)block_data_size;
+    char* write_buffer = (char*)&((uint32_t*)block_data_buffer)[2];
     char* write_ptr = write_buffer;
 
+    uint32_t compression_type = 0;
     for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
@@ -1763,14 +1801,10 @@ void WriteContentBlockJob(void* context)
         if (asset_part_index == -1)
         {
             LONGTAIL_LOG("WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 " in `%s`\n", chunk_hash, content_folder)
-            LONGTAIL_FREE(write_buffer);
-            write_buffer = 0;
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
             free((char*)tmp_block_path);
             tmp_block_path = 0;
-//            free((char*)block_path);
-//            block_path = 0;
-//            LONGTAIL_FREE(block_name);
-//            block_name = 0;
             return;
         }
         struct AssetPart* asset_part = &job->m_AssetPartLookup[asset_part_index].value;
@@ -1778,45 +1812,41 @@ void WriteContentBlockJob(void* context)
         if (IsDirPath(asset_path))
         {
             LONGTAIL_LOG("WriteContentBlockJob: Directory should not have any chunks `%s`\n", asset_path)
-            LONGTAIL_FREE(write_buffer);
-            write_buffer = 0;
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
             free((char*)tmp_block_path);
             tmp_block_path = 0;
-//            free((char*)block_path);
-//            block_path = 0;
-//            LONGTAIL_FREE(block_name);
-//            block_name = 0;
             return;
         }
 
         char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
         uint64_t asset_content_offset = asset_part->m_Start;
+        if (chunk_index != first_chunk_index && compression_type != asset_part->m_CompressionType)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Warning: Inconsistend compression type for chunks inside block 0x%" PRIx64 " in `%s`, retaining %u\n", block_hash, content_folder, compression_type)
+        }
+        else
+        {
+            compression_type = asset_part->m_CompressionType;
+        }
         StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
         if (!file_handle)
         {
             LONGTAIL_LOG("WriteContentBlockJob: Failed to open asset file `%s`\n", full_path);
-            LONGTAIL_FREE(write_buffer);
-            write_buffer = 0;
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
             free((char*)tmp_block_path);
             tmp_block_path = 0;
-//            free((char*)block_path);
-//            block_path = 0;
-//            LONGTAIL_FREE(block_name);
-//            block_name = 0;
             return;
         }
         uint64_t asset_file_size = source_storage_api->GetSize(source_storage_api, file_handle);
         if (asset_file_size < (asset_content_offset + chunk_size))
         {
             LONGTAIL_LOG("WriteContentBlockJob: Mismatching asset size in asset `%s`, size is %" PRIu64 ", but expecting at least %" PRIu64 "\n", full_path, asset_file_size, asset_content_offset + chunk_size);
-            LONGTAIL_FREE(write_buffer);
-            write_buffer = 0;
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
             free((char*)tmp_block_path);
             tmp_block_path = 0;
-//            free((char*)block_path);
-//            block_path = 0;
-//            LONGTAIL_FREE(block_name);
-//            block_name = 0;
             source_storage_api->CloseRead(source_storage_api, file_handle);
             file_handle = 0;
             return;
@@ -1829,61 +1859,56 @@ void WriteContentBlockJob(void* context)
         full_path = 0;
     }
 
-    CompressionAPI_HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api));
-    const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
-    char* compressed_buffer = (char*)LONGTAIL_MALLOC((sizeof(uint32_t) * 2) + max_dst_size);
-    ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
-
-    size_t compressed_size = compression_api->Compress(compression_api, compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
-    compression_api->DeleteCompressionContext(compression_api, compression_context);
-    LONGTAIL_FREE(write_buffer);
-    write_buffer = 0;
-    if (compressed_size <= 0)
+    if (compression_type != 0)
     {
-        LONGTAIL_LOG("WriteContentBlockJob: Failed to compress data for block for `%s`\n", tmp_block_path)
-        LONGTAIL_FREE(compressed_buffer);
-        compressed_buffer = 0;
-        free((char*)tmp_block_path);
-        tmp_block_path = 0;
-//        free((char*)block_path);
-//        block_path = 0;
-//        LONGTAIL_FREE(block_name);
-//        block_name = 0;
-        return;
+        // TODO: We should pick compression method based on 'compression_type'
+        CompressionAPI_HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api));
+        const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
+        char* compressed_buffer = (char*)LONGTAIL_MALLOC((sizeof(uint32_t) * 2) + max_dst_size);
+        ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
+
+        size_t compressed_size = compression_api->Compress(compression_api, compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
+        compression_api->DeleteCompressionContext(compression_api, compression_context);
+        if (compressed_size <= 0)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Failed to compress data for block for `%s`\n", tmp_block_path)
+            LONGTAIL_FREE(compressed_buffer);
+            compressed_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            return;
+        }
+        ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
+
+        LONGTAIL_FREE(block_data_buffer);
+        block_data_buffer = 0;
+        block_data_buffer_size = sizeof(uint32_t) + sizeof(uint32_t) + compressed_size;
+        block_data_buffer = compressed_buffer;
     }
 
-    ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
     if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
     {
         LONGTAIL_LOG("WriteContentBlockJob: Failed to create parent path for `%s`\n", tmp_block_path)
-        LONGTAIL_FREE(compressed_buffer);
-        compressed_buffer = 0;
+        LONGTAIL_FREE(block_data_buffer);
+        block_data_buffer = 0;
         free((char*)tmp_block_path);
-//        tmp_block_path = 0;
-//        free((char*)block_path);
-//        block_path = 0;
-//        LONGTAIL_FREE(block_name);
-//        block_name = 0;
         return;
     }
+
     StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 1);
     if (!block_file_handle)
     {
         LONGTAIL_LOG("WriteContentBlockJob: Failed to create block file `%s`\n", tmp_block_path)
-        LONGTAIL_FREE(compressed_buffer);
-        compressed_buffer = 0;
+        LONGTAIL_FREE(block_data_buffer);
+        block_data_buffer = 0;
         free((char*)tmp_block_path);
         tmp_block_path = 0;
-//        free((char*)block_path);
-//        block_path = 0;
-//        LONGTAIL_FREE(block_name);
-//        block_name = 0;
         return;
     }
-    int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, (sizeof(uint32_t) * 2) + compressed_size, compressed_buffer);
-    LONGTAIL_FREE(compressed_buffer);
-    compressed_buffer = 0;
-    uint32_t write_offset = (uint32_t)((sizeof(uint32_t) * 2) + compressed_size);
+    int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, block_data_buffer_size, block_data_buffer);
+    LONGTAIL_FREE(block_data_buffer);
+    block_data_buffer = 0;
+    uint32_t write_offset = block_data_buffer_size;
 
     uint32_t aligned_size = (((write_offset + 15) / 16) * 16);
     uint32_t padding = aligned_size - write_offset;
@@ -1906,12 +1931,6 @@ void WriteContentBlockJob(void* context)
     target_storage_api->CloseWrite(target_storage_api, block_file_handle);
     write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, job->m_BlockPath);
     job->m_Success = write_ok;
-
-//    LONGTAIL_FREE(block_name);
-//    block_name = 0;
-
-//    free((char*)block_path);
-//    block_path = 0;
 
     free((char*)tmp_block_path);
     tmp_block_path = 0;
@@ -2055,6 +2074,7 @@ static char* ReadBlockData(
         return 0;
     }
     uint64_t compressed_block_size = storage_api->GetSize(storage_api, block_file);
+
     char* compressed_block_content = (char*)LONGTAIL_MALLOC(compressed_block_size);
     int ok = storage_api->Read(storage_api, block_file, 0, compressed_block_size, compressed_block_content);
     storage_api->CloseRead(storage_api, block_file);
@@ -2068,36 +2088,66 @@ static char* ReadBlockData(
         return 0;
     }
 
-    uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
-    uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
-    char* block_data = (char*)LONGTAIL_MALLOC(uncompressed_size);
-    CompressionAPI_HDecompressionContext compression_context = compression_api->CreateDecompressionContext(compression_api);
-    if (!compression_context)
+    uint32_t chunk_count = *(const uint32_t*)(&compressed_block_content[compressed_block_size - sizeof(uint32_t)]);
+    size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
+    if (compressed_block_size < block_index_data_size)
     {
-        LONGTAIL_LOG("ReadBlockData: Failed to create decompressor for block `%s`\n", block_path)
-        LONGTAIL_FREE(block_data);
-        block_data = 0;
+        LONGTAIL_LOG("ReadBlockData: Malformed content block (size to small) `%s`\n", block_path)
         free(block_path);
         block_path = 0;
         LONGTAIL_FREE(compressed_block_content);
         compressed_block_content = 0;
         return 0;
     }
-    size_t result = compression_api->Decompress(compression_api, compression_context, &compressed_block_content[sizeof(uint32_t) * 2], block_data, compressed_size, uncompressed_size);
-    ok = result == uncompressed_size;
-    compression_api->DeleteDecompressionContext(compression_api, compression_context);
-    LONGTAIL_FREE(compressed_block_content);
-    compressed_block_content = 0;
 
-    if (!ok)
+    char* block_data = compressed_block_content;
+    const TLongtail_Hash* block_index_start = (const TLongtail_Hash*)&block_data[compressed_block_size - block_index_data_size];
+    // TODO: This could be cleaner
+    TLongtail_Hash verify_block_hash = block_index_start[0];
+    if (block_hash != verify_block_hash)
     {
-        LONGTAIL_LOG("ReadBlockData: Failed to decompress block `%s`\n", block_path)
-        LONGTAIL_FREE(block_data);
-        block_data = 0;
+        LONGTAIL_LOG("ReadBlockData: Malformed content block (mismatching block hash) `%s`\n", block_path)
         free(block_path);
         block_path = 0;
+        LONGTAIL_FREE(block_data);
+        block_data = 0;
         return 0;
     }
+    uint32_t compression_type = block_index_start[1];
+    if (0 != compression_type)
+    {
+        uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
+        uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
+        block_data = (char*)LONGTAIL_MALLOC(uncompressed_size);
+        CompressionAPI_HDecompressionContext compression_context = compression_api->CreateDecompressionContext(compression_api);
+        if (!compression_context)
+        {
+            LONGTAIL_LOG("ReadBlockData: Failed to create decompressor for block `%s`\n", block_path)
+            LONGTAIL_FREE(block_data);
+            block_data = 0;
+            free(block_path);
+            block_path = 0;
+            LONGTAIL_FREE(compressed_block_content);
+            compressed_block_content = 0;
+            return 0;
+        }
+        size_t result = compression_api->Decompress(compression_api, compression_context, &compressed_block_content[sizeof(uint32_t) * 2], block_data, compressed_size, uncompressed_size);
+        ok = result == uncompressed_size;
+        compression_api->DeleteDecompressionContext(compression_api, compression_context);
+        LONGTAIL_FREE(compressed_block_content);
+        compressed_block_content = 0;
+
+        if (!ok)
+        {
+            LONGTAIL_LOG("ReadBlockData: Failed to decompress block `%s`\n", block_path)
+            LONGTAIL_FREE(block_data);
+            block_data = 0;
+            free(block_path);
+            block_path = 0;
+            return 0;
+        }
+    }
+
     free(block_path);
     block_path = 0;
 
@@ -2981,6 +3031,131 @@ int WriteAssets(
     LONGTAIL_FATAL_ASSERT_PRIVATE(cl != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(awl != 0, return 0);
 
+    if (!job_api->ReserveJobs(job_api, awl->m_BlockJobCount + awl->m_AssetJobCount))
+    {
+        LONGTAIL_LOG("WriteAssets: Failed to reserve %u jobs for folder `%s`\n", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path)
+        LONGTAIL_FREE(awl);
+        awl = 0;
+        DeleteContentLookup(cl);
+        cl = 0;
+        return 0;
+    }
+
+    struct WriteAssetsFromBlockJob* block_jobs = (struct WriteAssetsFromBlockJob*)LONGTAIL_MALLOC((size_t)(sizeof(struct WriteAssetsFromBlockJob) * awl->m_BlockJobCount));
+    uint32_t b = 0;
+    uint32_t block_job_count = 0;
+    while (b < awl->m_BlockJobCount)
+    {
+        uint32_t asset_index = awl->m_BlockJobAssetIndexes[b];
+        TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
+        uint64_t block_index = hmget(cl->m_ChunkHashToBlockIndex, first_chunk_hash);
+        struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
+        job->m_ContentStorageAPI = content_storage_api;
+        job->m_VersionStorageAPI = version_storage_api;
+        job->m_CompressionAPI = compression_api;
+        job->m_ContentIndex = content_index;
+        job->m_VersionIndex = version_index;
+        job->m_ContentFolder = content_path;
+        job->m_VersionFolder = version_path;
+        job->m_BlockIndex = (uint64_t)block_index;
+        job->m_ContentChunkLookup = cl->m_ChunkHashToChunkIndex;
+        job->m_AssetIndexes = &awl->m_BlockJobAssetIndexes[b];
+
+        job->m_AssetCount = 1;
+        ++b;
+        while (b < awl->m_BlockJobCount)
+        {
+            uint32_t next_asset_index = awl->m_BlockJobAssetIndexes[b];
+            TLongtail_Hash next_first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[next_asset_index]]];
+            intptr_t next_block_index_ptr = hmgeti(cl->m_ChunkHashToBlockIndex, next_first_chunk_hash);
+            LONGTAIL_FATAL_ASSERT_PRIVATE(-1 != next_block_index_ptr, return 0)
+            uint64_t next_block_index = cl->m_ChunkHashToBlockIndex[next_block_index_ptr].value;
+            if (block_index != next_block_index)
+            {
+                break;
+            }
+
+            ++job->m_AssetCount;
+            ++b;
+        }
+
+        JobAPI_JobFunc func[1] = { WriteAssetsFromBlock };
+        void* ctx[1] = { job };
+
+        JobAPI_Jobs block_write_job = job_api->CreateJobs(job_api, 1, func, ctx);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(block_write_job != 0, return 0)
+        job_api->ReadyJobs(job_api, 1, block_write_job);
+    }
+
+    struct HashToIndexItem* base_asset_lookup = 0;
+    if (optional_base_version)
+    {
+        for (uint32_t a = 0; a < *optional_base_version->m_AssetCount; ++a)
+        {
+            hmput(base_asset_lookup, optional_base_version->m_ContentHashes[a], a);
+        }
+    }
+
+    struct WriteAssetFromBlocksJob* asset_jobs = (struct WriteAssetFromBlocksJob*)LONGTAIL_MALLOC(sizeof(struct WriteAssetFromBlocksJob) * awl->m_AssetJobCount);
+    for (uint32_t a = 0; a < awl->m_AssetJobCount; ++a)
+    {
+        struct WriteAssetFromBlocksJob* job = &asset_jobs[a];
+        job->m_ContentStorageAPI = content_storage_api;
+        job->m_VersionStorageAPI = version_storage_api;
+        job->m_CompressionAPI = compression_api;
+        job->m_ContentIndex = content_index;
+        job->m_VersionIndex = version_index;
+        job->m_ContentFolder = content_path;
+        job->m_VersionFolder = version_path;
+        job->m_ContentChunkLookup = cl->m_ChunkHashToChunkIndex;
+        job->m_AssetIndex = awl->m_AssetIndexJobs[a];
+        job->m_BaseVersionIndex = 0;
+        job->m_BaseAssetIndex = 0;
+        intptr_t base_asset_ptr = hmgeti(base_asset_lookup, version_index->m_ContentHashes[job->m_AssetIndex]);
+        if (base_asset_ptr != -1)
+        {
+            job->m_BaseVersionIndex = optional_base_version;
+            job->m_BaseAssetIndex = base_asset_lookup[base_asset_ptr].value;
+        }
+
+        JobAPI_JobFunc func[1] = { WriteAssetFromBlocks };
+        void* ctx[1] = { job };
+
+        JobAPI_Jobs asset_write_job = job_api->CreateJobs(job_api, 1, func, ctx);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(asset_write_job != 0, return 0)
+        job_api->ReadyJobs(job_api, 1, asset_write_job);
+        //WriteAssetFromBlocks(job);
+    }
+
+    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+
+    int success = 1;
+    for (uint32_t b = 0; b < block_job_count; ++b)
+    {
+        struct WriteAssetsFromBlockJob* job = &block_jobs[b];
+        if (!job->m_Success)
+        {
+            LONGTAIL_LOG("WriteAssets: Failed to write single block assets content from `%s` to folder `%s`\n", content_path, version_path)
+            success = 0;
+        }
+    }
+    for (uint32_t a = 0; a < awl->m_AssetJobCount; ++a)
+    {
+        struct WriteAssetFromBlocksJob* job = &asset_jobs[a];
+        if (!job->m_Success)
+        {
+            LONGTAIL_LOG("WriteAssets: Failed to write multi block assets content from `%s` to folder `%s`\n", content_path, version_path)
+            success = 0;
+        }
+    }
+
+    LONGTAIL_FREE(asset_jobs);
+    asset_jobs = 0;
+    LONGTAIL_FREE(block_jobs);
+    block_jobs = 0;
+
+    return success;
+#if 0
     uint32_t decompress_blocks_per_write = job_api->GetWorkerCount(job_api);//GetCPUCount();
     uint64_t decompress_job_count = 0;
     uint64_t write_job_count = 0;
@@ -3036,7 +3211,6 @@ int WriteAssets(
             }
         }
     }
-
     if (!job_api->ReserveJobs(job_api, awl->m_BlockJobCount + write_job_count + decompress_job_count))
     {
         LONGTAIL_LOG("WriteAssets: Failed to reserve %u jobs for folder `%s`\n", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path)
@@ -3106,166 +3280,7 @@ int WriteAssets(
             hmput(base_asset_lookup, optional_base_version->m_ContentHashes[a], a);
         }
     }
-    struct DecompressBlockContext* decompress_block_contexts = (struct DecompressBlockContext*)LONGTAIL_MALLOC(sizeof(struct DecompressBlockContext) * decompress_job_count);
-    struct WriteAssetBlocksContext* write_blocks_contexts = (struct WriteAssetBlocksContext*)LONGTAIL_MALLOC(sizeof(struct WriteAssetBlocksContext) * write_job_count);
-    JobAPI_JobFunc* decompres_job_funcs = (JobAPI_JobFunc*)LONGTAIL_MALLOC(sizeof(JobAPI_JobFunc) * decompress_blocks_per_write);
-    for (uint32_t d = 0; d < decompress_blocks_per_write; ++d)
-    {
-        decompres_job_funcs[d] = DecompressBlock;
-    }
-    void** decompress_job_ctxs = (void**)LONGTAIL_MALLOC(sizeof(void*) * decompress_blocks_per_write);
-    uint64_t decompress_job_index = 0;
-    uint64_t write_job_index = 0;
-    for (uint64_t a = 0; a < awl->m_AssetJobCount; ++a)
-    {
-        uint32_t asset_index = awl->m_AssetIndexJobs[a];
-        uint64_t asset_size = version_index->m_AssetSizes[asset_index];
-        if (asset_size == 0)
-        {
-            struct WriteAssetBlocksContext* write_block_context = &write_blocks_contexts[write_job_index];
-            write_block_context->m_StorageAPI = version_storage_api;
-            write_block_context->m_DecompressBlockContexts = &decompress_block_contexts[decompress_job_index];
-            write_block_context->m_AssetsPath = version_path;
-            write_block_context->m_BlockCount = 0;
-            write_block_context->m_ChunkOffset = 0;
-            write_block_context->m_AssetIndex = asset_index;
-            write_block_context->m_VersionIndex = version_index;
-            write_block_context->m_ContentIndex = content_index;
-            write_block_context->m_ContentLookup = cl;
-            write_block_context->m_Success = 0;
 
-            JobAPI_JobFunc write_job_funcs[1] = {WriteAssetBlocks};
-            void* write_job_contexts[1] = {write_block_context};
-            JobAPI_Jobs write_job = job_api->CreateJobs(job_api, 1, write_job_funcs, write_job_contexts);
-            LONGTAIL_FATAL_ASSERT_PRIVATE(write_job != 0, return 0)
-
-            job_api->ReadyJobs(job_api, 1, write_job);
-            write_job_index += 1;
-            continue;
-        }
-        
-        JobAPI_Jobs first_decompress_jobs = 0;
-        uint32_t first_decompress_job_count = 0;
-        JobAPI_Jobs prev_decompress_jobs = 0;
-        uint32_t prev_block_decompress_job_count = 0;
-        JobAPI_Jobs prev_write_job = 0;
-
-        uint32_t asset_chunk_count = version_index->m_AssetChunkCounts[asset_index];
-
-        uint32_t block_count = 0;
-        uint32_t chunk_index_start = version_index->m_AssetChunkIndexStarts[asset_index];
-        uint32_t chunk_offset = 0;
-
-        const uint32_t* asset_chunk_indexes = &version_index->m_AssetChunkIndexes[chunk_index_start];
-
-        intptr_t hm_tmp;
-        uint32_t c = 0;
-        while (c < asset_chunk_count)
-        {
-            uint32_t chunk_index = asset_chunk_indexes[c];
-            TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-            intptr_t last_block_index_ptr = hmgeti_ts(cl->m_ChunkHashToBlockIndex, chunk_hash, hm_tmp);
-            LONGTAIL_FATAL_ASSERT_PRIVATE(last_block_index_ptr != -1, return 0;)
-            uint64_t last_block_index = cl->m_ChunkHashToBlockIndex[last_block_index_ptr].value;
-            ++c;
-
-            while (c < asset_chunk_count)
-            {
-                uint32_t chunk_index = asset_chunk_indexes[c];
-                TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-                intptr_t block_index_ptr = hmgeti_ts(cl->m_ChunkHashToBlockIndex, chunk_hash, hm_tmp);
-                LONGTAIL_FATAL_ASSERT_PRIVATE(block_index_ptr != -1, return 0;)
-                uint64_t block_index = cl->m_ChunkHashToBlockIndex[block_index_ptr].value;
-                if (last_block_index != block_index)
-                {
-                    break;
-                }
-                ++c;
-            }
-
-            {
-                struct DecompressBlockContext* decompress_block_context = &decompress_block_contexts[decompress_job_index + block_count];
-                decompress_job_ctxs[block_count] = decompress_block_context;
-                decompress_block_context->m_StorageAPI = content_storage_api;
-                decompress_block_context->m_CompressonAPI = compression_api;
-                decompress_block_context->m_ContentFolder = content_path;
-                decompress_block_context->m_BlockHash = content_index->m_BlockHashes[last_block_index];
-                decompress_block_context->m_UncompressedBlockData = 0;
-                ++block_count;
-            }
-
-            if (block_count == decompress_blocks_per_write || c == asset_chunk_count)
-            {
-                uint32_t chunk_count = c - chunk_offset;
-                struct WriteAssetBlocksContext* write_block_context = &write_blocks_contexts[write_job_index];
-                write_block_context->m_StorageAPI = version_storage_api;
-                write_block_context->m_DecompressBlockContexts = &decompress_block_contexts[decompress_job_index];
-                write_block_context->m_AssetsPath = version_path;
-                write_block_context->m_BlockCount = block_count;
-                write_block_context->m_ChunkOffset = chunk_offset;
-                write_block_context->m_ChunkCount = chunk_count;
-                write_block_context->m_AssetIndex = asset_index;
-                write_block_context->m_VersionIndex = version_index;
-                write_block_context->m_ContentIndex = content_index;
-                write_block_context->m_ContentLookup = cl;
-                write_block_context->m_Success = 0;
-
-                {
-                    const uint32_t* verify_asset_chunk_indexes = &asset_chunk_indexes[chunk_offset];
-                    for (uint32_t vc = 0; vc < chunk_count; ++vc)
-                    {
-                        uint32_t chunk_index = verify_asset_chunk_indexes[vc];
-                        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-                        intptr_t block_index_ptr = hmgeti_ts(cl->m_ChunkHashToBlockIndex, chunk_hash, hm_tmp);
-                        LONGTAIL_FATAL_ASSERT_PRIVATE(block_index_ptr != -1, return 0)
-                        uint64_t block_index = cl->m_ChunkHashToBlockIndex[block_index_ptr].value;
-                        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-                        uint32_t job_index = block_count;
-                        for (uint32_t b = 0; b < block_count; ++b)
-                        {
-                            if (write_block_context->m_DecompressBlockContexts[b].m_BlockHash == block_hash)
-                            {
-                                job_index = b;
-                                break;
-                            }
-                        }
-                        LONGTAIL_FATAL_ASSERT_PRIVATE(job_index < block_count, return 0;)
-                    }
-                }
-
-                JobAPI_JobFunc write_job_funcs[1] = {WriteAssetBlocks};
-                void* write_job_contexts[1] = {write_block_context};
-                JobAPI_Jobs write_job = job_api->CreateJobs(job_api, 1, write_job_funcs, write_job_contexts);
-                LONGTAIL_FATAL_ASSERT_PRIVATE(write_job != 0, return 0)
-
-                JobAPI_Jobs decompress_jobs = job_api->CreateJobs(job_api, block_count, decompres_job_funcs, decompress_job_ctxs);
-                LONGTAIL_FATAL_ASSERT_PRIVATE(decompress_jobs != 0, return 0)
-
-                job_api->AddDependecies(job_api, 1, write_job, block_count, decompress_jobs);
-
-                if (chunk_offset == 0)
-                {
-                    first_decompress_jobs = decompress_jobs;
-                    first_decompress_job_count = block_count;
-                }
-                else
-                {
-                    job_api->AddDependecies(job_api, 1, write_job, 1, prev_write_job);
-                    job_api->AddDependecies(job_api, block_count, decompress_jobs, 1, prev_write_job);
-                }
-
-                prev_write_job = write_job;
-                prev_block_decompress_job_count = block_count;
-                prev_decompress_jobs = decompress_jobs;
-
-                chunk_offset += chunk_count;
-                decompress_job_index += block_count;
-                ++write_job_index;
-                block_count = 0;
-            }
-        }
-        job_api->ReadyJobs(job_api, first_decompress_job_count, first_decompress_jobs);
-    }
     job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
 
     int success = 1;
@@ -3298,6 +3313,7 @@ int WriteAssets(
     block_jobs = 0;
 
     return success;
+#endif // 0
 }
 
 
@@ -3718,12 +3734,14 @@ struct ContentIndex* CreateMissingContent(
             0,
             0,
             0,
+            0,
             max_block_size,
             max_chunks_per_block);
         return diff_content_index;
     }
 
     uint32_t* diff_chunk_sizes = (uint32_t*)LONGTAIL_MALLOC((size_t)(sizeof(uint32_t) * added_hash_count));
+    uint32_t* diff_chunk_compression_types = (uint32_t*)LONGTAIL_MALLOC((size_t)(sizeof(uint32_t) * added_hash_count));
 
     struct HashToIndexItem* chunk_index_lookup = 0;
     for (uint64_t i = 0; i < chunk_count; ++i)
@@ -3735,6 +3753,7 @@ struct ContentIndex* CreateMissingContent(
     {
         uint64_t chunk_index = hmget(chunk_index_lookup, added_hashes[j]);
         diff_chunk_sizes[j] = version->m_ChunkSizes[chunk_index];
+        diff_chunk_compression_types[j] = version->m_ChunkCompressionTypes[chunk_index];
     }
     hmfree(chunk_index_lookup);
     chunk_index_lookup = 0;
@@ -3744,9 +3763,12 @@ struct ContentIndex* CreateMissingContent(
         added_hash_count,
         added_hashes,
         diff_chunk_sizes,
+        diff_chunk_compression_types,
         max_block_size,
         max_chunks_per_block);
 
+    LONGTAIL_FREE(diff_chunk_compression_types);
+    diff_chunk_compression_types = 0;
     LONGTAIL_FREE(diff_chunk_sizes);
     diff_chunk_sizes = 0;
     LONGTAIL_FREE(added_hashes);

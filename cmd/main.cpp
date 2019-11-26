@@ -128,6 +128,33 @@ struct Progress
     }
 };
 
+const uint32_t NO_COMPRESSION_TYPE = 0;
+const uint32_t LIZARD_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'a') << '8') + ((uint32_t)'d');
+
+static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
+{
+    uint32_t count = *file_infos->m_Paths.m_PathCount;
+    uint32_t* result = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const char* path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[i]];
+        const char* extension_start = strrchr(path, '.');
+        if (extension_start == 0)
+        {
+            result[i] = LIZARD_COMPRESSION_TYPE;
+            continue;
+        }
+        if ((0 == strcmp(extension_start, ".zip")) ||
+            (0 == strcmp(extension_start, ".7z")) ||
+            (0 == strcmp(extension_start, ".pak")) ||
+            (0 == strcmp(extension_start, ".rar")) )
+        {
+            result[i] = NO_COMPRESSION_TYPE;
+            continue;
+        }
+    }
+    return result;
+}
 int Cmd_CreateVersionIndex(
     StorageAPI* storage_api,
     HashAPI* hash_api,
@@ -143,7 +170,14 @@ int Cmd_CreateVersionIndex(
     if (!file_infos)
     {
         printf("Failed to scan folder `%s`\n", version);
-        return 1;
+        return 0;
+    }
+    uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
+    if (!compression_types)
+    {
+        printf("Failed to get compression types for files in `%s`\n", version);
+        LONGTAIL_FREE(file_infos);
+        return 0;
     }
 
     Progress progress;
@@ -156,7 +190,10 @@ int Cmd_CreateVersionIndex(
         version,
         &file_infos->m_Paths,
         file_infos->m_FileSizes,
+        compression_types,
         target_chunk_size);
+    LONGTAIL_FREE(compression_types);
+    compression_types = 0;
     LONGTAIL_FREE(file_infos);
     file_infos = 0;
     if (!vindex)
@@ -317,6 +354,13 @@ int Cmd_CreateMissingContentIndex(
             printf("Failed to scan folder `%s`\n", version);
             return 0;
         }
+        uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
+        if (!compression_types)
+        {
+            printf("Failed to get compression types for files in `%s`\n", version);
+            LONGTAIL_FREE(file_infos);
+            return 0;
+        }
         Progress progress;
         vindex = CreateVersionIndex(
             storage_api,
@@ -327,7 +371,10 @@ int Cmd_CreateMissingContentIndex(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            compression_types,
             target_chunk_size);
+        LONGTAIL_FREE(compression_types);
+        compression_types = 0;
         LONGTAIL_FREE(file_infos);
         file_infos = 0;
         if (!vindex)
@@ -370,6 +417,7 @@ int Cmd_CreateMissingContentIndex(
     else
     {
         existing_cindex = CreateContentIndex(
+            0,
             0,
             0,
             0,
@@ -445,6 +493,13 @@ int Cmd_CreateContent(
             printf("Failed to scan folder `%s`\n", version);
             return 0;
         }
+        uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
+        if (!compression_types)
+        {
+            printf("Failed to get compression types for files in `%s`\n", version);
+            LONGTAIL_FREE(file_infos);
+            return 0;
+        }
         Progress progress;
         vindex = CreateVersionIndex(
             storage_api,
@@ -455,7 +510,10 @@ int Cmd_CreateContent(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            compression_types,
             target_chunk_size);
+        LONGTAIL_FREE(compression_types);
+        compression_types = 0;
         LONGTAIL_FREE(file_infos);
         file_infos = 0;
         if (!vindex)
@@ -482,6 +540,7 @@ int Cmd_CreateContent(
             *vindex->m_ChunkCount,
             vindex->m_ChunkHashes,
             vindex->m_ChunkSizes,
+            vindex->m_ChunkCompressionTypes,
             target_block_size,
             max_chunks_per_block);
         if (!cindex)
@@ -739,6 +798,13 @@ int Cmd_UpdateVersion(
             printf("Failed to scan folder `%s`\n", update_version);
             return 0;
         }
+        uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
+        if (!compression_types)
+        {
+            printf("Failed to get compression types for files in `%s`\n", update_version);
+            LONGTAIL_FREE(file_infos);
+            return 0;
+        }
         Progress progress;
         source_vindex = CreateVersionIndex(
             storage_api,
@@ -749,7 +815,10 @@ int Cmd_UpdateVersion(
             update_version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            compression_types,
             target_chunk_size);
+        LONGTAIL_FREE(compression_types);
+        compression_types = 0;
         LONGTAIL_FREE(file_infos);
         file_infos = 0;
         if (!source_vindex)
