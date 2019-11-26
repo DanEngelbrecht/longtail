@@ -1074,6 +1074,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
+            printf("Failed to create content `%s` from `%s`\n", create_content, version);
             return 1;
         }
 
@@ -1108,6 +1109,7 @@ int main(int argc, char** argv)
             content,
             content_index))
         {
+            printf("Failed to create version `%s` to `%s`\n", create_version, version_index);
             return 1;
         }
 
@@ -1130,6 +1132,7 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             printf("Failed to update version `%s` to `%s`\n", update_version, target_version_index);
+            return 1;
         }
 
         char incremental_version_index[512];

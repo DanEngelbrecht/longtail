@@ -1751,303 +1751,6 @@ char* GetBlockName(TLongtail_Hash block_hash)
     return name;
 }
 
-void WriteContentBlockJob(void* context)
-{
-    LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return);
-
-    struct WriteBlockJob* job = (struct WriteBlockJob*)context;
-    struct StorageAPI* source_storage_api = job->m_SourceStorageAPI;
-    struct StorageAPI* target_storage_api = job->m_TargetStorageAPI;
-    struct CompressionAPI* compression_api = job->m_CompressionAPI;
-
-    const struct ContentIndex* content_index = job->m_ContentIndex;
-    const char* content_folder = job->m_ContentFolder;
-    uint64_t first_chunk_index = job->m_FirstChunkIndex;
-    uint32_t chunk_count = job->m_ChunkCount;
-    uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
-    TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-
-    char tmp_block_name[64];
-    sprintf(tmp_block_name, "%s.tmp", job->m_BlockName);
-
-    char* tmp_block_path = (char*)target_storage_api->ConcatPath(target_storage_api, content_folder, tmp_block_name);
-
-    uint32_t block_data_size = 0;
-    for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
-    {
-        if (content_index->m_ChunkBlockIndexes[chunk_index] != block_index)
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Invalid chunk order! 0x%" PRIx64 " in `%s`\n", block_hash, content_folder)
-            return;
-        }
-        uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
-        block_data_size += chunk_size;
-    }
-
-    uint64_t block_data_buffer_size = sizeof(uint32_t) + sizeof(uint32_t) + block_data_size;
-    char* block_data_buffer = (char*)LONGTAIL_MALLOC(block_data_buffer_size);
-    ((uint32_t*)block_data_buffer)[0] = (uint32_t)block_data_size;
-    ((uint32_t*)block_data_buffer)[1] = (uint32_t)block_data_size;
-    char* write_buffer = (char*)&((uint32_t*)block_data_buffer)[2];
-    char* write_ptr = write_buffer;
-
-    uint32_t compression_type = 0;
-    for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
-    {
-        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
-        uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
-        intptr_t tmp;
-        intptr_t asset_part_index = hmgeti_ts(job->m_AssetPartLookup, chunk_hash, tmp);
-        if (asset_part_index == -1)
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 " in `%s`\n", chunk_hash, content_folder)
-            LONGTAIL_FREE(block_data_buffer);
-            block_data_buffer = 0;
-            free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            return;
-        }
-        struct AssetPart* asset_part = &job->m_AssetPartLookup[asset_part_index].value;
-        const char* asset_path = asset_part->m_Path;
-        if (IsDirPath(asset_path))
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Directory should not have any chunks `%s`\n", asset_path)
-            LONGTAIL_FREE(block_data_buffer);
-            block_data_buffer = 0;
-            free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            return;
-        }
-
-        char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
-        uint64_t asset_content_offset = asset_part->m_Start;
-        if (chunk_index != first_chunk_index && compression_type != asset_part->m_CompressionType)
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Warning: Inconsistend compression type for chunks inside block 0x%" PRIx64 " in `%s`, retaining %u\n", block_hash, content_folder, compression_type)
-        }
-        else
-        {
-            compression_type = asset_part->m_CompressionType;
-        }
-        StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
-        if (!file_handle)
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Failed to open asset file `%s`\n", full_path);
-            LONGTAIL_FREE(block_data_buffer);
-            block_data_buffer = 0;
-            free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            return;
-        }
-        uint64_t asset_file_size = source_storage_api->GetSize(source_storage_api, file_handle);
-        if (asset_file_size < (asset_content_offset + chunk_size))
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Mismatching asset size in asset `%s`, size is %" PRIu64 ", but expecting at least %" PRIu64 "\n", full_path, asset_file_size, asset_content_offset + chunk_size);
-            LONGTAIL_FREE(block_data_buffer);
-            block_data_buffer = 0;
-            free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            source_storage_api->CloseRead(source_storage_api, file_handle);
-            file_handle = 0;
-            return;
-        }
-        source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
-        write_ptr += chunk_size;
-
-        source_storage_api->CloseRead(source_storage_api, file_handle);
-        free((char*)full_path);
-        full_path = 0;
-    }
-
-    if (compression_type != 0)
-    {
-        // TODO: We should pick compression method based on 'compression_type'
-        CompressionAPI_HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api));
-        const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
-        char* compressed_buffer = (char*)LONGTAIL_MALLOC((sizeof(uint32_t) * 2) + max_dst_size);
-        ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
-
-        size_t compressed_size = compression_api->Compress(compression_api, compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
-        compression_api->DeleteCompressionContext(compression_api, compression_context);
-        if (compressed_size <= 0)
-        {
-            LONGTAIL_LOG("WriteContentBlockJob: Failed to compress data for block for `%s`\n", tmp_block_path)
-            LONGTAIL_FREE(compressed_buffer);
-            compressed_buffer = 0;
-            free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            return;
-        }
-        ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
-
-        LONGTAIL_FREE(block_data_buffer);
-        block_data_buffer = 0;
-        block_data_buffer_size = sizeof(uint32_t) + sizeof(uint32_t) + compressed_size;
-        block_data_buffer = compressed_buffer;
-    }
-
-    if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
-    {
-        LONGTAIL_LOG("WriteContentBlockJob: Failed to create parent path for `%s`\n", tmp_block_path)
-        LONGTAIL_FREE(block_data_buffer);
-        block_data_buffer = 0;
-        free((char*)tmp_block_path);
-        return;
-    }
-
-    StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 1);
-    if (!block_file_handle)
-    {
-        LONGTAIL_LOG("WriteContentBlockJob: Failed to create block file `%s`\n", tmp_block_path)
-        LONGTAIL_FREE(block_data_buffer);
-        block_data_buffer = 0;
-        free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        return;
-    }
-    int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, block_data_buffer_size, block_data_buffer);
-    LONGTAIL_FREE(block_data_buffer);
-    block_data_buffer = 0;
-    uint32_t write_offset = block_data_buffer_size;
-
-    uint32_t aligned_size = (((write_offset + 15) / 16) * 16);
-    uint32_t padding = aligned_size - write_offset;
-    if (padding)
-    {
-        target_storage_api->Write(target_storage_api, block_file_handle, write_offset, padding, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0");
-        write_offset = aligned_size;
-    }
-    struct BlockIndex* block_index_ptr = (struct BlockIndex*)LONGTAIL_MALLOC(GetBlockIndexSize(chunk_count));
-    InitBlockIndex(block_index_ptr, chunk_count);
-    memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
-    memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
-    *block_index_ptr->m_BlockHash = block_hash;
-    *block_index_ptr->m_ChunkCount = chunk_count;
-    size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
-    write_ok = target_storage_api->Write(target_storage_api, block_file_handle, write_offset, block_index_data_size, &block_index_ptr[1]);
-    LONGTAIL_FREE(block_index_ptr);
-    block_index_ptr = 0;
-
-    target_storage_api->CloseWrite(target_storage_api, block_file_handle);
-    write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, job->m_BlockPath);
-    job->m_Success = write_ok;
-
-    free((char*)tmp_block_path);
-    tmp_block_path = 0;
-
-    job->m_Success = 1;
-}
-
-int WriteContent(
-    struct StorageAPI* source_storage_api,
-    struct StorageAPI* target_storage_api,
-    struct CompressionAPI* compression_api,
-    struct JobAPI* job_api,
-    JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
-    struct ContentIndex* content_index,
-    struct ChunkHashToAssetPart* asset_part_lookup,
-    const char* assets_folder,
-    const char* content_folder)
-{
-    LONGTAIL_FATAL_ASSERT_PRIVATE(source_storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(target_storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_part_lookup != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(assets_folder != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(content_folder != 0, return 0);
-
-    LONGTAIL_LOG("WriteContent: Writing content from `%s` to `%s`, chunks %u, blocks %u\n", assets_folder, content_folder, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
-    uint64_t block_count = *content_index->m_BlockCount;
-    if (block_count == 0)
-    {
-        return 1;
-    }
-
-    if (!job_api->ReserveJobs(job_api, (uint32_t)block_count))
-    {
-        LONGTAIL_LOG("WriteContent: Failed to reserve jobs when writing to `%s`\n", content_folder)
-        return 0;
-    }
-
-    struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)LONGTAIL_MALLOC((size_t)(sizeof(struct WriteBlockJob) * block_count));
-    uint32_t block_start_chunk_index = 0;
-    uint32_t job_count = 0;
-    for (uint64_t block_index = 0; block_index < block_count; ++block_index)
-    {
-        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        uint32_t chunk_count = 0;
-        while(content_index->m_ChunkBlockIndexes[block_start_chunk_index + chunk_count] == block_index)
-        {
-            ++chunk_count;
-        }
-
-        char* block_name = GetBlockName(block_hash);
-        char file_name[64];
-        sprintf(file_name, "%s.lrb", block_name);
-        char* block_path = target_storage_api->ConcatPath(target_storage_api, content_folder, file_name);
-        if (target_storage_api->IsFile(target_storage_api, block_path))
-        {
-            free((char*)block_path);
-            block_path = 0;
-            block_start_chunk_index += chunk_count;
-            LONGTAIL_FREE(block_name);
-            block_name = 0;
-            continue;
-        }
-
-        struct WriteBlockJob* job = &write_block_jobs[job_count++];
-        job->m_SourceStorageAPI = source_storage_api;
-        job->m_TargetStorageAPI = target_storage_api;
-        job->m_CompressionAPI = compression_api;
-        job->m_ContentFolder = content_folder;
-        job->m_AssetsFolder = assets_folder;
-        job->m_ContentIndex = content_index;
-        job->m_BlockName = block_name;
-        job->m_BlockPath = block_path;
-        job->m_AssetPartLookup = asset_part_lookup;
-        job->m_FirstChunkIndex = block_start_chunk_index;
-        job->m_ChunkCount = chunk_count;
-        job->m_Success = 0;
-
-        JobAPI_JobFunc func[1] = { WriteContentBlockJob };
-        void* ctx[1] = { job };
-
-        JobAPI_Jobs jobs = job_api->CreateJobs(job_api, 1, func, ctx);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(jobs != 0, return 0)
-        job_api->ReadyJobs(job_api, 1, jobs);
-
-        block_start_chunk_index += chunk_count;
-    }
-
-    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
-
-    int success = 1;
-    while (job_count--)
-    {
-        struct WriteBlockJob* job = &write_block_jobs[job_count];
-        if (!job->m_Success)
-        {
-            LONGTAIL_LOG("WriteContent: Failed to write content to `%s`\n", content_folder)
-            uint64_t first_chunk_index = job->m_FirstChunkIndex;
-            uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
-            TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-            success = 0;
-        }
-        free((char*)job->m_BlockPath);
-        job->m_BlockPath = 0;
-        LONGTAIL_FREE((char*)job->m_BlockName);
-        job->m_BlockName = 0;
-    }
-
-    LONGTAIL_FREE(write_block_jobs);
-    write_block_jobs = 0;
-
-    return success;
-}
-
 static char* ReadBlockData(
     struct StorageAPI* storage_api,
     struct CompressionAPI* compression_api,
@@ -2202,6 +1905,308 @@ struct BlockIndex* ReadBlockIndex(
 
     return block_index;
 }
+
+void WriteContentBlockJob(void* context)
+{
+    LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return);
+
+    struct WriteBlockJob* job = (struct WriteBlockJob*)context;
+    struct StorageAPI* source_storage_api = job->m_SourceStorageAPI;
+    struct StorageAPI* target_storage_api = job->m_TargetStorageAPI;
+    struct CompressionAPI* compression_api = job->m_CompressionAPI;
+
+    const struct ContentIndex* content_index = job->m_ContentIndex;
+    const char* content_folder = job->m_ContentFolder;
+    uint64_t first_chunk_index = job->m_FirstChunkIndex;
+    uint32_t chunk_count = job->m_ChunkCount;
+    uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
+    TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+
+    char tmp_block_name[64];
+    sprintf(tmp_block_name, "%s.tmp", job->m_BlockName);
+
+    char* tmp_block_path = (char*)target_storage_api->ConcatPath(target_storage_api, content_folder, tmp_block_name);
+
+    uint32_t block_data_size = 0;
+    for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
+    {
+        if (content_index->m_ChunkBlockIndexes[chunk_index] != block_index)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Invalid chunk order! 0x%" PRIx64 " in `%s`\n", block_hash, content_folder)
+            return;
+        }
+        uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
+        block_data_size += chunk_size;
+    }
+
+    char* block_data_buffer = (char*)LONGTAIL_MALLOC(block_data_size);
+	char* write_buffer = block_data_buffer;
+    char* write_ptr = write_buffer;
+
+    uint32_t compression_type = 0;
+    for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
+    {
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
+        uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
+        intptr_t tmp;
+        intptr_t asset_part_index = hmgeti_ts(job->m_AssetPartLookup, chunk_hash, tmp);
+        if (asset_part_index == -1)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 " in `%s`\n", chunk_hash, content_folder)
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            return;
+        }
+        struct AssetPart* asset_part = &job->m_AssetPartLookup[asset_part_index].value;
+        const char* asset_path = asset_part->m_Path;
+        if (IsDirPath(asset_path))
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Directory should not have any chunks `%s`\n", asset_path)
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            return;
+        }
+
+        char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
+        uint64_t asset_content_offset = asset_part->m_Start;
+        if (chunk_index != first_chunk_index && compression_type != asset_part->m_CompressionType)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Warning: Inconsistend compression type for chunks inside block 0x%" PRIx64 " in `%s`, retaining %u\n", block_hash, content_folder, compression_type)
+        }
+        else
+        {
+            compression_type = asset_part->m_CompressionType;
+        }
+        StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
+        if (!file_handle)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Failed to open asset file `%s`\n", full_path);
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            return;
+        }
+        uint64_t asset_file_size = source_storage_api->GetSize(source_storage_api, file_handle);
+        if (asset_file_size < (asset_content_offset + chunk_size))
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Mismatching asset size in asset `%s`, size is %" PRIu64 ", but expecting at least %" PRIu64 "\n", full_path, asset_file_size, asset_content_offset + chunk_size);
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            source_storage_api->CloseRead(source_storage_api, file_handle);
+            file_handle = 0;
+            return;
+        }
+        source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
+        write_ptr += chunk_size;
+
+        source_storage_api->CloseRead(source_storage_api, file_handle);
+        free((char*)full_path);
+        full_path = 0;
+    }
+
+    if (compression_type != 0)
+    {
+        // TODO: We should pick compression method based on 'compression_type'
+        CompressionAPI_HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api));
+        const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
+        char* compressed_buffer = (char*)LONGTAIL_MALLOC((sizeof(uint32_t) * 2) + max_dst_size);
+        ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
+
+        size_t compressed_size = compression_api->Compress(compression_api, compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
+        compression_api->DeleteCompressionContext(compression_api, compression_context);
+        if (compressed_size <= 0)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Failed to compress data for block for `%s`\n", tmp_block_path)
+            LONGTAIL_FREE(compressed_buffer);
+            compressed_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            return;
+        }
+        ((uint32_t*)compressed_buffer)[1] = (uint32_t)compressed_size;
+
+        LONGTAIL_FREE(block_data_buffer);
+        block_data_buffer = 0;
+		block_data_size = (uint32_t)(sizeof(uint32_t) + sizeof(uint32_t) + compressed_size);
+        block_data_buffer = compressed_buffer;
+    }
+
+    if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
+    {
+        LONGTAIL_LOG("WriteContentBlockJob: Failed to create parent path for `%s`\n", tmp_block_path)
+        LONGTAIL_FREE(block_data_buffer);
+        block_data_buffer = 0;
+        free((char*)tmp_block_path);
+        return;
+    }
+
+    StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 1);
+    if (!block_file_handle)
+    {
+        LONGTAIL_LOG("WriteContentBlockJob: Failed to create block file `%s`\n", tmp_block_path)
+        LONGTAIL_FREE(block_data_buffer);
+        block_data_buffer = 0;
+        free((char*)tmp_block_path);
+        tmp_block_path = 0;
+        return;
+    }
+    int write_ok = target_storage_api->Write(target_storage_api, block_file_handle, 0, block_data_size, block_data_buffer);
+    LONGTAIL_FREE(block_data_buffer);
+    block_data_buffer = 0;
+    uint32_t write_offset = block_data_size;
+
+    uint32_t aligned_size = (((write_offset + 15) / 16) * 16);
+    uint32_t padding = aligned_size - write_offset;
+    if (padding)
+    {
+        target_storage_api->Write(target_storage_api, block_file_handle, write_offset, padding, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0");
+        write_offset = aligned_size;
+    }
+    struct BlockIndex* block_index_ptr = (struct BlockIndex*)LONGTAIL_MALLOC(GetBlockIndexSize(chunk_count));
+    InitBlockIndex(block_index_ptr, chunk_count);
+    memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
+    memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
+    *block_index_ptr->m_BlockHash = block_hash;
+    *block_index_ptr->m_ChunkCompressionType = compression_type;
+    *block_index_ptr->m_ChunkCount = chunk_count;
+    size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
+    write_ok = target_storage_api->Write(target_storage_api, block_file_handle, write_offset, block_index_data_size, &block_index_ptr[1]);
+    LONGTAIL_FREE(block_index_ptr);
+    block_index_ptr = 0;
+
+    target_storage_api->CloseWrite(target_storage_api, block_file_handle);
+    write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, job->m_BlockPath);
+#if SLOW_VALIDATION
+    void* block_data = ReadBlockData(target_storage_api, compression_api, content_folder, block_hash);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(block_data != 0, return; )
+    LONGTAIL_FREE(block_data);
+    block_data = 0;
+#endif
+    job->m_Success = write_ok;
+
+    free((char*)tmp_block_path);
+    tmp_block_path = 0;
+
+    job->m_Success = 1;
+}
+
+int WriteContent(
+    struct StorageAPI* source_storage_api,
+    struct StorageAPI* target_storage_api,
+    struct CompressionAPI* compression_api,
+    struct JobAPI* job_api,
+    JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
+    struct ContentIndex* content_index,
+    struct ChunkHashToAssetPart* asset_part_lookup,
+    const char* assets_folder,
+    const char* content_folder)
+{
+    LONGTAIL_FATAL_ASSERT_PRIVATE(source_storage_api != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(target_storage_api != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_api != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_part_lookup != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(assets_folder != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_folder != 0, return 0);
+
+    LONGTAIL_LOG("WriteContent: Writing content from `%s` to `%s`, chunks %u, blocks %u\n", assets_folder, content_folder, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    uint64_t block_count = *content_index->m_BlockCount;
+    if (block_count == 0)
+    {
+        return 1;
+    }
+
+    if (!job_api->ReserveJobs(job_api, (uint32_t)block_count))
+    {
+        LONGTAIL_LOG("WriteContent: Failed to reserve jobs when writing to `%s`\n", content_folder)
+        return 0;
+    }
+
+    struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)LONGTAIL_MALLOC((size_t)(sizeof(struct WriteBlockJob) * block_count));
+    uint32_t block_start_chunk_index = 0;
+    uint32_t job_count = 0;
+    for (uint64_t block_index = 0; block_index < block_count; ++block_index)
+    {
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        uint32_t chunk_count = 0;
+        while(content_index->m_ChunkBlockIndexes[block_start_chunk_index + chunk_count] == block_index)
+        {
+            ++chunk_count;
+        }
+
+        char* block_name = GetBlockName(block_hash);
+        char file_name[64];
+        sprintf(file_name, "%s.lrb", block_name);
+        char* block_path = target_storage_api->ConcatPath(target_storage_api, content_folder, file_name);
+        if (target_storage_api->IsFile(target_storage_api, block_path))
+        {
+            free((char*)block_path);
+            block_path = 0;
+            block_start_chunk_index += chunk_count;
+            LONGTAIL_FREE(block_name);
+            block_name = 0;
+            continue;
+        }
+
+        struct WriteBlockJob* job = &write_block_jobs[job_count++];
+        job->m_SourceStorageAPI = source_storage_api;
+        job->m_TargetStorageAPI = target_storage_api;
+        job->m_CompressionAPI = compression_api;
+        job->m_ContentFolder = content_folder;
+        job->m_AssetsFolder = assets_folder;
+        job->m_ContentIndex = content_index;
+        job->m_BlockName = block_name;
+        job->m_BlockPath = block_path;
+        job->m_AssetPartLookup = asset_part_lookup;
+        job->m_FirstChunkIndex = block_start_chunk_index;
+        job->m_ChunkCount = chunk_count;
+        job->m_Success = 0;
+
+        JobAPI_JobFunc func[1] = { WriteContentBlockJob };
+        void* ctx[1] = { job };
+
+        JobAPI_Jobs jobs = job_api->CreateJobs(job_api, 1, func, ctx);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(jobs != 0, return 0)
+        job_api->ReadyJobs(job_api, 1, jobs);
+
+        block_start_chunk_index += chunk_count;
+    }
+
+    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+
+    int success = 1;
+    while (job_count--)
+    {
+        struct WriteBlockJob* job = &write_block_jobs[job_count];
+        if (!job->m_Success)
+        {
+            LONGTAIL_LOG("WriteContent: Failed to write content to `%s`\n", content_folder)
+            uint64_t first_chunk_index = job->m_FirstChunkIndex;
+            uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
+            TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+            success = 0;
+        }
+        free((char*)job->m_BlockPath);
+        job->m_BlockPath = 0;
+        LONGTAIL_FREE((char*)job->m_BlockName);
+        job->m_BlockName = 0;
+    }
+
+    LONGTAIL_FREE(write_block_jobs);
+    write_block_jobs = 0;
+
+    return success;
+}
+
 
 struct ContentLookup
 {
