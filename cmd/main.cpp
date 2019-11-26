@@ -1151,6 +1151,58 @@ int main(int argc, char** argv)
             return 1;
         }
 
+        struct VersionIndex* source_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, create_version_index);
+        if (!source_vindex)
+        {
+            return 1;
+        }
+        struct VersionIndex* target_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, incremental_version_index);
+        if (!target_vindex)
+        {
+            LONGTAIL_FREE(source_vindex);
+            return 1;
+        }
+
+        struct VersionDiff* diff = CreateVersionDiff(
+            source_vindex,
+            target_vindex);
+        LONGTAIL_FREE(source_vindex);
+        LONGTAIL_FREE(target_vindex);
+        if (*diff->m_SourceRemovedCount != 0)
+        {
+            return 1;
+        }
+        if (*diff->m_TargetAddedCount != 0)
+        {
+            return 1;
+        }
+        if (*diff->m_ModifiedCount != 0)
+        {
+            return 1;
+        }
+        LONGTAIL_FREE(diff);
+
+        char verify_content_index[512];
+        sprintf(verify_content_index, "%s/%s.lci", test_base_path, test_version);
+        sprintf(content_index, "%s/chunks.lci", test_base_path);
+        sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
+        sprintf(version, "%s/local/%s", test_base_path, test_version);
+        if (!Cmd_CreateMissingContentIndex(
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            create_content_index,
+            content_index,
+            content,
+            version_index,
+            version,
+            target_block_size,
+            max_chunks_per_block,
+            target_chunk_size))
+        {
+            return 1;
+        }
+
         free((char*)test_version);
         free((char*)test_base_path);
 

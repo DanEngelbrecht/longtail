@@ -5,6 +5,8 @@
 #include <inttypes.h>
 #include "stb_ds.h"
 
+//#define SLOW_VALIDATION 1
+
 #if defined(LONGTAIL_ASSERTS)
 
 static Longtail_Assert Longtail_Assert_private = 0;
@@ -1702,7 +1704,7 @@ struct ChunkHashToAssetPart* CreateAssetPartLookup(
                 struct AssetPart asset_part = {
                     path,
                     asset_chunk_offset,
-                    compression_type,
+                    compression_type
 #ifdef SLOW_VALIDATION
                     , chunk_size
 #endif // SLOW_VALIDATION
@@ -3994,33 +3996,38 @@ struct VersionDiff* CreateVersionDiff(
     {
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
+        uint32_t source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
+        uint32_t target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
+
+        const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
+        const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
+
         if (source_path_hash == target_path_hash)
         {
-            uint32_t source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
             TLongtail_Hash source_content_hash = source_version->m_ContentHashes[source_asset_index];
-            uint32_t target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
             TLongtail_Hash target_content_hash = target_version->m_ContentHashes[target_asset_index];
             if (source_content_hash != target_content_hash)
             {
                 modified_source_indexes[modified_count] = source_asset_index;
                 modified_target_indexes[modified_count] = target_asset_index;
                 ++modified_count;
-                if (modified_count < 10)
-                {
-                    LONGTAIL_LOG("CreateVersionDiff: Missmatching content for asset `%s`\n", &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]])
-                }
+                LONGTAIL_LOG("CreateVersionDiff: Mismatching content for asset `%s`\n", source_path)
             }
             ++source_index;
             ++target_index;
-        } else if (source_path_hash < target_path_hash)
+        }
+        else if (source_path_hash < target_path_hash)
         {
             uint32_t source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
+            LONGTAIL_LOG("CreateVersionDiff: Removed asset `%s`\n", source_path)
             removed_source_asset_indexes[source_removed_count] = source_asset_index;
             ++source_removed_count;
             ++source_index;
-        } else
+        }
+        else
         {
             uint32_t target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
+            LONGTAIL_LOG("CreateVersionDiff: Added asset `%s`\n", target_path)
             added_target_asset_indexes[target_added_count] = target_asset_index;
             ++target_added_count;
             ++target_index;
@@ -4031,6 +4038,8 @@ struct VersionDiff* CreateVersionDiff(
         // source_path_hash removed
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
         uint32_t source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
+        const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
+        LONGTAIL_LOG("CreateVersionDiff: Removed asset `%s`\n", source_path)
         removed_source_asset_indexes[source_removed_count] = source_asset_index;
         ++source_removed_count;
         ++source_index;
@@ -4040,6 +4049,8 @@ struct VersionDiff* CreateVersionDiff(
         // target_path_hash added
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
         uint32_t target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
+        const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
+        LONGTAIL_LOG("CreateVersionDiff: Added asset `%s`\n", target_path)
         added_target_asset_indexes[target_added_count] = target_asset_index;
         ++target_added_count;
         ++target_index;
@@ -4054,7 +4065,7 @@ struct VersionDiff* CreateVersionDiff(
     }
     if (modified_count > 0)
     {
-        LONGTAIL_LOG("CreateVersionDiff: Missmatching content for %u assets found\n", modified_count)
+        LONGTAIL_LOG("CreateVersionDiff: Mismatching content for %u assets found\n", modified_count)
     }
 
     struct VersionDiff* version_diff = (struct VersionDiff*)LONGTAIL_MALLOC(GetVersionDiffSize(source_removed_count, target_added_count, modified_count));

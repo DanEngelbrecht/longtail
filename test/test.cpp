@@ -1322,16 +1322,18 @@ TEST(Longtail, VersionDiff)
     BikeshedJobAPI job_api(0);
     StoreCompressionAPI compression_api;
 
-    const uint32_t OLD_ASSET_COUNT = 7;
+    const uint32_t OLD_ASSET_COUNT = 9;
 
     const char* OLD_TEST_FILENAMES[] = {
-        "TheLongFile.txt",
-        "ShortString.txt",
-        "AnotherSample.txt",
-        "folder/ShortString.txt",
-        "old_folder/understanding.txt",
-        "WATCHIOUT.txt",
-        "empty/.init.py"
+        "ContentChangedSameLength.txt",
+        "WillBeRenamed.txt",
+        "ContentSameButShorter.txt",
+        "folder/ContentSameButLonger.txt",
+        "OldRenamedFolder/MovedToNewFolder.txt",
+        "JustDifferent.txt",
+        "EmptyFileInFolder/.init.py",
+        "a/file/in/folder/LongWithChangedStart.dll",
+        "a/file/in/other/folder/LongChangedAtEnd.exe"
     };
 
     const char* OLD_TEST_STRINGS[] = {
@@ -1341,7 +1343,42 @@ TEST(Longtail, VersionDiff)
         "Short string",
         "This is the documentation we are all craving to understand the complexities of life",
         "More than chunk less than block",
-        ""
+        "",
+        "A very long file that should be able to be recreated"
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+            "And in the end it is not the same, it is different, just because why not",
+        "A very long file that should be able to be recreated"
+            "Another big file but this does not contain the data as the one above, however it does start out the same as the other file,right?"
+            "Yet we also repeat this line, this is the first time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the second time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the third time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fourth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fifth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the sixth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the eigth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the ninth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the tenth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the elevth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the twelth time you see this, but it will also show up again and again with only small changes"
+            "I realize I'm not very good at writing out the numbering with the 'th stuff at the end. Not much reason to use that before."
+            "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
+            "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
+            "That will look like garbage, will that really be a good idea?"
+            "This is the end tough..."
     };
 
     const size_t OLD_TEST_SIZES[] = {
@@ -1351,19 +1388,24 @@ TEST(Longtail, VersionDiff)
         strlen(OLD_TEST_STRINGS[3]) + 1,
         strlen(OLD_TEST_STRINGS[4]) + 1,
         strlen(OLD_TEST_STRINGS[5]) + 1,
+        strlen(OLD_TEST_STRINGS[6]) + 1,
+        strlen(OLD_TEST_STRINGS[7]) + 1,
+        strlen(OLD_TEST_STRINGS[8]) + 1,
         0
     };
 
-    const uint32_t NEW_ASSET_COUNT = 6;
+    const uint32_t NEW_ASSET_COUNT = 9;
 
     const char* NEW_TEST_FILENAMES[] = {
-        "TheLongFile.txt",
-        "NewShortString.txt",
-        "AnotherSample.txt",
-        "folder/ShortString.txt",
-        "new_folder/understanding.txt",
-        "WATCHIOUT.txt",
-        "empty/.init.py"
+        "ContentChangedSameLength.txt",
+        "HasBeenRenamed.txt",
+        "ContentSameButShorter.txt",
+        "folder/ContentSameButLonger.txt",
+        "NewRenamedFolder/MovedToNewFolder.txt",
+        "JustDifferent.txt",
+        "EmptyFileInFolder/.init.py",
+        "a/file/in/folder/LongWithChangedStart.dll",
+        "a/file/in/other/folder/LongChangedAtEnd.exe"
     };
 
     const char* NEW_TEST_STRINGS[] = {
@@ -1373,7 +1415,42 @@ TEST(Longtail, VersionDiff)
         "Short string but with added stuff",    // Longer, same base content
         "This is the documentation we are all craving to understand the complexities of life",  // Same but moved to different folder
         "I wish I was a baller.", // Just different
-        "" // Unchanged
+        "", // Unchanged
+        "!A very long file that should be able to be recreated"
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff.",
+            "And in the end it is not the same, it is different, just because why not"  // Modified at start
+        "A very long file that should be able to be recreated"
+            "Another big file but this does not contain the data as the one above, however it does start out the same as the other file,right?"
+            "Yet we also repeat this line, this is the first time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the second time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the third time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fourth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fifth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the sixth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the eigth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the ninth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the tenth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the elevth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the twelth time you see this, but it will also show up again and again with only small changes"
+            "I realize I'm not very good at writing out the numbering with the 'th stuff at the end. Not much reason to use that before."
+            "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
+            "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
+            "That will look like garbage, will that really be a good idea?"
+            "This is the end tough...!"  // Modified at start
     };
 
     const size_t NEW_TEST_SIZES[] = {
@@ -1383,6 +1460,9 @@ TEST(Longtail, VersionDiff)
         strlen(NEW_TEST_STRINGS[3]) + 1,
         strlen(NEW_TEST_STRINGS[4]) + 1,
         strlen(NEW_TEST_STRINGS[5]) + 1,
+        strlen(NEW_TEST_STRINGS[6]) + 1,
+        strlen(NEW_TEST_STRINGS[7]) + 1,
+        strlen(NEW_TEST_STRINGS[8]) + 1,
         0
     };
 
@@ -1490,9 +1570,9 @@ TEST(Longtail, VersionDiff)
         new_vindex);
     ASSERT_NE((VersionDiff*)0, version_diff);
 
-    ASSERT_EQ(5, *version_diff->m_SourceRemovedCount);
+    ASSERT_EQ(3, *version_diff->m_SourceRemovedCount);
     ASSERT_EQ(3, *version_diff->m_TargetAddedCount);
-    ASSERT_EQ(4, *version_diff->m_ModifiedCount);
+    ASSERT_EQ(6, *version_diff->m_ModifiedCount);
 
     ASSERT_NE(0, ChangeVersion(
         &storage.m_StorageAPI,
@@ -1517,6 +1597,12 @@ TEST(Longtail, VersionDiff)
     LONGTAIL_FREE(old_vindex);
 
     // Verify that our old folder now matches the new folder data
+    FileInfos* updated_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "old");
+    ASSERT_NE((FileInfos*)0, updated_version_paths);
+    const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10;
+    ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
+    LONGTAIL_FREE(updated_version_paths);
+
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
     {
         char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "old", NEW_TEST_FILENAMES[i]);
