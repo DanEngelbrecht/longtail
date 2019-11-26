@@ -2101,9 +2101,9 @@ static char* ReadBlockData(
     }
 
     char* block_data = compressed_block_content;
-    const TLongtail_Hash* block_index_start = (const TLongtail_Hash*)&block_data[compressed_block_size - block_index_data_size];
+    const TLongtail_Hash* block_hash_ptr = (const TLongtail_Hash*)&block_data[compressed_block_size - block_index_data_size];
     // TODO: This could be cleaner
-    TLongtail_Hash verify_block_hash = block_index_start[0];
+    TLongtail_Hash verify_block_hash = *block_hash_ptr;
     if (block_hash != verify_block_hash)
     {
         LONGTAIL_LOG("ReadBlockData: Malformed content block (mismatching block hash) `%s`\n", block_path)
@@ -2113,7 +2113,8 @@ static char* ReadBlockData(
         block_data = 0;
         return 0;
     }
-    uint32_t compression_type = block_index_start[1];
+    const uint32_t* compression_type_ptr = (const uint32_t*)&block_hash_ptr[1];
+    uint32_t compression_type = *compression_type_ptr;
     if (0 != compression_type)
     {
         uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
