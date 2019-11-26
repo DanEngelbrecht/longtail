@@ -2113,6 +2113,7 @@ static char* ReadBlockData(
         block_data = 0;
         return 0;
     }
+    // TODO: We don't get the expected compression type here!
     const uint32_t* compression_type_ptr = (const uint32_t*)&block_hash_ptr[1];
     uint32_t compression_type = *compression_type_ptr;
     if (0 != compression_type)

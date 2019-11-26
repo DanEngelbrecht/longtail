@@ -139,12 +139,8 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
     {
         const char* path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[i]];
         const char* extension_start = strrchr(path, '.');
-        if (extension_start == 0)
-        {
-            result[i] = LIZARD_COMPRESSION_TYPE;
-            continue;
-        }
-        if ((0 == strcmp(extension_start, ".zip")) ||
+        if ((extension_start == 0) ||
+            (0 == strcmp(extension_start, ".zip")) ||
             (0 == strcmp(extension_start, ".7z")) ||
             (0 == strcmp(extension_start, ".pak")) ||
             (0 == strcmp(extension_start, ".rar")) )
@@ -152,6 +148,7 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
             result[i] = NO_COMPRESSION_TYPE;
             continue;
         }
+        result[i] = LIZARD_COMPRESSION_TYPE;
     }
     return result;
 }
