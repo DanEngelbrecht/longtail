@@ -457,7 +457,7 @@ struct BikeshedJobAPI
     JobWrapper* m_ReservedJobs;
     Bikeshed_TaskID* m_ReservedTasksIDs;
     uint32_t m_ReservedJobCount;
-    uint32_t m_SubmittedJobCount;
+    int32_t volatile m_SubmittedJobCount;
     int32_t volatile m_PendingJobCount;
 
     explicit BikeshedJobAPI(uint32_t worker_count)
@@ -542,18 +542,21 @@ struct BikeshedJobAPI
     static JobAPI_Jobs CreateJobs(JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
-        if (bikeshed_job_api->m_SubmittedJobCount + job_count > bikeshed_job_api->m_ReservedJobCount)
+        int32_t new_job_count = PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_SubmittedJobCount, (int32_t)job_count);
+        if (new_job_count > (int32_t)bikeshed_job_api->m_ReservedJobCount)
         {
+            PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_SubmittedJobCount, -((int32_t)job_count));
             printf("******************** SubmitJobs failure!!!!\n");
             return 0;
         }
+        int32_t job_range_start = new_job_count - job_count;
 
         BikeShed_TaskFunc* func = (BikeShed_TaskFunc*)malloc(sizeof(BikeShed_TaskFunc) * job_count);
         void** ctx = (void**)malloc(sizeof(void*) * job_count);
-        Bikeshed_TaskID* task_ids = &bikeshed_job_api->m_ReservedTasksIDs[bikeshed_job_api->m_SubmittedJobCount];
+        Bikeshed_TaskID* task_ids = &bikeshed_job_api->m_ReservedTasksIDs[job_range_start];
         for (uint32_t i = 0; i < job_count; ++i)
         {
-            JobWrapper* job_wrapper = &bikeshed_job_api->m_ReservedJobs[bikeshed_job_api->m_SubmittedJobCount + i];
+            JobWrapper* job_wrapper = &bikeshed_job_api->m_ReservedJobs[job_range_start + i];
             job_wrapper->m_JobAPI = bikeshed_job_api;
             job_wrapper->m_Context = job_contexts[i];
             job_wrapper->m_JobFunc = job_funcs[i];
@@ -566,7 +569,6 @@ struct BikeshedJobAPI
             Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
         }
 
-        bikeshed_job_api->m_SubmittedJobCount += job_count;
         PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
 
         free(ctx);
@@ -592,26 +594,23 @@ struct BikeshedJobAPI
     static void WaitForAllJobs(JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func)
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
-        if (bikeshed_job_api->m_SubmittedJobCount > 0)
+        int32_t old_pending_count = 0;
+        while (bikeshed_job_api->m_PendingJobCount > 0)
         {
-            int32_t old_pending_count = 0;
-            while (bikeshed_job_api->m_PendingJobCount > 0)
+            if (process_func)
             {
-                if (process_func)
-                {
-                    uint32_t jobs_done = bikeshed_job_api->m_SubmittedJobCount - bikeshed_job_api->m_PendingJobCount;
-                    process_func(context, bikeshed_job_api->m_SubmittedJobCount, jobs_done);
-                }
-                if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
-                {
-                    continue;
-                }
-                if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
-                {
-                    old_pending_count = bikeshed_job_api->m_PendingJobCount;
-                }
-                PLATFORM_SLEEP_PRIVATE(1000);
+                uint32_t jobs_done = bikeshed_job_api->m_SubmittedJobCount - bikeshed_job_api->m_PendingJobCount;
+                process_func(context, bikeshed_job_api->m_SubmittedJobCount, jobs_done);
             }
+            if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
+            {
+                continue;
+            }
+            if (old_pending_count != bikeshed_job_api->m_PendingJobCount)
+            {
+                old_pending_count = bikeshed_job_api->m_PendingJobCount;
+            }
+            PLATFORM_SLEEP_PRIVATE(1000);
         }
         if (process_func)
         {
