@@ -142,7 +142,7 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
         if ((extension_start == 0) ||
             (0 == strcmp(extension_start, ".zip")) ||
             (0 == strcmp(extension_start, ".7z")) ||
-            (0 == strcmp(extension_start, ".pak")) ||
+//            (0 == strcmp(extension_start, ".pak")) ||
             (0 == strcmp(extension_start, ".rar")) )
         {
             result[i] = NO_COMPRESSION_TYPE;
@@ -1090,14 +1090,11 @@ int main(int argc, char** argv)
         {
             return 1;
         }
-
+/*
         char create_version[512];
         sprintf(create_version, "%s/remote/%s", test_base_path, test_version);
-//        char content[512];
         sprintf(content, "%s/chunks", test_base_path);
-//        char content_index[512];
         sprintf(content_index, "%s/chunks.lci", test_base_path);
-//        char version_index[512];
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         if (!Cmd_CreateVersion(
             &storage_api.m_StorageAPI,
@@ -1112,7 +1109,7 @@ int main(int argc, char** argv)
             printf("Failed to create version `%s` to `%s`\n", create_version, version_index);
             return 1;
         }
-
+*/
         char update_version[512];
         sprintf(update_version, "%s/remote/incremental", test_base_path);
         sprintf(content, "%s/chunks", test_base_path);

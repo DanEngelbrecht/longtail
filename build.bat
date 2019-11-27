@@ -10,7 +10,7 @@ if "%1%" == "build-third-party" (
 )
 
 if "!RELEASE_MODE!" == "release" (
-    set OPT=/O2
+    set OPT=/O2 /Oi /Oy
     set CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626
 
     call build_options.bat
