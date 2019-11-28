@@ -459,6 +459,7 @@ struct BikeshedJobAPI
     uint32_t m_ReservedJobCount;
     int32_t volatile m_SubmittedJobCount;
     int32_t volatile m_PendingJobCount;
+    int32_t volatile m_JobsCompleted;
 
     explicit BikeshedJobAPI(uint32_t worker_count)
         : m_JobAPI{
@@ -478,6 +479,7 @@ struct BikeshedJobAPI
         , m_ReservedJobCount(0)
         , m_SubmittedJobCount(0)
         , m_PendingJobCount(0)
+        , m_JobsCompleted(0)
     {
         m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(1048576, 7340032, 1)), 1048576, 7340032, 1, &m_ReadyCallback.cb);
         m_Workers = new ThreadWorker[m_WorkerCount];
@@ -599,8 +601,7 @@ struct BikeshedJobAPI
         {
             if (process_func)
             {
-                uint32_t jobs_done = bikeshed_job_api->m_SubmittedJobCount - bikeshed_job_api->m_PendingJobCount;
-                process_func(context, bikeshed_job_api->m_SubmittedJobCount, jobs_done);
+                process_func(context, bikeshed_job_api->m_ReservedJobCount, bikeshed_job_api->m_JobsCompleted);
             }
             if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
             {
@@ -621,6 +622,7 @@ struct BikeshedJobAPI
         bikeshed_job_api->m_ReservedTasksIDs = 0;
         free(bikeshed_job_api->m_ReservedJobs);
         bikeshed_job_api->m_ReservedJobs = 0;
+        bikeshed_job_api->m_JobsCompleted = 0;
         bikeshed_job_api->m_ReservedJobCount = 0;
     }
 
@@ -634,6 +636,7 @@ struct BikeshedJobAPI
             return BIKESHED_TASK_RESULT_COMPLETE;
         }
         PLATFORM_ATOMICADD_PRIVATE(&wrapper->m_JobAPI->m_PendingJobCount, -1);
+        PLATFORM_ATOMICADD_PRIVATE(&wrapper->m_JobAPI->m_JobsCompleted, 1);
         return BIKESHED_TASK_RESULT_COMPLETE;
     }
 };
