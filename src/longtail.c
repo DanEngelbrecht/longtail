@@ -2391,8 +2391,8 @@ JobAPI_Jobs CreatePartialAssetWriteJob(
     JobAPI_JobFunc decompress_funcs[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     void* decompress_ctx[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
 
-    const uint32_t max_parallell_decompress_jobs = job_api->GetWorkerCount(job_api) + 2;
-    max_parallell_decompress_jobs = max_parallell_decompress_jobs <= MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? max_parallell_decompress_jobs : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
+    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 2;
+    const uint32_t max_parallell_decompress_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
     while (chunk_index_offset != chunk_index_end && job->m_BlockDecompressorJobCount < max_parallell_decompress_jobs)
     {
@@ -2638,7 +2638,7 @@ void WritePartialAssetFromBlocks(void* context)
     job->m_Success = 1;
 }
 
-
+/*
 struct WriteAssetFromBlocksJob
 {
     struct StorageAPI* m_ContentStorageAPI;
@@ -2955,7 +2955,7 @@ void WriteAssetFromBlocks(void* context)
     free(full_asset_path);
     full_asset_path = 0;
 }
-
+*/
 struct WriteAssetsFromBlockJob
 {
     struct StorageAPI* m_ContentStorageAPI;
@@ -2965,6 +2965,7 @@ struct WriteAssetsFromBlockJob
     const struct VersionIndex* m_VersionIndex;
     const char* m_ContentFolder;
     const char* m_VersionFolder;
+    struct BlockDecompressorJob m_DecompressBlockJob;
     uint64_t m_BlockIndex;
     uint32_t* m_AssetIndexes;
     uint32_t m_AssetCount;
@@ -2991,7 +2992,7 @@ void WriteAssetsFromBlock(void* context)
     struct HashToIndexItem* content_chunk_lookup = job->m_ContentChunkLookup;
 
     TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-    char* block_data = ReadBlockData(content_storage_api, compression_api, content_folder, block_hash);
+    char* block_data = job->m_DecompressBlockJob.m_BlockData;
     if (!block_data)
     {
         LONGTAIL_LOG("WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 "\n", block_hash)
@@ -3430,7 +3431,9 @@ int WriteAssets(
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_lookup != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(awl != 0, return 0);
 
-    const uint32_t max_parallell_decompress_jobs = job_api->GetWorkerCount(job_api) + 2;
+    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 2;
+    const uint32_t max_parallell_decompress_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
+
     uint32_t asset_job_count = 0;
     for (uint32_t a = 0; a < awl->m_AssetJobCount; ++a)
     {
@@ -3478,7 +3481,7 @@ int WriteAssets(
         }
     }
 
-    if (!job_api->ReserveJobs(job_api, awl->m_BlockJobCount + asset_job_count))
+    if (!job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2) + asset_job_count))
     {
         LONGTAIL_LOG("WriteAssets: Failed to reserve %u jobs for folder `%s`\n", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path)
         LONGTAIL_FREE(awl);
@@ -3496,7 +3499,18 @@ int WriteAssets(
         uint32_t asset_index = awl->m_BlockJobAssetIndexes[b];
         TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
         uint64_t block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, first_chunk_hash);
+
         struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
+        struct BlockDecompressorJob* block_job = &job->m_DecompressBlockJob;
+        block_job->m_ContentStorageAPI = content_storage_api;
+        block_job->m_CompressionAPI = compression_api;
+        block_job->m_ContentFolder = content_path;
+        block_job->m_BlockHash = content_index->m_BlockHashes[block_index];
+        JobAPI_JobFunc decompress_funcs[1] = { BlockDecompressor };
+        void* decompress_ctxs[1] = {block_job};
+        JobAPI_Jobs decompression_job = job_api->CreateJobs(job_api, 1, decompress_funcs, decompress_ctxs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(decompression_job != 0, return 0)
+
         job->m_ContentStorageAPI = content_storage_api;
         job->m_VersionStorageAPI = version_storage_api;
         job->m_CompressionAPI = compression_api;
@@ -3531,7 +3545,8 @@ int WriteAssets(
 
         JobAPI_Jobs block_write_job = job_api->CreateJobs(job_api, 1, func, ctx);
         LONGTAIL_FATAL_ASSERT_PRIVATE(block_write_job != 0, return 0)
-        job_api->ReadyJobs(job_api, 1, block_write_job);
+        job_api->AddDependecies(job_api, 1, block_write_job, 1, decompression_job);
+        job_api->ReadyJobs(job_api, 1, decompression_job);
     }
 /*
     struct HashToIndexItem* base_asset_lookup = 0;

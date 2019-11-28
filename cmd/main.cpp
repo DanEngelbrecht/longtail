@@ -241,17 +241,37 @@ int Cmd_CreateContentIndex(
     const char* content)
 {
     Progress progress;
-    ContentIndex* cindex = ReadContent(
-        storage_api,
-        hash_api,
-        job_api,
-        Progress::ProgressFunc,
-        &progress,
-        content);
-    if (!cindex)
+    ContentIndex* cindex = 0;
+    if (!content)
     {
-        printf("Failed to create content index for `%s`\n", content);
-        return 0;
+        cindex = CreateContentIndex(
+            hash_api,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0);
+        if (!cindex)
+        {
+            printf("Failed to create empty content index\n");
+            return 0;
+        }
+    }
+    else
+    {
+        cindex = ReadContent(
+            storage_api,
+            hash_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            content);
+        if (!cindex)
+        {
+            printf("Failed to create content index for `%s`\n", content);
+            return 0;
+        }
     }
     int ok = CreateParentPath(storage_api, create_content_index) &&
         WriteContentIndex(
