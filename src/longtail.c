@@ -2392,6 +2392,7 @@ JobAPI_Jobs CreatePartialAssetWriteJob(
     void* decompress_ctx[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
 
     const uint32_t max_parallell_decompress_jobs = job_api->GetWorkerCount(job_api) + 2;
+    max_parallell_decompress_jobs = max_parallell_decompress_jobs <= MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? max_parallell_decompress_jobs : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
     while (chunk_index_offset != chunk_index_end && job->m_BlockDecompressorJobCount < max_parallell_decompress_jobs)
     {
@@ -2630,6 +2631,7 @@ void WritePartialAssetFromBlocks(void* context)
         return;
     }
 
+    job->m_VersionStorageAPI->SetSize(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset);
     job->m_VersionStorageAPI->CloseWrite(job->m_VersionStorageAPI, job->m_AssetOutputFile);
     job->m_AssetOutputFile = 0;
 
