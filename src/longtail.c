@@ -2911,8 +2911,7 @@ void WriteAssetFromBlocks(void* context)
         int ok = version_storage_api->Write(version_storage_api, asset_file, asset_offset, chunk_size, &block_data[chunk_offset]);
         if (!ok)
         {
-            DWORD le = GetLastError();
-            LONGTAIL_LOG("WriteAssetFromBlocks: Failed to write chunk 0x%" PRIx64 " to asset `%s`, error: %d\n", chunk_hash, full_asset_path,le)
+            LONGTAIL_LOG("WriteAssetFromBlocks: Failed to write chunk 0x%" PRIx64 " to asset `%s`\n", chunk_hash, full_asset_path)
             ok = version_storage_api->Write(version_storage_api, asset_file, asset_offset, chunk_size, &block_data[chunk_offset]);
             if (!ok)
             {
@@ -3207,7 +3206,7 @@ struct AssetWriteList* BuildAssetWriteList(
             chunk_hashes,   // chunk_hashes
             cl  // cl
         };
-    qsort_r(awl->m_BlockJobAssetIndexes, (rsize_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
+    qsort_r(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
     return awl;
 }
 
@@ -3364,7 +3363,7 @@ void WriteAssetBlocks(void* c)
             ++decompressed_block_index;
             LONGTAIL_FATAL_ASSERT_PRIVATE(decompressed_block_index < context->m_BlockCount, return)
         }
-        const uint8_t* block_data = context->m_DecompressBlockContexts[decompressed_block_index].m_UncompressedBlockData;
+        const uint8_t* block_data = (const uint8_t*)context->m_DecompressBlockContexts[decompressed_block_index].m_UncompressedBlockData;
         uint64_t read_offset = context->m_ContentIndex->m_ChunkBlockOffsets[content_chunk_index];
         if (!context->m_StorageAPI->Write(context->m_StorageAPI, asset_file, write_pos, chunk_size, &block_data[read_offset]))
         {
@@ -3532,7 +3531,7 @@ int WriteAssets(
         LONGTAIL_FATAL_ASSERT_PRIVATE(block_write_job != 0, return 0)
         job_api->ReadyJobs(job_api, 1, block_write_job);
     }
-
+/*
     struct HashToIndexItem* base_asset_lookup = 0;
     if (optional_base_version)
     {
@@ -3541,7 +3540,7 @@ int WriteAssets(
             hmput(base_asset_lookup, optional_base_version->m_ContentHashes[a], a);
         }
     }
-
+*/
 /*
 DecompressorCount = blocks_remaning > 8 ? 8 : blocks_remaning
 
@@ -4574,11 +4573,23 @@ struct VersionDiff* CreateVersionDiff(
     qsort_r(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
     qsort_r(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
 
-    LONGTAIL_FREE(target_path_hashes);
-    target_path_hashes = 0;
+    LONGTAIL_FREE(removed_source_asset_indexes);
+    removed_source_asset_indexes = 0;
+
+    LONGTAIL_FREE(added_target_asset_indexes);
+    added_target_asset_indexes = 0;
+
+    LONGTAIL_FREE(modified_source_indexes);
+    modified_source_indexes = 0;
+
+    LONGTAIL_FREE(modified_target_indexes);
+    modified_target_indexes = 0;
 
     LONGTAIL_FREE(target_path_hashes);
     target_path_hashes = 0;
+
+    LONGTAIL_FREE(source_path_hashes);
+    source_path_hashes = 0;
 
     hmfree(target_path_hash_to_index);
     target_path_hash_to_index = 0;
@@ -4772,6 +4783,8 @@ int ChangeVersion(
     if (!awl)
     {
         LONGTAIL_LOG("ChangeVersion: Failed to create asset write list for version `%s`\n", content_path)
+        LONGTAIL_FREE(asset_indexes);
+        asset_indexes = 0;
         DeleteContentLookup(content_lookup);
         content_lookup = 0;
         return 0;
@@ -4791,6 +4804,9 @@ int ChangeVersion(
         version_path,
         content_lookup,
         awl);
+
+    LONGTAIL_FREE(asset_indexes);
+    asset_indexes = 0;
 
     LONGTAIL_FREE(awl);
     awl = 0;
