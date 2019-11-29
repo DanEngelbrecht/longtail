@@ -65,10 +65,18 @@ void Longtail_SetAssert(Longtail_Assert assert_func)
 #endif // defined(LONGTAIL_ASSERTS)
 }
 
+static Longtail_Log Longtail_Log_private = 0;
+
+void Longtail_SetLog(Longtail_Log log_func)
+{
+    Longtail_Log_private = log_func;
+}
+
+
 #ifndef LONGTAIL_LOG
     #ifdef LONGTAIL_VERBOSE_LOGS
         #define LONGTAIL_LOG(fmt, ...) \
-            printf("--- ");printf(fmt, __VA_ARGS__);
+            if (Longtail_Log_private) Longtail_Log_private(0, fmt, __VA_ARGS__);
     #else
         #define LONGTAIL_LOG(fmt, ...)
     #endif
@@ -4216,25 +4224,25 @@ void DiffHashes(
 struct ContentIndex* CreateMissingContent(
     struct HashAPI* hash_api,
     const struct ContentIndex* content_index,
-    const struct VersionIndex* version,
+    const struct VersionIndex* version_index,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(hash_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(version != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_block_size != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunks_per_block != 0, return 0);
 
-    LONGTAIL_LOG("CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks\n", *version->m_ChunkCount, *content_index->m_ChunkCount)
-    uint64_t chunk_count = *version->m_ChunkCount;
+    LONGTAIL_LOG("CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks\n", *version_index->m_ChunkCount, *content_index->m_ChunkCount)
+    uint64_t chunk_count = *version_index->m_ChunkCount;
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC((size_t)(sizeof(TLongtail_Hash) * chunk_count));
 
     uint64_t added_hash_count = 0;
     DiffHashes(
         content_index->m_ChunkHashes,
         *content_index->m_ChunkCount,
-        version->m_ChunkHashes,
+        version_index->m_ChunkHashes,
         chunk_count,
         &added_hash_count,
         added_hashes,
@@ -4262,14 +4270,14 @@ struct ContentIndex* CreateMissingContent(
     struct HashToIndexItem* chunk_index_lookup = 0;
     for (uint64_t i = 0; i < chunk_count; ++i)
     {
-        hmput(chunk_index_lookup, version->m_ChunkHashes[i], i);
+        hmput(chunk_index_lookup, version_index->m_ChunkHashes[i], i);
     }
 
     for (uint32_t j = 0; j < added_hash_count; ++j)
     {
         uint64_t chunk_index = hmget(chunk_index_lookup, added_hashes[j]);
-        diff_chunk_sizes[j] = version->m_ChunkSizes[chunk_index];
-        diff_chunk_compression_types[j] = version->m_ChunkCompressionTypes[chunk_index];
+        diff_chunk_sizes[j] = version_index->m_ChunkSizes[chunk_index];
+        diff_chunk_compression_types[j] = version_index->m_ChunkCompressionTypes[chunk_index];
     }
     hmfree(chunk_index_lookup);
     chunk_index_lookup = 0;

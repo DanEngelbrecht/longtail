@@ -10,6 +10,7 @@
 #include "../common/platform.h"
 
 #include <stdio.h>
+#include <inttypes.h>
 
 void AssertFailure(const char* expression, const char* file, int line)
 {
@@ -45,6 +46,7 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
+        free(dir_path);
         return 1;
     }
     while (last_path_delimiter > dir_path && last_path_delimiter[-1] == '/')
@@ -949,6 +951,387 @@ int Cmd_UpdateVersion(
     return 1;
 }
 
+int Cmd_UpSyncVersion(
+    StorageAPI* source_storage_api,
+    StorageAPI* target_storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    CompressionAPI* compression_api,
+    const char* version_path,
+    const char* version_index_path,
+    const char* content_path,
+    const char* content_index_path,
+    const char* upload_content_path,
+    int max_chunks_per_block,
+    int target_block_size,
+    int target_chunk_size)
+{
+    VersionIndex* vindex = ReadVersionIndex(source_storage_api, version_index_path);
+    if (!vindex)
+    {
+        struct FileInfos* file_infos = GetFilesRecursively(
+            source_storage_api,
+            version_path);
+        if (!file_infos)
+        {
+            printf("Failed to scan folder `%s`\n", version_path);
+            return 0;
+        }
+        uint32_t* compression_types = GetCompressionTypes(
+            source_storage_api,
+            file_infos);
+        if (!compression_types)
+        {
+            printf("Failed to get compression types for files in `%s`\n", version_path);
+            LONGTAIL_FREE(file_infos);
+            return 0;
+        }
+
+        Progress progress;
+        vindex = CreateVersionIndex(
+            source_storage_api,
+            hash_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            version_path,
+            &file_infos->m_Paths,
+            file_infos->m_FileSizes,
+            compression_types,
+            target_chunk_size);
+        LONGTAIL_FREE(compression_types);
+        compression_types = 0;
+        LONGTAIL_FREE(file_infos);
+        file_infos = 0;
+        if (!vindex)
+        {
+            printf("Failed to create version index for `%s`\n", version_path);
+            return 0;
+        }
+    }
+    struct ContentIndex* cindex = 0;
+    if (content_index_path)
+    {
+        cindex = ReadContentIndex(
+            source_storage_api,
+            content_index_path);
+    }
+    if (!cindex)
+    {
+        if (!content_path)
+        {
+            printf("--content folder must be given if no valid content index is given with --content-index\n");
+            return 0;
+        }
+        Progress progress;
+        cindex = ReadContent(
+            source_storage_api,
+            hash_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            content_path);
+        if (!cindex)
+        {
+            printf("Failed to create content index for `%s`\n", content_path);
+            return 0;
+        }
+    }
+
+    ContentIndex* missing_content_index = CreateMissingContent(
+        hash_api,
+        cindex,
+        vindex,
+        target_block_size,
+        max_chunks_per_block);
+    if (!missing_content_index)
+    {
+        printf("Failed to generate content index for missing content\n");
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
+    if (!asset_part_lookup)
+    {
+        printf("Failed to create source lookup table for version `%s`\n", version_path);
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    Progress progress;
+    int ok = CreatePath(target_storage_api, upload_content_path) && WriteContent(
+        source_storage_api,
+        target_storage_api,
+        compression_api,
+        job_api,
+        Progress::ProgressFunc,
+        &progress,
+        missing_content_index,
+        asset_part_lookup,
+        version_path,
+        upload_content_path);
+    if (!ok)
+    {
+        printf("Failed to create new content from `%s` to `%s`\n", version_path, upload_content_path);
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    ContentIndex* new_content_index = MergeContentIndex(cindex, missing_content_index);
+    if (!new_content_index)
+    {
+        printf("Failed creating a new content index with the added content\n");
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    ok = CreateParentPath(target_storage_api, upload_content_path) && WriteVersionIndex(
+        target_storage_api,
+        vindex,
+        version_index_path);
+    if (!ok)
+    {
+        printf("Failed to write the new version index to `%s`\n", version_index_path);
+        LONGTAIL_FREE(new_content_index);
+        new_content_index = 0;
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    ok = CreateParentPath(target_storage_api, content_index_path) && WriteContentIndex(
+        target_storage_api,
+        new_content_index,
+        content_index_path);
+    if (!ok)
+    {
+        printf("Failed to write the new version index to `%s`\n", version_index_path);
+        LONGTAIL_FREE(new_content_index);
+        new_content_index = 0;
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    LONGTAIL_FREE(new_content_index);
+    new_content_index = 0;
+    LONGTAIL_FREE(missing_content_index);
+    missing_content_index = 0;
+    LONGTAIL_FREE(vindex);
+    vindex = 0;
+    LONGTAIL_FREE(cindex);
+    cindex = 0;
+
+    printf("Updated version index `%s`\n", version_index_path);
+    printf("Updated content index `%s`\n", content_index_path);
+    printf("Created added content in `%s`\n", upload_content_path);
+
+    return 0;
+}
+
+struct HashToIndex
+{
+    TLongtail_Hash key;
+    uint64_t value;
+};
+
+int Cmd_DownSyncVersion(
+    StorageAPI* source_storage_api,
+    StorageAPI* target_storage_api,
+    HashAPI* hash_api,
+    JobAPI* job_api,
+    CompressionAPI* compression_api,
+    const char* target_version_index_path,
+    const char* have_content_index_path,
+    const char* have_content_path,
+    const char* remote_content_index_path,
+    const char* remote_content_path,
+    const char* output_format,
+    int max_chunks_per_block,
+    int target_block_size,
+    int target_chunk_size)
+{
+    VersionIndex* vindex_target = ReadVersionIndex(source_storage_api, target_version_index_path);
+    if (!vindex_target)
+    {
+        //TODO: print
+        return 0;
+    }
+
+    ContentIndex* existing_cindex = 0;
+    if (have_content_index_path)
+    {
+        existing_cindex = ReadContentIndex(source_storage_api, have_content_index_path);
+        if (!existing_cindex)
+        {
+            // TODO: print
+            return 0;
+        }
+    }
+    if (!existing_cindex)
+    {
+        if (!have_content_path)
+        {
+            // TODO: Print
+            LONGTAIL_FREE(vindex_target);
+            vindex_target = 0;
+            return 0;
+        }
+//        Progress progress;
+        existing_cindex = ReadContent(
+            source_storage_api,
+            hash_api, job_api,
+            0,//Progress::ProgressFunc,
+            0,//&progress,
+            have_content_path);
+        if (!existing_cindex)
+        {
+            // TODO: Print
+            LONGTAIL_FREE(vindex_target);
+            vindex_target = 0;
+            return 0;
+        }
+    }
+
+    ContentIndex* cindex_missing = CreateMissingContent(
+        hash_api,
+        existing_cindex,
+        vindex_target,
+        target_block_size,
+        max_chunks_per_block);
+    if (!cindex_missing)
+    {
+        // TODO: Print
+        LONGTAIL_FREE(existing_cindex);
+        existing_cindex = 0;
+        LONGTAIL_FREE(vindex_target);
+        vindex_target = 0;
+        return 0;
+    }
+    LONGTAIL_FREE(existing_cindex);
+    existing_cindex = 0;
+    LONGTAIL_FREE(vindex_target);
+    vindex_target = 0;
+
+    ContentIndex* cindex_remote = ReadContentIndex(source_storage_api, remote_content_index_path);
+    if (!cindex_remote)
+    {
+        if (!remote_content_path)
+        {
+            //TODO: print
+            LONGTAIL_FREE(cindex_missing);
+            cindex_missing = 0;
+            return 0;
+        }
+//        Progress progress;
+        cindex_remote = ReadContent(
+            source_storage_api,
+            hash_api, job_api,
+            0,//Progress::ProgressFunc,
+            0,//&progress,
+            remote_content_path);
+        if (!cindex_remote)
+        {
+            //TODO: print
+            LONGTAIL_FREE(cindex_missing);
+            cindex_missing = 0;
+            return 0;
+        }
+
+    }
+
+    HashToIndex* remote_chunk_to_remote_block_index_lookup = 0;
+    for (uint64_t i = 0; i < *cindex_remote->m_ChunkCount; ++i)
+    {
+        TLongtail_Hash chunk_hash = cindex_remote->m_ChunkHashes[i];
+        uint64_t block_index = cindex_remote->m_ChunkBlockIndexes[i];
+        hmput(remote_chunk_to_remote_block_index_lookup, chunk_hash, block_index);
+    }
+
+    TLongtail_Hash* requested_block_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * *cindex_remote->m_BlockCount);
+    uint64_t requested_block_count = 0;
+    HashToIndex* requested_blocks_lookup = 0;
+    for (uint32_t i = 0; i < *cindex_missing->m_ChunkCount; ++i)
+    {
+        TLongtail_Hash chunk_hash = cindex_missing->m_ChunkHashes[i];
+        intptr_t remote_block_index_ptr = hmgeti(remote_chunk_to_remote_block_index_lookup, chunk_hash);
+        if (remote_block_index_ptr == -1)
+        {
+            // TODO: printf
+            hmfree(requested_blocks_lookup);
+            requested_blocks_lookup = 0;
+            LONGTAIL_FREE(requested_block_hashes);
+            requested_block_hashes = 0;
+            hmfree(remote_chunk_to_remote_block_index_lookup);
+            remote_chunk_to_remote_block_index_lookup = 0;
+            LONGTAIL_FREE(cindex_remote);
+            cindex_remote = 0;
+            LONGTAIL_FREE(cindex_missing);
+            cindex_missing = 0;
+            return 0;
+        }
+        uint64_t remote_block_index = remote_chunk_to_remote_block_index_lookup[remote_block_index_ptr].value;
+        TLongtail_Hash remote_block_hash = cindex_remote->m_BlockHashes[remote_block_index];
+
+        intptr_t request_block_index_ptr = hmgeti(requested_blocks_lookup, remote_block_hash);
+        if (-1 == request_block_index_ptr)
+        {
+            requested_block_hashes[requested_block_count] = remote_block_hash;
+            hmput(requested_blocks_lookup, remote_block_hash, requested_block_count);
+            ++requested_block_count;
+        }
+    }
+
+    for (uint64_t b = 0; b < requested_block_count; ++b)
+    {
+        // TODO: Use input format
+        printf("0x%" PRIx64 ".lrb\n", requested_block_hashes[b]);
+    }
+
+    hmfree(requested_blocks_lookup);
+    requested_blocks_lookup = 0;
+
+    LONGTAIL_FREE(requested_block_hashes);
+    requested_block_hashes = 0;
+
+    hmfree(remote_chunk_to_remote_block_index_lookup);
+    remote_chunk_to_remote_block_index_lookup = 0;
+
+    LONGTAIL_FREE(cindex_remote);
+    cindex_remote = 0;
+    LONGTAIL_FREE(cindex_missing);
+    cindex_missing = 0;
+
+    return 0;
+}
+
+
+
 int main(int argc, char** argv)
 {
     int result = 0;
@@ -963,53 +1346,71 @@ int main(int argc, char** argv)
     int32_t target_block_size = 0;
     kgflags_int("target-block-size", 32768 * 8, "Target block size", false, &target_block_size);
 
-    const char* create_version_index_raw = NULL;
-    kgflags_string("create-version-index", NULL, "Path to version index output", false, &create_version_index_raw);
+    const char* create_version_index_raw = 0;
+    kgflags_string("create-version-index", 0, "Path to version index output", false, &create_version_index_raw);
 
-    const char* version_raw = NULL;
-    kgflags_string("version", NULL, "Path to version assets input", false, &version_raw);
+    const char* version_raw = 0;
+    kgflags_string("version", 0, "Path to version assets input", false, &version_raw);
 
-    const char* filter_raw = NULL;
-    kgflags_string("filter", NULL, "Path to filter file input", false, &filter_raw);
+    const char* filter_raw = 0;
+    kgflags_string("filter", 0, "Path to filter file input", false, &filter_raw);
 
-    const char* create_content_index_raw = NULL;
-    kgflags_string("create-content-index", NULL, "Path to content index output", false, &create_content_index_raw);
+    const char* create_content_index_raw = 0;
+    kgflags_string("create-content-index", 0, "Path to content index output", false, &create_content_index_raw);
 
-    const char* version_index_raw = NULL;
-    kgflags_string("version-index", NULL, "Path to version index input", false, &version_index_raw);
+    const char* version_index_raw = 0;
+    kgflags_string("version-index", 0, "Path to version index input", false, &version_index_raw);
 
-    const char* content_raw = NULL;
-    kgflags_string("content", NULL, "Path to content block input", false, &content_raw);
+    const char* content_raw = 0;
+    kgflags_string("content", 0, "Path to content block input", false, &content_raw);
     
-    const char* create_content_raw = NULL;
-    kgflags_string("create-content", NULL, "Path to content block output", false, &create_content_raw);
+    const char* create_content_raw = 0;
+    kgflags_string("create-content", 0, "Path to content block output", false, &create_content_raw);
 
-    const char* content_index_raw = NULL;
-    kgflags_string("content-index", NULL, "Path to content index input", false, &content_index_raw);
+    const char* content_index_raw = 0;
+    kgflags_string("content-index", 0, "Path to content index input", false, &content_index_raw);
 
-    const char* merge_content_index_raw = NULL;
-    kgflags_string("merge-content-index", NULL, "Path to base content index", false, &merge_content_index_raw);
+    const char* merge_content_index_raw = 0;
+    kgflags_string("merge-content-index", 0, "Path to base content index", false, &merge_content_index_raw);
 
-    const char* create_version_raw = NULL;
-    kgflags_string("create-version", NULL, "Path to version", false, &create_version_raw);
+    const char* create_version_raw = 0;
+    kgflags_string("create-version", 0, "Path to version", false, &create_version_raw);
 
-    const char* update_version_raw = NULL;
-    kgflags_string("update-version", NULL, "Path to version", false, &update_version_raw);
+    const char* update_version_raw = 0;
+    kgflags_string("update-version", 0, "Path to version", false, &update_version_raw);
 
-    const char* target_version_raw = NULL;
-    kgflags_string("target-version", NULL, "Path to target version", false, &target_version_raw);
+    const char* target_version_raw = 0;
+    kgflags_string("target-version", 0, "Path to target version", false, &target_version_raw);
 
-    const char* target_version_index_raw = NULL;
-    kgflags_string("target-version-index", NULL, "Path to target version index", false, &target_version_index_raw);
+    const char* target_version_index_raw = 0;
+    kgflags_string("target-version-index", 0, "Path to target version index", false, &target_version_index_raw);
 
-    const char* list_missing_blocks_raw = NULL;
-    kgflags_string("list-missing-blocks", NULL, "Path to content index", false, &list_missing_blocks_raw);
+    const char* list_missing_blocks_raw = 0;
+    kgflags_string("list-missing-blocks", 0, "Path to content index", false, &list_missing_blocks_raw);
 
-    const char* test_version_raw = NULL;
-    kgflags_string("test-version", NULL, "Test everything", false, &test_version_raw);
+    bool upsync = false;
+    kgflags_bool("upsync", false, "", false, &upsync);
 
-    const char* test_base_path_raw = NULL;
-    kgflags_string("test-base-path", NULL, "Base path for test everything", false, &test_base_path_raw);
+    const char* upload_content_raw = 0;
+    kgflags_string("upload-content", 0, "Path to write new content block", false, &upload_content_raw);
+
+    bool downsync = false;
+    kgflags_bool("downsync", false, "", false, &downsync);
+
+    const char* remote_content_index_raw = 0;
+    kgflags_string("remote-content-index", 0, "Path to write new content block", false, &remote_content_index_raw);
+
+    const char* remote_content_raw = 0;
+    kgflags_string("remote-content", 0, "Path to write new content block", false, &remote_content_raw);
+
+    const char* output_format = 0;
+    kgflags_string("output-format", 0, "Path to write new content block", false, &output_format);
+
+    const char* test_version_raw = 0;
+    kgflags_string("test-version", 0, "Test everything", false, &test_version_raw);
+
+    const char* test_base_path_raw = 0;
+    kgflags_string("test-base-path", 0, "Base path for test everything", false, &test_base_path_raw);
 
     if (!kgflags_parse(argc, argv)) {
         kgflags_print_errors();
@@ -1241,6 +1642,9 @@ int main(int argc, char** argv)
     const char* target_version = NormalizePath(target_version_raw);
     const char* target_version_index = NormalizePath(target_version_index_raw);
     const char* list_missing_blocks = NormalizePath(list_missing_blocks_raw);
+    const char* upload_content = NormalizePath(upload_content_raw);
+    const char* remote_content_index = NormalizePath(remote_content_index_raw);
+    const char* remote_content = NormalizePath(remote_content_raw);
 
     if (create_version_index && version)
     {
@@ -1394,6 +1798,108 @@ int main(int argc, char** argv)
         goto end;
     }
 
+    if (upsync)
+    {
+        if (!version)
+        {
+            printf("--upsync requires a --version path\n");
+            result = 1;
+            goto end;
+        }
+        if (!version_index)
+        {
+            printf("--upsync requires a --version-index path\n");
+            result = 1;
+            goto end;
+        }
+        if (!content_index)
+        {
+            printf("--upsync requires a --content-index path\n");
+            result = 1;
+            goto end;
+        }
+        if (!upload_content)
+        {
+            printf("--upsync requires a --upload-content path\n");
+            result = 1;
+            goto end;
+        }
+        TroveStorageAPI storage_api;
+        MeowHashAPI hash_api;
+        LizardCompressionAPI compression_api;
+        BikeshedJobAPI job_api(GetCPUCount());
+        if(!Cmd_UpSyncVersion(
+            &storage_api.m_StorageAPI,
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            &compression_api.m_CompressionAPI,
+            version,
+            version_index,
+            content,
+            content_index,
+            upload_content,
+            max_chunks_per_block,
+            target_block_size,
+            target_chunk_size))
+        {
+            // TODO: printf
+            result = 1;
+            goto end;
+        }
+    }
+
+    if (downsync)
+    {
+        TroveStorageAPI storage_api;
+        MeowHashAPI hash_api;
+        LizardCompressionAPI compression_api;
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
+
+        if (!target_version_index)
+        {
+            printf("--downsync requires a --target-version-index path\n");
+            result = 1;
+            goto end;
+        }
+        if (!content_index && !content)
+        {
+            printf("--downsync requires a --content-index or --content path\n");
+            result = 1;
+            goto end;
+        }
+        if (!remote_content_index && !remote_content)
+        {
+            printf("--downsync requires a --remote-content-index or --remote-content path\n");
+            result = 1;
+            goto end;
+        }
+
+        int ok = Cmd_DownSyncVersion(
+            &storage_api.m_StorageAPI,
+            &storage_api.m_StorageAPI,
+            &hash_api.m_HashAPI,
+            &job_api.m_JobAPI,
+            &compression_api.m_CompressionAPI,
+            target_version_index,
+            content_index,
+            content,
+            remote_content_index,
+            remote_content,
+            output_format,
+            max_chunks_per_block,
+            target_block_size,
+            target_chunk_size);
+
+        if (!ok)
+        {
+            // TODO: printf
+            result = 1;
+            goto end;
+        }
+        return 0;
+    }
+
     kgflags_print_usage();
     return 1;
 
@@ -1411,5 +1917,8 @@ end: free((void*)create_version_index);
     free((void*)target_version);
     free((void*)target_version_index);
     free((void*)list_missing_blocks);
+    free((void*)upload_content);
+    free((void*)remote_content_index);
+    free((void*)remote_content);
     return result;
 }

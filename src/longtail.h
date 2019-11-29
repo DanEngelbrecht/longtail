@@ -84,6 +84,8 @@ struct JobAPI
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 void Longtail_SetAssert(Longtail_Assert assert_func);
+typedef void (*Longtail_Log)(int level, const char* format, ...);
+void Longtail_SetLog(Longtail_Log log_func);
 
 #if defined(LONGTAIL_ASSERTS)
 void* Longtail_NukeMalloc(size_t s);

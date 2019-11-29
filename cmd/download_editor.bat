@@ -4,14 +4,25 @@ SetLocal EnableDelayedExpansion
 set LONGTAIL=%1
 set WORK_FOLDER=%2
 set VERSION=%3
-set SOURCE_FOLDER=%4
+set TARGET_FOLDER=%4
 set BUCKET=%5
 
-rem gsutil cp !BUCKET!\test_bucket\store.lci !WORK_FOLDER!\store.lci
-!LONGTAIL! --upsync --version "!SOURCE_FOLDER!" --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\store.lci" --upload-content "!WORK_FOLDER!\store"
-rem gsutil cp !WORK_FOLDER!\upload\*.lrb !BUCKET!\test_bucket\store\
-rem gsutil cp !WORK_FOLDER!\store.lci !BUCKET!\test_bucket\store\store.lci
-rem gsutil cp !WORK_FOLDER!\!VERSION!.lvi !BUCKET!\test_bucket\!VERSION!.lvi
+rem gsutil cp !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+rem gsutil cp !BUCKET!\!VERSION!.lvi !WORK_FOLDER!\!VERSION!.lvi
+@copy !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+@copy !BUCKET!\!VERSION!.lvi !WORK_FOLDER!\!VERSION!.lvi
+
+!LONGTAIL! --downsync --target-version-index "!WORK_FOLDER!\!VERSION!.lvi" --content "!WORK_FOLDER!\cache" --remote-content-index "!WORK_FOLDER!\remote_store.lci" --output-format "!BUCKET!\store\" >download_list.txt
+
+@if not exist "!WORK_FOLDER!\cache" mkdir "!WORK_FOLDER!\cache"
+
+@for /f "delims=" %%f in (download_list.txt) do (
+    @xcopy "!BUCKET!\store\%%f" "!WORK_FOLDER!\cache\"
+)
+
+rem !LONGTAIL! --downsync --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\remote_store.lci" --output-format "!BUCKET!\store\{hash}.lrb" | gsutil -m cp -I "!WORK_FOLDER!\store"
+
+!LONGTAIL! --update-version "!TARGET_FOLDER!" --content "!WORK_FOLDER!\cache" --target-version-index "!WORK_FOLDER!\!VERSION!.lvi"
 
 GOTO end
 
