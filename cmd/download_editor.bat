@@ -8,19 +8,19 @@ set TARGET_FOLDER=%4
 set BUCKET=%5
 
 rem gsutil cp !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
-rem gsutil cp !BUCKET!\!VERSION!.lvi !WORK_FOLDER!\!VERSION!.lvi
 @copy !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+
+rem gsutil cp !BUCKET!\!VERSION!.lvi !WORK_FOLDER!\!VERSION!.lvi
 @copy !BUCKET!\!VERSION!.lvi !WORK_FOLDER!\!VERSION!.lvi
 
-!LONGTAIL! --downsync --target-version-index "!WORK_FOLDER!\!VERSION!.lvi" --content "!WORK_FOLDER!\cache" --remote-content-index "!WORK_FOLDER!\remote_store.lci" --output-format "!BUCKET!\store\" >download_list.txt
+!LONGTAIL! --downsync --target-version-index "!WORK_FOLDER!\!VERSION!.lvi" --content "!WORK_FOLDER!\cache" --remote-content-index "!WORK_FOLDER!\remote_store.lci" --output-format "!BUCKET!\store\{blockname}" >download_list.txt
 
 @if not exist "!WORK_FOLDER!\cache" mkdir "!WORK_FOLDER!\cache"
 
+rem Replace with gsutil copy from download_list.txt
 @for /f "delims=" %%f in (download_list.txt) do (
-    @xcopy "!BUCKET!\store\%%f" "!WORK_FOLDER!\cache\"
+    @xcopy "%%f" "!WORK_FOLDER!\cache\"
 )
-
-rem !LONGTAIL! --downsync --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\remote_store.lci" --output-format "!BUCKET!\store\{hash}.lrb" | gsutil -m cp -I "!WORK_FOLDER!\store"
 
 !LONGTAIL! --update-version "!TARGET_FOLDER!" --content "!WORK_FOLDER!\cache" --target-version-index "!WORK_FOLDER!\!VERSION!.lvi"
 

@@ -7,14 +7,28 @@ set VERSION=%3
 set SOURCE_FOLDER=%4
 set BUCKET=%5
 
-rem gsutil cp !BUCKET!\test_bucket\store.lci !WORK_FOLDER!\store.lci
-!LONGTAIL! --upsync --version "!SOURCE_FOLDER!" --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\store.lci" --upload-content "!WORK_FOLDER!\store"
-rem gsutil cp !WORK_FOLDER!\upload\*.lrb !BUCKET!\test_bucket\store\
-rem gsutil cp !WORK_FOLDER!\store.lci !BUCKET!\test_bucket\store\store.lci
-rem gsutil cp !WORK_FOLDER!\!VERSION!.lvi !BUCKET!\test_bucket\!VERSION!.lvi
+rem gsutil cp !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+if exist "!BUCKET!\store.lci" copy !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+
+echo !LONGTAIL! --upsync --version "!SOURCE_FOLDER!" --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\remote_store.lci" --upload-content "!WORK_FOLDER!\upload" --output-format "!WORK_FOLDER!\upload\{blockname}"
+!LONGTAIL! --upsync --version "!SOURCE_FOLDER!" --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\remote_store.lci" --upload-content "!WORK_FOLDER!\upload" --output-format "!WORK_FOLDER!\upload\{blockname}" >!WORK_FOLDER!\upload_list.txt
+
+if not exist "!WORK_FOLDER!\upload" mkdir "!WORK_FOLDER!\upload"
+
+rem Replace with gsutil copy from upload_list.txt
+for /f "delims=" %%f in (!WORK_FOLDER!\upload_list.txt) do (
+    xcopy "%%f" "!BUCKET!\store\"
+)
+
+rem gsutil cp !WORK_FOLDER!\!VERSION!.lvi !BUCKET!\!VERSION!.lvi
+copy !WORK_FOLDER!\!VERSION!.lvi !BUCKET!\!VERSION!.lvi
+
+rem gsutil cp !WORK_FOLDER!\remote_store.lci !BUCKET!\store.lci
+copy !WORK_FOLDER!\remote_store.lci !BUCKET!\store.lci
 
 GOTO end
 
+C:\Dev\github\engelbd\longtail\cmd\upload_editor.bat C:\Dev\github\engelbd\longtail\build\longtail_debug.exe .\upsync\ git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor ..\local\WinEditor\git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor gcs_bucket
 
 
 IF NOT EXIST "remote" mkdir "remote"
