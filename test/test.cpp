@@ -13,7 +13,7 @@
 #include <errno.h>
 
 #define TEST_LOG(fmt, ...) \
-    printf("--- ");printf(fmt, __VA_ARGS__);
+    fprintf(stderr, "--- ");fprintf(stderr, fmt, __VA_ARGS__);
 
 
 

@@ -14,7 +14,7 @@
 
 void AssertFailure(const char* expression, const char* file, int line)
 {
-    printf("%s(%d): Assert failed `%s`\n", file, line, expression);
+    fprintf(stderr, "%s(%d): Assert failed `%s`\n", file, line, expression);
     exit(-1);
 }
 
@@ -102,9 +102,42 @@ char* NormalizePath(const char* path)
     return normalized_path;
 }
 
+int_fast32_t PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash* block_hashes, const char* format_string)
+{
+    const char* format_start = format_string;
+    const char* format_first_end = strstr(format_string, "{blockname}");
+    if (!format_first_end)
+    {
+        return 0;
+    }
+    size_t first_length = (size_t)((intptr_t)format_first_end - (intptr_t)format_start);
+    const char* format_second_start = &format_first_end[strlen("{blockname}")];
+    for (uint64_t b = 0; b < block_count; ++b)
+    {
+        char block_name[64];
+        sprintf(block_name, "0x%" PRIx64 ".lrb", block_hashes[b]);
+
+        char output_str[512];
+        memmove(output_str, format_string, first_length);
+        memmove(&output_str[first_length], block_name, strlen(block_name));
+        strcpy(&output_str[first_length + strlen(block_name)], format_second_start);
+
+        printf("%s\n", output_str);
+    }
+    return 1;
+}
+
 struct Progress
 {
-    Progress() : m_OldPercent(0) {}
+    Progress(const char* task)
+        : m_OldPercent(0)
+    {
+        fprintf(stderr, "%s:", task);
+    }
+    ~Progress()
+    {
+        fprintf(stderr, "\n");
+    }
     uint32_t m_OldPercent;
     static void ProgressFunc(void* context, uint32_t total, uint32_t jobs_done)
     {
@@ -114,7 +147,7 @@ struct Progress
             uint32_t percent_done = (100 * jobs_done) / total;
             if (percent_done - p->m_OldPercent >= 5)
             {
-                printf("%u%% ", percent_done);
+                fprintf(stderr, "%u%% ", percent_done);
                 p->m_OldPercent = percent_done;
             }
             return;
@@ -123,9 +156,8 @@ struct Progress
         {
             if (p->m_OldPercent != 100)
             {
-                printf("100%%");
+                fprintf(stderr, "100%%");
             }
-            printf("\n");
         }
     }
 };
@@ -168,36 +200,39 @@ int Cmd_CreateVersionIndex(
         version);
     if (!file_infos)
     {
-        printf("Failed to scan folder `%s`\n", version);
+        fprintf(stderr, "Failed to scan folder `%s`\n", version);
         return 0;
     }
     uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
     if (!compression_types)
     {
-        printf("Failed to get compression types for files in `%s`\n", version);
+        fprintf(stderr, "Failed to get compression types for files in `%s`\n", version);
         LONGTAIL_FREE(file_infos);
         return 0;
     }
 
-    Progress progress;
-    VersionIndex* vindex = CreateVersionIndex(
-        storage_api,
-        hash_api,
-        job_api,
-        Progress::ProgressFunc,
-        &progress,
-        version,
-        &file_infos->m_Paths,
-        file_infos->m_FileSizes,
-        compression_types,
-        target_chunk_size);
+    VersionIndex* vindex = 0;
+    {
+        Progress progress("Indexing version");
+        vindex = CreateVersionIndex(
+            storage_api,
+            hash_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            version,
+            &file_infos->m_Paths,
+            file_infos->m_FileSizes,
+            compression_types,
+            target_chunk_size);
+    }
     LONGTAIL_FREE(compression_types);
     compression_types = 0;
     LONGTAIL_FREE(file_infos);
     file_infos = 0;
     if (!vindex)
     {
-        printf("Failed to create version index for `%s`\n", version);
+        fprintf(stderr, "Failed to create version index for `%s`\n", version);
         return 0;
     }
 
@@ -208,7 +243,7 @@ int Cmd_CreateVersionIndex(
     {
         LONGTAIL_FREE(vindex);
         vindex = 0;
-        printf("Failed to read version index from `%s`\n", create_version_index);
+        fprintf(stderr, "Failed to read version index from `%s`\n", create_version_index);
         return 0;
     }
 
@@ -226,7 +261,7 @@ int Cmd_CreateVersionIndex(
     vindex = 0;
     if (!ok)
     {
-        printf("Failed to create version index to `%s`\n", create_version_index);
+        fprintf(stderr, "Failed to create version index to `%s`\n", create_version_index);
         return 0;
     }
 
@@ -242,7 +277,6 @@ int Cmd_CreateContentIndex(
     const char* create_content_index,
     const char* content)
 {
-    Progress progress;
     ContentIndex* cindex = 0;
     if (!content)
     {
@@ -256,12 +290,13 @@ int Cmd_CreateContentIndex(
             0);
         if (!cindex)
         {
-            printf("Failed to create empty content index\n");
+            fprintf(stderr, "Failed to create empty content index\n");
             return 0;
         }
     }
     else
     {
+        Progress progress("Reading content");
         cindex = ReadContent(
             storage_api,
             hash_api,
@@ -271,7 +306,7 @@ int Cmd_CreateContentIndex(
             content);
         if (!cindex)
         {
-            printf("Failed to create content index for `%s`\n", content);
+            fprintf(stderr, "Failed to create content index for `%s`\n", content);
             return 0;
         }
     }
@@ -285,7 +320,7 @@ int Cmd_CreateContentIndex(
     cindex = 0;
     if (!ok)
     {
-        printf("Failed to write content index to `%s`\n", create_content_index);
+        fprintf(stderr, "Failed to write content index to `%s`\n", create_content_index);
         return 0;
     }
     return 1;
@@ -300,7 +335,7 @@ int Cmd_MergeContentIndex(
     ContentIndex* cindex1 = ReadContentIndex(storage_api, content_index);
     if (!cindex1)
     {
-        printf("Failed to read content index from `%s`\n", content_index);
+        fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
         return 0;
     }
     ContentIndex* cindex2 = ReadContentIndex(storage_api, merge_content_index);
@@ -308,7 +343,7 @@ int Cmd_MergeContentIndex(
     {
         LONGTAIL_FREE(cindex1);
         cindex1 = 0;
-        printf("Failed to read content index from `%s`\n", merge_content_index);
+        fprintf(stderr, "Failed to read content index from `%s`\n", merge_content_index);
         return 0;
     }
     ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
@@ -319,7 +354,7 @@ int Cmd_MergeContentIndex(
 
     if (!cindex)
     {
-        printf("Failed to merge content index `%s` with `%s`\n", content_index, merge_content_index);
+        fprintf(stderr, "Failed to merge content index `%s` with `%s`\n", content_index, merge_content_index);
         return 0;
     }
 
@@ -334,7 +369,7 @@ int Cmd_MergeContentIndex(
 
     if (!ok)
     {
-        printf("Failed to write content index to `%s`\n", create_content_index);
+        fprintf(stderr, "Failed to write content index to `%s`\n", create_content_index);
         return 0;
     }
     return 1;
@@ -359,7 +394,7 @@ int Cmd_CreateMissingContentIndex(
         vindex = ReadVersionIndex(storage_api, version_index);
         if (!vindex)
         {
-            printf("Failed to read version index from `%s`\n", version_index);
+            fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
             return 0;
         }
     }
@@ -370,17 +405,17 @@ int Cmd_CreateMissingContentIndex(
             version);
         if (!file_infos)
         {
-            printf("Failed to scan folder `%s`\n", version);
+            fprintf(stderr, "Failed to scan folder `%s`\n", version);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
         if (!compression_types)
         {
-            printf("Failed to get compression types for files in `%s`\n", version);
+            fprintf(stderr, "Failed to get compression types for files in `%s`\n", version);
             LONGTAIL_FREE(file_infos);
             return 0;
         }
-        Progress progress;
+        Progress progress("Indexing version");
         vindex = CreateVersionIndex(
             storage_api,
             hash_api,
@@ -398,7 +433,7 @@ int Cmd_CreateMissingContentIndex(
         file_infos = 0;
         if (!vindex)
         {
-            printf("Failed to create version index for version `%s`\n", version);
+            fprintf(stderr, "Failed to create version index for version `%s`\n", version);
             return 0;
         }
     }
@@ -411,13 +446,13 @@ int Cmd_CreateMissingContentIndex(
         {
             LONGTAIL_FREE(vindex);
             vindex = 0;
-            printf("Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
             return 0;
         }
     }
     else if (content)
     {
-        Progress progress;
+        Progress progress("Reading content");
         existing_cindex = ReadContent(
             storage_api,
             hash_api,
@@ -429,7 +464,7 @@ int Cmd_CreateMissingContentIndex(
         {
             LONGTAIL_FREE(vindex);
             vindex = 0;
-            printf("Failed to read contents from `%s`\n", content);
+            fprintf(stderr, "Failed to read contents from `%s`\n", content);
             return 0;
         }
     }
@@ -458,7 +493,7 @@ int Cmd_CreateMissingContentIndex(
     vindex = 0;
     if (!cindex)
     {
-        printf("Failed to create content index for version `%s`\n", version);
+        fprintf(stderr, "Failed to create content index for version `%s`\n", version);
         return 0;
     }
 
@@ -473,7 +508,7 @@ int Cmd_CreateMissingContentIndex(
 
     if (!ok)
     {
-        printf("Failed to write content index to `%s`\n", create_content_index);
+        fprintf(stderr, "Failed to write content index to `%s`\n", create_content_index);
         return 0;
     }
     return 1;
@@ -498,7 +533,7 @@ int Cmd_CreateContent(
         vindex = ReadVersionIndex(storage_api, version_index);
         if (!vindex)
         {
-            printf("Failed to read version index from `%s`\n", version_index);
+            fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
             return 0;
         }
     }
@@ -509,17 +544,17 @@ int Cmd_CreateContent(
             version);
         if (!file_infos)
         {
-            printf("Failed to scan folder `%s`\n", version);
+            fprintf(stderr, "Failed to scan folder `%s`\n", version);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
         if (!compression_types)
         {
-            printf("Failed to get compression types for files in `%s`\n", version);
+            fprintf(stderr, "Failed to get compression types for files in `%s`\n", version);
             LONGTAIL_FREE(file_infos);
             return 0;
         }
-        Progress progress;
+        Progress progress("Indexing version");
         vindex = CreateVersionIndex(
             storage_api,
             hash_api,
@@ -537,7 +572,7 @@ int Cmd_CreateContent(
         file_infos = 0;
         if (!vindex)
         {
-            printf("Failed to create version index for version `%s`\n", version);
+            fprintf(stderr, "Failed to create version index for version `%s`\n", version);
             return 0;
         }
     }
@@ -548,7 +583,7 @@ int Cmd_CreateContent(
         cindex = ReadContentIndex(storage_api, content_index);
         if (!cindex)
         {
-            printf("Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
             return 0;
         }
     }
@@ -564,7 +599,7 @@ int Cmd_CreateContent(
             max_chunks_per_block);
         if (!cindex)
         {
-            printf("Failed to create content index for version `%s`\n", version);
+            fprintf(stderr, "Failed to create content index for version `%s`\n", version);
             LONGTAIL_FREE(vindex);
             vindex = 0;
             return 0;
@@ -579,32 +614,35 @@ int Cmd_CreateContent(
         cindex = 0;
         LONGTAIL_FREE(vindex);
         vindex = 0;
-        printf("Version `%s` does not fully encompass content `%s`\n", version, create_content);
+        fprintf(stderr, "Version `%s` does not fully encompass content `%s`\n", version, create_content);
         return 0;
     }
 
-    Progress progress;
     struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
     if (!asset_part_lookup)
     {
-        printf("Failed to create source lookup table for version `%s`\n", version);
+        fprintf(stderr, "Failed to create source lookup table for version `%s`\n", version);
         LONGTAIL_FREE(vindex);
         vindex = 0;
         LONGTAIL_FREE(cindex);
         cindex = 0;
         return 0;
     }
-    int ok = CreatePath(storage_api, create_content) && WriteContent(
-        storage_api,
-        storage_api,
-        compression_api,
-        job_api,
-        Progress::ProgressFunc,
-        &progress,
-        cindex,
-        asset_part_lookup,
-        version,
-        create_content);
+    int ok = 0;
+    {
+        Progress progress("Writing content");
+        ok = CreatePath(storage_api, create_content) && WriteContent(
+            storage_api,
+            storage_api,
+            compression_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            cindex,
+            asset_part_lookup,
+            version,
+            create_content);
+    }
 
     FreeAssetPartLookup(asset_part_lookup);
     asset_part_lookup = 0;
@@ -615,7 +653,7 @@ int Cmd_CreateContent(
 
     if (!ok)
     {
-        printf("Failed to write content to `%s`\n", create_content);
+        fprintf(stderr, "Failed to write content to `%s`\n", create_content);
         return 0;
     }
     return 1;
@@ -714,7 +752,7 @@ int Cmd_CreateVersion(
     VersionIndex* vindex = ReadVersionIndex(storage_api, version_index);
     if (!vindex)
     {
-        printf("Failed to read version index from `%s`\n", version_index);
+        fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
         return 0;
     }
 
@@ -726,13 +764,13 @@ int Cmd_CreateVersion(
         {
             LONGTAIL_FREE(vindex);
             vindex = 0;
-            printf("Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
             return 0;
         }
     }
     else
     {
-        Progress progress;
+        Progress progress("Reading content");
         cindex = ReadContent(
             storage_api,
             hash_api,
@@ -744,7 +782,7 @@ int Cmd_CreateVersion(
         {
             LONGTAIL_FREE(vindex);
             vindex = 0;
-            printf("Failed to create content index for `%s`\n", content);
+            fprintf(stderr, "Failed to create content index for `%s`\n", content);
             return 0;
         }
     }
@@ -757,29 +795,32 @@ int Cmd_CreateVersion(
         vindex = 0;
         LONGTAIL_FREE(cindex);
         cindex = 0;
-        printf("Content `%s` does not fully encompass version `%s`\n", content, create_version);
+        fprintf(stderr, "Content `%s` does not fully encompass version `%s`\n", content, create_version);
         return 0;
     }
 
-    Progress progress;
-    int ok = CreatePath(storage_api, create_version) && WriteVersion(
-        storage_api,
-        storage_api,
-        compression_api,
-        job_api,
-        Progress::ProgressFunc,
-        &progress,
-        cindex,
-        vindex,
-        content,
-        create_version);
+    int ok = 0;
+    {
+        Progress progress("Writing version");
+        ok = CreatePath(storage_api, create_version) && WriteVersion(
+            storage_api,
+            storage_api,
+            compression_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            cindex,
+            vindex,
+            content,
+            create_version);
+    }
     LONGTAIL_FREE(vindex);
     vindex = 0;
     LONGTAIL_FREE(cindex);
     cindex = 0;
     if (!ok)
     {
-        printf("Failed to create version `%s`\n", create_version);
+        fprintf(stderr, "Failed to create version `%s`\n", create_version);
         return 0;
     }
     return 1;
@@ -803,7 +844,7 @@ int Cmd_UpdateVersion(
         source_vindex = ReadVersionIndex(storage_api, version_index);
         if (!source_vindex)
         {
-            printf("Failed to read version index from `%s`\n", version_index);
+            fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
             return 0;
         }
     }
@@ -814,17 +855,17 @@ int Cmd_UpdateVersion(
             update_version);
         if (!file_infos)
         {
-            printf("Failed to scan folder `%s`\n", update_version);
+            fprintf(stderr, "Failed to scan folder `%s`\n", update_version);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
         if (!compression_types)
         {
-            printf("Failed to get compression types for files in `%s`\n", update_version);
+            fprintf(stderr, "Failed to get compression types for files in `%s`\n", update_version);
             LONGTAIL_FREE(file_infos);
             return 0;
         }
-        Progress progress;
+        Progress progress("Indexing version");
         source_vindex = CreateVersionIndex(
             storage_api,
             hash_api,
@@ -842,7 +883,7 @@ int Cmd_UpdateVersion(
         file_infos = 0;
         if (!source_vindex)
         {
-            printf("Failed to create version index for version `%s`\n", update_version);
+            fprintf(stderr, "Failed to create version index for version `%s`\n", update_version);
             return 0;
         }
     }
@@ -852,7 +893,7 @@ int Cmd_UpdateVersion(
     {
         LONGTAIL_FREE(source_vindex);
         source_vindex = 0;
-        printf("Failed to read version index from `%s`\n", target_version_index);
+        fprintf(stderr, "Failed to read version index from `%s`\n", target_version_index);
         return 0;
     }
 
@@ -866,13 +907,13 @@ int Cmd_UpdateVersion(
             target_vindex = 0;
             LONGTAIL_FREE(source_vindex);
             source_vindex = 0;
-            printf("Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
             return 0;
         }
     }
     else
     {
-        Progress progress;
+        Progress progress("Reading content");
         cindex = ReadContent(
             storage_api,
             hash_api,
@@ -886,7 +927,7 @@ int Cmd_UpdateVersion(
             target_vindex = 0;
             LONGTAIL_FREE(source_vindex);
             source_vindex = 0;
-            printf("Failed to create content index for `%s`\n", content);
+            fprintf(stderr, "Failed to create content index for `%s`\n", content);
             return 0;
         }
     }
@@ -899,7 +940,7 @@ int Cmd_UpdateVersion(
         target_vindex = 0;
         LONGTAIL_FREE(cindex);
         cindex = 0;
-        printf("Content `%s` does not fully encompass version `%s`\n", content, target_version_index);
+        fprintf(stderr, "Content `%s` does not fully encompass version `%s`\n", content, target_version_index);
         return 0;
     }
 
@@ -914,25 +955,28 @@ int Cmd_UpdateVersion(
         target_vindex = 0;
         LONGTAIL_FREE(source_vindex);
         source_vindex = 0;
-        printf("Failed to create version diff from `%s` to `%s`\n", version_index, target_version_index);
+        fprintf(stderr, "Failed to create version diff from `%s` to `%s`\n", version_index, target_version_index);
         return 0;
     }
 
-    Progress progress;
-    int ok = CreatePath(storage_api, update_version) && ChangeVersion(
-        storage_api,
-        storage_api,
-        hash_api,
-        job_api,
-        Progress::ProgressFunc,
-        &progress,
-        compression_api,
-        cindex,
-        source_vindex,
-        target_vindex,
-        version_diff,
-        content,
-        update_version);
+    int ok = 0;
+    {
+        Progress progress("Updating version");
+        ok = CreatePath(storage_api, update_version) && ChangeVersion(
+            storage_api,
+            storage_api,
+            hash_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            compression_api,
+            cindex,
+            source_vindex,
+            target_vindex,
+            version_diff,
+            content,
+            update_version);
+    }
 
     LONGTAIL_FREE(cindex);
     cindex = 0;
@@ -945,7 +989,7 @@ int Cmd_UpdateVersion(
 
     if (!ok)
     {
-        printf("Failed to update version `%s` to `%s`\n", update_version, target_version_index);
+        fprintf(stderr, "Failed to update version `%s` to `%s`\n", update_version, target_version_index);
         return 0;
     }
     return 1;
@@ -962,6 +1006,7 @@ int Cmd_UpSyncVersion(
     const char* content_path,
     const char* content_index_path,
     const char* upload_content_path,
+    const char* output_format,
     int max_chunks_per_block,
     int target_block_size,
     int target_chunk_size)
@@ -974,7 +1019,7 @@ int Cmd_UpSyncVersion(
             version_path);
         if (!file_infos)
         {
-            printf("Failed to scan folder `%s`\n", version_path);
+            fprintf(stderr, "Failed to scan folder `%s`\n", version_path);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(
@@ -982,12 +1027,12 @@ int Cmd_UpSyncVersion(
             file_infos);
         if (!compression_types)
         {
-            printf("Failed to get compression types for files in `%s`\n", version_path);
+            fprintf(stderr, "Failed to get compression types for files in `%s`\n", version_path);
             LONGTAIL_FREE(file_infos);
             return 0;
         }
 
-        Progress progress;
+        Progress progress("Indexing version");
         vindex = CreateVersionIndex(
             source_storage_api,
             hash_api,
@@ -1005,7 +1050,7 @@ int Cmd_UpSyncVersion(
         file_infos = 0;
         if (!vindex)
         {
-            printf("Failed to create version index for `%s`\n", version_path);
+            fprintf(stderr, "Failed to create version index for `%s`\n", version_path);
             return 0;
         }
     }
@@ -1018,23 +1063,46 @@ int Cmd_UpSyncVersion(
     }
     if (!cindex)
     {
-        if (!content_path)
+        if (!content_path && content_index_path)
         {
-            printf("--content folder must be given if no valid content index is given with --content-index\n");
-            return 0;
+            cindex = CreateContentIndex(
+                hash_api,
+                0,
+                0,
+                0,
+                0,
+                target_block_size,
+                max_chunks_per_block);
+            if (!cindex)
+            {
+                fprintf(stderr, "Failed to create empty content index\n");
+                LONGTAIL_FREE(vindex);
+                vindex = 0;
+                return 0;
+            }
         }
-        Progress progress;
-        cindex = ReadContent(
-            source_storage_api,
-            hash_api,
-            job_api,
-            Progress::ProgressFunc,
-            &progress,
-            content_path);
-        if (!cindex)
+        else
         {
-            printf("Failed to create content index for `%s`\n", content_path);
-            return 0;
+            if (!content_path)
+            {
+                fprintf(stderr, "--content folder must be given if no valid content index is given with --content-index\n");
+                return 0;
+            }
+            Progress progress("Reading content");
+            cindex = ReadContent(
+                source_storage_api,
+                hash_api,
+                job_api,
+                Progress::ProgressFunc,
+                &progress,
+                content_path);
+            if (!cindex)
+            {
+                fprintf(stderr, "Failed to create content index for `%s`\n", content_path);
+                LONGTAIL_FREE(vindex);
+                vindex = 0;
+                return 0;
+            }
         }
     }
 
@@ -1046,7 +1114,7 @@ int Cmd_UpSyncVersion(
         max_chunks_per_block);
     if (!missing_content_index)
     {
-        printf("Failed to generate content index for missing content\n");
+        fprintf(stderr, "Failed to generate content index for missing content\n");
         LONGTAIL_FREE(vindex);
         vindex = 0;
         LONGTAIL_FREE(cindex);
@@ -1057,7 +1125,7 @@ int Cmd_UpSyncVersion(
     ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
     if (!asset_part_lookup)
     {
-        printf("Failed to create source lookup table for version `%s`\n", version_path);
+        fprintf(stderr, "Failed to create source lookup table for version `%s`\n", version_path);
         LONGTAIL_FREE(vindex);
         vindex = 0;
         LONGTAIL_FREE(cindex);
@@ -1065,21 +1133,36 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 
-    Progress progress;
-    int ok = CreatePath(target_storage_api, upload_content_path) && WriteContent(
-        source_storage_api,
-        target_storage_api,
-        compression_api,
-        job_api,
-        Progress::ProgressFunc,
-        &progress,
-        missing_content_index,
-        asset_part_lookup,
-        version_path,
-        upload_content_path);
+    int ok = 0;
+    {
+        Progress progress("Writing content");
+        ok = CreatePath(target_storage_api, upload_content_path) && WriteContent(
+            source_storage_api,
+            target_storage_api,
+            compression_api,
+            job_api,
+            Progress::ProgressFunc,
+            &progress,
+            missing_content_index,
+            asset_part_lookup,
+            version_path,
+            upload_content_path);
+    }
     if (!ok)
     {
-        printf("Failed to create new content from `%s` to `%s`\n", version_path, upload_content_path);
+        fprintf(stderr, "Failed to create new content from `%s` to `%s`\n", version_path, upload_content_path);
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    if (!PrintFormattedBlockList(*missing_content_index->m_BlockCount, missing_content_index->m_BlockHashes, output_format))
+    {
+        fprintf(stderr, "Failed to format block output using format `%s`\n", output_format);
         LONGTAIL_FREE(missing_content_index);
         missing_content_index = 0;
         LONGTAIL_FREE(vindex);
@@ -1092,7 +1175,7 @@ int Cmd_UpSyncVersion(
     ContentIndex* new_content_index = MergeContentIndex(cindex, missing_content_index);
     if (!new_content_index)
     {
-        printf("Failed creating a new content index with the added content\n");
+        fprintf(stderr, "Failed creating a new content index with the added content\n");
         LONGTAIL_FREE(missing_content_index);
         missing_content_index = 0;
         LONGTAIL_FREE(vindex);
@@ -1108,7 +1191,7 @@ int Cmd_UpSyncVersion(
         version_index_path);
     if (!ok)
     {
-        printf("Failed to write the new version index to `%s`\n", version_index_path);
+        fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
         LONGTAIL_FREE(new_content_index);
         new_content_index = 0;
         LONGTAIL_FREE(missing_content_index);
@@ -1126,7 +1209,7 @@ int Cmd_UpSyncVersion(
         content_index_path);
     if (!ok)
     {
-        printf("Failed to write the new version index to `%s`\n", version_index_path);
+        fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
         LONGTAIL_FREE(new_content_index);
         new_content_index = 0;
         LONGTAIL_FREE(missing_content_index);
@@ -1147,9 +1230,9 @@ int Cmd_UpSyncVersion(
     LONGTAIL_FREE(cindex);
     cindex = 0;
 
-    printf("Updated version index `%s`\n", version_index_path);
-    printf("Updated content index `%s`\n", content_index_path);
-    printf("Created added content in `%s`\n", upload_content_path);
+    fprintf(stderr, "Updated version index `%s`\n", version_index_path);
+    fprintf(stderr, "Updated content index `%s`\n", content_index_path);
+    fprintf(stderr, "Wrote added content to `%s`\n", upload_content_path);
 
     return 0;
 }
@@ -1202,12 +1285,12 @@ int Cmd_DownSyncVersion(
             vindex_target = 0;
             return 0;
         }
-//        Progress progress;
+        Progress progress("Reading content");
         existing_cindex = ReadContent(
             source_storage_api,
             hash_api, job_api,
-            0,//Progress::ProgressFunc,
-            0,//&progress,
+            Progress::ProgressFunc,
+            &progress,
             have_content_path);
         if (!existing_cindex)
         {
@@ -1248,12 +1331,12 @@ int Cmd_DownSyncVersion(
             cindex_missing = 0;
             return 0;
         }
-//        Progress progress;
+        Progress progress("Reading content");
         cindex_remote = ReadContent(
             source_storage_api,
             hash_api, job_api,
-            0,//Progress::ProgressFunc,
-            0,//&progress,
+            Progress::ProgressFunc,
+            &progress,
             remote_content_path);
         if (!cindex_remote)
         {
@@ -1307,10 +1390,22 @@ int Cmd_DownSyncVersion(
         }
     }
 
-    for (uint64_t b = 0; b < requested_block_count; ++b)
+    if (!PrintFormattedBlockList(requested_block_count, requested_block_hashes, output_format))
     {
-        // TODO: Use input format
-        printf("0x%" PRIx64 ".lrb\n", requested_block_hashes[b]);
+        hmfree(requested_blocks_lookup);
+        requested_blocks_lookup = 0;
+
+        LONGTAIL_FREE(requested_block_hashes);
+        requested_block_hashes = 0;
+
+        hmfree(remote_chunk_to_remote_block_index_lookup);
+        remote_chunk_to_remote_block_index_lookup = 0;
+
+        LONGTAIL_FREE(cindex_remote);
+        cindex_remote = 0;
+        LONGTAIL_FREE(cindex_missing);
+        cindex_missing = 0;
+        return 0;
     }
 
     hmfree(requested_blocks_lookup);
@@ -1327,7 +1422,7 @@ int Cmd_DownSyncVersion(
     LONGTAIL_FREE(cindex_missing);
     cindex_missing = 0;
 
-    return 0;
+    return 1;
 }
 
 
@@ -1495,7 +1590,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            printf("Failed to create content `%s` from `%s`\n", create_content, version);
+            fprintf(stderr, "Failed to create content `%s` from `%s`\n", create_content, version);
             return 1;
         }
 
@@ -1527,7 +1622,7 @@ int main(int argc, char** argv)
             content,
             content_index))
         {
-            printf("Failed to create version `%s` to `%s`\n", create_version, version_index);
+            fprintf(stderr, "Failed to create version `%s` to `%s`\n", create_version, version_index);
             return 1;
         }
 */
@@ -1549,7 +1644,7 @@ int main(int argc, char** argv)
             target_version_index,
             target_chunk_size))
         {
-            printf("Failed to update version `%s` to `%s`\n", update_version, target_version_index);
+            fprintf(stderr, "Failed to update version `%s` to `%s`\n", update_version, target_version_index);
             return 1;
         }
 
@@ -1650,7 +1745,7 @@ int main(int argc, char** argv)
     {
         if (filter)
         {
-            printf("--filter option not yet supported\n");
+            fprintf(stderr, "--filter option not yet supported\n");
             result = 1;
             goto end;
         }
@@ -1802,25 +1897,25 @@ int main(int argc, char** argv)
     {
         if (!version)
         {
-            printf("--upsync requires a --version path\n");
+            fprintf(stderr, "--upsync requires a --version path\n");
             result = 1;
             goto end;
         }
         if (!version_index)
         {
-            printf("--upsync requires a --version-index path\n");
+            fprintf(stderr, "--upsync requires a --version-index path\n");
             result = 1;
             goto end;
         }
         if (!content_index)
         {
-            printf("--upsync requires a --content-index path\n");
+            fprintf(stderr, "--upsync requires a --content-index path\n");
             result = 1;
             goto end;
         }
         if (!upload_content)
         {
-            printf("--upsync requires a --upload-content path\n");
+            fprintf(stderr, "--upsync requires a --upload-content path\n");
             result = 1;
             goto end;
         }
@@ -1839,6 +1934,7 @@ int main(int argc, char** argv)
             content,
             content_index,
             upload_content,
+            output_format ? output_format : "{blockname}",
             max_chunks_per_block,
             target_block_size,
             target_chunk_size))
@@ -1858,19 +1954,19 @@ int main(int argc, char** argv)
 
         if (!target_version_index)
         {
-            printf("--downsync requires a --target-version-index path\n");
+            fprintf(stderr, "--downsync requires a --target-version-index path\n");
             result = 1;
             goto end;
         }
         if (!content_index && !content)
         {
-            printf("--downsync requires a --content-index or --content path\n");
+            fprintf(stderr, "--downsync requires a --content-index or --content path\n");
             result = 1;
             goto end;
         }
         if (!remote_content_index && !remote_content)
         {
-            printf("--downsync requires a --remote-content-index or --remote-content path\n");
+            fprintf(stderr, "--downsync requires a --remote-content-index or --remote-content path\n");
             result = 1;
             goto end;
         }
@@ -1886,7 +1982,7 @@ int main(int argc, char** argv)
             content,
             remote_content_index,
             remote_content,
-            output_format,
+            output_format ? output_format : "{blockname}",
             max_chunks_per_block,
             target_block_size,
             target_chunk_size);

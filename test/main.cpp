@@ -11,7 +11,7 @@
 
 void TestAssert(const char* expression, const char* file, int line)
 {
-    printf("%s(%d): Assert failed `%s`\n", file, line, expression);
+    fprintf(stderr, "%s(%d): Assert failed `%s`\n", file, line, expression);
     exit(-1);
 }
 

@@ -548,7 +548,7 @@ struct BikeshedJobAPI
         if (new_job_count > (int32_t)bikeshed_job_api->m_ReservedJobCount)
         {
             PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_SubmittedJobCount, -((int32_t)job_count));
-            printf("******************** SubmitJobs failure!!!!\n");
+            fprintf(stderr, "******************** SubmitJobs failure!!!!\n");
             return 0;
         }
         int32_t job_range_start = new_job_count - job_count;
