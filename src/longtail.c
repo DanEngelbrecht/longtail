@@ -2432,6 +2432,20 @@ void WritePartialAssetFromBlocks(void* context)
         }
         free(full_asset_path);
         full_asset_path = 0;
+
+
+        uint64_t asset_size = job->m_VersionIndex->m_AssetSizes[job->m_AssetIndex];
+        if (!job->m_VersionStorageAPI->SetSize(job->m_VersionStorageAPI, job->m_AssetOutputFile, asset_size))
+        {
+            LONGTAIL_LOG("WritePartialAssetFromBlocks: Fail to set file size for `%s` in `%s`\n", asset_path, job->m_VersionFolder)
+            job->m_VersionStorageAPI->CloseWrite(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+            job->m_AssetOutputFile = 0;
+            for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+            {
+                LONGTAIL_FREE(block_datas[d]);
+            }
+            return;
+        }
     }
 
     JobAPI_Jobs sync_write_job = 0;
