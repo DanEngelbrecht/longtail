@@ -1019,8 +1019,6 @@ TEST(Longtail, WriteContent)
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
 
-    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
     ASSERT_NE(0, WriteContent(
         &source_storage.m_StorageAPI,
         &target_storage.m_StorageAPI,
@@ -1029,11 +1027,9 @@ TEST(Longtail, WriteContent)
         0,
         0,
         cindex,
-        asset_part_lookup,
+        vindex,
         "local",
         "chunks"));
-    FreeAssetPartLookup(asset_part_lookup);
-    asset_part_lookup = 0;
 
     ContentIndex* cindex2 = ReadContent(
         &target_storage.m_StorageAPI,
@@ -1550,7 +1546,6 @@ TEST(Longtail, VersionDiff)
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
-    struct ChunkHashToAssetPart* new_asset_part_lookup = CreateAssetPartLookup(new_vindex);
     ASSERT_EQ(1, WriteContent(
         &storage.m_StorageAPI,
         &storage.m_StorageAPI,
@@ -1559,11 +1554,9 @@ TEST(Longtail, VersionDiff)
         0,
         0,
         content_index,
-        new_asset_part_lookup,
+        new_vindex,
         "new",
         "chunks"));
-    FreeAssetPartLookup(new_asset_part_lookup);
-    new_asset_part_lookup = 0;
 
     VersionDiff* version_diff = CreateVersionDiff(
         old_vindex,
@@ -1692,7 +1685,6 @@ TEST(Longtail, FullScale)
 
     StoreCompressionAPI store_compression;
 
-    struct ChunkHashToAssetPart* local_asset_part_lookup = CreateAssetPartLookup(local_version_index);
     ASSERT_EQ(1, WriteContent(
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
@@ -1701,11 +1693,9 @@ TEST(Longtail, FullScale)
         0,
         0,
         local_content_index,
-        local_asset_part_lookup,
+        local_version_index,
         "",
         ""));
-    FreeAssetPartLookup(local_asset_part_lookup);
-    local_asset_part_lookup = 0;
 
     ContentIndex* remote_content_index = CreateContentIndex(
             &hash_api.m_HashAPI,
@@ -1716,7 +1706,6 @@ TEST(Longtail, FullScale)
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
-    struct ChunkHashToAssetPart* remote_asset_part_lookup = CreateAssetPartLookup(remote_version_index);
     ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
         &remote_storage.m_StorageAPI,
@@ -1725,7 +1714,7 @@ TEST(Longtail, FullScale)
         0,
         0,
         remote_content_index,
-        remote_asset_part_lookup,
+        remote_version_index,
         "",
         ""));
 
@@ -1736,6 +1725,7 @@ TEST(Longtail, FullScale)
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, missing_content);
+ 
     ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
@@ -1744,11 +1734,9 @@ TEST(Longtail, FullScale)
         0,
         0,
         missing_content,
-        remote_asset_part_lookup,
+        remote_version_index,
         "",
         ""));
-    FreeAssetPartLookup(remote_asset_part_lookup);
-    remote_asset_part_lookup = 0;
 
     ContentIndex* merged_content_index = MergeContentIndex(local_content_index, missing_content);
     ASSERT_EQ(1, WriteVersion(
@@ -1928,8 +1916,6 @@ TEST(Longtail, WriteVersion)
     ASSERT_NE((ContentIndex*)0, cindex);
 
     StoreCompressionAPI store_compression;
-    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-    ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
     ASSERT_NE(0, WriteContent(
         storage_api,
         storage_api,
@@ -1938,11 +1924,9 @@ TEST(Longtail, WriteVersion)
         0,
         0,
         cindex,
-        asset_part_lookup,
+        vindex,
         "local",
         "chunks"));
-    FreeAssetPartLookup(asset_part_lookup);
-    asset_part_lookup = 0;
 
     ASSERT_NE(0, WriteVersion(
         storage_api,
@@ -2078,7 +2062,6 @@ void Bench()
         ASSERT_NE((ContentIndex*)0, missing_content_index);
 
         LizardCompressionAPI compression_api;
-        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version_index);
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
@@ -2090,11 +2073,9 @@ void Bench()
             0,
             0,
             missing_content_index,
-            asset_part_lookup,
+            version_index,
             version_source_folder,
             delta_upload_content_folder));
-        FreeAssetPartLookup(asset_part_lookup);
-        asset_part_lookup = 0;
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
         for (uint64_t b = 0; b < *missing_content_index->m_BlockCount; ++b)
@@ -2253,7 +2234,6 @@ void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
-        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version1);
         WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
@@ -2262,12 +2242,9 @@ void LifelikeTest()
             0,
             0,
             local_content_index,
-            asset_part_lookup,
+            version1,
             local_path_1,
             local_content_path);
-
-        FreeAssetPartLookup(asset_part_lookup);
-        asset_part_lookup = 0;
     }
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
@@ -2321,8 +2298,6 @@ void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
-        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version2);
-        ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
         ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
@@ -2331,20 +2306,15 @@ void LifelikeTest()
             0,
             0,
             missing_content,
-            asset_part_lookup,
+            version2,
             local_path_2,
             local_content_path));
-
-        FreeAssetPartLookup(asset_part_lookup);
-        asset_part_lookup = 0;
     }
 
     if (1)
     {
         // Write this to disk for reference to see how big the diff is...
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
-        struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(version2);
-        ASSERT_NE((ChunkHashToAssetPart*)0, asset_part_lookup);
         ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
@@ -2353,12 +2323,9 @@ void LifelikeTest()
             0,
             0,
             missing_content,
-            asset_part_lookup,
+            version2,
             local_path_2,
             remote_content_path));
-
-        FreeAssetPartLookup(asset_part_lookup);
-        asset_part_lookup = 0;
     }
 
 //    ContentIndex* remote_content_index = CreateContentIndex(

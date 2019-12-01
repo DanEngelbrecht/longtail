@@ -161,7 +161,7 @@ int WriteContent(
     JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
     struct ContentIndex* content_index,
-    struct ChunkHashToAssetPart* asset_part_lookup,
+    struct VersionIndex* version_index,
     const char* assets_folder,
     const char* content_folder);
 
@@ -187,16 +187,6 @@ struct ContentIndex* RetargetContent(
 struct ContentIndex* MergeContentIndex(
     struct ContentIndex* local_content_index,
     struct ContentIndex* remote_content_index);
-
-struct PathLookup* CreateContentHashToPathLookup(
-    const struct VersionIndex* version_index,
-    uint64_t* out_unique_asset_indexes);
-
-void FreePathLookup(struct PathLookup* path_lookup);
-
-struct ChunkHashToAssetPart* CreateAssetPartLookup(
-    struct VersionIndex* version_index);
-void FreeAssetPartLookup(struct ChunkHashToAssetPart* asset_part_lookup);
 
 int WriteVersion(
     struct StorageAPI* content_storage_api,
@@ -292,10 +282,10 @@ struct VersionIndex
     // uint64_t* m_ModificationDates;   // []
     uint32_t* m_AssetChunkIndexStarts;  // []
     uint32_t* m_AssetChunkIndexes;      // []
-
     TLongtail_Hash* m_ChunkHashes;      // []
-    uint32_t* m_ChunkSizes;             // []   -- This is just for convenience when creating content index? Would be nice to be able to skip
-    uint32_t* m_ChunkCompressionTypes;  // [] -- This is for convenience so we know how to WriteContent
+
+    uint32_t* m_ChunkSizes;             // []
+    uint32_t* m_ChunkCompressionTypes;  // []
 
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
@@ -324,8 +314,6 @@ int ValidateVersion(
 struct Paths* MakePaths(
     uint32_t path_count,
     const char* const* path_names);
-
-TLongtail_Hash GetPathHash(struct HashAPI* hash_api, const char* path);
 
 char* GetBlockName(TLongtail_Hash block_hash);
 

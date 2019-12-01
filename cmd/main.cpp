@@ -186,6 +186,11 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
     }
     return result;
 }
+
+
+
+
+
 int Cmd_CreateVersionIndex(
     StorageAPI* storage_api,
     HashAPI* hash_api,
@@ -264,8 +269,6 @@ int Cmd_CreateVersionIndex(
         fprintf(stderr, "Failed to create version index to `%s`\n", create_version_index);
         return 0;
     }
-
-
 
     return 1;
 }
@@ -618,16 +621,6 @@ int Cmd_CreateContent(
         return 0;
     }
 
-    struct ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-    if (!asset_part_lookup)
-    {
-        fprintf(stderr, "Failed to create source lookup table for version `%s`\n", version);
-        LONGTAIL_FREE(vindex);
-        vindex = 0;
-        LONGTAIL_FREE(cindex);
-        cindex = 0;
-        return 0;
-    }
     int ok = 0;
     {
         Progress progress("Writing content");
@@ -639,13 +632,11 @@ int Cmd_CreateContent(
             Progress::ProgressFunc,
             &progress,
             cindex,
-            asset_part_lookup,
+            vindex,
             version,
             create_content);
     }
 
-    FreeAssetPartLookup(asset_part_lookup);
-    asset_part_lookup = 0;
     LONGTAIL_FREE(vindex);
     vindex = 0;
     LONGTAIL_FREE(cindex);
@@ -1122,17 +1113,6 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 
-    ChunkHashToAssetPart* asset_part_lookup = CreateAssetPartLookup(vindex);
-    if (!asset_part_lookup)
-    {
-        fprintf(stderr, "Failed to create source lookup table for version `%s`\n", version_path);
-        LONGTAIL_FREE(vindex);
-        vindex = 0;
-        LONGTAIL_FREE(cindex);
-        cindex = 0;
-        return 0;
-    }
-
     int ok = 0;
     {
         Progress progress("Writing content");
@@ -1144,7 +1124,7 @@ int Cmd_UpSyncVersion(
             Progress::ProgressFunc,
             &progress,
             missing_content_index,
-            asset_part_lookup,
+            vindex,
             version_path,
             upload_content_path);
     }
