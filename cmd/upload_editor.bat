@@ -8,23 +8,28 @@ set SOURCE_FOLDER=%4
 set BUCKET=%5
 
 rem gsutil cp !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+del !WORK_FOLDER!\remote_store.lci
 if exist "!BUCKET!\store.lci" copy !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+if %errorlevel% neq 0 exit /b %errorlevel%
 
-echo !LONGTAIL! --upsync --version "!SOURCE_FOLDER!" --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\remote_store.lci" --upload-content "!WORK_FOLDER!\upload" --output-format "!WORK_FOLDER!\upload\{blockname}"
-!LONGTAIL! --upsync --version "!SOURCE_FOLDER!" --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\remote_store.lci" --upload-content "!WORK_FOLDER!\upload" --output-format "!WORK_FOLDER!\upload\{blockname}" >!WORK_FOLDER!\upload_list.txt
+!LONGTAIL! --upsync --version "!SOURCE_FOLDER!" --version-index "!WORK_FOLDER!\!VERSION!.lvi" --content-index "!WORK_FOLDER!\remote_store.lci" --upload-content "!WORK_FOLDER!\cache" --output-format "!WORK_FOLDER!\cache\{blockname}" >!WORK_FOLDER!\upload_list.txt
+if %errorlevel% neq 0 exit /b %errorlevel%
 
-if not exist "!WORK_FOLDER!\upload" mkdir "!WORK_FOLDER!\upload"
+if not exist "!WORK_FOLDER!\cache" mkdir "!WORK_FOLDER!\cache"
 
 rem Replace with gsutil copy from upload_list.txt
 for /f "delims=" %%f in (!WORK_FOLDER!\upload_list.txt) do (
     xcopy "%%f" "!BUCKET!\store\"
+	if %errorlevel% neq 0 exit /b %errorlevel%
 )
 
 rem gsutil cp !WORK_FOLDER!\!VERSION!.lvi !BUCKET!\!VERSION!.lvi
 copy !WORK_FOLDER!\!VERSION!.lvi !BUCKET!\!VERSION!.lvi
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 rem gsutil cp !WORK_FOLDER!\remote_store.lci !BUCKET!\store.lci
 copy !WORK_FOLDER!\remote_store.lci !BUCKET!\store.lci
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 GOTO end
 

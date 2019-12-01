@@ -4301,6 +4301,97 @@ struct ContentIndex* CreateMissingContent(
     return diff_content_index;
 }
 
+struct ContentIndex* RetargetContent(
+    const struct ContentIndex* reference_content_index,
+    const struct ContentIndex* content_index)
+{
+    struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
+    for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
+    {
+        TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
+        uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
+        hmput(chunk_to_remote_block_index_lookup, chunk_hash, block_index);
+    }
+
+    TLongtail_Hash* requested_block_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * *reference_content_index->m_BlockCount);
+    uint64_t requested_block_count = 0;
+    struct HashToIndexItem* requested_blocks_lookup = 0;
+    for (uint32_t i = 0; i < *content_index->m_ChunkCount; ++i)
+    {
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
+        intptr_t remote_block_index_ptr = hmgeti(chunk_to_remote_block_index_lookup, chunk_hash);
+        if (remote_block_index_ptr == -1)
+        {
+            LONGTAIL_LOG("RetargetContent: reference content does not contain the requested chunk\n");
+            hmfree(requested_blocks_lookup);
+            requested_blocks_lookup = 0;
+            LONGTAIL_FREE(requested_block_hashes);
+            requested_block_hashes = 0;
+            hmfree(chunk_to_remote_block_index_lookup);
+            chunk_to_remote_block_index_lookup = 0;
+            return 0;
+        }
+        uint64_t remote_block_index = chunk_to_remote_block_index_lookup[remote_block_index_ptr].value;
+        TLongtail_Hash remote_block_hash = reference_content_index->m_BlockHashes[remote_block_index];
+
+        intptr_t request_block_index_ptr = hmgeti(requested_blocks_lookup, remote_block_hash);
+        if (-1 == request_block_index_ptr)
+        {
+            requested_block_hashes[requested_block_count] = remote_block_hash;
+            hmput(requested_blocks_lookup, remote_block_hash, requested_block_count);
+            ++requested_block_count;
+        }
+    }
+
+    uint64_t chunk_count = 0;
+    for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
+    {
+        TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
+        if (-1 == hmgeti(requested_blocks_lookup, block_hash))
+        {
+            continue;
+        }
+        ++chunk_count;
+    }
+
+    size_t content_index_size = GetContentIndexSize(requested_block_count, chunk_count);
+    struct ContentIndex* resulting_content_index = (struct ContentIndex*)LONGTAIL_MALLOC(content_index_size);
+
+    resulting_content_index->m_BlockCount = (uint64_t*)&((char*)resulting_content_index)[sizeof(struct ContentIndex)];
+    resulting_content_index->m_ChunkCount = (uint64_t*)&((char*)resulting_content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
+    *resulting_content_index->m_BlockCount = requested_block_count;
+    *resulting_content_index->m_ChunkCount = chunk_count;
+    InitContentIndex(resulting_content_index);
+
+    memmove(resulting_content_index->m_BlockHashes, requested_block_hashes, sizeof(TLongtail_Hash) * requested_block_count);
+
+    uint64_t chunk_index = 0;
+    for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
+    {
+        TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
+        intptr_t block_index_ptr = hmgeti(requested_blocks_lookup, block_hash);
+        if (-1 == block_index_ptr)
+        {
+            continue;
+        }
+        TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[c];
+        uint32_t chunk_length = reference_content_index->m_ChunkLengths[c];
+        uint32_t chunk_block_offset = reference_content_index->m_ChunkBlockOffsets[c];
+        uint64_t block_index = requested_blocks_lookup[block_index_ptr].value;
+        resulting_content_index->m_ChunkBlockIndexes[chunk_index] = block_index;
+        resulting_content_index->m_ChunkHashes[chunk_index] = chunk_hash;
+        resulting_content_index->m_ChunkBlockOffsets[chunk_index] = chunk_block_offset;
+        resulting_content_index->m_ChunkLengths[chunk_index] = chunk_length;
+        ++chunk_index;
+    }
+
+    hmfree(requested_blocks_lookup);
+    requested_blocks_lookup = 0;
+    LONGTAIL_FREE(requested_block_hashes);
+    requested_block_hashes = 0;
+    return resulting_content_index;
+}
+
 // TODO: This could be more efficient - if a block exists in both local_content_index and remote_content_index it will
 // be present twice in the resulting content index. This is fine but a waste.
 struct ContentIndex* MergeContentIndex(

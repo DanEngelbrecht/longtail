@@ -132,11 +132,11 @@ struct Progress
     Progress(const char* task)
         : m_OldPercent(0)
     {
-        fprintf(stderr, "%s:", task);
+        fprintf(stderr, "%s: ", task);
     }
     ~Progress()
     {
-        fprintf(stderr, "\n");
+        fprintf(stderr, " Done\n");
     }
     uint32_t m_OldPercent;
     static void ProgressFunc(void* context, uint32_t total, uint32_t jobs_done)
@@ -1348,59 +1348,11 @@ int Cmd_DownSyncVersion(
 
     }
 
-    HashToIndex* remote_chunk_to_remote_block_index_lookup = 0;
-    for (uint64_t i = 0; i < *cindex_remote->m_ChunkCount; ++i)
+    ContentIndex* request_content = RetargetContent(
+        cindex_remote,
+        cindex_missing);
+    if (!request_content)
     {
-        TLongtail_Hash chunk_hash = cindex_remote->m_ChunkHashes[i];
-        uint64_t block_index = cindex_remote->m_ChunkBlockIndexes[i];
-        hmput(remote_chunk_to_remote_block_index_lookup, chunk_hash, block_index);
-    }
-
-    TLongtail_Hash* requested_block_hashes = (TLongtail_Hash*)LONGTAIL_MALLOC(sizeof(TLongtail_Hash) * *cindex_remote->m_BlockCount);
-    uint64_t requested_block_count = 0;
-    HashToIndex* requested_blocks_lookup = 0;
-    for (uint32_t i = 0; i < *cindex_missing->m_ChunkCount; ++i)
-    {
-        TLongtail_Hash chunk_hash = cindex_missing->m_ChunkHashes[i];
-        intptr_t remote_block_index_ptr = hmgeti(remote_chunk_to_remote_block_index_lookup, chunk_hash);
-        if (remote_block_index_ptr == -1)
-        {
-            // TODO: printf
-            hmfree(requested_blocks_lookup);
-            requested_blocks_lookup = 0;
-            LONGTAIL_FREE(requested_block_hashes);
-            requested_block_hashes = 0;
-            hmfree(remote_chunk_to_remote_block_index_lookup);
-            remote_chunk_to_remote_block_index_lookup = 0;
-            LONGTAIL_FREE(cindex_remote);
-            cindex_remote = 0;
-            LONGTAIL_FREE(cindex_missing);
-            cindex_missing = 0;
-            return 0;
-        }
-        uint64_t remote_block_index = remote_chunk_to_remote_block_index_lookup[remote_block_index_ptr].value;
-        TLongtail_Hash remote_block_hash = cindex_remote->m_BlockHashes[remote_block_index];
-
-        intptr_t request_block_index_ptr = hmgeti(requested_blocks_lookup, remote_block_hash);
-        if (-1 == request_block_index_ptr)
-        {
-            requested_block_hashes[requested_block_count] = remote_block_hash;
-            hmput(requested_blocks_lookup, remote_block_hash, requested_block_count);
-            ++requested_block_count;
-        }
-    }
-
-    if (!PrintFormattedBlockList(requested_block_count, requested_block_hashes, output_format))
-    {
-        hmfree(requested_blocks_lookup);
-        requested_blocks_lookup = 0;
-
-        LONGTAIL_FREE(requested_block_hashes);
-        requested_block_hashes = 0;
-
-        hmfree(remote_chunk_to_remote_block_index_lookup);
-        remote_chunk_to_remote_block_index_lookup = 0;
-
         LONGTAIL_FREE(cindex_remote);
         cindex_remote = 0;
         LONGTAIL_FREE(cindex_missing);
@@ -1408,24 +1360,23 @@ int Cmd_DownSyncVersion(
         return 0;
     }
 
-    hmfree(requested_blocks_lookup);
-    requested_blocks_lookup = 0;
-
-    LONGTAIL_FREE(requested_block_hashes);
-    requested_block_hashes = 0;
-
-    hmfree(remote_chunk_to_remote_block_index_lookup);
-    remote_chunk_to_remote_block_index_lookup = 0;
-
     LONGTAIL_FREE(cindex_remote);
     cindex_remote = 0;
     LONGTAIL_FREE(cindex_missing);
     cindex_missing = 0;
 
+    if (!PrintFormattedBlockList(*request_content->m_BlockCount, request_content->m_BlockHashes, output_format))
+    {
+        LONGTAIL_FREE(request_content);
+        request_content = 0;
+        return 0;
+    }
+
+    LONGTAIL_FREE(request_content);
+    request_content = 0;
+
     return 1;
 }
-
-
 
 int main(int argc, char** argv)
 {

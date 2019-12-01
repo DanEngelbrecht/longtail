@@ -8,21 +8,27 @@ set TARGET_FOLDER=%4
 set BUCKET=%5
 
 rem gsutil cp !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+del !WORK_FOLDER!\remote_store.lci
 @copy !BUCKET!\store.lci !WORK_FOLDER!\remote_store.lci
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 rem gsutil cp !BUCKET!\!VERSION!.lvi !WORK_FOLDER!\!VERSION!.lvi
 @copy !BUCKET!\!VERSION!.lvi !WORK_FOLDER!\!VERSION!.lvi
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 !LONGTAIL! --downsync --target-version-index "!WORK_FOLDER!\!VERSION!.lvi" --content "!WORK_FOLDER!\cache" --remote-content-index "!WORK_FOLDER!\remote_store.lci" --output-format "!BUCKET!\store\{blockname}" >download_list.txt
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 @if not exist "!WORK_FOLDER!\cache" mkdir "!WORK_FOLDER!\cache"
 
 rem Replace with gsutil copy from download_list.txt
 @for /f "delims=" %%f in (download_list.txt) do (
     @xcopy "%%f" "!WORK_FOLDER!\cache\"
+	if %errorlevel% neq 0 exit /b %errorlevel%
 )
 
 !LONGTAIL! --update-version "!TARGET_FOLDER!" --content "!WORK_FOLDER!\cache" --target-version-index "!WORK_FOLDER!\!VERSION!.lvi"
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 GOTO end
 
