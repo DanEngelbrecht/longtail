@@ -2213,7 +2213,7 @@ void BlockDecompressor(void* context)
         job->m_BlockHash);
     if (!job->m_BlockData)
     {
-        LONGTAIL_LOG("WriteAssetFromBlocks: Failed to read block 0x%" PRIx64 " from `%s`\n", job->m_BlockHash, job->m_ContentFolder)
+        LONGTAIL_LOG("BlockDecompressor: Failed to read block 0x%" PRIx64 " from `%s`\n", job->m_BlockHash, job->m_ContentFolder)
         return;
     }
 }
