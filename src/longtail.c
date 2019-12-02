@@ -2081,8 +2081,6 @@ int WriteContent(
             free((char*)block_path);
             block_path = 0;
             block_start_chunk_index += chunk_count;
-            hmfree(asset_part_lookup);
-            asset_part_lookup = 0;
             LONGTAIL_FREE(block_name);
             block_name = 0;
             continue;

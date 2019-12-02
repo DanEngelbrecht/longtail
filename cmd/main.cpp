@@ -110,6 +110,10 @@ int_fast32_t PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash*
     {
         return 0;
     }
+    if (block_count == 0)
+    {
+        return 1;
+    }
     size_t first_length = (size_t)((intptr_t)format_first_end - (intptr_t)format_start);
     const char* format_second_start = &format_first_end[strlen("{blockname}")];
     for (uint64_t b = 0; b < block_count; ++b)
@@ -1214,7 +1218,7 @@ int Cmd_UpSyncVersion(
     fprintf(stderr, "Updated content index `%s`\n", content_index_path);
     fprintf(stderr, "Wrote added content to `%s`\n", upload_content_path);
 
-    return 0;
+    return 1;
 }
 
 struct HashToIndex
@@ -1874,6 +1878,7 @@ int main(int argc, char** argv)
             result = 1;
             goto end;
         }
+		return 0;
     }
 
     if (downsync)
