@@ -1000,7 +1000,8 @@ int Cmd_UpSyncVersion(
     const char* version_index_path,
     const char* content_path,
     const char* content_index_path,
-    const char* upload_content_path,
+    const char* missing_content_path,
+    const char* missing_content_index_path,
     const char* output_format,
     int max_chunks_per_block,
     int target_block_size,
@@ -1120,7 +1121,7 @@ int Cmd_UpSyncVersion(
     int ok = 0;
     {
         Progress progress("Writing content");
-        ok = CreatePath(target_storage_api, upload_content_path) && WriteContent(
+        ok = CreatePath(target_storage_api, missing_content_path) && WriteContent(
             source_storage_api,
             target_storage_api,
             compression_api,
@@ -1130,11 +1131,61 @@ int Cmd_UpSyncVersion(
             missing_content_index,
             vindex,
             version_path,
-            upload_content_path);
+            missing_content_path);
     }
     if (!ok)
     {
-        fprintf(stderr, "Failed to create new content from `%s` to `%s`\n", version_path, upload_content_path);
+        fprintf(stderr, "Failed to create new content from `%s` to `%s`\n", version_path, missing_content_path);
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+/*
+    ContentIndex* new_content_index = MergeContentIndex(cindex, missing_content_index);
+    if (!new_content_index)
+    {
+        fprintf(stderr, "Failed creating a new content index with the added content\n");
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+*/
+    ok = CreateParentPath(target_storage_api, version_index_path) && WriteVersionIndex(
+        target_storage_api,
+        vindex,
+        version_index_path);
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
+/*        LONGTAIL_FREE(new_content_index);
+        new_content_index = 0;*/
+        LONGTAIL_FREE(missing_content_index);
+        missing_content_index = 0;
+        LONGTAIL_FREE(vindex);
+        vindex = 0;
+        LONGTAIL_FREE(cindex);
+        cindex = 0;
+        return 0;
+    }
+
+    ok = CreateParentPath(target_storage_api, content_index_path) && WriteContentIndex(
+        target_storage_api,
+        missing_content_index,
+        missing_content_index_path);
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
+/*        LONGTAIL_FREE(new_content_index);
+        new_content_index = 0;*/
         LONGTAIL_FREE(missing_content_index);
         missing_content_index = 0;
         LONGTAIL_FREE(vindex);
@@ -1155,58 +1206,9 @@ int Cmd_UpSyncVersion(
         cindex = 0;
         return 0;
     }
-
-    ContentIndex* new_content_index = MergeContentIndex(cindex, missing_content_index);
-    if (!new_content_index)
-    {
-        fprintf(stderr, "Failed creating a new content index with the added content\n");
-        LONGTAIL_FREE(missing_content_index);
-        missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
-        vindex = 0;
-        LONGTAIL_FREE(cindex);
-        cindex = 0;
-        return 0;
-    }
-
-    ok = CreateParentPath(target_storage_api, upload_content_path) && WriteVersionIndex(
-        target_storage_api,
-        vindex,
-        version_index_path);
-    if (!ok)
-    {
-        fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
-        LONGTAIL_FREE(new_content_index);
-        new_content_index = 0;
-        LONGTAIL_FREE(missing_content_index);
-        missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
-        vindex = 0;
-        LONGTAIL_FREE(cindex);
-        cindex = 0;
-        return 0;
-    }
-
-    ok = CreateParentPath(target_storage_api, content_index_path) && WriteContentIndex(
-        target_storage_api,
-        new_content_index,
-        content_index_path);
-    if (!ok)
-    {
-        fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
-        LONGTAIL_FREE(new_content_index);
-        new_content_index = 0;
-        LONGTAIL_FREE(missing_content_index);
-        missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
-        vindex = 0;
-        LONGTAIL_FREE(cindex);
-        cindex = 0;
-        return 0;
-    }
-
-    LONGTAIL_FREE(new_content_index);
+/*    LONGTAIL_FREE(new_content_index);
     new_content_index = 0;
+*/
     LONGTAIL_FREE(missing_content_index);
     missing_content_index = 0;
     LONGTAIL_FREE(vindex);
@@ -1214,9 +1216,9 @@ int Cmd_UpSyncVersion(
     LONGTAIL_FREE(cindex);
     cindex = 0;
 
-    fprintf(stderr, "Updated version index `%s`\n", version_index_path);
-    fprintf(stderr, "Updated content index `%s`\n", content_index_path);
-    fprintf(stderr, "Wrote added content to `%s`\n", upload_content_path);
+    fprintf(stderr, "Updated version index to `%s`\n", version_index_path);
+    fprintf(stderr, "Wrote added content to `%s`\n", missing_content_path);
+    fprintf(stderr, "Wrote added content index to `%s`\n", missing_content_index_path);
 
     return 1;
 }
@@ -1421,8 +1423,11 @@ int main(int argc, char** argv)
     bool upsync = false;
     kgflags_bool("upsync", false, "", false, &upsync);
 
-    const char* upload_content_raw = 0;
-    kgflags_string("upload-content", 0, "Path to write new content block", false, &upload_content_raw);
+    const char* missing_content_raw = 0;
+    kgflags_string("upload-content", 0, "Path to write new content blocks", false, &missing_content_raw);
+
+    const char* missing_content_index_raw = 0;
+    kgflags_string("missing-content-content", 0, "Path to write new content block", false, &missing_content_index_raw);
 
     bool downsync = false;
     kgflags_bool("downsync", false, "", false, &downsync);
@@ -1672,9 +1677,11 @@ int main(int argc, char** argv)
     const char* target_version = NormalizePath(target_version_raw);
     const char* target_version_index = NormalizePath(target_version_index_raw);
     const char* list_missing_blocks = NormalizePath(list_missing_blocks_raw);
-    const char* upload_content = NormalizePath(upload_content_raw);
     const char* remote_content_index = NormalizePath(remote_content_index_raw);
     const char* remote_content = NormalizePath(remote_content_raw);
+    const char* missing_content = NormalizePath(missing_content_raw);
+    const char* missing_content_index = NormalizePath(missing_content_index_raw);
+
 
     if (create_version_index && version)
     {
@@ -1848,9 +1855,15 @@ int main(int argc, char** argv)
             result = 1;
             goto end;
         }
-        if (!upload_content)
+        if (!missing_content)
         {
-            fprintf(stderr, "--upsync requires a --upload-content path\n");
+            fprintf(stderr, "--upsync requires a --missing_content path\n");
+            result = 1;
+            goto end;
+        }
+        if (!missing_content_index)
+        {
+            fprintf(stderr, "--upsync requires a --missing-content-path path\n");
             result = 1;
             goto end;
         }
@@ -1868,7 +1881,8 @@ int main(int argc, char** argv)
             version_index,
             content,
             content_index,
-            upload_content,
+            missing_content,
+            missing_content_index,
             output_format ? output_format : "{blockname}",
             max_chunks_per_block,
             target_block_size,
@@ -1949,8 +1963,9 @@ end: free((void*)create_version_index);
     free((void*)target_version);
     free((void*)target_version_index);
     free((void*)list_missing_blocks);
-    free((void*)upload_content);
     free((void*)remote_content_index);
     free((void*)remote_content);
+    free((void*)missing_content);
+    free((void*)missing_content_index);
     return result;
 }
