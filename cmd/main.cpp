@@ -1376,7 +1376,7 @@ int main(int argc, char** argv)
     kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
 
     int32_t target_block_size = 0;
-    kgflags_int("target-block-size", 32768 * 8, "Target block size", false, &target_block_size);
+    kgflags_int("target-block-size", 32768 * 12, "Target block size", false, &target_block_size);
 
     const char* create_version_index_raw = 0;
     kgflags_string("create-version-index", 0, "Path to version index output", false, &create_version_index_raw);
@@ -1424,10 +1424,10 @@ int main(int argc, char** argv)
     kgflags_bool("upsync", false, "", false, &upsync);
 
     const char* missing_content_raw = 0;
-    kgflags_string("upload-content", 0, "Path to write new content blocks", false, &missing_content_raw);
+    kgflags_string("missing-content", 0, "Path to write new content blocks", false, &missing_content_raw);
 
     const char* missing_content_index_raw = 0;
-    kgflags_string("missing-content-content", 0, "Path to write new content block", false, &missing_content_index_raw);
+    kgflags_string("missing-content-index", 0, "Path to write new content block", false, &missing_content_index_raw);
 
     bool downsync = false;
     kgflags_bool("downsync", false, "", false, &downsync);
@@ -1849,21 +1849,21 @@ int main(int argc, char** argv)
             result = 1;
             goto end;
         }
-        if (!content_index)
+        if (!content_index && !content)
         {
-            fprintf(stderr, "--upsync requires a --content-index path\n");
+            fprintf(stderr, "--upsync requires either a --content or --content-index path\n");
             result = 1;
             goto end;
         }
         if (!missing_content)
         {
-            fprintf(stderr, "--upsync requires a --missing_content path\n");
+            fprintf(stderr, "--upsync requires a --missing-content path\n");
             result = 1;
             goto end;
         }
         if (!missing_content_index)
         {
-            fprintf(stderr, "--upsync requires a --missing-content-path path\n");
+            fprintf(stderr, "--upsync requires a --missing-content-index path\n");
             result = 1;
             goto end;
         }

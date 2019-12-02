@@ -5,5 +5,10 @@ set SOURCE_FOLDER=%2
 set CACHE_FOLDER=%3
 set BUCKET=%4
 
-for /f %%f in ('dir /b %SOURCE_FOLDER%') do call .\gcs_put.bat %LONGTAIL% %%f.lvi %SOURCE_FOLDER%\%%f %CACHE_FOLDER% %BUCKET%
+echo LONGTAIL: %LONGTAIL%
+echo SOURCE_FOLDER: %SOURCE_FOLDER%
+echo CACHE_FOLDER: %CACHE_FOLDER%
+echo BUCKET: %BUCKET%
+
+for /f %%f in ('dir /b %SOURCE_FOLDER%') do call .\gcs_put.bat %LONGTAIL% %%f %SOURCE_FOLDER%\%%f %CACHE_FOLDER% %BUCKET%
 
