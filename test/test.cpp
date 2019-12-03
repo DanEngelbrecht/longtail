@@ -630,68 +630,6 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 }
 
 
-struct StoreCompressionAPI
-{
-    CompressionAPI m_CompressionAPI;
-
-    StoreCompressionAPI()
-        : m_CompressionAPI{
-            GetDefaultSettings,
-            GetMaxCompressionSetting,
-            CreateCompressionContext,
-            GetMaxCompressedSize,
-            Compress,
-            DeleteCompressionContext,
-            CreateDecompressionContext,
-            Decompress,
-            DeleteDecompressionContext
-            }
-    {
-
-    }
-
-    static int DefaultCompressionSetting;
-    static CompressionAPI_HSettings GetDefaultSettings(CompressionAPI*)
-    {
-        return (CompressionAPI_HSettings)&DefaultCompressionSetting;
-    }
-    static CompressionAPI_HSettings GetMaxCompressionSetting(CompressionAPI* compression_api)
-    {
-        return GetDefaultSettings(compression_api);
-    }
-    static CompressionAPI_HCompressionContext CreateCompressionContext(CompressionAPI*, CompressionAPI_HSettings settings)
-    {
-        return (CompressionAPI_HCompressionContext)settings;
-    }
-    static size_t GetMaxCompressedSize(CompressionAPI*, CompressionAPI_HCompressionContext , size_t size)
-    {
-        return size;
-    }
-    static size_t Compress(CompressionAPI*, CompressionAPI_HCompressionContext , const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
-    {
-        memmove(compressed, uncompressed, uncompressed_size);
-        return uncompressed_size;
-    }
-    static void DeleteCompressionContext(CompressionAPI*, CompressionAPI_HCompressionContext)
-    {
-    }
-    static CompressionAPI_HDecompressionContext CreateDecompressionContext(CompressionAPI* compression_api)
-    {
-        return (CompressionAPI_HDecompressionContext)GetDefaultSettings(compression_api);
-    }
-    static size_t Decompress(CompressionAPI*, CompressionAPI_HDecompressionContext, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
-    {
-        memmove(uncompressed, compressed, uncompressed_size);
-        return uncompressed_size;
-    }
-    static void DeleteDecompressionContext(CompressionAPI*, CompressionAPI_HDecompressionContext)
-    {
-    }
-};
-
-int StoreCompressionAPI::DefaultCompressionSetting = 0;
-
-
 
 
 static TLongtail_Hash GetContentTag(const char* , const char* path)
@@ -871,22 +809,42 @@ TEST(Longtail, ContentIndex)
     LONGTAIL_FREE(content_index);
 }
 
+const uint32_t NO_COMPRESSION_TYPE = 0;
+const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'r') << 8) + ((uint32_t)'d');
+
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
     uint32_t* result = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * count);
     for (uint32_t i = 0; i < count; ++i)
     {
-        result[i] = 0;
+        result[i] = LIZARD_DEFAULT_COMPRESSION_TYPE;
     }
     return result;
+}
+
+struct CompressionRegistry* GetCompressionRegistry()
+{
+    static LizardCompressionAPI lizard;
+    static const CompressionAPI* compression_apis[] = {
+        &lizard.m_CompressionAPI};
+    static const uint32_t compression_types[] = {
+        LIZARD_DEFAULT_COMPRESSION_TYPE};
+    static const CompressionAPI_HSettings compression_settings[] = {
+        lizard.m_CompressionAPI.GetDefaultSettings(&lizard.m_CompressionAPI)};
+    struct CompressionRegistry* compression_registry = CreateCompressionRegistry(
+        1,
+        &compression_types[0],
+        &compression_apis[0],
+        &compression_settings[0]);
+    return compression_registry;
 }
 
 TEST(Longtail, ContentIndexSerialization)
 {
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
-    LizardCompressionAPI compression_api;
+
     BikeshedJobAPI job_api(0);
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/five_items", 5));
@@ -955,7 +913,7 @@ TEST(Longtail, WriteContent)
     InMemStorageAPI target_storage;
     MeowHashAPI hash_api;
     BikeshedJobAPI job_api(0);
-    LizardCompressionAPI compression_api;
+    CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     const char* TEST_FILENAMES[5] = {
         "local/TheLongFile.txt",
@@ -1019,7 +977,7 @@ TEST(Longtail, WriteContent)
     ASSERT_NE(0, WriteContent(
         &source_storage.m_StorageAPI,
         &target_storage.m_StorageAPI,
-        &compression_api.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1065,6 +1023,9 @@ TEST(Longtail, WriteContent)
     LONGTAIL_FREE(cindex2);
     LONGTAIL_FREE(cindex);
     LONGTAIL_FREE(vindex);
+
+    LONGTAIL_FREE(compression_registry);
+    compression_registry = 0;
 }
 
 #if 0
@@ -1313,7 +1274,7 @@ TEST(Longtail, VersionDiff)
     InMemStorageAPI storage;
     MeowHashAPI hash_api;
     BikeshedJobAPI job_api(0);
-    StoreCompressionAPI compression_api;
+    CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     const uint32_t OLD_ASSET_COUNT = 9;
 
@@ -1546,7 +1507,7 @@ TEST(Longtail, VersionDiff)
     ASSERT_EQ(1, WriteContent(
         &storage.m_StorageAPI,
         &storage.m_StorageAPI,
-        &compression_api.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1571,7 +1532,7 @@ TEST(Longtail, VersionDiff)
         &job_api.m_JobAPI,
         0,
         0,
-        &compression_api.m_CompressionAPI,
+        compression_registry,
         content_index,
         old_vindex,
         new_vindex,
@@ -1612,7 +1573,8 @@ TEST(Longtail, VersionDiff)
         LONGTAIL_FREE(test_data);
         test_data = 0;
     }
-
+    LONGTAIL_FREE(compression_registry);
+    compression_registry = 0;
 }
 
 TEST(Longtail, FullScale)
@@ -1621,6 +1583,7 @@ TEST(Longtail, FullScale)
     InMemStorageAPI local_storage;
     MeowHashAPI hash_api;
     BikeshedJobAPI job_api(0);
+    CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     CreateFakeContent(&local_storage.m_StorageAPI, 0, 5);
 
@@ -1680,12 +1643,10 @@ TEST(Longtail, FullScale)
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK);
 
-    StoreCompressionAPI store_compression;
-
     ASSERT_EQ(1, WriteContent(
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
-        &store_compression.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1706,7 +1667,7 @@ TEST(Longtail, FullScale)
     ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
         &remote_storage.m_StorageAPI,
-        &store_compression.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1726,7 +1687,7 @@ TEST(Longtail, FullScale)
     ASSERT_EQ(1, WriteContent(
         &remote_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
-        &store_compression.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1739,7 +1700,7 @@ TEST(Longtail, FullScale)
     ASSERT_EQ(1, WriteVersion(
         &local_storage.m_StorageAPI,
         &local_storage.m_StorageAPI,
-        &store_compression.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1775,6 +1736,8 @@ TEST(Longtail, FullScale)
     LONGTAIL_FREE(local_content_index);
     LONGTAIL_FREE(remote_version_index);
     LONGTAIL_FREE(local_version_index);
+    LONGTAIL_FREE(compression_registry);
+    compression_registry = 0;
 }
 
 
@@ -1783,6 +1746,7 @@ TEST(Longtail, WriteVersion)
     InMemStorageAPI source_storage;
     StorageAPI* storage_api = &source_storage.m_StorageAPI;
     BikeshedJobAPI job_api(0);
+    CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     const uint32_t asset_count = 8;
 
@@ -1912,11 +1876,10 @@ TEST(Longtail, WriteVersion)
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
 
-    StoreCompressionAPI store_compression;
     ASSERT_NE(0, WriteContent(
         storage_api,
         storage_api,
-        &store_compression.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1928,7 +1891,7 @@ TEST(Longtail, WriteVersion)
     ASSERT_NE(0, WriteVersion(
         storage_api,
         storage_api,
-        &store_compression.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -1961,6 +1924,8 @@ TEST(Longtail, WriteVersion)
     vindex = 0;
     LONGTAIL_FREE(cindex);
     cindex = 0;
+    LONGTAIL_FREE(compression_registry);
+    compression_registry = 0;
 }
 
 void Bench()
@@ -2004,6 +1969,7 @@ void Bench()
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
     BikeshedJobAPI job_api(0);
+    CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
@@ -2058,14 +2024,13 @@ void Bench()
             MAX_CHUNKS_PER_BLOCK);
         ASSERT_NE((ContentIndex*)0, missing_content_index);
 
-        LizardCompressionAPI compression_api;
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
         ASSERT_NE(0, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             &job_api.m_JobAPI,
             0,
             0,
@@ -2130,7 +2095,7 @@ void Bench()
         ASSERT_NE(0, WriteVersion(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             &job_api.m_JobAPI,
             0,
             0,
@@ -2149,6 +2114,9 @@ void Bench()
     }
 
     LONGTAIL_FREE(full_content_index);
+
+    LONGTAIL_FREE(compression_registry);
+    compression_registry = 0;
 
     #undef HOME
 }
@@ -2187,8 +2155,8 @@ void LifelikeTest()
     printf("Indexing `%s`...\n", local_path_1);
     TroveStorageAPI storage_api;
     MeowHashAPI hash_api;
-    LizardCompressionAPI compression_api;
     BikeshedJobAPI job_api(0);
+    CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     FileInfos* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
     ASSERT_NE((FileInfos*)0, local_path_1_paths);
@@ -2234,7 +2202,7 @@ void LifelikeTest()
         WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             &job_api.m_JobAPI,
             0,
             0,
@@ -2248,7 +2216,7 @@ void LifelikeTest()
     ASSERT_EQ(1, WriteVersion(
         &storage_api.m_StorageAPI,
         &storage_api.m_StorageAPI,
-        &compression_api.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -2298,7 +2266,7 @@ void LifelikeTest()
         ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             &job_api.m_JobAPI,
             0,
             0,
@@ -2315,7 +2283,7 @@ void LifelikeTest()
         ASSERT_EQ(1, WriteContent(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             &job_api.m_JobAPI,
             0,
             0,
@@ -2374,7 +2342,7 @@ void LifelikeTest()
     ASSERT_EQ(1, WriteVersion(
         &storage_api.m_StorageAPI,
         &storage_api.m_StorageAPI,
-        &compression_api.m_CompressionAPI,
+        compression_registry,
         &job_api.m_JobAPI,
         0,
         0,
@@ -2398,6 +2366,9 @@ void LifelikeTest()
 
     LONGTAIL_FREE(version1);
     version1 = 0;
+
+    LONGTAIL_FREE(compression_registry);
+    compression_registry = 0;
 
     return;
 }

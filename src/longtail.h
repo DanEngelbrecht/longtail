@@ -68,6 +68,14 @@ struct CompressionAPI
     void (*DeleteDecompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context);
 };
 
+struct CompressionRegistry;
+
+struct CompressionRegistry* CreateCompressionRegistry(
+    uint32_t compression_type_count,
+    const uint32_t* compression_types,
+    const struct CompressionAPI** compression_apis,
+    const CompressionAPI_HSettings* compression_settings);
+
 typedef void (*JobAPI_JobFunc)(void* context);
 typedef void (*JobAPI_ProgressFunc)(void* context, uint32_t total_count, uint32_t done_count);
 typedef void* JobAPI_Jobs;
@@ -156,7 +164,7 @@ struct ContentIndex* ReadContentIndex(
 int WriteContent(
     struct StorageAPI* source_storage_api,
     struct StorageAPI* target_storage_api,
-    struct CompressionAPI* compression_api,
+    struct CompressionRegistry* compression_registry,
     struct JobAPI* job_api,
     JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -191,7 +199,7 @@ struct ContentIndex* MergeContentIndex(
 int WriteVersion(
     struct StorageAPI* content_storage_api,
     struct StorageAPI* version_storage_api,
-    struct CompressionAPI* compression_api,
+    struct CompressionRegistry* compression_registry,
     struct JobAPI* job_api,
     JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -211,7 +219,7 @@ int ChangeVersion(
     struct JobAPI* job_api,
     JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
-    struct CompressionAPI* compression_api,
+    struct CompressionRegistry* compression_registry,
     const struct ContentIndex* content_index,
     const struct VersionIndex* source_version,
     const struct VersionIndex* target_version,

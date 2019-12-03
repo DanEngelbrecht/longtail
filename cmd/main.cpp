@@ -180,7 +180,7 @@ struct Progress
 };
 
 const uint32_t NO_COMPRESSION_TYPE = 0;
-const uint32_t LIZARD_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'a') << 8) + ((uint32_t)'d');
+const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'a') << 8) + ((uint32_t)'d');
 
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 {
@@ -199,11 +199,27 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
             result[i] = NO_COMPRESSION_TYPE;
             continue;
         }
-        result[i] = LIZARD_COMPRESSION_TYPE;
+        result[i] = LIZARD_DEFAULT_COMPRESSION_TYPE;
     }
     return result;
 }
 
+struct CompressionRegistry* GetCompressionRegistry()
+{
+    static LizardCompressionAPI lizard;
+    static const CompressionAPI* compression_apis[] = {
+        &lizard.m_CompressionAPI};
+    static const uint32_t compression_types[] = {
+        LIZARD_DEFAULT_COMPRESSION_TYPE};
+    static const CompressionAPI_HSettings compression_settings[] = {
+        lizard.m_CompressionAPI.GetDefaultSettings(&lizard.m_CompressionAPI)};
+    struct CompressionRegistry* compression_registry = CreateCompressionRegistry(
+        1,
+        &compression_types[0],
+        &compression_apis[0],
+        &compression_settings[0]);
+    return compression_registry;
+}
 
 
 
@@ -538,7 +554,7 @@ int Cmd_CreateContent(
     StorageAPI* storage_api,
     HashAPI* hash_api,
     JobAPI* job_api,
-    CompressionAPI* compression_api,
+    CompressionRegistry* compression_registry,
     const char* create_content,
     const char* content_index,
     const char* version,
@@ -644,7 +660,7 @@ int Cmd_CreateContent(
         ok = CreatePath(storage_api, create_content) && WriteContent(
             storage_api,
             storage_api,
-            compression_api,
+            compression_registry,
             job_api,
             Progress::ProgressFunc,
             &progress,
@@ -751,7 +767,7 @@ int Cmd_CreateVersion(
     StorageAPI* storage_api,
     HashAPI* hash_api,
     JobAPI* job_api,
-    CompressionAPI* compression_api,
+    CompressionRegistry* compression_registry,
     const char* create_version,
     const char* version_index,
     const char* content,
@@ -813,7 +829,7 @@ int Cmd_CreateVersion(
         ok = CreatePath(storage_api, create_version) && WriteVersion(
             storage_api,
             storage_api,
-            compression_api,
+            compression_registry,
             job_api,
             Progress::ProgressFunc,
             &progress,
@@ -838,7 +854,7 @@ int Cmd_UpdateVersion(
     StorageAPI* storage_api,
     HashAPI* hash_api,
     JobAPI* job_api,
-    CompressionAPI* compression_api,
+    CompressionRegistry* compression_registry,
     const char* update_version,
     const char* version_index,
     const char* content,
@@ -977,7 +993,7 @@ int Cmd_UpdateVersion(
             job_api,
             Progress::ProgressFunc,
             &progress,
-            compression_api,
+            compression_registry,
             cindex,
             source_vindex,
             target_vindex,
@@ -1008,7 +1024,7 @@ int Cmd_UpSyncVersion(
     StorageAPI* target_storage_api,
     HashAPI* hash_api,
     JobAPI* job_api,
-    CompressionAPI* compression_api,
+    CompressionRegistry* compression_registry,
     const char* version_path,
     const char* version_index_path,
     const char* content_path,
@@ -1137,7 +1153,7 @@ int Cmd_UpSyncVersion(
         ok = CreatePath(target_storage_api, missing_content_path) && WriteContent(
             source_storage_api,
             target_storage_api,
-            compression_api,
+            compression_registry,
             job_api,
             Progress::ProgressFunc,
             &progress,
@@ -1247,7 +1263,7 @@ int Cmd_DownSyncVersion(
     StorageAPI* target_storage_api,
     HashAPI* hash_api,
     JobAPI* job_api,
-    CompressionAPI* compression_api,
+    CompressionRegistry* compression_registry,
     const char* target_version_index_path,
     const char* have_content_index_path,
     const char* have_content_path,
@@ -1479,7 +1495,7 @@ int main(int argc, char** argv)
 
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        LizardCompressionAPI compression_api;
+        CompressionRegistry* compression_registry = GetCompressionRegistry();
         BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
         char create_content_index[512];
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
@@ -1492,6 +1508,7 @@ int main(int argc, char** argv)
             create_content_index,
             content))
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
@@ -1508,6 +1525,7 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
@@ -1530,6 +1548,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
@@ -1540,7 +1559,7 @@ int main(int argc, char** argv)
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             create_content,
             content_index,
             version,
@@ -1550,6 +1569,7 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to create content `%s` from `%s`\n", create_content, version);
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
@@ -1563,6 +1583,7 @@ int main(int argc, char** argv)
             content_index,
             merge_content_index))
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 /*
@@ -1575,13 +1596,14 @@ int main(int argc, char** argv)
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             create_version,
             version_index,
             content,
             content_index))
         {
             fprintf(stderr, "Failed to create version `%s` to `%s`\n", create_version, version_index);
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 */
@@ -1595,7 +1617,7 @@ int main(int argc, char** argv)
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             update_version,
             0,
             content,
@@ -1604,6 +1626,7 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to update version `%s` to `%s`\n", update_version, target_version_index);
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
@@ -1620,18 +1643,21 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
         struct VersionIndex* source_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, create_version_index);
         if (!source_vindex)
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
         struct VersionIndex* target_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, incremental_version_index);
         if (!target_vindex)
         {
             LONGTAIL_FREE(source_vindex);
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
@@ -1642,14 +1668,17 @@ int main(int argc, char** argv)
         LONGTAIL_FREE(target_vindex);
         if (*diff->m_SourceRemovedCount != 0)
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
         if (*diff->m_TargetAddedCount != 0)
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
         if (*diff->m_ModifiedCount != 0)
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
         LONGTAIL_FREE(diff);
@@ -1672,11 +1701,13 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
+            LONGTAIL_FREE(compression_registry);
             return 1;
         }
 
         free((char*)test_version);
         free((char*)test_base_path);
+        LONGTAIL_FREE(compression_registry);
 
         printf("********* SUCCESS *********\n");
         return 0;
@@ -1782,13 +1813,13 @@ int main(int argc, char** argv)
     {
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        LizardCompressionAPI compression_api;
+        CompressionRegistry* compression_registry = GetCompressionRegistry();
         BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
         int ok = Cmd_CreateContent(
                 &storage_api.m_StorageAPI,
                 &hash_api.m_HashAPI,
                 &job_api.m_JobAPI,
-                &compression_api.m_CompressionAPI,
+                compression_registry,
                 create_content,
                 content_index,
                 version,
@@ -1796,6 +1827,7 @@ int main(int argc, char** argv)
                 target_block_size,
                 max_chunks_per_block,
                 target_chunk_size);
+        LONGTAIL_FREE(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1815,18 +1847,19 @@ int main(int argc, char** argv)
     {
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        LizardCompressionAPI compression_api;
+        CompressionRegistry* compression_registry = GetCompressionRegistry();
         BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_CreateVersion(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             create_version,
             version_index,
             content,
             content_index);
+        LONGTAIL_FREE(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1835,14 +1868,14 @@ int main(int argc, char** argv)
     {
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        LizardCompressionAPI compression_api;
+        CompressionRegistry* compression_registry = GetCompressionRegistry();
         BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_UpdateVersion(
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             update_version,
             version_index,
             content,
@@ -1850,6 +1883,7 @@ int main(int argc, char** argv)
             target_version_index,
             target_chunk_size);
 
+        LONGTAIL_FREE(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1888,14 +1922,14 @@ int main(int argc, char** argv)
         }
         TroveStorageAPI storage_api;
         MeowHashAPI hash_api;
-        LizardCompressionAPI compression_api;
+        CompressionRegistry* compression_registry = GetCompressionRegistry();
         BikeshedJobAPI job_api(GetCPUCount());
-        if(!Cmd_UpSyncVersion(
+        int ok = Cmd_UpSyncVersion(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             version,
             version_index,
             content,
@@ -1905,8 +1939,10 @@ int main(int argc, char** argv)
             output_format ? output_format : "{blockname}",
             max_chunks_per_block,
             target_block_size,
-            target_chunk_size))
-        {
+            target_chunk_size);
+        LONGTAIL_FREE(compression_registry);
+
+        if (!ok){
             // TODO: printf
             result = 1;
             goto end;
@@ -1917,11 +1953,6 @@ int main(int argc, char** argv)
 
     if (downsync)
     {
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
-        LizardCompressionAPI compression_api;
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
-
         if (!target_version_index)
         {
             fprintf(stderr, "--downsync requires a --target-version-index path\n");
@@ -1941,12 +1972,17 @@ int main(int argc, char** argv)
             goto end;
         }
 
+        TroveStorageAPI storage_api;
+        MeowHashAPI hash_api;
+        CompressionRegistry* compression_registry = GetCompressionRegistry();
+        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
+
         int ok = Cmd_DownSyncVersion(
             &storage_api.m_StorageAPI,
             &storage_api.m_StorageAPI,
             &hash_api.m_HashAPI,
             &job_api.m_JobAPI,
-            &compression_api.m_CompressionAPI,
+            compression_registry,
             target_version_index,
             content_index,
             content,
@@ -1956,6 +1992,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_block_size,
             target_chunk_size);
+        LONGTAIL_FREE(compression_registry);
 
         if (!ok)
         {
