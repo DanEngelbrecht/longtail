@@ -3554,6 +3554,8 @@ struct ContentIndex* RetargetContent(
             ++requested_block_count;
         }
     }
+    hmfree(chunk_to_remote_block_index_lookup);
+    chunk_to_remote_block_index_lookup = 0;
 
     uint64_t chunk_count = 0;
     for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
