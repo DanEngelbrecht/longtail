@@ -3534,7 +3534,7 @@ struct ContentIndex* RetargetContent(
         intptr_t remote_block_index_ptr = hmgeti(chunk_to_remote_block_index_lookup, chunk_hash);
         if (remote_block_index_ptr == -1)
         {
-            LONGTAIL_LOG("RetargetContent: reference content does not contain the requested chunk\n");
+            LONGTAIL_LOG("RetargetContent: reference content does not contain the chunk 0x%" PRIx64 "\n", chunk_hash);
             hmfree(requested_blocks_lookup);
             requested_blocks_lookup = 0;
             LONGTAIL_FREE(requested_block_hashes);
