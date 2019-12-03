@@ -227,30 +227,6 @@ int ChangeVersion(
     const char* content_path,
     const char* version_path);
 
-///////////// Test functions
-
-size_t GetVersionIndexSize(
-    uint32_t asset_count,
-    uint32_t chunk_count,
-    uint32_t asset_chunk_index_count,
-    uint32_t path_data_size);
-
-struct VersionIndex* BuildVersionIndex(
-    void* mem,
-    size_t mem_size,
-    const struct Paths* paths,
-    const TLongtail_Hash* path_hashes,
-    const TLongtail_Hash* content_hashes,
-    const uint64_t* content_sizes,
-    const uint32_t* asset_chunk_index_starts,
-    const uint32_t* asset_chunk_counts,
-    uint32_t asset_chunk_index_count,
-    const uint32_t* asset_chunk_indexes,
-    uint32_t chunk_count,
-    const uint32_t* chunk_sizes,
-    const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_compression_types);
-
 struct Paths
 {
     uint32_t m_DataSize;
@@ -319,11 +295,33 @@ int ValidateVersion(
     const struct ContentIndex* content_index,
     const struct VersionIndex* version_index);
 
+///////////// Test functions
+
 struct Paths* MakePaths(
     uint32_t path_count,
     const char* const* path_names);
 
-char* GetBlockName(TLongtail_Hash block_hash);
+size_t GetVersionIndexSize(
+    uint32_t asset_count,
+    uint32_t chunk_count,
+    uint32_t asset_chunk_index_count,
+    uint32_t path_data_size);
+
+struct VersionIndex* BuildVersionIndex(
+    void* mem,
+    size_t mem_size,
+    const struct Paths* paths,
+    const TLongtail_Hash* path_hashes,
+    const TLongtail_Hash* content_hashes,
+    const uint64_t* content_sizes,
+    const uint32_t* asset_chunk_index_starts,
+    const uint32_t* asset_chunk_counts,
+    uint32_t asset_chunk_index_count,
+    const uint32_t* asset_chunk_indexes,
+    uint32_t chunk_count,
+    const uint32_t* chunk_sizes,
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* chunk_compression_types);
 
 struct Chunker;
 

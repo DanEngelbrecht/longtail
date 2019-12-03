@@ -2040,45 +2040,50 @@ void Bench()
             delta_upload_content_folder));
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
-        for (uint64_t b = 0; b < *missing_content_index->m_BlockCount; ++b)
+        StorageAPI_HIterator fs_iterator = storage_api.m_StorageAPI.StartFind(&storage_api.m_StorageAPI, delta_upload_content_folder);
+        if (fs_iterator)
         {
-            TLongtail_Hash block_hash = missing_content_index->m_BlockHashes[b];
-            char* block_name = GetBlockName(block_hash);
-
-            char source_path[256];
-            sprintf(source_path, "%s/%s.lrb", delta_upload_content_folder, block_name);
-
-            char target_path[256];
-            sprintf(target_path, "%s/%s.lrb", CONTENT_FOLDER, block_name);
-
-            free(block_name);
-
-            StorageAPI_HOpenFile v = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, target_path);
-            if (v)
+            do
             {
-                storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, v);
-                v = 0;
-                continue;
-            }
+                const char* file_name = storage_api.m_StorageAPI.GetFileName(&storage_api.m_StorageAPI, fs_iterator);
+                if (file_name)
+                {
+                    char* target_path = storage_api.m_StorageAPI.ConcatPath(&storage_api.m_StorageAPI, CONTENT_FOLDER, file_name);
 
-            StorageAPI_HOpenFile s = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, source_path);
-            ASSERT_NE((StorageAPI_HOpenFile)0, s);
+                    StorageAPI_HOpenFile v = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, target_path);
+                    if (v)
+                    {
+                        storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, v);
+                        v = 0;
+                        free(target_path);
+                        continue;
+                    }
 
-            ASSERT_NE(0, MakePath(&storage_api.m_StorageAPI, target_path));
-            StorageAPI_HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path, 0);
-            ASSERT_NE((StorageAPI_HOpenFile)0, t);
+                    char* source_path = storage_api.m_StorageAPI.ConcatPath(&storage_api.m_StorageAPI, delta_upload_content_folder, file_name);
 
-            uint64_t block_file_size = storage_api.m_StorageAPI.GetSize(&storage_api.m_StorageAPI, s);
-            void* buffer = LONGTAIL_MALLOC(block_file_size);
+                    StorageAPI_HOpenFile s = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, source_path);
+                    ASSERT_NE((StorageAPI_HOpenFile)0, s);
 
-            ASSERT_NE(0, storage_api.m_StorageAPI.Read(&storage_api.m_StorageAPI, s, 0, block_file_size, buffer));
-            ASSERT_NE(0, storage_api.m_StorageAPI.Write(&storage_api.m_StorageAPI, t, 0, block_file_size, buffer));
+                    ASSERT_NE(0, MakePath(&storage_api.m_StorageAPI, target_path));
+                    StorageAPI_HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path, 0);
+                    ASSERT_NE((StorageAPI_HOpenFile)0, t);
 
-            LONGTAIL_FREE(buffer);
-            buffer = 0,
+                    uint64_t block_file_size = storage_api.m_StorageAPI.GetSize(&storage_api.m_StorageAPI, s);
+                    void* buffer = LONGTAIL_MALLOC(block_file_size);
 
-            storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, s);
-            storage_api.m_StorageAPI.CloseWrite(&storage_api.m_StorageAPI, t);
+                    ASSERT_NE(0, storage_api.m_StorageAPI.Read(&storage_api.m_StorageAPI, s, 0, block_file_size, buffer));
+                    ASSERT_NE(0, storage_api.m_StorageAPI.Write(&storage_api.m_StorageAPI, t, 0, block_file_size, buffer));
+
+                    LONGTAIL_FREE(buffer);
+                    buffer = 0,
+
+                    storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, s);
+                    storage_api.m_StorageAPI.CloseWrite(&storage_api.m_StorageAPI, t);
+
+                    free(target_path);
+                    free(source_path);
+                }
+            }while(storage_api.m_StorageAPI.FindNext(&storage_api.m_StorageAPI, fs_iterator));
         }
 
         ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);

@@ -1727,7 +1727,7 @@ struct WriteBlockJob
     struct CompressionRegistry* m_CompressionRegistry;
     const char* m_ContentFolder;
     const char* m_AssetsFolder;
-    const char* m_BlockName;
+    TLongtail_Hash m_BlockHash;
     const char* m_BlockPath;
     const struct ContentIndex* m_ContentIndex;
     struct ChunkHashToAssetPart* m_AssetPartLookup;
@@ -1736,11 +1736,11 @@ struct WriteBlockJob
     uint32_t m_Success;
 };
 
-char* GetBlockName(TLongtail_Hash block_hash)
+#define MAX_BLOCK_NAME_LENGTH   64
+
+void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-    char* name = (char*)LONGTAIL_MALLOC(64);
-    sprintf(name, "0x%" PRIx64, block_hash);
-    return name;
+    sprintf(out_name, "0x%" PRIx64, block_hash);
 }
 
 static char* ReadBlockData(
@@ -1753,12 +1753,10 @@ static char* ReadBlockData(
     LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_folder != 0, return 0);
 
-    char* block_name = GetBlockName(block_hash);
-    char file_name[64];
-    sprintf(file_name, "%s.lrb", block_name);
+    char file_name[MAX_BLOCK_NAME_LENGTH + 4];
+    GetBlockName(block_hash, file_name);
+    strcat(file_name, ".lrb");
     char* block_path = storage_api->ConcatPath(storage_api, content_folder, file_name);
-    LONGTAIL_FREE(block_name);
-    block_name = 0;
 
     StorageAPI_HOpenFile block_file = storage_api->OpenReadFile(storage_api, block_path);
     if (!block_file)
@@ -1915,8 +1913,9 @@ void WriteContentBlockJob(void* context)
     uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
     TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
 
-    char tmp_block_name[64];
-    sprintf(tmp_block_name, "%s.tmp", job->m_BlockName);
+    char tmp_block_name[MAX_BLOCK_NAME_LENGTH + 4];
+    GetBlockName(job->m_BlockHash, tmp_block_name);
+    strcat(tmp_block_name, ".tmp");
 
     char* tmp_block_path = (char*)target_storage_api->ConcatPath(target_storage_api, content_folder, tmp_block_name);
 
@@ -2139,7 +2138,8 @@ int WriteContent(
             ++chunk_count;
         }
 
-        char* block_name = GetBlockName(block_hash);
+        char block_name[MAX_BLOCK_NAME_LENGTH];
+        GetBlockName(block_hash, block_name);
         char file_name[64];
         sprintf(file_name, "%s.lrb", block_name);
         char* block_path = target_storage_api->ConcatPath(target_storage_api, content_folder, file_name);
@@ -2148,8 +2148,6 @@ int WriteContent(
             free((char*)block_path);
             block_path = 0;
             block_start_chunk_index += chunk_count;
-            LONGTAIL_FREE(block_name);
-            block_name = 0;
             continue;
         }
 
@@ -2160,7 +2158,7 @@ int WriteContent(
         job->m_ContentFolder = content_folder;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
-        job->m_BlockName = block_name;
+        job->m_BlockHash = block_hash;
         job->m_BlockPath = block_path;
         job->m_AssetPartLookup = asset_part_lookup;
         job->m_FirstChunkIndex = block_start_chunk_index;
@@ -2193,8 +2191,6 @@ int WriteContent(
         }
         free((char*)job->m_BlockPath);
         job->m_BlockPath = 0;
-        LONGTAIL_FREE((char*)job->m_BlockName);
-        job->m_BlockName = 0;
     }
 
     hmfree(asset_part_lookup);
