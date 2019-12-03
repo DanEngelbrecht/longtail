@@ -128,6 +128,7 @@ int SafeCreateDir(struct StorageAPI* storage_api, const char* path)
     {
         return 1;
     }
+    LONGTAIL_LOG("Failed to create directory `%s`\n", path)
     return 0;
 }
 
@@ -2435,7 +2436,7 @@ void WritePartialAssetFromBlocks(void* context)
         uint64_t asset_size = job->m_VersionIndex->m_AssetSizes[job->m_AssetIndex];
         if (!job->m_VersionStorageAPI->SetSize(job->m_VersionStorageAPI, job->m_AssetOutputFile, asset_size))
         {
-            LONGTAIL_LOG("WritePartialAssetFromBlocks: Fail to set file size for `%s` in `%s`\n", asset_path, job->m_VersionFolder)
+            LONGTAIL_LOG("WritePartialAssetFromBlocks: Fail to set initial file size for `%s` in `%s`\n", asset_path, job->m_VersionFolder)
             job->m_VersionStorageAPI->CloseWrite(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
             for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
@@ -2543,9 +2544,15 @@ void WritePartialAssetFromBlocks(void* context)
         return;
     }
 
-    job->m_VersionStorageAPI->SetSize(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset);
+    int ok = job->m_VersionStorageAPI->SetSize(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset);
     job->m_VersionStorageAPI->CloseWrite(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+
     job->m_AssetOutputFile = 0;
+    if (!ok)
+    {
+        LONGTAIL_LOG("WritePartialAssetFromBlocks: Failed to set final size of asset `%s` to %" PRIx64 "\n", asset_path, write_offset)
+        return;
+    }
 
     job->m_Success = 1;
 }
