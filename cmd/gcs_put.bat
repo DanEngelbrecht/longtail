@@ -1,6 +1,8 @@
 @echo on
 SetLocal EnableDelayedExpansion
 
+if "%~5"=="" goto usage
+
 set LONGTAIL=%1
 set VERSION_NAME=%2
 set SOURCE_FOLDER=%3
@@ -39,5 +41,9 @@ call gsutil cp merged_store.lci %BUCKET%/store.lci
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 GOTO end
+
+:usage
+
+echo "gcs_put.bat <longtail-executable> <version_name> <source_folder> <cache_folder> <gcs_bucket_uri>"
 
 :end
