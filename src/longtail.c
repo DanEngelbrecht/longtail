@@ -1147,7 +1147,7 @@ int WriteVersionIndex(
         LONGTAIL_LOG("WriteVersionIndex: Failed create parent path for `%s`\n", path);
         return 0;
     }
-    StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path, 1);
+    StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path, 0);
     if (!file_handle)
     {
         LONGTAIL_LOG("WriteVersionIndex: Failed open `%s` for write\n", path);
@@ -1536,7 +1536,7 @@ int WriteContentIndex(
         LONGTAIL_LOG("WriteContentIndex: Failed to create parent folder for `%s`\n", path);
         return 0;
     }
-    StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path, 1);
+    StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path, 0);
     if (!file_handle)
     {
         LONGTAIL_LOG("WriteContentIndex: Failed to create `%s`\n", path);
@@ -1971,7 +1971,7 @@ void WriteContentBlockJob(void* context)
         return;
     }
 
-    StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 1);
+    StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 0);
     if (!block_file_handle)
     {
         LONGTAIL_LOG("WriteContentBlockJob: Failed to create block file `%s`\n", tmp_block_path)
@@ -2417,7 +2417,8 @@ void WritePartialAssetFromBlocks(void* context)
             return;
         }
 
-        job->m_AssetOutputFile = job->m_VersionStorageAPI->OpenWriteFile(job->m_VersionStorageAPI, full_asset_path, 1);
+        uint64_t asset_size = job->m_VersionIndex->m_AssetSizes[job->m_AssetIndex];
+        job->m_AssetOutputFile = job->m_VersionStorageAPI->OpenWriteFile(job->m_VersionStorageAPI, full_asset_path, asset_size);
         if (!job->m_AssetOutputFile)
         {
             LONGTAIL_LOG("WritePartialAssetFromBlocks: Unable to create asset `%s` in `%s`\n", asset_path, job->m_VersionFolder)
@@ -2616,7 +2617,7 @@ void WriteAssetsFromBlock(void* context)
             return;
         }
 
-        StorageAPI_HOpenFile asset_file = version_storage_api->OpenWriteFile(version_storage_api, full_asset_path, 1);
+        StorageAPI_HOpenFile asset_file = version_storage_api->OpenWriteFile(version_storage_api, full_asset_path, 0);
         if (!asset_file)
         {
             LONGTAIL_LOG("WriteAssetsFromBlock: Unable to create asset `%s`\n", full_asset_path)

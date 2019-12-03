@@ -292,7 +292,7 @@ struct InMemStorageAPI
         return &file_name[1];
     }
 
-    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* storage_api, const char* path, int truncate)
+    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* storage_api, const char* path, uint64_t initial_size)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash parent_path_hash = GetParentPathHash(instance, path);
@@ -302,25 +302,22 @@ struct InMemStorageAPI
             return 0;
         }
         TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
+        PathEntry* path_entry = 0;
         PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
         if (it)
         {
-            PathEntry* path_entry = *it;
-            if (!truncate)
-            {
-                return (StorageAPI_HOpenFile)path_hash;
-            }
-            free(path_entry->m_FileName);
-            path_entry->m_FileName = 0;
-            Free_TContent((*it)->m_Content);
-            free(path_entry);
-            *it = 0;
+            path_entry = *it;
         }
-        PathEntry* path_entry = (PathEntry*)malloc(sizeof(PathEntry));
-        path_entry->m_Content = SetCapacity_TContent((TContent*)0, 16);
-        path_entry->m_ParentHash = parent_path_hash;
-        path_entry->m_FileName = strdup(GetFileName(path));
-        instance->m_PathHashToContent.Put(path_hash, path_entry);
+        else
+        {
+            path_entry = (PathEntry*)malloc(sizeof(PathEntry));
+            path_entry->m_ParentHash = parent_path_hash;
+            path_entry->m_FileName = strdup(GetFileName(path));
+            path_entry->m_Content = SetCapacity_TContent((TContent*)0, 16u);
+            instance->m_PathHashToContent.Put(path_hash, path_entry);
+        }
+        path_entry->m_Content = SetCapacity_TContent(path_entry->m_Content, (uint32_t)initial_size);
+        SetSize_TContent(path_entry->m_Content, (uint32_t)initial_size);
         return (StorageAPI_HOpenFile)path_hash;
     }
     static int Write(StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
@@ -761,7 +758,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
         {
             return 0;
         }
-        StorageAPI_HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path, 1);
+        StorageAPI_HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path, 0);
         if (!content_file)
         {
             return 0;
@@ -979,7 +976,7 @@ TEST(Longtail, WriteContent)
     for (uint32_t i = 0; i < 5; ++i)
     {
         ASSERT_NE(0, CreateParentPath(&source_storage.m_StorageAPI, TEST_FILENAMES[i]));
-        StorageAPI_HOpenFile w = source_storage.m_StorageAPI.OpenWriteFile(&source_storage.m_StorageAPI, TEST_FILENAMES[i], 1);
+        StorageAPI_HOpenFile w = source_storage.m_StorageAPI.OpenWriteFile(&source_storage.m_StorageAPI, TEST_FILENAMES[i], 0);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         ASSERT_NE(0, source_storage.m_StorageAPI.Write(&source_storage.m_StorageAPI, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
         source_storage.m_StorageAPI.CloseWrite(&source_storage.m_StorageAPI, w);
@@ -1466,7 +1463,7 @@ TEST(Longtail, VersionDiff)
     {
         char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "old", OLD_TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(&storage.m_StorageAPI, file_name));
-        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name, 1);
+        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name, 0);
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (OLD_TEST_SIZES[i])
@@ -1481,7 +1478,7 @@ TEST(Longtail, VersionDiff)
     {
         char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "new", NEW_TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(&storage.m_StorageAPI, file_name));
-        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name, 1);
+        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name, 0);
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (NEW_TEST_SIZES[i])
@@ -1870,7 +1867,7 @@ TEST(Longtail, WriteVersion)
     {
         char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage_api, file_name));
-        StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, file_name, 1);
+        StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, file_name, 0);
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (TEST_SIZES[i])
@@ -2103,7 +2100,7 @@ void Bench()
             ASSERT_NE((StorageAPI_HOpenFile)0, s);
 
             ASSERT_NE(0, MakePath(&storage_api.m_StorageAPI, target_path));
-            StorageAPI_HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path, 1);
+            StorageAPI_HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path, 0);
             ASSERT_NE((StorageAPI_HOpenFile)0, t);
 
             uint64_t block_file_size = storage_api.m_StorageAPI.GetSize(&storage_api.m_StorageAPI, s);
@@ -2356,7 +2353,7 @@ void LifelikeTest()
 //        char* source_path = storage_api.ConcatPath(remote_content_path, block_file_name);
 //        StorageAPI_HOpenFile s = storage_api.OpenReadFile(source_path);
 //        char* target_path = storage_api.ConcatPath(local_content_path, block_file_name);
-//        StorageAPI_HOpenFile t = storage_api.OpenWriteFile(target_path, 1);
+//        StorageAPI_HOpenFile t = storage_api.OpenWriteFile(target_path, 0);
 //        uint64_t size = storage_api.GetSize(s);
 //        char* buffer = (char*)malloc(size);
 //        storage_api.Read(s, 0, size, buffer);

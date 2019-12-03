@@ -242,11 +242,11 @@ struct TroveStorageAPI
         Trove_CloseReadFile((HTroveOpenReadFile)f);
     }
 
-    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* , const char* path, int truncate)
+    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* , const char* path, uint64_t initial_size)
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Trove_OpenWriteFile(tmp_path, truncate);
+        StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Trove_OpenWriteFile(tmp_path, initial_size);
         free(tmp_path);
         return r;
     }
