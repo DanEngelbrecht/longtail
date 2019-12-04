@@ -9,6 +9,7 @@
 
 #include "../common/platform.h"
 
+#include "../third-party/jc_containers/src/jc_hashtable.h"
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -118,7 +119,7 @@ char* NormalizePath(const char* path)
 // TODO: We really should not copy this code!
 #define MAX_BLOCK_NAME_LENGTH   32
 
-void GetBlockName(TLongtail_Hash block_hash, char* out_name)
+static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
     sprintf(out_name, "0x%016" PRIx64, block_hash);
 //    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);

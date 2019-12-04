@@ -2753,10 +2753,10 @@ struct BlockJobCompareContext
     struct ContentLookup* cl;
 };
 
-#if defined(_MSC_VER) || defined(__GNUC__)
-static int BlockJobCompare(void* context, const void* a_ptr, const void* b_ptr)
-#else
+#if defined(__clang__)
 static int BlockJobCompare(const void* a_ptr, const void* b_ptr, void* context)
+#elif defined(_MSC_VER) || defined(__GNUC__)
+static int BlockJobCompare(void* context, const void* a_ptr, const void* b_ptr)
 #endif
 {
     struct BlockJobCompareContext* c = (struct BlockJobCompareContext*)context;
@@ -3754,10 +3754,11 @@ static int CompareIndexs(const void* a_ptr, const void* b_ptr)
     return (int)a - b;
 }
 */
-#if defined(_MSC_VER) || defined(__GNUC__)
-static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_ptr)
-#else
+
+#if defined(__clang__)
 static int SortPathShortToLong(const void* a_ptr, const void* b_ptr, void* context)
+#elif defined(_MSC_VER) || defined(__GNUC__)
+static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_ptr)
 #endif
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0);
@@ -3774,10 +3775,10 @@ static int SortPathShortToLong(const void* a_ptr, const void* b_ptr, void* conte
     return (a_len > b_len) ? 1 : (a_len < b_len) ? -1 : 0;
 }
 
-#if defined(_MSC_VER) || defined(__GNUC__)
-static int SortPathLongToShort(void* context, const void* a_ptr, const void* b_ptr)
-#else
+#if defined(__clang__)
 static int SortPathLongToShort(const void* a_ptr, const void* b_ptr, void* context)
+#elif defined(_MSC_VER) || defined(__GNUC__)
+static int SortPathLongToShort(void* context, const void* a_ptr, const void* b_ptr)
 #endif
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0);
