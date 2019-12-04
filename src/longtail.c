@@ -1736,11 +1736,13 @@ struct WriteBlockJob
     uint32_t m_Success;
 };
 
-#define MAX_BLOCK_NAME_LENGTH   64
+#define MAX_BLOCK_NAME_LENGTH   32
 
 void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-    sprintf(out_name, "0x%" PRIx64, block_hash);
+    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
+    memmove(out_name, &out_name[5], 4);
+    out_name[4] = '/';
 }
 
 static char* ReadBlockData(

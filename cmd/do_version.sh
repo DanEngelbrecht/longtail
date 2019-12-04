@@ -13,7 +13,7 @@ $1 --create-content "$2/$3_chunks" --content-index "$2/$3.lci" --version "$2/loc
 
 echo Adding the new chunks from $2/$3_chunks to $2/chunks/
 [ -d "$2/chunks" ] || mkdir -p "$2/chunks"
-cp $2/$3_chunks/* $2/chunks
+cp -r $2/$3_chunks/* $2/chunks
 
 echo Merging the new chunks from $2/local/$3.lci into $2/chunks.lci
 $1 --create-content-index "$2/chunks.lci" --content-index "$2/chunks.lci" --merge-content-index "$2/$3.lci"
