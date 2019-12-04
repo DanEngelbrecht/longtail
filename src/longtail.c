@@ -83,7 +83,10 @@ void Longtail_SetLog(Longtail_Log log_func)
 #endif
 
 #if !defined(LONGTAIL_ATOMICADD)
-    #if defined(__clang__) || defined(__GNUC__)
+    #if defined(__clang__)
+        #define LONGTAIL_ATOMICADD_PRIVATE(value, amount) (__sync_add_and_fetch (value, amount))
+        #define qsort_s qsort_r
+    #elif defined(__GNUC__)
         #define LONGTAIL_ATOMICADD_PRIVATE(value, amount) (__sync_add_and_fetch (value, amount))
     #elif defined(_MSC_VER)
         #if !defined(_WINDOWS_)
@@ -93,7 +96,6 @@ void Longtail_SetLog(Longtail_Log log_func)
         #endif
 
         #define LONGTAIL_ATOMICADD_PRIVATE(value, amount) (_InterlockedExchangeAdd((volatile LONG *)value, amount) + amount)
-        #define qsort_r qsort_s
     #else
         inline int32_t LONGTAIL_NonAtomicAdd(volatile int32_t* store, int32_t value) { *store += value; return *store; }
         #define LONGTAIL_ATOMICADD_PRIVATE(value, amount) (LONGTAIL_NonAtomicAdd(value, amount))
@@ -1740,9 +1742,10 @@ struct WriteBlockJob
 
 void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
-    memmove(out_name, &out_name[5], 4);
-    out_name[4] = '/';
+    sprintf(out_name, "0x%016" PRIx64, block_hash);
+//    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
+//    memmove(out_name, &out_name[5], 4);
+//    out_name[4] = '/';
 }
 
 static char* ReadBlockData(
@@ -2750,7 +2753,7 @@ struct BlockJobCompareContext
     struct ContentLookup* cl;
 };
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__GNUC__)
 static int BlockJobCompare(void* context, const void* a_ptr, const void* b_ptr)
 #else
 static int BlockJobCompare(const void* a_ptr, const void* b_ptr, void* context)
@@ -2879,7 +2882,7 @@ struct AssetWriteList* BuildAssetWriteList(
             chunk_hashes,   // chunk_hashes
             cl  // cl
         };
-    qsort_r(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
+    qsort_s(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
     return awl;
 }
 
@@ -3751,7 +3754,7 @@ static int CompareIndexs(const void* a_ptr, const void* b_ptr)
     return (int)a - b;
 }
 */
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__GNUC__)
 static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_ptr)
 #else
 static int SortPathShortToLong(const void* a_ptr, const void* b_ptr, void* context)
@@ -3771,7 +3774,7 @@ static int SortPathShortToLong(const void* a_ptr, const void* b_ptr, void* conte
     return (a_len > b_len) ? 1 : (a_len < b_len) ? -1 : 0;
 }
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__GNUC__)
 static int SortPathLongToShort(void* context, const void* a_ptr, const void* b_ptr)
 #else
 static int SortPathLongToShort(const void* a_ptr, const void* b_ptr, void* context)
@@ -3976,8 +3979,8 @@ struct VersionDiff* CreateVersionDiff(
     memmove(version_diff->m_SourceModifiedAssetIndexes, modified_source_indexes, sizeof(uint32_t) * modified_count);
     memmove(version_diff->m_TargetModifiedAssetIndexes, modified_target_indexes, sizeof(uint32_t) * modified_count);
 
-    qsort_r(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
-    qsort_r(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
+    qsort_s(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
+    qsort_s(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
 
     LONGTAIL_FREE(removed_source_asset_indexes);
     removed_source_asset_indexes = 0;

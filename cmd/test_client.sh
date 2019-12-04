@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-LONGTAIL=../build/longtail_debug
+LONGTAIL=../build/longtail
 BASEPATH=~/Temp/longtail
 
 echo Indexing currently known chunks "$BASEPATH/chunks"

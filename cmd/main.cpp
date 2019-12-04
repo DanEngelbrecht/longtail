@@ -115,6 +115,17 @@ char* NormalizePath(const char* path)
     return normalized_path;
 }
 
+// TODO: We really should not copy this code!
+#define MAX_BLOCK_NAME_LENGTH   32
+
+void GetBlockName(TLongtail_Hash block_hash, char* out_name)
+{
+    sprintf(out_name, "0x%016" PRIx64, block_hash);
+//    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
+//    memmove(out_name, &out_name[5], 4);
+//    out_name[4] = '/';
+}
+
 int_fast32_t PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash* block_hashes, const char* format_string)
 {
     const char* format_start = format_string;
@@ -131,8 +142,9 @@ int_fast32_t PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash*
     const char* format_second_start = &format_first_end[strlen("{blockname}")];
     for (uint64_t b = 0; b < block_count; ++b)
     {
-        char block_name[64];
-        sprintf(block_name, "0x%" PRIx64 ".lrb", block_hashes[b]);
+        char block_name[MAX_BLOCK_NAME_LENGTH + 4];
+        GetBlockName(block_hashes[b], block_name);
+        strcat(block_name, ".lrb");
 
         char output_str[512];
         memmove(output_str, format_string, first_length);

@@ -2,7 +2,6 @@
 
 #define BIKESHED_IMPLEMENTATION
 #include "../third-party/bikeshed/bikeshed.h"
-#include "../third-party/jc_containers/src/jc_hashtable.h"
 #include "../third-party/lizard/lib/lizard_common.h"
 #include "../third-party/lizard/lib/lizard_decompress.h"
 #include "../third-party/lizard/lib/lizard_compress.h"

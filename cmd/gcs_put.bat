@@ -26,7 +26,8 @@ if exist upload_list.txt del upload_list.txt
 %LONGTAIL% --upsync --version %SOURCE_FOLDER% --version-index %VERSION_NAME%.lvi --content-index "remote_store.lci" --missing-content %CACHE_FOLDER% --missing-content-index "new_content.lci" --output-format %CACHE_FOLDER%\{blockname} >upload_list.txt
 if %errorlevel% neq 0 exit /b %errorlevel%
 
-if exist upload_list.txt type .\upload_list.txt | call gsutil -m cp -I %BUCKET%/store
+if exist upload_list.txt type .\upload_list.txt | call gsutil -m cp -n -e -I %BUCKET%/store
+rem call gsutil -m -q cp -r -n -e %CACHE_FOLDER%/**/*.lrb %BUCKET%/store/
 
 call gsutil cp %VERSION_NAME%.lvi %BUCKET%/%VERSION_NAME%.lvi
 if %errorlevel% neq 0 exit /b %errorlevel%
