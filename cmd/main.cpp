@@ -180,7 +180,7 @@ struct Progress
 };
 
 const uint32_t NO_COMPRESSION_TYPE = 0;
-const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'a') << 8) + ((uint32_t)'d');
+const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'\0') << 8) + ((uint32_t)'d');
 
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 {

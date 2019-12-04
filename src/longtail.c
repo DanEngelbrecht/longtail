@@ -1812,6 +1812,15 @@ static char* ReadBlockData(
     if (0 != compression_type)
     {
         struct CompressionAPI* compression_api = GetCompressionAPI(compression_registry, compression_type);
+        if (!compression_api)
+        {
+            LONGTAIL_LOG("ReadBlockData: Compression type not supported `%u`\n", compression_type)
+            free(block_path);
+            block_path = 0;
+            LONGTAIL_FREE(block_data);
+            block_data = 0;
+            return 0;
+        }
         uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
         uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
         block_data = (char*)LONGTAIL_MALLOC(uncompressed_size);
@@ -2002,6 +2011,15 @@ void WriteContentBlockJob(void* context)
     if (compression_type != 0)
     {
         struct CompressionAPI* compression_api = GetCompressionAPI(compression_registry, compression_type);
+        if (!compression_api)
+        {
+            LONGTAIL_LOG("WriteContentBlockJob: Compression type not supported `%u`\n", compression_type)
+            LONGTAIL_FREE(block_data_buffer);
+            block_data_buffer = 0;
+            free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            return;
+        }
         CompressionAPI_HSettings compression_settings = GetCompressionSettings(compression_registry, compression_type);
         CompressionAPI_HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_settings);
         const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
