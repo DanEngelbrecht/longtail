@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-export TARGET=test
+export TARGET=longtail_lib
+export TARGET_MODE="lib"
 export SRC="$BASE_DIR/src/longtail.c $BASE_DIR/lib/longtail_lib.cpp"
-export TEST_SRC="$BASE_DIR/test/impl_bind.c $BASE_DIR/test/main.cpp $BASE_DIR/test/test.cpp"
+export TEST_SRC=""
 export THIRDPARTY_SRC="$THIRDPARTY_DIR/nadir/src/nadir.cpp $THIRDPARTY_DIR/lizard/lib/*.c $THIRDPARTY_DIR/lizard/lib/entropy/*.c $THIRDPARTY_DIR/lizard/lib/xxhash/*.c $THIRDPARTY_DIR/trove/src/trove.cpp"
-export CXXFLAGS="$CXXFLAGS -pthread"
-export CXXFLAGS_DEBUG="$CXXFLAGS_DEBUG -DBIKESHED_ASSERTS -DLONGTAIL_VERBOSE_LOGS -DLONGTAIL_ASSERTS"
+export CXXFLAGS="$CXXFLAGS -pthread -DLONGTAIL_VERBOSE_LOGS"
+export CXXFLAGS_DEBUG="$CXXFLAGS_DEBUG -DBIKESHED_ASSERTS -DLONGTAIL_VERBOSE_LOGS"

@@ -1,9 +1,8 @@
 #include "longtail.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <inttypes.h>
 #include "stb_ds.h"
+
+#include <stdio.h>
+#include <inttypes.h>
 
 //#define SLOW_VALIDATION 1
 

@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 
-if [ "$1" = "build-third-party" ]; then
-    BUILD_THIRD_PARTY="$1"
-    RELEASE_MODE="$2"
+export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+export THIRDPARTY_DIR=${BASE_DIR}/third-party/
+
+if [ "$1" = "build-third-party" ] || [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] ; then
+    BUILD_THIRD_PARTY="build-third-party"
 else
     BUILD_THIRD_PARTY=""
-    RELEASE_MODE="$1"
+fi
+
+if [ "$1" = "release" ] || [ "$2" = "release" ] || [ "$3" = "release" ] ; then
+    RELEASE_MODE="release"
+else
+    RELEASE_MODE="debug"
 fi
 
 if [ "$RELEASE_MODE" = "release" ]; then
@@ -32,18 +39,28 @@ else
     export CXXFLAGS="$CXXFLAGS $CXXFLAGS_DEBUG"
 fi
 
-if [ ! -e "../build/$THIRD_PARTY_LIB" ]; then
+if [ ! -e "$BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB" ]; then
     BUILD_THIRD_PARTY="build-third-party"
 fi
 
-mkdir -p ../build
+mkdir -p $BASE_DIR/build/third-party-$RELEASE_MODE
 
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
-    pushd ../third-party
+    pushd $BASE_DIR/build/third-party-$RELEASE_MODE
+    rm -rf $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
     clang++ -c $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
+    ar rc $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
     popd
-    ar rc ../build/$THIRD_PARTY_LIB ../third-party/*.o
-    rm ../third-party/*.o
 fi
 
-clang++ -o ../build/$OUTPUT $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC ../build/$THIRD_PARTY_LIB
+if [ "$TARGET_MODE" = "lib" ]; then
+    mkdir -p $BASE_DIR/build/lib-$RELEASE_MODE
+    rm -rf $BASE_DIR/build/lib-$RELEASE_MODE/*.o
+    pushd $BASE_DIR/build/lib-$RELEASE_MODE
+    clang++ -c $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC
+    echo $BASE_DIR/build/$TARGET
+    ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
+    popd
+else
+    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+fi

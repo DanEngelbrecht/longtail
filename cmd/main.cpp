@@ -1,15 +1,12 @@
-
 #include "../src/longtail.h"
+#include "../lib/longtail_lib.h"
+#include "../src/stb_ds.h"
 
 #define KGFLAGS_IMPLEMENTATION
 #include "../third-party/kgflags/kgflags.h"
 
-#define STB_DS_IMPLEMENTATION
-#include "../src/stb_ds.h"
-
-#include "../common/platform.h"
-
 #include "../third-party/jc_containers/src/jc_hashtable.h"
+
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -192,9 +189,6 @@ struct Progress
     }
 };
 
-const uint32_t NO_COMPRESSION_TYPE = 0;
-const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'\0') << 8) + ((uint32_t)'d');
-
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
@@ -217,22 +211,6 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
     return result;
 }
 
-struct CompressionRegistry* GetCompressionRegistry()
-{
-    static LizardCompressionAPI lizard;
-    static const CompressionAPI* compression_apis[] = {
-        &lizard.m_CompressionAPI};
-    static const uint32_t compression_types[] = {
-        LIZARD_DEFAULT_COMPRESSION_TYPE};
-    static const CompressionAPI_HSettings compression_settings[] = {
-        lizard.m_CompressionAPI.GetDefaultSettings(&lizard.m_CompressionAPI)};
-    struct CompressionRegistry* compression_registry = CreateCompressionRegistry(
-        1,
-        &compression_types[0],
-        &compression_apis[0],
-        &compression_settings[0]);
-    return compression_registry;
-}
 
 
 
@@ -1506,33 +1484,29 @@ int main(int argc, char** argv)
         const char* test_version = NormalizePath(test_version_raw);
         const char* test_base_path = NormalizePath(test_base_path_raw);
 
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
         CompressionRegistry* compression_registry = GetCompressionRegistry();
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
         char create_content_index[512];
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         char content[512];
         sprintf(content, "%s/chunks", test_base_path);
         if (!Cmd_CreateContentIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             create_content_index,
             content))
         {
             LONGTAIL_FREE(compression_registry);
             return 1;
         }
-
         char create_version_index[512];
         sprintf(create_version_index, "%s/%s.lvi", test_base_path, test_version);
         char version[512];
         sprintf(version, "%s/local/%s", test_base_path, test_version);
         if (!Cmd_CreateVersionIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             create_version_index,
             version,
             0,
@@ -1549,9 +1523,9 @@ int main(int argc, char** argv)
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         sprintf(version, "%s/local/%s", test_base_path, test_version);
         if (!Cmd_CreateMissingContentIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             create_content_index,
             content_index,
             content,
@@ -1569,9 +1543,9 @@ int main(int argc, char** argv)
         sprintf(create_content, "%s/chunks", test_base_path);
         sprintf(content_index, "%s/%s.lci", test_base_path, test_version);
         if (!Cmd_CreateContent(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             compression_registry,
             create_content,
             content_index,
@@ -1591,7 +1565,7 @@ int main(int argc, char** argv)
         char merge_content_index[512];
         sprintf(merge_content_index, "%s/%s.lci", test_base_path, test_version);
         if (!Cmd_MergeContentIndex(
-            &storage_api.m_StorageAPI,
+            GetFSStorageAPI(),
             create_content_index,
             content_index,
             merge_content_index))
@@ -1600,15 +1574,14 @@ int main(int argc, char** argv)
             return 1;
         }
 /*
-        char create_version[512];
         sprintf(create_version, "%s/remote/%s", test_base_path, test_version);
         sprintf(content, "%s/chunks", test_base_path);
         sprintf(content_index, "%s/chunks.lci", test_base_path);
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         if (!Cmd_CreateVersion(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             compression_registry,
             create_version,
             version_index,
@@ -1621,15 +1594,14 @@ int main(int argc, char** argv)
         }
 */
         char update_version[512];
-        sprintf(update_version, "%s/remote/incremental", test_base_path);
         sprintf(content, "%s/chunks", test_base_path);
         sprintf(content_index, "%s/chunks.lci", test_base_path);
         char target_version_index[512];
         sprintf(target_version_index, "%s/%s.lvi", test_base_path, test_version);
         if (!Cmd_UpdateVersion(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             compression_registry,
             update_version,
             0,
@@ -1642,15 +1614,14 @@ int main(int argc, char** argv)
             LONGTAIL_FREE(compression_registry);
             return 1;
         }
-
         char incremental_version_index[512];
         sprintf(incremental_version_index, "%s/remote/%s.lvi", test_base_path, test_version);
         char incremental_version[512];
         sprintf(incremental_version, "%s/remote/incremental", test_base_path);
         if (!Cmd_CreateVersionIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             incremental_version_index,
             incremental_version,
             0,
@@ -1660,13 +1631,13 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        struct VersionIndex* source_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, create_version_index);
+        struct VersionIndex* source_vindex = ReadVersionIndex(GetFSStorageAPI(), create_version_index);
         if (!source_vindex)
         {
             LONGTAIL_FREE(compression_registry);
             return 1;
         }
-        struct VersionIndex* target_vindex = ReadVersionIndex(&storage_api.m_StorageAPI, incremental_version_index);
+        struct VersionIndex* target_vindex = ReadVersionIndex(GetFSStorageAPI(), incremental_version_index);
         if (!target_vindex)
         {
             LONGTAIL_FREE(source_vindex);
@@ -1702,9 +1673,9 @@ int main(int argc, char** argv)
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         sprintf(version, "%s/local/%s", test_base_path, test_version);
         if (!Cmd_CreateMissingContentIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             create_content_index,
             content_index,
             content,
@@ -1755,14 +1726,10 @@ int main(int argc, char** argv)
             goto end;
         }
 
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
-
         int ok = Cmd_CreateVersionIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             create_version_index,
             version,
             filter,
@@ -1775,13 +1742,10 @@ int main(int argc, char** argv)
     {
         if (content && (!content_index && !merge_content_index))
         {
-            TroveStorageAPI storage_api;
-            MeowHashAPI hash_api;
-            BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
             int ok = Cmd_CreateContentIndex(
-                &storage_api.m_StorageAPI,
-                &hash_api.m_HashAPI,
-                &job_api.m_JobAPI,
+                GetFSStorageAPI(),
+                GetMeowHashAPI(),
+                GetBikeshedJobAPI(GetCPUCount()),
                 create_content_index,
                 content);
             result = ok ? 0 : 1;
@@ -1789,9 +1753,8 @@ int main(int argc, char** argv)
         }
         if (content_index && merge_content_index)
         {
-            TroveStorageAPI storage_api;
             int ok = Cmd_MergeContentIndex(
-                &storage_api.m_StorageAPI,
+                GetFSStorageAPI(),
                 create_content_index,
                 content_index,
                 merge_content_index);
@@ -1802,14 +1765,10 @@ int main(int argc, char** argv)
 
     if (create_content_index && version)
     {
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
-
         int ok = Cmd_CreateMissingContentIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             create_content_index,
             content_index,
             content,
@@ -1824,14 +1783,11 @@ int main(int argc, char** argv)
 
     if (create_content && version)
     {
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
         CompressionRegistry* compression_registry = GetCompressionRegistry();
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
         int ok = Cmd_CreateContent(
-                &storage_api.m_StorageAPI,
-                &hash_api.m_HashAPI,
-                &job_api.m_JobAPI,
+                GetFSStorageAPI(),
+                GetMeowHashAPI(),
+                GetBikeshedJobAPI(GetCPUCount()),
                 compression_registry,
                 create_content,
                 content_index,
@@ -1847,9 +1803,8 @@ int main(int argc, char** argv)
 
     if (list_missing_blocks && content_index)
     {
-        TroveStorageAPI storage_api;
         int ok = Cmd_ListMissingBlocks(
-            &storage_api.m_StorageAPI,
+            GetFSStorageAPI(),
             list_missing_blocks,
             content_index);
         result = ok ? 0 : 1;
@@ -1858,15 +1813,12 @@ int main(int argc, char** argv)
 
     if (create_version && version_index && content)
     {
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
         CompressionRegistry* compression_registry = GetCompressionRegistry();
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_CreateVersion(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             compression_registry,
             create_version,
             version_index,
@@ -1879,15 +1831,12 @@ int main(int argc, char** argv)
 
     if (update_version && content && target_version_index)
     {
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
         CompressionRegistry* compression_registry = GetCompressionRegistry();
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_UpdateVersion(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             compression_registry,
             update_version,
             version_index,
@@ -1933,15 +1882,12 @@ int main(int argc, char** argv)
             result = 1;
             goto end;
         }
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
         CompressionRegistry* compression_registry = GetCompressionRegistry();
-        BikeshedJobAPI job_api(GetCPUCount());
         int ok = Cmd_UpSyncVersion(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             compression_registry,
             version,
             version_index,
@@ -1985,16 +1931,13 @@ int main(int argc, char** argv)
             goto end;
         }
 
-        TroveStorageAPI storage_api;
-        MeowHashAPI hash_api;
         CompressionRegistry* compression_registry = GetCompressionRegistry();
-        BikeshedJobAPI job_api(GetCPUCount());    // We oversubscribe with 1 (workers + main thread) since a lot of our time will be spent waitig for IO);
 
         int ok = Cmd_DownSyncVersion(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            GetFSStorageAPI(),
+            GetFSStorageAPI(),
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(GetCPUCount()),
             compression_registry,
             target_version_index,
             content_index,

@@ -5,7 +5,7 @@
 
 #include "../third-party/jc_containers/src/jc_hashtable.h"
 
-#include "../common/platform.h"
+#include "../lib/longtail_lib.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -14,586 +14,6 @@
 
 #define TEST_LOG(fmt, ...) \
     fprintf(stderr, "--- ");fprintf(stderr, fmt, __VA_ARGS__);
-
-
-
-
-//////////////
-
-// TODO: Move to longtail.h
-
-
-/*
-uint64_t GetMissingAssets(const ContentIndex* content_index, const VersionIndex* version, TLongtail_Hash* missing_assets)
-{
-    uint32_t missing_hash_count = 0;
-    DiffHashes(content_index->m_ContentHashes, *content_index->m_AssetCount, version->m_ContentHashes, *version->m_AssetCount, &missing_hash_count, missing_assets, 0, 0);
-    return missing_hash_count;
-}
-
-
-ContentIndex* GetBlocksForAssets(const ContentIndex* content_index, uint64_t asset_count, const TLongtail_Hash* asset_hashes, uint64_t* out_missing_asset_count, uint64_t* out_missing_assets)
-{
-    uint64_t found_asset_count = 0;
-    uint64_t* found_assets = (uint64_t*)malloc(sizeof(uint64_t) * asset_count);
-
-    {
-        uint64_t content_index_asset_count = *content_index->m_AssetCount;
-        uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint64_t>::CalcSize((uint32_t)content_index_asset_count);
-        jc::HashTable<TLongtail_Hash, uint32_t> content_hash_to_asset_index;
-        void* content_hash_to_asset_index_mem = malloc(hash_size);
-        content_hash_to_asset_index.Create(content_index_asset_count, content_hash_to_asset_index_mem);
-        for (uint64_t i = 0; i < content_index_asset_count; ++i)
-        {
-            TLongtail_Hash asset_content_hash = content_index->m_ContentHashes[i];
-            content_hash_to_asset_index.Put(asset_content_hash, i);
-        }
-
-        for (uint64_t i = 0; i < asset_count; ++i)
-        {
-            TLongtail_Hash asset_hash = asset_hashes[i];
-            const uint32_t* asset_index_ptr = content_hash_to_asset_index.Get(asset_hash);
-            if (asset_index_ptr != 0)
-            {
-                found_assets[found_asset_count++] = *asset_index_ptr;
-            }
-            else
-            {
-                out_missing_assets[(*out_missing_asset_count)++];
-            }
-        }
-
-        free(content_hash_to_asset_index_mem);
-    }
-
-    uint32_t* asset_count_in_blocks = (uint32_t*)malloc(sizeof(uint32_t) * *content_index->m_BlockCount);
-    uint64_t* asset_start_in_blocks = (uint64_t*)malloc(sizeof(uint64_t) * *content_index->m_BlockCount);
-    uint64_t i = 0;
-    while (i < *content_index->m_AssetCount)
-    {
-        uint64_t prev_block_index = content_index->m_ChunkBlockIndexes[i++];
-        asset_start_in_blocks[prev_block_index] = i;
-        uint32_t assets_count_in_block = 1;
-        while (i < *content_index->m_AssetCount && prev_block_index == content_index->m_ChunkBlockIndexes[i])
-        {
-            ++assets_count_in_block;
-            ++i;
-        }
-        asset_count_in_blocks[prev_block_index] = assets_count_in_block;
-    }
-
-    uint32_t hash_size = jc::HashTable<uint64_t, uint32_t>::CalcSize((uint32_t)*content_index->m_AssetCount);
-    jc::HashTable<uint64_t, uint32_t> block_index_to_asset_count;
-    void* block_index_to_first_asset_index_mem = malloc(hash_size);
-    block_index_to_asset_count.Create((uint32_t)*content_index->m_AssetCount, block_index_to_first_asset_index_mem);
-
-    uint64_t copy_block_count = 0;
-    uint64_t* copy_blocks = (uint64_t*)malloc(sizeof(uint64_t) * found_asset_count);
-
-    uint64_t unique_asset_count = 0;
-    for (uint64_t i = 0; i < found_asset_count; ++i)
-    {
-        uint64_t asset_index = found_assets[i];
-        uint64_t block_index = content_index->m_ChunkBlockIndexes[asset_index];
-        uint32_t* block_index_ptr = block_index_to_asset_count.Get(block_index);
-        if (!block_index_ptr)
-        {
-            block_index_to_asset_count.Put(block_index, 1);
-            copy_blocks[copy_block_count++] = block_index;
-            unique_asset_count += asset_count_in_blocks[block_index];
-        }
-        else
-        {
-            (*block_index_ptr)++;
-        }
-    }
-    free(block_index_to_first_asset_index_mem);
-    block_index_to_first_asset_index_mem = 0;
-
-    size_t content_index_size = GetContentIndexSize(copy_block_count, unique_asset_count);
-    ContentIndex* existing_content_index = (ContentIndex*)malloc(content_index_size);
-
-    existing_content_index->m_BlockCount = (uint64_t*)&((char*)existing_content_index)[sizeof(ContentIndex)];
-    existing_content_index->m_AssetCount = (uint64_t*)&((char*)existing_content_index)[sizeof(ContentIndex) + sizeof(uint64_t)];
-    *existing_content_index->m_BlockCount = copy_block_count;
-    *existing_content_index->m_AssetCount = unique_asset_count;
-    InitContentIndex(existing_content_index);
-    uint64_t asset_offset = 0;
-    for (uint64_t i = 0; i < copy_block_count; ++i)
-    {
-        uint64_t block_index = copy_blocks[i];
-        uint32_t block_asset_count = asset_count_in_blocks[block_index];
-        existing_content_index->m_BlockHash[i] = content_index->m_BlockHash[block_index];
-        for (uint32_t j = 0; j < block_asset_count; ++j)
-        {
-            uint64_t source_asset_index = asset_start_in_blocks[block_index] + j;
-            uint64_t target_asset_index = asset_offset + j;
-            existing_content_index->m_ContentHashes[target_asset_index] = content_index->m_ChunkBlockOffsets[source_asset_index];
-            existing_content_index->m_ChunkBlockIndexes[target_asset_index] = block_index;
-            existing_content_index->m_ChunkBlockOffsets[target_asset_index] = content_index->m_ChunkBlockOffsets[source_asset_index];
-            existing_content_index->m_AssetLengths[target_asset_index] = content_index->m_AssetLengths[source_asset_index];
-        }
-        asset_offset += block_asset_count;
-    }
-
-    free(asset_count_in_blocks);
-    asset_count_in_blocks = 0;
-    free(asset_start_in_blocks);
-    asset_start_in_blocks = 0;
-    free(asset_count_in_blocks);
-    asset_count_in_blocks = 0;
-
-    free(copy_blocks);
-    copy_blocks = 0;
-
-    return existing_content_index;
-}
-
-*/
-
-
-///////////////
-
-
-
-
-
-
-
-
-
-
-// TODO: Replace with stb_ds array!
-typedef char TContent;
-LONGTAIL_DECLARE_ARRAY_TYPE(TContent, malloc, free)
-
-struct InMemStorageAPI
-{
-    StorageAPI m_StorageAPI;
-    struct PathEntry
-    {
-        char* m_FileName;
-        TLongtail_Hash m_ParentHash;
-        TContent* m_Content;
-    };
-    jc::HashTable<TLongtail_Hash, PathEntry*> m_PathHashToContent;
-    void* m_PathHashToContentMem;
-    MeowHashAPI m_HashAPI;
-
-    InMemStorageAPI()
-        : m_StorageAPI{
-            OpenReadFile,
-            GetSize,
-            Read,
-            CloseRead,
-            OpenWriteFile,
-            Write,
-            SetSize,
-            CloseWrite,
-            CreateDir,
-            RenameFile,
-            ConcatPath,
-            IsDir,
-            IsFile,
-            RemoveDir,
-            RemoveFile,
-            StartFind,
-            FindNext,
-            CloseFind,
-            GetFileName,
-            GetDirectoryName,
-            GetEntrySize
-            }
-    {
-        uint32_t hash_size = jc::HashTable<TLongtail_Hash, PathEntry*>::CalcSize(65536);
-        m_PathHashToContentMem = malloc(hash_size);
-        m_PathHashToContent.Create(65536, m_PathHashToContentMem);
-    }
-
-    ~InMemStorageAPI()
-    {
-        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator it = m_PathHashToContent.Begin();
-        while (it != m_PathHashToContent.End())
-        {
-            PathEntry* path_entry = *it.GetValue();
-            free(path_entry->m_FileName);
-            path_entry->m_FileName = 0;
-            Free_TContent(path_entry->m_Content);
-            path_entry->m_Content = 0;
-            free(path_entry);
-            ++it;
-        }
-        free(m_PathHashToContentMem);
-        m_PathHashToContentMem = 0;
-    }
-
-    static uint64_t GetPathHash(HashAPI* hash_api, const char* path)
-    {
-        HashAPI_HContext context = hash_api->BeginContext(hash_api);
-        hash_api->Hash(hash_api, context, (uint32_t)strlen(path), (void*)path);
-        return hash_api->EndContext(hash_api, context);
-    }
-
-    static StorageAPI_HOpenFile OpenReadFile(StorageAPI* storage_api, const char* path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
-        PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
-        if (it)
-        {
-            return (StorageAPI_HOpenFile)*it;
-        }
-        return 0;
-    }
-    static uint64_t GetSize(StorageAPI* storage_api, StorageAPI_HOpenFile f)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        PathEntry* path_entry = (PathEntry*)f;
-        return GetSize_TContent(path_entry->m_Content);
-    }
-    static int Read(StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        PathEntry* path_entry = (PathEntry*)f;
-        if ((offset + length) > GetSize_TContent(path_entry->m_Content))
-        {
-            return 0;
-        }
-        memcpy(output, &path_entry->m_Content[offset], length);
-        return 1;
-    }
-    static void CloseRead(StorageAPI* , StorageAPI_HOpenFile)
-    {
-    }
-
-    static TLongtail_Hash GetParentPathHash(InMemStorageAPI* instance, const char* path)
-    {
-        const char* dir_path_begin = strrchr(path, '/');
-        if (!dir_path_begin)
-        {
-            return 0;
-        }
-        size_t dir_length = (uintptr_t)dir_path_begin - (uintptr_t)path;
-        char* dir_path = (char*)malloc(dir_length + 1);
-        strncpy(dir_path, path, dir_length);
-        dir_path[dir_length] = '\0';
-        TLongtail_Hash hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, dir_path);
-        free(dir_path);
-        return hash;
-    }
-
-    static const char* GetFileName(const char* path)
-    {
-        const char* file_name = strrchr(path, '/');
-        if (file_name == 0)
-        {
-            return path;
-        }
-        return &file_name[1];
-    }
-
-    static StorageAPI_HOpenFile OpenWriteFile(StorageAPI* storage_api, const char* path, uint64_t initial_size)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash parent_path_hash = GetParentPathHash(instance, path);
-        if (parent_path_hash != 0 && !instance->m_PathHashToContent.Get(parent_path_hash))
-        {
-            TEST_LOG("InMemStorageAPI_OpenWriteFile `%s` failed - parent folder does not exist\n", path)
-            return 0;
-        }
-        TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
-        PathEntry* path_entry = 0;
-        PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
-        if (it)
-        {
-            path_entry = *it;
-        }
-        else
-        {
-            path_entry = (PathEntry*)malloc(sizeof(PathEntry));
-            path_entry->m_ParentHash = parent_path_hash;
-            path_entry->m_FileName = strdup(GetFileName(path));
-            path_entry->m_Content = SetCapacity_TContent((TContent*)0, 16u);
-            instance->m_PathHashToContent.Put(path_hash, path_entry);
-        }
-        path_entry->m_Content = SetCapacity_TContent(path_entry->m_Content, (uint32_t)initial_size);
-        SetSize_TContent(path_entry->m_Content, (uint32_t)initial_size);
-        return (StorageAPI_HOpenFile)path_hash;
-    }
-    static int Write(StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash path_hash = (TLongtail_Hash)f;
-        PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
-        if (!it)
-        {
-            return 0;
-        }
-        TContent* content = (*it)->m_Content;
-        size_t size = GetSize_TContent(content);
-        if (offset > size)
-        {
-            return 0;
-        }
-        if (offset + length > size)
-        {
-            size = offset + length;
-        }
-        content = SetCapacity_TContent(content, (uint32_t)size);
-        SetSize_TContent(content, (uint32_t)size);
-        memcpy(&(content)[offset], input, length);
-        (*it)->m_Content = content;
-        return 1;
-    }
-
-    static int SetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash path_hash = (TLongtail_Hash)f;
-        PathEntry** it = instance->m_PathHashToContent.Get(path_hash);
-        if (!it)
-        {
-            return 0;
-        }
-        TContent* content = (*it)->m_Content;
-        if (GetSize_TContent(content) > (uint32_t)length)
-        {
-            SetSize_TContent(content, (int32_t)length);
-        }
-        content = SetCapacity_TContent(content, (uint32_t)length);
-        SetSize_TContent(content, (uint32_t)length);
-        (*it)->m_Content = content;
-        return 1;
-    }
-
-    static void CloseWrite(StorageAPI* , StorageAPI_HOpenFile)
-    {
-    }
-
-    static int CreateDir(StorageAPI* storage_api, const char* path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash parent_path_hash = GetParentPathHash(instance, path);
-        if (parent_path_hash && !instance->m_PathHashToContent.Get(parent_path_hash))
-        {
-            TEST_LOG("InMemStorageAPI_CreateDir `%s` failed - parent folder does not exist\n", path)
-            return 0;
-        }
-        TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
-        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(path_hash);
-        if (source_path_ptr)
-        {
-            if ((*source_path_ptr)->m_Content == 0)
-            {
-                return 1;
-            }
-            TEST_LOG("InMemStorageAPI_CreateDir `%s` failed - path exists and is not a directory\n", path)
-            return 0;
-        }
-
-        PathEntry* path_entry = (PathEntry*)malloc(sizeof(PathEntry));
-        path_entry->m_Content = 0;
-        path_entry->m_ParentHash = parent_path_hash;
-        path_entry->m_FileName = strdup(GetFileName(path));
-        instance->m_PathHashToContent.Put(path_hash, path_entry);
-        return 1;
-    }
-
-    static int RenameFile(StorageAPI* storage_api, const char* source_path, const char* target_path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash source_path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, source_path);
-        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(source_path_hash);
-        if (!source_path_ptr)
-        {
-            TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - source path does not exist\n", source_path, target_path)
-            return 0;
-        }
-        TLongtail_Hash target_path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, target_path);
-        PathEntry** target_path_ptr = instance->m_PathHashToContent.Get(target_path_hash);
-        if (target_path_ptr)
-        {
-            TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - target path does not exist\n", source_path, target_path)
-            return 0;
-        }
-        (*source_path_ptr)->m_ParentHash = GetParentPathHash(instance, target_path);
-        free((*source_path_ptr)->m_FileName);
-        (*source_path_ptr)->m_FileName = strdup(GetFileName(target_path));
-        instance->m_PathHashToContent.Put(target_path_hash, *source_path_ptr);
-        instance->m_PathHashToContent.Erase(source_path_hash);
-        return 1;
-    }
-    static char* ConcatPath(StorageAPI* , const char* root_path, const char* sub_path)
-    {
-        if (root_path[0] == 0)
-        {
-            return strdup(sub_path);
-        }
-        size_t path_len = strlen(root_path) + 1 + strlen(sub_path) + 1;
-        char* path = (char*)malloc(path_len);
-        strcpy(path, root_path);
-        strcat(path, "/");
-        strcat(path, sub_path);
-        return path;
-    }
-
-    static int IsDir(StorageAPI* storage_api, const char* path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash source_path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
-        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(source_path_hash);
-        if (!source_path_ptr)
-        {
-            return 0;
-        }
-        return (*source_path_ptr)->m_Content == 0;
-    }
-    static int IsFile(StorageAPI* storage_api, const char* path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash source_path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
-        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(source_path_hash);
-        if (!source_path_ptr)
-        {
-            return 0;
-        }
-        return (*source_path_ptr)->m_Content != 0;
-    }
-
-    static int RemoveDir(struct StorageAPI* storage_api, const char* path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
-        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(path_hash);
-        if (!source_path_ptr)
-        {
-            return 0;
-        }
-        PathEntry* path_entry = *source_path_ptr;
-        if (path_entry->m_Content)
-        {
-            // Not a directory
-            return 0;
-        }
-        free(path_entry->m_FileName);
-        path_entry->m_FileName = 0;
-        Free_TContent(path_entry->m_Content);
-        path_entry->m_Content = 0;
-        free(path_entry);
-        instance->m_PathHashToContent.Erase(path_hash);
-        return 1;
-    }
-
-    static int RemoveFile(struct StorageAPI* storage_api, const char* path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash path_hash = GetPathHash(&instance->m_HashAPI.m_HashAPI, path);
-        PathEntry** source_path_ptr = instance->m_PathHashToContent.Get(path_hash);
-        if (!source_path_ptr)
-        {
-            return 0;
-        }
-        PathEntry* path_entry = *source_path_ptr;
-        if (!path_entry->m_Content)
-        {
-            // Not a file
-            return 0;
-        }
-        free(path_entry->m_FileName);
-        path_entry->m_FileName = 0;
-        Free_TContent(path_entry->m_Content);
-        path_entry->m_Content = 0;
-        free(path_entry);
-        instance->m_PathHashToContent.Erase(path_hash);
-        return 1;
-    }
-
-    static StorageAPI_HIterator StartFind(StorageAPI* storage_api, const char* path)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash path_hash = path[0] ? GetPathHash(&instance->m_HashAPI.m_HashAPI, path) : 0;
-        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)malloc(sizeof(jc::HashTable<TLongtail_Hash, uint64_t>::Iterator));
-        (*it_ptr) = instance->m_PathHashToContent.Begin();
-        while ((*it_ptr) != instance->m_PathHashToContent.End())
-        {
-            PathEntry* path_entry = *(*it_ptr).GetValue();
-            if (path_entry->m_ParentHash == path_hash)
-            {
-                return (StorageAPI_HIterator)it_ptr;
-            }
-            ++(*it_ptr);
-        }
-        free(it_ptr);
-        return (StorageAPI_HIterator)0;
-    }
-    static int FindNext(StorageAPI* storage_api, StorageAPI_HIterator iterator)
-    {
-        InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
-        TLongtail_Hash path_hash = (*(*it_ptr).GetValue())->m_ParentHash;
-        ++(*it_ptr);
-        while ((*it_ptr) != instance->m_PathHashToContent.End())
-        {
-            PathEntry* path_entry = *(*it_ptr).GetValue();
-            if (path_entry->m_ParentHash == path_hash)
-            {
-                return 1;
-            }
-            ++(*it_ptr);
-        }
-        return 0;
-    }
-    static void CloseFind(StorageAPI* storage_api, StorageAPI_HIterator iterator)
-    {
-        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
-        free(it_ptr);
-    }
-    static const char* GetFileName(StorageAPI* , StorageAPI_HIterator iterator)
-    {
-        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
-        PathEntry* path_entry = *(*it_ptr).GetValue();
-        if (path_entry == 0)
-        {
-            return 0;
-        }
-        if (path_entry->m_Content == 0)
-        {
-            return 0;
-        }
-        return path_entry->m_FileName;
-    }
-    static const char* GetDirectoryName(StorageAPI* , StorageAPI_HIterator iterator)
-    {
-        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
-        PathEntry* path_entry = *(*it_ptr).GetValue();
-        if (path_entry == 0)
-        {
-            return 0;
-        }
-        if (path_entry->m_Content != 0)
-        {
-            return 0;
-        }
-        return path_entry->m_FileName;
-    }
-
-    static uint64_t GetEntrySize(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
-    {
-        jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator* it_ptr = (jc::HashTable<TLongtail_Hash, PathEntry*>::Iterator*)iterator;
-        PathEntry* path_entry = *(*it_ptr).GetValue();
-        if (path_entry == 0)
-        {
-            return 0;
-        }
-        if (path_entry->m_Content == 0)
-        {
-            return 0;
-        }
-        return GetSize_TContent(path_entry->m_Content);
-    }
-};
-
-
 
 int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 {
@@ -631,22 +51,6 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 
 
 
-
-static TLongtail_Hash GetContentTag(const char* , const char* path)
-{
-    const char * extension = strrchr(path, '.');
-    if (extension)
-    {
-        MeowHashAPI hash;
-        return InMemStorageAPI::GetPathHash(&hash.m_HashAPI, path);
-    }
-    return (TLongtail_Hash)-1;
-}
-
-TLongtail_Hash GetContentTagFake(const char* , const char* path)
-{
-    return 0u;
-}
 
 int MakePath(StorageAPI* storage_api, const char* path)
 {
@@ -774,12 +178,11 @@ TEST(Longtail, ContentIndex)
     const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
     const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
     const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
-    MeowHashAPI hash_api;
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* content_index = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         asset_count,
         asset_content_hashes,
         asset_sizes,
@@ -809,9 +212,6 @@ TEST(Longtail, ContentIndex)
     LONGTAIL_FREE(content_index);
 }
 
-const uint32_t NO_COMPRESSION_TYPE = 0;
-const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'r') << 8) + ((uint32_t)'d');
-
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
@@ -823,39 +223,20 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
     return result;
 }
 
-struct CompressionRegistry* GetCompressionRegistry()
-{
-    static LizardCompressionAPI lizard;
-    static const CompressionAPI* compression_apis[] = {
-        &lizard.m_CompressionAPI};
-    static const uint32_t compression_types[] = {
-        LIZARD_DEFAULT_COMPRESSION_TYPE};
-    static const CompressionAPI_HSettings compression_settings[] = {
-        lizard.m_CompressionAPI.GetDefaultSettings(&lizard.m_CompressionAPI)};
-    struct CompressionRegistry* compression_registry = CreateCompressionRegistry(
-        1,
-        &compression_types[0],
-        &compression_apis[0],
-        &compression_settings[0]);
-    return compression_registry;
-}
-
 TEST(Longtail, ContentIndexSerialization)
 {
-    InMemStorageAPI local_storage;
-    MeowHashAPI hash_api;
+    StorageAPI* local_storage = CreateInMemStorageAPI();
 
-    BikeshedJobAPI job_api(0);
-    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/two_items", 2));
-    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "source/version1/five_items", 5));
-    FileInfos* version1_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "source/version1");
+    ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/two_items", 2));
+    ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/five_items", 5));
+    FileInfos* version1_paths = GetFilesRecursively(local_storage, "source/version1");
     ASSERT_NE((FileInfos*)0, version1_paths);
-    uint32_t* compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, version1_paths);
+    uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
     VersionIndex* vindex = CreateVersionIndex(
-        &local_storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        local_storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "source/version1",
@@ -870,7 +251,7 @@ TEST(Longtail, ContentIndexSerialization)
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* cindex = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
@@ -882,9 +263,9 @@ TEST(Longtail, ContentIndexSerialization)
     LONGTAIL_FREE(vindex);
     vindex = 0;
 
-    ASSERT_NE(0, WriteContentIndex(&local_storage.m_StorageAPI, cindex, "cindex.lci"));
+    ASSERT_NE(0, WriteContentIndex(local_storage, cindex, "cindex.lci"));
 
-    ContentIndex* cindex2 = ReadContentIndex(&local_storage.m_StorageAPI, "cindex.lci");
+    ContentIndex* cindex2 = ReadContentIndex(local_storage, "cindex.lci");
     ASSERT_NE((ContentIndex*)0, cindex2);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
@@ -905,14 +286,14 @@ TEST(Longtail, ContentIndexSerialization)
 
     LONGTAIL_FREE(cindex2);
     cindex2 = 0;
+
+    DestroyInMemStorageAPI(local_storage);
 }
 
 TEST(Longtail, WriteContent)
 {
-    InMemStorageAPI source_storage;
-    InMemStorageAPI target_storage;
-    MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(0);
+    StorageAPI* source_storage = CreateInMemStorageAPI();
+    StorageAPI* target_storage = CreateInMemStorageAPI();
     CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     const char* TEST_FILENAMES[5] = {
@@ -933,22 +314,22 @@ TEST(Longtail, WriteContent)
 
     for (uint32_t i = 0; i < 5; ++i)
     {
-        ASSERT_NE(0, CreateParentPath(&source_storage.m_StorageAPI, TEST_FILENAMES[i]));
-        StorageAPI_HOpenFile w = source_storage.m_StorageAPI.OpenWriteFile(&source_storage.m_StorageAPI, TEST_FILENAMES[i], 0);
+        ASSERT_NE(0, CreateParentPath(source_storage, TEST_FILENAMES[i]));
+        StorageAPI_HOpenFile w = source_storage->OpenWriteFile(source_storage, TEST_FILENAMES[i], 0);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
-        ASSERT_NE(0, source_storage.m_StorageAPI.Write(&source_storage.m_StorageAPI, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
-        source_storage.m_StorageAPI.CloseWrite(&source_storage.m_StorageAPI, w);
+        ASSERT_NE(0, source_storage->Write(source_storage, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        source_storage->CloseWrite(source_storage, w);
         w = 0;
     }
 
-    FileInfos* version1_paths = GetFilesRecursively(&source_storage.m_StorageAPI, "local");
+    FileInfos* version1_paths = GetFilesRecursively(source_storage, "local");
     ASSERT_NE((FileInfos*)0, version1_paths);
-    uint32_t* compression_types = GetCompressionTypes(&source_storage.m_StorageAPI, version1_paths);
+    uint32_t* compression_types = GetCompressionTypes(source_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
     VersionIndex* vindex = CreateVersionIndex(
-        &source_storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        source_storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "local",
@@ -965,7 +346,7 @@ TEST(Longtail, WriteContent)
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
     ContentIndex* cindex = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
@@ -975,10 +356,10 @@ TEST(Longtail, WriteContent)
     ASSERT_NE((ContentIndex*)0, cindex);
 
     ASSERT_NE(0, WriteContent(
-        &source_storage.m_StorageAPI,
-        &target_storage.m_StorageAPI,
+        source_storage,
+        target_storage,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         cindex,
@@ -987,9 +368,9 @@ TEST(Longtail, WriteContent)
         "chunks"));
 
     ContentIndex* cindex2 = ReadContent(
-        &target_storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        target_storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "chunks");
@@ -1026,21 +407,21 @@ TEST(Longtail, WriteContent)
 
     LONGTAIL_FREE(compression_registry);
     compression_registry = 0;
+
+    DestroyInMemStorageAPI(target_storage);
+    DestroyInMemStorageAPI(source_storage);
 }
 
 #if 0
 TEST(Longtail, TestVeryLargeFile)
 {
     const char* assets_path = "C:\\Temp\\longtail\\local\\WinClient\\CL6332_WindowsClient\\WindowsClient\\PioneerGame\\Content\\Paks";
-    TroveStorageAPI storage_api;
-    MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(0);
 
-    FileInfos* paths = GetFilesRecursively(&storage_api.m_StorageAPI, assets_path);
+    FileInfos* paths = GetFilesRecursively(storage_api, assets_path);
     VersionIndex* version_index = CreateVersionIndex(
-        &storage_api.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        storage_api,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         assets_path,
@@ -1083,12 +464,10 @@ TEST(Longtail, CreateMissingContent)
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
     const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
 
-    MeowHashAPI hash_api;
-
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* content_index = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         asset_count - 4,
         asset_content_hashes,
         chunk_sizes,
@@ -1126,7 +505,7 @@ TEST(Longtail, CreateMissingContent)
     LONGTAIL_FREE(paths);
 
     ContentIndex* missing_content_index = CreateMissingContent(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         content_index,
         version_index,
         MAX_BLOCK_SIZE,
@@ -1167,23 +546,21 @@ TEST(Longtail, GetMissingAssets)
 
 TEST(Longtail, VersionIndexDirectories)
 {
-    InMemStorageAPI local_storage;
-    MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(0);
-    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "two_items", 2));
-    local_storage.m_StorageAPI.CreateDir(&local_storage.m_StorageAPI, "no_items");
-    ASSERT_EQ(1, CreateFakeContent(&local_storage.m_StorageAPI, "deep/file/down/under/three_items", 3));
-    ASSERT_EQ(1, MakePath(&local_storage.m_StorageAPI, "deep/folders/with/nothing/in/menoexists.nop"));
+    StorageAPI* local_storage = CreateInMemStorageAPI();
+    ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 2));
+    local_storage->CreateDir(local_storage, "no_items");
+    ASSERT_EQ(1, CreateFakeContent(local_storage, "deep/file/down/under/three_items", 3));
+    ASSERT_EQ(1, MakePath(local_storage, "deep/folders/with/nothing/in/menoexists.nop"));
 
-    FileInfos* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
+    FileInfos* local_paths = GetFilesRecursively(local_storage, "");
     ASSERT_NE((FileInfos*)0, local_paths);
-    uint32_t* compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, local_paths);
+    uint32_t* compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
 
     VersionIndex* local_version_index = CreateVersionIndex(
-        &local_storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        local_storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "",
@@ -1197,13 +574,14 @@ TEST(Longtail, VersionIndexDirectories)
     LONGTAIL_FREE(compression_types);
     LONGTAIL_FREE(local_version_index);
     LONGTAIL_FREE(local_paths);
+
+    DestroyInMemStorageAPI(local_storage);
 }
 
 TEST(Longtail, MergeContentIndex)
 {
-    MeowHashAPI hash_api;
     ContentIndex* cindex1 = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         0,
         0,
         0,
@@ -1212,7 +590,7 @@ TEST(Longtail, MergeContentIndex)
         8);
     ASSERT_NE((ContentIndex*)0, cindex1);
     ContentIndex* cindex2 = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         0,
         0,
         0,
@@ -1227,7 +605,7 @@ TEST(Longtail, MergeContentIndex)
     uint32_t chunk_sizes_4[] = {10, 20, 10};
     uint32_t chunk_compression_types_4[] = {0, 0, 0};
     ContentIndex* cindex4 = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         3,
         chunk_hashes_4,
         chunk_sizes_4,
@@ -1241,7 +619,7 @@ TEST(Longtail, MergeContentIndex)
     uint32_t chunk_compression_types_5[] = {0, 0, 0};
 
     ContentIndex* cindex5 = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         3,
         chunk_hashes_5,
         chunk_sizes_5,
@@ -1271,9 +649,7 @@ TEST(Longtail, MergeContentIndex)
 
 TEST(Longtail, VersionDiff)
 {
-    InMemStorageAPI storage;
-    MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(0);
+    StorageAPI* storage = CreateInMemStorageAPI();
     CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     const uint32_t OLD_ASSET_COUNT = 9;
@@ -1422,42 +798,42 @@ TEST(Longtail, VersionDiff)
 
     for (uint32_t i = 0; i < OLD_ASSET_COUNT; ++i)
     {
-        char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "old", OLD_TEST_FILENAMES[i]);
-        ASSERT_NE(0, CreateParentPath(&storage.m_StorageAPI, file_name));
-        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name, 0);
+        char* file_name = storage->ConcatPath(storage, "old", OLD_TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(storage, file_name));
+        StorageAPI_HOpenFile w = storage->OpenWriteFile(storage, file_name, 0);
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (OLD_TEST_SIZES[i])
         {
-            ASSERT_NE(0, storage.m_StorageAPI.Write(&storage.m_StorageAPI, w, 0, OLD_TEST_SIZES[i], OLD_TEST_STRINGS[i]));
+            ASSERT_NE(0, storage->Write(storage, w, 0, OLD_TEST_SIZES[i], OLD_TEST_STRINGS[i]));
         }
-        storage.m_StorageAPI.CloseWrite(&storage.m_StorageAPI, w);
+        storage->CloseWrite(storage, w);
         w = 0;
     }
 
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
     {
-        char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "new", NEW_TEST_FILENAMES[i]);
-        ASSERT_NE(0, CreateParentPath(&storage.m_StorageAPI, file_name));
-        StorageAPI_HOpenFile w = storage.m_StorageAPI.OpenWriteFile(&storage.m_StorageAPI, file_name, 0);
+        char* file_name = storage->ConcatPath(storage, "new", NEW_TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(storage, file_name));
+        StorageAPI_HOpenFile w = storage->OpenWriteFile(storage, file_name, 0);
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (NEW_TEST_SIZES[i])
         {
-            ASSERT_NE(0, storage.m_StorageAPI.Write(&storage.m_StorageAPI, w, 0, NEW_TEST_SIZES[i], NEW_TEST_STRINGS[i]));
+            ASSERT_NE(0, storage->Write(storage, w, 0, NEW_TEST_SIZES[i], NEW_TEST_STRINGS[i]));
         }
-        storage.m_StorageAPI.CloseWrite(&storage.m_StorageAPI, w);
+        storage->CloseWrite(storage, w);
         w = 0;
     }
 
-    FileInfos* old_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "old");
+    FileInfos* old_version_paths = GetFilesRecursively(storage, "old");
     ASSERT_NE((FileInfos*)0, old_version_paths);
-    uint32_t* old_compression_types = GetCompressionTypes(&storage.m_StorageAPI, old_version_paths);
+    uint32_t* old_compression_types = GetCompressionTypes(storage, old_version_paths);
     ASSERT_NE((uint32_t*)0, old_compression_types);
     VersionIndex* old_vindex = CreateVersionIndex(
-        &storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "old",
@@ -1471,14 +847,14 @@ TEST(Longtail, VersionDiff)
     LONGTAIL_FREE(old_version_paths);
     old_version_paths = 0;
 
-    FileInfos* new_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "new");
+    FileInfos* new_version_paths = GetFilesRecursively(storage, "new");
     ASSERT_NE((FileInfos*)0, new_version_paths);
-    uint32_t* new_compression_types = GetCompressionTypes(&storage.m_StorageAPI, new_version_paths);
+    uint32_t* new_compression_types = GetCompressionTypes(storage, new_version_paths);
     ASSERT_NE((uint32_t*)0, new_compression_types);
     VersionIndex* new_vindex = CreateVersionIndex(
-        &storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "new",
@@ -1496,7 +872,7 @@ TEST(Longtail, VersionDiff)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
 
     ContentIndex* content_index = CreateContentIndex(
-            &hash_api.m_HashAPI,
+            GetMeowHashAPI(),
             *new_vindex->m_ChunkCount,
             new_vindex->m_ChunkHashes,
             new_vindex->m_ChunkSizes,
@@ -1505,10 +881,10 @@ TEST(Longtail, VersionDiff)
             MAX_CHUNKS_PER_BLOCK);
 
     ASSERT_EQ(1, WriteContent(
-        &storage.m_StorageAPI,
-        &storage.m_StorageAPI,
+        storage,
+        storage,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         content_index,
@@ -1526,10 +902,10 @@ TEST(Longtail, VersionDiff)
     ASSERT_EQ(6, *version_diff->m_ModifiedCount);
 
     ASSERT_NE(0, ChangeVersion(
-        &storage.m_StorageAPI,
-        &storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        storage,
+        storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         compression_registry,
@@ -1548,7 +924,7 @@ TEST(Longtail, VersionDiff)
     LONGTAIL_FREE(old_vindex);
 
     // Verify that our old folder now matches the new folder data
-    FileInfos* updated_version_paths = GetFilesRecursively(&storage.m_StorageAPI, "old");
+    FileInfos* updated_version_paths = GetFilesRecursively(storage, "old");
     ASSERT_NE((FileInfos*)0, updated_version_paths);
     const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
@@ -1556,49 +932,48 @@ TEST(Longtail, VersionDiff)
 
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
     {
-        char* file_name = storage.m_StorageAPI.ConcatPath(&storage.m_StorageAPI, "old", NEW_TEST_FILENAMES[i]);
-        StorageAPI_HOpenFile r = storage.m_StorageAPI.OpenReadFile(&storage.m_StorageAPI, file_name);
+        char* file_name = storage->ConcatPath(storage, "old", NEW_TEST_FILENAMES[i]);
+        StorageAPI_HOpenFile r = storage->OpenReadFile(storage, file_name);
         free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
-        uint64_t size = storage.m_StorageAPI.GetSize(&storage.m_StorageAPI, r);
+        uint64_t size = storage->GetSize(storage, r);
         ASSERT_EQ(NEW_TEST_SIZES[i], size);
         char* test_data = (char*)LONGTAIL_MALLOC(sizeof(char) * size);
         if (size)
         {
-            ASSERT_NE(0, storage.m_StorageAPI.Read(&storage.m_StorageAPI, r, 0, size, test_data));
+            ASSERT_NE(0, storage->Read(storage, r, 0, size, test_data));
             ASSERT_STREQ(NEW_TEST_STRINGS[i], test_data);
         }
-        storage.m_StorageAPI.CloseWrite(&storage.m_StorageAPI, r);
+        storage->CloseWrite(storage, r);
         r = 0;
         LONGTAIL_FREE(test_data);
         test_data = 0;
     }
     LONGTAIL_FREE(compression_registry);
     compression_registry = 0;
+    DestroyInMemStorageAPI(storage);
 }
 
 TEST(Longtail, FullScale)
 {
     return;
-    InMemStorageAPI local_storage;
-    MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(0);
+    StorageAPI* local_storage = CreateInMemStorageAPI();
     CompressionRegistry* compression_registry = GetCompressionRegistry();
 
-    CreateFakeContent(&local_storage.m_StorageAPI, 0, 5);
+    CreateFakeContent(local_storage, 0, 5);
 
-    InMemStorageAPI remote_storage;
-    CreateFakeContent(&remote_storage.m_StorageAPI, 0, 10);
+    StorageAPI* remote_storage = CreateInMemStorageAPI();
+    CreateFakeContent(remote_storage, 0, 10);
 
-    FileInfos* local_paths = GetFilesRecursively(&local_storage.m_StorageAPI, "");
+    FileInfos* local_paths = GetFilesRecursively(local_storage, "");
     ASSERT_NE((FileInfos*)0, local_paths);
-    uint32_t* local_compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, local_paths);
+    uint32_t* local_compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
 
     VersionIndex* local_version_index = CreateVersionIndex(
-        &local_storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        local_storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "",
@@ -1611,14 +986,14 @@ TEST(Longtail, FullScale)
     LONGTAIL_FREE(local_compression_types);
     local_compression_types = 0;
 
-    FileInfos* remote_paths = GetFilesRecursively(&remote_storage.m_StorageAPI, "");
+    FileInfos* remote_paths = GetFilesRecursively(remote_storage, "");
     ASSERT_NE((FileInfos*)0, local_paths);
-    uint32_t* remote_compression_types = GetCompressionTypes(&local_storage.m_StorageAPI, remote_paths);
+    uint32_t* remote_compression_types = GetCompressionTypes(local_storage, remote_paths);
     ASSERT_NE((uint32_t*)0, remote_compression_types);
     VersionIndex* remote_version_index = CreateVersionIndex(
-        &remote_storage.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        remote_storage,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "",
@@ -1635,7 +1010,7 @@ TEST(Longtail, FullScale)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
 
     ContentIndex* local_content_index = CreateContentIndex(
-            &hash_api.m_HashAPI,
+            GetMeowHashAPI(),
             * local_version_index->m_ChunkCount,
             local_version_index->m_ChunkHashes,
             local_version_index->m_ChunkSizes,
@@ -1644,10 +1019,10 @@ TEST(Longtail, FullScale)
             MAX_CHUNKS_PER_BLOCK);
 
     ASSERT_EQ(1, WriteContent(
-        &local_storage.m_StorageAPI,
-        &local_storage.m_StorageAPI,
+        local_storage,
+        local_storage,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         local_content_index,
@@ -1656,7 +1031,7 @@ TEST(Longtail, FullScale)
         ""));
 
     ContentIndex* remote_content_index = CreateContentIndex(
-            &hash_api.m_HashAPI,
+            GetMeowHashAPI(),
             * remote_version_index->m_ChunkCount,
             remote_version_index->m_ChunkHashes,
             remote_version_index->m_ChunkSizes,
@@ -1665,10 +1040,10 @@ TEST(Longtail, FullScale)
             MAX_CHUNKS_PER_BLOCK);
 
     ASSERT_EQ(1, WriteContent(
-        &remote_storage.m_StorageAPI,
-        &remote_storage.m_StorageAPI,
+        remote_storage,
+        remote_storage,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         remote_content_index,
@@ -1677,7 +1052,7 @@ TEST(Longtail, FullScale)
         ""));
 
     ContentIndex* missing_content = CreateMissingContent(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         local_content_index,
         remote_version_index,
         MAX_BLOCK_SIZE,
@@ -1685,10 +1060,10 @@ TEST(Longtail, FullScale)
     ASSERT_NE((ContentIndex*)0, missing_content);
  
     ASSERT_EQ(1, WriteContent(
-        &remote_storage.m_StorageAPI,
-        &local_storage.m_StorageAPI,
+        remote_storage,
+        local_storage,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         missing_content,
@@ -1698,10 +1073,10 @@ TEST(Longtail, FullScale)
 
     ContentIndex* merged_content_index = MergeContentIndex(local_content_index, missing_content);
     ASSERT_EQ(1, WriteVersion(
-        &local_storage.m_StorageAPI,
-        &local_storage.m_StorageAPI,
+        local_storage,
+        local_storage,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         merged_content_index,
@@ -1713,13 +1088,13 @@ TEST(Longtail, FullScale)
     {
         char path[20];
         sprintf(path, "%u", i);
-        StorageAPI_HOpenFile r = local_storage.m_StorageAPI.OpenReadFile(&local_storage.m_StorageAPI, path);
+        StorageAPI_HOpenFile r = local_storage->OpenReadFile(local_storage, path);
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
-        uint64_t size = local_storage.m_StorageAPI.GetSize(&local_storage.m_StorageAPI, r);
+        uint64_t size = local_storage->GetSize(local_storage, r);
         uint64_t expected_size = 64000 + 1 + i;
         ASSERT_EQ(expected_size, size);
         char* buffer = (char*)LONGTAIL_MALLOC(expected_size);
-        local_storage.m_StorageAPI.Read(&local_storage.m_StorageAPI, r, 0, expected_size, buffer);
+        local_storage->Read(local_storage, r, 0, expected_size, buffer);
 
         for (uint64_t j = 0; j < expected_size; j++)
         {
@@ -1727,7 +1102,7 @@ TEST(Longtail, FullScale)
         }
 
         LONGTAIL_FREE(buffer);
-        local_storage.m_StorageAPI.CloseRead(&local_storage.m_StorageAPI, r);
+        local_storage->CloseRead(local_storage, r);
     }
 
     LONGTAIL_FREE(missing_content);
@@ -1738,14 +1113,13 @@ TEST(Longtail, FullScale)
     LONGTAIL_FREE(local_version_index);
     LONGTAIL_FREE(compression_registry);
     compression_registry = 0;
+    DestroyInMemStorageAPI(local_storage);
 }
 
 
 TEST(Longtail, WriteVersion)
 {
-    InMemStorageAPI source_storage;
-    StorageAPI* storage_api = &source_storage.m_StorageAPI;
-    BikeshedJobAPI job_api(0);
+    StorageAPI* storage_api = CreateInMemStorageAPI();
     CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     const uint32_t asset_count = 8;
@@ -1842,15 +1216,14 @@ TEST(Longtail, WriteVersion)
         w = 0;
     }
 
-    MeowHashAPI hash_api;
     FileInfos* version1_paths = GetFilesRecursively(storage_api, "local");
     ASSERT_NE((FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
     VersionIndex* vindex = CreateVersionIndex(
         storage_api,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         "local",
@@ -1867,7 +1240,7 @@ TEST(Longtail, WriteVersion)
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
     ContentIndex* cindex = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
@@ -1880,7 +1253,7 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         cindex,
@@ -1892,7 +1265,7 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         cindex,
@@ -1926,6 +1299,7 @@ TEST(Longtail, WriteVersion)
     cindex = 0;
     LONGTAIL_FREE(compression_registry);
     compression_registry = 0;
+    DestroyInMemStorageAPI(storage_api);
 }
 
 void Bench()
@@ -1966,15 +1340,13 @@ void Bench()
 
     const char* TARGET_VERSION_PREFIX = HOME "\\remote\\";
 
-    TroveStorageAPI storage_api;
-    MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(0);
+    struct StorageAPI* storage_api = GetFSStorageAPI();
     CompressionRegistry* compression_registry = GetCompressionRegistry();
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* full_content_index = CreateContentIndex(
-            &hash_api.m_HashAPI,
+            GetMeowHashAPI(),
             0,
             0,
             0,
@@ -1989,14 +1361,14 @@ void Bench()
         char version_source_folder[256];
         sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
         printf("Indexing `%s`\n", version_source_folder);
-        FileInfos* version_source_paths = GetFilesRecursively(&storage_api.m_StorageAPI, version_source_folder);
+        FileInfos* version_source_paths = GetFilesRecursively(storage_api, version_source_folder);
         ASSERT_NE((FileInfos*)0, version_source_paths);
-        uint32_t* version_compression_types = GetCompressionTypes(&storage_api.m_StorageAPI, version_source_paths);
+        uint32_t* version_compression_types = GetCompressionTypes(storage_api, version_source_paths);
         ASSERT_NE((uint32_t*)0, version_compression_types);
         VersionIndex* version_index = CreateVersionIndex(
-            &storage_api.m_StorageAPI,
-            &hash_api.m_HashAPI,
-            &job_api.m_JobAPI,
+            storage_api,
+            GetMeowHashAPI(),
+            GetBikeshedJobAPI(0),
             0,
             0,
             version_source_folder,
@@ -2013,11 +1385,11 @@ void Bench()
 
         char version_index_file[256];
         sprintf(version_index_file, "%s%s%s", SOURCE_VERSION_PREFIX, VERSION[i], VERSION_INDEX_SUFFIX);
-        ASSERT_NE(0, WriteVersionIndex(&storage_api.m_StorageAPI, version_index, version_index_file));
+        ASSERT_NE(0, WriteVersionIndex(storage_api, version_index, version_index_file));
         printf("Wrote version index to `%s`\n", version_index_file);
 
         ContentIndex* missing_content_index = CreateMissingContent(
-            &hash_api.m_HashAPI,
+            GetMeowHashAPI(),
             full_content_index,
             version_index,
             MAX_BLOCK_SIZE,
@@ -2028,10 +1400,10 @@ void Bench()
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
         ASSERT_NE(0, WriteContent(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
+            storage_api,
+            storage_api,
             compression_registry,
-            &job_api.m_JobAPI,
+            GetBikeshedJobAPI(0),
             0,
             0,
             missing_content_index,
@@ -2040,50 +1412,50 @@ void Bench()
             delta_upload_content_folder));
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
-        StorageAPI_HIterator fs_iterator = storage_api.m_StorageAPI.StartFind(&storage_api.m_StorageAPI, delta_upload_content_folder);
+        StorageAPI_HIterator fs_iterator = storage_api->StartFind(storage_api, delta_upload_content_folder);
         if (fs_iterator)
         {
             do
             {
-                const char* file_name = storage_api.m_StorageAPI.GetFileName(&storage_api.m_StorageAPI, fs_iterator);
+                const char* file_name = storage_api->GetFileName(storage_api, fs_iterator);
                 if (file_name)
                 {
-                    char* target_path = storage_api.m_StorageAPI.ConcatPath(&storage_api.m_StorageAPI, CONTENT_FOLDER, file_name);
+                    char* target_path = storage_api->ConcatPath(storage_api, CONTENT_FOLDER, file_name);
 
-                    StorageAPI_HOpenFile v = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, target_path);
+                    StorageAPI_HOpenFile v = storage_api->OpenReadFile(storage_api, target_path);
                     if (v)
                     {
-                        storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, v);
+                        storage_api->CloseRead(storage_api, v);
                         v = 0;
                         free(target_path);
                         continue;
                     }
 
-                    char* source_path = storage_api.m_StorageAPI.ConcatPath(&storage_api.m_StorageAPI, delta_upload_content_folder, file_name);
+                    char* source_path = storage_api->ConcatPath(storage_api, delta_upload_content_folder, file_name);
 
-                    StorageAPI_HOpenFile s = storage_api.m_StorageAPI.OpenReadFile(&storage_api.m_StorageAPI, source_path);
+                    StorageAPI_HOpenFile s = storage_api->OpenReadFile(storage_api, source_path);
                     ASSERT_NE((StorageAPI_HOpenFile)0, s);
 
-                    ASSERT_NE(0, MakePath(&storage_api.m_StorageAPI, target_path));
-                    StorageAPI_HOpenFile t = storage_api.m_StorageAPI.OpenWriteFile(&storage_api.m_StorageAPI, target_path, 0);
+                    ASSERT_NE(0, MakePath(storage_api, target_path));
+                    StorageAPI_HOpenFile t = storage_api->OpenWriteFile(storage_api, target_path, 0);
                     ASSERT_NE((StorageAPI_HOpenFile)0, t);
 
-                    uint64_t block_file_size = storage_api.m_StorageAPI.GetSize(&storage_api.m_StorageAPI, s);
+                    uint64_t block_file_size = storage_api->GetSize(storage_api, s);
                     void* buffer = LONGTAIL_MALLOC(block_file_size);
 
-                    ASSERT_NE(0, storage_api.m_StorageAPI.Read(&storage_api.m_StorageAPI, s, 0, block_file_size, buffer));
-                    ASSERT_NE(0, storage_api.m_StorageAPI.Write(&storage_api.m_StorageAPI, t, 0, block_file_size, buffer));
+                    ASSERT_NE(0, storage_api->Read(storage_api, s, 0, block_file_size, buffer));
+                    ASSERT_NE(0, storage_api->Write(storage_api, t, 0, block_file_size, buffer));
 
                     LONGTAIL_FREE(buffer);
                     buffer = 0,
 
-                    storage_api.m_StorageAPI.CloseRead(&storage_api.m_StorageAPI, s);
-                    storage_api.m_StorageAPI.CloseWrite(&storage_api.m_StorageAPI, t);
+                    storage_api->CloseRead(storage_api, s);
+                    storage_api->CloseWrite(storage_api, t);
 
                     free(target_path);
                     free(source_path);
                 }
-            }while(storage_api.m_StorageAPI.FindNext(&storage_api.m_StorageAPI, fs_iterator));
+            }while(storage_api->FindNext(storage_api, fs_iterator));
         }
 
         ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);
@@ -2098,10 +1470,10 @@ void Bench()
         sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
         printf("Reconstructing %u assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
         ASSERT_NE(0, WriteVersion(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
+            storage_api,
+            storage_api,
             compression_registry,
-            &job_api.m_JobAPI,
+            GetBikeshedJobAPI(0),
             0,
             0,
             full_content_index,
@@ -2122,6 +1494,7 @@ void Bench()
 
     LONGTAIL_FREE(compression_registry);
     compression_registry = 0;
+    DestroyInMemStorageAPI(storage_api);
 
     #undef HOME
 }
@@ -2158,19 +1531,17 @@ void LifelikeTest()
     const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
 
     printf("Indexing `%s`...\n", local_path_1);
-    TroveStorageAPI storage_api;
-    MeowHashAPI hash_api;
-    BikeshedJobAPI job_api(0);
+    struct StorageAPI* storage_api = GetFSStorageAPI();
     CompressionRegistry* compression_registry = GetCompressionRegistry();
 
-    FileInfos* local_path_1_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_1);
+    FileInfos* local_path_1_paths = GetFilesRecursively(storage_api, local_path_1);
     ASSERT_NE((FileInfos*)0, local_path_1_paths);
-    uint32_t* local_compression_types = GetCompressionTypes(&storage_api.m_StorageAPI, local_path_1_paths);
+    uint32_t* local_compression_types = GetCompressionTypes(storage_api, local_path_1_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
     VersionIndex* version1 = CreateVersionIndex(
-        &storage_api.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        storage_api,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         local_path_1,
@@ -2178,7 +1549,7 @@ void LifelikeTest()
         local_path_1_paths->m_FileSizes,
         local_compression_types,
         16384);
-    WriteVersionIndex(&storage_api.m_StorageAPI, version1, version_index_path_1);
+    WriteVersionIndex(storage_api, version1, version_index_path_1);
     LONGTAIL_FREE(local_compression_types);
     local_compression_types = 0;
     LONGTAIL_FREE(local_path_1_paths);
@@ -2189,7 +1560,7 @@ void LifelikeTest()
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* local_content_index = CreateContentIndex(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         *version1->m_ChunkCount,
         version1->m_ChunkHashes,
         version1->m_ChunkSizes,
@@ -2198,17 +1569,17 @@ void LifelikeTest()
         MAX_CHUNKS_PER_BLOCK);
 
     printf("Writing local content index...\n");
-    WriteContentIndex(&storage_api.m_StorageAPI, local_content_index, local_content_index_path);
+    WriteContentIndex(storage_api, local_content_index, local_content_index_path);
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
         WriteContent(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
+            storage_api,
+            storage_api,
             compression_registry,
-            &job_api.m_JobAPI,
+            GetBikeshedJobAPI(0),
             0,
             0,
             local_content_index,
@@ -2219,10 +1590,10 @@ void LifelikeTest()
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
     ASSERT_EQ(1, WriteVersion(
-        &storage_api.m_StorageAPI,
-        &storage_api.m_StorageAPI,
+        storage_api,
+        storage_api,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         local_content_index,
@@ -2232,14 +1603,14 @@ void LifelikeTest()
     printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
-    FileInfos* local_path_2_paths = GetFilesRecursively(&storage_api.m_StorageAPI, local_path_2);
+    FileInfos* local_path_2_paths = GetFilesRecursively(storage_api, local_path_2);
     ASSERT_NE((FileInfos*)0, local_path_2_paths);
-    uint32_t* local_2_compression_types = GetCompressionTypes(&storage_api.m_StorageAPI, local_path_2_paths);
+    uint32_t* local_2_compression_types = GetCompressionTypes(storage_api, local_path_2_paths);
     ASSERT_NE((uint32_t*)0, local_2_compression_types);
     VersionIndex* version2 = CreateVersionIndex(
-        &storage_api.m_StorageAPI,
-        &hash_api.m_HashAPI,
-        &job_api.m_JobAPI,
+        storage_api,
+        GetMeowHashAPI(),
+        GetBikeshedJobAPI(0),
         0,
         0,
         local_path_2,
@@ -2252,12 +1623,12 @@ void LifelikeTest()
     LONGTAIL_FREE(local_path_2_paths);
     local_path_2_paths = 0;
     ASSERT_NE((VersionIndex*)0, version2);
-    ASSERT_EQ(1, WriteVersionIndex(&storage_api.m_StorageAPI, version2, version_index_path_2));
+    ASSERT_EQ(1, WriteVersionIndex(storage_api, version2, version_index_path_2));
     printf("%u assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
     
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
     ContentIndex* missing_content = CreateMissingContent(
-        &hash_api.m_HashAPI,
+        GetMeowHashAPI(),
         local_content_index,
         version2,
         MAX_BLOCK_SIZE,
@@ -2269,10 +1640,10 @@ void LifelikeTest()
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
         ASSERT_EQ(1, WriteContent(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
+            storage_api,
+            storage_api,
             compression_registry,
-            &job_api.m_JobAPI,
+            GetBikeshedJobAPI(0),
             0,
             0,
             missing_content,
@@ -2286,10 +1657,10 @@ void LifelikeTest()
         // Write this to disk for reference to see how big the diff is...
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
         ASSERT_EQ(1, WriteContent(
-            &storage_api.m_StorageAPI,
-            &storage_api.m_StorageAPI,
+            storage_api,
+            storage_api,
             compression_registry,
-            &job_api.m_JobAPI,
+            GetBikeshedJobAPI(0),
             0,
             0,
             missing_content,
@@ -2345,10 +1716,10 @@ void LifelikeTest()
 
     printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
     ASSERT_EQ(1, WriteVersion(
-        &storage_api.m_StorageAPI,
-        &storage_api.m_StorageAPI,
+        storage_api,
+        storage_api,
         compression_registry,
-        &job_api.m_JobAPI,
+        GetBikeshedJobAPI(0),
         0,
         0,
         merged_local_content,
@@ -2374,6 +1745,8 @@ void LifelikeTest()
 
     LONGTAIL_FREE(compression_registry);
     compression_registry = 0;
+
+    DestroyInMemStorageAPI(storage_api);
 
     return;
 }
