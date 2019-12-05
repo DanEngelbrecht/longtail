@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <stdarg.h>
 
 void AssertFailure(const char* expression, const char* file, int line)
 {

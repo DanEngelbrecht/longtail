@@ -46,6 +46,7 @@ fi
 mkdir -p $BASE_DIR/build/third-party-$RELEASE_MODE
 
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
+    echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     pushd $BASE_DIR/build/third-party-$RELEASE_MODE
     rm -rf $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
     clang++ -c $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
@@ -62,5 +63,6 @@ if [ "$TARGET_MODE" = "lib" ]; then
     ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
     popd
 else
+    echo Building $OUTPUT
     clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi

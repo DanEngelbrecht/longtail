@@ -1,13 +1,48 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
+set BASE_DIR=%~dp0
+set THIRDPARTY_DIR=!BASE_DIR!third-party\
+
+:build_third_party_arg
+
 if "%1%" == "build-third-party" (
-    set BUILD_THIRD_PARTY=%1%
-    set RELEASE_MODE=%2%
-) else (
-    set BUILD_THIRD_PARTY=
-    set RELEASE_MODE=%1%
+    goto build_third_party
 )
+if "%2%" == "build-third-party" (
+    goto build_third_party
+)
+if "%3%" == "build-third-party" (
+    goto build_third_party
+)
+
+set BUILD_THIRD_PARTY=
+goto release_arg
+
+:build_third_party
+
+set BUILD_THIRD_PARTY=build-third-party
+
+:release_arg
+if "%1%" == "release" (
+    goto build_release_mode
+)
+if "%2%" == "release" (
+    goto build_release_mode
+)
+if "%3%" == "release" (
+    goto build_release_mode
+)
+
+set RELEASE_MODE=debug
+goto arg_end
+
+:build_release_mode
+
+set RELEASE_MODE=release
+goto arg_end
+
+:arg_end
 
 if "!RELEASE_MODE!" == "release" (
     set OPT=/O2 /Oi /Oy
@@ -75,26 +110,34 @@ if NOT DEFINED VCINSTALLDIR (
 )
 
 
-if NOT EXIST ..\build\!THIRD_PARTY_LIB! (
+if NOT EXIST !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! (
     set BUILD_THIRD_PARTY=build-third-party
 )
 
-IF NOT EXIST ..\build (
-    mkdir ..\build
+IF NOT EXIST !BASE_DIR!build\third-party-!RELEASE_MODE! (
+    mkdir !BASE_DIR!build\third-party-!RELEASE_MODE!
 )
 
 if "!BUILD_THIRD_PARTY!" == "build-third-party" (
-    echo "Compiling third party dependencies to library" %THIRD_PARTY_LIB%
-    del /s ..\build\!THIRD_PARTY_LIB! >nul 2>&1
-    pushd ..\third-party
-    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% /Fd:..\build\test_vc.pdb
+    echo Compiling third party dependencies to library !THIRD_PARTY_LIB!
+    del /q !BASE_DIR!build\third-party-!RELEASE_MODE!\*.obj >nul 2>&1
+    pushd !BASE_DIR!build\third-party-!RELEASE_MODE!
+    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC%
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
+    echo Creating third party dependencies library !THIRD_PARTY_LIB!
+    lib.exe /nologo *.obj /OUT:!BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
+    set LIB_BUILD_ERROR=%ERRORLEVEL%
     popd
     if !LIB_COMPILE_ERROR! neq 0 exit /b !LIB_COMPILE_ERROR!
-    lib.exe /nologo ..\third-party\*.obj /OUT:..\build\!THIRD_PARTY_LIB!
-    del ..\third-party\*.obj
+    if !LIB_BUILD_ERROR! neq 0 exit /b !LIB_BUILD_ERROR!
 )
 
-cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fo:..\build\ /Fd:..\build\test_vc.pdb /link /out:..\build\%OUTPUT%.exe /pdb:..\build\%OUTPUT%.pdb ..\build\!THIRD_PARTY_LIB!
+pushd !BASE_DIR!\build
+echo Building %OUTPUT%
+cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fd:%OUTPUT%.pdb /link /out:%OUTPUT%.exe /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
+set BUILD_ERROR=%ERRORLEVEL%
+popd
 
-exit /B %ERRORLEVEL%
+if !BUILD_ERROR! neq 0 exit /b !BUILD_ERROR!
+
+:end

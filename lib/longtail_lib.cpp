@@ -430,7 +430,7 @@ struct InMemStorageAPI
 
     ~InMemStorageAPI()
     {
-        uint32_t c = arrlen(m_PathEntries);
+        size_t c = arrlen(m_PathEntries);
         while(c--)
         {
             PathEntry* path_entry = &m_PathEntries[c];
@@ -473,7 +473,7 @@ struct InMemStorageAPI
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         PathEntry* path_entry = (PathEntry*)f;
-        if ((offset + length) > arrlen(path_entry->m_Content))
+        if ((ptrdiff_t)(offset + length) > arrlen(path_entry->m_Content))
         {
             return 0;
         }
@@ -528,8 +528,8 @@ struct InMemStorageAPI
         }
         else
         {
-            uint32_t entry_index = arrlen(instance->m_PathEntries);
-            arrsetlen(instance->m_PathEntries, entry_index + 1);
+            ptrdiff_t entry_index = arrlen(instance->m_PathEntries);
+            arrsetlen(instance->m_PathEntries, (size_t)(entry_index + 1));
             path_entry = &instance->m_PathEntries[entry_index];
             path_entry->m_ParentHash = parent_path_hash;
             path_entry->m_FileName = strdup(GetFileName(path));
@@ -550,12 +550,12 @@ struct InMemStorageAPI
             return 0;
         }
         PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
-        size_t size = arrlen(path_entry->m_Content);
-        if (offset > size)
+        ptrdiff_t size = arrlen(path_entry->m_Content);
+        if ((ptrdiff_t)offset > size)
         {
             return 0;
         }
-        if (offset + length > size)
+        if ((ptrdiff_t)(offset + length) > size)
         {
             size = offset + length;
         }
@@ -605,8 +605,8 @@ struct InMemStorageAPI
             return 0;
         }
 
-        uint32_t entry_index = arrlen(instance->m_PathEntries);
-        arrsetlen(instance->m_PathEntries, entry_index + 1);
+        ptrdiff_t entry_index = arrlen(instance->m_PathEntries);
+        arrsetlen(instance->m_PathEntries, (size_t)(entry_index + 1));
         PathEntry* path_entry = &instance->m_PathEntries[entry_index];
         path_entry->m_ParentHash = parent_path_hash;
         path_entry->m_FileName = strdup(GetFileName(path));
@@ -733,7 +733,7 @@ struct InMemStorageAPI
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = path[0] ? GetPathHash(instance->m_HashAPI, path) : 0;
-        uint32_t* i = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t));
+        ptrdiff_t* i = (ptrdiff_t*)LONGTAIL_MALLOC(sizeof(ptrdiff_t));
         *i = 0;
         while (*i < arrlen(instance->m_PathEntries))
         {
@@ -748,7 +748,7 @@ struct InMemStorageAPI
     static int FindNext(StorageAPI* storage_api, StorageAPI_HIterator iterator)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        uint32_t* i = (uint32_t*)iterator;
+        ptrdiff_t* i = (ptrdiff_t*)iterator;
         TLongtail_Hash path_hash = instance->m_PathEntries[*i].m_ParentHash;
         *i += 1;
         while (*i < arrlen(instance->m_PathEntries))
@@ -768,7 +768,7 @@ struct InMemStorageAPI
     static const char* GetFileName(StorageAPI* storage_api, StorageAPI_HIterator iterator)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        uint32_t* i = (uint32_t*)iterator;
+        ptrdiff_t* i = (ptrdiff_t*)iterator;
         if (instance->m_PathEntries[*i].m_Content == 0)
         {
             return 0;
