@@ -545,7 +545,7 @@ struct InMemStorageAPI
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = (TLongtail_Hash)f;
         intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
-        if (it != -1)
+        if (it == -1)
         {
             return 0;
         }
@@ -570,7 +570,7 @@ struct InMemStorageAPI
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = (TLongtail_Hash)f;
         intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
-        if (it != -1)
+        if (it == -1)
         {
             return 0;
         }
@@ -631,7 +631,7 @@ struct InMemStorageAPI
         intptr_t target_path_ptr = hmgeti(instance->m_PathHashToContent, target_path_hash);
         if (target_path_ptr != -1)
         {
-            TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - target path does not exist\n", source_path, target_path)
+            TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - target path already exist\n", source_path, target_path)
             return 0;
         }
         source_entry->m_ParentHash = GetParentPathHash(instance, target_path);
@@ -670,8 +670,8 @@ struct InMemStorageAPI
     static int IsFile(StorageAPI* storage_api, const char* path)
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
-        TLongtail_Hash source_path_hash = GetPathHash(instance->m_HashAPI, path);
-        intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, source_path_hash);
+        TLongtail_Hash path_hash = GetPathHash(instance->m_HashAPI, path);
+        intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
         if (source_path_ptr == -1)
         {
             return 0;
@@ -684,8 +684,7 @@ struct InMemStorageAPI
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = GetPathHash(instance->m_HashAPI, path);
-        TLongtail_Hash source_path_hash = GetPathHash(instance->m_HashAPI, path);
-        intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, source_path_hash);
+        intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
         if (source_path_ptr == -1)
         {
             return 0;
@@ -709,7 +708,7 @@ struct InMemStorageAPI
     {
         InMemStorageAPI* instance = (InMemStorageAPI*)storage_api;
         TLongtail_Hash path_hash = GetPathHash(instance->m_HashAPI, path);
-        intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path);
+        intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
         if (source_path_ptr == -1)
         {
             return 0;
