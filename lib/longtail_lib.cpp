@@ -257,7 +257,7 @@ struct TroveStorageAPI
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        int ok = Trove_RemoveDir(tmp_path) == TRUE;
+        int ok = Trove_RemoveDir(tmp_path);
         return ok;
     }
 
@@ -265,7 +265,7 @@ struct TroveStorageAPI
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        int ok = Trove_RemoveFile(tmp_path) == TRUE;
+        int ok = Trove_RemoveFile(tmp_path);
         free(tmp_path);
         return ok;
     }
