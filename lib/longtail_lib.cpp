@@ -742,6 +742,7 @@ struct InMemStorageAPI
             }
             *i += 1;
         }
+        LONGTAIL_FREE(i);
         return (StorageAPI_HIterator)0;
     }
     static int FindNext(StorageAPI* storage_api, StorageAPI_HIterator iterator)
@@ -762,7 +763,8 @@ struct InMemStorageAPI
     }
     static void CloseFind(StorageAPI* , StorageAPI_HIterator iterator)
     {
-        LONGTAIL_FREE((uint32_t*)iterator);
+        ptrdiff_t* i = (ptrdiff_t*)iterator;
+        LONGTAIL_FREE(i);
     }
     static const char* GetFileName(StorageAPI* storage_api, StorageAPI_HIterator iterator)
     {
