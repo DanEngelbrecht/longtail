@@ -3,8 +3,6 @@
 
 #include "../third-party/jctest/src/jc_test.h"
 
-#include "../third-party/jc_containers/src/jc_hashtable.h"
-
 #include "../lib/longtail_lib.h"
 
 #include <inttypes.h>

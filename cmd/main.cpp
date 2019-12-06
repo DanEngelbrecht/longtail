@@ -5,8 +5,6 @@
 #define KGFLAGS_IMPLEMENTATION
 #include "../third-party/kgflags/kgflags.h"
 
-#include "../third-party/jc_containers/src/jc_hashtable.h"
-
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdarg.h>
@@ -125,7 +123,13 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 //    out_name[4] = '/';
 }
 
-int_fast32_t PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash* block_hashes, const char* format_string)
+struct HashToIndex
+{
+    TLongtail_Hash key;
+    uint64_t value;
+};
+
+int PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash* block_hashes, const char* format_string)
 {
     const char* format_start = format_string;
     const char* format_first_end = strstr(format_string, "{blockname}");
@@ -693,66 +697,57 @@ int Cmd_ListMissingBlocks(
         return 0;
     }
 
-    // TODO: Move to longtail.h
-    uint32_t hash_size = jc::HashTable<TLongtail_Hash, uint32_t>::CalcSize((uint32_t)*have_content_index->m_ChunkCount);
-    jc::HashTable<TLongtail_Hash, uint32_t> asset_hash_to_have_block_index;
-    void* asset_hash_to_have_block_index_mem = malloc(hash_size);
-    asset_hash_to_have_block_index.Create((uint32_t)*have_content_index->m_ChunkCount, asset_hash_to_have_block_index_mem);
+    struct HashToIndex* chunk_hash_to_have_block_index = 0;
 
     for (uint32_t i = 0; i < (uint32_t)*have_content_index->m_ChunkCount; ++i)
     {
-        asset_hash_to_have_block_index.Put(have_content_index->m_ChunkHashes[i], have_content_index->m_ChunkHashes[i]);
+        hmput(chunk_hash_to_have_block_index, have_content_index->m_ChunkHashes[i], i);
     }
 
-    hash_size = jc::HashTable<uint32_t, uint32_t>::CalcSize((uint32_t)*need_content_index->m_BlockCount);
-    jc::HashTable<uint32_t, uint32_t> need_block_index_to_asset_count;
-    void* need_block_index_to_asset_count_mem = malloc(hash_size);
-    need_block_index_to_asset_count.Create((uint32_t)*need_content_index->m_BlockCount, need_block_index_to_asset_count_mem);
+    TLongtail_Hash* missing_block_hashes = 0;
+    arrsetcap(missing_block_hashes, *need_content_index->m_BlockCount);
+
+    struct HashToIndex* need_block_index_to_chunk_count = 0;
 
     for (uint32_t i = 0; i < *need_content_index->m_ChunkCount; ++i)
     {
-        uint32_t* have_block_index_ptr = asset_hash_to_have_block_index.Get(need_content_index->m_ChunkHashes[i]);
-        if (have_block_index_ptr)
+        intptr_t have_block_index_ptr = hmgeti(chunk_hash_to_have_block_index, need_content_index->m_ChunkHashes[i]);
+        if (have_block_index_ptr != -1)
         {
             continue;
         }
-        uint32_t* need_block_index_ptr = need_block_index_to_asset_count.Get(need_content_index->m_ChunkBlockIndexes[i]);
-        if (need_block_index_ptr)
+        uint64_t block_index = need_content_index->m_ChunkBlockIndexes[i];
+        TLongtail_Hash block_hash = need_content_index->m_BlockHashes[block_index];
+        intptr_t need_block_index_ptr = hmgeti(need_block_index_to_chunk_count, need_content_index->m_ChunkBlockIndexes[i]);
+        if (need_block_index_ptr != -1)
         {
-            (*need_block_index_ptr)++;
             continue;
         }
-        need_block_index_to_asset_count.Put(need_content_index->m_ChunkBlockIndexes[i], 1u);
+        hmput(need_block_index_to_chunk_count, need_content_index->m_ChunkBlockIndexes[i], 1u);
+        arrpush(missing_block_hashes, block_hash);
     }
 
-    free(need_block_index_to_asset_count_mem);
-    need_block_index_to_asset_count_mem = 0;
-    uint32_t missing_block_count = need_block_index_to_asset_count.Size();
+    hmfree(need_block_index_to_chunk_count);
+    need_block_index_to_chunk_count = 0;
+    hmfree(chunk_hash_to_have_block_index);
+    chunk_hash_to_have_block_index = 0;
+
+    LONGTAIL_FREE(need_content_index);
+    need_content_index = 0;
+    LONGTAIL_FREE(have_content_index);
+    have_content_index = 0;
+
+    uint64_t missing_block_count = arrlen(missing_block_hashes);
     if (missing_block_count == 0)
     {
-        free(asset_hash_to_have_block_index_mem);
-        asset_hash_to_have_block_index_mem = 0;
-        LONGTAIL_FREE(need_content_index);
-        need_content_index = 0;
-        LONGTAIL_FREE(have_content_index);
-        have_content_index = 0;
+        arrfree(missing_block_hashes);
+        missing_block_hashes = 0;
         return 0;
     }
-    TLongtail_Hash* missing_block_hashes = (TLongtail_Hash*)malloc(sizeof(TLongtail_Hash) * missing_block_count);
-    uint32_t block_index = 0;
-    for (jc::HashTable<uint32_t, uint32_t>::Iterator it = need_block_index_to_asset_count.Begin(); it != need_block_index_to_asset_count.End(); ++it)
-    {
-        uint32_t need_block_index = *it.GetValue();
-        TLongtail_Hash need_block_hash = need_content_index->m_BlockHashes[need_block_index];
-        missing_block_hashes[block_index++] = need_block_hash;
-    }
-    free(need_block_index_to_asset_count_mem);
-    need_block_index_to_asset_count_mem = 0;
-
-    free(missing_block_hashes);
+    int ok = PrintFormattedBlockList(missing_block_count, missing_block_hashes, "{blockname}");
+    arrfree(missing_block_hashes);
     missing_block_hashes = 0;
-
-    return 1;
+    return ok;
 }
 
 int Cmd_CreateVersion(
@@ -1243,12 +1238,6 @@ int Cmd_UpSyncVersion(
 
     return 1;
 }
-
-struct HashToIndex
-{
-    TLongtail_Hash key;
-    uint64_t value;
-};
 
 int Cmd_DownSyncVersion(
     StorageAPI* source_storage_api,
