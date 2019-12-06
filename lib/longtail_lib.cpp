@@ -257,12 +257,7 @@ struct TroveStorageAPI
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        #ifdef _WIN32
-        int ok = ::RemoveDirectoryA(tmp_path) == TRUE;
-        #else
-        int ok = rmdir(path) == 0;
-        #endif
-        free(tmp_path);
+        int ok = Trove_RemoveDir(tmp_path) == TRUE;
         return ok;
     }
 
@@ -270,11 +265,7 @@ struct TroveStorageAPI
     {
         char* tmp_path = strdup(path);
         Trove_DenormalizePath(tmp_path);
-        #ifdef _WIN32
-        int ok = ::DeleteFileA(tmp_path) == TRUE;
-        #else
-        int ok = unlink(path) == 0;
-        #endif
+        int ok = Trove_RemoveFile(tmp_path) == TRUE;
         free(tmp_path);
         return ok;
     }

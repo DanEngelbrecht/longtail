@@ -1,5 +1,4 @@
 #include "../src/longtail.h"
-#include "../src/longtail_array.h"
 
 #include "../third-party/jctest/src/jc_test.h"
 
@@ -8,6 +7,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 
 #define TEST_LOG(fmt, ...) \
