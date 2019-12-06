@@ -18,73 +18,10 @@
 #define TEST_LOG(fmt, ...) \
     fprintf(stderr, "--- ");fprintf(stderr, fmt, __VA_ARGS__);
 
-#if !defined(PLATFORM_ATOMICADD)
-    #if defined(__clang__) || defined(__GNUC__)
-        #define PLATFORM_ATOMICADD_PRIVATE(value, amount) (__sync_add_and_fetch (value, amount))
-    #elif defined(_MSC_VER)
-        #if !defined(_WINDOWS_)
-            #define WIN32_LEAN_AND_MEAN
-            #include <Windows.h>
-            #undef WIN32_LEAN_AND_MEAN
-        #endif
-
-        #define PLATFORM_ATOMICADD_PRIVATE(value, amount) (_InterlockedExchangeAdd((volatile LONG *)value, amount) + amount)
-    #else
-        inline int32_t Platform_NonAtomicAdd(volatile int32_t* store, int32_t value) { *store += value; return *store; }
-        #define PLATFORM_ATOMICADD_PRIVATE(value, amount) (Platform_NonAtomicAdd(value, amount))
-    #endif
-#else
-    #define PLATFORM_ATOMICADD_PRIVATE PLATFORM_ATOMICADD
-#endif
-
-#if !defined(PLATFORM_SLEEP)
-    #if defined(__clang__) || defined(__GNUC__)
-        #define PLATFORM_SLEEP_PRIVATE(timeout_us) (::usleep((useconds_t)timeout_us))
-    #elif defined(_MSC_VER)
-        #if !defined(_WINDOWS_)
-            #define WIN32_LEAN_AND_MEAN
-            #include <Windows.h>
-            #undef WIN32_LEAN_AND_MEAN
-        #endif
-
-        #define PLATFORM_SLEEP_PRIVATE(timeout_us) (::Sleep((DWORD)(timeout_us / 1000)))
-    #endif
-#else
-    #define PLATFORM_SLEEP_PRIVATE PLATFORM_SLEEP
-#endif
-
-#if defined(_WIN32)
-
-#if !defined(_WINDOWS_)
-    #if !defined(_WINDOWS_)
-        #define WIN32_LEAN_AND_MEAN
-        #include <Windows.h>
-        #undef WIN32_LEAN_AND_MEAN
-    #endif
-#endif
-
 int GetCPUCount()
 {
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo(&sysinfo);
-    return sysinfo.dwNumberOfProcessors;
+    return (int)nadir::GetCPUCount();
 }
-
-#endif
-
-#if defined(__APPLE__) || defined(__linux__)
-
-#include <unistd.h>
-#include <sys/stat.h>
-
-int GetCPUCount()
-{
-   return sysconf(_SC_NPROCESSORS_ONLN);
-}
-
-
-
-#endif
 
 struct ReadyCallback
 {
@@ -970,10 +907,10 @@ struct BikeshedJobAPI
     static JobAPI_Jobs CreateJobs(JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
     {
         BikeshedJobAPI* bikeshed_job_api = (BikeshedJobAPI*)job_api;
-        int32_t new_job_count = PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_SubmittedJobCount, (int32_t)job_count);
+        int32_t new_job_count = nadir::AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, (int32_t)job_count);
         if (new_job_count > (int32_t)bikeshed_job_api->m_ReservedJobCount)
         {
-            PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_SubmittedJobCount, -((int32_t)job_count));
+            nadir::AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, -((int32_t)job_count));
             return 0;
         }
         int32_t job_range_start = new_job_count - job_count;
@@ -996,7 +933,7 @@ struct BikeshedJobAPI
             Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
         }
 
-        PLATFORM_ATOMICADD_PRIVATE(&bikeshed_job_api->m_PendingJobCount, job_count);
+        nadir::AtomicAdd32(&bikeshed_job_api->m_PendingJobCount, job_count);
 
         free(ctx);
         free(func);
@@ -1036,7 +973,7 @@ struct BikeshedJobAPI
             {
                 old_pending_count = bikeshed_job_api->m_PendingJobCount;
             }
-            PLATFORM_SLEEP_PRIVATE(1000);
+            nadir::Sleep(1000);
         }
         if (process_func)
         {
@@ -1060,14 +997,11 @@ struct BikeshedJobAPI
             // TODO! Error handling!
             return BIKESHED_TASK_RESULT_COMPLETE;
         }
-        PLATFORM_ATOMICADD_PRIVATE(&wrapper->m_JobAPI->m_PendingJobCount, -1);
-        PLATFORM_ATOMICADD_PRIVATE(&wrapper->m_JobAPI->m_JobsCompleted, 1);
+        nadir::AtomicAdd32(&wrapper->m_JobAPI->m_PendingJobCount, -1);
+        nadir::AtomicAdd32(&wrapper->m_JobAPI->m_JobsCompleted, 1);
         return BIKESHED_TASK_RESULT_COMPLETE;
     }
 };
-
-#undef PLATFORM_ATOMICADD_PRIVATE
-#undef PLATFORM_SLEEP_PRIVATE
 
 
 
