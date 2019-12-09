@@ -1469,20 +1469,24 @@ int main(int argc, char** argv)
 
     g_log_level = log_level;
 
+    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
+    StorageAPI* fs_storage_api = CreateFSStorageAPI();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(GetCPUCount());
+
     if (test_version_raw && test_base_path_raw)
     {
         const char* test_version = NormalizePath(test_version_raw);
         const char* test_base_path = NormalizePath(test_base_path_raw);
 
-        CompressionRegistry* compression_registry = GetCompressionRegistry();
         char create_content_index[512];
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         char content[512];
         sprintf(content, "%s/chunks", test_base_path);
         if (!Cmd_CreateContentIndex(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             create_content_index,
             content))
         {
@@ -1494,9 +1498,9 @@ int main(int argc, char** argv)
         char version[512];
         sprintf(version, "%s/local/%s", test_base_path, test_version);
         if (!Cmd_CreateVersionIndex(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             create_version_index,
             version,
             0,
@@ -1513,9 +1517,9 @@ int main(int argc, char** argv)
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         sprintf(version, "%s/local/%s", test_base_path, test_version);
         if (!Cmd_CreateMissingContentIndex(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             create_content_index,
             content_index,
             content,
@@ -1533,9 +1537,9 @@ int main(int argc, char** argv)
         sprintf(create_content, "%s/chunks", test_base_path);
         sprintf(content_index, "%s/%s.lci", test_base_path, test_version);
         if (!Cmd_CreateContent(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             compression_registry,
             create_content,
             content_index,
@@ -1555,7 +1559,7 @@ int main(int argc, char** argv)
         char merge_content_index[512];
         sprintf(merge_content_index, "%s/%s.lci", test_base_path, test_version);
         if (!Cmd_MergeContentIndex(
-            GetFSStorageAPI(),
+            fs_storage_api,
             create_content_index,
             content_index,
             merge_content_index))
@@ -1569,9 +1573,9 @@ int main(int argc, char** argv)
         sprintf(content_index, "%s/chunks.lci", test_base_path);
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         if (!Cmd_CreateVersion(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             compression_registry,
             create_version,
             version_index,
@@ -1589,9 +1593,9 @@ int main(int argc, char** argv)
         char target_version_index[512];
         sprintf(target_version_index, "%s/%s.lvi", test_base_path, test_version);
         if (!Cmd_UpdateVersion(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             compression_registry,
             update_version,
             0,
@@ -1609,9 +1613,9 @@ int main(int argc, char** argv)
         char incremental_version[512];
         sprintf(incremental_version, "%s/remote/incremental", test_base_path);
         if (!Cmd_CreateVersionIndex(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             incremental_version_index,
             incremental_version,
             0,
@@ -1621,13 +1625,13 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        struct VersionIndex* source_vindex = ReadVersionIndex(GetFSStorageAPI(), create_version_index);
+        struct VersionIndex* source_vindex = ReadVersionIndex(fs_storage_api, create_version_index);
         if (!source_vindex)
         {
             LONGTAIL_FREE(compression_registry);
             return 1;
         }
-        struct VersionIndex* target_vindex = ReadVersionIndex(GetFSStorageAPI(), incremental_version_index);
+        struct VersionIndex* target_vindex = ReadVersionIndex(fs_storage_api, incremental_version_index);
         if (!target_vindex)
         {
             LONGTAIL_FREE(source_vindex);
@@ -1663,9 +1667,9 @@ int main(int argc, char** argv)
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         sprintf(version, "%s/local/%s", test_base_path, test_version);
         if (!Cmd_CreateMissingContentIndex(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             create_content_index,
             content_index,
             content,
@@ -1717,9 +1721,9 @@ int main(int argc, char** argv)
         }
 
         int ok = Cmd_CreateVersionIndex(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             create_version_index,
             version,
             filter,
@@ -1733,9 +1737,9 @@ int main(int argc, char** argv)
         if (content && (!content_index && !merge_content_index))
         {
             int ok = Cmd_CreateContentIndex(
-                GetFSStorageAPI(),
-                GetMeowHashAPI(),
-                GetBikeshedJobAPI(GetCPUCount()),
+                fs_storage_api,
+                hash_api,
+                job_api,
                 create_content_index,
                 content);
             result = ok ? 0 : 1;
@@ -1744,7 +1748,7 @@ int main(int argc, char** argv)
         if (content_index && merge_content_index)
         {
             int ok = Cmd_MergeContentIndex(
-                GetFSStorageAPI(),
+                fs_storage_api,
                 create_content_index,
                 content_index,
                 merge_content_index);
@@ -1756,9 +1760,9 @@ int main(int argc, char** argv)
     if (create_content_index && version)
     {
         int ok = Cmd_CreateMissingContentIndex(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             create_content_index,
             content_index,
             content,
@@ -1773,11 +1777,10 @@ int main(int argc, char** argv)
 
     if (create_content && version)
     {
-        CompressionRegistry* compression_registry = GetCompressionRegistry();
         int ok = Cmd_CreateContent(
-                GetFSStorageAPI(),
-                GetMeowHashAPI(),
-                GetBikeshedJobAPI(GetCPUCount()),
+                fs_storage_api,
+                hash_api,
+                job_api,
                 compression_registry,
                 create_content,
                 content_index,
@@ -1794,7 +1797,7 @@ int main(int argc, char** argv)
     if (list_missing_blocks && content_index)
     {
         int ok = Cmd_ListMissingBlocks(
-            GetFSStorageAPI(),
+            fs_storage_api,
             list_missing_blocks,
             content_index);
         result = ok ? 0 : 1;
@@ -1803,12 +1806,10 @@ int main(int argc, char** argv)
 
     if (create_version && version_index && content)
     {
-        CompressionRegistry* compression_registry = GetCompressionRegistry();
-
         int ok = Cmd_CreateVersion(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             compression_registry,
             create_version,
             version_index,
@@ -1821,12 +1822,10 @@ int main(int argc, char** argv)
 
     if (update_version && content && target_version_index)
     {
-        CompressionRegistry* compression_registry = GetCompressionRegistry();
-
         int ok = Cmd_UpdateVersion(
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            hash_api,
+            job_api,
             compression_registry,
             update_version,
             version_index,
@@ -1872,12 +1871,11 @@ int main(int argc, char** argv)
             result = 1;
             goto end;
         }
-        CompressionRegistry* compression_registry = GetCompressionRegistry();
         int ok = Cmd_UpSyncVersion(
-            GetFSStorageAPI(),
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            fs_storage_api,
+            hash_api,
+            job_api,
             compression_registry,
             version,
             version_index,
@@ -1921,13 +1919,11 @@ int main(int argc, char** argv)
             goto end;
         }
 
-        CompressionRegistry* compression_registry = GetCompressionRegistry();
-
         int ok = Cmd_DownSyncVersion(
-            GetFSStorageAPI(),
-            GetFSStorageAPI(),
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(GetCPUCount()),
+            fs_storage_api,
+            fs_storage_api,
+            hash_api,
+            job_api,
             compression_registry,
             target_version_index,
             content_index,
@@ -1953,7 +1949,13 @@ int main(int argc, char** argv)
     kgflags_print_usage();
     return 1;
 
-end: free((void*)create_version_index);
+end:
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyStorageAPI(fs_storage_api);
+    DestroyCompressionRegistry(compression_registry);
+
+    free((void*)create_version_index);
     free((void*)version);
     free((void*)filter);
     free((void*)create_content_index);

@@ -179,8 +179,9 @@ TEST(Longtail, ContentIndex)
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+    HashAPI* hash_api = CreateMeowHashAPI();
     ContentIndex* content_index = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         asset_count,
         asset_content_hashes,
         asset_sizes,
@@ -208,6 +209,8 @@ TEST(Longtail, ContentIndex)
     ASSERT_EQ(43591, content_index->m_ChunkBlockOffsets[4]);
 
     LONGTAIL_FREE(content_index);
+
+    DestroyHashAPI(hash_api);
 }
 
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
@@ -224,6 +227,8 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 TEST(Longtail, ContentIndexSerialization)
 {
     StorageAPI* local_storage = CreateInMemStorageAPI();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/five_items", 5));
@@ -233,8 +238,8 @@ TEST(Longtail, ContentIndexSerialization)
     ASSERT_NE((uint32_t*)0, compression_types);
     VersionIndex* vindex = CreateVersionIndex(
         local_storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "source/version1",
@@ -249,7 +254,7 @@ TEST(Longtail, ContentIndexSerialization)
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* cindex = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
@@ -285,14 +290,18 @@ TEST(Longtail, ContentIndexSerialization)
     LONGTAIL_FREE(cindex2);
     cindex2 = 0;
 
-    DestroyInMemStorageAPI(local_storage);
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyStorageAPI(local_storage);
 }
 
 TEST(Longtail, WriteContent)
 {
     StorageAPI* source_storage = CreateInMemStorageAPI();
     StorageAPI* target_storage = CreateInMemStorageAPI();
-    CompressionRegistry* compression_registry = GetCompressionRegistry();
+    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     const char* TEST_FILENAMES[5] = {
         "local/TheLongFile.txt",
@@ -326,8 +335,8 @@ TEST(Longtail, WriteContent)
     ASSERT_NE((uint32_t*)0, compression_types);
     VersionIndex* vindex = CreateVersionIndex(
         source_storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "local",
@@ -344,7 +353,7 @@ TEST(Longtail, WriteContent)
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
     ContentIndex* cindex = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
@@ -357,7 +366,7 @@ TEST(Longtail, WriteContent)
         source_storage,
         target_storage,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         cindex,
@@ -367,8 +376,8 @@ TEST(Longtail, WriteContent)
 
     ContentIndex* cindex2 = ReadContent(
         target_storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "chunks");
@@ -403,11 +412,11 @@ TEST(Longtail, WriteContent)
     LONGTAIL_FREE(cindex);
     LONGTAIL_FREE(vindex);
 
-    LONGTAIL_FREE(compression_registry);
-    compression_registry = 0;
-
-    DestroyInMemStorageAPI(target_storage);
-    DestroyInMemStorageAPI(source_storage);
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyCompressionRegistry(compression_registry);
+    DestroyStorageAPI(target_storage);
+    DestroyStorageAPI(source_storage);
 }
 
 #if 0
@@ -418,8 +427,8 @@ TEST(Longtail, TestVeryLargeFile)
     FileInfos* paths = GetFilesRecursively(storage_api, assets_path);
     VersionIndex* version_index = CreateVersionIndex(
         storage_api,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         assets_path,
@@ -450,6 +459,8 @@ TEST(Longtail, GetBlocksForAssets)
 
 TEST(Longtail, CreateMissingContent)
 {
+    HashAPI* hash_api = CreateMeowHashAPI();
+
     const char* assets_path = "";
     const uint64_t asset_count = 5;
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
@@ -465,7 +476,7 @@ TEST(Longtail, CreateMissingContent)
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* content_index = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         asset_count - 4,
         asset_content_hashes,
         chunk_sizes,
@@ -503,7 +514,7 @@ TEST(Longtail, CreateMissingContent)
     LONGTAIL_FREE(paths);
 
     ContentIndex* missing_content_index = CreateMissingContent(
-        GetMeowHashAPI(),
+        hash_api,
         content_index,
         version_index,
         MAX_BLOCK_SIZE,
@@ -535,6 +546,8 @@ TEST(Longtail, CreateMissingContent)
     LONGTAIL_FREE(content_index);
 
     LONGTAIL_FREE(missing_content_index);
+
+    DestroyHashAPI(hash_api);
 }
 
 TEST(Longtail, GetMissingAssets)
@@ -545,6 +558,9 @@ TEST(Longtail, GetMissingAssets)
 TEST(Longtail, VersionIndexDirectories)
 {
     StorageAPI* local_storage = CreateInMemStorageAPI();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
+
     ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 2));
     local_storage->CreateDir(local_storage, "no_items");
     ASSERT_EQ(1, CreateFakeContent(local_storage, "deep/file/down/under/three_items", 3));
@@ -557,8 +573,8 @@ TEST(Longtail, VersionIndexDirectories)
 
     VersionIndex* local_version_index = CreateVersionIndex(
         local_storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "",
@@ -573,13 +589,16 @@ TEST(Longtail, VersionIndexDirectories)
     LONGTAIL_FREE(local_version_index);
     LONGTAIL_FREE(local_paths);
 
-    DestroyInMemStorageAPI(local_storage);
+    DestroyHashAPI(hash_api);
+    DestroyJobAPI(job_api);
+    DestroyStorageAPI(local_storage);
 }
 
 TEST(Longtail, MergeContentIndex)
 {
+    HashAPI* hash_api = CreateMeowHashAPI();
     ContentIndex* cindex1 = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         0,
         0,
         0,
@@ -588,7 +607,7 @@ TEST(Longtail, MergeContentIndex)
         8);
     ASSERT_NE((ContentIndex*)0, cindex1);
     ContentIndex* cindex2 = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         0,
         0,
         0,
@@ -603,7 +622,7 @@ TEST(Longtail, MergeContentIndex)
     uint32_t chunk_sizes_4[] = {10, 20, 10};
     uint32_t chunk_compression_types_4[] = {0, 0, 0};
     ContentIndex* cindex4 = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         3,
         chunk_hashes_4,
         chunk_sizes_4,
@@ -617,7 +636,7 @@ TEST(Longtail, MergeContentIndex)
     uint32_t chunk_compression_types_5[] = {0, 0, 0};
 
     ContentIndex* cindex5 = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         3,
         chunk_hashes_5,
         chunk_sizes_5,
@@ -643,12 +662,16 @@ TEST(Longtail, MergeContentIndex)
     LONGTAIL_FREE(cindex3);
     LONGTAIL_FREE(cindex2);
     LONGTAIL_FREE(cindex1);
+
+    DestroyHashAPI(hash_api);
 }
 
 TEST(Longtail, VersionDiff)
 {
     StorageAPI* storage = CreateInMemStorageAPI();
-    CompressionRegistry* compression_registry = GetCompressionRegistry();
+    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     const uint32_t OLD_ASSET_COUNT = 9;
 
@@ -830,8 +853,8 @@ TEST(Longtail, VersionDiff)
     ASSERT_NE((uint32_t*)0, old_compression_types);
     VersionIndex* old_vindex = CreateVersionIndex(
         storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "old",
@@ -851,8 +874,8 @@ TEST(Longtail, VersionDiff)
     ASSERT_NE((uint32_t*)0, new_compression_types);
     VersionIndex* new_vindex = CreateVersionIndex(
         storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "new",
@@ -870,7 +893,7 @@ TEST(Longtail, VersionDiff)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
 
     ContentIndex* content_index = CreateContentIndex(
-            GetMeowHashAPI(),
+            hash_api,
             *new_vindex->m_ChunkCount,
             new_vindex->m_ChunkHashes,
             new_vindex->m_ChunkSizes,
@@ -882,7 +905,7 @@ TEST(Longtail, VersionDiff)
         storage,
         storage,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         content_index,
@@ -902,8 +925,8 @@ TEST(Longtail, VersionDiff)
     ASSERT_NE(0, ChangeVersion(
         storage,
         storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         compression_registry,
@@ -947,16 +970,20 @@ TEST(Longtail, VersionDiff)
         LONGTAIL_FREE(test_data);
         test_data = 0;
     }
-    LONGTAIL_FREE(compression_registry);
-    compression_registry = 0;
-    DestroyInMemStorageAPI(storage);
+
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyCompressionRegistry(compression_registry);
+    DestroyStorageAPI(storage);
 }
 
 TEST(Longtail, FullScale)
 {
     return;
     StorageAPI* local_storage = CreateInMemStorageAPI();
-    CompressionRegistry* compression_registry = GetCompressionRegistry();
+    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     CreateFakeContent(local_storage, 0, 5);
 
@@ -970,8 +997,8 @@ TEST(Longtail, FullScale)
 
     VersionIndex* local_version_index = CreateVersionIndex(
         local_storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "",
@@ -990,8 +1017,8 @@ TEST(Longtail, FullScale)
     ASSERT_NE((uint32_t*)0, remote_compression_types);
     VersionIndex* remote_version_index = CreateVersionIndex(
         remote_storage,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "",
@@ -1008,7 +1035,7 @@ TEST(Longtail, FullScale)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
 
     ContentIndex* local_content_index = CreateContentIndex(
-            GetMeowHashAPI(),
+            hash_api,
             * local_version_index->m_ChunkCount,
             local_version_index->m_ChunkHashes,
             local_version_index->m_ChunkSizes,
@@ -1020,7 +1047,7 @@ TEST(Longtail, FullScale)
         local_storage,
         local_storage,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         local_content_index,
@@ -1029,7 +1056,7 @@ TEST(Longtail, FullScale)
         ""));
 
     ContentIndex* remote_content_index = CreateContentIndex(
-            GetMeowHashAPI(),
+            hash_api,
             * remote_version_index->m_ChunkCount,
             remote_version_index->m_ChunkHashes,
             remote_version_index->m_ChunkSizes,
@@ -1041,7 +1068,7 @@ TEST(Longtail, FullScale)
         remote_storage,
         remote_storage,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         remote_content_index,
@@ -1050,7 +1077,7 @@ TEST(Longtail, FullScale)
         ""));
 
     ContentIndex* missing_content = CreateMissingContent(
-        GetMeowHashAPI(),
+        hash_api,
         local_content_index,
         remote_version_index,
         MAX_BLOCK_SIZE,
@@ -1061,7 +1088,7 @@ TEST(Longtail, FullScale)
         remote_storage,
         local_storage,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         missing_content,
@@ -1074,7 +1101,7 @@ TEST(Longtail, FullScale)
         local_storage,
         local_storage,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         merged_content_index,
@@ -1109,16 +1136,20 @@ TEST(Longtail, FullScale)
     LONGTAIL_FREE(local_content_index);
     LONGTAIL_FREE(remote_version_index);
     LONGTAIL_FREE(local_version_index);
-    LONGTAIL_FREE(compression_registry);
-    compression_registry = 0;
-    DestroyInMemStorageAPI(local_storage);
+
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyCompressionRegistry(compression_registry);
+    DestroyStorageAPI(local_storage);
 }
 
 
 TEST(Longtail, WriteVersion)
 {
     StorageAPI* storage_api = CreateInMemStorageAPI();
-    CompressionRegistry* compression_registry = GetCompressionRegistry();
+    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     const uint32_t asset_count = 8;
 
@@ -1220,8 +1251,8 @@ TEST(Longtail, WriteVersion)
     ASSERT_NE((uint32_t*)0, version1_compression_types);
     VersionIndex* vindex = CreateVersionIndex(
         storage_api,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         "local",
@@ -1238,7 +1269,7 @@ TEST(Longtail, WriteVersion)
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
     ContentIndex* cindex = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
@@ -1251,7 +1282,7 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         cindex,
@@ -1263,7 +1294,7 @@ TEST(Longtail, WriteVersion)
         storage_api,
         storage_api,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         cindex,
@@ -1295,9 +1326,10 @@ TEST(Longtail, WriteVersion)
     vindex = 0;
     LONGTAIL_FREE(cindex);
     cindex = 0;
-    LONGTAIL_FREE(compression_registry);
-    compression_registry = 0;
-    DestroyInMemStorageAPI(storage_api);
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyCompressionRegistry(compression_registry);
+    DestroyStorageAPI(storage_api);
 }
 
 void Bench()
@@ -1338,13 +1370,15 @@ void Bench()
 
     const char* TARGET_VERSION_PREFIX = HOME "\\remote\\";
 
-    struct StorageAPI* storage_api = GetFSStorageAPI();
-    CompressionRegistry* compression_registry = GetCompressionRegistry();
+    struct StorageAPI* storage_api = CreateFSStorageAPI();
+    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* full_content_index = CreateContentIndex(
-            GetMeowHashAPI(),
+            hash_api,
             0,
             0,
             0,
@@ -1365,8 +1399,8 @@ void Bench()
         ASSERT_NE((uint32_t*)0, version_compression_types);
         VersionIndex* version_index = CreateVersionIndex(
             storage_api,
-            GetMeowHashAPI(),
-            GetBikeshedJobAPI(0),
+            hash_api,
+            job_api,
             0,
             0,
             version_source_folder,
@@ -1387,7 +1421,7 @@ void Bench()
         printf("Wrote version index to `%s`\n", version_index_file);
 
         ContentIndex* missing_content_index = CreateMissingContent(
-            GetMeowHashAPI(),
+            hash_api,
             full_content_index,
             version_index,
             MAX_BLOCK_SIZE,
@@ -1401,7 +1435,7 @@ void Bench()
             storage_api,
             storage_api,
             compression_registry,
-            GetBikeshedJobAPI(0),
+            job_api,
             0,
             0,
             missing_content_index,
@@ -1471,7 +1505,7 @@ void Bench()
             storage_api,
             storage_api,
             compression_registry,
-            GetBikeshedJobAPI(0),
+            job_api,
             0,
             0,
             full_content_index,
@@ -1490,9 +1524,10 @@ void Bench()
 
     LONGTAIL_FREE(full_content_index);
 
-    LONGTAIL_FREE(compression_registry);
-    compression_registry = 0;
-    DestroyInMemStorageAPI(storage_api);
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyCompressionRegistry(compression_registry);
+    DestroyStorageAPI(storage_api);
 
     #undef HOME
 }
@@ -1529,8 +1564,10 @@ void LifelikeTest()
     const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
 
     printf("Indexing `%s`...\n", local_path_1);
-    struct StorageAPI* storage_api = GetFSStorageAPI();
-    CompressionRegistry* compression_registry = GetCompressionRegistry();
+    struct StorageAPI* storage_api = CreateFSStorageAPI();
+    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
+    HashAPI* hash_api = CreateMeowHashAPI();
+    JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     FileInfos* local_path_1_paths = GetFilesRecursively(storage_api, local_path_1);
     ASSERT_NE((FileInfos*)0, local_path_1_paths);
@@ -1538,8 +1575,8 @@ void LifelikeTest()
     ASSERT_NE((uint32_t*)0, local_compression_types);
     VersionIndex* version1 = CreateVersionIndex(
         storage_api,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         local_path_1,
@@ -1558,7 +1595,7 @@ void LifelikeTest()
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     ContentIndex* local_content_index = CreateContentIndex(
-        GetMeowHashAPI(),
+        hash_api,
         *version1->m_ChunkCount,
         version1->m_ChunkHashes,
         version1->m_ChunkSizes,
@@ -1577,7 +1614,7 @@ void LifelikeTest()
             storage_api,
             storage_api,
             compression_registry,
-            GetBikeshedJobAPI(0),
+            job_api,
             0,
             0,
             local_content_index,
@@ -1591,7 +1628,7 @@ void LifelikeTest()
         storage_api,
         storage_api,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         local_content_index,
@@ -1607,8 +1644,8 @@ void LifelikeTest()
     ASSERT_NE((uint32_t*)0, local_2_compression_types);
     VersionIndex* version2 = CreateVersionIndex(
         storage_api,
-        GetMeowHashAPI(),
-        GetBikeshedJobAPI(0),
+        hash_api,
+        job_api,
         0,
         0,
         local_path_2,
@@ -1626,7 +1663,7 @@ void LifelikeTest()
     
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
     ContentIndex* missing_content = CreateMissingContent(
-        GetMeowHashAPI(),
+        hash_api,
         local_content_index,
         version2,
         MAX_BLOCK_SIZE,
@@ -1641,7 +1678,7 @@ void LifelikeTest()
             storage_api,
             storage_api,
             compression_registry,
-            GetBikeshedJobAPI(0),
+            job_api,
             0,
             0,
             missing_content,
@@ -1658,7 +1695,7 @@ void LifelikeTest()
             storage_api,
             storage_api,
             compression_registry,
-            GetBikeshedJobAPI(0),
+            job_api,
             0,
             0,
             missing_content,
@@ -1717,7 +1754,7 @@ void LifelikeTest()
         storage_api,
         storage_api,
         compression_registry,
-        GetBikeshedJobAPI(0),
+        job_api,
         0,
         0,
         merged_local_content,
@@ -1741,10 +1778,10 @@ void LifelikeTest()
     LONGTAIL_FREE(version1);
     version1 = 0;
 
-    LONGTAIL_FREE(compression_registry);
-    compression_registry = 0;
-
-    DestroyInMemStorageAPI(storage_api);
+    DestroyJobAPI(job_api);
+    DestroyHashAPI(hash_api);
+    DestroyCompressionRegistry(compression_registry);
+    DestroyStorageAPI(storage_api);
 
     return;
 }
