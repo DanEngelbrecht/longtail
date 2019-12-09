@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 #if defined(_WIN32)
-
+gservservsev
 #include <Windows.h>
 
 size_t Longtail_GetCPUCount()
@@ -398,14 +398,14 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
 
 #include <sys/types.h>
 #include <dirent.h>
+#include <semaphore.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <errno.h>
-
-#    define ALIGN_SIZE(x, align) (((x) + ((align)-1)) & ~((align)-1))
+#include <pthread.h>
 
 size_t Longtail_GetCPUCount()
 {
@@ -422,40 +422,40 @@ int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount)
     return __sync_fetch_and_add(value, amount) + amount;
 }
 
-struct Thread
+struct Longtail_Thread
 {
-    pthread_t          m_Handle;
-    ThreadFunc         m_ThreadFunc;
-    void*              m_ContextData;
-    pthread_mutex_t    m_ExitLock;
-    pthread_cond_t     m_ExitConditionalVariable;
-    bool               m_Exited;
+    pthread_t           m_Handle;
+    Longtail_ThreadFunc m_ThreadFunc;
+    void*               m_ContextData;
+    pthread_mutex_t     m_ExitLock;
+    pthread_cond_t      m_ExitConditionalVariable;
+    int                 m_Exited;
 };
 
 static void* ThreadStartFunction(void* data)
 {
-    Thread* thread = (Thread*)data;
+    struct Longtail_Thread* thread = (struct Longtail_Thread*)data;
     (void)thread->m_ThreadFunc(thread->m_ContextData);
     pthread_mutex_lock(&thread->m_ExitLock);
-    thread->m_Exited = true;
+    thread->m_Exited = 1;
     pthread_cond_broadcast(&thread->m_ExitConditionalVariable);
     pthread_mutex_unlock(&thread->m_ExitLock);
     return 0;
 }
 
-size_t GetThreadSize()
+size_t Longtail_GetThreadSize()
 {
-    return ALIGN_SIZE((uint32_t)sizeof(struct Thread), 8u) + ALIGN_SIZE((uint32_t)GetNonReentrantLockSize(), 8u) + ALIGN_SIZE((uint32_t)GetConditionVariableSize(), 8u);
+    return sizeof(struct Longtail_Thread);
 }
 
-HThread CreateThread(void* mem, ThreadFunc thread_func, uint32_t stack_size, void* context_data)
+HLongtail_Thread Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data)
 {
-    Thread* thread        = (Thread*)mem;
+    struct Longtail_Thread* thread = (struct Longtail_Thread*)mem;
     thread->m_ThreadFunc  = thread_func;
     thread->m_ContextData = context_data;
-    thread->m_Exited      = false;
+    thread->m_Exited      = 0;
     pthread_mutex_init(&thread->m_ExitLock, 0);
-    pthread_cond_init(&thread->m_ExitConditionalVariable, 0)
+    pthread_cond_init(&thread->m_ExitConditionalVariable, 0);
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -472,28 +472,28 @@ HThread CreateThread(void* mem, ThreadFunc thread_func, uint32_t stack_size, voi
     return thread;
 }
 
-static bool GetTimeSpec(timespec* ts, uint64_t delay_us)
+static int GetTimeSpec(struct timespec* ts, uint64_t delay_us)
 {
     if (clock_gettime(CLOCK_REALTIME, ts) == -1)
     {
-        return false;
+        return 0;
     }
     uint64_t end_ns = (uint64_t)(ts->tv_nsec) + (delay_us * 1000u);
     uint64_t wait_s = end_ns / 1000000000u;
     ts->tv_sec += wait_s;
     ts->tv_nsec = (long)(end_ns - wait_s * 1000000000u);
-    return true;
+    return 1;
 }
 
-bool JoinThread(HThread thread, uint64_t timeout_us)
+int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
 {
     if (thread->m_Handle == 0)
     {
-        return true;
+        return 1;
     }
-    if (timeout_us == TIMEOUT_INFINITE)
+    if (timeout_us == LONGTAIL_TIMEOUT_INFINITE)
     {
-        int result = ::pthread_join(thread->m_Handle, 0);
+        int result = pthread_join(thread->m_Handle, 0);
         if (result == 0)
         {
             thread->m_Handle = 0;
@@ -503,23 +503,23 @@ bool JoinThread(HThread thread, uint64_t timeout_us)
     struct timespec ts;
     if (!GetTimeSpec(&ts, timeout_us))
     {
-        return false;
+        return 0;
     }
     pthread_mutex_lock(&thread->m_ExitLock);
     while (!thread->m_Exited)
     {
-        if (0 != pthread_cond_timedwait(&thread->m_ConditionVariable, &thread->m_Mutex, &ts))
+        if (0 != pthread_cond_timedwait(&thread->m_ExitConditionalVariable, &thread->m_ExitLock, &ts))
         {
             break;
         }
     }
-    bool exited = thread->m_Exited;
+    int exited = thread->m_Exited;
     pthread_mutex_unlock(&thread->m_ExitLock);
     if (!exited)
     {
-        return false;
+        return 0;
     }
-    int result = ::pthread_join(thread->m_Handle, 0);
+    int result = pthread_join(thread->m_Handle, 0);
     if (result == 0)
     {
         thread->m_Handle = 0;
@@ -527,7 +527,7 @@ bool JoinThread(HThread thread, uint64_t timeout_us)
     return result == 0;
 }
 
-void DeleteThread(HThread thread)
+void Longtail_DeleteThread(HLongtail_Thread thread)
 {
     pthread_cond_destroy(&thread->m_ExitConditionalVariable);
     pthread_mutex_destroy(&thread->m_ExitLock);
@@ -610,25 +610,25 @@ HLongtail_Sema Longtail_CreateSema(void* mem, int initial_count)
     return semaphore;
 }
 
-bool Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
+int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 {
     while (count--)
     {
         if (0 != sem_post(&semaphore->m_Semaphore))
         {
-            return false;
+            return 0;
         }
     }
-    return true;
+    return 1;
 }
 
-bool Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
     if (0 != sem_wait(&semaphore->m_Semaphore))
     {
-        return false;
+        return 0;
     }
-    return true;
+    return 1;
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)

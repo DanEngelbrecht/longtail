@@ -29,10 +29,10 @@ struct ReadyCallback
     HLongtail_Sema m_Semaphore;
 };
 
-static void ReadyCallback_Dispose(struct ReadyCallback* this)
+static void ReadyCallback_Dispose(struct ReadyCallback* ready_callback)
 {
-    Longtail_DeleteSema(this->m_Semaphore);
-	LONGTAIL_FREE(this->m_Semaphore);
+    Longtail_DeleteSema(ready_callback->m_Semaphore);
+	LONGTAIL_FREE(ready_callback->m_Semaphore);
 }
 
 static void ReadyCallback_Ready(struct Bikeshed_ReadyCallback* ready_callback, uint8_t channel, uint32_t ready_count)
@@ -46,10 +46,10 @@ static void ReadyCallback_Wait(struct ReadyCallback* cb)
     Longtail_WaitSema(cb->m_Semaphore);
 }
 
-static void ReadyCallback_Init(struct ReadyCallback* this)
+static void ReadyCallback_Init(struct ReadyCallback* ready_callback)
 {
-    this->cb.SignalReady = ReadyCallback_Ready;
-    this->m_Semaphore = Longtail_CreateSema(LONGTAIL_MALLOC(Longtail_GetSemaSize()), 0);
+    ready_callback->cb.SignalReady = ReadyCallback_Ready;
+    ready_callback->m_Semaphore = Longtail_CreateSema(LONGTAIL_MALLOC(Longtail_GetSemaSize()), 0);
 }
 
 
@@ -61,50 +61,50 @@ struct ThreadWorker
     HLongtail_Thread      thread;
 };
 
-static void ThreadWorker_Init(struct ThreadWorker* this)
+static void ThreadWorker_Init(struct ThreadWorker* thread_worker)
 {
-    this->stop = 0;
-    this->shed = 0;
-    this->semaphore = 0;
-    this->thread = 0;
+    thread_worker->stop = 0;
+    thread_worker->shed = 0;
+    thread_worker->semaphore = 0;
+    thread_worker->thread = 0;
 }
 
-static void ThreadWorker_Dispose(struct ThreadWorker* this)
+static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
 {
 }
 
 static int32_t ThreadWorker_Execute(void* context)
 {
-    struct ThreadWorker* this = (struct ThreadWorker*)(context);
+    struct ThreadWorker* thread_worker = (struct ThreadWorker*)(context);
 
-    while (*this->stop == 0)
+    while (*thread_worker->stop == 0)
     {
-        if (!Bikeshed_ExecuteOne(this->shed, 0))
+        if (!Bikeshed_ExecuteOne(thread_worker->shed, 0))
         {
-            Longtail_WaitSema(this->semaphore);
+            Longtail_WaitSema(thread_worker->semaphore);
         }
     }
     return 0;
 }
 
-int ThreadWorker_CreateThread(struct ThreadWorker* this, Bikeshed in_shed, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
+int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_shed, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
 {
-    this->shed               = in_shed;
-    this->stop               = in_stop;
-    this->semaphore          = in_semaphore;
-    this->thread             = Longtail_CreateThread(LONGTAIL_MALLOC(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, this);
-    return this->thread != 0;
+    thread_worker->shed               = in_shed;
+    thread_worker->stop               = in_stop;
+    thread_worker->semaphore          = in_semaphore;
+    thread_worker->thread             = Longtail_CreateThread(LONGTAIL_MALLOC(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, thread_worker);
+    return thread_worker->thread != 0;
 }
 
-void ThreadWorker_JoinThread(struct ThreadWorker* this)
+void ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
 {
-    Longtail_JoinThread(this->thread, LONGTAIL_TIMEOUT_INFINITE);
+    Longtail_JoinThread(thread_worker->thread, LONGTAIL_TIMEOUT_INFINITE);
 }
 
-void ThreadWorker_DisposeThread(struct ThreadWorker* this)
+void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
 {
-    Longtail_DeleteThread(this->thread);
-	LONGTAIL_FREE(this->thread);
+    Longtail_DeleteThread(thread_worker->thread);
+	LONGTAIL_FREE(thread_worker->thread);
 }
 
 struct ManagedHashAPI
@@ -124,11 +124,13 @@ static HashAPI_HContext MeowHash_BeginContext(struct HashAPI* hash_api)
     MeowBegin(state, MeowDefaultSeed);
     return (HashAPI_HContext)state;
 }
+
 static void MeowHash_Hash(struct HashAPI* hash_api, HashAPI_HContext context, uint32_t length, void* data)
 {
     meow_state* state = (meow_state*)context;
     MeowAbsorb(state, length, data);
 }
+
 static uint64_t MeowHash_EndContext(struct HashAPI* hash_api, HashAPI_HContext context)
 {
     meow_state* state = (meow_state*)context;
@@ -183,7 +185,7 @@ struct FSStorageAPI
     struct ManagedStorageAPI m_StorageAPI;
 };
 
-void FSStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
+static void FSStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
 {
 }
 
@@ -195,14 +197,17 @@ static StorageAPI_HOpenFile FSStorageAPI_OpenReadFile(struct StorageAPI* storage
     free(tmp_path);
     return r;
 }
+
 static uint64_t FSStorageAPI_GetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
     return Longtail_GetFileSize((HLongtail_OpenReadFile)f);
 }
+
 static int FSStorageAPI_Read(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 {
     return Longtail_Read((HLongtail_OpenReadFile)f, offset,length, output);
 }
+
 static void FSStorageAPI_CloseRead(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
     Longtail_CloseReadFile((HLongtail_OpenReadFile)f);
@@ -216,6 +221,7 @@ static StorageAPI_HOpenFile FSStorageAPI_OpenWriteFile(struct StorageAPI* storag
     free(tmp_path);
     return r;
 }
+
 static int FSStorageAPI_Write(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 {
     return Longtail_Write((HLongtail_OpenWriteFile)f, offset,length, input);
@@ -251,6 +257,7 @@ static int FSStorageAPI_RenameFile(struct StorageAPI* storage_api, const char* s
     free(tmp_source_path);
     return ok;
 }
+
 static char* FSStorageAPI_ConcatPath(struct StorageAPI* storage_api, const char* root_path, const char* sub_path)
 {
     // TODO: Trove is inconsistent - it works on normalized paths!
@@ -390,23 +397,23 @@ struct InMemStorageAPI
     struct PathEntry* m_PathEntries;
 };
 
-void InMemStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
+static void InMemStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
 {
-    struct InMemStorageAPI* this = (struct InMemStorageAPI*)storage_api;
-    size_t c = arrlen(this->m_PathEntries);
+    struct InMemStorageAPI* in_mem_storage_api = (struct InMemStorageAPI*)storage_api;
+    size_t c = arrlen(in_mem_storage_api->m_PathEntries);
     while(c--)
     {
-        struct PathEntry* path_entry = &this->m_PathEntries[c];
+        struct PathEntry* path_entry = &in_mem_storage_api->m_PathEntries[c];
         free(path_entry->m_FileName);
         path_entry->m_FileName = 0;
         arrfree(path_entry->m_Content);
         path_entry->m_Content = 0;
     }
-    hmfree(this->m_PathHashToContent);
-    this->m_PathHashToContent = 0;
-    arrfree(this->m_PathEntries);
-    this->m_PathEntries = 0;
-    DestroyHashAPI(this->m_HashAPI);
+    hmfree(in_mem_storage_api->m_PathHashToContent);
+    in_mem_storage_api->m_PathHashToContent = 0;
+    arrfree(in_mem_storage_api->m_PathEntries);
+    in_mem_storage_api->m_PathEntries = 0;
+    DestroyHashAPI(in_mem_storage_api->m_HashAPI);
 }
 
 static uint64_t InMemStorageAPI_GetPathHash(struct HashAPI* hash_api, const char* path)
@@ -427,12 +434,14 @@ static StorageAPI_HOpenFile InMemStorageAPI_OpenReadFile(struct StorageAPI* stor
     }
     return 0;
 }
+
 static uint64_t InMemStorageAPI_GetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     struct PathEntry* path_entry = (struct PathEntry*)f;
     return arrlen(path_entry->m_Content);
 }
+
 static int InMemStorageAPI_Read(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
@@ -505,6 +514,7 @@ static StorageAPI_HOpenFile InMemStorageAPI_OpenWriteFile(struct StorageAPI* sto
     arrsetlen(path_entry->m_Content, (uint32_t)initial_size);
     return (StorageAPI_HOpenFile)path_hash;
 }
+
 static int InMemStorageAPI_Write(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
@@ -711,6 +721,7 @@ static StorageAPI_HIterator InMemStorageAPI_StartFind(struct StorageAPI* storage
     LONGTAIL_FREE(i);
     return (StorageAPI_HIterator)0;
 }
+
 static int InMemStorageAPI_FindNext(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
@@ -1021,7 +1032,7 @@ static void Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
 	ReadyCallback_Init(&job_api->m_ReadyCallback);
 
     job_api->m_Shed = Bikeshed_Create(malloc(BIKESHED_SIZE(1048576, 7340032, 1)), 1048576, 7340032, 1, &job_api->m_ReadyCallback.cb);
-    job_api->m_Workers = LONGTAIL_MALLOC(sizeof(struct ThreadWorker) * job_api->m_WorkerCount);
+    job_api->m_Workers = (struct ThreadWorker*)LONGTAIL_MALLOC(sizeof(struct ThreadWorker) * job_api->m_WorkerCount);
     for (uint32_t i = 0; i < job_api->m_WorkerCount; ++i)
     {
         ThreadWorker_Init(&job_api->m_Workers[i]);
@@ -1146,17 +1157,15 @@ struct CompressionRegistry* CreateDefaultCompressionRegistry()
         return 0;
     }
     lizard_compression_api = CreateLizardCompressionAPI();
-    static struct CompressionAPI* compression_apis[1];
+    static struct CompressionAPI* compression_apis[1] = {lizard_compression_api};
     compression_apis[0] = lizard_compression_api;
-    static uint32_t compression_types[] = {
-        LIZARD_DEFAULT_COMPRESSION_TYPE};
-    static CompressionAPI_HSettings compression_settings[1];
-    compression_settings[0] = lizard_compression_api->GetDefaultSettings(lizard_compression_api);
-        
+    static uint32_t compression_types[] = {LIZARD_DEFAULT_COMPRESSION_TYPE};
+    static CompressionAPI_HSettings compression_settings[1] = {compression_settings[0] = lizard_compression_api->GetDefaultSettings(lizard_compression_api)};
+
     struct CompressionRegistry* compression_registry = CreateCompressionRegistry(
         1,
         &compression_types[0],
-        &compression_apis[0],
+        (const struct CompressionAPI**)&compression_apis[0],
         &compression_settings[0]);
     return compression_registry;
 }

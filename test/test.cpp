@@ -180,6 +180,10 @@ TEST(Longtail, ContentIndex)
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     HashAPI* hash_api = CreateMeowHashAPI();
+    ASSERT_NE((HashAPI*)0, hash_api);
+    HashAPI_HContext c = hash_api->BeginContext(hash_api);
+    ASSERT_NE((HashAPI_HContext)0, c);
+    hash_api->EndContext(hash_api, c);
     ContentIndex* content_index = CreateContentIndex(
         hash_api,
         asset_count,
