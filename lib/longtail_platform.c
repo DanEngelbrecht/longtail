@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 #if defined(_WIN32)
-gservservsev
+
 #include <Windows.h>
 
 size_t Longtail_GetCPUCount()

@@ -1157,10 +1157,11 @@ struct CompressionRegistry* CreateDefaultCompressionRegistry()
         return 0;
     }
     lizard_compression_api = CreateLizardCompressionAPI();
-    static struct CompressionAPI* compression_apis[1] = {lizard_compression_api};
+    static struct CompressionAPI* compression_apis[1];
     compression_apis[0] = lizard_compression_api;
     static uint32_t compression_types[] = {LIZARD_DEFAULT_COMPRESSION_TYPE};
-    static CompressionAPI_HSettings compression_settings[1] = {compression_settings[0] = lizard_compression_api->GetDefaultSettings(lizard_compression_api)};
+    static CompressionAPI_HSettings compression_settings[1];
+    compression_settings[0] = lizard_compression_api->GetDefaultSettings(lizard_compression_api);
 
     struct CompressionRegistry* compression_registry = CreateCompressionRegistry(
         1,
