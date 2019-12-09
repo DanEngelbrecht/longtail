@@ -52,11 +52,11 @@ int CreatePath(struct StorageAPI* storage_api, const char* path)
 
 int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 {
-    char* dir_path = strdup(path);
+    char* dir_path = Longtail_Strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
-        free(dir_path);
+        Longtail_Free(dir_path);
         return 1;
     }
     while (last_path_delimiter > dir_path && last_path_delimiter[-1] == '/')
@@ -65,7 +65,7 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
     }
     *last_path_delimiter = '\0';
     int ok = CreatePath(storage_api, dir_path);
-    free(dir_path);
+    Longtail_Free(dir_path);
     return ok;
 }
 
@@ -75,7 +75,7 @@ char* NormalizePath(const char* path)
     {
         return 0;
     }
-    char* normalized_path = strdup(path);
+    char* normalized_path = Longtail_Strdup(path);
     size_t wi = 0;
     size_t ri = 0;
     while (path[ri])
@@ -197,7 +197,7 @@ struct Progress
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
-    uint32_t* result = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * count);
+    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
     for (uint32_t i = 0; i < count; ++i)
     {
         const char* path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[i]];
@@ -241,7 +241,7 @@ int Cmd_CreateVersionIndex(
     if (!compression_types)
     {
         fprintf(stderr, "Failed to get compression types for files in `%s`\n", version);
-        LONGTAIL_FREE(file_infos);
+        Longtail_Free(file_infos);
         return 0;
     }
 
@@ -260,9 +260,9 @@ int Cmd_CreateVersionIndex(
             compression_types,
             target_chunk_size);
     }
-    LONGTAIL_FREE(compression_types);
+    Longtail_Free(compression_types);
     compression_types = 0;
-    LONGTAIL_FREE(file_infos);
+    Longtail_Free(file_infos);
     file_infos = 0;
     if (!vindex)
     {
@@ -275,7 +275,7 @@ int Cmd_CreateVersionIndex(
     VersionIndex* target_vindex = ReadVersionIndex(storage_api, create_version_index);
     if (!target_vindex)
     {
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
         fprintf(stderr, "Failed to read version index from `%s`\n", create_version_index);
         return 0;
@@ -285,13 +285,13 @@ int Cmd_CreateVersionIndex(
         vindex,
         target_vindex);
 
-    LONGTAIL_FREE(version_diff);
+    Longtail_Free(version_diff);
     version_diff = 0;
 
-    LONGTAIL_FREE(target_vindex);
+    Longtail_Free(target_vindex);
     target_vindex = 0;
 
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(vindex);
     vindex = 0;
     if (!ok)
     {
@@ -348,7 +348,7 @@ int Cmd_CreateContentIndex(
             cindex,
             create_content_index);
 
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
     if (!ok)
     {
@@ -373,15 +373,15 @@ int Cmd_MergeContentIndex(
     ContentIndex* cindex2 = ReadContentIndex(storage_api, merge_content_index);
     if (!cindex2)
     {
-        LONGTAIL_FREE(cindex1);
+        Longtail_Free(cindex1);
         cindex1 = 0;
         fprintf(stderr, "Failed to read content index from `%s`\n", merge_content_index);
         return 0;
     }
     ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
-    LONGTAIL_FREE(cindex2);
+    Longtail_Free(cindex2);
     cindex2 = 0;
-    LONGTAIL_FREE(cindex1);
+    Longtail_Free(cindex1);
     cindex1 = 0;
 
     if (!cindex)
@@ -396,7 +396,7 @@ int Cmd_MergeContentIndex(
             cindex,
             create_content_index);
 
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
 
     if (!ok)
@@ -444,7 +444,7 @@ int Cmd_CreateMissingContentIndex(
         if (!compression_types)
         {
             fprintf(stderr, "Failed to get compression types for files in `%s`\n", version);
-            LONGTAIL_FREE(file_infos);
+            Longtail_Free(file_infos);
             return 0;
         }
         Progress progress("Indexing version");
@@ -459,9 +459,9 @@ int Cmd_CreateMissingContentIndex(
             file_infos->m_FileSizes,
             compression_types,
             target_chunk_size);
-        LONGTAIL_FREE(compression_types);
+        Longtail_Free(compression_types);
         compression_types = 0;
-        LONGTAIL_FREE(file_infos);
+        Longtail_Free(file_infos);
         file_infos = 0;
         if (!vindex)
         {
@@ -476,7 +476,7 @@ int Cmd_CreateMissingContentIndex(
         existing_cindex = ReadContentIndex(storage_api, content_index);
         if (!existing_cindex)
         {
-            LONGTAIL_FREE(vindex);
+            Longtail_Free(vindex);
             vindex = 0;
             fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
             return 0;
@@ -494,7 +494,7 @@ int Cmd_CreateMissingContentIndex(
             content);
         if (!existing_cindex)
         {
-            LONGTAIL_FREE(vindex);
+            Longtail_Free(vindex);
             vindex = 0;
             fprintf(stderr, "Failed to read contents from `%s`\n", content);
             return 0;
@@ -519,9 +519,9 @@ int Cmd_CreateMissingContentIndex(
         target_block_size,
         max_chunks_per_block);
 
-    LONGTAIL_FREE(existing_cindex);
+    Longtail_Free(existing_cindex);
     existing_cindex = 0;
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(vindex);
     vindex = 0;
     if (!cindex)
     {
@@ -535,7 +535,7 @@ int Cmd_CreateMissingContentIndex(
             cindex,
             create_content_index);
 
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
 
     if (!ok)
@@ -583,7 +583,7 @@ int Cmd_CreateContent(
         if (!compression_types)
         {
             fprintf(stderr, "Failed to get compression types for files in `%s`\n", version);
-            LONGTAIL_FREE(file_infos);
+            Longtail_Free(file_infos);
             return 0;
         }
         Progress progress("Indexing version");
@@ -598,9 +598,9 @@ int Cmd_CreateContent(
             file_infos->m_FileSizes,
             compression_types,
             target_chunk_size);
-        LONGTAIL_FREE(compression_types);
+        Longtail_Free(compression_types);
         compression_types = 0;
-        LONGTAIL_FREE(file_infos);
+        Longtail_Free(file_infos);
         file_infos = 0;
         if (!vindex)
         {
@@ -632,7 +632,7 @@ int Cmd_CreateContent(
         if (!cindex)
         {
             fprintf(stderr, "Failed to create content index for version `%s`\n", version);
-            LONGTAIL_FREE(vindex);
+            Longtail_Free(vindex);
             vindex = 0;
             return 0;
         }
@@ -642,9 +642,9 @@ int Cmd_CreateContent(
         cindex,
         vindex))
     {
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
         fprintf(stderr, "Version `%s` does not fully encompass content `%s`\n", version, create_content);
         return 0;
@@ -666,9 +666,9 @@ int Cmd_CreateContent(
             create_content);
     }
 
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(vindex);
     vindex = 0;
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
 
     if (!ok)
@@ -692,7 +692,7 @@ int Cmd_ListMissingBlocks(
     ContentIndex* need_content_index = ReadContentIndex(storage_api, content_index);
     if (!need_content_index)
     {
-        LONGTAIL_FREE(have_content_index);
+        Longtail_Free(have_content_index);
         have_content_index = 0;
         return 0;
     }
@@ -732,9 +732,9 @@ int Cmd_ListMissingBlocks(
     hmfree(chunk_hash_to_have_block_index);
     chunk_hash_to_have_block_index = 0;
 
-    LONGTAIL_FREE(need_content_index);
+    Longtail_Free(need_content_index);
     need_content_index = 0;
-    LONGTAIL_FREE(have_content_index);
+    Longtail_Free(have_content_index);
     have_content_index = 0;
 
     uint64_t missing_block_count = arrlen(missing_block_hashes);
@@ -773,7 +773,7 @@ int Cmd_CreateVersion(
         cindex = ReadContentIndex(storage_api, content_index);
         if (!cindex)
         {
-            LONGTAIL_FREE(vindex);
+            Longtail_Free(vindex);
             vindex = 0;
             fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
             return 0;
@@ -791,7 +791,7 @@ int Cmd_CreateVersion(
             content);
         if (!cindex)
         {
-            LONGTAIL_FREE(vindex);
+            Longtail_Free(vindex);
             vindex = 0;
             fprintf(stderr, "Failed to create content index for `%s`\n", content);
             return 0;
@@ -802,9 +802,9 @@ int Cmd_CreateVersion(
         cindex,
         vindex))
     {
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         fprintf(stderr, "Content `%s` does not fully encompass version `%s`\n", content, create_version);
         return 0;
@@ -825,9 +825,9 @@ int Cmd_CreateVersion(
             content,
             create_version);
     }
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(vindex);
     vindex = 0;
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
     if (!ok)
     {
@@ -873,7 +873,7 @@ int Cmd_UpdateVersion(
         if (!compression_types)
         {
             fprintf(stderr, "Failed to get compression types for files in `%s`\n", update_version);
-            LONGTAIL_FREE(file_infos);
+            Longtail_Free(file_infos);
             return 0;
         }
         Progress progress("Indexing version");
@@ -888,9 +888,9 @@ int Cmd_UpdateVersion(
             file_infos->m_FileSizes,
             compression_types,
             target_chunk_size);
-        LONGTAIL_FREE(compression_types);
+        Longtail_Free(compression_types);
         compression_types = 0;
-        LONGTAIL_FREE(file_infos);
+        Longtail_Free(file_infos);
         file_infos = 0;
         if (!source_vindex)
         {
@@ -902,7 +902,7 @@ int Cmd_UpdateVersion(
     VersionIndex* target_vindex = ReadVersionIndex(storage_api, target_version_index);
     if (!target_vindex)
     {
-        LONGTAIL_FREE(source_vindex);
+        Longtail_Free(source_vindex);
         source_vindex = 0;
         fprintf(stderr, "Failed to read version index from `%s`\n", target_version_index);
         return 0;
@@ -914,9 +914,9 @@ int Cmd_UpdateVersion(
         cindex = ReadContentIndex(storage_api, content_index);
         if (!cindex)
         {
-            LONGTAIL_FREE(target_vindex);
+            Longtail_Free(target_vindex);
             target_vindex = 0;
-            LONGTAIL_FREE(source_vindex);
+            Longtail_Free(source_vindex);
             source_vindex = 0;
             fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
             return 0;
@@ -934,9 +934,9 @@ int Cmd_UpdateVersion(
             content);
         if (!cindex)
         {
-            LONGTAIL_FREE(target_vindex);
+            Longtail_Free(target_vindex);
             target_vindex = 0;
-            LONGTAIL_FREE(source_vindex);
+            Longtail_Free(source_vindex);
             source_vindex = 0;
             fprintf(stderr, "Failed to create content index for `%s`\n", content);
             return 0;
@@ -947,9 +947,9 @@ int Cmd_UpdateVersion(
         cindex,
         target_vindex))
     {
-        LONGTAIL_FREE(target_vindex);
+        Longtail_Free(target_vindex);
         target_vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         fprintf(stderr, "Content `%s` does not fully encompass version `%s`\n", content, target_version_index);
         return 0;
@@ -960,11 +960,11 @@ int Cmd_UpdateVersion(
         target_vindex);
     if (!version_diff)
     {
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
-        LONGTAIL_FREE(target_vindex);
+        Longtail_Free(target_vindex);
         target_vindex = 0;
-        LONGTAIL_FREE(source_vindex);
+        Longtail_Free(source_vindex);
         source_vindex = 0;
         fprintf(stderr, "Failed to create version diff from `%s` to `%s`\n", version_index, target_version_index);
         return 0;
@@ -989,13 +989,13 @@ int Cmd_UpdateVersion(
             update_version);
     }
 
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
-    LONGTAIL_FREE(target_vindex);
+    Longtail_Free(target_vindex);
     target_vindex = 0;
-    LONGTAIL_FREE(source_vindex);
+    Longtail_Free(source_vindex);
     source_vindex = 0;
-    LONGTAIL_FREE(version_diff);
+    Longtail_Free(version_diff);
     version_diff = 0;
 
     if (!ok)
@@ -1040,7 +1040,7 @@ int Cmd_UpSyncVersion(
         if (!compression_types)
         {
             fprintf(stderr, "Failed to get compression types for files in `%s`\n", version_path);
-            LONGTAIL_FREE(file_infos);
+            Longtail_Free(file_infos);
             return 0;
         }
 
@@ -1056,9 +1056,9 @@ int Cmd_UpSyncVersion(
             file_infos->m_FileSizes,
             compression_types,
             target_chunk_size);
-        LONGTAIL_FREE(compression_types);
+        Longtail_Free(compression_types);
         compression_types = 0;
-        LONGTAIL_FREE(file_infos);
+        Longtail_Free(file_infos);
         file_infos = 0;
         if (!vindex)
         {
@@ -1088,7 +1088,7 @@ int Cmd_UpSyncVersion(
             if (!cindex)
             {
                 fprintf(stderr, "Failed to create empty content index\n");
-                LONGTAIL_FREE(vindex);
+                Longtail_Free(vindex);
                 vindex = 0;
                 return 0;
             }
@@ -1111,7 +1111,7 @@ int Cmd_UpSyncVersion(
             if (!cindex)
             {
                 fprintf(stderr, "Failed to create content index for `%s`\n", content_path);
-                LONGTAIL_FREE(vindex);
+                Longtail_Free(vindex);
                 vindex = 0;
                 return 0;
             }
@@ -1127,9 +1127,9 @@ int Cmd_UpSyncVersion(
     if (!missing_content_index)
     {
         fprintf(stderr, "Failed to generate content index for missing content\n");
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         return 0;
     }
@@ -1152,11 +1152,11 @@ int Cmd_UpSyncVersion(
     if (!ok)
     {
         fprintf(stderr, "Failed to create new content from `%s` to `%s`\n", version_path, missing_content_path);
-        LONGTAIL_FREE(missing_content_index);
+        Longtail_Free(missing_content_index);
         missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         return 0;
     }
@@ -1166,11 +1166,11 @@ int Cmd_UpSyncVersion(
     if (!new_content_index)
     {
         fprintf(stderr, "Failed creating a new content index with the added content\n");
-        LONGTAIL_FREE(missing_content_index);
+        Longtail_Free(missing_content_index);
         missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         return 0;
     }
@@ -1182,13 +1182,13 @@ int Cmd_UpSyncVersion(
     if (!ok)
     {
         fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
-/*        LONGTAIL_FREE(new_content_index);
+/*        Longtail_Free(new_content_index);
         new_content_index = 0;*/
-        LONGTAIL_FREE(missing_content_index);
+        Longtail_Free(missing_content_index);
         missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         return 0;
     }
@@ -1200,13 +1200,13 @@ int Cmd_UpSyncVersion(
     if (!ok)
     {
         fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
-/*        LONGTAIL_FREE(new_content_index);
+/*        Longtail_Free(new_content_index);
         new_content_index = 0;*/
-        LONGTAIL_FREE(missing_content_index);
+        Longtail_Free(missing_content_index);
         missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         return 0;
     }
@@ -1214,22 +1214,22 @@ int Cmd_UpSyncVersion(
     if (!PrintFormattedBlockList(*missing_content_index->m_BlockCount, missing_content_index->m_BlockHashes, output_format))
     {
         fprintf(stderr, "Failed to format block output using format `%s`\n", output_format);
-        LONGTAIL_FREE(missing_content_index);
+        Longtail_Free(missing_content_index);
         missing_content_index = 0;
-        LONGTAIL_FREE(vindex);
+        Longtail_Free(vindex);
         vindex = 0;
-        LONGTAIL_FREE(cindex);
+        Longtail_Free(cindex);
         cindex = 0;
         return 0;
     }
-/*    LONGTAIL_FREE(new_content_index);
+/*    Longtail_Free(new_content_index);
     new_content_index = 0;
 */
-    LONGTAIL_FREE(missing_content_index);
+    Longtail_Free(missing_content_index);
     missing_content_index = 0;
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(vindex);
     vindex = 0;
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
 
     fprintf(stderr, "Updated version index to `%s`\n", version_index_path);
@@ -1277,7 +1277,7 @@ int Cmd_DownSyncVersion(
         if (!have_content_path)
         {
             // TODO: Print
-            LONGTAIL_FREE(vindex_target);
+            Longtail_Free(vindex_target);
             vindex_target = 0;
             return 0;
         }
@@ -1291,7 +1291,7 @@ int Cmd_DownSyncVersion(
         if (!existing_cindex)
         {
             // TODO: Print
-            LONGTAIL_FREE(vindex_target);
+            Longtail_Free(vindex_target);
             vindex_target = 0;
             return 0;
         }
@@ -1306,15 +1306,15 @@ int Cmd_DownSyncVersion(
     if (!cindex_missing)
     {
         // TODO: Print
-        LONGTAIL_FREE(existing_cindex);
+        Longtail_Free(existing_cindex);
         existing_cindex = 0;
-        LONGTAIL_FREE(vindex_target);
+        Longtail_Free(vindex_target);
         vindex_target = 0;
         return 0;
     }
-    LONGTAIL_FREE(existing_cindex);
+    Longtail_Free(existing_cindex);
     existing_cindex = 0;
-    LONGTAIL_FREE(vindex_target);
+    Longtail_Free(vindex_target);
     vindex_target = 0;
 
     ContentIndex* cindex_remote = ReadContentIndex(source_storage_api, remote_content_index_path);
@@ -1323,7 +1323,7 @@ int Cmd_DownSyncVersion(
         if (!remote_content_path)
         {
             //TODO: print
-            LONGTAIL_FREE(cindex_missing);
+            Longtail_Free(cindex_missing);
             cindex_missing = 0;
             return 0;
         }
@@ -1337,7 +1337,7 @@ int Cmd_DownSyncVersion(
         if (!cindex_remote)
         {
             //TODO: print
-            LONGTAIL_FREE(cindex_missing);
+            Longtail_Free(cindex_missing);
             cindex_missing = 0;
             return 0;
         }
@@ -1349,26 +1349,26 @@ int Cmd_DownSyncVersion(
         cindex_missing);
     if (!request_content)
     {
-        LONGTAIL_FREE(cindex_remote);
+        Longtail_Free(cindex_remote);
         cindex_remote = 0;
-        LONGTAIL_FREE(cindex_missing);
+        Longtail_Free(cindex_missing);
         cindex_missing = 0;
         return 0;
     }
 
-    LONGTAIL_FREE(cindex_remote);
+    Longtail_Free(cindex_remote);
     cindex_remote = 0;
-    LONGTAIL_FREE(cindex_missing);
+    Longtail_Free(cindex_missing);
     cindex_missing = 0;
 
     if (!PrintFormattedBlockList(*request_content->m_BlockCount, request_content->m_BlockHashes, output_format))
     {
-        LONGTAIL_FREE(request_content);
+        Longtail_Free(request_content);
         request_content = 0;
         return 0;
     }
 
-    LONGTAIL_FREE(request_content);
+    Longtail_Free(request_content);
     request_content = 0;
 
     return 1;
@@ -1490,7 +1490,7 @@ int main(int argc, char** argv)
             create_content_index,
             content))
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
         char create_version_index[512];
@@ -1506,7 +1506,7 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
 
@@ -1529,7 +1529,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
 
@@ -1550,7 +1550,7 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to create content `%s` from `%s`\n", create_content, version);
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
 
@@ -1564,7 +1564,7 @@ int main(int argc, char** argv)
             content_index,
             merge_content_index))
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
 /*
@@ -1583,7 +1583,7 @@ int main(int argc, char** argv)
             content_index))
         {
             fprintf(stderr, "Failed to create version `%s` to `%s`\n", create_version, version_index);
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
 */
@@ -1605,7 +1605,7 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to update version `%s` to `%s`\n", update_version, target_version_index);
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
         char incremental_version_index[512];
@@ -1621,45 +1621,45 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
 
         struct VersionIndex* source_vindex = ReadVersionIndex(fs_storage_api, create_version_index);
         if (!source_vindex)
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
         struct VersionIndex* target_vindex = ReadVersionIndex(fs_storage_api, incremental_version_index);
         if (!target_vindex)
         {
-            LONGTAIL_FREE(source_vindex);
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(source_vindex);
+            Longtail_Free(compression_registry);
             return 1;
         }
 
         struct VersionDiff* diff = CreateVersionDiff(
             source_vindex,
             target_vindex);
-        LONGTAIL_FREE(source_vindex);
-        LONGTAIL_FREE(target_vindex);
+        Longtail_Free(source_vindex);
+        Longtail_Free(target_vindex);
         if (*diff->m_SourceRemovedCount != 0)
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
         if (*diff->m_TargetAddedCount != 0)
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
         if (*diff->m_ModifiedCount != 0)
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
-        LONGTAIL_FREE(diff);
+        Longtail_Free(diff);
 
         char verify_content_index[512];
         sprintf(verify_content_index, "%s/%s.lci", test_base_path, test_version);
@@ -1679,13 +1679,13 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            LONGTAIL_FREE(compression_registry);
+            Longtail_Free(compression_registry);
             return 1;
         }
 
-        free((char*)test_version);
-        free((char*)test_base_path);
-        LONGTAIL_FREE(compression_registry);
+        Longtail_Free((char*)test_version);
+        Longtail_Free((char*)test_base_path);
+        Longtail_Free(compression_registry);
 
         printf("********* SUCCESS *********\n");
         return 0;
@@ -1789,7 +1789,7 @@ int main(int argc, char** argv)
                 target_block_size,
                 max_chunks_per_block,
                 target_chunk_size);
-        LONGTAIL_FREE(compression_registry);
+        Longtail_Free(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1815,7 +1815,7 @@ int main(int argc, char** argv)
             version_index,
             content,
             content_index);
-        LONGTAIL_FREE(compression_registry);
+        Longtail_Free(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1834,7 +1834,7 @@ int main(int argc, char** argv)
             target_version_index,
             target_chunk_size);
 
-        LONGTAIL_FREE(compression_registry);
+        Longtail_Free(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1887,7 +1887,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_block_size,
             target_chunk_size);
-        LONGTAIL_FREE(compression_registry);
+        Longtail_Free(compression_registry);
 
         if (!ok){
             // TODO: printf
@@ -1934,7 +1934,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_block_size,
             target_chunk_size);
-        LONGTAIL_FREE(compression_registry);
+        Longtail_Free(compression_registry);
 
         if (!ok)
         {
@@ -1955,23 +1955,23 @@ end:
     DestroyStorageAPI(fs_storage_api);
     DestroyCompressionRegistry(compression_registry);
 
-    free((void*)create_version_index);
-    free((void*)version);
-    free((void*)filter);
-    free((void*)create_content_index);
-    free((void*)version_index);
-    free((void*)content);
-    free((void*)create_content);
-    free((void*)content_index);
-    free((void*)merge_content_index);
-    free((void*)create_version);
-    free((void*)update_version);
-    free((void*)target_version);
-    free((void*)target_version_index);
-    free((void*)list_missing_blocks);
-    free((void*)remote_content_index);
-    free((void*)remote_content);
-    free((void*)missing_content);
-    free((void*)missing_content_index);
+    Longtail_Free((void*)create_version_index);
+    Longtail_Free((void*)version);
+    Longtail_Free((void*)filter);
+    Longtail_Free((void*)create_content_index);
+    Longtail_Free((void*)version_index);
+    Longtail_Free((void*)content);
+    Longtail_Free((void*)create_content);
+    Longtail_Free((void*)content_index);
+    Longtail_Free((void*)merge_content_index);
+    Longtail_Free((void*)create_version);
+    Longtail_Free((void*)update_version);
+    Longtail_Free((void*)target_version);
+    Longtail_Free((void*)target_version_index);
+    Longtail_Free((void*)list_missing_blocks);
+    Longtail_Free((void*)remote_content_index);
+    Longtail_Free((void*)remote_content);
+    Longtail_Free((void*)missing_content);
+    Longtail_Free((void*)missing_content_index);
     return result;
 }

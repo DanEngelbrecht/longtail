@@ -15,17 +15,17 @@
 
 int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 {
-    char* dir_path = strdup(path);
+    char* dir_path = Longtail_Strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
-        free(dir_path);
+        Longtail_Free(dir_path);
         return 1;
     }
     *last_path_delimiter = '\0';
     if (storage_api->IsDir(storage_api, dir_path))
     {
-        free(dir_path);
+        Longtail_Free(dir_path);
         return 1;
     }
     else
@@ -33,17 +33,17 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
         if (!CreateParentPath(storage_api, dir_path))
         {
             TEST_LOG("CreateParentPath failed: `%s`\n", dir_path)
-            free(dir_path);
+            Longtail_Free(dir_path);
             return 0;
         }
         if (storage_api->CreateDir(storage_api, dir_path))
         {
-            free(dir_path);
+            Longtail_Free(dir_path);
             return 1;
         }
     }
     TEST_LOG("CreateParentPath failed: `%s`\n", dir_path)
-    free(dir_path);
+    Longtail_Free(dir_path);
     return 0;
 }
 
@@ -52,18 +52,18 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 
 int MakePath(StorageAPI* storage_api, const char* path)
 {
-    char* dir_path = strdup(path);
+    char* dir_path = Longtail_Strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
-        free(dir_path);
+        Longtail_Free(dir_path);
         dir_path = 0;
         return 1;
     }
     *last_path_delimiter = '\0';
     if (storage_api->IsDir(storage_api, dir_path))
     {
-        free(dir_path);
+        Longtail_Free(dir_path);
         return 1;
     }
     else
@@ -71,17 +71,17 @@ int MakePath(StorageAPI* storage_api, const char* path)
         if (!MakePath(storage_api, dir_path))
         {
             TEST_LOG("MakePath failed: `%s`\n", dir_path)
-            free(dir_path);
+            Longtail_Free(dir_path);
             return 0;
         }
         if (storage_api->CreateDir(storage_api, dir_path))
         {
-            free(dir_path);
+            Longtail_Free(dir_path);
             return 1;
         }
         if (storage_api->IsDir(storage_api, dir_path))
         {
-            free(dir_path);
+            Longtail_Free(dir_path);
             return 1;
         }
         return 0;
@@ -104,10 +104,10 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
             return 0;
         }
         uint64_t content_size = 64000 + 1 + i;
-        char* data = (char*)LONGTAIL_MALLOC(sizeof(char) * content_size);
+        char* data = (char*)Longtail_Alloc(sizeof(char) * content_size);
         memset(data, i, content_size);
         int ok = storage_api->Write(storage_api, content_file, 0, content_size, data);
-        LONGTAIL_FREE(data);
+        Longtail_Free(data);
         if (!ok)
         {
             return 0;
@@ -119,9 +119,9 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
 
 TEST(Longtail, LongtailMalloc)
 {
-    void* p = LONGTAIL_MALLOC(77);
+    void* p = Longtail_Alloc(77);
     ASSERT_NE((void*)0, p);
-    LONGTAIL_FREE(p);
+    Longtail_Free(p);
 }
 
 TEST(Longtail, VersionIndex)
@@ -144,7 +144,7 @@ TEST(Longtail, VersionIndex)
 
     Paths* paths = MakePaths(5, asset_paths);
     size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
-    void* version_index_mem = LONGTAIL_MALLOC(version_index_size);
+    void* version_index_mem = Longtail_Alloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
@@ -162,8 +162,8 @@ TEST(Longtail, VersionIndex)
         asset_content_hashes,
         asset_compression_types);
 
-    LONGTAIL_FREE(version_index);
-    LONGTAIL_FREE(paths);
+    Longtail_Free(version_index);
+    Longtail_Free(paths);
 }
 
 TEST(Longtail, ContentIndex)
@@ -212,7 +212,7 @@ TEST(Longtail, ContentIndex)
     ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[3]);
     ASSERT_EQ(43591, content_index->m_ChunkBlockOffsets[4]);
 
-    LONGTAIL_FREE(content_index);
+    Longtail_Free(content_index);
 
     DestroyHashAPI(hash_api);
 }
@@ -220,7 +220,7 @@ TEST(Longtail, ContentIndex)
 static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
-    uint32_t* result = (uint32_t*)LONGTAIL_MALLOC(sizeof(uint32_t) * count);
+    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
     for (uint32_t i = 0; i < count; ++i)
     {
         result[i] = LIZARD_DEFAULT_COMPRESSION_TYPE;
@@ -252,8 +252,8 @@ TEST(Longtail, ContentIndexSerialization)
         compression_types,
         16384);
     ASSERT_NE((VersionIndex*)0, vindex);
-    LONGTAIL_FREE(compression_types);
-    LONGTAIL_FREE(version1_paths);
+    Longtail_Free(compression_types);
+    Longtail_Free(version1_paths);
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
@@ -267,7 +267,7 @@ TEST(Longtail, ContentIndexSerialization)
         MAX_CHUNKS_PER_BLOCK);
     ASSERT_NE((ContentIndex*)0, cindex);
 
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(vindex);
     vindex = 0;
 
     ASSERT_NE(0, WriteContentIndex(local_storage, cindex, "cindex.lci"));
@@ -288,10 +288,10 @@ TEST(Longtail, ContentIndexSerialization)
         ASSERT_EQ(cindex->m_ChunkLengths[i], cindex2->m_ChunkLengths[i]);
     }
 
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
 
-    LONGTAIL_FREE(cindex2);
+    Longtail_Free(cindex2);
     cindex2 = 0;
 
     DestroyJobAPI(job_api);
@@ -349,9 +349,9 @@ TEST(Longtail, WriteContent)
         compression_types,
         16);
     ASSERT_NE((VersionIndex*)0, vindex);
-    LONGTAIL_FREE(compression_types);
+    Longtail_Free(compression_types);
     compression_types = 0;
-    LONGTAIL_FREE(version1_paths);
+    Longtail_Free(version1_paths);
     version1_paths = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
@@ -412,9 +412,9 @@ TEST(Longtail, WriteContent)
         ASSERT_EQ(cindex->m_ChunkLengths[i], cindex2->m_ChunkLengths[i2]);
     }
 
-    LONGTAIL_FREE(cindex2);
-    LONGTAIL_FREE(cindex);
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(cindex2);
+    Longtail_Free(cindex);
+    Longtail_Free(vindex);
 
     DestroyJobAPI(job_api);
     DestroyHashAPI(hash_api);
@@ -440,7 +440,7 @@ TEST(Longtail, TestVeryLargeFile)
         paths->m_FileSizes,
         32758u);
 
-    LONGTAIL_FREE(version_index);
+    Longtail_Free(version_index);
 }
 #endif // 0
 
@@ -498,7 +498,7 @@ TEST(Longtail, CreateMissingContent)
 
     Paths* paths = MakePaths(5, asset_paths);
     size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
-    void* version_index_mem = LONGTAIL_MALLOC(version_index_size);
+    void* version_index_mem = Longtail_Alloc(version_index_size);
 
     VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,
@@ -515,7 +515,7 @@ TEST(Longtail, CreateMissingContent)
         chunk_sizes,
         asset_content_hashes,
         asset_compression_types);
-    LONGTAIL_FREE(paths);
+    Longtail_Free(paths);
 
     ContentIndex* missing_content_index = CreateMissingContent(
         hash_api,
@@ -546,10 +546,10 @@ TEST(Longtail, CreateMissingContent)
     ASSERT_EQ(asset_sizes[1], missing_content_index->m_ChunkLengths[3]);
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockOffsets[3]);
 
-    LONGTAIL_FREE(version_index);
-    LONGTAIL_FREE(content_index);
+    Longtail_Free(version_index);
+    Longtail_Free(content_index);
 
-    LONGTAIL_FREE(missing_content_index);
+    Longtail_Free(missing_content_index);
 
     DestroyHashAPI(hash_api);
 }
@@ -589,9 +589,9 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(16, *local_version_index->m_AssetCount);
 
-    LONGTAIL_FREE(compression_types);
-    LONGTAIL_FREE(local_version_index);
-    LONGTAIL_FREE(local_paths);
+    Longtail_Free(compression_types);
+    Longtail_Free(local_version_index);
+    Longtail_Free(local_paths);
 
     DestroyHashAPI(hash_api);
     DestroyJobAPI(job_api);
@@ -659,13 +659,13 @@ TEST(Longtail, MergeContentIndex)
     ASSERT_EQ(4, *cindex7->m_BlockCount);
     ASSERT_EQ(6, *cindex7->m_ChunkCount);
 
-    LONGTAIL_FREE(cindex7);
-    LONGTAIL_FREE(cindex6);
-    LONGTAIL_FREE(cindex5);
-    LONGTAIL_FREE(cindex4);
-    LONGTAIL_FREE(cindex3);
-    LONGTAIL_FREE(cindex2);
-    LONGTAIL_FREE(cindex1);
+    Longtail_Free(cindex7);
+    Longtail_Free(cindex6);
+    Longtail_Free(cindex5);
+    Longtail_Free(cindex4);
+    Longtail_Free(cindex3);
+    Longtail_Free(cindex2);
+    Longtail_Free(cindex1);
 
     DestroyHashAPI(hash_api);
 }
@@ -826,7 +826,7 @@ TEST(Longtail, VersionDiff)
         char* file_name = storage->ConcatPath(storage, "old", OLD_TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage, file_name));
         StorageAPI_HOpenFile w = storage->OpenWriteFile(storage, file_name, 0);
-        free(file_name);
+        Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (OLD_TEST_SIZES[i])
         {
@@ -841,7 +841,7 @@ TEST(Longtail, VersionDiff)
         char* file_name = storage->ConcatPath(storage, "new", NEW_TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage, file_name));
         StorageAPI_HOpenFile w = storage->OpenWriteFile(storage, file_name, 0);
-        free(file_name);
+        Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (NEW_TEST_SIZES[i])
         {
@@ -867,9 +867,9 @@ TEST(Longtail, VersionDiff)
         old_compression_types,
         16);
     ASSERT_NE((VersionIndex*)0, old_vindex);
-    LONGTAIL_FREE(old_compression_types);
+    Longtail_Free(old_compression_types);
     old_compression_types = 0;
-    LONGTAIL_FREE(old_version_paths);
+    Longtail_Free(old_version_paths);
     old_version_paths = 0;
 
     FileInfos* new_version_paths = GetFilesRecursively(storage, "new");
@@ -888,9 +888,9 @@ TEST(Longtail, VersionDiff)
         new_compression_types,
         16);
     ASSERT_NE((VersionIndex*)0, new_vindex);
-    LONGTAIL_FREE(new_compression_types);
+    Longtail_Free(new_compression_types);
     new_compression_types = 0;
-    LONGTAIL_FREE(new_version_paths);
+    Longtail_Free(new_version_paths);
     new_version_paths = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
@@ -941,29 +941,29 @@ TEST(Longtail, VersionDiff)
         "chunks",
         "old"));
 
-    LONGTAIL_FREE(content_index);
+    Longtail_Free(content_index);
 
-    LONGTAIL_FREE(version_diff);
+    Longtail_Free(version_diff);
 
-    LONGTAIL_FREE(new_vindex);
-    LONGTAIL_FREE(old_vindex);
+    Longtail_Free(new_vindex);
+    Longtail_Free(old_vindex);
 
     // Verify that our old folder now matches the new folder data
     FileInfos* updated_version_paths = GetFilesRecursively(storage, "old");
     ASSERT_NE((FileInfos*)0, updated_version_paths);
     const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
-    LONGTAIL_FREE(updated_version_paths);
+    Longtail_Free(updated_version_paths);
 
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
     {
         char* file_name = storage->ConcatPath(storage, "old", NEW_TEST_FILENAMES[i]);
         StorageAPI_HOpenFile r = storage->OpenReadFile(storage, file_name);
-        free(file_name);
+        Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
         uint64_t size = storage->GetSize(storage, r);
         ASSERT_EQ(NEW_TEST_SIZES[i], size);
-        char* test_data = (char*)LONGTAIL_MALLOC(sizeof(char) * size);
+        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
         if (size)
         {
             ASSERT_NE(0, storage->Read(storage, r, 0, size, test_data));
@@ -971,7 +971,7 @@ TEST(Longtail, VersionDiff)
         }
         storage->CloseWrite(storage, r);
         r = 0;
-        LONGTAIL_FREE(test_data);
+        Longtail_Free(test_data);
         test_data = 0;
     }
 
@@ -1012,7 +1012,7 @@ TEST(Longtail, FullScale)
         16384);
     ASSERT_NE((VersionIndex*)0, local_version_index);
     ASSERT_EQ(5, *local_version_index->m_AssetCount);
-    LONGTAIL_FREE(local_compression_types);
+    Longtail_Free(local_compression_types);
     local_compression_types = 0;
 
     FileInfos* remote_paths = GetFilesRecursively(remote_storage, "");
@@ -1032,7 +1032,7 @@ TEST(Longtail, FullScale)
         16384);
     ASSERT_NE((VersionIndex*)0, remote_version_index);
     ASSERT_EQ(10, *remote_version_index->m_AssetCount);
-    LONGTAIL_FREE(remote_compression_types);
+    Longtail_Free(remote_compression_types);
     remote_compression_types = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
@@ -1122,7 +1122,7 @@ TEST(Longtail, FullScale)
         uint64_t size = local_storage->GetSize(local_storage, r);
         uint64_t expected_size = 64000 + 1 + i;
         ASSERT_EQ(expected_size, size);
-        char* buffer = (char*)LONGTAIL_MALLOC(expected_size);
+        char* buffer = (char*)Longtail_Alloc(expected_size);
         local_storage->Read(local_storage, r, 0, expected_size, buffer);
 
         for (uint64_t j = 0; j < expected_size; j++)
@@ -1130,16 +1130,16 @@ TEST(Longtail, FullScale)
             ASSERT_EQ((int)i, (int)buffer[j]);
         }
 
-        LONGTAIL_FREE(buffer);
+        Longtail_Free(buffer);
         local_storage->CloseRead(local_storage, r);
     }
 
-    LONGTAIL_FREE(missing_content);
-    LONGTAIL_FREE(merged_content_index);
-    LONGTAIL_FREE(remote_content_index);
-    LONGTAIL_FREE(local_content_index);
-    LONGTAIL_FREE(remote_version_index);
-    LONGTAIL_FREE(local_version_index);
+    Longtail_Free(missing_content);
+    Longtail_Free(merged_content_index);
+    Longtail_Free(remote_content_index);
+    Longtail_Free(local_content_index);
+    Longtail_Free(remote_version_index);
+    Longtail_Free(local_version_index);
 
     DestroyJobAPI(job_api);
     DestroyHashAPI(hash_api);
@@ -1239,7 +1239,7 @@ TEST(Longtail, WriteVersion)
         char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage_api, file_name));
         StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, file_name, 0);
-        free(file_name);
+        Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (TEST_SIZES[i])
         {
@@ -1265,9 +1265,9 @@ TEST(Longtail, WriteVersion)
         version1_compression_types,
         50);
     ASSERT_NE((VersionIndex*)0, vindex);
-    LONGTAIL_FREE(version1_compression_types);
+    Longtail_Free(version1_compression_types);
     version1_compression_types = 0;
-    LONGTAIL_FREE(version1_paths);
+    Longtail_Free(version1_paths);
     version1_paths = 0;
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
@@ -1310,11 +1310,11 @@ TEST(Longtail, WriteVersion)
     {
         char* file_name = storage_api->ConcatPath(storage_api, "remote", TEST_FILENAMES[i]);
         StorageAPI_HOpenFile r = storage_api->OpenReadFile(storage_api, file_name);
-        free(file_name);
+        Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
         uint64_t size = storage_api->GetSize(storage_api, r);
         ASSERT_EQ(TEST_SIZES[i], size);
-        char* test_data = (char*)LONGTAIL_MALLOC(sizeof(char) * size);
+        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
         if (size)
         {
             ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
@@ -1322,13 +1322,13 @@ TEST(Longtail, WriteVersion)
         }
         storage_api->CloseWrite(storage_api, r);
         r = 0;
-        LONGTAIL_FREE(test_data);
+        Longtail_Free(test_data);
         test_data = 0;
     }
 
-    LONGTAIL_FREE(vindex);
+    Longtail_Free(vindex);
     vindex = 0;
-    LONGTAIL_FREE(cindex);
+    Longtail_Free(cindex);
     cindex = 0;
     DestroyJobAPI(job_api);
     DestroyHashAPI(hash_api);
@@ -1412,9 +1412,9 @@ void Bench()
             version_source_paths->m_FileSizes,
             version_compression_types,
             16384);
-        LONGTAIL_FREE(version_compression_types);
+        Longtail_Free(version_compression_types);
         version_compression_types = 0;
-        LONGTAIL_FREE(version_source_paths);
+        Longtail_Free(version_source_paths);
         version_source_paths = 0;
         ASSERT_NE((VersionIndex*)0, version_index);
         printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
@@ -1463,7 +1463,7 @@ void Bench()
                     {
                         storage_api->CloseRead(storage_api, v);
                         v = 0;
-                        free(target_path);
+                        Longtail_Free(target_path);
                         continue;
                     }
 
@@ -1477,28 +1477,28 @@ void Bench()
                     ASSERT_NE((StorageAPI_HOpenFile)0, t);
 
                     uint64_t block_file_size = storage_api->GetSize(storage_api, s);
-                    void* buffer = LONGTAIL_MALLOC(block_file_size);
+                    void* buffer = Longtail_Alloc(block_file_size);
 
                     ASSERT_NE(0, storage_api->Read(storage_api, s, 0, block_file_size, buffer));
                     ASSERT_NE(0, storage_api->Write(storage_api, t, 0, block_file_size, buffer));
 
-                    LONGTAIL_FREE(buffer);
+                    Longtail_Free(buffer);
                     buffer = 0,
 
                     storage_api->CloseRead(storage_api, s);
                     storage_api->CloseWrite(storage_api, t);
 
-                    free(target_path);
-                    free(source_path);
+                    Longtail_Free(target_path);
+                    Longtail_Free(source_path);
                 }
             }while(storage_api->FindNext(storage_api, fs_iterator));
         }
 
         ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);
         ASSERT_NE((ContentIndex*)0, merged_content_index);
-        LONGTAIL_FREE(missing_content_index);
+        Longtail_Free(missing_content_index);
         missing_content_index = 0;
-        LONGTAIL_FREE(full_content_index);
+        Longtail_Free(full_content_index);
         full_content_index = merged_content_index;
         merged_content_index = 0;
 
@@ -1523,10 +1523,10 @@ void Bench()
 
     for (uint32_t i = 0; i < VERSION_COUNT; ++i)
     {
-        LONGTAIL_FREE(version_indexes[i]);
+        Longtail_Free(version_indexes[i]);
     }
 
-    LONGTAIL_FREE(full_content_index);
+    Longtail_Free(full_content_index);
 
     DestroyJobAPI(job_api);
     DestroyHashAPI(hash_api);
@@ -1589,9 +1589,9 @@ void LifelikeTest()
         local_compression_types,
         16384);
     WriteVersionIndex(storage_api, version1, version_index_path_1);
-    LONGTAIL_FREE(local_compression_types);
+    Longtail_Free(local_compression_types);
     local_compression_types = 0;
-    LONGTAIL_FREE(local_path_1_paths);
+    Longtail_Free(local_path_1_paths);
     local_path_1_paths = 0;
     printf("%u assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
@@ -1657,9 +1657,9 @@ void LifelikeTest()
         local_path_2_paths->m_FileSizes,
         local_2_compression_types,
         16384);
-    LONGTAIL_FREE(local_2_compression_types);
+    Longtail_Free(local_2_compression_types);
     local_2_compression_types = 0;
-    LONGTAIL_FREE(local_path_2_paths);
+    Longtail_Free(local_path_2_paths);
     local_path_2_paths = 0;
     ASSERT_NE((VersionIndex*)0, version2);
     ASSERT_EQ(1, WriteVersionIndex(storage_api, version2, version_index_path_2));
@@ -1741,16 +1741,16 @@ void LifelikeTest()
 //        char* buffer = (char*)malloc(size);
 //        storage_api.Read(s, 0, size, buffer);
 //        storage_api.Write(t, 0, size, buffer);
-//        free(buffer);
+//        Longtail_Free(buffer);
 //        storage_api.CloseWrite(t);
 //        storage_api.CloseRead(s);
 //    }
 
     ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
     ASSERT_NE((ContentIndex*)0, merged_local_content);
-    LONGTAIL_FREE(missing_content);
+    Longtail_Free(missing_content);
     missing_content = 0;
-    LONGTAIL_FREE(local_content_index);
+    Longtail_Free(local_content_index);
     local_content_index = 0;
 
     printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
@@ -1767,19 +1767,19 @@ void LifelikeTest()
         remote_path_2));
     printf("Reconstructed %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
-//    LONGTAIL_FREE(existing_blocks);
+//    Longtail_Free(existing_blocks);
 //    existing_blocks = 0;
-//    LONGTAIL_FREE(remaining_missing_assets);
+//    Longtail_Free(remaining_missing_assets);
 //    remaining_missing_assets = 0;
-//    LONGTAIL_FREE(missing_assets);
+//    Longtail_Free(missing_assets);
 //    missing_assets = 0;
-//    LONGTAIL_FREE(remote_content_index);
+//    Longtail_Free(remote_content_index);
 //    remote_content_index = 0;
 
-    LONGTAIL_FREE(merged_local_content);
+    Longtail_Free(merged_local_content);
     merged_local_content = 0;
 
-    LONGTAIL_FREE(version1);
+    Longtail_Free(version1);
     version1 = 0;
 
     DestroyJobAPI(job_api);
@@ -1894,7 +1894,7 @@ TEST(Longtail, ChunkerLargeFile)
     ASSERT_EQ((const uint8_t*)0, r.buf);
     ASSERT_EQ(0, r.len);
 
-    LONGTAIL_FREE(chunker);
+    Longtail_Free(chunker);
     chunker = 0;
 
     fclose(large_file);

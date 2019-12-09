@@ -1,4 +1,5 @@
 #include "longtail_platform.h"
+#include "../src/longtail.h"
 #include <stdint.h>
 
 #if defined(_WIN32)
@@ -384,7 +385,7 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
         --folder_length;
     }
     size_t path_len = folder_length + 1 + strlen(file) + 1;
-    char* path = (char*)malloc(path_len);
+    char* path = (char*)Longtail_Alloc(path_len);
 
     memmove(path, folder, folder_length);
     path[folder_length] = '\\';
@@ -781,11 +782,11 @@ static int Skip(HLongtail_FSIterator fs_iterator)
 
 int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
 {
-    fs_iterator->m_DirPath = strdup(path);
+    fs_iterator->m_DirPath = Longtail_Strdup(path);
     fs_iterator->m_DirStream = opendir(path);
     if (0 == fs_iterator->m_DirStream)
     {
-        free(fs_iterator->m_DirPath);
+        Longtail_Free(fs_iterator->m_DirPath);
         return 0;
     }
 
@@ -793,7 +794,7 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     if (fs_iterator->m_DirEntry == 0)
     {
         closedir(fs_iterator->m_DirStream);
-        free(fs_iterator->m_DirPath);
+        Longtail_Free(fs_iterator->m_DirPath);
         return 0;
     }
     int has_files = Skip(fs_iterator);
@@ -802,7 +803,7 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
         return 1;
     }
     closedir(fs_iterator->m_DirStream);
-    free(fs_iterator->m_DirPath);
+    Longtail_Free(fs_iterator->m_DirPath);
     return 0;
 }
 
@@ -820,7 +821,7 @@ void Longtail_CloseFind(HLongtail_FSIterator fs_iterator)
 {
     closedir(fs_iterator->m_DirStream);
     fs_iterator->m_DirStream = 0;
-    free(fs_iterator->m_DirPath);
+    Longtail_Free(fs_iterator->m_DirPath);
     fs_iterator->m_DirPath = 0;
 }
 
@@ -850,7 +851,7 @@ uint64_t Longtail_GetEntrySize(HLongtail_FSIterator fs_iterator)
     }
     size_t dir_len = strlen(fs_iterator->m_DirPath);
     size_t file_len = strlen(fs_iterator->m_DirEntry->d_name);
-    char* path = (char*)malloc(dir_len + 1 + file_len + 1);
+    char* path = (char*)Longtail_Alloc(dir_len + 1 + file_len + 1);
     memcpy(&path[0], fs_iterator->m_DirPath, dir_len);
     path[dir_len] = '/';
     memcpy(&path[dir_len + 1], fs_iterator->m_DirEntry->d_name, file_len);
@@ -858,7 +859,7 @@ uint64_t Longtail_GetEntrySize(HLongtail_FSIterator fs_iterator)
     struct stat stat_buf;
     int ok = stat(path, &stat_buf);
     uint64_t size = ok ? 0 : (uint64_t)stat_buf.st_size;
-    free(path);
+    Longtail_Free(path);
     return size;
 }
 
@@ -968,7 +969,7 @@ void Longtail_CloseWriteFile(HLongtail_OpenWriteFile handle)
 const char* Longtail_ConcatPath(const char* folder, const char* file)
 {
     size_t path_len = strlen(folder) + 1 + strlen(file) + 1;
-    char* path = (char*)malloc(path_len);
+    char* path = (char*)Longtail_Alloc(path_len);
     strcpy(path, folder);
     strcat(path, "/");
     strcat(path, file);

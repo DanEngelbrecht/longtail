@@ -95,19 +95,12 @@ void Longtail_SetAssert(Longtail_Assert assert_func);
 typedef void (*Longtail_Log)(int level, const char* format, ...);
 void Longtail_SetLog(Longtail_Log log_func);
 
-#if defined(LONGTAIL_ASSERTS)
-void* Longtail_NukeMalloc(size_t s);
-void Longtail_NukeFree(void* p);
-#    define LONGTAIL_MALLOC(s) \
-        Longtail_NukeMalloc(s)
-#    define LONGTAIL_FREE(p) \
-        Longtail_NukeFree(p)
-#else
-#    define LONGTAIL_MALLOC(s) \
-        malloc(s)
-#    define LONGTAIL_FREE(p) \
-        free(p)
-#endif // defined(LONGTAIL_ASSERTS)
+typedef void* (*Longtail_Alloc_Func)(size_t s);
+typedef void (*Longtail_Free_Func)(void* p);
+void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free);
+
+void* Longtail_Alloc(size_t s);
+void Longtail_Free(void* p);
 
 typedef uint64_t TLongtail_Hash;
 struct Paths;
@@ -117,6 +110,8 @@ struct ContentIndex;
 struct PathLookup;
 struct ChunkHashToAssetPart;
 struct VersionDiff;
+
+char* Longtail_Strdup(const char* path);
 
 struct FileInfos* GetFilesRecursively(
     struct StorageAPI* storage_api,
