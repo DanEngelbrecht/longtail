@@ -662,7 +662,7 @@ int Cmd_CreateContent(
     }
     return 1;
 }
-
+/*
 int Cmd_ListMissingBlocks(
     StorageAPI* storage_api,
     const char* list_missing_blocks,
@@ -733,7 +733,7 @@ int Cmd_ListMissingBlocks(
     missing_block_hashes = 0;
     return ok;
 }
-
+*/
 int Cmd_CreateVersion(
     StorageAPI* storage_api,
     HashAPI* hash_api,
@@ -1412,8 +1412,8 @@ int main(int argc, char** argv)
     const char* target_version_index_raw = 0;
     kgflags_string("target-version-index", 0, "Path to target version index", false, &target_version_index_raw);
 
-    const char* list_missing_blocks_raw = 0;
-    kgflags_string("list-missing-blocks", 0, "Path to content index", false, &list_missing_blocks_raw);
+//    const char* list_missing_blocks_raw = 0;
+//    kgflags_string("list-missing-blocks", 0, "Path to content index", false, &list_missing_blocks_raw);
 
     bool upsync = false;
     kgflags_bool("upsync", false, "", false, &upsync);
@@ -1688,7 +1688,7 @@ int main(int argc, char** argv)
     const char* update_version = NormalizePath(update_version_raw);
     const char* target_version = NormalizePath(target_version_raw);
     const char* target_version_index = NormalizePath(target_version_index_raw);
-    const char* list_missing_blocks = NormalizePath(list_missing_blocks_raw);
+//    const char* list_missing_blocks = NormalizePath(list_missing_blocks_raw);
     const char* remote_content_index = NormalizePath(remote_content_index_raw);
     const char* remote_content = NormalizePath(remote_content_raw);
     const char* missing_content = NormalizePath(missing_content_raw);
@@ -1778,7 +1778,7 @@ int main(int argc, char** argv)
         goto end;
     }
 
-    if (list_missing_blocks && content_index)
+/*    if (list_missing_blocks && content_index)
     {
         int ok = Cmd_ListMissingBlocks(
             fs_storage_api,
@@ -1786,7 +1786,7 @@ int main(int argc, char** argv)
             content_index);
         result = ok ? 0 : 1;
         goto end;
-    }
+    }*/
 
     if (create_version && version_index && content)
     {
@@ -1952,7 +1952,7 @@ end:
     Longtail_Free((void*)update_version);
     Longtail_Free((void*)target_version);
     Longtail_Free((void*)target_version_index);
-    Longtail_Free((void*)list_missing_blocks);
+//    Longtail_Free((void*)list_missing_blocks);
     Longtail_Free((void*)remote_content_index);
     Longtail_Free((void*)remote_content);
     Longtail_Free((void*)missing_content);
