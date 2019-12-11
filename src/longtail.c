@@ -3644,7 +3644,7 @@ struct Paths* GetPathsForContentBlocks(
         char block_name[MAX_BLOCK_NAME_LENGTH];
         GetBlockName(block_hash, block_name);
         strcat(block_name, ".lrb");
-        paths = AppendPath(block_name, paths, &max_path_count, &max_path_data_size, 0, (MAX_BLOCK_NAME_LENGTH + 4) * 32);
+        paths = AppendPath(paths, block_name, &max_path_count, &max_path_data_size, 0, (MAX_BLOCK_NAME_LENGTH + 4) * 32);
     }
     return paths;
 }
