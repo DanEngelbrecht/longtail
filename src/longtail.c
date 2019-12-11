@@ -3628,6 +3628,27 @@ struct ContentIndex* CreateMissingContent(
     return diff_content_index;
 }
 
+struct Paths* GetPathsForContentBlocks(
+    struct ContentIndex* content_index)
+{
+    if (*content_index->m_BlockCount == 0)
+    {
+        return CreatePaths(0, 0);
+    }
+    uint32_t max_path_count = *content_index->m_BlockCount;
+    uint32_t max_path_data_size = max_path_count * (MAX_BLOCK_NAME_LENGTH + 4);
+    struct Paths* paths = CreatePaths(max_path_count, max_path_data_size);
+    for (uint64_t b = 0; b < *content_index->m_BlockCount; ++b)
+    {
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[b];
+        char block_name[MAX_BLOCK_NAME_LENGTH];
+        GetBlockName(block_hash, block_name);
+        strcat(block_name, ".lrb");
+        paths = AppendPath(block_name, paths, &max_path_count, &max_path_data_size, 0, (MAX_BLOCK_NAME_LENGTH + 4) * 32);
+    }
+    return paths;
+}
+
 struct ContentIndex* RetargetContent(
     const struct ContentIndex* reference_content_index,
     const struct ContentIndex* content_index)

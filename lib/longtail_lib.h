@@ -24,8 +24,8 @@ extern void DestroyJobAPI(struct JobAPI* job_api);
 extern struct CompressionRegistry* CreateDefaultCompressionRegistry();
 extern void DestroyCompressionRegistry(struct CompressionRegistry* compression_registry);
 
-static const uint32_t NO_COMPRESSION_TYPE = 0u;
-static const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'\0') << 8) + ((uint32_t)'d');
+extern const uint32_t NO_COMPRESSION_TYPE;
+extern const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE;
 
 #ifdef __cplusplus
 }

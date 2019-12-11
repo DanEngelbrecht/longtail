@@ -112,24 +112,13 @@ char* NormalizePath(const char* path)
     return normalized_path;
 }
 
-// TODO: We really should not copy this code!
-#define MAX_BLOCK_NAME_LENGTH   32
-
-static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
-{
-    sprintf(out_name, "0x%016" PRIx64, block_hash);
-//    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
-//    memmove(out_name, &out_name[5], 4);
-//    out_name[4] = '/';
-}
-
 struct HashToIndex
 {
     TLongtail_Hash key;
     uint64_t value;
 };
 
-int PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash* block_hashes, const char* format_string)
+int PrintFormattedBlockList(ContentIndex* content_index, const char* format_string)
 {
     const char* format_start = format_string;
     const char* format_first_end = strstr(format_string, "{blockname}");
@@ -137,17 +126,12 @@ int PrintFormattedBlockList(uint64_t block_count, const TLongtail_Hash* block_ha
     {
         return 0;
     }
-    if (block_count == 0)
-    {
-        return 1;
-    }
+    Paths* paths = GetPathsForContentBlocks(content_index);
     size_t first_length = (size_t)((intptr_t)format_first_end - (intptr_t)format_start);
     const char* format_second_start = &format_first_end[strlen("{blockname}")];
-    for (uint64_t b = 0; b < block_count; ++b)
+    for (uint64_t b = 0; b < *content_index->m_BlockCount; ++b)
     {
-        char block_name[MAX_BLOCK_NAME_LENGTH + 4];
-        GetBlockName(block_hashes[b], block_name);
-        strcat(block_name, ".lrb");
+        const char* block_name = &paths->m_Data[paths->m_Offsets[b]];
 
         char output_str[512];
         memmove(output_str, format_string, first_length);
@@ -1211,7 +1195,7 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 
-    if (!PrintFormattedBlockList(*missing_content_index->m_BlockCount, missing_content_index->m_BlockHashes, output_format))
+    if (!PrintFormattedBlockList(missing_content_index, output_format))
     {
         fprintf(stderr, "Failed to format block output using format `%s`\n", output_format);
         Longtail_Free(missing_content_index);
@@ -1361,7 +1345,7 @@ int Cmd_DownSyncVersion(
     Longtail_Free(cindex_missing);
     cindex_missing = 0;
 
-    if (!PrintFormattedBlockList(*request_content->m_BlockCount, request_content->m_BlockHashes, output_format))
+    if (!PrintFormattedBlockList(request_content, output_format))
     {
         Longtail_Free(request_content);
         request_content = 0;

@@ -183,6 +183,9 @@ struct ContentIndex* CreateMissingContent(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block);
 
+struct Paths* GetPathsForContentBlocks(
+    struct ContentIndex* content_index);
+
 struct ContentIndex* RetargetContent(
     const struct ContentIndex* reference_content_index,
     const struct ContentIndex* content_index);
