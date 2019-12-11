@@ -15,17 +15,11 @@ void AssertFailure(const char* expression, const char* file, int line)
     exit(-1);
 }
 
-static int g_log_level = 0;
+const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-void Log(int level, const char* format, ...)
+void LogStdErr(int level, const char* log)
 {
-    if (level >= g_log_level)
-    {
-        va_list argptr;
-        va_start(argptr, format);
-        vfprintf(stderr, format, argptr);
-        va_end(argptr);
-    }
+    fprintf(stderr, "%s: %s", ERROR_LEVEL[level], log);
 }
 
 int CreateParentPath(struct StorageAPI* storage_api, const char* path);
@@ -1362,7 +1356,7 @@ int main(int argc, char** argv)
 {
     int result = 0;
     Longtail_SetAssert(AssertFailure);
-    Longtail_SetLog(Log);
+    Longtail_SetLog(LogStdErr);
 
     int32_t target_chunk_size = 8;
     kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
@@ -1442,8 +1436,8 @@ int main(int argc, char** argv)
     const char* test_base_path_raw = 0;
     kgflags_string("test-base-path", 0, "Base path for test everything", false, &test_base_path_raw);
 
-    int log_level = 5;
-    kgflags_int("log-level", 5, "log level - 0 is full logs", false, &log_level);
+    int log_level = 2;
+    kgflags_int("log-level", 2, "log level - 0 is full logs", false, &log_level);
 
     if (!kgflags_parse(argc, argv)) {
         kgflags_print_errors();
@@ -1451,7 +1445,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    g_log_level = log_level;
+    Longtail_SetLogLevel(log_level);
 
     CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
     StorageAPI* fs_storage_api = CreateFSStorageAPI();

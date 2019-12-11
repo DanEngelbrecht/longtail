@@ -92,8 +92,9 @@ struct JobAPI
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 void Longtail_SetAssert(Longtail_Assert assert_func);
-typedef void (*Longtail_Log)(int level, const char* format, ...);
+typedef void (*Longtail_Log)(int level, const char* str);
 void Longtail_SetLog(Longtail_Log log_func);
+void Longtail_SetLogLevel(int level);
 
 typedef void* (*Longtail_Alloc_Func)(size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
