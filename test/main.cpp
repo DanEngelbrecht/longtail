@@ -19,7 +19,7 @@ const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
 void LogStdErr(void* , int level, const char* log)
 {
-    fprintf(stderr, "%s: %s", ERROR_LEVEL[level], log);
+    fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
 }
 
 int main(int argc, char** argv)
