@@ -79,11 +79,13 @@ void Longtail_Free(void* p)
 #endif
 
 static Longtail_Log Longtail_Log_private = 0;
+static void* Longtail_LogContext = 0;
 static int Longtail_LogLevel_private = LONGTAIL_LOG_LEVEL;
 
-void Longtail_SetLog(Longtail_Log log_func)
+void Longtail_SetLog(Longtail_Log log_func, void* context)
 {
     Longtail_Log_private = log_func;
+    Longtail_LogContext = context;
 }
 
 void Longtail_SetLogLevel(int level)
@@ -127,7 +129,7 @@ static void Longtail_NukeFree(void* p)
         char buffer[2048];
         vsprintf(buffer, fmt, argptr);
         va_end(argptr);
-        Longtail_Log_private(level, buffer);
+        Longtail_Log_private(Longtail_LogContext, level, buffer);
     }
     #define LONGTAIL_LOG(level, fmt, ...) \
         if (Longtail_Log_private && level >= Longtail_LogLevel_private) CallLogger(level, fmt, __VA_ARGS__);

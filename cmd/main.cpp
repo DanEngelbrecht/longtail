@@ -17,7 +17,7 @@ void AssertFailure(const char* expression, const char* file, int line)
 
 const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-void LogStdErr(int level, const char* log)
+void LogStdErr(void* , int level, const char* log)
 {
     fprintf(stderr, "%s: %s", ERROR_LEVEL[level], log);
 }
@@ -1356,7 +1356,7 @@ int main(int argc, char** argv)
 {
     int result = 0;
     Longtail_SetAssert(AssertFailure);
-    Longtail_SetLog(LogStdErr);
+    Longtail_SetLog(LogStdErr, 0);
 
     int32_t target_chunk_size = 8;
     kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
