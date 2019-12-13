@@ -118,6 +118,36 @@ void Longtail_DeleteSema(HLongtail_Sema semaphore)
     CloseHandle(semaphore->m_Handle);
 }
 
+struct Longtail_SpinLock
+{
+    SRWLOCK m_Lock;
+};
+
+size_t Longtail_GetSpinLockSize()
+{
+    return sizeof(struct Longtail_SpinLock);
+}
+
+HLongtail_SpinLock Longtail_CreateSpinLock(void* mem)
+{
+    HLongtail_SpinLock spin_lock = (HLongtail_SpinLock)mem;
+    InitializeSRWLock(&spin_lock->m_Lock);
+    return spin_lock;
+}
+
+void Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock)
+{
+}
+
+void Longtail_LockSpinLock(HLongtail_SpinLock spin_lock)
+{
+    AcquireSRWLockExclusive(&spin_lock->m_Lock);
+}
+
+void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
+{
+    ReleaseSRWLockExclusive(&spin_lock->m_Lock);
+}
 
 
 
@@ -589,6 +619,37 @@ void Longtail_DeleteSema(HLongtail_Sema semaphore)
     semaphore_destroy(self, semaphore->m_Semaphore);
 }
 
+struct Longtail_SpinLock
+{
+    os_unfair_lock m_Lock;
+};
+
+size_t Longtail_GetSpinLockSize()
+{
+    return sizeof(struct Longtail_SpinLock);
+}
+
+HLongtail_SpinLock Longtail_CreateSpinLock(void* mem)
+{
+    HLongtail_SpinLock spin_lock                         = (HLongtail_SpinLock)mem;
+    spin_lock->m_Lock._os_unfair_lock_opaque    = 0;
+    return spin_lock;
+}
+
+void Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock)
+{
+}
+
+void Longtail_LockSpinLock(HLongtail_SpinLock spin_lock)
+{
+    os_unfair_lock_lock(&spin_lock->m_Lock);
+}
+
+void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
+{
+    os_unfair_lock_unlock(&spin_lock->m_Lock);
+}
+
 #else
 
 struct Longtail_Sema
@@ -635,6 +696,40 @@ int Longtail_WaitSema(HLongtail_Sema semaphore)
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
 {
     sem_destroy(&semaphore->m_Semaphore);
+}
+
+struct Longtail_SpinLock
+{
+    pthread_spinlock_t m_Lock;
+};
+
+size_t Longtail_GetSpinLockSize()
+{
+    return sizeof(struct Longtail_SpinLock);
+}
+
+HLongtail_SpinLock Longtail_CreateSpinLock(void* mem)
+{
+    HLongtail_SpinLock spin_lock = (HLongtail_SpinLock)mem;
+    if (0 != pthread_spin_init(&spin_lock->m_Lock, 0))
+    {
+        return 0;
+    }
+    return spin_lock;
+}
+
+void Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock)
+{
+}
+
+void Longtail_LockSpinLock(HLongtail_SpinLock spin_lock)
+{
+    pthread_spin_lock(&spin_lock->m_Lock);
+}
+
+void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
+{
+    pthread_spin_unlock(&spin_lock->m_Lock);
 }
 
 #endif

@@ -31,6 +31,12 @@ int             Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count);
 int             Longtail_WaitSema(HLongtail_Sema semaphore);
 void            Longtail_DeleteSema(HLongtail_Sema semaphore);
 
+typedef struct Longtail_SpinLock* HLongtail_SpinLock;
+size_t              Longtail_GetSpinLockSize();
+HLongtail_SpinLock  Longtail_CreateSpinLock(void* mem);
+void                Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock);
+void                Longtail_LockSpinLock(HLongtail_SpinLock spin_lock);
+void                Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock);
 
 
 
