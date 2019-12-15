@@ -207,57 +207,59 @@ static StorageAPI_HOpenFile FSStorageAPI_OpenReadFile(struct StorageAPI* storage
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Longtail_OpenReadFile(tmp_path);
+    HLongtail_OpenFile r;
+    int err = Longtail_OpenReadFile(tmp_path, &r);
     Longtail_Free(tmp_path);
-    return r;
+    return err == 0 ? (StorageAPI_HOpenFile)r : 0;
 }
 
 static uint64_t FSStorageAPI_GetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
-    return Longtail_GetFileSize((HLongtail_OpenReadFile)f);
+    return Longtail_GetFileSize((HLongtail_OpenFile)f);
 }
 
 static int FSStorageAPI_Read(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 {
-    return Longtail_Read((HLongtail_OpenReadFile)f, offset,length, output);
+    return Longtail_Read((HLongtail_OpenFile)f, offset,length, output) == 0;
 }
 
 static void FSStorageAPI_CloseRead(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
-    Longtail_CloseReadFile((HLongtail_OpenReadFile)f);
+    Longtail_CloseFile((HLongtail_OpenFile)f);
 }
 
 static StorageAPI_HOpenFile FSStorageAPI_OpenWriteFile(struct StorageAPI* storage_api, const char* path, uint64_t initial_size)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Longtail_OpenWriteFile(tmp_path, initial_size);
+    HLongtail_OpenFile r;
+    int err = Longtail_OpenWriteFile(tmp_path, initial_size, &r);
     Longtail_Free(tmp_path);
-    return r;
+    return err == 0 ? (StorageAPI_HOpenFile)r : 0;
 }
 
 static int FSStorageAPI_Write(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 {
-    return Longtail_Write((HLongtail_OpenWriteFile)f, offset,length, input);
+    return Longtail_Write((HLongtail_OpenFile)f, offset,length, input) == 0;
 }
 
 static int FSStorageAPI_SetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length)
 {
-    return Longtail_SetFileSize((HLongtail_OpenWriteFile)f, length);
+    return Longtail_SetFileSize((HLongtail_OpenFile)f, length) == 0;
 }
 
 static void FSStorageAPI_CloseWrite(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
-    Longtail_CloseWriteFile((HLongtail_OpenWriteFile)f);
+    Longtail_CloseFile((HLongtail_OpenFile)f);
 }
 
 static int FSStorageAPI_CreateDir(struct StorageAPI* storage_api, const char* path)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    int ok = Longtail_CreateDirectory(tmp_path);
+    int err = Longtail_CreateDirectory(tmp_path);
     Longtail_Free(tmp_path);
-    return ok;
+    return err == 0;
 }
 
 static int FSStorageAPI_RenameFile(struct StorageAPI* storage_api, const char* source_path, const char* target_path)
@@ -266,10 +268,10 @@ static int FSStorageAPI_RenameFile(struct StorageAPI* storage_api, const char* s
     Longtail_DenormalizePath(tmp_source_path);
     char* tmp_target_path = Longtail_Strdup(target_path);
     Longtail_DenormalizePath(tmp_target_path);
-    int ok = Longtail_MoveFile(tmp_source_path, tmp_target_path);
+    int err = Longtail_MoveFile(tmp_source_path, tmp_target_path);
     Longtail_Free(tmp_target_path);
     Longtail_Free(tmp_source_path);
-    return ok;
+    return err == 0;
 }
 
 static char* FSStorageAPI_ConcatPath(struct StorageAPI* storage_api, const char* root_path, const char* sub_path)
@@ -302,17 +304,18 @@ static int FSStorageAPI_RemoveDir(struct StorageAPI* storage_api, const char* pa
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    int ok = Longtail_RemoveDir(tmp_path);
-    return ok;
+    int err = Longtail_RemoveDir(tmp_path);
+    Longtail_Free(tmp_path);
+    return err == 0;
 }
 
 static int FSStorageAPI_RemoveFile(struct StorageAPI* storage_api, const char* path)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    int ok = Longtail_RemoveFile(tmp_path);
+    int err = Longtail_RemoveFile(tmp_path);
     Longtail_Free(tmp_path);
-    return ok;
+    return err == 0;
 }
 
 static StorageAPI_HIterator FSStorageAPI_StartFind(struct StorageAPI* storage_api, const char* path)
@@ -332,7 +335,7 @@ static StorageAPI_HIterator FSStorageAPI_StartFind(struct StorageAPI* storage_ap
 
 static int FSStorageAPI_FindNext(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
 {
-    return Longtail_FindNext((HLongtail_FSIterator)iterator);
+    return Longtail_FindNext((HLongtail_FSIterator)iterator) == 0;
 }
 
 static void FSStorageAPI_CloseFind(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
