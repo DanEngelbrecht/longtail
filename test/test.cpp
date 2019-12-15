@@ -112,7 +112,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
         {
             return 0;
         }
-        storage_api->CloseWrite(storage_api, content_file);
+        storage_api->CloseFile(storage_api, content_file);
     }
     return 1;
 }
@@ -329,7 +329,7 @@ TEST(Longtail, WriteContent)
         StorageAPI_HOpenFile w = source_storage->OpenWriteFile(source_storage, TEST_FILENAMES[i], 0);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         ASSERT_NE(0, source_storage->Write(source_storage, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
-        source_storage->CloseWrite(source_storage, w);
+        source_storage->CloseFile(source_storage, w);
         w = 0;
     }
 
@@ -832,7 +832,7 @@ TEST(Longtail, VersionDiff)
         {
             ASSERT_NE(0, storage->Write(storage, w, 0, OLD_TEST_SIZES[i], OLD_TEST_STRINGS[i]));
         }
-        storage->CloseWrite(storage, w);
+        storage->CloseFile(storage, w);
         w = 0;
     }
 
@@ -847,7 +847,7 @@ TEST(Longtail, VersionDiff)
         {
             ASSERT_NE(0, storage->Write(storage, w, 0, NEW_TEST_SIZES[i], NEW_TEST_STRINGS[i]));
         }
-        storage->CloseWrite(storage, w);
+        storage->CloseFile(storage, w);
         w = 0;
     }
 
@@ -969,7 +969,7 @@ TEST(Longtail, VersionDiff)
             ASSERT_NE(0, storage->Read(storage, r, 0, size, test_data));
             ASSERT_STREQ(NEW_TEST_STRINGS[i], test_data);
         }
-        storage->CloseWrite(storage, r);
+        storage->CloseFile(storage, r);
         r = 0;
         Longtail_Free(test_data);
         test_data = 0;
@@ -1131,7 +1131,7 @@ TEST(Longtail, FullScale)
         }
 
         Longtail_Free(buffer);
-        local_storage->CloseRead(local_storage, r);
+        local_storage->CloseFile(local_storage, r);
     }
 
     Longtail_Free(missing_content);
@@ -1245,7 +1245,7 @@ TEST(Longtail, WriteVersion)
         {
             ASSERT_NE(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
         }
-        storage_api->CloseWrite(storage_api, w);
+        storage_api->CloseFile(storage_api, w);
         w = 0;
     }
 
@@ -1320,7 +1320,7 @@ TEST(Longtail, WriteVersion)
             ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
             ASSERT_STREQ(TEST_STRINGS[i], test_data);
         }
-        storage_api->CloseWrite(storage_api, r);
+        storage_api->CloseFile(storage_api, r);
         r = 0;
         Longtail_Free(test_data);
         test_data = 0;
@@ -1461,7 +1461,7 @@ void Bench()
                     StorageAPI_HOpenFile v = storage_api->OpenReadFile(storage_api, target_path);
                     if (v)
                     {
-                        storage_api->CloseRead(storage_api, v);
+                        storage_api->CloseFile(storage_api, v);
                         v = 0;
                         Longtail_Free(target_path);
                         continue;
@@ -1485,8 +1485,8 @@ void Bench()
                     Longtail_Free(buffer);
                     buffer = 0,
 
-                    storage_api->CloseRead(storage_api, s);
-                    storage_api->CloseWrite(storage_api, t);
+                    storage_api->CloseFile(storage_api, s);
+                    storage_api->CloseFile(storage_api, t);
 
                     Longtail_Free(target_path);
                     Longtail_Free(source_path);
@@ -1742,8 +1742,8 @@ void LifelikeTest()
 //        storage_api.Read(s, 0, size, buffer);
 //        storage_api.Write(t, 0, size, buffer);
 //        Longtail_Free(buffer);
-//        storage_api.CloseWrite(t);
-//        storage_api.CloseRead(s);
+//        storage_api.CloseFile(t);
+//        storage_api.CloseFile(s);
 //    }
 
     ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);

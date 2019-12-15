@@ -223,11 +223,6 @@ static int FSStorageAPI_Read(struct StorageAPI* storage_api, StorageAPI_HOpenFil
     return Longtail_Read((HLongtail_OpenFile)f, offset,length, output) == 0;
 }
 
-static void FSStorageAPI_CloseRead(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
-{
-    Longtail_CloseFile((HLongtail_OpenFile)f);
-}
-
 static StorageAPI_HOpenFile FSStorageAPI_OpenWriteFile(struct StorageAPI* storage_api, const char* path, uint64_t initial_size)
 {
     char* tmp_path = Longtail_Strdup(path);
@@ -248,7 +243,7 @@ static int FSStorageAPI_SetSize(struct StorageAPI* storage_api, StorageAPI_HOpen
     return Longtail_SetFileSize((HLongtail_OpenFile)f, length) == 0;
 }
 
-static void FSStorageAPI_CloseWrite(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
+static void FSStorageAPI_CloseFile(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
     Longtail_CloseFile((HLongtail_OpenFile)f);
 }
@@ -364,11 +359,10 @@ static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
     storage_api->m_StorageAPI.m_API.OpenReadFile = FSStorageAPI_OpenReadFile;
     storage_api->m_StorageAPI.m_API.GetSize = FSStorageAPI_GetSize;
     storage_api->m_StorageAPI.m_API.Read = FSStorageAPI_Read;
-    storage_api->m_StorageAPI.m_API.CloseRead = FSStorageAPI_CloseRead;
     storage_api->m_StorageAPI.m_API.OpenWriteFile = FSStorageAPI_OpenWriteFile;
     storage_api->m_StorageAPI.m_API.Write = FSStorageAPI_Write;
     storage_api->m_StorageAPI.m_API.SetSize = FSStorageAPI_SetSize;
-    storage_api->m_StorageAPI.m_API.CloseWrite = FSStorageAPI_CloseWrite;
+    storage_api->m_StorageAPI.m_API.CloseFile = FSStorageAPI_CloseFile;
     storage_api->m_StorageAPI.m_API.CreateDir = FSStorageAPI_CreateDir;
     storage_api->m_StorageAPI.m_API.RenameFile = FSStorageAPI_RenameFile;
     storage_api->m_StorageAPI.m_API.ConcatPath = FSStorageAPI_ConcatPath;
@@ -494,10 +488,6 @@ static int InMemStorageAPI_Read(struct StorageAPI* storage_api, StorageAPI_HOpen
     return 1;
 }
 
-static void InMemStorageAPI_CloseRead(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
-{
-}
-
 static TLongtail_Hash InMemStorageAPI_GetParentPathHash(struct InMemStorageAPI* instance, const char* path)
 {
     const char* dir_path_begin = strrchr(path, '/');
@@ -604,7 +594,7 @@ static int InMemStorageAPI_SetSize(struct StorageAPI* storage_api, StorageAPI_HO
     return 1;
 }
 
-static void InMemStorageAPI_CloseWrite(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
+static void InMemStorageAPI_CloseFile(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
 {
 }
 
@@ -860,11 +850,10 @@ static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_StorageAPI.m_API.OpenReadFile = InMemStorageAPI_OpenReadFile;
     storage_api->m_StorageAPI.m_API.GetSize = InMemStorageAPI_GetSize;
     storage_api->m_StorageAPI.m_API.Read = InMemStorageAPI_Read;
-    storage_api->m_StorageAPI.m_API.CloseRead = InMemStorageAPI_CloseRead;
     storage_api->m_StorageAPI.m_API.OpenWriteFile = InMemStorageAPI_OpenWriteFile;
     storage_api->m_StorageAPI.m_API.Write = InMemStorageAPI_Write;
     storage_api->m_StorageAPI.m_API.SetSize = InMemStorageAPI_SetSize;
-    storage_api->m_StorageAPI.m_API.CloseWrite = InMemStorageAPI_CloseWrite;
+    storage_api->m_StorageAPI.m_API.CloseFile = InMemStorageAPI_CloseFile;
     storage_api->m_StorageAPI.m_API.CreateDir = InMemStorageAPI_CreateDir;
     storage_api->m_StorageAPI.m_API.RenameFile = InMemStorageAPI_RenameFile;
     storage_api->m_StorageAPI.m_API.ConcatPath = InMemStorageAPI_ConcatPath;

@@ -637,7 +637,7 @@ void DynamicChunking(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to read from file `%s`", path)
             Longtail_Free(buffer);
             buffer = 0;
-            storage_api->CloseRead(storage_api, file_handle);
+            storage_api->CloseFile(storage_api, file_handle);
             file_handle = 0;
             Longtail_Free(path);
             path = 0;
@@ -686,7 +686,7 @@ void DynamicChunking(void* context)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create chunker for asset `%s`", path)
             hash_job->m_Success = 0;
-            storage_api->CloseRead(storage_api, file_handle);
+            storage_api->CloseFile(storage_api, file_handle);
             file_handle = 0;
             Longtail_Free(path);
             path = 0;
@@ -706,7 +706,7 @@ void DynamicChunking(void* context)
                 chunker = 0;
                 hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
                 hash_job->m_Success = 0;
-                storage_api->CloseRead(storage_api, file_handle);
+                storage_api->CloseFile(storage_api, file_handle);
                 file_handle = 0;
                 Longtail_Free(path);
                 path = 0;
@@ -735,7 +735,7 @@ void DynamicChunking(void* context)
             chunker = 0;
             hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
             hash_job->m_Success = 0;
-            storage_api->CloseRead(storage_api, file_handle);
+            storage_api->CloseFile(storage_api, file_handle);
             file_handle = 0;
             Longtail_Free(path);
             path = 0;
@@ -747,7 +747,7 @@ void DynamicChunking(void* context)
         chunker = 0;
     }
 
-    storage_api->CloseRead(storage_api, file_handle);
+    storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
     
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count <= hash_job->m_MaxChunkCount, return);
@@ -1286,11 +1286,11 @@ int WriteVersionIndex(
     if (!storage_api->Write(storage_api, file_handle, 0, index_data_size, &version_index[1]))
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed to write to `%s`", path);
-        storage_api->CloseWrite(storage_api, file_handle);
+        storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return 0;
     }
-    storage_api->CloseWrite(storage_api, file_handle);
+    storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
 
     return 1;
@@ -1317,7 +1317,7 @@ struct VersionIndex* ReadVersionIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadVersionIndex: Failed to allocate memory for `%s`", path);
         Longtail_Free(version_index);
         version_index = 0;
-        storage_api->CloseRead(storage_api, file_handle);
+        storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return 0;
     }
@@ -1326,11 +1326,11 @@ struct VersionIndex* ReadVersionIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadVersionIndex: Failed to read from `%s`", path);
         Longtail_Free(version_index);
         version_index = 0;
-        storage_api->CloseRead(storage_api, file_handle);
+        storage_api->CloseFile(storage_api, file_handle);
         return 0;
     }
     InitVersionIndex(version_index, (size_t)version_index_data_size);
-    storage_api->CloseRead(storage_api, file_handle);
+    storage_api->CloseFile(storage_api, file_handle);
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     return version_index;
 }
@@ -1675,11 +1675,11 @@ int WriteContentIndex(
     if (!storage_api->Write(storage_api, file_handle, 0, index_data_size, &content_index[1]))
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentIndex: Failed to write to `%s`", path);
-        storage_api->CloseWrite(storage_api, file_handle);
+        storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return 0;
     }
-    storage_api->CloseWrite(storage_api, file_handle);
+    storage_api->CloseFile(storage_api, file_handle);
 
     return 1;
 }
@@ -1705,7 +1705,7 @@ struct ContentIndex* ReadContentIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContentIndex: Failed allocate memory for `%s`", path);
         Longtail_Free(content_index);
         content_index = 0;
-        storage_api->CloseRead(storage_api, file_handle);
+        storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return 0;
     }
@@ -1714,12 +1714,12 @@ struct ContentIndex* ReadContentIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContentIndex: Failed to read from `%s`", path);
         Longtail_Free(content_index);
         content_index = 0;
-        storage_api->CloseRead(storage_api, file_handle);
+        storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return 0;
     }
     InitContentIndex(content_index);
-    storage_api->CloseRead(storage_api, file_handle);
+    storage_api->CloseFile(storage_api, file_handle);
     return content_index;
 }
 
@@ -1838,7 +1838,7 @@ static char* ReadBlockData(
 
     char* compressed_block_content = (char*)Longtail_Alloc(compressed_block_size);
     int ok = storage_api->Read(storage_api, block_file, 0, compressed_block_size, compressed_block_content);
-    storage_api->CloseRead(storage_api, block_file);
+    storage_api->CloseFile(storage_api, block_file);
     block_file = 0;
     if (!ok){
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to read block `%s`", block_path)
@@ -1943,26 +1943,26 @@ struct BlockIndex* ReadBlockIndex(
     uint64_t s = storage_api->GetSize(storage_api, f);
     if (s < (sizeof(uint32_t)))
     {
-        storage_api->CloseRead(storage_api, f);
+        storage_api->CloseFile(storage_api, f);
         return 0;
     }
     uint32_t chunk_count = 0;
     if (!storage_api->Read(storage_api, f, s - sizeof(uint32_t), sizeof(uint32_t), &chunk_count))
     {
-        storage_api->CloseRead(storage_api, f);
+        storage_api->CloseFile(storage_api, f);
         return 0;
     }
     size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
     if (s < block_index_data_size)
     {
-        storage_api->CloseRead(storage_api, f);
+        storage_api->CloseFile(storage_api, f);
         return 0;
     }
 
     struct BlockIndex* block_index = InitBlockIndex(Longtail_Alloc(GetBlockIndexSize(chunk_count)), chunk_count);
 
     int ok = storage_api->Read(storage_api, f, s - block_index_data_size, block_index_data_size, &block_index[1]);
-    storage_api->CloseRead(storage_api, f);
+    storage_api->CloseFile(storage_api, f);
     if (!ok)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlock: Failed to read block `%s`", full_block_path)
@@ -2064,14 +2064,14 @@ void WriteContentBlockJob(void* context)
             block_data_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
             tmp_block_path = 0;
-            source_storage_api->CloseRead(source_storage_api, file_handle);
+            source_storage_api->CloseFile(source_storage_api, file_handle);
             file_handle = 0;
             return;
         }
         source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
         write_ptr += chunk_size;
 
-        source_storage_api->CloseRead(source_storage_api, file_handle);
+        source_storage_api->CloseFile(source_storage_api, file_handle);
         Longtail_Free((char*)full_path);
         full_path = 0;
     }
@@ -2156,7 +2156,7 @@ void WriteContentBlockJob(void* context)
     Longtail_Free(block_index_ptr);
     block_index_ptr = 0;
 
-    target_storage_api->CloseWrite(target_storage_api, block_file_handle);
+    target_storage_api->CloseFile(target_storage_api, block_file_handle);
     write_ok = write_ok & target_storage_api->RenameFile(target_storage_api, tmp_block_path, job->m_BlockPath);
 #if SLOW_VALIDATION
     void* block_data = ReadBlockData(target_storage_api, compression_api, content_folder, block_hash);
@@ -2649,7 +2649,7 @@ void WritePartialAssetFromBlocks(void* context)
         if (!job->m_VersionStorageAPI->Write(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset, chunk_size, &block_data[chunk_offset]))
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to write to asset `%s`", asset_path)
-            job->m_VersionStorageAPI->CloseWrite(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+            job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
 
             for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
@@ -2680,7 +2680,7 @@ void WritePartialAssetFromBlocks(void* context)
     }
 
     int ok = 1;//job->m_VersionStorageAPI->SetSize(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset);
-    job->m_VersionStorageAPI->CloseWrite(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+    job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
 
     job->m_AssetOutputFile = 0;
     if (!ok)
@@ -2777,7 +2777,7 @@ void WriteAssetsFromBlock(void* context)
             if (!ok)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to write to asset `%s`", full_asset_path)
-                content_storage_api->CloseWrite(version_storage_api, asset_file);
+                content_storage_api->CloseFile(version_storage_api, asset_file);
                 asset_file = 0;
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
@@ -2788,7 +2788,7 @@ void WriteAssetsFromBlock(void* context)
             asset_write_offset += chunk_size;
         }
 
-        version_storage_api->CloseWrite(version_storage_api, asset_file);
+        version_storage_api->CloseFile(version_storage_api, asset_file);
         asset_file = 0;
 
         Longtail_Free(full_asset_path);
