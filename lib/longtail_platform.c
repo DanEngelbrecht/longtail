@@ -164,11 +164,21 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
 {
     if (thread->m_Handle == 0)
     {
-        return 1;
+        return 0;
     }
     DWORD wait_ms = (timeout_us == LONGTAIL_TIMEOUT_INFINITE) ? INFINITE : (DWORD)(timeout_us / 1000);
     DWORD result  = WaitForSingleObject(thread->m_Handle, wait_ms);
-    return result == WAIT_OBJECT_0;
+    switch (result)
+    {
+        case WAIT_OBJECT_0:
+        return 0;
+        case WAIT_TIMEOUT:
+        return ETIME;
+        case WAIT_FAILED:
+        return Win32ErrorToErrno(GetLastError());
+        default:
+        return EINVAL;
+    }
 }
 
 void Longtail_DeleteThread(HLongtail_Thread thread)
@@ -187,15 +197,16 @@ size_t Longtail_GetSemaSize()
     return sizeof(struct Longtail_Sema);
 }
 
-HLongtail_Sema Longtail_CreateSema(void* mem, int initial_count)
+int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
 {
     HLongtail_Sema semaphore = (HLongtail_Sema)mem;
     semaphore->m_Handle = CreateSemaphore(NULL, initial_count, 0x7fffffff, NULL);
     if (semaphore->m_Handle == INVALID_HANDLE_VALUE)
     {
-        return 0;
+        return Win32ErrorToErrno(GetLastError());;
     }
-    return semaphore;
+    *out_sema = semaphore;
+    return 0;
 }
 
 int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
@@ -226,11 +237,12 @@ size_t Longtail_GetSpinLockSize()
     return sizeof(struct Longtail_SpinLock);
 }
 
-HLongtail_SpinLock Longtail_CreateSpinLock(void* mem)
+int Longtail_CreateSpinLock(void* mem, HLongtail_SpinLock* out_spin_lock)
 {
     HLongtail_SpinLock spin_lock = (HLongtail_SpinLock)mem;
     InitializeSRWLock(&spin_lock->m_Lock);
-    return spin_lock;
+    *out_spin_lock = spin_lock;
+    return 0;
 }
 
 void Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock)
@@ -640,20 +652,20 @@ static int GetTimeSpec(struct timespec* ts, uint64_t delay_us)
 {
     if (clock_gettime(CLOCK_REALTIME, ts) == -1)
     {
-        return 0;
+        return errno;
     }
     uint64_t end_ns = (uint64_t)(ts->tv_nsec) + (delay_us * 1000u);
     uint64_t wait_s = end_ns / 1000000000u;
     ts->tv_sec += wait_s;
     ts->tv_nsec = (long)(end_ns - wait_s * 1000000000u);
-    return 1;
+    return 0;
 }
 
 int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
 {
     if (thread->m_Handle == 0)
     {
-        return 1;
+        return 0;
     }
     if (timeout_us == LONGTAIL_TIMEOUT_INFINITE)
     {
@@ -662,33 +674,33 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
         {
             thread->m_Handle = 0;
         }
-        return result == 0;
+        return result;
     }
     struct timespec ts;
-    if (!GetTimeSpec(&ts, timeout_us))
-    {
-        return 0;
+    int err = GetTimeSpec(&ts, timeout_us))
+    if (err != 0){
+        return err;
     }
-    pthread_mutex_lock(&thread->m_ExitLock);
+    err = pthread_mutex_lock(&thread->m_ExitLock);
+    if (err != 0){
+        return err;
+    }
     while (!thread->m_Exited)
     {
-        if (0 != pthread_cond_timedwait(&thread->m_ExitConditionalVariable, &thread->m_ExitLock, &ts))
+        int err = pthread_cond_timedwait(&thread->m_ExitConditionalVariable, &thread->m_ExitLock, &ts);
+        if (err == ETIMEDOUT)
         {
-            break;
+            pthread_mutex_unlock(&thread->m_ExitLock);
+            return err;
         }
     }
-    int exited = thread->m_Exited;
     pthread_mutex_unlock(&thread->m_ExitLock);
-    if (!exited)
-    {
-        return 0;
-    }
-    int result = pthread_join(thread->m_Handle, 0);
+    err = pthread_join(thread->m_Handle, 0);
     if (result == 0)
     {
         thread->m_Handle = 0;
     }
-    return result == 0;
+    return err;
 }
 
 void Longtail_DeleteThread(HLongtail_Thread thread)
@@ -710,7 +722,7 @@ size_t Longtail_GetSemaSize()
     return sizeof(struct Longtail_Sema);
 }
 
-HLongtail_Sema Longtail_CreateSema(void* mem, int initial_count)
+int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
 {
     HLongtail_Sema semaphore = (HLongtail_Sema)mem;
 
@@ -719,10 +731,11 @@ HLongtail_Sema Longtail_CreateSema(void* mem, int initial_count)
 
     if (ret != KERN_SUCCESS)
     {
-        return 0;
+        return ret;
     }
 
-    return semaphore;
+    *out_sema = semaphore;
+    return 0;
 }
 
 bool Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
@@ -762,11 +775,12 @@ size_t Longtail_GetSpinLockSize()
     return sizeof(struct Longtail_SpinLock);
 }
 
-HLongtail_SpinLock Longtail_CreateSpinLock(void* mem)
+int Longtail_CreateSpinLock(void* mem, HLongtail_SpinLock* out_spin_lock)
 {
-    HLongtail_SpinLock spin_lock                         = (HLongtail_SpinLock)mem;
+    HLongtail_SpinLock spin_lock                = (HLongtail_SpinLock)mem;
     spin_lock->m_Lock._os_unfair_lock_opaque    = 0;
-    return spin_lock;
+    *out_spin_lock = spin_lock;
+    return 0;
 }
 
 void Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock)
@@ -795,14 +809,15 @@ size_t Longtail_GetSemaSize()
     return sizeof(struct Longtail_Sema);
 }
 
-HLongtail_Sema Longtail_CreateSema(void* mem, int initial_count)
+int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
 {
     HLongtail_Sema semaphore = (HLongtail_Sema)mem;
-    if (0 != sem_init(&semaphore->m_Semaphore, 0, (unsigned int)initial_count))
-    {
+    int err = sem_init(&semaphore->m_Semaphore, 0, (unsigned int)initial_count);
+    if (err != 0){
         return 0;
     }
-    return semaphore;
+    *out_sema = semaphore;
+    return 0;
 }
 
 int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
@@ -841,14 +856,15 @@ size_t Longtail_GetSpinLockSize()
     return sizeof(struct Longtail_SpinLock);
 }
 
-HLongtail_SpinLock Longtail_CreateSpinLock(void* mem)
+int Longtail_CreateSpinLock(void* mem, HLongtail_SpinLock* out_spin_lock)
 {
     HLongtail_SpinLock spin_lock = (HLongtail_SpinLock)mem;
-    if (0 != pthread_spin_init(&spin_lock->m_Lock, 0))
-    {
+    int err = pthread_spin_init(&spin_lock->m_Lock, 0);
+    if (err != 0) {
         return 0;
     }
-    return spin_lock;
+    *out_spin_lock = spin_lock;
+    return 0;
 }
 
 void Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock)

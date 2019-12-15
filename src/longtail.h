@@ -96,6 +96,19 @@ typedef void (*Longtail_Log)(void* context, int level, const char* str);
 void Longtail_SetLog(Longtail_Log log_func, void* context);
 void Longtail_SetLogLevel(int level);
 
+#define LONGTAIL_LOG_LEVEL_DEBUG     0
+#define LONGTAIL_LOG_LEVEL_INFO      1
+#define LONGTAIL_LOG_LEVEL_WARNING   2
+#define LONGTAIL_LOG_LEVEL_ERROR     3
+#define LONGTAIL_LOG_LEVEL_OFF       4
+
+#ifndef LONGTAIL_LOG
+    void Longtail_CallLogger(int level, const char* fmt, ...);
+    #define LONGTAIL_LOG(level, fmt, ...) \
+        Longtail_CallLogger(level, fmt, __VA_ARGS__);
+#endif
+
+
 typedef void* (*Longtail_Alloc_Func)(size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
 void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free);

@@ -68,12 +68,6 @@ void Longtail_Free(void* p)
     Free_private ? Free_private(p) : free(p);
 }
 
-#define LOG_LEVEL_DEBUG     0
-#define LOG_LEVEL_INFO      1
-#define LOG_LEVEL_WARNING   2
-#define LOG_LEVEL_ERROR     3
-#define LOG_LEVEL_OFF       4
-
 #if !defined(LONGTAIL_LOG_LEVEL)
     #define LONGTAIL_LOG_LEVEL   0
 #endif
@@ -121,19 +115,19 @@ static void Longtail_NukeFree(void* p)
 }
 */
 
-#ifndef LONGTAIL_LOG
-    static void CallLogger(int level, const char* fmt, ...)
+void Longtail_CallLogger(int level, const char* fmt, ...)
+{
+    if (!Longtail_Log_private || (level < Longtail_LogLevel_private))
     {
-        va_list argptr;
-        va_start(argptr, fmt);
-        char buffer[2048];
-        vsprintf(buffer, fmt, argptr);
-        va_end(argptr);
-        Longtail_Log_private(Longtail_LogContext, level, buffer);
+        return;
     }
-    #define LONGTAIL_LOG(level, fmt, ...) \
-        if (Longtail_Log_private && level >= Longtail_LogLevel_private) CallLogger(level, fmt, __VA_ARGS__);
-#endif
+    va_list argptr;
+    va_start(argptr, fmt);
+    char buffer[2048];
+    vsprintf(buffer, fmt, argptr);
+    va_end(argptr);
+    Longtail_Log_private(Longtail_LogContext, level, buffer);
+}
 
 #if !defined(LONGTAIL_ATOMICADD)
     #if defined(__clang__)
@@ -190,7 +184,7 @@ int SafeCreateDir(struct StorageAPI* storage_api, const char* path)
     {
         return 1;
     }
-    LONGTAIL_LOG(LOG_LEVEL_ERROR, "Failed to create directory `%s`", path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create directory `%s`", path)
     return 0;
 }
 
@@ -218,7 +212,7 @@ int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
     {
         if (!EnsureParentPathExists(storage_api, dir_path))
         {
-            LONGTAIL_LOG(LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`", dir_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`", dir_path)
             Longtail_Free(dir_path);
             dir_path = 0;
             return 0;
@@ -230,7 +224,7 @@ int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
             return 1;
         }
     }
-    LONGTAIL_LOG(LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`", dir_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`", dir_path)
     Longtail_Free(dir_path);
     dir_path = 0;
     return 0;
@@ -315,7 +309,7 @@ int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, Process
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_folder != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(entry_processor != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0);
-    LONGTAIL_LOG(LOG_LEVEL_DEBUG, "RecurseTree: Scanning folder `%s`", root_folder)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree: Scanning folder `%s`", root_folder)
 
     uint32_t folder_index = 0;
 
@@ -501,7 +495,7 @@ struct FileInfos* GetFilesRecursively(struct StorageAPI* storage_api, const char
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return 0);
-    LONGTAIL_LOG(LOG_LEVEL_DEBUG, "GetFilesRecursively: Scanning `%s`", root_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "GetFilesRecursively: Scanning `%s`", root_path)
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
 
@@ -512,7 +506,7 @@ struct FileInfos* GetFilesRecursively(struct StorageAPI* storage_api, const char
 
     if(!RecurseTree(storage_api, root_path, AddFile, &context))
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "GetFilesRecursively: Failed get files in folder `%s`", root_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "GetFilesRecursively: Failed get files in folder `%s`", root_path)
         Longtail_Free(context.m_Paths);
         context.m_Paths = 0;
         arrfree(context.m_FileSizes);
@@ -570,7 +564,7 @@ static uint32_t StorageChunkFeederFunc(void* context, struct Chunker* chunker, u
         }
         if (!c->m_StorageAPI->Read(c->m_StorageAPI, c->m_AssetFile, c->m_StartRange + c->m_Offset, (uint32_t)read_count, buffer))
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "StorageChunkFeederFunc: Failed to read from asset file `%s`", c->m_AssetPath)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "StorageChunkFeederFunc: Failed to read from asset file `%s`", c->m_AssetPath)
             return 0;
         }
         c->m_Offset += read_count;
@@ -623,7 +617,7 @@ void DynamicChunking(void* context)
     StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "DynamicChunking: Failed to open file `%s`", path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to open file `%s`", path)
         Longtail_Free(path);
         path = 0;
         return;
@@ -640,7 +634,7 @@ void DynamicChunking(void* context)
         char* buffer = (char*)Longtail_Alloc((size_t)hash_size);
         if (!storage_api->Read(storage_api, file_handle, 0, hash_size, buffer))
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "DynamicChunking: Failed to read from file `%s`", path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to read from file `%s`", path)
             Longtail_Free(buffer);
             buffer = 0;
             storage_api->CloseRead(storage_api, file_handle);
@@ -690,7 +684,7 @@ void DynamicChunking(void* context)
 
         if (!chunker)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "DynamicChunking: Failed to create chunker for asset `%s`", path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create chunker for asset `%s`", path)
             hash_job->m_Success = 0;
             storage_api->CloseRead(storage_api, file_handle);
             file_handle = 0;
@@ -707,7 +701,7 @@ void DynamicChunking(void* context)
         {
             if(remaining < r.len)
             {
-                LONGTAIL_LOG(LOG_LEVEL_ERROR, "DynamicChunking: Chunking size is larger than remaining file size for asset `%s`", path)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Chunking size is larger than remaining file size for asset `%s`", path)
                 Longtail_Free(chunker);
                 chunker = 0;
                 hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
@@ -736,7 +730,7 @@ void DynamicChunking(void* context)
         }
         if(remaining != 0)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "DynamicChunking: Chunking stopped before end of file size for asset `%s`", path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Chunking stopped before end of file size for asset `%s`", path)
             Longtail_Free(chunker);
             chunker = 0;
             hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
@@ -802,7 +796,7 @@ int ChunkAssets(
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_DEBUG, "ChunkAssets: Hashing and chunking folder `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ChunkAssets: Hashing and chunking folder `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
 
     uint64_t max_hash_size = max_chunk_size * 1024;
@@ -827,7 +821,7 @@ int ChunkAssets(
 
     if (!job_api->ReserveJobs(job_api, job_count))
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "ChunkAssets: Failed to reserve %u jobs for folder `%s`", (uint32_t)*paths->m_PathCount, root_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to reserve %u jobs for folder `%s`", (uint32_t)*paths->m_PathCount, root_path)
         return 0;
     }
 
@@ -893,7 +887,7 @@ int ChunkAssets(
     {
         if (!hash_jobs[i].m_Success)
         {
-            LONGTAIL_LOG(LOG_LEVEL_WARNING, "ChunkAssets: Failed to hash `%s`", hash_jobs[i].m_Path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to hash `%s`", hash_jobs[i].m_Path)
             success = 0;
         }
     }
@@ -1171,7 +1165,7 @@ struct VersionIndex* CreateVersionIndex(
         max_chunk_size,
         &assets_chunk_index_count))
     {
-        LONGTAIL_LOG(LOG_LEVEL_INFO, "CreateVersionIndex: Failed to chunk and hash assets in `%s`", root_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateVersionIndex: Failed to chunk and hash assets in `%s`", root_path);
         Longtail_Free(asset_chunk_compression_types);
         asset_chunk_compression_types = 0;
         Longtail_Free(asset_chunk_start_index);
@@ -1275,23 +1269,23 @@ int WriteVersionIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "WriteVersionIndex: Writing index to `%s` containing %u assets in %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WriteVersionIndex: Writing index to `%s` containing %u assets in %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (*version_index->m_ChunkCount), (*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
 
     if (!EnsureParentPathExists(storage_api, path))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteVersionIndex: Failed create parent path for `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed create parent path for `%s`", path);
         return 0;
     }
     StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path, 0);
     if (!file_handle)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteVersionIndex: Failed open `%s` for write", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed open `%s` for write", path);
         return 0;
     }
     if (!storage_api->Write(storage_api, file_handle, 0, index_data_size, &version_index[1]))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteVersionIndex: Failed to write to `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed to write to `%s`", path);
         storage_api->CloseWrite(storage_api, file_handle);
         file_handle = 0;
         return 0;
@@ -1309,18 +1303,18 @@ struct VersionIndex* ReadVersionIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "ReadVersionIndex: Reading from `%s`", path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ReadVersionIndex: Reading from `%s`", path)
     StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "ReadVersionIndex: Failed to open file `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadVersionIndex: Failed to open file `%s`", path);
         return 0;
     }
     uint64_t version_index_data_size = storage_api->GetSize(storage_api, file_handle);
     struct VersionIndex* version_index = (struct VersionIndex*)Longtail_Alloc((size_t)(sizeof(struct VersionIndex) + version_index_data_size));
     if (!version_index)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadVersionIndex: Failed to allocate memory for `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadVersionIndex: Failed to allocate memory for `%s`", path);
         Longtail_Free(version_index);
         version_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
@@ -1329,7 +1323,7 @@ struct VersionIndex* ReadVersionIndex(
     }
     if (!storage_api->Read(storage_api, file_handle, 0, version_index_data_size, &version_index[1]))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadVersionIndex: Failed to read from `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadVersionIndex: Failed to read from `%s`", path);
         Longtail_Free(version_index);
         version_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
@@ -1337,7 +1331,7 @@ struct VersionIndex* ReadVersionIndex(
     }
     InitVersionIndex(version_index, (size_t)version_index_data_size);
     storage_api->CloseRead(storage_api, file_handle);
-    LONGTAIL_LOG(LOG_LEVEL_DEBUG, "ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     return version_index;
 }
 
@@ -1516,7 +1510,7 @@ struct ContentIndex* CreateContentIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_block_size != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunks_per_block != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "CreateContentIndex: Creating index for %" PRIu64 " chunks", chunk_count)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateContentIndex: Creating index for %" PRIu64 " chunks", chunk_count)
     if (chunk_count == 0)
     {
         size_t content_index_size = GetContentIndexSize(0, 0);
@@ -1664,23 +1658,23 @@ int WriteContentIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "WriteContentIndex: Write index to `%s`, chunks %u, blocks %u", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WriteContentIndex: Write index to `%s`, chunks %u, blocks %u", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
 
     if (!EnsureParentPathExists(storage_api, path))
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "WriteContentIndex: Failed to create parent folder for `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteContentIndex: Failed to create parent folder for `%s`", path);
         return 0;
     }
     StorageAPI_HOpenFile file_handle = storage_api->OpenWriteFile(storage_api, path, 0);
     if (!file_handle)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentIndex: Failed to create `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentIndex: Failed to create `%s`", path);
         return 0;
     }
     if (!storage_api->Write(storage_api, file_handle, 0, index_data_size, &content_index[1]))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentIndex: Failed to write to `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentIndex: Failed to write to `%s`", path);
         storage_api->CloseWrite(storage_api, file_handle);
         file_handle = 0;
         return 0;
@@ -1697,18 +1691,18 @@ struct ContentIndex* ReadContentIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "ReadContentIndex from `%s`", path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ReadContentIndex from `%s`", path)
     StorageAPI_HOpenFile file_handle = storage_api->OpenReadFile(storage_api, path);
     if (!file_handle)
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "ReadContentIndex: Failed to open `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadContentIndex: Failed to open `%s`", path);
         return 0;
     }
     uint64_t content_index_data_size = storage_api->GetSize(storage_api, file_handle);
     struct ContentIndex* content_index = (struct ContentIndex*)Longtail_Alloc((size_t)(sizeof(struct ContentIndex) + content_index_data_size));
     if (!content_index)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadContentIndex: Failed allocate memory for `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContentIndex: Failed allocate memory for `%s`", path);
         Longtail_Free(content_index);
         content_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
@@ -1717,7 +1711,7 @@ struct ContentIndex* ReadContentIndex(
     }
     if (!storage_api->Read(storage_api, file_handle, 0, content_index_data_size, &content_index[1]))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadContentIndex: Failed to read from `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContentIndex: Failed to read from `%s`", path);
         Longtail_Free(content_index);
         content_index = 0;
         storage_api->CloseRead(storage_api, file_handle);
@@ -1835,7 +1829,7 @@ static char* ReadBlockData(
     StorageAPI_HOpenFile block_file = storage_api->OpenReadFile(storage_api, block_path);
     if (!block_file)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadBlockData: Failed to open block `%s`", block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to open block `%s`", block_path)
         Longtail_Free(block_path);
         block_path = 0;
         return 0;
@@ -1847,7 +1841,7 @@ static char* ReadBlockData(
     storage_api->CloseRead(storage_api, block_file);
     block_file = 0;
     if (!ok){
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadBlockData: Failed to read block `%s`", block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to read block `%s`", block_path)
         Longtail_Free(block_path);
         block_path = 0;
         Longtail_Free(compressed_block_content);
@@ -1859,7 +1853,7 @@ static char* ReadBlockData(
     size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
     if (compressed_block_size < block_index_data_size)
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "ReadBlockData: Malformed content block (size to small) `%s`", block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadBlockData: Malformed content block (size to small) `%s`", block_path)
         Longtail_Free(block_path);
         block_path = 0;
         Longtail_Free(compressed_block_content);
@@ -1873,7 +1867,7 @@ static char* ReadBlockData(
     TLongtail_Hash verify_block_hash = *block_hash_ptr;
     if (block_hash != verify_block_hash)
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "ReadBlockData: Malformed content block (mismatching block hash) `%s`", block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadBlockData: Malformed content block (mismatching block hash) `%s`", block_path)
         Longtail_Free(block_path);
         block_path = 0;
         Longtail_Free(block_data);
@@ -1888,7 +1882,7 @@ static char* ReadBlockData(
         struct CompressionAPI* compression_api = GetCompressionAPI(compression_registry, compression_type);
         if (!compression_api)
         {
-            LONGTAIL_LOG(LOG_LEVEL_WARNING, "ReadBlockData: Compression type not supported `%u`", compression_type)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadBlockData: Compression type not supported `%u`", compression_type)
             Longtail_Free(block_path);
             block_path = 0;
             Longtail_Free(block_data);
@@ -1901,7 +1895,7 @@ static char* ReadBlockData(
         CompressionAPI_HDecompressionContext compression_context = compression_api->CreateDecompressionContext(compression_api);
         if (!compression_context)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadBlockData: Failed to create decompressor for block `%s`", block_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to create decompressor for block `%s`", block_path)
             Longtail_Free(block_data);
             block_data = 0;
             Longtail_Free(block_path);
@@ -1918,7 +1912,7 @@ static char* ReadBlockData(
 
         if (!ok)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadBlockData: Failed to decompress block `%s`", block_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to decompress block `%s`", block_path)
             Longtail_Free(block_data);
             block_data = 0;
             Longtail_Free(block_path);
@@ -1943,7 +1937,7 @@ struct BlockIndex* ReadBlockIndex(
     StorageAPI_HOpenFile f = storage_api->OpenReadFile(storage_api, full_block_path);
     if (!f)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadBlock: Failed to open block `%s`", full_block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlock: Failed to open block `%s`", full_block_path)
         return 0;
     }
     uint64_t s = storage_api->GetSize(storage_api, f);
@@ -1971,7 +1965,7 @@ struct BlockIndex* ReadBlockIndex(
     storage_api->CloseRead(storage_api, f);
     if (!ok)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadBlock: Failed to read block `%s`", full_block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlock: Failed to read block `%s`", full_block_path)
         Longtail_Free(block_index);
         block_index = 0;
         return 0;
@@ -2023,7 +2017,7 @@ void WriteContentBlockJob(void* context)
         intptr_t asset_part_index = hmgeti_ts(job->m_AssetPartLookup, chunk_hash, tmp);
         if (asset_part_index == -1)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 " in `%s`", chunk_hash, content_folder)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 " in `%s`", chunk_hash, content_folder)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
@@ -2034,7 +2028,7 @@ void WriteContentBlockJob(void* context)
         const char* asset_path = asset_part->m_Path;
         if (IsDirPath(asset_path))
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Directory should not have any chunks `%s`", asset_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Directory should not have any chunks `%s`", asset_path)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
@@ -2046,7 +2040,7 @@ void WriteContentBlockJob(void* context)
         uint64_t asset_content_offset = asset_part->m_Start;
         if (chunk_index != first_chunk_index && compression_type != asset_part->m_CompressionType)
         {
-            LONGTAIL_LOG(LOG_LEVEL_WARNING, "WriteContentBlockJob: Warning: Inconsistend compression type for chunks inside block 0x%" PRIx64 " in `%s`, retaining %u", block_hash, content_folder, compression_type)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteContentBlockJob: Warning: Inconsistend compression type for chunks inside block 0x%" PRIx64 " in `%s`, retaining %u", block_hash, content_folder, compression_type)
         }
         else
         {
@@ -2055,7 +2049,7 @@ void WriteContentBlockJob(void* context)
         StorageAPI_HOpenFile file_handle = source_storage_api->OpenReadFile(source_storage_api, full_path);
         if (!file_handle)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to open asset file `%s`", full_path);
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to open asset file `%s`", full_path);
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
@@ -2065,7 +2059,7 @@ void WriteContentBlockJob(void* context)
         uint64_t asset_file_size = source_storage_api->GetSize(source_storage_api, file_handle);
         if (asset_file_size < (asset_content_offset + chunk_size))
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Mismatching asset size in asset `%s`, size is %" PRIu64 ", but expecting at least %" PRIu64 "", full_path, asset_file_size, asset_content_offset + chunk_size);
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Mismatching asset size in asset `%s`, size is %" PRIu64 ", but expecting at least %" PRIu64 "", full_path, asset_file_size, asset_content_offset + chunk_size);
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
@@ -2087,7 +2081,7 @@ void WriteContentBlockJob(void* context)
         struct CompressionAPI* compression_api = GetCompressionAPI(compression_registry, compression_type);
         if (!compression_api)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Compression type not supported `%u`", compression_type)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Compression type not supported `%u`", compression_type)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
@@ -2104,7 +2098,7 @@ void WriteContentBlockJob(void* context)
         compression_api->DeleteCompressionContext(compression_api, compression_context);
         if (compressed_size <= 0)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to compress data for block for `%s`", tmp_block_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to compress data for block for `%s`", tmp_block_path)
             Longtail_Free(compressed_buffer);
             compressed_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
@@ -2121,7 +2115,7 @@ void WriteContentBlockJob(void* context)
 
     if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to create parent path for `%s`", tmp_block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to create parent path for `%s`", tmp_block_path)
         Longtail_Free(block_data_buffer);
         block_data_buffer = 0;
         Longtail_Free((char*)tmp_block_path);
@@ -2131,7 +2125,7 @@ void WriteContentBlockJob(void* context)
     StorageAPI_HOpenFile block_file_handle = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 0);
     if (!block_file_handle)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to create block file `%s`", tmp_block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to create block file `%s`", tmp_block_path)
         Longtail_Free(block_data_buffer);
         block_data_buffer = 0;
         Longtail_Free((char*)tmp_block_path);
@@ -2199,7 +2193,7 @@ int WriteContent(
     LONGTAIL_FATAL_ASSERT_PRIVATE(assets_folder != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_folder != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "WriteContent: Writing content from `%s` to `%s`, chunks %u, blocks %u", assets_folder, content_folder, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WriteContent: Writing content from `%s` to `%s`, chunks %u, blocks %u", assets_folder, content_folder, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -2208,7 +2202,7 @@ int WriteContent(
 
     if (!job_api->ReserveJobs(job_api, (uint32_t)block_count))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContent: Failed to reserve jobs when writing to `%s`", content_folder)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContent: Failed to reserve jobs when writing to `%s`", content_folder)
         return 0;
     }
 
@@ -2275,7 +2269,7 @@ int WriteContent(
         struct WriteBlockJob* job = &write_block_jobs[job_count];
         if (!job->m_Success)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteContent: Failed to write content to `%s`", content_folder)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContent: Failed to write content to `%s`", content_folder)
             uint64_t first_chunk_index = job->m_FirstChunkIndex;
             uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
             TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
@@ -2366,7 +2360,7 @@ void BlockDecompressor(void* context)
         job->m_BlockHash);
     if (!job->m_BlockData)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "BlockDecompressor: Failed to read block 0x%" PRIx64 " from `%s`", job->m_BlockHash, job->m_ContentFolder)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockDecompressor: Failed to read block 0x%" PRIx64 " from `%s`", job->m_BlockHash, job->m_ContentFolder)
         return;
     }
 }
@@ -2519,7 +2513,7 @@ void WritePartialAssetFromBlocks(void* context)
 
     if (decompressed_block_count != block_decompressor_job_count)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: %u blocks failed to decompress", block_decompressor_job_count - decompressed_block_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: %u blocks failed to decompress", block_decompressor_job_count - decompressed_block_count)
         for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
         {
             Longtail_Free(block_datas[d]);
@@ -2534,7 +2528,7 @@ void WritePartialAssetFromBlocks(void* context)
 
     if (!job->m_AssetOutputFile && job->m_AssetChunkIndexOffset)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Skipping write to asset `%s` due to previous write failure", asset_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Skipping write to asset `%s` due to previous write failure", asset_path)
         for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
         {
             Longtail_Free(block_datas[d]);
@@ -2546,7 +2540,7 @@ void WritePartialAssetFromBlocks(void* context)
         char* full_asset_path = job->m_VersionStorageAPI->ConcatPath(job->m_VersionStorageAPI, job->m_VersionFolder, asset_path);
         if (!EnsureParentPathExists(job->m_VersionStorageAPI, full_asset_path))
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create parent folder for `%s` in `%s`", asset_path, job->m_VersionFolder)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create parent folder for `%s` in `%s`", asset_path, job->m_VersionFolder)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
@@ -2560,7 +2554,7 @@ void WritePartialAssetFromBlocks(void* context)
             LONGTAIL_FATAL_ASSERT_PRIVATE(block_decompressor_job_count == 0, return; )
             if (!SafeCreateDir(job->m_VersionStorageAPI, full_asset_path))
             {
-                LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create folder for `%s` in `%s`", asset_path, job->m_VersionFolder)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create folder for `%s` in `%s`", asset_path, job->m_VersionFolder)
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
                 return;
@@ -2575,7 +2569,7 @@ void WritePartialAssetFromBlocks(void* context)
         job->m_AssetOutputFile = job->m_VersionStorageAPI->OpenWriteFile(job->m_VersionStorageAPI, full_asset_path, asset_size);
         if (!job->m_AssetOutputFile)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Unable to create asset `%s` in `%s`", asset_path, job->m_VersionFolder)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Unable to create asset `%s` in `%s`", asset_path, job->m_VersionFolder)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
@@ -2608,7 +2602,7 @@ void WritePartialAssetFromBlocks(void* context)
 
         if (!sync_write_job)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create next write/decompress job for asset `%s`", asset_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create next write/decompress job for asset `%s`", asset_path)
             for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
             {
                 Longtail_Free(block_datas[d]);
@@ -2654,7 +2648,7 @@ void WritePartialAssetFromBlocks(void* context)
 
         if (!job->m_VersionStorageAPI->Write(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset, chunk_size, &block_data[chunk_offset]))
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to write to asset `%s`", asset_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to write to asset `%s`", asset_path)
             job->m_VersionStorageAPI->CloseWrite(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
 
@@ -2691,7 +2685,7 @@ void WritePartialAssetFromBlocks(void* context)
     job->m_AssetOutputFile = 0;
     if (!ok)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to set final size of asset `%s` to %" PRIx64 "", asset_path, write_offset)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to set final size of asset `%s` to %" PRIx64 "", asset_path, write_offset)
         return;
     }
 
@@ -2737,7 +2731,7 @@ void WriteAssetsFromBlock(void* context)
     char* block_data = job->m_DecompressBlockJob.m_BlockData;
     if (!block_data)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 "", block_hash)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 "", block_hash)
         return;
     }
 
@@ -2749,7 +2743,7 @@ void WriteAssetsFromBlock(void* context)
         int ok = EnsureParentPathExists(version_storage_api, full_asset_path);
         if (!ok)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to create parent folder for `%s`", full_asset_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to create parent folder for `%s`", full_asset_path)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             Longtail_Free(block_data);
@@ -2760,7 +2754,7 @@ void WriteAssetsFromBlock(void* context)
         StorageAPI_HOpenFile asset_file = version_storage_api->OpenWriteFile(version_storage_api, full_asset_path, 0);
         if (!asset_file)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Unable to create asset `%s`", full_asset_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Unable to create asset `%s`", full_asset_path)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             Longtail_Free(block_data);
@@ -2782,7 +2776,7 @@ void WriteAssetsFromBlock(void* context)
             ok = version_storage_api->Write(version_storage_api, asset_file, asset_write_offset, chunk_size, &block_data[chunk_block_offset]);
             if (!ok)
             {
-                LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to write to asset `%s`", full_asset_path)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to write to asset `%s`", full_asset_path)
                 content_storage_api->CloseWrite(version_storage_api, asset_file);
                 asset_file = 0;
                 Longtail_Free(full_asset_path);
@@ -2906,7 +2900,7 @@ struct AssetWriteList* BuildAssetWriteList(
         intptr_t find_i = hmgeti(cl->m_ChunkHashToBlockIndex, chunk_hash);
         if (find_i == -1)
         {
-            LONGTAIL_LOG(LOG_LEVEL_WARNING, "WriteVersion: Failed to find chunk 0x%" PRIx64 " in content index for asset `%s`", chunk_hash, path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteVersion: Failed to find chunk 0x%" PRIx64 " in content index for asset `%s`", chunk_hash, path)
             Longtail_Free(awl);
             awl = 0;
             return 0;
@@ -2920,7 +2914,7 @@ struct AssetWriteList* BuildAssetWriteList(
             intptr_t find_i = hmgeti(cl->m_ChunkHashToBlockIndex, next_chunk_hash);
             if (find_i == -1)
             {
-                LONGTAIL_LOG(LOG_LEVEL_WARNING, "WriteVersion: Failed to find chunk 0x%" PRIx64 " in content index for asset `%s`", next_chunk_hash, path)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteVersion: Failed to find chunk 0x%" PRIx64 " in content index for asset `%s`", next_chunk_hash, path)
                 Longtail_Free(awl);
                 awl = 0;
                 return 0;
@@ -2974,7 +2968,7 @@ static void DecompressBlock(void* c)
         context->m_BlockHash);
     if (!context->m_UncompressedBlockData)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "DecompressBlock: Failed to decompress block 0x%" PRIx64 " in content `%s`", context->m_BlockHash, context->m_ContentFolder)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DecompressBlock: Failed to decompress block 0x%" PRIx64 " in content `%s`", context->m_BlockHash, context->m_ContentFolder)
     }
 }
 
@@ -3056,7 +3050,7 @@ int WriteAssets(
 
     if (!job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2) + asset_job_count))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteAssets: Failed to reserve %u jobs for folder `%s`", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets: Failed to reserve %u jobs for folder `%s`", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path)
         Longtail_Free(awl);
         awl = 0;
         DeleteContentLookup(content_lookup);
@@ -3179,7 +3173,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
         struct WriteAssetsFromBlockJob* job = &block_jobs[b];
         if (!job->m_Success)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteAssets: Failed to write single block assets content from `%s` to folder `%s`", content_path, version_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets: Failed to write single block assets content from `%s` to folder `%s`", content_path, version_path)
             success = 0;
         }
     }
@@ -3188,7 +3182,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
         struct WritePartialAssetFromBlocksJob* job = &asset_jobs[a];
         if (!job->m_Success)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteAssets: Failed to write multi block assets content from `%s` to folder `%s`", content_path, version_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets: Failed to write multi block assets content from `%s` to folder `%s`", content_path, version_path)
             success = 0;
         }
     }
@@ -3222,7 +3216,7 @@ int WriteVersion(
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_path != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_path != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "WriteVersion: Write version from `%s` to `%s`, assets %u, chunks %u", content_path, version_path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WriteVersion: Write version from `%s` to `%s`, assets %u, chunks %u", content_path, version_path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     if (*version_index->m_AssetCount == 0)
     {
         return 1;
@@ -3235,7 +3229,7 @@ int WriteVersion(
         content_index->m_ChunkBlockIndexes);
     if (!content_lookup)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteVersion: Failed create content lookup for content `%s`", content_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersion: Failed create content lookup for content `%s`", content_path);
         return 0;
     }
 
@@ -3254,7 +3248,7 @@ int WriteVersion(
 
     if (!awl)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "WriteVersion: Failed to create asset write list for version `%s`", content_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersion: Failed to create asset write list for version `%s`", content_path)
         DeleteContentLookup(content_lookup);
         content_lookup = 0;
         return 0;
@@ -3364,7 +3358,7 @@ struct ContentIndex* ReadContent(
     LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_path != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "ReadContent: Reading from `%s`", content_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ReadContent: Reading from `%s`", content_path)
 
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
@@ -3373,7 +3367,7 @@ struct ContentIndex* ReadContent(
     struct ReadContentContext context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(content_path)), paths, 0};
     if(!RecurseTree(storage_api, content_path, ReadContentAddPath, &context))
     {
-        LONGTAIL_LOG(LOG_LEVEL_WARNING, "ReadContent: Failed to scan folder `%s`", content_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadContent: Failed to scan folder `%s`", content_path)
         Longtail_Free(context.m_Paths);
         context.m_Paths = 0;
         return 0;
@@ -3383,13 +3377,13 @@ struct ContentIndex* ReadContent(
 
     if (!job_api->ReserveJobs(job_api, *paths->m_PathCount))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ReadContent: Failed to reserve jobs for `%s`", content_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContent: Failed to reserve jobs for `%s`", content_path)
         Longtail_Free(paths);
         paths = 0;
         return 0;
     }
 
-    LONGTAIL_LOG(LOG_LEVEL_DEBUG, "ReadContent: Scanning %u files from `%s`", *paths->m_PathCount, content_path);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadContent: Scanning %u files from `%s`", *paths->m_PathCount, content_path);
 
     struct ScanBlockJob* jobs = (struct ScanBlockJob*)Longtail_Alloc(sizeof(struct ScanBlockJob) * *paths->m_PathCount);
 
@@ -3426,7 +3420,7 @@ struct ContentIndex* ReadContent(
         }
     }
 
-    LONGTAIL_LOG(LOG_LEVEL_DEBUG, "ReadContent: Found %" PRIu64 " chunks in %" PRIu64 " blocks from `%s`", chunk_count, block_count, content_path);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadContent: Found %" PRIu64 " chunks in %" PRIu64 " blocks from `%s`", chunk_count, block_count, content_path);
 
     size_t content_index_data_size = GetContentIndexDataSize(block_count, chunk_count);
     struct ContentIndex* content_index = (struct ContentIndex*)Longtail_Alloc(sizeof(struct ContentIndex) + content_index_data_size);
@@ -3594,7 +3588,7 @@ struct ContentIndex* CreateMissingContent(
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_block_size != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunks_per_block != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks", *version_index->m_ChunkCount, *content_index->m_ChunkCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks", *version_index->m_ChunkCount, *content_index->m_ChunkCount)
     uint64_t chunk_count = *version_index->m_ChunkCount;
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)Longtail_Alloc((size_t)(sizeof(TLongtail_Hash) * chunk_count));
 
@@ -3703,7 +3697,7 @@ struct ContentIndex* RetargetContent(
         intptr_t remote_block_index_ptr = hmgeti(chunk_to_remote_block_index_lookup, chunk_hash);
         if (remote_block_index_ptr == -1)
         {
-            LONGTAIL_LOG(LOG_LEVEL_ERROR, "RetargetContent: reference content does not contain the chunk 0x%" PRIx64 "", chunk_hash);
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetargetContent: reference content does not contain the chunk 0x%" PRIx64 "", chunk_hash);
             hmfree(requested_blocks_lookup);
             requested_blocks_lookup = 0;
             Longtail_Free(requested_block_hashes);
@@ -4001,7 +3995,7 @@ struct VersionDiff* CreateVersionDiff(
                 modified_source_indexes[modified_count] = source_asset_index;
                 modified_target_indexes[modified_count] = target_asset_index;
                 ++modified_count;
-                LONGTAIL_LOG(LOG_LEVEL_DEBUG, "CreateVersionDiff: Mismatching content for asset `%s`", source_path)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CreateVersionDiff: Mismatching content for asset `%s`", source_path)
             }
             ++source_index;
             ++target_index;
@@ -4009,7 +4003,7 @@ struct VersionDiff* CreateVersionDiff(
         else if (source_path_hash < target_path_hash)
         {
             uint32_t source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
-            LONGTAIL_LOG(LOG_LEVEL_DEBUG, "CreateVersionDiff: Removed asset `%s`", source_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CreateVersionDiff: Removed asset `%s`", source_path)
             removed_source_asset_indexes[source_removed_count] = source_asset_index;
             ++source_removed_count;
             ++source_index;
@@ -4017,7 +4011,7 @@ struct VersionDiff* CreateVersionDiff(
         else
         {
             uint32_t target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
-            LONGTAIL_LOG(LOG_LEVEL_DEBUG, "CreateVersionDiff: Added asset `%s`", target_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CreateVersionDiff: Added asset `%s`", target_path)
             added_target_asset_indexes[target_added_count] = target_asset_index;
             ++target_added_count;
             ++target_index;
@@ -4029,7 +4023,7 @@ struct VersionDiff* CreateVersionDiff(
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
         uint32_t source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
         const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
-        LONGTAIL_LOG(LOG_LEVEL_DEBUG, "CreateVersionDiff: Removed asset `%s`", source_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CreateVersionDiff: Removed asset `%s`", source_path)
         removed_source_asset_indexes[source_removed_count] = source_asset_index;
         ++source_removed_count;
         ++source_index;
@@ -4040,22 +4034,22 @@ struct VersionDiff* CreateVersionDiff(
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
         uint32_t target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
         const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
-        LONGTAIL_LOG(LOG_LEVEL_DEBUG, "CreateVersionDiff: Added asset `%s`", target_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CreateVersionDiff: Added asset `%s`", target_path)
         added_target_asset_indexes[target_added_count] = target_asset_index;
         ++target_added_count;
         ++target_index;
     }
     if (source_removed_count > 0)
     {
-        LONGTAIL_LOG(LOG_LEVEL_INFO, "CreateVersionDiff: Found %u removed assets", source_removed_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateVersionDiff: Found %u removed assets", source_removed_count)
     }
     if (target_added_count > 0)
     {
-        LONGTAIL_LOG(LOG_LEVEL_INFO, "CreateVersionDiff: Found %u added assets", target_added_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateVersionDiff: Found %u added assets", target_added_count)
     }
     if (modified_count > 0)
     {
-        LONGTAIL_LOG(LOG_LEVEL_INFO, "CreateVersionDiff: Mismatching content for %u assets found", modified_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateVersionDiff: Mismatching content for %u assets found", modified_count)
     }
 
     struct VersionDiff* version_diff = (struct VersionDiff*)Longtail_Alloc(GetVersionDiffSize(source_removed_count, target_added_count, modified_count));
@@ -4127,16 +4121,16 @@ int ChangeVersion(
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_path != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_path != 0, return 0);
 
-    LONGTAIL_LOG(LOG_LEVEL_INFO, "ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount, version_path, content_path);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount, version_path, content_path);
 
     if (!EnsureParentPathExists(version_storage_api, version_path))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ChangeVersion: Failed to create parent path for `%s`", version_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to create parent path for `%s`", version_path);
         return 0;
     }
     if (!SafeCreateDir(version_storage_api, version_path))
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ChangeVersion: Failed to create folder `%s`", version_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to create folder `%s`", version_path);
         return 0;
     }
     struct ContentLookup* content_lookup = CreateContentLookup(
@@ -4147,7 +4141,7 @@ int ChangeVersion(
         content_index->m_ChunkBlockIndexes);
     if (!content_lookup)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ChangeVersion: Failed create content lookup for content `%s`", content_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed create content lookup for content `%s`", content_path);
         return 0;
     }
 
@@ -4157,7 +4151,7 @@ int ChangeVersion(
         intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
         if (-1 == chunk_content_index_ptr)
         {
-            LONGTAIL_LOG(LOG_LEVEL_WARNING, "ChangeVersion: Not all chunks in target version in `%s` is available in content folder `%s`", version_path, content_path);
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChangeVersion: Not all chunks in target version in `%s` is available in content folder `%s`", version_path, content_path);
             DeleteContentLookup(content_lookup);
             content_lookup = 0;
             return 0;
@@ -4177,7 +4171,7 @@ int ChangeVersion(
             intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
             if (-1 == chunk_content_index_ptr)
             {
-                LONGTAIL_LOG(LOG_LEVEL_WARNING, "ChangeVersion: Not all chunks for asset `%s` is in target version in `%s` is available in content folder `%s`", target_name, version_path, content_path);
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChangeVersion: Not all chunks for asset `%s` is in target version in `%s` is available in content folder `%s`", target_name, version_path, content_path);
                 DeleteContentLookup(content_lookup);
                 content_lookup = 0;
                 return 0;
@@ -4206,7 +4200,7 @@ int ChangeVersion(
                     {
                         if (!retry_count)
                         {
-                            LONGTAIL_LOG(LOG_LEVEL_ERROR, "ChangeVersion: Failed to remove directory `%s`", full_asset_path);
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to remove directory `%s`", full_asset_path);
                             Longtail_Free(full_asset_path);
                             full_asset_path = 0;
                             DeleteContentLookup(content_lookup);
@@ -4228,7 +4222,7 @@ int ChangeVersion(
                     {
                         if (!retry_count)
                         {
-                            LONGTAIL_LOG(LOG_LEVEL_ERROR, "ChangeVersion: Failed to remove file `%s`", full_asset_path);
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to remove file `%s`", full_asset_path);
                             Longtail_Free(full_asset_path);
                             full_asset_path = 0;
                             DeleteContentLookup(content_lookup);
@@ -4250,7 +4244,7 @@ int ChangeVersion(
             --retry_count;
             if (retry_count == 1)
             {
-                LONGTAIL_LOG(LOG_LEVEL_INFO, "ChangeVersion: Retrying removal of remaning %u assets in `%s`", removed_count - successful_remove_count, version_path);
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ChangeVersion: Retrying removal of remaning %u assets in `%s`", removed_count - successful_remove_count, version_path);
             }
         }
     }
@@ -4282,7 +4276,7 @@ int ChangeVersion(
 
     if (!awl)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "ChangeVersion: Failed to create asset write list for version `%s`", content_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to create asset write list for version `%s`", content_path)
         Longtail_Free(asset_indexes);
         asset_indexes = 0;
         DeleteContentLookup(content_lookup);
@@ -4562,22 +4556,22 @@ struct Chunker* CreateChunker(
 
     if (params->min < ChunkerWindowSize)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "Chunker: Min chunk size too small, must be over %u", ChunkerWindowSize);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Chunker: Min chunk size too small, must be over %u", ChunkerWindowSize);
         return 0;
     }
     if (params->min > params->max)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "Chunker: Min (%u) chunk size must not be greater than max (%u)", (uint32_t)params->min, (uint32_t)params->max);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Chunker: Min (%u) chunk size must not be greater than max (%u)", (uint32_t)params->min, (uint32_t)params->max);
         return 0;
     }
     if (params->min > params->avg)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "Chunker: Min (%u) chunk size must not be greater than avg (%u)", (uint32_t)params->min, (uint32_t)params->avg);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Chunker: Min (%u) chunk size must not be greater than avg (%u)", (uint32_t)params->min, (uint32_t)params->avg);
         return 0;
     }
     if (params->avg > params->max)
     {
-        LONGTAIL_LOG(LOG_LEVEL_ERROR, "Chunker: Avg (%u) chunk size must not be greater than max (%u)", (uint32_t)params->avg, (uint32_t)params->max);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Chunker: Avg (%u) chunk size must not be greater than max (%u)", (uint32_t)params->avg, (uint32_t)params->max);
         return 0;
     }
     struct Chunker* c = (struct Chunker*)Longtail_Alloc((size_t)((sizeof(struct Chunker) + params->max)));

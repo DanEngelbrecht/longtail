@@ -52,7 +52,11 @@ static void ReadyCallback_Wait(struct ReadyCallback* cb)
 static void ReadyCallback_Init(struct ReadyCallback* ready_callback)
 {
     ready_callback->cb.SignalReady = ReadyCallback_Ready;
-    ready_callback->m_Semaphore = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0);
+    int err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &ready_callback->m_Semaphore);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create semaphore for ReadyCallback error: %d", err);
+    }
 }
 
 
@@ -104,7 +108,11 @@ int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_sh
 
 void ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
 {
-    Longtail_JoinThread(thread_worker->thread, LONGTAIL_TIMEOUT_INFINITE);
+    int err = Longtail_JoinThread(thread_worker->thread, LONGTAIL_TIMEOUT_INFINITE);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtain_JoinThread failed with error %d", err);
+    }
 }
 
 void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
@@ -872,7 +880,11 @@ static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_HashAPI = CreateMeowHashAPI();
     storage_api->m_PathHashToContent = 0;
     storage_api->m_PathEntries = 0;
-    storage_api->m_SpinLock = Longtail_CreateSpinLock(&storage_api[1]);
+    int err = Longtail_CreateSpinLock(&storage_api[1], &storage_api->m_SpinLock);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create spinlock for in mem storage api error: %d", err);
+    }
 }
 
 struct StorageAPI* CreateInMemStorageAPI()
