@@ -1,10 +1,107 @@
 #include "longtail_platform.h"
 #include "../src/longtail.h"
 #include <stdint.h>
+#include <errno.h>
 
 #if defined(_WIN32)
 
 #include <Windows.h>
+
+static int Win32ErrorToErrno(DWORD err)
+{
+    switch (err)
+    {
+        case ERROR_SUCCESS:
+        return 0;
+        case ERROR_FILE_NOT_FOUND:
+        case ERROR_PATH_NOT_FOUND:
+        case ERROR_INVALID_TARGET_HANDLE:
+        return ENOENT;
+        case ERROR_TOO_MANY_OPEN_FILES:
+        case ERROR_SHARING_BUFFER_EXCEEDED:
+        case ERROR_NOT_ENOUGH_MEMORY:
+        case ERROR_OUTOFMEMORY:
+        case ERROR_TOO_MANY_SEMAPHORES:
+        case ERROR_NO_MORE_SEARCH_HANDLES:
+        case ERROR_MAX_THRDS_REACHED:
+        return ENOMEM;
+        case ERROR_ACCESS_DENIED:
+        case ERROR_INVALID_ACCESS:
+        case ERROR_WRITE_PROTECT:
+        case ERROR_SHARING_VIOLATION:
+        case ERROR_LOCK_VIOLATION:
+        case ERROR_NETWORK_ACCESS_DENIED:
+        case ERROR_INVALID_PASSWORD:
+        case ERROR_EXCL_SEM_ALREADY_OWNED:
+        case ERROR_FORMS_AUTH_REQUIRED:
+        case ERROR_NOT_OWNER:
+        case ERROR_OPLOCK_NOT_GRANTED:
+        return EACCES;
+        case ERROR_INVALID_HANDLE:
+        case ERROR_INVALID_DATA:
+        case ERROR_NOT_SAME_DEVICE:
+        case ERROR_BAD_COMMAND:
+        case ERROR_BAD_LENGTH:
+        case ERROR_NOT_SUPPORTED:
+        case ERROR_INVALID_PARAMETER:
+        case ERROR_SEM_IS_SET:
+        case ERROR_TOO_MANY_SEM_REQUESTS:
+        case ERROR_BUFFER_OVERFLOW:
+        case ERROR_INSUFFICIENT_BUFFER:
+        case ERROR_INVALID_NAME:
+        case ERROR_INVALID_LEVEL:
+        case ERROR_DIRECT_ACCESS_HANDLE:
+        case ERROR_NEGATIVE_SEEK:
+        case ERROR_SEEK_ON_DEVICE:
+        case ERROR_BAD_ARGUMENTS:
+        case ERROR_BAD_PATHNAME:
+        case ERROR_SEM_NOT_FOUND:
+        case ERROR_FILENAME_EXCED_RANGE:
+        case ERROR_DIRECTORY:
+        return EINVAL;
+        case ERROR_INVALID_DRIVE:
+        return ENODEV;
+        case ERROR_CURRENT_DIRECTORY:
+        case ERROR_BAD_UNIT:
+        case ERROR_NOT_READY:
+        case ERROR_REM_NOT_LIST:
+        case ERROR_NO_VOLUME_LABEL:
+        case ERROR_MOD_NOT_FOUND:
+        case ERROR_PROC_NOT_FOUND:
+        return ENOENT;
+        break;
+        case ERROR_SEEK:
+        case ERROR_WRITE_FAULT:
+        case ERROR_READ_FAULT:
+        case ERROR_SECTOR_NOT_FOUND:
+        case ERROR_NOT_DOS_DISK:
+        case ERROR_CANNOT_MAKE:
+        case ERROR_NET_WRITE_FAULT:
+        case ERROR_BROKEN_PIPE:
+        case ERROR_OPEN_FAILED:
+        case ERROR_FILE_TOO_LARGE:
+        case ERROR_BAD_FILE_TYPE:
+        case ERROR_DISK_TOO_FRAGMENTED:
+        return EIO;
+        case ERROR_HANDLE_DISK_FULL:
+        case ERROR_DISK_FULL:
+        return ENOSPC;
+        case ERROR_FILE_EXISTS:
+        case ERROR_ALREADY_EXISTS:
+        return EEXIST;
+        case ERROR_SEM_TIMEOUT:
+        return ETIME;
+        case ERROR_WAIT_NO_CHILDREN:
+        return ECHILD;
+        case ERROR_BUSY_DRIVE:
+        case ERROR_PATH_BUSY:
+        case ERROR_BUSY:
+        case ERROR_PIPE_BUSY:
+        return EBUSY;
+        default:
+        return EINVAL;
+    }
+}
 
 size_t Longtail_GetCPUCount()
 {
@@ -43,7 +140,7 @@ size_t Longtail_GetThreadSize()
     return sizeof(struct Longtail_Thread);
 }
 
-HLongtail_Thread Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data)
+int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread)
 {
     struct Longtail_Thread* thread = (struct Longtail_Thread*)mem;
     thread->m_ThreadFunc = thread_func;
@@ -57,9 +154,10 @@ HLongtail_Thread Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_fun
         0);
     if (thread->m_Handle == INVALID_HANDLE_VALUE)
     {
-        return 0;
+        return Win32ErrorToErrno(GetLastError());
     }
-    return thread;
+    *out_thread = thread;
+    return 0;
 }
 
 int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
@@ -435,7 +533,6 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <errno.h>
 #include <pthread.h>
 
 size_t Longtail_GetCPUCount()
@@ -479,28 +576,64 @@ size_t Longtail_GetThreadSize()
     return sizeof(struct Longtail_Thread);
 }
 
-HLongtail_Thread Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data)
+int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread)
 {
-    struct Longtail_Thread* thread = (struct Longtail_Thread*)mem;
-    thread->m_ThreadFunc  = thread_func;
-    thread->m_ContextData = context_data;
-    thread->m_Exited      = 0;
-    pthread_mutex_init(&thread->m_ExitLock, 0);
-    pthread_cond_init(&thread->m_ExitConditionalVariable, 0);
+    struct Longtail_Thread* thread      = (struct Longtail_Thread*)mem;
+    thread->m_ThreadFunc                = thread_func;
+    thread->m_ContextData               = context_data;
+    thread->m_Exited                    = 0;
+    thread->m_ExitLock                  = 0;
+    thread->m_ExitConditionalVariable   = 0;
+
+    int err = 0;
 
     pthread_attr_t attr;
-    pthread_attr_init(&attr);
+    int attr_err = pthread_attr_init(&attr);
+    if (attr_err != 0) {
+        err = attr_err;
+        goto error;
+    }
+
+    int exit_lock_err = pthread_mutex_init(&thread->m_ExitLock, 0);
+    if (exit_lock_err != 0) {
+        err = exit_lock_err;
+        goto error;
+    }
+
+    int exit_cont_err = pthread_cond_init(&thread->m_ExitConditionalVariable, 0);
+    if (exit_cont_err != 0) {
+        err = exit_cont_err;
+        goto error;
+    }
+
     if (stack_size != 0)
     {
-        pthread_attr_setstacksize(&attr, stack_size);
+        err = pthread_attr_setstacksize(&attr, stack_size);
+        if (err != 0) {
+            goto error;
+        }
     }
-    int result = pthread_create(&thread->m_Handle, &attr, ThreadStartFunction, (void*)thread);
-    pthread_attr_destroy(&attr);
-    if (result != 0)
+
+    int thread_err = pthread_create(&thread->m_Handle, &attr, ThreadStartFunction, (void*)thread);
+    if (thread_err != 0)
     {
-        return 0;
+        err = thread_err;
+        goto error;
     }
-    return thread;
+    pthread_attr_destroy(&attr);
+    return 0;
+
+error:
+    if (exit_cont_err == 0) {
+        pthread_cond_destroy(&thread->m_ExitConditionalVariable);
+    }
+    if (exit_lock_err == 0) {
+        pthread_mutex_destroy(&thread->m_ExitLock);
+    }
+    if (attr_err == 0) {
+        pthread_attr_destroy(&attr);
+    }
+    return err;
 }
 
 static int GetTimeSpec(struct timespec* ts, uint64_t delay_us)

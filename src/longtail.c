@@ -1139,8 +1139,11 @@ struct VersionIndex* CreateVersionIndex(
 
     uint32_t path_count = *paths->m_PathCount;
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(path_hashes != 0, return 0);
     TLongtail_Hash* content_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_hashes != 0, return 0);
     uint32_t* asset_chunk_counts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * path_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_counts != 0, return 0);
 
     uint32_t assets_chunk_index_count = 0;
     uint32_t* asset_chunk_sizes = 0;
@@ -1185,9 +1188,13 @@ struct VersionIndex* CreateVersionIndex(
     }
 
     uint32_t* asset_chunk_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_indexes != 0, return 0);
     TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * assets_chunk_index_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_hashes != 0, return 0);
     uint32_t* compact_chunk_sizes =  (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_sizes != 0, return 0);
     uint32_t* compact_chunk_compression_types =  (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_compression_types != 0, return 0);
 
     uint32_t unique_chunk_count = 0;
     struct HashToIndexItem* chunk_hash_to_index = 0;
@@ -1215,6 +1222,7 @@ struct VersionIndex* CreateVersionIndex(
 
     size_t version_index_size = GetVersionIndexSize(path_count, unique_chunk_count, assets_chunk_index_count, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index_mem != 0, return 0);
 
     struct VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,              // mem
@@ -1231,6 +1239,7 @@ struct VersionIndex* CreateVersionIndex(
         compact_chunk_sizes,            // chunk_sizes
         compact_chunk_hashes,           // chunk_hashes
         compact_chunk_compression_types); // chunk_compression_types
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return 0);
 
     Longtail_Free(compact_chunk_compression_types);
     compact_chunk_compression_types = 0;

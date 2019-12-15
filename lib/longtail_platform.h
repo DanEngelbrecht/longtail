@@ -20,7 +20,7 @@ typedef struct Longtail_Thread* HLongtail_Thread;
 typedef int (*Longtail_ThreadFunc)(void* context_data);
 
 size_t              Longtail_GetThreadSize();
-HLongtail_Thread    Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data);
+int                 Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread);
 int                 Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us);
 void                Longtail_DeleteThread(HLongtail_Thread thread);
 

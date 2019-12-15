@@ -95,8 +95,11 @@ int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_sh
     thread_worker->shed               = in_shed;
     thread_worker->stop               = in_stop;
     thread_worker->semaphore          = in_semaphore;
-    thread_worker->thread             = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, thread_worker);
-    return thread_worker->thread != 0;
+    int err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, thread_worker, &thread_worker->thread);
+    if (err == 0) {
+         return 1;
+    }
+    return 0;
 }
 
 void ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
