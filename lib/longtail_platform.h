@@ -66,7 +66,7 @@ int         Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLon
 int         Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length);
 int         Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output);
 int         Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, const void* input);
-uint64_t    Longtail_GetFileSize(HLongtail_OpenFile handle);
+int         Longtail_GetFileSize(HLongtail_OpenFile handle, uint64_t* out_size);
 void        Longtail_CloseFile(HLongtail_OpenFile handle);
 // Not sure about doing memory allocation here...
 const char* Longtail_ConcatPath(const char* folder, const char* file);

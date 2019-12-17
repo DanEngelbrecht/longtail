@@ -36,7 +36,7 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
             Longtail_Free(dir_path);
             return 0;
         }
-        if (storage_api->CreateDir(storage_api, dir_path))
+        if (0 == storage_api->CreateDir(storage_api, dir_path))
         {
             Longtail_Free(dir_path);
             return 1;
@@ -74,7 +74,7 @@ int MakePath(StorageAPI* storage_api, const char* path)
             Longtail_Free(dir_path);
             return 0;
         }
-        if (storage_api->CreateDir(storage_api, dir_path))
+        if (0 == storage_api->CreateDir(storage_api, dir_path))
         {
             Longtail_Free(dir_path);
             return 1;
@@ -98,17 +98,17 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
         {
             return 0;
         }
-        StorageAPI_HOpenFile content_file = storage_api->OpenWriteFile(storage_api, path, 0);
-        if (!content_file)
+        StorageAPI_HOpenFile content_file;
+        if (storage_api->OpenWriteFile(storage_api, path, 0, &content_file))
         {
             return 0;
         }
         uint64_t content_size = 64000 + 1 + i;
         char* data = (char*)Longtail_Alloc(sizeof(char) * content_size);
         memset(data, i, content_size);
-        int ok = storage_api->Write(storage_api, content_file, 0, content_size, data);
+        int err = storage_api->Write(storage_api, content_file, 0, content_size, data);
         Longtail_Free(data);
-        if (!ok)
+        if (err)
         {
             return 0;
         }
@@ -181,7 +181,9 @@ TEST(Longtail, ContentIndex)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
     HashAPI* hash_api = CreateMeowHashAPI();
     ASSERT_NE((HashAPI*)0, hash_api);
-    HashAPI_HContext c = hash_api->BeginContext(hash_api);
+    HashAPI_HContext c;
+    int err = hash_api->BeginContext(hash_api, &c);
+    ASSERT_EQ(0, err);
     ASSERT_NE((HashAPI_HContext)0, c);
     hash_api->EndContext(hash_api, c);
     ContentIndex* content_index = CreateContentIndex(
@@ -326,9 +328,10 @@ TEST(Longtail, WriteContent)
     for (uint32_t i = 0; i < 5; ++i)
     {
         ASSERT_NE(0, CreateParentPath(source_storage, TEST_FILENAMES[i]));
-        StorageAPI_HOpenFile w = source_storage->OpenWriteFile(source_storage, TEST_FILENAMES[i], 0);
+        StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, source_storage->OpenWriteFile(source_storage, TEST_FILENAMES[i], 0, &w));
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
-        ASSERT_NE(0, source_storage->Write(source_storage, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        ASSERT_EQ(0, source_storage->Write(source_storage, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
         source_storage->CloseFile(source_storage, w);
         w = 0;
     }
@@ -566,7 +569,7 @@ TEST(Longtail, VersionIndexDirectories)
     JobAPI* job_api = CreateBikeshedJobAPI(0);
 
     ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 2));
-    local_storage->CreateDir(local_storage, "no_items");
+    ASSERT_EQ(0, local_storage->CreateDir(local_storage, "no_items"));
     ASSERT_EQ(1, CreateFakeContent(local_storage, "deep/file/down/under/three_items", 3));
     ASSERT_EQ(1, MakePath(local_storage, "deep/folders/with/nothing/in/menoexists.nop"));
 
@@ -825,12 +828,13 @@ TEST(Longtail, VersionDiff)
     {
         char* file_name = storage->ConcatPath(storage, "old", OLD_TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage, file_name));
-        StorageAPI_HOpenFile w = storage->OpenWriteFile(storage, file_name, 0);
+        StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
         Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (OLD_TEST_SIZES[i])
         {
-            ASSERT_NE(0, storage->Write(storage, w, 0, OLD_TEST_SIZES[i], OLD_TEST_STRINGS[i]));
+            ASSERT_EQ(0, storage->Write(storage, w, 0, OLD_TEST_SIZES[i], OLD_TEST_STRINGS[i]));
         }
         storage->CloseFile(storage, w);
         w = 0;
@@ -840,12 +844,13 @@ TEST(Longtail, VersionDiff)
     {
         char* file_name = storage->ConcatPath(storage, "new", NEW_TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage, file_name));
-        StorageAPI_HOpenFile w = storage->OpenWriteFile(storage, file_name, 0);
+        StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
         Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (NEW_TEST_SIZES[i])
         {
-            ASSERT_NE(0, storage->Write(storage, w, 0, NEW_TEST_SIZES[i], NEW_TEST_STRINGS[i]));
+            ASSERT_EQ(0, storage->Write(storage, w, 0, NEW_TEST_SIZES[i], NEW_TEST_STRINGS[i]));
         }
         storage->CloseFile(storage, w);
         w = 0;
@@ -958,15 +963,17 @@ TEST(Longtail, VersionDiff)
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
     {
         char* file_name = storage->ConcatPath(storage, "old", NEW_TEST_FILENAMES[i]);
-        StorageAPI_HOpenFile r = storage->OpenReadFile(storage, file_name);
+        StorageAPI_HOpenFile r;
+        ASSERT_EQ(0, storage->OpenReadFile(storage, file_name, &r));
         Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
-        uint64_t size = storage->GetSize(storage, r);
+        uint64_t size;
+        ASSERT_EQ(0, storage->GetSize(storage, r, &size));
         ASSERT_EQ(NEW_TEST_SIZES[i], size);
         char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
         if (size)
         {
-            ASSERT_NE(0, storage->Read(storage, r, 0, size, test_data));
+            ASSERT_EQ(0, storage->Read(storage, r, 0, size, test_data));
             ASSERT_STREQ(NEW_TEST_STRINGS[i], test_data);
         }
         storage->CloseFile(storage, r);
@@ -1117,13 +1124,15 @@ TEST(Longtail, FullScale)
     {
         char path[20];
         sprintf(path, "%u", i);
-        StorageAPI_HOpenFile r = local_storage->OpenReadFile(local_storage, path);
+        StorageAPI_HOpenFile r;
+        ASSERT_EQ(0, local_storage->OpenReadFile(local_storage, path, &r));
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
-        uint64_t size = local_storage->GetSize(local_storage, r);
+        uint64_t size;
+        ASSERT_EQ(0, local_storage->GetSize(local_storage, r, &size));
         uint64_t expected_size = 64000 + 1 + i;
         ASSERT_EQ(expected_size, size);
         char* buffer = (char*)Longtail_Alloc(expected_size);
-        local_storage->Read(local_storage, r, 0, expected_size, buffer);
+        ASSERT_EQ(0, local_storage->Read(local_storage, r, 0, expected_size, buffer));
 
         for (uint64_t j = 0; j < expected_size; j++)
         {
@@ -1238,12 +1247,13 @@ TEST(Longtail, WriteVersion)
     {
         char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
         ASSERT_NE(0, CreateParentPath(storage_api, file_name));
-        StorageAPI_HOpenFile w = storage_api->OpenWriteFile(storage_api, file_name, 0);
+        StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
         Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, w);
         if (TEST_SIZES[i])
         {
-            ASSERT_NE(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+            ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
         }
         storage_api->CloseFile(storage_api, w);
         w = 0;
@@ -1309,15 +1319,17 @@ TEST(Longtail, WriteVersion)
     for (uint32_t i = 0; i < asset_count; ++i)
     {
         char* file_name = storage_api->ConcatPath(storage_api, "remote", TEST_FILENAMES[i]);
-        StorageAPI_HOpenFile r = storage_api->OpenReadFile(storage_api, file_name);
+        StorageAPI_HOpenFile r;
+        ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, file_name, &r));
         Longtail_Free(file_name);
         ASSERT_NE((StorageAPI_HOpenFile)0, r);
-        uint64_t size = storage_api->GetSize(storage_api, r);
+        uint64_t size;
+        ASSERT_EQ(0, storage_api->GetSize(storage_api, r, &size));
         ASSERT_EQ(TEST_SIZES[i], size);
         char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
         if (size)
         {
-            ASSERT_NE(0, storage_api->Read(storage_api, r, 0, size, test_data));
+            ASSERT_EQ(0, storage_api->Read(storage_api, r, 0, size, test_data));
             ASSERT_STREQ(TEST_STRINGS[i], test_data);
         }
         storage_api->CloseFile(storage_api, r);
@@ -1448,8 +1460,9 @@ void Bench()
             delta_upload_content_folder));
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
-        StorageAPI_HIterator fs_iterator = storage_api->StartFind(storage_api, delta_upload_content_folder);
-        if (fs_iterator)
+        StorageAPI_HIterator fs_iterator;
+        int err = storage_api->StartFind(storage_api, delta_upload_content_folder, &fs_iterator);
+        if (!err)
         {
             do
             {
@@ -1458,8 +1471,8 @@ void Bench()
                 {
                     char* target_path = storage_api->ConcatPath(storage_api, CONTENT_FOLDER, file_name);
 
-                    StorageAPI_HOpenFile v = storage_api->OpenReadFile(storage_api, target_path);
-                    if (v)
+                    StorageAPI_HOpenFile v;
+                    if (0 == storage_api->OpenReadFile(storage_api, target_path, &v))
                     {
                         storage_api->CloseFile(storage_api, v);
                         v = 0;
@@ -1469,18 +1482,21 @@ void Bench()
 
                     char* source_path = storage_api->ConcatPath(storage_api, delta_upload_content_folder, file_name);
 
-                    StorageAPI_HOpenFile s = storage_api->OpenReadFile(storage_api, source_path);
+                    StorageAPI_HOpenFile s;
+                    ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, source_path, &s));
                     ASSERT_NE((StorageAPI_HOpenFile)0, s);
 
                     ASSERT_NE(0, MakePath(storage_api, target_path));
-                    StorageAPI_HOpenFile t = storage_api->OpenWriteFile(storage_api, target_path, 0);
+                    StorageAPI_HOpenFile t;
+                    ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, target_path, 0, &t));
                     ASSERT_NE((StorageAPI_HOpenFile)0, t);
 
-                    uint64_t block_file_size = storage_api->GetSize(storage_api, s);
+                    uint64_t block_file_size;
+                    ASSERT_EQ(0, storage_api->GetSize(storage_api, s, &block_file_size));
                     void* buffer = Longtail_Alloc(block_file_size);
 
-                    ASSERT_NE(0, storage_api->Read(storage_api, s, 0, block_file_size, buffer));
-                    ASSERT_NE(0, storage_api->Write(storage_api, t, 0, block_file_size, buffer));
+                    ASSERT_EQ(0, storage_api->Read(storage_api, s, 0, block_file_size, buffer));
+                    ASSERT_EQ(0, storage_api->Write(storage_api, t, 0, block_file_size, buffer));
 
                     Longtail_Free(buffer);
                     buffer = 0,
@@ -1491,7 +1507,11 @@ void Bench()
                     Longtail_Free(target_path);
                     Longtail_Free(source_path);
                 }
-            }while(storage_api->FindNext(storage_api, fs_iterator));
+            }while(storage_api->FindNext(storage_api, fs_iterator) == 0);
+        }
+        else
+        {
+            ASSERT_EQ(ENOENT, err);
         }
 
         ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);

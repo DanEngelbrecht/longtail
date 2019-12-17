@@ -10,9 +10,10 @@ extern "C" {
 typedef struct HashAPI_Context* HashAPI_HContext;
 struct HashAPI
 {
-    HashAPI_HContext (*BeginContext)(struct HashAPI* hash_api);
+    int (*BeginContext)(struct HashAPI* hash_api, HashAPI_HContext* out_context);
     void (*Hash)(struct HashAPI* hash_api, HashAPI_HContext context, uint32_t length, void* data);
     uint64_t (*EndContext)(struct HashAPI* hash_api, HashAPI_HContext context);
+    int (*HashBuffer)(struct HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash);
 };
 
 typedef struct StorageAPI_OpenFile* StorageAPI_HOpenFile;
@@ -20,11 +21,11 @@ typedef struct StorageAPI_Iterator* StorageAPI_HIterator;
 
 struct StorageAPI
 {
-    StorageAPI_HOpenFile (*OpenReadFile)(struct StorageAPI* storage_api, const char* path);
-    uint64_t (*GetSize)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f);
+    int (*OpenReadFile)(struct StorageAPI* storage_api, const char* path, StorageAPI_HOpenFile* out_open_file);
+    int (*GetSize)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t* out_size);
     int (*Read)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output);
 
-    StorageAPI_HOpenFile (*OpenWriteFile)(struct StorageAPI* storage_api, const char* path, uint64_t initial_size);
+    int (*OpenWriteFile)(struct StorageAPI* storage_api, const char* path, uint64_t initial_size, StorageAPI_HOpenFile* out_open_file);
     int (*Write)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
     int (*SetSize)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length);
 
@@ -41,7 +42,7 @@ struct StorageAPI
     int (*RemoveDir)(struct StorageAPI* storage_api, const char* path);
     int (*RemoveFile)(struct StorageAPI* storage_api, const char* path);
 
-    StorageAPI_HIterator (*StartFind)(struct StorageAPI* storage_api, const char* path);
+    int (*StartFind)(struct StorageAPI* storage_api, const char* path, StorageAPI_HIterator* out_iterator);
     int (*FindNext)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
     void (*CloseFind)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
     const char* (*GetFileName)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);

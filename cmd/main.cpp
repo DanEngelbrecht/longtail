@@ -36,7 +36,7 @@ int CreatePath(struct StorageAPI* storage_api, const char* path)
         {
             return 0;
         }
-        if (storage_api->CreateDir(storage_api, path))
+        if (0 == storage_api->CreateDir(storage_api, path))
         {
             return 1;
         }

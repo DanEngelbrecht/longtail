@@ -534,21 +534,17 @@ int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, 
     return 0;
 }
 
-uint64_t Longtail_GetFileSize(HLongtail_OpenFile handle)
+int Longtail_GetFileSize(HLongtail_OpenFile handle, uint64_t* out_size)
 {
     HANDLE h = (HANDLE)(handle);
     DWORD high = 0;
     DWORD low = GetFileSize(h, &high);
     if (low == INVALID_FILE_SIZE)
     {
-        DWORD e = GetLastError();
-        if (e != 0)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Can't determine size of file: %d\n", e);
-            return 0;
-        }
+        return Win32ErrorToErrno(GetLastError());
     }
-    return (((uint64_t)high) << 32) + (uint64_t)low;
+    *out_size = (((uint64_t)high) << 32) + (uint64_t)low;
+    return 0;
 }
 
 void Longtail_CloseFile(HLongtail_OpenFile handle)
