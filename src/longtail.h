@@ -133,7 +133,7 @@ int GetFilesRecursively(
     const char* root_path,
     struct FileInfos** out_file_infos);
 
-struct VersionIndex* CreateVersionIndex(
+int CreateVersionIndex(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
@@ -143,16 +143,18 @@ struct VersionIndex* CreateVersionIndex(
     const struct Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_compression_types,
-    uint32_t max_chunk_size);
+    uint32_t max_chunk_size,
+    struct VersionIndex** out_version_index);
 
 int WriteVersionIndex(
     struct StorageAPI* storage_api,
     struct VersionIndex* version_index,
     const char* path);
 
-struct VersionIndex* ReadVersionIndex(
+ int ReadVersionIndex(
     struct StorageAPI* storage_api,
-    const char* path);
+    const char* path,
+    struct VersionIndex** out_version_index);
 
 struct ContentIndex* CreateContentIndex(
     struct HashAPI* hash_api,

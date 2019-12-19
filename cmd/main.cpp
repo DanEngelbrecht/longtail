@@ -28,17 +28,19 @@ int CreatePath(struct StorageAPI* storage_api, const char* path)
 {
     if (storage_api->IsDir(storage_api, path))
     {
-        return 1;
+        return 0;
     }
     else
     {
-        if (!CreateParentPath(storage_api, path))
+        int err = CreateParentPath(storage_api, path);
+        if (err)
         {
-            return 0;
+            return err;
         }
-        if (0 == storage_api->CreateDir(storage_api, path))
+        err = storage_api->CreateDir(storage_api, path);
+        if (err)
         {
-            return 1;
+            return err;
         }
     }
     return 0;
@@ -51,16 +53,16 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
     if (last_path_delimiter == 0)
     {
         Longtail_Free(dir_path);
-        return 1;
+        return 0;
     }
     while (last_path_delimiter > dir_path && last_path_delimiter[-1] == '/')
     {
         --last_path_delimiter;
     }
     *last_path_delimiter = '\0';
-    int ok = CreatePath(storage_api, dir_path);
+    int err = CreatePath(storage_api, dir_path);
     Longtail_Free(dir_path);
-    return ok;
+    return err;
 }
 
 char* NormalizePath(const char* path)
@@ -228,7 +230,7 @@ int Cmd_CreateVersionIndex(
     VersionIndex* vindex = 0;
     {
         Progress progress("Indexing version");
-        vindex = CreateVersionIndex(
+        err =CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -238,26 +240,28 @@ int Cmd_CreateVersionIndex(
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
             compression_types,
-            target_chunk_size);
+            target_chunk_size,
+            &vindex);
     }
     Longtail_Free(compression_types);
     compression_types = 0;
     Longtail_Free(file_infos);
     file_infos = 0;
-    if (!vindex)
+    if (err)
     {
-        fprintf(stderr, "Failed to create version index for `%s`\n", version);
+        fprintf(stderr, "Failed to create version index for `%s`, %d\n", version, err);
         return 0;
     }
 
-    int ok = CreateParentPath(storage_api, create_version_index) && WriteVersionIndex(storage_api, vindex, create_version_index);
+    int ok = (0 == CreateParentPath(storage_api, create_version_index)) && (0 == WriteVersionIndex(storage_api, vindex, create_version_index));
 
-    VersionIndex* target_vindex = ReadVersionIndex(storage_api, create_version_index);
-    if (!target_vindex)
+    VersionIndex* target_vindex;
+    err = ReadVersionIndex(storage_api, create_version_index, &target_vindex);
+    if (err)
     {
         Longtail_Free(vindex);
         vindex = 0;
-        fprintf(stderr, "Failed to read version index from `%s`\n", create_version_index);
+        fprintf(stderr, "Failed to read version index from `%s`, %d\n", create_version_index, err);
         return 0;
     }
 
@@ -322,7 +326,7 @@ int Cmd_CreateContentIndex(
             return 0;
         }
     }
-    int ok = CreateParentPath(storage_api, create_content_index) &&
+    int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
         WriteContentIndex(
             storage_api,
             cindex,
@@ -370,7 +374,7 @@ int Cmd_MergeContentIndex(
         return 0;
     }
 
-    int ok = CreateParentPath(storage_api, create_content_index) &&
+    int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
         WriteContentIndex(
             storage_api,
             cindex,
@@ -403,10 +407,10 @@ int Cmd_CreateMissingContentIndex(
     VersionIndex* vindex = 0;
     if (version_index)
     {
-        vindex = ReadVersionIndex(storage_api, version_index);
-        if (!vindex)
+        int err = ReadVersionIndex(storage_api, version_index, &vindex);
+        if (err)
         {
-            fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
+            fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
             return 0;
         }
     }
@@ -430,7 +434,7 @@ int Cmd_CreateMissingContentIndex(
             return 0;
         }
         Progress progress("Indexing version");
-        vindex = CreateVersionIndex(
+        err = CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -440,14 +444,15 @@ int Cmd_CreateMissingContentIndex(
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
             compression_types,
-            target_chunk_size);
+            target_chunk_size,
+            &vindex);
         Longtail_Free(compression_types);
         compression_types = 0;
         Longtail_Free(file_infos);
         file_infos = 0;
-        if (!vindex)
+        if (err)
         {
-            fprintf(stderr, "Failed to create version index for version `%s`\n", version);
+            fprintf(stderr, "Failed to create version index for version `%s`, %d\n", version, err);
             return 0;
         }
     }
@@ -511,7 +516,7 @@ int Cmd_CreateMissingContentIndex(
         return 0;
     }
 
-    int ok = CreateParentPath(storage_api, create_content_index) &&
+    int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
         WriteContentIndex(
             storage_api,
             cindex,
@@ -544,10 +549,10 @@ int Cmd_CreateContent(
     VersionIndex* vindex = 0;
     if (version_index)
     {
-        vindex = ReadVersionIndex(storage_api, version_index);
-        if (!vindex)
+        int err = ReadVersionIndex(storage_api, version_index, &vindex);
+        if (err)
         {
-            fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
+            fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
             return 0;
         }
     }
@@ -571,7 +576,7 @@ int Cmd_CreateContent(
             return 0;
         }
         Progress progress("Indexing version");
-        vindex = CreateVersionIndex(
+        err = CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -581,14 +586,15 @@ int Cmd_CreateContent(
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
             compression_types,
-            target_chunk_size);
+            target_chunk_size,
+            &vindex);
         Longtail_Free(compression_types);
         compression_types = 0;
         Longtail_Free(file_infos);
         file_infos = 0;
-        if (!vindex)
+        if (err)
         {
-            fprintf(stderr, "Failed to create version index for version `%s`\n", version);
+            fprintf(stderr, "Failed to create version index for version `%s`, %d\n", version, err);
             return 0;
         }
     }
@@ -637,7 +643,7 @@ int Cmd_CreateContent(
     int ok = 0;
     {
         Progress progress("Writing content");
-        ok = CreatePath(storage_api, create_content) && WriteContent(
+        ok = (0 == CreatePath(storage_api, create_content)) && WriteContent(
             storage_api,
             storage_api,
             compression_registry,
@@ -744,10 +750,11 @@ int Cmd_CreateVersion(
     const char* content,
     const char* content_index)
 {
-    VersionIndex* vindex = ReadVersionIndex(storage_api, version_index);
-    if (!vindex)
+    VersionIndex* vindex;
+    int err = ReadVersionIndex(storage_api, version_index, &vindex);
+    if (err)
     {
-        fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
+        fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
         return 0;
     }
 
@@ -797,7 +804,7 @@ int Cmd_CreateVersion(
     int ok = 0;
     {
         Progress progress("Writing version");
-        ok = CreatePath(storage_api, create_version) && WriteVersion(
+        ok = (0 == CreatePath(storage_api, create_version)) && WriteVersion(
             storage_api,
             storage_api,
             compression_registry,
@@ -836,10 +843,10 @@ int Cmd_UpdateVersion(
     VersionIndex* source_vindex = 0;
     if (version_index)
     {
-        source_vindex = ReadVersionIndex(storage_api, version_index);
-        if (!source_vindex)
+        int err = CreateVersionIndex(storage_api, version_index, &source_vindex);
+        if (err)
         {
-            fprintf(stderr, "Failed to read version index from `%s`\n", version_index);
+            fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
             return 0;
         }
     }
@@ -863,7 +870,7 @@ int Cmd_UpdateVersion(
             return 0;
         }
         Progress progress("Indexing version");
-        source_vindex = CreateVersionIndex(
+        err = CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -873,24 +880,26 @@ int Cmd_UpdateVersion(
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
             compression_types,
-            target_chunk_size);
+            target_chunk_size,
+            &source_vindex);
         Longtail_Free(compression_types);
         compression_types = 0;
         Longtail_Free(file_infos);
         file_infos = 0;
-        if (!source_vindex)
+        if (err)
         {
-            fprintf(stderr, "Failed to create version index for version `%s`\n", update_version);
+            fprintf(stderr, "Failed to create version index for version `%s`, %d\n", update_version, err);
             return 0;
         }
     }
 
-    VersionIndex* target_vindex = ReadVersionIndex(storage_api, target_version_index);
-    if (!target_vindex)
+    VersionIndex* target_vindex;
+    int err = ReadVersionIndex(storage_api, target_version_index, &target_vindex);
+    if (err)
     {
         Longtail_Free(source_vindex);
         source_vindex = 0;
-        fprintf(stderr, "Failed to read version index from `%s`\n", target_version_index);
+        fprintf(stderr, "Failed to read version index from `%s`, %d\n", target_version_index, err);
         return 0;
     }
 
@@ -959,7 +968,7 @@ int Cmd_UpdateVersion(
     int ok = 0;
     {
         Progress progress("Updating version");
-        ok = CreatePath(storage_api, update_version) && ChangeVersion(
+        ok = (0 == CreatePath(storage_api, update_version)) && ChangeVersion(
             storage_api,
             storage_api,
             hash_api,
@@ -1009,9 +1018,15 @@ int Cmd_UpSyncVersion(
     int target_block_size,
     int target_chunk_size)
 {
-    VersionIndex* vindex = ReadVersionIndex(source_storage_api, version_index_path);
-    if (!vindex)
+    VersionIndex* vindex;
+    int err = ReadVersionIndex(source_storage_api, version_index_path, &vindex);
+    if (err)
     {
+        if (err != ENOENT)
+        {
+            fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index_path, err);
+            return 0;
+        }
         struct FileInfos* file_infos;
         int err = GetFilesRecursively(
             source_storage_api,
@@ -1033,7 +1048,7 @@ int Cmd_UpSyncVersion(
         }
 
         Progress progress("Indexing version");
-        vindex = CreateVersionIndex(
+        err = CreateVersionIndex(
             source_storage_api,
             hash_api,
             job_api,
@@ -1043,14 +1058,15 @@ int Cmd_UpSyncVersion(
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
             compression_types,
-            target_chunk_size);
+            target_chunk_size,
+            &vindex);
         Longtail_Free(compression_types);
         compression_types = 0;
         Longtail_Free(file_infos);
         file_infos = 0;
-        if (!vindex)
+        if (err)
         {
-            fprintf(stderr, "Failed to create version index for `%s`\n", version_path);
+            fprintf(stderr, "Failed to create version index for `%s`, %d\n", version_path, err);
             return 0;
         }
     }
@@ -1125,7 +1141,7 @@ int Cmd_UpSyncVersion(
     int ok = 0;
     {
         Progress progress("Writing content");
-        ok = CreatePath(target_storage_api, missing_content_path) && WriteContent(
+        ok = (0 == CreatePath(target_storage_api, missing_content_path)) && WriteContent(
             source_storage_api,
             target_storage_api,
             compression_registry,
@@ -1163,10 +1179,10 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 */
-    ok = CreateParentPath(target_storage_api, version_index_path) && WriteVersionIndex(
+    ok = (0 == CreateParentPath(target_storage_api, version_index_path)) && (0 == WriteVersionIndex(
         target_storage_api,
         vindex,
-        version_index_path);
+        version_index_path));
     if (!ok)
     {
         fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
@@ -1181,7 +1197,7 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 
-    ok = CreateParentPath(target_storage_api, content_index_path) && WriteContentIndex(
+    ok = (0 == CreateParentPath(target_storage_api, content_index_path)) && WriteContentIndex(
         target_storage_api,
         missing_content_index,
         missing_content_index_path);
@@ -1243,10 +1259,11 @@ int Cmd_DownSyncVersion(
     int target_block_size,
     int target_chunk_size)
 {
-    VersionIndex* vindex_target = ReadVersionIndex(source_storage_api, target_version_index_path);
-    if (!vindex_target)
+    VersionIndex* vindex_target;
+    int err = ReadVersionIndex(source_storage_api, target_version_index_path, &vindex_target);
+    if (err)
     {
-        //TODO: print
+        fprintf(stderr, "Failed to read version index from `%s`, %d\n", target_version_index_path, err);
         return 0;
     }
 
@@ -1606,15 +1623,19 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        struct VersionIndex* source_vindex = ReadVersionIndex(fs_storage_api, create_version_index);
-        if (!source_vindex)
+        struct VersionIndex* source_vindex;
+        int err = ReadVersionIndex(fs_storage_api, create_version_index, &source_vindex);
+        if (err)
         {
+            fprintf(stderr, "Failed to read version index `%s`, %d\n", create_version_index, err);
             return 1;
         }
-        struct VersionIndex* target_vindex = ReadVersionIndex(fs_storage_api, incremental_version_index);
-        if (!target_vindex)
+        struct VersionIndex* target_vindex;
+        err = ReadVersionIndex(fs_storage_api, incremental_version_index, &target_vindex);
+        if (err)
         {
             Longtail_Free(source_vindex);
+            fprintf(stderr, "Failed to read version index `%s`, %d\n", incremental_version_index, err);
             return 1;
         }
 

@@ -613,7 +613,7 @@ struct HashJob
     uint32_t* m_ChunkCompressionTypes;
     uint32_t* m_ChunkSizes;
     uint32_t m_MaxChunkSize;
-    int m_Success;
+    int m_Err;
 };
 
 void DynamicChunking(void* context)
@@ -621,13 +621,13 @@ void DynamicChunking(void* context)
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return);
     struct HashJob* hash_job = (struct HashJob*)context;
 
-    hash_job->m_Success = 0;
+    hash_job->m_Err = EINVAL;
 
     *hash_job->m_PathHash = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path);
 
     if (IsDirPath(hash_job->m_Path))
     {
-        hash_job->m_Success = 1;
+        hash_job->m_Err = 0;
         *hash_job->m_AssetChunkCount = 0;
         return;
     }
@@ -637,11 +637,12 @@ void DynamicChunking(void* context)
     char* path = storage_api->ConcatPath(storage_api, hash_job->m_RootPath, hash_job->m_Path);
     StorageAPI_HOpenFile file_handle;
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
-    if (err != 0)
+    if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to open file `%s`, %d", path, err)
         Longtail_Free(path);
         path = 0;
+        hash_job->m_Err = err;
         return;
     }
 
@@ -654,7 +655,7 @@ void DynamicChunking(void* context)
     else if (hash_size <= ChunkerWindowSize || hash_job->m_MaxChunkSize <= ChunkerWindowSize)
     {
         char* buffer = (char*)Longtail_Alloc((size_t)hash_size);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(buffer, return;)
+        LONGTAIL_FATAL_ASSERT_PRIVATE(buffer, hash_job->m_Err = ENOMEM; return;)
         int err = storage_api->Read(storage_api, file_handle, 0, hash_size, buffer);
         if (err)
         {
@@ -665,11 +666,12 @@ void DynamicChunking(void* context)
             file_handle = 0;
             Longtail_Free(path);
             path = 0;
+            hash_job->m_Err = err;
             return;
         }
 
         err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, (uint32_t)hash_size, buffer, &hash_job->m_ChunkHashes[chunk_count]);
-        if (err != 0)
+        if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create hash context for path `%s`", path)
             Longtail_Free(buffer);
@@ -678,6 +680,7 @@ void DynamicChunking(void* context)
             file_handle = 0;
             Longtail_Free(path);
             path = 0;
+            hash_job->m_Err = err;
             return;
         }
 
@@ -717,24 +720,24 @@ void DynamicChunking(void* context)
         if (!chunker)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create chunker for asset `%s`", path)
-            hash_job->m_Success = 0;
             storage_api->CloseFile(storage_api, file_handle);
             file_handle = 0;
             Longtail_Free(path);
             path = 0;
+            hash_job->m_Err = ENOMEM;
             return;
         }
 
         HashAPI_HContext asset_hash_context;
         int err = hash_job->m_HashAPI->BeginContext(hash_job->m_HashAPI, &asset_hash_context);
-        if (err != 0)
+        if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create hash context for path `%s`", path)
-            hash_job->m_Success = 0;
             storage_api->CloseFile(storage_api, file_handle);
             file_handle = 0;
             Longtail_Free(path);
             path = 0;
+            hash_job->m_Err = err;
             return;
         }
 
@@ -742,38 +745,23 @@ void DynamicChunking(void* context)
         struct ChunkRange r = NextChunk(chunker);
         while (r.len)
         {
-            if(remaining < r.len)
+            LONGTAIL_FATAL_ASSERT_PRIVATE(remaining >= r.len, hash_job->m_Err = EINVAL; return;)
+            int err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, r.len, (void*)r.buf, &hash_job->m_ChunkHashes[chunk_count]);
+            if (err != 0)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Chunking size is larger than remaining file size for asset `%s`", path)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create hash for chunk of `%s`", path)
                 Longtail_Free(chunker);
                 chunker = 0;
                 hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
-                hash_job->m_Success = 0;
                 storage_api->CloseFile(storage_api, file_handle);
                 file_handle = 0;
                 Longtail_Free(path);
                 path = 0;
+                hash_job->m_Err = err;
                 return;
             }
-
-            {
-                int err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, r.len, (void*)r.buf, &hash_job->m_ChunkHashes[chunk_count]);
-                if (err != 0)
-                {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create hash for chunk of `%s`", path)
-                    Longtail_Free(chunker);
-                    chunker = 0;
-                    hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
-                    hash_job->m_Success = 0;
-                    storage_api->CloseFile(storage_api, file_handle);
-                    file_handle = 0;
-                    Longtail_Free(path);
-                    path = 0;
-                    return;
-                }
-                hash_job->m_ChunkSizes[chunk_count] = r.len;
-                hash_job->m_ChunkCompressionTypes[chunk_count] = hash_job->m_ContentCompressionType;
-            }
+            hash_job->m_ChunkSizes[chunk_count] = r.len;
+            hash_job->m_ChunkCompressionTypes[chunk_count] = hash_job->m_ContentCompressionType;
 
             ++chunk_count;
             hash_job->m_HashAPI->Hash(hash_job->m_HashAPI, asset_hash_context, r.len, (void*)r.buf);
@@ -781,19 +769,7 @@ void DynamicChunking(void* context)
             remaining -= r.len;
             r = NextChunk(chunker);
         }
-        if(remaining != 0)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Chunking stopped before end of file size for asset `%s`", path)
-            Longtail_Free(chunker);
-            chunker = 0;
-            hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
-            hash_job->m_Success = 0;
-            storage_api->CloseFile(storage_api, file_handle);
-            file_handle = 0;
-            Longtail_Free(path);
-            path = 0;
-            return;
-        }
+        LONGTAIL_FATAL_ASSERT_PRIVATE(remaining == 0, hash_job->m_Err = EINVAL; return;)
 
         content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
         Longtail_Free(chunker);
@@ -809,7 +785,7 @@ void DynamicChunking(void* context)
     Longtail_Free((char*)path);
     path = 0;
 
-    hash_job->m_Success = 1;
+    hash_job->m_Err = 0;
 }
 
 int ChunkAssets(
@@ -832,22 +808,22 @@ int ChunkAssets(
     uint32_t max_chunk_size,
     uint32_t* chunk_count)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(hash_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(paths != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(path_hashes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(hash_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(paths != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(path_hashes != 0, return EINVAL);
 
-    LONGTAIL_FATAL_ASSERT_PRIVATE(content_hashes != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(content_sizes != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_start_index != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_counts != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_sizes != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_hashes != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_compression_types != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_hashes != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_sizes != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_start_index != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_counts != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_sizes != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_hashes != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_compression_types != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count != 0, return EINVAL);
 
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ChunkAssets: Hashing and chunking folder `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
@@ -876,20 +852,20 @@ int ChunkAssets(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to reserve %u jobs for folder `%s`, %d", (uint32_t)*paths->m_PathCount, root_path, err)
-        return 0;
+        return err;
     }
 
     uint32_t* job_chunk_counts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * job_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(job_chunk_counts, return 0;)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(job_chunk_counts, return ENOMEM;)
     TLongtail_Hash* hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * max_chunk_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(hashes, return 0;)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(hashes, return ENOMEM;)
     uint32_t* sizes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_chunk_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(sizes, return 0;)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(sizes, return ENOMEM;)
     uint32_t* compression_types = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_chunk_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_types, return 0;)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_types, return ENOMEM;)
 
     struct HashJob* hash_jobs = (struct HashJob*)Longtail_Alloc(sizeof(struct HashJob) * job_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(hash_jobs, return 0;)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(hash_jobs, return ENOMEM;)
 
     uint64_t jobs_started = 0;
     uint64_t chunks_offset = 0;
@@ -902,7 +878,7 @@ int ChunkAssets(
 
         for (uint64_t job_part = 0; job_part < asset_part_count; ++job_part)
         {
-            LONGTAIL_FATAL_ASSERT_PRIVATE(jobs_started < job_count, return 0;)
+            LONGTAIL_FATAL_ASSERT_PRIVATE(jobs_started < job_count, return EINVAL;)
 
             uint64_t range_start = job_part * max_hash_size;
             uint64_t job_size = (asset_size - range_start) > max_hash_size ? max_hash_size : (asset_size - range_start);
@@ -925,15 +901,16 @@ int ChunkAssets(
             job->m_ChunkSizes = &sizes[chunks_offset];
             job->m_ChunkCompressionTypes = &compression_types[chunks_offset];
             job->m_MaxChunkSize = max_chunk_size;
+            job->m_Err = EINVAL;
 
             JobAPI_JobFunc func[1] = {DynamicChunking};
             void* ctx[1] = {&hash_jobs[jobs_started]};
 
             JobAPI_Jobs jobs;
             int err = job_api->CreateJobs(job_api, 1, func, ctx, &jobs);
-            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
+            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return err;)
             err = job_api->ReadyJobs(job_api, 1, jobs);
-            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
+            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return err;)
 
             jobs_started++;
 
@@ -942,33 +919,33 @@ int ChunkAssets(
     }
 
     err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return err;)
 
-    int success = 1;
+    err = 0;
     for (uint32_t i = 0; i < jobs_started; ++i)
     {
-        if (!hash_jobs[i].m_Success)
+        if (hash_jobs[i].m_Err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to hash `%s`", hash_jobs[i].m_Path)
-            success = 0;
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to hash `%s`, %d", hash_jobs[i].m_Path, hash_jobs[i].m_Err)
+            err = err ? err : hash_jobs[i].m_Err;
         }
     }
 
-    if (success)
+    if (!err)
     {
         uint32_t built_chunk_count = 0;
         for (uint32_t i = 0; i < jobs_started; ++i)
         {
-            LONGTAIL_FATAL_ASSERT_PRIVATE(*hash_jobs[i].m_AssetChunkCount <= hash_jobs[i].m_MaxChunkCount, return 0;);
+            LONGTAIL_FATAL_ASSERT_PRIVATE(*hash_jobs[i].m_AssetChunkCount <= hash_jobs[i].m_MaxChunkCount, return EINVAL;);
             built_chunk_count += *hash_jobs[i].m_AssetChunkCount;
         }
         *chunk_count = built_chunk_count;
         *chunk_sizes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * *chunk_count);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_sizes, return 0;)
+        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_sizes, return ENOMEM;)
         *chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * *chunk_count);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_hashes, return 0;)
+        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_hashes, return ENOMEM;)
         *chunk_compression_types = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * *chunk_count);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_compression_types, return 0;)
+        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_compression_types, return ENOMEM;)
 
         uint32_t chunk_offset = 0;
         for (uint32_t i = 0; i < jobs_started; ++i)
@@ -992,26 +969,19 @@ int ChunkAssets(
         for (uint32_t a = 0; a < asset_count; ++a)
         {
             uint32_t chunk_start_index = asset_chunk_start_index[a];
-            int err = hash_api->HashBuffer(hash_api, sizeof(TLongtail_Hash) * asset_chunk_counts[a], &(*chunk_hashes)[chunk_start_index], &content_hashes[a]);
-            if (err != 0)
+            err = hash_api->HashBuffer(hash_api, sizeof(TLongtail_Hash) * asset_chunk_counts[a], &(*chunk_hashes)[chunk_start_index], &content_hashes[a]);
+            if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to hash chunks for `%s`", &paths->m_Data[paths->m_Offsets[a]])
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to hash chunks for `%s`, %d", &paths->m_Data[paths->m_Offsets[a]], err)
                 Longtail_Free(*chunk_sizes);
                 *chunk_sizes = 0;
                 Longtail_Free(*chunk_hashes);
                 *chunk_hashes = 0;
                 Longtail_Free(*chunk_compression_types);
                 *chunk_compression_types = 0;
-                return 0;
+                return err;
             }
         }
-    }
-    else
-    {
-        *chunk_count = 0;
-        *chunk_sizes = 0;
-        *chunk_hashes = 0;
-        *chunk_compression_types = 0;
     }
 
     Longtail_Free(compression_types);
@@ -1029,7 +999,7 @@ int ChunkAssets(
     Longtail_Free(hash_jobs);
     hash_jobs = 0;
 
-    return success;
+    return err;
 }
 
 size_t GetVersionIndexDataSize(
@@ -1186,7 +1156,7 @@ struct VersionIndex* BuildVersionIndex(
     return version_index;
 }
 
-struct VersionIndex* CreateVersionIndex(
+int CreateVersionIndex(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
@@ -1196,31 +1166,32 @@ struct VersionIndex* CreateVersionIndex(
     const struct Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_compression_types,
-    uint32_t max_chunk_size)
+    uint32_t max_chunk_size,
+    struct VersionIndex** out_version_index)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(hash_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(paths != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(hash_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(paths != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return EINVAL);
 
     uint32_t path_count = *paths->m_PathCount;
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(path_hashes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(path_hashes != 0, return ENOMEM);
     TLongtail_Hash* content_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(content_hashes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_hashes != 0, return ENOMEM);
     uint32_t* asset_chunk_counts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * path_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_counts != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_counts != 0, return ENOMEM);
 
     uint32_t assets_chunk_index_count = 0;
     uint32_t* asset_chunk_sizes = 0;
     uint32_t* asset_chunk_compression_types = 0;
     TLongtail_Hash* asset_chunk_hashes = 0;
     uint32_t* asset_chunk_start_index = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * path_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_start_index, return 0;)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_start_index, return ENOMEM;)
 
-    if (!ChunkAssets(
+    int err = ChunkAssets(
         storage_api,
         hash_api,
         job_api,
@@ -1238,9 +1209,9 @@ struct VersionIndex* CreateVersionIndex(
         &asset_chunk_hashes,
         &asset_chunk_compression_types,
         max_chunk_size,
-        &assets_chunk_index_count))
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateVersionIndex: Failed to chunk and hash assets in `%s`", root_path);
+        &assets_chunk_index_count);
+    if (err) {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateVersionIndex: Failed to chunk and hash assets in `%s`, %d", root_path, err);
         Longtail_Free(asset_chunk_compression_types);
         asset_chunk_compression_types = 0;
         Longtail_Free(asset_chunk_start_index);
@@ -1253,17 +1224,17 @@ struct VersionIndex* CreateVersionIndex(
         content_hashes = 0;
         Longtail_Free(path_hashes);
         path_hashes = 0;
-        return 0;
+        return err;
     }
 
     uint32_t* asset_chunk_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_indexes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_indexes != 0, return ENOMEM);
     TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * assets_chunk_index_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_hashes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_hashes != 0, return ENOMEM);
     uint32_t* compact_chunk_sizes =  (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_sizes != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_sizes != 0, return ENOMEM);
     uint32_t* compact_chunk_compression_types =  (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_compression_types != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compact_chunk_compression_types != 0, return ENOMEM);
 
     uint32_t unique_chunk_count = 0;
     struct HashToIndexItem* chunk_hash_to_index = 0;
@@ -1291,7 +1262,7 @@ struct VersionIndex* CreateVersionIndex(
 
     size_t version_index_size = GetVersionIndexSize(path_count, unique_chunk_count, assets_chunk_index_count, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index_mem, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index_mem, return ENOMEM);
 
     struct VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,              // mem
@@ -1308,7 +1279,7 @@ struct VersionIndex* CreateVersionIndex(
         compact_chunk_sizes,            // chunk_sizes
         compact_chunk_hashes,           // chunk_hashes
         compact_chunk_compression_types); // chunk_compression_types
-    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL);
 
     Longtail_Free(compact_chunk_compression_types);
     compact_chunk_compression_types = 0;
@@ -1333,7 +1304,8 @@ struct VersionIndex* CreateVersionIndex(
     Longtail_Free(path_hashes);
     path_hashes = 0;
 
-    return version_index;
+    *out_version_index = version_index;
+    return 0;
 }
 
 int WriteVersionIndex(
@@ -1341,9 +1313,9 @@ int WriteVersionIndex(
     struct VersionIndex* version_index,
     const char* path)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL);
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WriteVersionIndex: Writing index to `%s` containing %u assets in %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (*version_index->m_ChunkCount), (*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
 
@@ -1351,14 +1323,14 @@ int WriteVersionIndex(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed create parent path for `%s`, %d", path, err);
-        return 0;
+        return err;
     }
     StorageAPI_HOpenFile file_handle;
     err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed open `%s` for write, %d", path, err);
-        return 0;
+        return err;
     }
     err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &version_index[1]);
     if (err)
@@ -1366,20 +1338,21 @@ int WriteVersionIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed to write to `%s`, %d", path, err);
         storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
-        return 0;
+        return err;
     }
     storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
 
-    return 1;
+    return 0;
 }
 
-struct VersionIndex* ReadVersionIndex(
+int ReadVersionIndex(
     struct StorageAPI* storage_api,
-    const char* path)
+    const char* path,
+    struct VersionIndex** out_version_index)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL);
 
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ReadVersionIndex: Reading from `%s`", path)
     StorageAPI_HOpenFile file_handle;
@@ -1387,14 +1360,14 @@ struct VersionIndex* ReadVersionIndex(
     if (err != 0)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadVersionIndex: Failed to open file `%s`, %d", path, err);
-        return 0;
+        return err;
     }
     uint64_t version_index_data_size;
     err = storage_api->GetSize(storage_api, file_handle, &version_index_data_size);
     if (err != 0)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadVersionIndex: Failed to get size of file `%s`, %d", path, err);
-        return 0;
+        return err;
     }
     struct VersionIndex* version_index = (struct VersionIndex*)Longtail_Alloc((size_t)(sizeof(struct VersionIndex) + version_index_data_size));
     if (!version_index)
@@ -1404,7 +1377,7 @@ struct VersionIndex* ReadVersionIndex(
         version_index = 0;
         storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
-        return 0;
+        return err;
     }
     err = storage_api->Read(storage_api, file_handle, 0, version_index_data_size, &version_index[1]);
     if (err)
@@ -1413,12 +1386,13 @@ struct VersionIndex* ReadVersionIndex(
         Longtail_Free(version_index);
         version_index = 0;
         storage_api->CloseFile(storage_api, file_handle);
-        return 0;
+        return err;
     }
     InitVersionIndex(version_index, (size_t)version_index_data_size);
     storage_api->CloseFile(storage_api, file_handle);
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
-    return version_index;
+    *out_version_index = version_index;
+    return 0;
 }
 
 struct BlockIndex
