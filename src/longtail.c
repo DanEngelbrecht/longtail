@@ -179,8 +179,8 @@ TLongtail_Hash GetPathHash(struct HashAPI* hash_api, const char* path)
 
 int SafeCreateDir(struct StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL);
     int err = storage_api->CreateDir(storage_api, path);
     if (!err)
     {
@@ -196,10 +196,10 @@ int SafeCreateDir(struct StorageAPI* storage_api, const char* path)
 
 int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL);
     char* dir_path = Longtail_Strdup(path);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(dir_path != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(dir_path != 0, return ENOMEM);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
     if (last_path_delimiter == 0)
     {
@@ -312,10 +312,10 @@ typedef void (*ProcessEntry)(void* context, const char* root_path, const char* f
 
 int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(root_folder != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(entry_processor != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(root_folder != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(entry_processor != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return EINVAL);
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree: Scanning folder `%s`", root_folder)
 
     uint32_t folder_index = 0;
@@ -325,12 +325,13 @@ int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, Process
 
     arrput(folder_paths, Longtail_Strdup(root_folder));
 
+    int err = 0;
     while (folder_index < (uint32_t)arrlen(folder_paths))
     {
         const char* asset_folder = folder_paths[folder_index++];
 
         StorageAPI_HIterator fs_iterator;
-        int err = storage_api->StartFind(storage_api, asset_folder, &fs_iterator);
+        err = storage_api->StartFind(storage_api, asset_folder, &fs_iterator);
         if (!err)
         {
             do
@@ -360,19 +361,20 @@ int RecurseTree(struct StorageAPI* storage_api, const char* root_folder, Process
                         entry_processor(context, asset_folder, file_name, 0, size);
                     }
                 }
-            }while(storage_api->FindNext(storage_api, fs_iterator) == 0);
+                err = storage_api->FindNext(storage_api, fs_iterator);
+            }while(err == 0);
             storage_api->CloseFind(storage_api, fs_iterator);
         }
-        else if (err != ENOENT)
+        if (err == ENOENT)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree: Failed to scan folder `%s`, %d", asset_folder, err)
+            err = 0;
         }
         Longtail_Free((void*)asset_folder);
         asset_folder = 0;
     }
     arrfree(folder_paths);
     folder_paths = 0;
-    return 1;
+    return err;
 }
 
 size_t GetPathsSize(uint32_t path_count, uint32_t path_data_size)
@@ -503,10 +505,10 @@ void AddFile(void* context, const char* root_path, const char* file_name, int is
     full_path = 0;
 }
 
-struct FileInfos* GetFilesRecursively(struct StorageAPI* storage_api, const char* root_path)
+int GetFilesRecursively(struct StorageAPI* storage_api, const char* root_path, struct FileInfos** out_file_infos)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return EINVAL);
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "GetFilesRecursively: Scanning `%s`", root_path)
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
@@ -516,14 +518,15 @@ struct FileInfos* GetFilesRecursively(struct StorageAPI* storage_api, const char
     paths = 0;
     arrsetcap(context.m_FileSizes, 4096);
 
-    if(!RecurseTree(storage_api, root_path, AddFile, &context))
+    int err = RecurseTree(storage_api, root_path, AddFile, &context);
+    if(err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "GetFilesRecursively: Failed get files in folder `%s`", root_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "GetFilesRecursively: Failed get files in folder `%s`, %d", root_path, err)
         Longtail_Free(context.m_Paths);
         context.m_Paths = 0;
         arrfree(context.m_FileSizes);
         context.m_FileSizes = 0;
-        return 0;
+        return err;
     }
 
     uint32_t asset_count = *context.m_Paths->m_PathCount;
@@ -547,7 +550,8 @@ struct FileInfos* GetFilesRecursively(struct StorageAPI* storage_api, const char
     arrfree(context.m_FileSizes);
     context.m_FileSizes = 0;
 
-    return result;
+    *out_file_infos = result;
+    return 0;
 }
 
 struct StorageChunkFeederContext
@@ -3553,9 +3557,10 @@ struct ContentIndex* ReadContent(
 
     struct Paths* paths = CreatePaths(default_path_count, default_path_data_size);
     struct ReadContentContext context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(content_path)), paths, 0};
-    if(!RecurseTree(storage_api, content_path, ReadContentAddPath, &context))
+    int err = RecurseTree(storage_api, content_path, ReadContentAddPath, &context);
+    if(err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadContent: Failed to scan folder `%s`", content_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadContent: Failed to scan folder `%s`, %d", content_path, err)
         Longtail_Free(context.m_Paths);
         context.m_Paths = 0;
         return 0;
@@ -3563,7 +3568,7 @@ struct ContentIndex* ReadContent(
     paths = context.m_Paths;
     context.m_Paths = 0;
 
-    int err = job_api->ReserveJobs(job_api, *paths->m_PathCount);
+    err = job_api->ReserveJobs(job_api, *paths->m_PathCount);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContent: Failed to reserve jobs for `%s`, %d", content_path, err)

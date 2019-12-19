@@ -238,7 +238,8 @@ TEST(Longtail, ContentIndexSerialization)
 
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/five_items", 5));
-    FileInfos* version1_paths = GetFilesRecursively(local_storage, "source/version1");
+    FileInfos* version1_paths;
+    ASSERT_EQ(0, GetFilesRecursively(local_storage, "source/version1", &version1_paths));
     ASSERT_NE((FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -336,7 +337,8 @@ TEST(Longtail, WriteContent)
         w = 0;
     }
 
-    FileInfos* version1_paths = GetFilesRecursively(source_storage, "local");
+    FileInfos* version1_paths;
+    ASSERT_EQ(0, GetFilesRecursively(source_storage, "local", &version1_paths));
     ASSERT_NE((FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(source_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -573,7 +575,8 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(1, CreateFakeContent(local_storage, "deep/file/down/under/three_items", 3));
     ASSERT_EQ(1, MakePath(local_storage, "deep/folders/with/nothing/in/menoexists.nop"));
 
-    FileInfos* local_paths = GetFilesRecursively(local_storage, "");
+    FileInfos* local_paths;
+    ASSERT_EQ(0, GetFilesRecursively(local_storage, "", &local_paths));
     ASSERT_NE((FileInfos*)0, local_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -856,7 +859,8 @@ TEST(Longtail, VersionDiff)
         w = 0;
     }
 
-    FileInfos* old_version_paths = GetFilesRecursively(storage, "old");
+    FileInfos* old_version_paths;
+    ASSERT_EQ(0, GetFilesRecursively(storage, "old", &old_version_paths));
     ASSERT_NE((FileInfos*)0, old_version_paths);
     uint32_t* old_compression_types = GetCompressionTypes(storage, old_version_paths);
     ASSERT_NE((uint32_t*)0, old_compression_types);
@@ -877,7 +881,8 @@ TEST(Longtail, VersionDiff)
     Longtail_Free(old_version_paths);
     old_version_paths = 0;
 
-    FileInfos* new_version_paths = GetFilesRecursively(storage, "new");
+    FileInfos* new_version_paths;
+    ASSERT_EQ(0, GetFilesRecursively(storage, "new", &new_version_paths));
     ASSERT_NE((FileInfos*)0, new_version_paths);
     uint32_t* new_compression_types = GetCompressionTypes(storage, new_version_paths);
     ASSERT_NE((uint32_t*)0, new_compression_types);
@@ -954,7 +959,8 @@ TEST(Longtail, VersionDiff)
     Longtail_Free(old_vindex);
 
     // Verify that our old folder now matches the new folder data
-    FileInfos* updated_version_paths = GetFilesRecursively(storage, "old");
+    FileInfos* updated_version_paths;
+    ASSERT_EQ(0, GetFilesRecursively(storage, "old", &updated_version_paths));
     ASSERT_NE((FileInfos*)0, updated_version_paths);
     const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
@@ -1001,7 +1007,8 @@ TEST(Longtail, FullScale)
     StorageAPI* remote_storage = CreateInMemStorageAPI();
     CreateFakeContent(remote_storage, 0, 10);
 
-    FileInfos* local_paths = GetFilesRecursively(local_storage, "");
+    FileInfos* local_paths;
+    ASSERT_EQ(0, GetFilesRecursively(local_storage, "", &local_paths));
     ASSERT_NE((FileInfos*)0, local_paths);
     uint32_t* local_compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
@@ -1022,7 +1029,8 @@ TEST(Longtail, FullScale)
     Longtail_Free(local_compression_types);
     local_compression_types = 0;
 
-    FileInfos* remote_paths = GetFilesRecursively(remote_storage, "");
+    FileInfos* remote_paths;
+    ASSERT_EQ(0, GetFilesRecursively(remote_storage, "", &remote_paths));
     ASSERT_NE((FileInfos*)0, local_paths);
     uint32_t* remote_compression_types = GetCompressionTypes(local_storage, remote_paths);
     ASSERT_NE((uint32_t*)0, remote_compression_types);
@@ -1259,7 +1267,8 @@ TEST(Longtail, WriteVersion)
         w = 0;
     }
 
-    FileInfos* version1_paths = GetFilesRecursively(storage_api, "local");
+    FileInfos* version1_paths;
+    ASSERT_EQ(0, GetFilesRecursively(storage_api, "local", &version1_paths));
     ASSERT_NE((FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
@@ -1409,7 +1418,8 @@ void Bench()
         char version_source_folder[256];
         sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
         printf("Indexing `%s`\n", version_source_folder);
-        FileInfos* version_source_paths = GetFilesRecursively(storage_api, version_source_folder);
+        FileInfos* version_source_paths;
+        ASSERT_EQ(0, GetFilesRecursively(storage_api, version_source_folder, &version_source_paths));
         ASSERT_NE((FileInfos*)0, version_source_paths);
         uint32_t* version_compression_types = GetCompressionTypes(storage_api, version_source_paths);
         ASSERT_NE((uint32_t*)0, version_compression_types);
@@ -1593,7 +1603,8 @@ void LifelikeTest()
     HashAPI* hash_api = CreateMeowHashAPI();
     JobAPI* job_api = CreateBikeshedJobAPI(0);
 
-    FileInfos* local_path_1_paths = GetFilesRecursively(storage_api, local_path_1);
+    FileInfos* local_path_1_paths;
+    ASSERT_EQ(0, GetFilesRecursively(storage_api, local_path_1, &local_path_1_paths));
     ASSERT_NE((FileInfos*)0, local_path_1_paths);
     uint32_t* local_compression_types = GetCompressionTypes(storage_api, local_path_1_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
@@ -1662,7 +1673,8 @@ void LifelikeTest()
     printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
-    FileInfos* local_path_2_paths = GetFilesRecursively(storage_api, local_path_2);
+    FileInfos* local_path_2_paths;
+    ASSERT_EQ(0, GetFilesRecursively(storage_api, local_path_2, &local_path_2_paths));
     ASSERT_NE((FileInfos*)0, local_path_2_paths);
     uint32_t* local_2_compression_types = GetCompressionTypes(storage_api, local_path_2_paths);
     ASSERT_NE((uint32_t*)0, local_2_compression_types);

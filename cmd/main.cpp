@@ -207,12 +207,14 @@ int Cmd_CreateVersionIndex(
     const char* filter,
     int target_chunk_size)
 {
-    struct FileInfos* file_infos = GetFilesRecursively(
+    struct FileInfos* file_infos;
+    int err = GetFilesRecursively(
         storage_api,
-        version);
-    if (!file_infos)
+        version,
+        &file_infos);
+    if (err)
     {
-        fprintf(stderr, "Failed to scan folder `%s`\n", version);
+        fprintf(stderr, "Failed to scan folder `%s`, %d\n", version, err);
         return 0;
     }
     uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
@@ -410,12 +412,14 @@ int Cmd_CreateMissingContentIndex(
     }
     else
     {
-        struct FileInfos* file_infos = GetFilesRecursively(
+        struct FileInfos* file_infos;
+        int err = GetFilesRecursively(
             storage_api,
-            version);
-        if (!file_infos)
+            version,
+            &file_infos);
+        if (err)
         {
-            fprintf(stderr, "Failed to scan folder `%s`\n", version);
+            fprintf(stderr, "Failed to scan folder `%s`, %d\n", version, err);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
@@ -549,12 +553,14 @@ int Cmd_CreateContent(
     }
     else
     {
-        struct FileInfos* file_infos = GetFilesRecursively(
+        struct FileInfos* file_infos;
+        int err = GetFilesRecursively(
             storage_api,
-            version);
-        if (!file_infos)
+            version,
+            &file_infos);
+        if (err)
         {
-            fprintf(stderr, "Failed to scan folder `%s`\n", version);
+            fprintf(stderr, "Failed to scan folder `%s`, %d\n", version, err);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
@@ -839,12 +845,14 @@ int Cmd_UpdateVersion(
     }
     else
     {
-        struct FileInfos* file_infos = GetFilesRecursively(
+        struct FileInfos* file_infos;
+        int err = GetFilesRecursively(
             storage_api,
-            update_version);
-        if (!file_infos)
+            update_version,
+            &file_infos);
+        if (err)
         {
-            fprintf(stderr, "Failed to scan folder `%s`\n", update_version);
+            fprintf(stderr, "Failed to scan folder `%s`, %d\n", update_version, err);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(storage_api, file_infos);
@@ -1004,12 +1012,14 @@ int Cmd_UpSyncVersion(
     VersionIndex* vindex = ReadVersionIndex(source_storage_api, version_index_path);
     if (!vindex)
     {
-        struct FileInfos* file_infos = GetFilesRecursively(
+        struct FileInfos* file_infos;
+        int err = GetFilesRecursively(
             source_storage_api,
-            version_path);
-        if (!file_infos)
+            version_path,
+            &file_infos);
+        if (err)
         {
-            fprintf(stderr, "Failed to scan folder `%s`\n", version_path);
+            fprintf(stderr, "Failed to scan folder `%s`, %d\n", version_path, err);
             return 0;
         }
         uint32_t* compression_types = GetCompressionTypes(
