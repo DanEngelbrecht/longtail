@@ -181,16 +181,17 @@ int SafeCreateDir(struct StorageAPI* storage_api, const char* path)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return 0);
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return 0);
-    if (0 == storage_api->CreateDir(storage_api, path))
+    int err = storage_api->CreateDir(storage_api, path);
+    if (!err)
     {
-        return 1;
+        return 0;
     }
     if (storage_api->IsDir(storage_api, path))
     {
-        return 1;
+        return 0;
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create directory `%s`", path)
-    return 0;
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create directory `%s`, %d", path, err)
+    return err;
 }
 
 int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
@@ -204,35 +205,36 @@ int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path)
     {
         Longtail_Free(dir_path);
         dir_path = 0;
-        return 1;
+        return 0;
     }
     *last_path_delimiter = '\0';
     if (storage_api->IsDir(storage_api, dir_path))
     {
         Longtail_Free(dir_path);
         dir_path = 0;
-        return 1;
+        return 0;
     }
-    else
+
+    int err = EnsureParentPathExists(storage_api, dir_path);
+    if (err)
     {
-        if (!EnsureParentPathExists(storage_api, dir_path))
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`", dir_path)
-            Longtail_Free(dir_path);
-            dir_path = 0;
-            return 0;
-        }
-        if (SafeCreateDir(storage_api, dir_path))
-        {
-            Longtail_Free(dir_path);
-            dir_path = 0;
-            return 1;
-        }
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`, %d", dir_path, err)
+        Longtail_Free(dir_path);
+        dir_path = 0;
+        return err;
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`", dir_path)
+    err = SafeCreateDir(storage_api, dir_path);
+    if (!err)
+    {
+        Longtail_Free(dir_path);
+        dir_path = 0;
+        return 0;
+    }
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "EnsureParentPathExists failed: `%s`, %d", dir_path, err)
     Longtail_Free(dir_path);
     dir_path = 0;
-    return 0;
+    return err;
 }
 
 
@@ -1327,13 +1329,14 @@ int WriteVersionIndex(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WriteVersionIndex: Writing index to `%s` containing %u assets in %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount);
     size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (*version_index->m_ChunkCount), (*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
 
-    if (!EnsureParentPathExists(storage_api, path))
+    int err = EnsureParentPathExists(storage_api, path);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed create parent path for `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed create parent path for `%s`, %d", path, err);
         return 0;
     }
     StorageAPI_HOpenFile file_handle;
-    int err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
+    err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteVersionIndex: Failed open `%s` for write, %d", path, err);
@@ -1729,13 +1732,14 @@ int WriteContentIndex(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WriteContentIndex: Write index to `%s`, chunks %u, blocks %u", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
 
-    if (!EnsureParentPathExists(storage_api, path))
+    int err = EnsureParentPathExists(storage_api, path);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteContentIndex: Failed to create parent folder for `%s`", path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentIndex: Failed to create parent folder for `%s`, %d", path, err);
         return 0;
     }
     StorageAPI_HOpenFile file_handle;
-    int err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
+    err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentIndex: Failed to create `%s`, %d", path, err);
@@ -2234,9 +2238,10 @@ void WriteContentBlockJob(void* context)
         block_data_buffer = compressed_buffer;
     }
 
-    if (!EnsureParentPathExists(target_storage_api, tmp_block_path))
+    int err = EnsureParentPathExists(target_storage_api, tmp_block_path);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to create parent path for `%s`", tmp_block_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to create parent path for `%s`, %d", tmp_block_path, err)
         Longtail_Free(block_data_buffer);
         block_data_buffer = 0;
         Longtail_Free((char*)tmp_block_path);
@@ -2244,7 +2249,7 @@ void WriteContentBlockJob(void* context)
     }
 
     StorageAPI_HOpenFile block_file_handle;
-    int err = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 0, &block_file_handle);
+    err = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 0, &block_file_handle);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob: Failed to create block file `%s`, %d", tmp_block_path, err)
@@ -2711,9 +2716,10 @@ void WritePartialAssetFromBlocks(void* context)
     if (!job->m_AssetOutputFile)
     {
         char* full_asset_path = job->m_VersionStorageAPI->ConcatPath(job->m_VersionStorageAPI, job->m_VersionFolder, asset_path);
-        if (!EnsureParentPathExists(job->m_VersionStorageAPI, full_asset_path))
+        int err = EnsureParentPathExists(job->m_VersionStorageAPI, full_asset_path);
+        if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create parent folder for `%s` in `%s`", asset_path, job->m_VersionFolder)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create parent folder for `%s` in `%s`, %d", asset_path, job->m_VersionFolder, err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
@@ -2725,9 +2731,10 @@ void WritePartialAssetFromBlocks(void* context)
         if (IsDirPath(full_asset_path))
         {
             LONGTAIL_FATAL_ASSERT_PRIVATE(block_decompressor_job_count == 0, return; )
-            if (!SafeCreateDir(job->m_VersionStorageAPI, full_asset_path))
+            err = SafeCreateDir(job->m_VersionStorageAPI, full_asset_path);
+            if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create folder for `%s` in `%s`", asset_path, job->m_VersionFolder)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create folder for `%s` in `%s`, %d", asset_path, job->m_VersionFolder, err)
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
                 return;
@@ -2739,7 +2746,7 @@ void WritePartialAssetFromBlocks(void* context)
         }
 
         uint64_t asset_size = job->m_VersionIndex->m_AssetSizes[job->m_AssetIndex];
-        int err = job->m_VersionStorageAPI->OpenWriteFile(job->m_VersionStorageAPI, full_asset_path, asset_size, &job->m_AssetOutputFile);
+        err = job->m_VersionStorageAPI->OpenWriteFile(job->m_VersionStorageAPI, full_asset_path, asset_size, &job->m_AssetOutputFile);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Unable to create asset `%s` in `%s`, %d", asset_path, job->m_VersionFolder, err)
@@ -2913,10 +2920,10 @@ void WriteAssetsFromBlock(void* context)
         uint32_t asset_index = asset_indexes[i];
         const char* asset_path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
         char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_folder, asset_path);
-        int ok = EnsureParentPathExists(version_storage_api, full_asset_path);
-        if (!ok)
+        int err = EnsureParentPathExists(version_storage_api, full_asset_path);
+        if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to create parent folder for `%s`", full_asset_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to create parent folder for `%s`, %d", full_asset_path, err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             Longtail_Free(block_data);
@@ -2925,7 +2932,7 @@ void WriteAssetsFromBlock(void* context)
         }
 
         StorageAPI_HOpenFile asset_file;
-        int err = version_storage_api->OpenWriteFile(version_storage_api, full_asset_path, 0, &asset_file);
+        err = version_storage_api->OpenWriteFile(version_storage_api, full_asset_path, 0, &asset_file);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Unable to create asset `%s`, %d", full_asset_path, err)
@@ -4308,14 +4315,16 @@ int ChangeVersion(
 
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount, version_path, content_path);
 
-    if (!EnsureParentPathExists(version_storage_api, version_path))
+    int err = EnsureParentPathExists(version_storage_api, version_path);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to create parent path for `%s`", version_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to create parent path for `%s`, %d", version_path, err);
         return 0;
     }
-    if (!SafeCreateDir(version_storage_api, version_path))
+    err = SafeCreateDir(version_storage_api, version_path);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to create folder `%s`", version_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChangeVersion: Failed to create folder `%s`, %d", version_path, err);
         return 0;
     }
     struct ContentLookup* content_lookup = CreateContentLookup(

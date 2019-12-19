@@ -128,15 +128,9 @@ struct VersionDiff;
 
 char* Longtail_Strdup(const char* path);
 
-int EnsureParentPathExists(
-    struct StorageAPI* storage_api,
-    const char* path);
-
 struct FileInfos* GetFilesRecursively(
     struct StorageAPI* storage_api,
     const char* root_path);
-
-int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path);
 
 struct VersionIndex* CreateVersionIndex(
     struct StorageAPI* storage_api,
