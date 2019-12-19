@@ -861,9 +861,10 @@ int ChunkAssets(
         }
     }
 
-    if (!job_api->ReserveJobs(job_api, job_count))
+    int err = job_api->ReserveJobs(job_api, job_count);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to reserve %u jobs for folder `%s`", (uint32_t)*paths->m_PathCount, root_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to reserve %u jobs for folder `%s`, %d", (uint32_t)*paths->m_PathCount, root_path, err)
         return 0;
     }
 
@@ -912,9 +913,11 @@ int ChunkAssets(
             JobAPI_JobFunc func[1] = {DynamicChunking};
             void* ctx[1] = {&hash_jobs[jobs_started]};
 
-            JobAPI_Jobs jobs = job_api->CreateJobs(job_api, 1, func, ctx);
-            LONGTAIL_FATAL_ASSERT_PRIVATE(jobs != 0, return 0)
-            job_api->ReadyJobs(job_api, 1, jobs);
+            JobAPI_Jobs jobs;
+            int err = job_api->CreateJobs(job_api, 1, func, ctx, &jobs);
+            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
+            err = job_api->ReadyJobs(job_api, 1, jobs);
+            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
 
             jobs_started++;
 
@@ -922,7 +925,8 @@ int ChunkAssets(
         }
     }
 
-    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
 
     int success = 1;
     for (uint32_t i = 0; i < jobs_started; ++i)
@@ -1986,15 +1990,15 @@ static char* ReadBlockData(
             compressed_block_content = 0;
             return 0;
         }
-        size_t result = compression_api->Decompress(compression_api, compression_context, &compressed_block_content[sizeof(uint32_t) * 2], block_data, compressed_size, uncompressed_size);
-        int ok = result == uncompressed_size;
+        size_t result;
+        err = compression_api->Decompress(compression_api, compression_context, &compressed_block_content[sizeof(uint32_t) * 2], block_data, compressed_size, uncompressed_size, &result);
         compression_api->DeleteDecompressionContext(compression_api, compression_context);
         Longtail_Free(compressed_block_content);
         compressed_block_content = 0;
 
-        if (!ok)
+        if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to decompress block `%s`", block_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to decompress block `%s`, %d", block_path, err)
             Longtail_Free(block_data);
             block_data = 0;
             Longtail_Free(block_path);
@@ -2202,12 +2206,16 @@ void WriteContentBlockJob(void* context)
             return;
         }
         CompressionAPI_HSettings compression_settings = GetCompressionSettings(compression_registry, compression_type);
-        CompressionAPI_HCompressionContext compression_context = compression_api->CreateCompressionContext(compression_api, compression_settings);
+        CompressionAPI_HCompressionContext compression_context;
+        int err = compression_api->CreateCompressionContext(compression_api, compression_settings, &compression_context);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return;)
         const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
         char* compressed_buffer = (char*)Longtail_Alloc((sizeof(uint32_t) * 2) + max_dst_size);
         ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
 
-        size_t compressed_size = compression_api->Compress(compression_api, compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size);
+        size_t compressed_size;
+        err = compression_api->Compress(compression_api, compression_context, (const char*)write_buffer, &((char*)compressed_buffer)[sizeof(int32_t) * 2], block_data_size, max_dst_size, &compressed_size);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return;)
         compression_api->DeleteCompressionContext(compression_api, compression_context);
         if (compressed_size <= 0)
         {
@@ -2352,9 +2360,10 @@ int WriteContent(
         return 1;
     }
 
-    if (!job_api->ReserveJobs(job_api, (uint32_t)block_count))
+    int err = job_api->ReserveJobs(job_api, (uint32_t)block_count);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContent: Failed to reserve jobs when writing to `%s`", content_folder)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContent: Failed to reserve jobs when writing to `%s`, %d", content_folder, err)
         return 0;
     }
 
@@ -2406,14 +2415,17 @@ int WriteContent(
         JobAPI_JobFunc func[1] = { WriteContentBlockJob };
         void* ctx[1] = { job };
 
-        JobAPI_Jobs jobs = job_api->CreateJobs(job_api, 1, func, ctx);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(jobs != 0, return 0)
-        job_api->ReadyJobs(job_api, 1, jobs);
+        JobAPI_Jobs jobs;
+        int err = job_api->CreateJobs(job_api, 1, func, ctx, &jobs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
+        err = job_api->ReadyJobs(job_api, 1, jobs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
 
         block_start_chunk_index += chunk_count;
     }
 
-    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
 
     int success = 1;
     while (job_count--)
@@ -2626,18 +2638,27 @@ JobAPI_Jobs CreatePartialAssetWriteJob(
 
     JobAPI_JobFunc write_funcs[1] = { WritePartialAssetFromBlocks };
     void* write_ctx[1] = { job };
-    JobAPI_Jobs write_job = job_api->CreateJobs(job_api, 1, write_funcs, write_ctx);
+    JobAPI_Jobs write_job;
+    int err = job_api->CreateJobs(job_api, 1, write_funcs, write_ctx, &write_job);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
 
     if (job->m_BlockDecompressorJobCount > 0)
     {
-        JobAPI_Jobs decompression_jobs = job_api->CreateJobs(job_api, job->m_BlockDecompressorJobCount, decompress_funcs, decompress_ctx);
+        JobAPI_Jobs decompression_jobs;
+        err = job_api->CreateJobs(job_api, job->m_BlockDecompressorJobCount, decompress_funcs, decompress_ctx, &decompression_jobs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
         JobAPI_JobFunc sync_write_funcs[1] = { WriteReady };
         void* sync_write_ctx[1] = { 0 };
-        JobAPI_Jobs write_sync_job = job_api->CreateJobs(job_api, 1, sync_write_funcs, sync_write_ctx);
+        JobAPI_Jobs write_sync_job;
+        err = job_api->CreateJobs(job_api, 1, sync_write_funcs, sync_write_ctx, &write_sync_job);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
 
-        job_api->AddDependecies(job_api, 1, write_job, 1, write_sync_job);
-        job_api->AddDependecies(job_api, 1, write_job, job->m_BlockDecompressorJobCount, decompression_jobs);
-        job_api->ReadyJobs(job_api, job->m_BlockDecompressorJobCount, decompression_jobs);
+        err = job_api->AddDependecies(job_api, 1, write_job, 1, write_sync_job);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
+        err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockDecompressorJobCount, decompression_jobs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
+        err = job_api->ReadyJobs(job_api, job->m_BlockDecompressorJobCount, decompression_jobs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
 
         return write_sync_job;
     }
@@ -2811,7 +2832,8 @@ void WritePartialAssetFromBlocks(void* context)
             }
             if (sync_write_job)
             {
-                job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+                err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+                LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return)
             }
             return;
         }
@@ -2827,8 +2849,13 @@ void WritePartialAssetFromBlocks(void* context)
 
     if (sync_write_job)
     {
-        // We can now release the next write job
-        job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+        // We can now release the next write job which will in turn close the job->m_AssetOutputFile
+        int err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+        if (err)
+        {
+            job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+            return;
+        }
         return;
     }
 
@@ -3195,9 +3222,10 @@ int WriteAssets(
         }
     }
 
-    if (!job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2) + asset_job_count))
+    int err = job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2) + asset_job_count);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets: Failed to reserve %u jobs for folder `%s`", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets: Failed to reserve %u jobs for folder `%s`, %d", awl->m_BlockJobCount + awl->m_AssetJobCount, version_path, err)
         Longtail_Free(awl);
         awl = 0;
         DeleteContentLookup(content_lookup);
@@ -3222,8 +3250,9 @@ int WriteAssets(
         block_job->m_BlockHash = content_index->m_BlockHashes[block_index];
         JobAPI_JobFunc decompress_funcs[1] = { BlockDecompressor };
         void* decompress_ctxs[1] = {block_job};
-        JobAPI_Jobs decompression_job = job_api->CreateJobs(job_api, 1, decompress_funcs, decompress_ctxs);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(decompression_job != 0, return 0)
+        JobAPI_Jobs decompression_job;
+        int err = job_api->CreateJobs(job_api, 1, decompress_funcs, decompress_ctxs, &decompression_job);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
 
         job->m_ContentStorageAPI = content_storage_api;
         job->m_VersionStorageAPI = version_storage_api;
@@ -3257,10 +3286,13 @@ int WriteAssets(
         JobAPI_JobFunc func[1] = { WriteAssetsFromBlock };
         void* ctx[1] = { job };
 
-        JobAPI_Jobs block_write_job = job_api->CreateJobs(job_api, 1, func, ctx);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(block_write_job != 0, return 0)
-        job_api->AddDependecies(job_api, 1, block_write_job, 1, decompression_job);
-        job_api->ReadyJobs(job_api, 1, decompression_job);
+        JobAPI_Jobs block_write_job;
+        err = job_api->CreateJobs(job_api, 1, func, ctx, &block_write_job);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
+        err = job_api->AddDependecies(job_api, 1, block_write_job, 1, decompression_job);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
+        err = job_api->ReadyJobs(job_api, 1, decompression_job);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
     }
 /*
 DecompressorCount = blocks_remaning > 8 ? 8 : blocks_remaning
@@ -3309,10 +3341,12 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
             &asset_jobs[a],
             0,
             (StorageAPI_HOpenFile)0);
-        job_api->ReadyJobs(job_api, 1, write_sync_job);
+        err = job_api->ReadyJobs(job_api, 1, write_sync_job);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
     }
 
-    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
 
     int success = 1;
     for (uint32_t b = 0; b < block_job_count; ++b)
@@ -3522,9 +3556,10 @@ struct ContentIndex* ReadContent(
     paths = context.m_Paths;
     context.m_Paths = 0;
 
-    if (!job_api->ReserveJobs(job_api, *paths->m_PathCount))
+    int err = job_api->ReserveJobs(job_api, *paths->m_PathCount);
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContent: Failed to reserve jobs for `%s`", content_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadContent: Failed to reserve jobs for `%s`, %d", content_path, err)
         Longtail_Free(paths);
         paths = 0;
         return 0;
@@ -3548,12 +3583,15 @@ struct ContentIndex* ReadContent(
 
         JobAPI_JobFunc job_func[] = {ScanBlock};
         void* ctx[] = {job};
-        JobAPI_Jobs jobs = job_api->CreateJobs(job_api, 1, job_func, ctx);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(jobs != 0, return 0)
-        job_api->ReadyJobs(job_api, 1, jobs);
+        JobAPI_Jobs jobs;
+        int err = job_api->CreateJobs(job_api, 1, job_func, ctx, &jobs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
+        err = job_api->ReadyJobs(job_api, 1, jobs);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0)
     }
 
-    job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return 0;)
 
     uint64_t block_count = 0;
     uint64_t chunk_count = 0;

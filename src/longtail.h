@@ -59,13 +59,13 @@ struct CompressionAPI
     CompressionAPI_HSettings (*GetDefaultSettings)(struct CompressionAPI* compression_api);
     CompressionAPI_HSettings (*GetMaxCompressionSetting)(struct CompressionAPI* compression_api);
 
-    CompressionAPI_HCompressionContext (*CreateCompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HSettings settings);
+    int (*CreateCompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HSettings settings, CompressionAPI_HCompressionContext* out_context);
     size_t (*GetMaxCompressedSize)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, size_t size);
-    size_t (*Compress)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size);
+    int (*Compress)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_size);
     void (*DeleteCompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context);
 
     CompressionAPI_HDecompressionContext (*CreateDecompressionContext)(struct CompressionAPI* compression_api);
-    size_t (*Decompress)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size);
+    int (*Decompress)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* out_size);
     void (*DeleteDecompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context);
 };
 
@@ -85,10 +85,10 @@ struct JobAPI
 {
     int (*GetWorkerCount)(struct JobAPI* job_api);
     int (*ReserveJobs)(struct JobAPI* job_api, uint32_t job_count);
-    JobAPI_Jobs (*CreateJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[]);
-    void (*AddDependecies)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs);
-    void (*ReadyJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs);
-    void (*WaitForAllJobs)(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func);
+    int (*CreateJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[], JobAPI_Jobs* out_jobs);
+    int (*AddDependecies)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs);
+    int (*ReadyJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs);
+    int (*WaitForAllJobs)(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func);
 };
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);

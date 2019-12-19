@@ -978,40 +978,40 @@ static int Bikeshed_ReserveJobs(struct JobAPI* job_api, uint32_t job_count)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     if (bikeshed_job_api->m_PendingJobCount)
     {
-        return 0;
+        return EBUSY;
     }
     if (bikeshed_job_api->m_SubmittedJobCount)
     {
-        return 0;
+        return EBUSY;
     }
     if (bikeshed_job_api->m_ReservedJobs)
     {
-        return 0;
+        return EBUSY;
     }
     if (bikeshed_job_api->m_ReservedJobCount)
     {
-        return 0;
+        return EBUSY;
     }
     bikeshed_job_api->m_ReservedJobs = (struct JobWrapper*)Longtail_Alloc(sizeof(struct JobWrapper) * job_count);
     bikeshed_job_api->m_ReservedTasksIDs = (Bikeshed_TaskID*)Longtail_Alloc(sizeof(Bikeshed_TaskID) * job_count);
     if (bikeshed_job_api->m_ReservedJobs && bikeshed_job_api->m_ReservedTasksIDs)
     {
         bikeshed_job_api->m_ReservedJobCount = job_count;
-        return 1;
+        return 0;
     }
 	Longtail_Free(bikeshed_job_api->m_ReservedTasksIDs);
 	Longtail_Free(bikeshed_job_api->m_ReservedJobs);
-    return 0;
+    return ENOMEM;
 }
 
-static JobAPI_Jobs Bikeshed_CreateJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
+static int Bikeshed_CreateJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[], JobAPI_Jobs* out_jobs)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t new_job_count = Longtail_AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, (int32_t)job_count);
     if (new_job_count > (int32_t)bikeshed_job_api->m_ReservedJobCount)
     {
         Longtail_AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, -((int32_t)job_count));
-        return 0;
+        return ENOMEM;
     }
     int32_t job_range_start = new_job_count - job_count;
 
@@ -1037,25 +1037,28 @@ static JobAPI_Jobs Bikeshed_CreateJobs(struct JobAPI* job_api, uint32_t job_coun
 
 	Longtail_Free(ctx);
 	Longtail_Free(func);
-    return task_ids;
+    *out_jobs = task_ids;
+    return 0;
 }
 
-static void Bikeshed_AddDependecies(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs)
+static int Bikeshed_AddDependecies(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     while (!Bikeshed_AddDependencies(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs, dependency_job_count, (Bikeshed_TaskID*)dependency_jobs))
     {
         Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
     }
+    return 0;
 }
 
-static void Bikeshed_ReadyJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs)
+static int Bikeshed_ReadyJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs);
+    return 0;
 }
 
-static void Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func)
+static int Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t old_pending_count = 0;
@@ -1086,6 +1089,7 @@ static void Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAP
     bikeshed_job_api->m_ReservedJobs = 0;
     bikeshed_job_api->m_JobsCompleted = 0;
     bikeshed_job_api->m_ReservedJobCount = 0;
+    return 0;
 }
 
 static void Bikeshed_Dispose(struct ManagedJobAPI* job_api)
@@ -1178,9 +1182,10 @@ static CompressionAPI_HSettings LizardCompressionAPI_GetMaxCompressionSetting(st
     return (CompressionAPI_HSettings)&LizardCompressionAPI_MaxCompressionSetting;
 }
 
-static CompressionAPI_HCompressionContext LizardCompressionAPI_CreateCompressionContext(struct CompressionAPI* compression_api, CompressionAPI_HSettings settings)
+static int LizardCompressionAPI_CreateCompressionContext(struct CompressionAPI* compression_api, CompressionAPI_HSettings settings, CompressionAPI_HCompressionContext* out_context)
 {
-    return (CompressionAPI_HCompressionContext)settings;
+    *out_context = (CompressionAPI_HCompressionContext)settings;
+    return 0;
 }
 
 static size_t LizardCompressionAPI_GetMaxCompressedSize(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, size_t size)
@@ -1188,11 +1193,16 @@ static size_t LizardCompressionAPI_GetMaxCompressedSize(struct CompressionAPI* c
     return (size_t)Lizard_compressBound((int)size);
 }
 
-static size_t LizardCompressionAPI_Compress(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
+static int LizardCompressionAPI_Compress(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_size)
 {
     int compression_setting = *(int*)context;
     int compressed_size = Lizard_compress(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
-    return (size_t)(compressed_size >= 0 ? compressed_size : 0);
+    if (compressed_size == 0)
+    {
+        return ENOMEM;
+    }
+    *out_size = (size_t)(compressed_size);
+    return 0;
 }
 
 static void LizardCompressionAPI_DeleteCompressionContext(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context)
@@ -1204,10 +1214,15 @@ static CompressionAPI_HDecompressionContext LizardCompressionAPI_CreateDecompres
     return (CompressionAPI_HDecompressionContext)LizardCompressionAPI_GetDefaultSettings(compression_api);
 }
 
-static size_t LizardCompressionAPI_Decompress(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
+static int LizardCompressionAPI_Decompress(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* out_size)
 {
     int result = Lizard_decompress_safe(compressed, uncompressed, (int)compressed_size, (int)uncompressed_size);
-    return (size_t)(result >= 0 ? result : 0);
+    if (result < 0)
+    {
+        return EBADF;
+    }
+    *out_size = (size_t)(result);
+    return 0;
 }
 
 static void LizardCompressionAPI_DeleteDecompressionContext(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context)
