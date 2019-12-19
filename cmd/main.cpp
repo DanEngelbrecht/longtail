@@ -1468,7 +1468,6 @@ int main(int argc, char** argv)
             create_content_index,
             content))
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
         char create_version_index[512];
@@ -1484,7 +1483,6 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
 
@@ -1507,7 +1505,6 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
 
@@ -1528,7 +1525,6 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to create content `%s` from `%s`\n", create_content, version);
-            Longtail_Free(compression_registry);
             return 1;
         }
 
@@ -1542,7 +1538,6 @@ int main(int argc, char** argv)
             content_index,
             merge_content_index))
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
 /*
@@ -1583,7 +1578,6 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to update version `%s` to `%s`\n", update_version, target_version_index);
-            Longtail_Free(compression_registry);
             return 1;
         }
         char incremental_version_index[512];
@@ -1599,21 +1593,18 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
 
         struct VersionIndex* source_vindex = ReadVersionIndex(fs_storage_api, create_version_index);
         if (!source_vindex)
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
         struct VersionIndex* target_vindex = ReadVersionIndex(fs_storage_api, incremental_version_index);
         if (!target_vindex)
         {
             Longtail_Free(source_vindex);
-            Longtail_Free(compression_registry);
             return 1;
         }
 
@@ -1624,17 +1615,14 @@ int main(int argc, char** argv)
         Longtail_Free(target_vindex);
         if (*diff->m_SourceRemovedCount != 0)
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
         if (*diff->m_TargetAddedCount != 0)
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
         if (*diff->m_ModifiedCount != 0)
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
         Longtail_Free(diff);
@@ -1657,13 +1645,11 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            Longtail_Free(compression_registry);
             return 1;
         }
 
         Longtail_Free((char*)test_version);
         Longtail_Free((char*)test_base_path);
-        Longtail_Free(compression_registry);
 
         printf("********* SUCCESS *********\n");
         return 0;
@@ -1767,7 +1753,6 @@ int main(int argc, char** argv)
                 target_block_size,
                 max_chunks_per_block,
                 target_chunk_size);
-        Longtail_Free(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1793,7 +1778,6 @@ int main(int argc, char** argv)
             version_index,
             content,
             content_index);
-        Longtail_Free(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1812,7 +1796,6 @@ int main(int argc, char** argv)
             target_version_index,
             target_chunk_size);
 
-        Longtail_Free(compression_registry);
         result = ok ? 0 : 1;
         goto end;
     }
@@ -1865,7 +1848,6 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_block_size,
             target_chunk_size);
-        Longtail_Free(compression_registry);
 
         if (!ok){
             // TODO: printf
@@ -1912,7 +1894,6 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_block_size,
             target_chunk_size);
-        Longtail_Free(compression_registry);
 
         if (!ok)
         {
