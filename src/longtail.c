@@ -154,6 +154,7 @@ void Longtail_CallLogger(int level, const char* fmt, ...)
 char* Longtail_Strdup(const char* path)
 {
     char* r = Longtail_Alloc(strlen(path) + 1);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(r, return 0;)
     strcpy(r, path);
     return r;
 }
@@ -258,6 +259,7 @@ struct CompressionRegistry* CreateCompressionRegistry(
         sizeof(struct CompressionAPI*) * compression_type_count +
         sizeof(CompressionAPI_HSettings) * compression_type_count;
     struct CompressionRegistry* registry = (struct CompressionRegistry*)Longtail_Alloc(size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(registry, return 0;)
     registry->m_Count = compression_type_count;
     char* p = (char*)&registry[1];
     registry->m_Types = (uint32_t*)p;
@@ -483,6 +485,7 @@ void AddFile(void* context, const char* root_path, const char* file_name, int is
     {
         uint32_t path_length = (uint32_t)strlen(full_path);
         char* full_dir_path = (char*)Longtail_Alloc(path_length + 1 + 1);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(full_dir_path, return;)
         strcpy(full_dir_path, full_path);
         strcpy(&full_dir_path[path_length], "/");
         Longtail_Free(full_path);
@@ -534,6 +537,7 @@ int GetFilesRecursively(struct StorageAPI* storage_api, const char* root_path, s
         sizeof(struct FileInfos) +
         sizeof(uint64_t) * asset_count +
         GetPathsSize(asset_count, context.m_Paths->m_DataSize));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(result, return ENOMEM;)
 
     result->m_Paths.m_DataSize = context.m_Paths->m_DataSize;
     result->m_Paths.m_PathCount = (uint32_t*)&result[1];
@@ -650,6 +654,7 @@ void DynamicChunking(void* context)
     else if (hash_size <= ChunkerWindowSize || hash_job->m_MaxChunkSize <= ChunkerWindowSize)
     {
         char* buffer = (char*)Longtail_Alloc((size_t)hash_size);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(buffer, return;)
         int err = storage_api->Read(storage_api, file_handle, 0, hash_size, buffer);
         if (err)
         {
@@ -875,11 +880,16 @@ int ChunkAssets(
     }
 
     uint32_t* job_chunk_counts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * job_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(job_chunk_counts, return 0;)
     TLongtail_Hash* hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * max_chunk_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(hashes, return 0;)
     uint32_t* sizes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_chunk_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(sizes, return 0;)
     uint32_t* compression_types = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_chunk_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_types, return 0;)
 
     struct HashJob* hash_jobs = (struct HashJob*)Longtail_Alloc(sizeof(struct HashJob) * job_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(hash_jobs, return 0;)
 
     uint64_t jobs_started = 0;
     uint64_t chunks_offset = 0;
@@ -954,8 +964,11 @@ int ChunkAssets(
         }
         *chunk_count = built_chunk_count;
         *chunk_sizes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * *chunk_count);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_sizes, return 0;)
         *chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * *chunk_count);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_hashes, return 0;)
         *chunk_compression_types = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * *chunk_count);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(*chunk_compression_types, return 0;)
 
         uint32_t chunk_offset = 0;
         for (uint32_t i = 0; i < jobs_started; ++i)
@@ -1205,6 +1218,7 @@ struct VersionIndex* CreateVersionIndex(
     uint32_t* asset_chunk_compression_types = 0;
     TLongtail_Hash* asset_chunk_hashes = 0;
     uint32_t* asset_chunk_start_index = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * path_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_chunk_start_index, return 0;)
 
     if (!ChunkAssets(
         storage_api,
@@ -1277,7 +1291,7 @@ struct VersionIndex* CreateVersionIndex(
 
     size_t version_index_size = GetVersionIndexSize(path_count, unique_chunk_count, assets_chunk_index_count, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index_mem != 0, return 0);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index_mem, return 0);
 
     struct VersionIndex* version_index = BuildVersionIndex(
         version_index_mem,              // mem
@@ -1590,6 +1604,7 @@ struct ContentIndex* CreateContentIndex(
     {
         size_t content_index_size = GetContentIndexSize(0, 0);
         struct ContentIndex* content_index = (struct ContentIndex*)Longtail_Alloc(content_index_size);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return 0;)
 
         content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex)];
         content_index->m_ChunkCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
@@ -1599,12 +1614,15 @@ struct ContentIndex* CreateContentIndex(
         return content_index;
     }
     uint64_t* chunk_indexes = (uint64_t*)Longtail_Alloc((size_t)(sizeof(uint64_t) * chunk_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_indexes, return 0;)
     uint64_t unique_chunk_count = GetUniqueHashes(chunk_count, chunk_hashes, chunk_indexes);
 
     struct BlockIndex** block_indexes = (struct BlockIndex**)Longtail_Alloc(sizeof(struct BlockIndex*) * unique_chunk_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(block_indexes, return 0;)
 
     #define MAX_ASSETS_PER_BLOCK 16384u
     uint64_t* stored_chunk_indexes = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * max_chunks_per_block);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(stored_chunk_indexes, return 0;)
 
     uint32_t current_size = 0;
     uint64_t i = 0;
@@ -1688,6 +1706,7 @@ struct ContentIndex* CreateContentIndex(
     // Build Content Index (from block list)
     size_t content_index_size = GetContentIndexSize(block_count, unique_chunk_count);
     struct ContentIndex* content_index = (struct ContentIndex*)Longtail_Alloc(content_index_size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return 0;)
 
     content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex)];
     content_index->m_ChunkCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
@@ -1931,6 +1950,7 @@ static char* ReadBlockData(
     }
 
     char* compressed_block_content = (char*)Longtail_Alloc(compressed_block_size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compressed_block_content, return 0;)
     err = storage_api->Read(storage_api, block_file, 0, compressed_block_size, compressed_block_content);
     storage_api->CloseFile(storage_api, block_file);
     block_file = 0;
@@ -1986,6 +2006,7 @@ static char* ReadBlockData(
         uint32_t uncompressed_size = ((uint32_t*)compressed_block_content)[0];
         uint32_t compressed_size = ((uint32_t*)compressed_block_content)[1];
         block_data = (char*)Longtail_Alloc(uncompressed_size);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(block_data, return 0;)
         CompressionAPI_HDecompressionContext compression_context = compression_api->CreateDecompressionContext(compression_api);
         if (!compression_context)
         {
@@ -2063,6 +2084,7 @@ struct BlockIndex* ReadBlockIndex(
     }
 
     struct BlockIndex* block_index = InitBlockIndex(Longtail_Alloc(GetBlockIndexSize(chunk_count)), chunk_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(block_index, return 0;)
 
     err = storage_api->Read(storage_api, f, s - block_index_data_size, block_index_data_size, &block_index[1]);
     storage_api->CloseFile(storage_api, f);
@@ -2108,6 +2130,7 @@ void WriteContentBlockJob(void* context)
     }
 
     char* block_data_buffer = (char*)Longtail_Alloc(block_data_size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(block_data_buffer, return;)
     char* write_buffer = block_data_buffer;
     char* write_ptr = write_buffer;
 
@@ -2219,6 +2242,7 @@ void WriteContentBlockJob(void* context)
         LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return;)
         const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
         char* compressed_buffer = (char*)Longtail_Alloc((sizeof(uint32_t) * 2) + max_dst_size);
+        LONGTAIL_FATAL_ASSERT_PRIVATE(compressed_buffer, return;)
         ((uint32_t*)compressed_buffer)[0] = (uint32_t)block_data_size;
 
         size_t compressed_size;
@@ -2296,6 +2320,7 @@ void WriteContentBlockJob(void* context)
         write_offset = aligned_size;
     }
     struct BlockIndex* block_index_ptr = (struct BlockIndex*)Longtail_Alloc(GetBlockIndexSize(chunk_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(block_index_ptr, return;)
     InitBlockIndex(block_index_ptr, chunk_count);
     memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
     memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
@@ -2383,6 +2408,7 @@ int WriteContent(
     }
 
     struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)Longtail_Alloc((size_t)(sizeof(struct WriteBlockJob) * block_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(write_block_jobs, return 0;)
     uint32_t block_start_chunk_index = 0;
     uint32_t job_count = 0;
     for (uint64_t block_index = 0; block_index < block_count; ++block_index)
@@ -2493,6 +2519,7 @@ struct ContentLookup* CreateContentLookup(
     LONGTAIL_FATAL_ASSERT_PRIVATE(chunk_count == 0 || chunk_block_indexes != 0, return 0);
 
     struct ContentLookup* cl = (struct ContentLookup*)Longtail_Alloc(sizeof(struct ContentLookup));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(cl, return 0;)
     cl->m_BlockHashToBlockIndex = 0;
     cl->m_ChunkHashToChunkIndex = 0;
     cl->m_ChunkHashToBlockIndex = 0;
@@ -3040,6 +3067,7 @@ static int BlockJobCompare(void* context, const void* a_ptr, const void* b_ptr)
 struct AssetWriteList* CreateAssetWriteList(uint32_t asset_count)
 {
     struct AssetWriteList* awl = (struct AssetWriteList*)(Longtail_Alloc(sizeof(struct AssetWriteList) + sizeof(uint32_t) * asset_count + sizeof(uint32_t) * asset_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(awl, return 0;)
     awl->m_BlockJobCount = 0;
     awl->m_AssetJobCount = 0;
     awl->m_BlockJobAssetIndexes = (uint32_t*)&awl[1];
@@ -3245,6 +3273,7 @@ int WriteAssets(
     }
 
     struct WriteAssetsFromBlockJob* block_jobs = (struct WriteAssetsFromBlockJob*)Longtail_Alloc((size_t)(sizeof(struct WriteAssetsFromBlockJob) * awl->m_BlockJobCount));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(block_jobs, return 0;)
     uint32_t b = 0;
     uint32_t block_job_count = 0;
     while (b < awl->m_BlockJobCount)
@@ -3336,6 +3365,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
 */
 
     struct WritePartialAssetFromBlocksJob* asset_jobs = (struct WritePartialAssetFromBlocksJob*)Longtail_Alloc(sizeof(struct WritePartialAssetFromBlocksJob) * awl->m_AssetJobCount);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_jobs, return 0;)
     for (uint32_t a = 0; a < awl->m_AssetJobCount; ++a)
     {
         JobAPI_Jobs write_sync_job = CreatePartialAssetWriteJob(
@@ -3580,6 +3610,7 @@ struct ContentIndex* ReadContent(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadContent: Scanning %u files from `%s`", *paths->m_PathCount, content_path);
 
     struct ScanBlockJob* jobs = (struct ScanBlockJob*)Longtail_Alloc(sizeof(struct ScanBlockJob) * *paths->m_PathCount);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(jobs, return 0;)
 
     for (uint32_t path_index = 0; path_index < *paths->m_PathCount; ++path_index)
     {
@@ -3621,6 +3652,7 @@ struct ContentIndex* ReadContent(
 
     size_t content_index_data_size = GetContentIndexDataSize(block_count, chunk_count);
     struct ContentIndex* content_index = (struct ContentIndex*)Longtail_Alloc(sizeof(struct ContentIndex) + content_index_data_size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return 0;)
     content_index->m_BlockCount = (uint64_t*) & ((char*)content_index)[sizeof(struct ContentIndex)];
     content_index->m_ChunkCount = (uint64_t*) & ((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
     *content_index->m_BlockCount = block_count;
@@ -3711,7 +3743,9 @@ void DiffHashes(
     LONGTAIL_FATAL_ASSERT_PRIVATE((removed_hash_count == 0 && removed_hashes == 0) || (removed_hash_count != 0 && removed_hashes != 0), return);
 
     TLongtail_Hash* refs = (TLongtail_Hash*)Longtail_Alloc((size_t)(sizeof(TLongtail_Hash) * reference_hash_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(refs, return;)
     TLongtail_Hash* news = (TLongtail_Hash*)Longtail_Alloc((size_t)(sizeof(TLongtail_Hash) * new_hash_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(news, return;)
     memmove(refs, reference_hashes, (size_t)(sizeof(TLongtail_Hash) * reference_hash_count));
     memmove(news, new_hashes, (size_t)(sizeof(TLongtail_Hash) * new_hash_count));
 
@@ -3788,6 +3822,7 @@ struct ContentIndex* CreateMissingContent(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks", *version_index->m_ChunkCount, *content_index->m_ChunkCount)
     uint64_t chunk_count = *version_index->m_ChunkCount;
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)Longtail_Alloc((size_t)(sizeof(TLongtail_Hash) * chunk_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(added_hashes, return 0;)
 
     uint64_t added_hash_count = 0;
     DiffHashes(
@@ -3816,7 +3851,9 @@ struct ContentIndex* CreateMissingContent(
     }
 
     uint32_t* diff_chunk_sizes = (uint32_t*)Longtail_Alloc((size_t)(sizeof(uint32_t) * added_hash_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(diff_chunk_sizes, return 0;)
     uint32_t* diff_chunk_compression_types = (uint32_t*)Longtail_Alloc((size_t)(sizeof(uint32_t) * added_hash_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(diff_chunk_compression_types, return 0;)
 
     struct HashToIndexItem* chunk_index_lookup = 0;
     for (uint64_t i = 0; i < chunk_count; ++i)
@@ -3886,6 +3923,7 @@ struct ContentIndex* RetargetContent(
     }
 
     TLongtail_Hash* requested_block_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * *reference_content_index->m_BlockCount);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(requested_block_hashes, return 0;)
     uint64_t requested_block_count = 0;
     struct HashToIndexItem* requested_blocks_lookup = 0;
     for (uint32_t i = 0; i < *content_index->m_ChunkCount; ++i)
@@ -3930,6 +3968,7 @@ struct ContentIndex* RetargetContent(
 
     size_t content_index_size = GetContentIndexSize(requested_block_count, chunk_count);
     struct ContentIndex* resulting_content_index = (struct ContentIndex*)Longtail_Alloc(content_index_size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(resulting_content_index, return 0;)
 
     resulting_content_index->m_BlockCount = (uint64_t*)&((char*)resulting_content_index)[sizeof(struct ContentIndex)];
     resulting_content_index->m_ChunkCount = (uint64_t*)&((char*)resulting_content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
@@ -3983,6 +4022,7 @@ struct ContentIndex* MergeContentIndex(
     uint64_t chunk_count = local_chunk_count + remote_chunk_count;
     size_t content_index_size = GetContentIndexSize(block_count, chunk_count);
     struct ContentIndex* content_index = (struct ContentIndex*)Longtail_Alloc(content_index_size);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return 0;)
 
     content_index->m_BlockCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex)];
     content_index->m_ChunkCount = (uint64_t*)&((char*)content_index)[sizeof(struct ContentIndex) + sizeof(uint64_t)];
@@ -4141,7 +4181,9 @@ struct VersionDiff* CreateVersionDiff(
     uint32_t target_asset_count = *target_version->m_AssetCount;
 
     TLongtail_Hash* source_path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof (TLongtail_Hash) * source_asset_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(source_path_hashes, return 0;)
     TLongtail_Hash* target_path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof (TLongtail_Hash) * target_asset_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(target_path_hashes, return 0;)
 
     for (uint32_t i = 0; i < source_asset_count; ++i)
     {
@@ -4161,11 +4203,15 @@ struct VersionDiff* CreateVersionDiff(
     qsort(target_path_hashes, target_asset_count, sizeof(TLongtail_Hash), CompareHashes);
 
     uint32_t* removed_source_asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * source_asset_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(removed_source_asset_indexes, return 0;)
     uint32_t* added_target_asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * target_asset_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(added_target_asset_indexes, return 0;)
 
     const uint32_t max_modified_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
     uint32_t* modified_source_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(modified_source_indexes, return 0;)
     uint32_t* modified_target_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(modified_target_indexes, return 0;)
 
     uint32_t source_removed_count = 0;
     uint32_t target_added_count = 0;
@@ -4250,6 +4296,7 @@ struct VersionDiff* CreateVersionDiff(
     }
 
     struct VersionDiff* version_diff = (struct VersionDiff*)Longtail_Alloc(GetVersionDiffSize(source_removed_count, target_added_count, modified_count));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_diff, return 0;)
     uint32_t* counts_ptr = (uint32_t*)&version_diff[1];
     counts_ptr[0] = source_removed_count;
     counts_ptr[1] = target_added_count;
@@ -4453,6 +4500,7 @@ int ChangeVersion(
     uint32_t asset_count = added_count + modified_count;
 
     uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * asset_count);
+    LONGTAIL_FATAL_ASSERT_PRIVATE(asset_indexes, return 0;)
     for (uint32_t i = 0; i < added_count; ++i)
     {
         asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
@@ -4774,6 +4822,7 @@ struct Chunker* CreateChunker(
         return 0;
     }
     struct Chunker* c = (struct Chunker*)Longtail_Alloc((size_t)((sizeof(struct Chunker) + params->max)));
+    LONGTAIL_FATAL_ASSERT_PRIVATE(c, return 0;)
     c->params = *params;
     c->buf.data = (uint8_t*)&c[1];
     c->buf.len = 0;
