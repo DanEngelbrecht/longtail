@@ -122,7 +122,12 @@ int PrintFormattedBlockList(ContentIndex* content_index, const char* format_stri
     {
         return 0;
     }
-    Paths* paths = GetPathsForContentBlocks(content_index);
+    Paths* paths;
+    int err = GetPathsForContentBlocks(content_index, &paths);
+    if (err)
+    {
+        return 0;
+    }
     size_t first_length = (size_t)((intptr_t)format_first_end - (intptr_t)format_start);
     const char* format_second_start = &format_first_end[strlen("{blockname}")];
     for (uint64_t b = 0; b < *content_index->m_BlockCount; ++b)
@@ -313,16 +318,17 @@ int Cmd_CreateContentIndex(
     else
     {
         Progress progress("Reading content");
-        cindex = ReadContent(
+        int err = ReadContent(
             storage_api,
             hash_api,
             job_api,
             Progress::ProgressFunc,
             &progress,
-            content);
-        if (!cindex)
+            content,
+            &cindex);
+        if (err)
         {
-            fprintf(stderr, "Failed to create content index for `%s`\n", content);
+            fprintf(stderr, "Failed to create content index for `%s`, %d\n", content, err);
             return 0;
         }
     }
@@ -472,18 +478,19 @@ int Cmd_CreateMissingContentIndex(
     else if (content)
     {
         Progress progress("Reading content");
-        existing_cindex = ReadContent(
+        int err = ReadContent(
             storage_api,
             hash_api,
             job_api,
             Progress::ProgressFunc,
             &progress,
-            content);
-        if (!existing_cindex)
+            content,
+            &existing_cindex);
+        if (err)
         {
             Longtail_Free(vindex);
             vindex = 0;
-            fprintf(stderr, "Failed to read contents from `%s`\n", content);
+            fprintf(stderr, "Failed to read contents from `%s`, %d\n", content, err);
             return 0;
         }
     }
@@ -499,20 +506,22 @@ int Cmd_CreateMissingContentIndex(
             0);
     }
 
-    ContentIndex* cindex = CreateMissingContent(
+    ContentIndex* cindex;
+    int err = CreateMissingContent(
         hash_api,
         existing_cindex,
         vindex,
         target_block_size,
-        max_chunks_per_block);
+        max_chunks_per_block,
+        &cindex);
 
     Longtail_Free(existing_cindex);
     existing_cindex = 0;
     Longtail_Free(vindex);
     vindex = 0;
-    if (!cindex)
+    if (err)
     {
-        fprintf(stderr, "Failed to create content index for version `%s`\n", version);
+        fprintf(stderr, "Failed to create content index for version `%s`, %d\n", version, err);
         return 0;
     }
 
@@ -773,18 +782,19 @@ int Cmd_CreateVersion(
     else
     {
         Progress progress("Reading content");
-        cindex = ReadContent(
+        int err = ReadContent(
             storage_api,
             hash_api,
             job_api,
             Progress::ProgressFunc,
             &progress,
-            content);
-        if (!cindex)
+            content,
+            &cindex);
+        if (err)
         {
             Longtail_Free(vindex);
             vindex = 0;
-            fprintf(stderr, "Failed to create content index for `%s`\n", content);
+            fprintf(stderr, "Failed to create content index for `%s`, %d\n", content, err);
             return 0;
         }
     }
@@ -843,7 +853,7 @@ int Cmd_UpdateVersion(
     VersionIndex* source_vindex = 0;
     if (version_index)
     {
-        int err = CreateVersionIndex(storage_api, version_index, &source_vindex);
+        int err = ReadVersionIndex(storage_api, version_index, &source_vindex);
         if (err)
         {
             fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
@@ -920,20 +930,21 @@ int Cmd_UpdateVersion(
     else
     {
         Progress progress("Reading content");
-        cindex = ReadContent(
+        int err = ReadContent(
             storage_api,
             hash_api,
             job_api,
             Progress::ProgressFunc,
             &progress,
-            content);
-        if (!cindex)
+            content,
+            &cindex);
+        if (err)
         {
             Longtail_Free(target_vindex);
             target_vindex = 0;
             Longtail_Free(source_vindex);
             source_vindex = 0;
-            fprintf(stderr, "Failed to create content index for `%s`\n", content);
+            fprintf(stderr, "Failed to create content index for `%s`, %d\n", content, err);
             return 0;
         }
     }
@@ -1105,16 +1116,17 @@ int Cmd_UpSyncVersion(
                 return 0;
             }
             Progress progress("Reading content");
-            cindex = ReadContent(
+            int err = ReadContent(
                 source_storage_api,
                 hash_api,
                 job_api,
                 Progress::ProgressFunc,
                 &progress,
-                content_path);
-            if (!cindex)
+                content_path,
+                &cindex);
+            if (err)
             {
-                fprintf(stderr, "Failed to create content index for `%s`\n", content_path);
+                fprintf(stderr, "Failed to create content index for `%s`, %d\n", content_path, err);
                 Longtail_Free(vindex);
                 vindex = 0;
                 return 0;
@@ -1122,15 +1134,17 @@ int Cmd_UpSyncVersion(
         }
     }
 
-    ContentIndex* missing_content_index = CreateMissingContent(
+    ContentIndex* missing_content_index;
+    err = CreateMissingContent(
         hash_api,
         cindex,
         vindex,
         target_block_size,
-        max_chunks_per_block);
-    if (!missing_content_index)
+        max_chunks_per_block,
+        &missing_content_index);
+    if (err)
     {
-        fprintf(stderr, "Failed to generate content index for missing content\n");
+        fprintf(stderr, "Failed to generate content index for missing content, %d\n", err);
         Longtail_Free(vindex);
         vindex = 0;
         Longtail_Free(cindex);
@@ -1287,30 +1301,33 @@ int Cmd_DownSyncVersion(
             return 0;
         }
         Progress progress("Reading content");
-        existing_cindex = ReadContent(
+        int err = ReadContent(
             source_storage_api,
             hash_api, job_api,
             Progress::ProgressFunc,
             &progress,
-            have_content_path);
-        if (!existing_cindex)
+            have_content_path,
+            &existing_cindex);
+        if (err)
         {
-            // TODO: Print
+            fprintf(stderr, "Failed to read content from `%s`, %d\n", have_content_path, err);
             Longtail_Free(vindex_target);
             vindex_target = 0;
             return 0;
         }
     }
 
-    ContentIndex* cindex_missing = CreateMissingContent(
+    ContentIndex* cindex_missing;
+    err = CreateMissingContent(
         hash_api,
         existing_cindex,
         vindex_target,
         target_block_size,
-        max_chunks_per_block);
-    if (!cindex_missing)
+        max_chunks_per_block,
+        &cindex_missing);
+    if (err)
     {
-        // TODO: Print
+        fprintf(stderr, "Failed to read create missing content for `%s` from `%s`, %d\n", target_version_index_path, have_content_path, err);
         Longtail_Free(existing_cindex);
         existing_cindex = 0;
         Longtail_Free(vindex_target);
@@ -1333,15 +1350,16 @@ int Cmd_DownSyncVersion(
             return 0;
         }
         Progress progress("Reading content");
-        cindex_remote = ReadContent(
+        int err = ReadContent(
             source_storage_api,
             hash_api, job_api,
             Progress::ProgressFunc,
             &progress,
-            remote_content_path);
-        if (!cindex_remote)
+            remote_content_path,
+            &cindex_remote);
+        if (err)
         {
-            //TODO: print
+            fprintf(stderr, "Failed to read content from `%s`, %d\n", remote_content_path, err);
             Longtail_Free(cindex_missing);
             cindex_missing = 0;
             return 0;

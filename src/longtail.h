@@ -186,23 +186,26 @@ int WriteContent(
     const char* assets_folder,
     const char* content_folder);
 
-struct ContentIndex* ReadContent(
+int ReadContent(
     struct StorageAPI* storage_api,
     struct HashAPI* hash_api,
     struct JobAPI* job_api,
     JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
-    const char* content_path);
+    const char* content_path,
+    struct ContentIndex** out_content_index);
 
-struct ContentIndex* CreateMissingContent(
+int CreateMissingContent(
     struct HashAPI* hash_api,
     const struct ContentIndex* content_index,
     const struct VersionIndex* version,
     uint32_t max_block_size,
-    uint32_t max_chunks_per_block);
+    uint32_t max_chunks_per_block,
+    struct ContentIndex** out_content_index);
 
-struct Paths* GetPathsForContentBlocks(
-    struct ContentIndex* content_index);
+int GetPathsForContentBlocks(
+    struct ContentIndex* content_index,
+    struct Paths** out_paths);
 
 struct ContentIndex* RetargetContent(
     const struct ContentIndex* reference_content_index,
@@ -313,9 +316,10 @@ int ValidateVersion(
 
 ///////////// Test functions
 
-struct Paths* MakePaths(
+int MakePaths(
     uint32_t path_count,
-    const char* const* path_names);
+    const char* const* path_names,
+    struct Paths** out_paths);
 
 size_t GetVersionIndexSize(
     uint32_t asset_count,
@@ -359,10 +363,11 @@ struct ChunkRange NextChunk(struct Chunker* c);
 
 typedef uint32_t (*Chunker_Feeder)(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer);
 
-struct Chunker* CreateChunker(
+ int CreateChunker(
     struct ChunkerParams* params,
     Chunker_Feeder feeder,
-    void* context);
+    void* context,
+    struct Chunker** out_chunker);
 
 #ifdef __cplusplus
 }

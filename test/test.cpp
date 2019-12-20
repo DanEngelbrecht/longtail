@@ -142,7 +142,8 @@ TEST(Longtail, VersionIndex)
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
     const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
 
-    Paths* paths = MakePaths(5, asset_paths);
+    Paths* paths;
+    ASSERT_EQ(0, MakePaths(5, asset_paths, &paths));
     size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
@@ -387,13 +388,15 @@ TEST(Longtail, WriteContent)
         "local",
         "chunks"));
 
-    ContentIndex* cindex2 = ReadContent(
+    ContentIndex* cindex2;
+    ASSERT_EQ(0, ReadContent(
         target_storage,
         hash_api,
         job_api,
         0,
         0,
-        "chunks");
+        "chunks",
+        &cindex2));
     ASSERT_NE((ContentIndex*)0, cindex2);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
@@ -507,7 +510,8 @@ TEST(Longtail, CreateMissingContent)
         "first_"
     };
 
-    Paths* paths = MakePaths(5, asset_paths);
+    Paths* paths;
+    ASSERT_EQ(0, MakePaths(5, asset_paths, &paths));
     size_t version_index_size = GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
@@ -528,12 +532,14 @@ TEST(Longtail, CreateMissingContent)
         asset_compression_types);
     Longtail_Free(paths);
 
-    ContentIndex* missing_content_index = CreateMissingContent(
+    ContentIndex* missing_content_index;
+    ASSERT_EQ(0, CreateMissingContent(
         hash_api,
         content_index,
         version_index,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &missing_content_index));
 
     ASSERT_EQ(2u, *missing_content_index->m_BlockCount);
     ASSERT_EQ(4u, *missing_content_index->m_ChunkCount);
@@ -1111,12 +1117,14 @@ TEST(Longtail, FullScale)
         "",
         ""));
 
-    ContentIndex* missing_content = CreateMissingContent(
+    ContentIndex* missing_content;
+    ASSERT_EQ(0, CreateMissingContent(
         hash_api,
         local_content_index,
         remote_version_index,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &missing_content));
     ASSERT_NE((ContentIndex*)0, missing_content);
  
     ASSERT_EQ(1, WriteContent(
@@ -1466,12 +1474,14 @@ void Bench()
         ASSERT_EQ(0, WriteVersionIndex(storage_api, version_index, version_index_file));
         printf("Wrote version index to `%s`\n", version_index_file);
 
-        ContentIndex* missing_content_index = CreateMissingContent(
+        ContentIndex* missing_content_index;
+        ASSERT_EQ(0, CreateMissingContent(
             hash_api,
             full_content_index,
             version_index,
             MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK);
+            MAX_CHUNKS_PER_BLOCK,
+            &missing_content_index));
         ASSERT_NE((ContentIndex*)0, missing_content_index);
 
         char delta_upload_content_folder[256];
@@ -1722,12 +1732,14 @@ void LifelikeTest()
     printf("%u assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
     
     // What is missing in local content that we need from remote version in new blocks with just the missing assets.
-    ContentIndex* missing_content = CreateMissingContent(
+    ContentIndex* missing_content;
+    ASSERT_EQ(0, CreateMissingContent(
         hash_api,
         local_content_index,
         version2,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &missing_content));
     ASSERT_NE((ContentIndex*)0, missing_content);
     printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
 
@@ -1908,10 +1920,12 @@ TEST(Longtail, ChunkerLargeFile)
     FeederContext feeder_context = {large_file, size, 0};
 
     struct ChunkerParams params = {ChunkSizeMinDefault, ChunkSizeAvgDefault, ChunkSizeMaxDefault};
-    Chunker* chunker = CreateChunker(
+    Chunker* chunker;
+    ASSERT_EQ(0, CreateChunker(
         &params,
         FeederContext::FeederFunc,
-        &feeder_context);
+        &feeder_context,
+        &chunker));
 
     const uint32_t expected_chunk_count = 20;
     const struct ChunkRange expected_chunks[expected_chunk_count] =
