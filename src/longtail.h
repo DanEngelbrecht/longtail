@@ -156,23 +156,25 @@ int WriteVersionIndex(
     const char* path,
     struct VersionIndex** out_version_index);
 
-struct ContentIndex* CreateContentIndex(
+int CreateContentIndex(
     struct HashAPI* hash_api,
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     const uint32_t* chunk_compression_types,
     uint32_t max_block_size,
-    uint32_t max_chunks_per_block);
+    uint32_t max_chunks_per_block,
+    struct ContentIndex** out_content_index);
 
 int WriteContentIndex(
     struct StorageAPI* storage_api,
     struct ContentIndex* content_index,
     const char* path);
 
-struct ContentIndex* ReadContentIndex(
+int ReadContentIndex(
     struct StorageAPI* storage_api,
-    const char* path);
+    const char* path,
+    struct ContentIndex** out_content_index);
 
 int WriteContent(
     struct StorageAPI* source_storage_api,
@@ -207,13 +209,15 @@ int GetPathsForContentBlocks(
     struct ContentIndex* content_index,
     struct Paths** out_paths);
 
-struct ContentIndex* RetargetContent(
+ int RetargetContent(
     const struct ContentIndex* reference_content_index,
-    const struct ContentIndex* content_index);
+    const struct ContentIndex* content_index,
+    struct ContentIndex** out_content_index);
 
-struct ContentIndex* MergeContentIndex(
+int MergeContentIndex(
     struct ContentIndex* local_content_index,
-    struct ContentIndex* remote_content_index);
+    struct ContentIndex* remote_content_index,
+    struct ContentIndex** out_content_index);
 
 int WriteVersion(
     struct StorageAPI* content_storage_api,
@@ -227,9 +231,10 @@ int WriteVersion(
     const char* content_path,
     const char* version_path);
 
-struct VersionDiff* CreateVersionDiff(
+int CreateVersionDiff(
     const struct VersionIndex* source_version,
-    const struct VersionIndex* target_version);
+    const struct VersionIndex* target_version,
+    struct VersionDiff** out_version_diff);
 
 int ChangeVersion(
     struct StorageAPI* content_storage_api,
@@ -361,7 +366,7 @@ struct ChunkRange
 
 struct ChunkRange NextChunk(struct Chunker* c);
 
-typedef uint32_t (*Chunker_Feeder)(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer);
+typedef int (*Chunker_Feeder)(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer, uint32_t* out_size);
 
  int CreateChunker(
     struct ChunkerParams* params,

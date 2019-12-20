@@ -270,9 +270,11 @@ int Cmd_CreateVersionIndex(
         return 0;
     }
 
-    struct VersionDiff* version_diff = CreateVersionDiff(
+    struct VersionDiff* version_diff;
+    err = CreateVersionDiff(
         vindex,
-        target_vindex);
+        target_vindex,
+        &version_diff);
 
     Longtail_Free(version_diff);
     version_diff = 0;
@@ -282,9 +284,9 @@ int Cmd_CreateVersionIndex(
 
     Longtail_Free(vindex);
     vindex = 0;
-    if (!ok)
+    if (err)
     {
-        fprintf(stderr, "Failed to create version index to `%s`\n", create_version_index);
+        fprintf(stderr, "Failed to create version index to `%s`, %d\n", create_version_index, err);
         return 0;
     }
 
@@ -301,17 +303,18 @@ int Cmd_CreateContentIndex(
     ContentIndex* cindex = 0;
     if (!content)
     {
-        cindex = CreateContentIndex(
+        int err = CreateContentIndex(
             hash_api,
             0,
             0,
             0,
             0,
             0,
-            0);
-        if (!cindex)
+            0,
+            &cindex);
+        if (err)
         {
-            fprintf(stderr, "Failed to create empty content index\n");
+            fprintf(stderr, "Failed to create empty content indexm %d\n", err);
             return 0;
         }
     }
@@ -333,10 +336,10 @@ int Cmd_CreateContentIndex(
         }
     }
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        WriteContentIndex(
+        (0 == WriteContentIndex(
             storage_api,
             cindex,
-            create_content_index);
+            create_content_index));
 
     Longtail_Free(cindex);
     cindex = 0;
@@ -354,37 +357,40 @@ int Cmd_MergeContentIndex(
     const char* content_index,
     const char* merge_content_index)
 {
-    ContentIndex* cindex1 = ReadContentIndex(storage_api, content_index);
-    if (!cindex1)
+    ContentIndex* cindex1;
+    int err = ReadContentIndex(storage_api, content_index, &cindex1);
+    if (err)
     {
-        fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
+        fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
         return 0;
     }
-    ContentIndex* cindex2 = ReadContentIndex(storage_api, merge_content_index);
-    if (!cindex2)
+    ContentIndex* cindex2;
+    err = ReadContentIndex(storage_api, merge_content_index, &cindex2);
+    if (err)
     {
         Longtail_Free(cindex1);
         cindex1 = 0;
-        fprintf(stderr, "Failed to read content index from `%s`\n", merge_content_index);
+        fprintf(stderr, "Failed to read content index from `%s`, %d\n", merge_content_index, err);
         return 0;
     }
-    ContentIndex* cindex = MergeContentIndex(cindex1, cindex2);
+    ContentIndex* cindex;
+    err = MergeContentIndex(cindex1, cindex2, &cindex);
     Longtail_Free(cindex2);
     cindex2 = 0;
     Longtail_Free(cindex1);
     cindex1 = 0;
 
-    if (!cindex)
+    if (err)
     {
-        fprintf(stderr, "Failed to merge content index `%s` with `%s`\n", content_index, merge_content_index);
+        fprintf(stderr, "Failed to merge content index `%s` with `%s`, %d\n", content_index, merge_content_index, err);
         return 0;
     }
 
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        WriteContentIndex(
+        (0 == WriteContentIndex(
             storage_api,
             cindex,
-            create_content_index);
+            create_content_index));
 
     Longtail_Free(cindex);
     cindex = 0;
@@ -466,12 +472,12 @@ int Cmd_CreateMissingContentIndex(
     ContentIndex* existing_cindex = 0;
     if (content_index)
     {
-        existing_cindex = ReadContentIndex(storage_api, content_index);
-        if (!existing_cindex)
+        int err = ReadContentIndex(storage_api, content_index, &existing_cindex);
+        if (err)
         {
             Longtail_Free(vindex);
             vindex = 0;
-            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
             return 0;
         }
     }
@@ -496,14 +502,22 @@ int Cmd_CreateMissingContentIndex(
     }
     else
     {
-        existing_cindex = CreateContentIndex(
+        int err = CreateContentIndex(
             0,
             0,
             0,
             0,
             0,
             0,
-            0);
+            0,
+            &existing_cindex);
+        if (err)
+        {
+            Longtail_Free(vindex);
+            vindex = 0;
+            fprintf(stderr, "Failed to create empty contents from%d\n", err);
+            return 0;
+        }
     }
 
     ContentIndex* cindex;
@@ -526,10 +540,10 @@ int Cmd_CreateMissingContentIndex(
     }
 
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        WriteContentIndex(
+        (0 == WriteContentIndex(
             storage_api,
             cindex,
-            create_content_index);
+            create_content_index));
 
     Longtail_Free(cindex);
     cindex = 0;
@@ -611,48 +625,50 @@ int Cmd_CreateContent(
     ContentIndex* cindex = 0;
     if (content_index)
     {
-        cindex = ReadContentIndex(storage_api, content_index);
-        if (!cindex)
+        int err = ReadContentIndex(storage_api, content_index, &cindex);
+        if (err)
         {
-            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
             return 0;
         }
     }
     else
     {
-        cindex = CreateContentIndex(
+        int err = CreateContentIndex(
             hash_api,
             *vindex->m_ChunkCount,
             vindex->m_ChunkHashes,
             vindex->m_ChunkSizes,
             vindex->m_ChunkCompressionTypes,
             target_block_size,
-            max_chunks_per_block);
-        if (!cindex)
+            max_chunks_per_block,
+            &cindex);
+        if (err)
         {
-            fprintf(stderr, "Failed to create content index for version `%s`\n", version);
+            fprintf(stderr, "Failed to create content index for version `%s`, %d\n", version, err);
             Longtail_Free(vindex);
             vindex = 0;
             return 0;
         }
     }
 
-    if (!ValidateVersion(
+    int err = ValidateVersion(
         cindex,
-        vindex))
+        vindex);
+    if (err)
     {
         Longtail_Free(cindex);
         cindex = 0;
         Longtail_Free(vindex);
         vindex = 0;
-        fprintf(stderr, "Version `%s` does not fully encompass content `%s`\n", version, create_content);
+        fprintf(stderr, "Version `%s` does not fully encompass content `%s`, %d\n", version, create_content, err);
         return 0;
     }
 
     int ok = 0;
     {
         Progress progress("Writing content");
-        ok = (0 == CreatePath(storage_api, create_content)) && WriteContent(
+        ok = (0 == CreatePath(storage_api, create_content)) && (0 == WriteContent(
             storage_api,
             storage_api,
             compression_registry,
@@ -662,7 +678,7 @@ int Cmd_CreateContent(
             cindex,
             vindex,
             version,
-            create_content);
+            create_content));
     }
 
     Longtail_Free(vindex);
@@ -683,13 +699,15 @@ int Cmd_ListMissingBlocks(
     const char* list_missing_blocks,
     const char* content_index)
 {
-    ContentIndex* have_content_index = ReadContentIndex(storage_api, list_missing_blocks);
-    if (!have_content_index)
+    ContentIndex* have_content_index;
+    int err = ReadContentIndex(storage_api, list_missing_blocks. &have_content_index);
+    if (err)
     {
         return 0;
     }
-    ContentIndex* need_content_index = ReadContentIndex(storage_api, content_index);
-    if (!need_content_index)
+    ContentIndex* need_content_index;
+    err = ReadContentIndex(storage_api, content_index, &need_content_index);
+    if (err)
     {
         Longtail_Free(have_content_index);
         have_content_index = 0;
@@ -770,12 +788,12 @@ int Cmd_CreateVersion(
     ContentIndex* cindex = 0;
     if (content_index)
     {
-        cindex = ReadContentIndex(storage_api, content_index);
-        if (!cindex)
+        err = ReadContentIndex(storage_api, content_index, &cindex);
+        if (err)
         {
             Longtail_Free(vindex);
             vindex = 0;
-            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
             return 0;
         }
     }
@@ -799,22 +817,22 @@ int Cmd_CreateVersion(
         }
     }
 
-    if (!ValidateContent(
+    err = ValidateContent(
         cindex,
-        vindex))
-    {
+        vindex);
+    if (err) {
         Longtail_Free(vindex);
         vindex = 0;
         Longtail_Free(cindex);
         cindex = 0;
-        fprintf(stderr, "Content `%s` does not fully encompass version `%s`\n", content, create_version);
+        fprintf(stderr, "Content `%s` does not fully encompass version `%s`m %d\n", content, create_version, err);
         return 0;
     }
 
     int ok = 0;
     {
         Progress progress("Writing version");
-        ok = (0 == CreatePath(storage_api, create_version)) && WriteVersion(
+        ok = (0 == CreatePath(storage_api, create_version)) && (0 == WriteVersion(
             storage_api,
             storage_api,
             compression_registry,
@@ -824,7 +842,7 @@ int Cmd_CreateVersion(
             cindex,
             vindex,
             content,
-            create_version);
+            create_version));
     }
     Longtail_Free(vindex);
     vindex = 0;
@@ -916,14 +934,14 @@ int Cmd_UpdateVersion(
     ContentIndex* cindex = 0;
     if (content_index)
     {
-        cindex = ReadContentIndex(storage_api, content_index);
-        if (!cindex)
+        err = ReadContentIndex(storage_api, content_index, &cindex);
+        if (err)
         {
             Longtail_Free(target_vindex);
             target_vindex = 0;
             Longtail_Free(source_vindex);
             source_vindex = 0;
-            fprintf(stderr, "Failed to read content index from `%s`\n", content_index);
+            fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
             return 0;
         }
     }
@@ -949,22 +967,25 @@ int Cmd_UpdateVersion(
         }
     }
 
-    if (!ValidateContent(
+    err = ValidateContent(
         cindex,
-        target_vindex))
+        target_vindex);
+    if (err)
     {
         Longtail_Free(target_vindex);
         target_vindex = 0;
         Longtail_Free(cindex);
         cindex = 0;
-        fprintf(stderr, "Content `%s` does not fully encompass version `%s`\n", content, target_version_index);
+        fprintf(stderr, "Content `%s` does not fully encompass version `%s`, %d\n", content, target_version_index, err);
         return 0;
     }
 
-    struct VersionDiff* version_diff = CreateVersionDiff(
+    struct VersionDiff* version_diff;
+    err = CreateVersionDiff(
         source_vindex,
-        target_vindex);
-    if (!version_diff)
+        target_vindex,
+        &version_diff);
+    if (err)
     {
         Longtail_Free(cindex);
         cindex = 0;
@@ -972,14 +993,14 @@ int Cmd_UpdateVersion(
         target_vindex = 0;
         Longtail_Free(source_vindex);
         source_vindex = 0;
-        fprintf(stderr, "Failed to create version diff from `%s` to `%s`\n", version_index, target_version_index);
+        fprintf(stderr, "Failed to create version diff from `%s` to `%s`, %d\n", version_index, target_version_index, err);
         return 0;
     }
 
     int ok = 0;
     {
         Progress progress("Updating version");
-        ok = (0 == CreatePath(storage_api, update_version)) && ChangeVersion(
+        ok = (0 == CreatePath(storage_api, update_version)) && (0 == ChangeVersion(
             storage_api,
             storage_api,
             hash_api,
@@ -992,7 +1013,7 @@ int Cmd_UpdateVersion(
             target_vindex,
             version_diff,
             content,
-            update_version);
+            update_version));
     }
 
     Longtail_Free(cindex);
@@ -1084,25 +1105,27 @@ int Cmd_UpSyncVersion(
     struct ContentIndex* cindex = 0;
     if (content_index_path)
     {
-        cindex = ReadContentIndex(
+        err = ReadContentIndex(
             source_storage_api,
-            content_index_path);
+            content_index_path,
+            &cindex);
     }
-    if (!cindex)
+    if (err)
     {
         if (!content_path && content_index_path)
         {
-            cindex = CreateContentIndex(
+            err = CreateContentIndex(
                 hash_api,
                 0,
                 0,
                 0,
                 0,
                 target_block_size,
-                max_chunks_per_block);
-            if (!cindex)
+                max_chunks_per_block,
+                &cindex);
+            if (err)
             {
-                fprintf(stderr, "Failed to create empty content index\n");
+                fprintf(stderr, "Failed to create empty content index, %d\n", err);
                 Longtail_Free(vindex);
                 vindex = 0;
                 return 0;
@@ -1155,7 +1178,7 @@ int Cmd_UpSyncVersion(
     int ok = 0;
     {
         Progress progress("Writing content");
-        ok = (0 == CreatePath(target_storage_api, missing_content_path)) && WriteContent(
+        ok = (0 == CreatePath(target_storage_api, missing_content_path)) && (0 == WriteContent(
             source_storage_api,
             target_storage_api,
             compression_registry,
@@ -1165,7 +1188,7 @@ int Cmd_UpSyncVersion(
             missing_content_index,
             vindex,
             version_path,
-            missing_content_path);
+            missing_content_path));
     }
     if (!ok)
     {
@@ -1180,10 +1203,11 @@ int Cmd_UpSyncVersion(
     }
 
 /*
-    ContentIndex* new_content_index = MergeContentIndex(cindex, missing_content_index);
-    if (!new_content_index)
+    ContentIndex* new_content_index;
+    err = MergeContentIndex(cindex, missing_content_index, &new_content_index);
+    if (err)
     {
-        fprintf(stderr, "Failed creating a new content index with the added content\n");
+        fprintf(stderr, "Failed creating a new content index with the added content, %d\n", err);
         Longtail_Free(missing_content_index);
         missing_content_index = 0;
         Longtail_Free(vindex);
@@ -1211,10 +1235,10 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 
-    ok = (0 == CreateParentPath(target_storage_api, content_index_path)) && WriteContentIndex(
+    ok = (0 == CreateParentPath(target_storage_api, content_index_path)) && (0 == WriteContentIndex(
         target_storage_api,
         missing_content_index,
-        missing_content_index_path);
+        missing_content_index_path));
     if (!ok)
     {
         fprintf(stderr, "Failed to write the new version index to `%s`\n", version_index_path);
@@ -1284,10 +1308,10 @@ int Cmd_DownSyncVersion(
     ContentIndex* existing_cindex = 0;
     if (have_content_index_path)
     {
-        existing_cindex = ReadContentIndex(source_storage_api, have_content_index_path);
-        if (!existing_cindex)
+        err = ReadContentIndex(source_storage_api, have_content_index_path, &existing_cindex);
+        if (err)
         {
-            // TODO: print
+            fprintf(stderr, "Failed to read content index from `%s`, %d\n", have_content_index_path, err);
             return 0;
         }
     }
@@ -1339,8 +1363,9 @@ int Cmd_DownSyncVersion(
     Longtail_Free(vindex_target);
     vindex_target = 0;
 
-    ContentIndex* cindex_remote = ReadContentIndex(source_storage_api, remote_content_index_path);
-    if (!cindex_remote)
+    ContentIndex* cindex_remote;
+    err = ReadContentIndex(source_storage_api, remote_content_index_path, &cindex_remote);
+    if (err)
     {
         if (!remote_content_path)
         {
@@ -1350,7 +1375,7 @@ int Cmd_DownSyncVersion(
             return 0;
         }
         Progress progress("Reading content");
-        int err = ReadContent(
+        err = ReadContent(
             source_storage_api,
             hash_api, job_api,
             Progress::ProgressFunc,
@@ -1364,13 +1389,14 @@ int Cmd_DownSyncVersion(
             cindex_missing = 0;
             return 0;
         }
-
     }
 
-    ContentIndex* request_content = RetargetContent(
+    ContentIndex* request_content;
+    err = RetargetContent(
         cindex_remote,
-        cindex_missing);
-    if (!request_content)
+        cindex_missing,
+        &request_content);
+    if (err)
     {
         Longtail_Free(cindex_remote);
         cindex_remote = 0;
@@ -1657,9 +1683,18 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        struct VersionDiff* diff = CreateVersionDiff(
+        struct VersionDiff* diff;
+        err = CreateVersionDiff(
             source_vindex,
-            target_vindex);
+            target_vindex,
+            &diff);
+        if (err)
+        {
+            Longtail_Free(target_vindex);
+            Longtail_Free(source_vindex);
+            fprintf(stderr, "Failed to create version diff between `%s` and `%s`, %d\n", create_version_index, incremental_version_index, err);
+            return 1;
+        }
         Longtail_Free(source_vindex);
         Longtail_Free(target_vindex);
         if (*diff->m_SourceRemovedCount != 0)

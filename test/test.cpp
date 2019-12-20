@@ -187,14 +187,16 @@ TEST(Longtail, ContentIndex)
     ASSERT_EQ(0, err);
     ASSERT_NE((HashAPI_HContext)0, c);
     hash_api->EndContext(hash_api, c);
-    ContentIndex* content_index = CreateContentIndex(
+    ContentIndex* content_index;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         asset_count,
         asset_content_hashes,
         asset_sizes,
         asset_compression_types,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &content_index));
 
     ASSERT_EQ(2u, *content_index->m_BlockCount);
     ASSERT_EQ(5u, *content_index->m_ChunkCount);
@@ -263,22 +265,25 @@ TEST(Longtail, ContentIndexSerialization)
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
-    ContentIndex* cindex = CreateContentIndex(
+    ContentIndex* cindex;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
         vindex->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &cindex));
     ASSERT_NE((ContentIndex*)0, cindex);
 
     Longtail_Free(vindex);
     vindex = 0;
 
-    ASSERT_NE(0, WriteContentIndex(local_storage, cindex, "cindex.lci"));
+    ASSERT_EQ(0, WriteContentIndex(local_storage, cindex, "cindex.lci"));
 
-    ContentIndex* cindex2 = ReadContentIndex(local_storage, "cindex.lci");
+    ContentIndex* cindex2;
+    ASSERT_EQ(0, ReadContentIndex(local_storage, "cindex.lci", &cindex2));
     ASSERT_NE((ContentIndex*)0, cindex2);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
@@ -366,17 +371,19 @@ TEST(Longtail, WriteContent)
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
-    ContentIndex* cindex = CreateContentIndex(
+    ContentIndex* cindex;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
         vindex->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &cindex));
     ASSERT_NE((ContentIndex*)0, cindex);
 
-    ASSERT_NE(0, WriteContent(
+    ASSERT_EQ(0, WriteContent(
         source_storage,
         target_storage,
         compression_registry,
@@ -440,7 +447,8 @@ TEST(Longtail, TestVeryLargeFile)
 {
     const char* assets_path = "C:\\Temp\\longtail\\local\\WinClient\\CL6332_WindowsClient\\WindowsClient\\PioneerGame\\Content\\Paks";
 
-    FileInfos* paths = GetFilesRecursively(storage_api, assets_path);
+    FileInfos* paths;
+    ASSERT_EQ(0, GetFilesRecursively(storage_api, assets_path, &paths));
     VersionIndex* version_index;
     ASSERT_EQ(0, CreateVersionIndex(
         storage_api,
@@ -493,14 +501,16 @@ TEST(Longtail, CreateMissingContent)
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
-    ContentIndex* content_index = CreateContentIndex(
+    ContentIndex* content_index;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         asset_count - 4,
         asset_content_hashes,
         chunk_sizes,
         asset_compression_types,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &content_index));
 
     const char* asset_paths[5] = {
         "fifth_",
@@ -621,60 +631,71 @@ TEST(Longtail, VersionIndexDirectories)
 TEST(Longtail, MergeContentIndex)
 {
     HashAPI* hash_api = CreateMeowHashAPI();
-    ContentIndex* cindex1 = CreateContentIndex(
+    ContentIndex* cindex1;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         0,
         0,
         0,
         0,
         16,
-        8);
+        8,
+        &cindex1));
     ASSERT_NE((ContentIndex*)0, cindex1);
-    ContentIndex* cindex2 = CreateContentIndex(
+    ContentIndex* cindex2;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         0,
         0,
         0,
         0,
         16,
-        8);
+        8,
+        &cindex2));
     ASSERT_NE((ContentIndex*)0, cindex2);
-    ContentIndex* cindex3 = MergeContentIndex(cindex1, cindex2);
+    ContentIndex* cindex3;
+    ASSERT_EQ(0, MergeContentIndex(cindex1, cindex2, &cindex3));
     ASSERT_NE((ContentIndex*)0, cindex3);
 
     TLongtail_Hash chunk_hashes_4[] = {5, 6, 7};
     uint32_t chunk_sizes_4[] = {10, 20, 10};
     uint32_t chunk_compression_types_4[] = {0, 0, 0};
-    ContentIndex* cindex4 = CreateContentIndex(
+    ContentIndex* cindex4;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         3,
         chunk_hashes_4,
         chunk_sizes_4,
         chunk_compression_types_4,
         30,
-        2);
+        2,
+        &cindex4));
     ASSERT_NE((ContentIndex*)0, cindex4);
 
     TLongtail_Hash chunk_hashes_5[] = {8, 7, 6};
     uint32_t chunk_sizes_5[] = {20, 10, 20};
     uint32_t chunk_compression_types_5[] = {0, 0, 0};
 
-    ContentIndex* cindex5 = CreateContentIndex(
+    ContentIndex* cindex5;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         3,
         chunk_hashes_5,
         chunk_sizes_5,
         chunk_compression_types_5,
         30,
-        2);
+        2,
+        &cindex5));
     ASSERT_NE((ContentIndex*)0, cindex5);
 
-    ContentIndex* cindex6 = MergeContentIndex(cindex4, cindex5);
+    ContentIndex* cindex6;
+    ASSERT_EQ(0, MergeContentIndex(cindex4, cindex5, &cindex6));
     ASSERT_NE((ContentIndex*)0, cindex6);
     ASSERT_EQ(4, *cindex6->m_BlockCount);
     ASSERT_EQ(6, *cindex6->m_ChunkCount);
 
-    ContentIndex* cindex7 = MergeContentIndex(cindex6, cindex1);
+    ContentIndex* cindex7;
+    ASSERT_EQ(0, MergeContentIndex(cindex6, cindex1, &cindex7));
     ASSERT_NE((ContentIndex*)0, cindex7);
     ASSERT_EQ(4, *cindex7->m_BlockCount);
     ASSERT_EQ(6, *cindex7->m_ChunkCount);
@@ -924,16 +945,18 @@ TEST(Longtail, VersionDiff)
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
 
-    ContentIndex* content_index = CreateContentIndex(
+    ContentIndex* content_index;
+    ASSERT_EQ(0, CreateContentIndex(
             hash_api,
             *new_vindex->m_ChunkCount,
             new_vindex->m_ChunkHashes,
             new_vindex->m_ChunkSizes,
             new_vindex->m_ChunkCompressionTypes,
             MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK);
+            MAX_CHUNKS_PER_BLOCK,
+            &content_index));
 
-    ASSERT_EQ(1, WriteContent(
+    ASSERT_EQ(0, WriteContent(
         storage,
         storage,
         compression_registry,
@@ -945,16 +968,18 @@ TEST(Longtail, VersionDiff)
         "new",
         "chunks"));
 
-    VersionDiff* version_diff = CreateVersionDiff(
+    VersionDiff* version_diff;
+    ASSERT_EQ(0, CreateVersionDiff(
         old_vindex,
-        new_vindex);
+        new_vindex,
+        &version_diff));
     ASSERT_NE((VersionDiff*)0, version_diff);
 
     ASSERT_EQ(3, *version_diff->m_SourceRemovedCount);
     ASSERT_EQ(3, *version_diff->m_TargetAddedCount);
     ASSERT_EQ(6, *version_diff->m_ModifiedCount);
 
-    ASSERT_NE(0, ChangeVersion(
+    ASSERT_EQ(0, ChangeVersion(
         storage,
         storage,
         hash_api,
@@ -1075,16 +1100,18 @@ TEST(Longtail, FullScale)
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
 
-    ContentIndex* local_content_index = CreateContentIndex(
+    ContentIndex* local_content_index;
+    ASSERT_EQ(0, CreateContentIndex(
             hash_api,
             * local_version_index->m_ChunkCount,
             local_version_index->m_ChunkHashes,
             local_version_index->m_ChunkSizes,
             local_version_index->m_ChunkCompressionTypes,
             MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK);
+            MAX_CHUNKS_PER_BLOCK,
+            &local_content_index));
 
-    ASSERT_EQ(1, WriteContent(
+    ASSERT_EQ(0, WriteContent(
         local_storage,
         local_storage,
         compression_registry,
@@ -1096,16 +1123,18 @@ TEST(Longtail, FullScale)
         "",
         ""));
 
-    ContentIndex* remote_content_index = CreateContentIndex(
+    ContentIndex* remote_content_index;
+    ASSERT_EQ(0, CreateContentIndex(
             hash_api,
             * remote_version_index->m_ChunkCount,
             remote_version_index->m_ChunkHashes,
             remote_version_index->m_ChunkSizes,
             remote_version_index->m_ChunkCompressionTypes,
             MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK);
+            MAX_CHUNKS_PER_BLOCK,
+            &remote_content_index));
 
-    ASSERT_EQ(1, WriteContent(
+    ASSERT_EQ(0, WriteContent(
         remote_storage,
         remote_storage,
         compression_registry,
@@ -1127,7 +1156,7 @@ TEST(Longtail, FullScale)
         &missing_content));
     ASSERT_NE((ContentIndex*)0, missing_content);
  
-    ASSERT_EQ(1, WriteContent(
+    ASSERT_EQ(0, WriteContent(
         remote_storage,
         local_storage,
         compression_registry,
@@ -1139,8 +1168,9 @@ TEST(Longtail, FullScale)
         "",
         ""));
 
-    ContentIndex* merged_content_index = MergeContentIndex(local_content_index, missing_content);
-    ASSERT_EQ(1, WriteVersion(
+    ContentIndex* merged_content_index;
+    ASSERT_EQ(0, MergeContentIndex(local_content_index, missing_content, &merged_content_index));
+    ASSERT_EQ(0, WriteVersion(
         local_storage,
         local_storage,
         compression_registry,
@@ -1317,17 +1347,19 @@ TEST(Longtail, WriteVersion)
 
     static const uint32_t MAX_BLOCK_SIZE = 32;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
-    ContentIndex* cindex = CreateContentIndex(
+    ContentIndex* cindex;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         *vindex->m_ChunkCount,
         vindex->m_ChunkHashes,
         vindex->m_ChunkSizes,
         vindex->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &cindex));
     ASSERT_NE((ContentIndex*)0, cindex);
 
-    ASSERT_NE(0, WriteContent(
+    ASSERT_EQ(0, WriteContent(
         storage_api,
         storage_api,
         compression_registry,
@@ -1339,7 +1371,7 @@ TEST(Longtail, WriteVersion)
         "local",
         "chunks"));
 
-    ASSERT_NE(0, WriteVersion(
+    ASSERT_EQ(0, WriteVersion(
         storage_api,
         storage_api,
         compression_registry,
@@ -1428,14 +1460,16 @@ void Bench()
 
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
-    ContentIndex* full_content_index = CreateContentIndex(
+    ContentIndex* full_content_index;
+    ASSERT_EQ(0, CreateContentIndex(
             hash_api,
             0,
             0,
             0,
             0,
             MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK);
+            MAX_CHUNKS_PER_BLOCK,
+            &full_content_index));
     ASSERT_NE((ContentIndex*)0, full_content_index);
     VersionIndex* version_indexes[VERSION_COUNT];
 
@@ -1487,7 +1521,7 @@ void Bench()
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
-        ASSERT_NE(0, WriteContent(
+        ASSERT_EQ(0, WriteContent(
             storage_api,
             storage_api,
             compression_registry,
@@ -1554,7 +1588,8 @@ void Bench()
             ASSERT_EQ(ENOENT, err);
         }
 
-        ContentIndex* merged_content_index = MergeContentIndex(full_content_index, missing_content_index);
+        ContentIndex* merged_content_index;
+        ASSERT_EQ(0, MergeContentIndex(full_content_index, missing_content_index, &merged_content_index));
         ASSERT_NE((ContentIndex*)0, merged_content_index);
         Longtail_Free(missing_content_index);
         missing_content_index = 0;
@@ -1565,7 +1600,7 @@ void Bench()
         char version_target_folder[256];
         sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
         printf("Reconstructing %u assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
-        ASSERT_NE(0, WriteVersion(
+        ASSERT_EQ(0, WriteVersion(
             storage_api,
             storage_api,
             compression_registry,
@@ -1661,17 +1696,19 @@ void LifelikeTest()
     printf("Creating local content index...\n");
     static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
-    ContentIndex* local_content_index = CreateContentIndex(
+    ContentIndex* local_content_index;
+    ASSERT_EQ(0, CreateContentIndex(
         hash_api,
         *version1->m_ChunkCount,
         version1->m_ChunkHashes,
         version1->m_ChunkSizes,
         version1->m_ChunkCompressionTypes,
         MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK);
+        MAX_CHUNKS_PER_BLOCK,
+        &local_content_index));
 
     printf("Writing local content index...\n");
-    WriteContentIndex(storage_api, local_content_index, local_content_index_path);
+    ASSERT_EQ(0, WriteContentIndex(storage_api, local_content_index, local_content_index_path));
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
     if (1)
@@ -1691,7 +1728,7 @@ void LifelikeTest()
     }
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-    ASSERT_EQ(1, WriteVersion(
+    ASSERT_EQ(0, WriteVersion(
         storage_api,
         storage_api,
         compression_registry,
@@ -1746,7 +1783,7 @@ void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
-        ASSERT_EQ(1, WriteContent(
+        ASSERT_EQ(0, WriteContent(
             storage_api,
             storage_api,
             compression_registry,
@@ -1763,7 +1800,7 @@ void LifelikeTest()
     {
         // Write this to disk for reference to see how big the diff is...
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
-        ASSERT_EQ(1, WriteContent(
+        ASSERT_EQ(0, WriteContent(
             storage_api,
             storage_api,
             compression_registry,
@@ -1776,7 +1813,8 @@ void LifelikeTest()
             remote_content_path));
     }
 
-//    ContentIndex* remote_content_index = CreateContentIndex(
+//    ContentIndex* remote_content_index;
+//    ASSERT_EQ(0, CreateContentIndex(
 //        local_path_2,
 //        *version2->m_AssetCount,
 //        version2->m_ContentHashes,
@@ -1784,7 +1822,8 @@ void LifelikeTest()
 //        version2->m_AssetSize,
 //        version2->m_NameOffsets,
 //        version2->m_NameData,
-//        GetContentTag);
+//        GetContentTag,
+//        &remote_content_index));
 
 //    uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2->m_AssetCount);
 //    uint64_t missing_asset_count = GetMissingAssets(local_content_index, version2, missing_assets);
@@ -1814,7 +1853,8 @@ void LifelikeTest()
 //        storage_api.CloseFile(s);
 //    }
 
-    ContentIndex* merged_local_content = MergeContentIndex(local_content_index, missing_content);
+    ContentIndex* merged_local_content;
+    ASSERT_EQ(0, MergeContentIndex(local_content_index, missing_content, &merged_local_content));
     ASSERT_NE((ContentIndex*)0, merged_local_content);
     Longtail_Free(missing_content);
     missing_content = 0;
@@ -1822,7 +1862,7 @@ void LifelikeTest()
     local_content_index = 0;
 
     printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-    ASSERT_EQ(1, WriteVersion(
+    ASSERT_EQ(0, WriteVersion(
         storage_api,
         storage_api,
         compression_registry,
@@ -1887,7 +1927,7 @@ TEST(Longtail, ChunkerLargeFile)
         long size;
         long offset;
 
-        static uint32_t FeederFunc(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer)
+        static int FeederFunc(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer, uint32_t* out_size)
         {
             FeederContext* c = (FeederContext*)context;
             uint32_t read_count = c->size - c->offset;
@@ -1900,20 +1940,18 @@ TEST(Longtail, ChunkerLargeFile)
                 int err = fseek(c->f, c->offset, SEEK_SET);
                 if (err)
                 {
-                    return 0;
+                    return err;
                 }
                 uint8_t* p = (uint8_t*)buffer;
                 size_t r = fread(buffer, (size_t)read_count, 1, c->f);
                 if (r != 1)
                 {
-                    int e1 = errno;
-                    int is_eof = feof(c->f);
-                    int e2 = ferror(c->f);
-                    return 0;
+                    return errno;
                 }
             }
             c->offset += read_count;
-            return read_count;
+            *out_size = read_count;
+            return 0;
         }
     };
 
