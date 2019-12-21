@@ -15,8 +15,8 @@ else
     RELEASE_MODE="debug"
 fi
 
-export BASE_CXXFLAGS="-Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template"
-
+export BASE_CXXFLAGS="-Wno-implicit-int-conversion -Wno-sign-conversion -Wno-extra-semi-stmt -Wno-missing-prototypes -Wno-atomic-implicit-seq-cst -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
+# -pedantic
 if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
@@ -30,7 +30,7 @@ if [ "$RELEASE_MODE" = "release" ]; then
 else
     export OPT="-g"
     export ASAN="-fsanitize=address -fno-omit-frame-pointer"
-    BASE_CXXFLAGS="$BASE_CXXFLAGS -Wall -Weverything -pedantic -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
+    BASE_CXXFLAGS="$BASE_CXXFLAGS" # -Wall -Weverything"
     export ARCH="-m64 -maes -mssse3"
 
     . ./build_options.sh

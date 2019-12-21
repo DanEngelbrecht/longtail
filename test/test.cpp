@@ -13,7 +13,7 @@
 #define TEST_LOG(fmt, ...) \
     fprintf(stderr, "--- ");fprintf(stderr, fmt, __VA_ARGS__);
 
-int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
+static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* dir_path = Longtail_Strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');

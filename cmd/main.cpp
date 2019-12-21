@@ -10,22 +10,22 @@
 #include <inttypes.h>
 #include <stdarg.h>
 
-void AssertFailure(const char* expression, const char* file, int line)
+static void AssertFailure(const char* expression, const char* file, int line)
 {
     fprintf(stderr, "%s(%d): Assert failed `%s`\n", file, line, expression);
     exit(-1);
 }
 
-const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
+static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-void LogStdErr(void* , int level, const char* log)
+static void LogStdErr(void* , int level, const char* log)
 {
     fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
 }
 
-int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
+static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
 
-int CreatePath(struct Longtail_StorageAPI* storage_api, const char* path)
+static int CreatePath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     if (storage_api->IsDir(storage_api, path))
     {
@@ -47,7 +47,7 @@ int CreatePath(struct Longtail_StorageAPI* storage_api, const char* path)
     return 0;
 }
 
-int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
+static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* dir_path = Longtail_Strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
@@ -66,7 +66,7 @@ int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
     return err;
 }
 
-char* NormalizePath(const char* path)
+static char* NormalizePath(const char* path)
 {
     if (!path)
     {
@@ -115,7 +115,7 @@ struct HashToIndex
     uint64_t value;
 };
 
-int PrintFormattedBlockList(Longtail_ContentIndex* content_index, const char* format_string)
+static int PrintFormattedBlockList(Longtail_ContentIndex* content_index, const char* format_string)
 {
     const char* format_start = format_string;
     const char* format_first_end = strstr(format_string, "{blockname}");
@@ -206,7 +206,7 @@ static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileI
 
 
 
-int Cmd_Longtail_CreateVersionIndex(
+static int Cmd_Longtail_CreateVersionIndex(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
@@ -294,7 +294,7 @@ int Cmd_Longtail_CreateVersionIndex(
     return 1;
 }
 
-int Cmd_Longtail_CreateContentIndex(
+static int Cmd_Longtail_CreateContentIndex(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
@@ -352,7 +352,7 @@ int Cmd_Longtail_CreateContentIndex(
     return 1;
 }
 
-int Cmd_MergeContentIndex(
+static int Cmd_MergeContentIndex(
     Longtail_StorageAPI* storage_api,
     const char* create_content_index,
     const char* content_index,
@@ -404,7 +404,7 @@ int Cmd_MergeContentIndex(
     return 1;
 }
 
-int Cmd_Longtail_CreateMissingContentIndex(
+static int Cmd_Longtail_CreateMissingContentIndex(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
@@ -557,7 +557,7 @@ int Cmd_Longtail_CreateMissingContentIndex(
     return 1;
 }
 
-int Cmd_CreateContent(
+static int Cmd_CreateContent(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
@@ -768,7 +768,7 @@ int Cmd_ListMissingBlocks(
     return ok;
 }
 */
-int Cmd_CreateVersion(
+static int Cmd_CreateVersion(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
@@ -857,7 +857,7 @@ int Cmd_CreateVersion(
     return 1;
 }
 
-int Cmd_UpdateVersion(
+static int Cmd_UpdateVersion(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
@@ -1034,7 +1034,7 @@ int Cmd_UpdateVersion(
     return 1;
 }
 
-int Cmd_UpSyncVersion(
+static int Cmd_UpSyncVersion(
     Longtail_StorageAPI* source_storage_api,
     Longtail_StorageAPI* target_storage_api,
     Longtail_HashAPI* hash_api,
@@ -1282,7 +1282,7 @@ int Cmd_UpSyncVersion(
     return 1;
 }
 
-int Cmd_DownSyncVersion(
+static int Cmd_DownSyncVersion(
     Longtail_StorageAPI* source_storage_api,
     Longtail_StorageAPI* target_storage_api,
     Longtail_HashAPI* hash_api,
