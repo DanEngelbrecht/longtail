@@ -7,88 +7,88 @@
 extern "C" {
 #endif
 
-typedef struct HashAPI_Context* HashAPI_HContext;
-struct HashAPI
+typedef struct Longtail_HashAPI_Context* Longtail_HashAPI_HContext;
+struct Longtail_HashAPI
 {
-    int (*BeginContext)(struct HashAPI* hash_api, HashAPI_HContext* out_context);
-    void (*Hash)(struct HashAPI* hash_api, HashAPI_HContext context, uint32_t length, void* data);
-    uint64_t (*EndContext)(struct HashAPI* hash_api, HashAPI_HContext context);
-    int (*HashBuffer)(struct HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash);
+    int (*BeginContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context);
+    void (*Hash)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data);
+    uint64_t (*EndContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context);
+    int (*HashBuffer)(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash);
 };
 
-typedef struct StorageAPI_OpenFile* StorageAPI_HOpenFile;
-typedef struct StorageAPI_Iterator* StorageAPI_HIterator;
+typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
+typedef struct Longtail_StorageAPI_Iterator* Longtail_StorageAPI_HIterator;
 
-struct StorageAPI
+struct Longtail_StorageAPI
 {
-    int (*OpenReadFile)(struct StorageAPI* storage_api, const char* path, StorageAPI_HOpenFile* out_open_file);
-    int (*GetSize)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t* out_size);
-    int (*Read)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output);
+    int (*OpenReadFile)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
+    int (*GetSize)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
+    int (*Read)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output);
 
-    int (*OpenWriteFile)(struct StorageAPI* storage_api, const char* path, uint64_t initial_size, StorageAPI_HOpenFile* out_open_file);
-    int (*Write)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
-    int (*SetSize)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length);
+    int (*OpenWriteFile)(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file);
+    int (*Write)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
+    int (*SetSize)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length);
 
-    void (*CloseFile)(struct StorageAPI* storage_api, StorageAPI_HOpenFile f);
+    void (*CloseFile)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f);
 
-    int (*CreateDir)(struct StorageAPI* storage_api, const char* path);
+    int (*CreateDir)(struct Longtail_StorageAPI* storage_api, const char* path);
 
-    int (*RenameFile)(struct StorageAPI* storage_api, const char* source_path, const char* target_path);
-    char* (*ConcatPath)(struct StorageAPI* storage_api, const char* root_path, const char* sub_path);
+    int (*RenameFile)(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path);
+    char* (*ConcatPath)(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path);
 
-    int (*IsDir)(struct StorageAPI* storage_api, const char* path);
-    int (*IsFile)(struct StorageAPI* storage_api, const char* path);
+    int (*IsDir)(struct Longtail_StorageAPI* storage_api, const char* path);
+    int (*IsFile)(struct Longtail_StorageAPI* storage_api, const char* path);
 
-    int (*RemoveDir)(struct StorageAPI* storage_api, const char* path);
-    int (*RemoveFile)(struct StorageAPI* storage_api, const char* path);
+    int (*RemoveDir)(struct Longtail_StorageAPI* storage_api, const char* path);
+    int (*RemoveFile)(struct Longtail_StorageAPI* storage_api, const char* path);
 
-    int (*StartFind)(struct StorageAPI* storage_api, const char* path, StorageAPI_HIterator* out_iterator);
-    int (*FindNext)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
-    void (*CloseFind)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
-    const char* (*GetFileName)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
-    const char* (*GetDirectoryName)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
-    uint64_t (*GetEntrySize)(struct StorageAPI* storage_api, StorageAPI_HIterator iterator);
+    int (*StartFind)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator);
+    int (*FindNext)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
+    void (*CloseFind)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
+    const char* (*GetFileName)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
+    const char* (*GetDirectoryName)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
+    uint64_t (*GetEntrySize)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 };
 
-typedef struct CompressionAPI_CompressionContext* CompressionAPI_HCompressionContext;
-typedef struct CompressionAPI_DecompressionContext* CompressionAPI_HDecompressionContext;
-typedef struct CompressionAPI_Settings* CompressionAPI_HSettings;
+typedef struct Longtail_CompressionAPI_CompressionContext* Longtail_CompressionAPI_HCompressionContext;
+typedef struct Longtail_CompressionAPI_DecompressionContext* Longtail_CompressionAPI_HDecompressionContext;
+typedef struct Longtail_CompressionAPI_Settings* Longtail_CompressionAPI_HSettings;
 
-struct CompressionAPI
+struct Longtail_CompressionAPI
 {
-    CompressionAPI_HSettings (*GetDefaultSettings)(struct CompressionAPI* compression_api);
-    CompressionAPI_HSettings (*GetMaxCompressionSetting)(struct CompressionAPI* compression_api);
+    Longtail_CompressionAPI_HSettings (*GetDefaultSettings)(struct Longtail_CompressionAPI* compression_api);
+    Longtail_CompressionAPI_HSettings (*GetMaxCompressionSetting)(struct Longtail_CompressionAPI* compression_api);
 
-    int (*CreateCompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HSettings settings, CompressionAPI_HCompressionContext* out_context);
-    size_t (*GetMaxCompressedSize)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, size_t size);
-    int (*Compress)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_size);
-    void (*DeleteCompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context);
+    int (*CreateCompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, Longtail_CompressionAPI_HCompressionContext* out_context);
+    size_t (*GetMaxCompressedSize)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, size_t size);
+    int (*Compress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_size);
+    void (*DeleteCompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context);
 
-    CompressionAPI_HDecompressionContext (*CreateDecompressionContext)(struct CompressionAPI* compression_api);
-    int (*Decompress)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* out_size);
-    void (*DeleteDecompressionContext)(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context);
+    Longtail_CompressionAPI_HDecompressionContext (*CreateDecompressionContext)(struct Longtail_CompressionAPI* compression_api);
+    int (*Decompress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* out_size);
+    void (*DeleteDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context);
 };
 
-struct CompressionRegistry;
+struct Longtail_CompressionRegistry;
 
-struct CompressionRegistry* CreateCompressionRegistry(
+struct Longtail_CompressionRegistry* Longtail_CreateCompressionRegistry(
     uint32_t compression_type_count,
     const uint32_t* compression_types,
-    const struct CompressionAPI** compression_apis,
-    const CompressionAPI_HSettings* compression_settings);
+    const struct Longtail_CompressionAPI** compression_apis,
+    const Longtail_CompressionAPI_HSettings* compression_settings);
 
-typedef void (*JobAPI_JobFunc)(void* context);
-typedef void (*JobAPI_ProgressFunc)(void* context, uint32_t total_count, uint32_t done_count);
-typedef void* JobAPI_Jobs;
+typedef void (*Longtail_JobAPI_JobFunc)(void* context);
+typedef void (*Longtail_JobAPI_ProgressFunc)(void* context, uint32_t total_count, uint32_t done_count);
+typedef void* Longtail_JobAPI_Jobs;
 
-struct JobAPI
+struct Longtail_JobAPI
 {
-    uint32_t (*GetWorkerCount)(struct JobAPI* job_api);
-    int (*ReserveJobs)(struct JobAPI* job_api, uint32_t job_count);
-    int (*CreateJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[], JobAPI_Jobs* out_jobs);
-    int (*AddDependecies)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs);
-    int (*ReadyJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs);
-    int (*WaitForAllJobs)(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func);
+    uint32_t (*GetWorkerCount)(struct Longtail_JobAPI* job_api);
+    int (*ReserveJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count);
+    int (*CreateJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs);
+    int (*AddDependecies)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs);
+    int (*ReadyJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
+    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, void* context, Longtail_JobAPI_ProgressFunc process_func);
 };
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
@@ -118,140 +118,140 @@ void* Longtail_Alloc(size_t s);
 void Longtail_Free(void* p);
 
 typedef uint64_t TLongtail_Hash;
-struct Paths;
-struct FileInfos;
-struct VersionIndex;
-struct ContentIndex;
+struct Longtail_Paths;
+struct Longtail_FileInfos;
+struct Longtail_VersionIndex;
+struct Longtail_ContentIndex;
 struct PathLookup;
 struct ChunkHashToAssetPart;
-struct VersionDiff;
+struct Longtail_VersionDiff;
 
 char* Longtail_Strdup(const char* path);
 
-int GetFilesRecursively(
-    struct StorageAPI* storage_api,
+int Longtail_GetFilesRecursively(
+    struct Longtail_StorageAPI* storage_api,
     const char* root_path,
-    struct FileInfos** out_file_infos);
+    struct Longtail_FileInfos** out_file_infos);
 
-int CreateVersionIndex(
-    struct StorageAPI* storage_api,
-    struct HashAPI* hash_api,
-    struct JobAPI* job_api,
-    JobAPI_ProgressFunc job_progress_func,
+int Longtail_CreateVersionIndex(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
     const char* root_path,
-    const struct Paths* paths,
+    const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_compression_types,
     uint32_t max_chunk_size,
-    struct VersionIndex** out_version_index);
+    struct Longtail_VersionIndex** out_version_index);
 
-int WriteVersionIndex(
-    struct StorageAPI* storage_api,
-    struct VersionIndex* version_index,
+int Longtail_WriteVersionIndex(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_VersionIndex* version_index,
     const char* path);
 
- int ReadVersionIndex(
-    struct StorageAPI* storage_api,
+ int Longtail_ReadVersionIndex(
+    struct Longtail_StorageAPI* storage_api,
     const char* path,
-    struct VersionIndex** out_version_index);
+    struct Longtail_VersionIndex** out_version_index);
 
-int CreateContentIndex(
-    struct HashAPI* hash_api,
+int Longtail_CreateContentIndex(
+    struct Longtail_HashAPI* hash_api,
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     const uint32_t* chunk_compression_types,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
-    struct ContentIndex** out_content_index);
+    struct Longtail_ContentIndex** out_content_index);
 
-int WriteContentIndex(
-    struct StorageAPI* storage_api,
-    struct ContentIndex* content_index,
+int Longtail_Longtail_WriteContentIndex(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_ContentIndex* content_index,
     const char* path);
 
-int ReadContentIndex(
-    struct StorageAPI* storage_api,
+int Longtail_Longtail_ReadContentIndex(
+    struct Longtail_StorageAPI* storage_api,
     const char* path,
-    struct ContentIndex** out_content_index);
+    struct Longtail_ContentIndex** out_content_index);
 
-int WriteContent(
-    struct StorageAPI* source_storage_api,
-    struct StorageAPI* target_storage_api,
-    struct CompressionRegistry* compression_registry,
-    struct JobAPI* job_api,
-    JobAPI_ProgressFunc job_progress_func,
+int Longtail_WriteContent(
+    struct Longtail_StorageAPI* source_storage_api,
+    struct Longtail_StorageAPI* target_storage_api,
+    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_JobAPI* job_api,
+    Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
-    struct ContentIndex* content_index,
-    struct VersionIndex* version_index,
+    struct Longtail_ContentIndex* content_index,
+    struct Longtail_VersionIndex* version_index,
     const char* assets_folder,
     const char* content_folder);
 
-int ReadContent(
-    struct StorageAPI* storage_api,
-    struct HashAPI* hash_api,
-    struct JobAPI* job_api,
-    JobAPI_ProgressFunc job_progress_func,
+int Longtail_ReadContent(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
     const char* content_path,
-    struct ContentIndex** out_content_index);
+    struct Longtail_ContentIndex** out_content_index);
 
-int CreateMissingContent(
-    struct HashAPI* hash_api,
-    const struct ContentIndex* content_index,
-    const struct VersionIndex* version,
+int Longtail_CreateMissingContent(
+    struct Longtail_HashAPI* hash_api,
+    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_VersionIndex* version,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
-    struct ContentIndex** out_content_index);
+    struct Longtail_ContentIndex** out_content_index);
 
-int GetPathsForContentBlocks(
-    struct ContentIndex* content_index,
-    struct Paths** out_paths);
+int Longtail_GetPathsForContentBlocks(
+    struct Longtail_ContentIndex* content_index,
+    struct Longtail_Paths** out_paths);
 
- int RetargetContent(
-    const struct ContentIndex* reference_content_index,
-    const struct ContentIndex* content_index,
-    struct ContentIndex** out_content_index);
+ int Longtail_RetargetContent(
+    const struct Longtail_ContentIndex* reference_content_index,
+    const struct Longtail_ContentIndex* content_index,
+    struct Longtail_ContentIndex** out_content_index);
 
-int MergeContentIndex(
-    struct ContentIndex* local_content_index,
-    struct ContentIndex* remote_content_index,
-    struct ContentIndex** out_content_index);
+int Longtail_MergeContentIndex(
+    struct Longtail_ContentIndex* local_content_index,
+    struct Longtail_ContentIndex* remote_content_index,
+    struct Longtail_ContentIndex** out_content_index);
 
-int WriteVersion(
-    struct StorageAPI* content_storage_api,
-    struct StorageAPI* version_storage_api,
-    struct CompressionRegistry* compression_registry,
-    struct JobAPI* job_api,
-    JobAPI_ProgressFunc job_progress_func,
+int Longtail_WriteVersion(
+    struct Longtail_StorageAPI* content_storage_api,
+    struct Longtail_StorageAPI* version_storage_api,
+    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_JobAPI* job_api,
+    Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
-    const struct ContentIndex* content_index,
-    const struct VersionIndex* version_index,
+    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_VersionIndex* version_index,
     const char* content_path,
     const char* version_path);
 
-int CreateVersionDiff(
-    const struct VersionIndex* source_version,
-    const struct VersionIndex* target_version,
-    struct VersionDiff** out_version_diff);
+int Longtail_CreateVersionDiff(
+    const struct Longtail_VersionIndex* source_version,
+    const struct Longtail_VersionIndex* target_version,
+    struct Longtail_VersionDiff** out_version_diff);
 
-int ChangeVersion(
-    struct StorageAPI* content_storage_api,
-    struct StorageAPI* version_storage_api,
-    struct HashAPI* hash_api,
-    struct JobAPI* job_api,
-    JobAPI_ProgressFunc job_progress_func,
+int Longtail_ChangeVersion(
+    struct Longtail_StorageAPI* content_storage_api,
+    struct Longtail_StorageAPI* version_storage_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
-    struct CompressionRegistry* compression_registry,
-    const struct ContentIndex* content_index,
-    const struct VersionIndex* source_version,
-    const struct VersionIndex* target_version,
-    const struct VersionDiff* version_diff,
+    struct Longtail_CompressionRegistry* compression_registry,
+    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_VersionIndex* source_version,
+    const struct Longtail_VersionIndex* target_version,
+    const struct Longtail_VersionDiff* version_diff,
     const char* content_path,
     const char* version_path);
 
-struct Paths
+struct Longtail_Paths
 {
     uint32_t m_DataSize;
     uint32_t* m_PathCount;
@@ -259,13 +259,13 @@ struct Paths
     char* m_Data;
 };
 
-struct FileInfos
+struct Longtail_FileInfos
 {
-    struct Paths m_Paths;
+    struct Longtail_Paths m_Paths;
     uint64_t* m_FileSizes;
 };
 
-struct ContentIndex
+struct Longtail_ContentIndex
 {
     uint64_t* m_BlockCount;
     uint64_t* m_ChunkCount;
@@ -277,7 +277,7 @@ struct ContentIndex
     uint32_t* m_ChunkLengths;           // []
 };
 
-struct VersionIndex
+struct Longtail_VersionIndex
 {
     uint32_t* m_AssetCount;
     uint32_t* m_ChunkCount;
@@ -300,7 +300,7 @@ struct VersionIndex
     char* m_NameData;
 };
 
-struct VersionDiff
+struct Longtail_VersionDiff
 {
     uint32_t* m_SourceRemovedCount;
     uint32_t* m_TargetAddedCount;
@@ -311,31 +311,31 @@ struct VersionDiff
     uint32_t* m_TargetModifiedAssetIndexes;
 };
 
-int ValidateContent(
-    const struct ContentIndex* content_index,
-    const struct VersionIndex* version_index);
+int Longtail_ValidateContent(
+    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_VersionIndex* version_index);
 
-int ValidateVersion(
-    const struct ContentIndex* content_index,
-    const struct VersionIndex* version_index);
+int Longtail_ValidateVersion(
+    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_VersionIndex* version_index);
 
 ///////////// Test functions
 
-int MakePaths(
+int Longtail_MakePaths(
     uint32_t path_count,
     const char* const* path_names,
-    struct Paths** out_paths);
+    struct Longtail_Paths** out_paths);
 
-size_t GetVersionIndexSize(
+size_t Longtail_GetVersionIndexSize(
     uint32_t asset_count,
     uint32_t chunk_count,
     uint32_t asset_chunk_index_count,
     uint32_t path_data_size);
 
-struct VersionIndex* BuildVersionIndex(
+struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     void* mem,
     size_t mem_size,
-    const struct Paths* paths,
+    const struct Longtail_Paths* paths,
     const TLongtail_Hash* path_hashes,
     const TLongtail_Hash* content_hashes,
     const uint64_t* content_sizes,
@@ -348,31 +348,31 @@ struct VersionIndex* BuildVersionIndex(
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_compression_types);
 
-struct Chunker;
+struct Longtail_Chunker;
 
-struct ChunkerParams
+struct Longtail_ChunkerParams
 {
     uint32_t min;
     uint32_t avg;
     uint32_t max;
 };
 
-struct ChunkRange
+struct Longtail_ChunkRange
 {
     const uint8_t* buf;
     uint64_t offset;
     uint32_t len;
 };
 
-struct ChunkRange NextChunk(struct Chunker* c);
+struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c);
 
-typedef int (*Chunker_Feeder)(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer, uint32_t* out_size);
+typedef int (*Longtail_Chunker_Feeder)(void* context, struct Longtail_Chunker* chunker, uint32_t requested_size, char* buffer, uint32_t* out_size);
 
- int CreateChunker(
-    struct ChunkerParams* params,
-    Chunker_Feeder feeder,
+ int Longtail_CreateChunker(
+    struct Longtail_ChunkerParams* params,
+    Longtail_Chunker_Feeder feeder,
     void* context,
-    struct Chunker** out_chunker);
+    struct Longtail_Chunker** out_chunker);
 
 #ifdef __cplusplus
 }

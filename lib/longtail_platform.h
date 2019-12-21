@@ -9,8 +9,8 @@ extern "C" {
 
 static const uint64_t LONGTAIL_TIMEOUT_INFINITE = ((uint64_t)-1);
 
-size_t  Longtail_GetCPUCount();
-void    Longtail_Sleep(uint64_t timeout_us);
+uint32_t    Longtail_GetCPUCount();
+void        Longtail_Sleep(uint64_t timeout_us);
 
 typedef int32_t volatile TLongtail_Atomic32;
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount);
@@ -61,13 +61,13 @@ uint64_t    Longtail_GetEntrySize(HLongtail_FSIterator fs_iterator);
 
 typedef struct Longtail_OpenFile_private* HLongtail_OpenFile;
 
-int         Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file);
-int         Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file);
-int         Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length);
-int         Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output);
-int         Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, const void* input);
-int         Longtail_GetFileSize(HLongtail_OpenFile handle, uint64_t* out_size);
-void        Longtail_CloseFile(HLongtail_OpenFile handle);
+int     Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file);
+int     Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file);
+int     Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length);
+int     Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output);
+int     Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, const void* input);
+int     Longtail_GetFileSize(HLongtail_OpenFile handle, uint64_t* out_size);
+void    Longtail_CloseFile(HLongtail_OpenFile handle);
 // Not sure about doing memory allocation here...
 const char* Longtail_ConcatPath(const char* folder, const char* file);
 

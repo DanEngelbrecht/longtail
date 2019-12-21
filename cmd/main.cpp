@@ -1,5 +1,6 @@
 #include "../src/longtail.h"
 #include "../lib/longtail_lib.h"
+#include "../lib/longtail_platform.h"
 #include "../src/stb_ds.h"
 
 #define KGFLAGS_IMPLEMENTATION
@@ -22,9 +23,9 @@ void LogStdErr(void* , int level, const char* log)
     fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
 }
 
-int CreateParentPath(struct StorageAPI* storage_api, const char* path);
+int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
 
-int CreatePath(struct StorageAPI* storage_api, const char* path)
+int CreatePath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     if (storage_api->IsDir(storage_api, path))
     {
@@ -46,7 +47,7 @@ int CreatePath(struct StorageAPI* storage_api, const char* path)
     return 0;
 }
 
-int CreateParentPath(struct StorageAPI* storage_api, const char* path)
+int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* dir_path = Longtail_Strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
@@ -114,7 +115,7 @@ struct HashToIndex
     uint64_t value;
 };
 
-int PrintFormattedBlockList(ContentIndex* content_index, const char* format_string)
+int PrintFormattedBlockList(Longtail_ContentIndex* content_index, const char* format_string)
 {
     const char* format_start = format_string;
     const char* format_first_end = strstr(format_string, "{blockname}");
@@ -122,8 +123,8 @@ int PrintFormattedBlockList(ContentIndex* content_index, const char* format_stri
     {
         return 0;
     }
-    Paths* paths;
-    int err = GetPathsForContentBlocks(content_index, &paths);
+    Longtail_Paths* paths;
+    int err = Longtail_GetPathsForContentBlocks(content_index, &paths);
     if (err)
     {
         return 0;
@@ -179,7 +180,7 @@ struct Progress
     }
 };
 
-static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
+static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
@@ -193,10 +194,10 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 //            (0 == strcmp(extension_start, ".pak")) ||
             (0 == strcmp(extension_start, ".rar")) )
         {
-            result[i] = NO_COMPRESSION_TYPE;
+            result[i] = LONGTAIL_NO_COMPRESSION_TYPE;
             continue;
         }
-        result[i] = LIZARD_DEFAULT_COMPRESSION_TYPE;
+        result[i] = LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE;
     }
     return result;
 }
@@ -205,17 +206,17 @@ static uint32_t* GetCompressionTypes(StorageAPI* , const FileInfos* file_infos)
 
 
 
-int Cmd_CreateVersionIndex(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
+int Cmd_Longtail_CreateVersionIndex(
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
     const char* create_version_index,
     const char* version,
     const char* filter,
     int target_chunk_size)
 {
-    struct FileInfos* file_infos;
-    int err = GetFilesRecursively(
+    struct Longtail_FileInfos* file_infos;
+    int err = Longtail_GetFilesRecursively(
         storage_api,
         version,
         &file_infos);
@@ -232,10 +233,10 @@ int Cmd_CreateVersionIndex(
         return 0;
     }
 
-    VersionIndex* vindex = 0;
+    Longtail_VersionIndex* vindex = 0;
     {
         Progress progress("Indexing version");
-        err =CreateVersionIndex(
+        err =Longtail_CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -258,10 +259,10 @@ int Cmd_CreateVersionIndex(
         return 0;
     }
 
-    int ok = (0 == CreateParentPath(storage_api, create_version_index)) && (0 == WriteVersionIndex(storage_api, vindex, create_version_index));
+    int ok = (0 == CreateParentPath(storage_api, create_version_index)) && (0 == Longtail_WriteVersionIndex(storage_api, vindex, create_version_index));
 
-    VersionIndex* target_vindex;
-    err = ReadVersionIndex(storage_api, create_version_index, &target_vindex);
+    Longtail_VersionIndex* target_vindex;
+    err = Longtail_ReadVersionIndex(storage_api, create_version_index, &target_vindex);
     if (err)
     {
         Longtail_Free(vindex);
@@ -270,8 +271,8 @@ int Cmd_CreateVersionIndex(
         return 0;
     }
 
-    struct VersionDiff* version_diff;
-    err = CreateVersionDiff(
+    struct Longtail_VersionDiff* version_diff;
+    err = Longtail_CreateVersionDiff(
         vindex,
         target_vindex,
         &version_diff);
@@ -293,17 +294,17 @@ int Cmd_CreateVersionIndex(
     return 1;
 }
 
-int Cmd_CreateContentIndex(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
+int Cmd_Longtail_CreateContentIndex(
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
     const char* create_content_index,
     const char* content)
 {
-    ContentIndex* cindex = 0;
+    Longtail_ContentIndex* cindex = 0;
     if (!content)
     {
-        int err = CreateContentIndex(
+        int err = Longtail_CreateContentIndex(
             hash_api,
             0,
             0,
@@ -321,7 +322,7 @@ int Cmd_CreateContentIndex(
     else
     {
         Progress progress("Reading content");
-        int err = ReadContent(
+        int err = Longtail_ReadContent(
             storage_api,
             hash_api,
             job_api,
@@ -336,7 +337,7 @@ int Cmd_CreateContentIndex(
         }
     }
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        (0 == WriteContentIndex(
+        (0 == Longtail_Longtail_WriteContentIndex(
             storage_api,
             cindex,
             create_content_index));
@@ -352,20 +353,20 @@ int Cmd_CreateContentIndex(
 }
 
 int Cmd_MergeContentIndex(
-    StorageAPI* storage_api,
+    Longtail_StorageAPI* storage_api,
     const char* create_content_index,
     const char* content_index,
     const char* merge_content_index)
 {
-    ContentIndex* cindex1;
-    int err = ReadContentIndex(storage_api, content_index, &cindex1);
+    Longtail_ContentIndex* cindex1;
+    int err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex1);
     if (err)
     {
         fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
         return 0;
     }
-    ContentIndex* cindex2;
-    err = ReadContentIndex(storage_api, merge_content_index, &cindex2);
+    Longtail_ContentIndex* cindex2;
+    err = Longtail_Longtail_ReadContentIndex(storage_api, merge_content_index, &cindex2);
     if (err)
     {
         Longtail_Free(cindex1);
@@ -373,8 +374,8 @@ int Cmd_MergeContentIndex(
         fprintf(stderr, "Failed to read content index from `%s`, %d\n", merge_content_index, err);
         return 0;
     }
-    ContentIndex* cindex;
-    err = MergeContentIndex(cindex1, cindex2, &cindex);
+    Longtail_ContentIndex* cindex;
+    err = Longtail_MergeContentIndex(cindex1, cindex2, &cindex);
     Longtail_Free(cindex2);
     cindex2 = 0;
     Longtail_Free(cindex1);
@@ -387,7 +388,7 @@ int Cmd_MergeContentIndex(
     }
 
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        (0 == WriteContentIndex(
+        (0 == Longtail_Longtail_WriteContentIndex(
             storage_api,
             cindex,
             create_content_index));
@@ -403,10 +404,10 @@ int Cmd_MergeContentIndex(
     return 1;
 }
 
-int Cmd_CreateMissingContentIndex(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
+int Cmd_Longtail_CreateMissingContentIndex(
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
     const char* create_content_index,
     const char* content_index,
     const char* content,
@@ -416,10 +417,10 @@ int Cmd_CreateMissingContentIndex(
     int max_chunks_per_block,
     int target_chunk_size)
 {
-    VersionIndex* vindex = 0;
+    Longtail_VersionIndex* vindex = 0;
     if (version_index)
     {
-        int err = ReadVersionIndex(storage_api, version_index, &vindex);
+        int err = Longtail_ReadVersionIndex(storage_api, version_index, &vindex);
         if (err)
         {
             fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
@@ -428,8 +429,8 @@ int Cmd_CreateMissingContentIndex(
     }
     else
     {
-        struct FileInfos* file_infos;
-        int err = GetFilesRecursively(
+        struct Longtail_FileInfos* file_infos;
+        int err = Longtail_GetFilesRecursively(
             storage_api,
             version,
             &file_infos);
@@ -446,7 +447,7 @@ int Cmd_CreateMissingContentIndex(
             return 0;
         }
         Progress progress("Indexing version");
-        err = CreateVersionIndex(
+        err = Longtail_CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -469,10 +470,10 @@ int Cmd_CreateMissingContentIndex(
         }
     }
 
-    ContentIndex* existing_cindex = 0;
+    Longtail_ContentIndex* existing_cindex = 0;
     if (content_index)
     {
-        int err = ReadContentIndex(storage_api, content_index, &existing_cindex);
+        int err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &existing_cindex);
         if (err)
         {
             Longtail_Free(vindex);
@@ -484,7 +485,7 @@ int Cmd_CreateMissingContentIndex(
     else if (content)
     {
         Progress progress("Reading content");
-        int err = ReadContent(
+        int err = Longtail_ReadContent(
             storage_api,
             hash_api,
             job_api,
@@ -502,7 +503,7 @@ int Cmd_CreateMissingContentIndex(
     }
     else
     {
-        int err = CreateContentIndex(
+        int err = Longtail_CreateContentIndex(
             0,
             0,
             0,
@@ -520,8 +521,8 @@ int Cmd_CreateMissingContentIndex(
         }
     }
 
-    ContentIndex* cindex;
-    int err = CreateMissingContent(
+    Longtail_ContentIndex* cindex;
+    int err = Longtail_CreateMissingContent(
         hash_api,
         existing_cindex,
         vindex,
@@ -540,7 +541,7 @@ int Cmd_CreateMissingContentIndex(
     }
 
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        (0 == WriteContentIndex(
+        (0 == Longtail_Longtail_WriteContentIndex(
             storage_api,
             cindex,
             create_content_index));
@@ -557,10 +558,10 @@ int Cmd_CreateMissingContentIndex(
 }
 
 int Cmd_CreateContent(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
-    CompressionRegistry* compression_registry,
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    Longtail_CompressionRegistry* compression_registry,
     const char* create_content,
     const char* content_index,
     const char* version,
@@ -569,10 +570,10 @@ int Cmd_CreateContent(
     int max_chunks_per_block,
     int target_chunk_size)
 {
-    VersionIndex* vindex = 0;
+    Longtail_VersionIndex* vindex = 0;
     if (version_index)
     {
-        int err = ReadVersionIndex(storage_api, version_index, &vindex);
+        int err = Longtail_ReadVersionIndex(storage_api, version_index, &vindex);
         if (err)
         {
             fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
@@ -581,8 +582,8 @@ int Cmd_CreateContent(
     }
     else
     {
-        struct FileInfos* file_infos;
-        int err = GetFilesRecursively(
+        struct Longtail_FileInfos* file_infos;
+        int err = Longtail_GetFilesRecursively(
             storage_api,
             version,
             &file_infos);
@@ -599,7 +600,7 @@ int Cmd_CreateContent(
             return 0;
         }
         Progress progress("Indexing version");
-        err = CreateVersionIndex(
+        err = Longtail_CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -622,10 +623,10 @@ int Cmd_CreateContent(
         }
     }
 
-    ContentIndex* cindex = 0;
+    Longtail_ContentIndex* cindex = 0;
     if (content_index)
     {
-        int err = ReadContentIndex(storage_api, content_index, &cindex);
+        int err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex);
         if (err)
         {
             fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
@@ -634,7 +635,7 @@ int Cmd_CreateContent(
     }
     else
     {
-        int err = CreateContentIndex(
+        int err = Longtail_CreateContentIndex(
             hash_api,
             *vindex->m_ChunkCount,
             vindex->m_ChunkHashes,
@@ -652,7 +653,7 @@ int Cmd_CreateContent(
         }
     }
 
-    int err = ValidateVersion(
+    int err = Longtail_ValidateVersion(
         cindex,
         vindex);
     if (err)
@@ -668,7 +669,7 @@ int Cmd_CreateContent(
     int ok = 0;
     {
         Progress progress("Writing content");
-        ok = (0 == CreatePath(storage_api, create_content)) && (0 == WriteContent(
+        ok = (0 == CreatePath(storage_api, create_content)) && (0 == Longtail_WriteContent(
             storage_api,
             storage_api,
             compression_registry,
@@ -695,18 +696,18 @@ int Cmd_CreateContent(
 }
 /*
 int Cmd_ListMissingBlocks(
-    StorageAPI* storage_api,
+    Longtail_StorageAPI* storage_api,
     const char* list_missing_blocks,
     const char* content_index)
 {
-    ContentIndex* have_content_index;
-    int err = ReadContentIndex(storage_api, list_missing_blocks. &have_content_index);
+    Longtail_ContentIndex* have_content_index;
+    int err = Longtail_Longtail_ReadContentIndex(storage_api, list_missing_blocks. &have_content_index);
     if (err)
     {
         return 0;
     }
-    ContentIndex* need_content_index;
-    err = ReadContentIndex(storage_api, content_index, &need_content_index);
+    Longtail_ContentIndex* need_content_index;
+    err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &need_content_index);
     if (err)
     {
         Longtail_Free(have_content_index);
@@ -768,27 +769,27 @@ int Cmd_ListMissingBlocks(
 }
 */
 int Cmd_CreateVersion(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
-    CompressionRegistry* compression_registry,
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    Longtail_CompressionRegistry* compression_registry,
     const char* create_version,
     const char* version_index,
     const char* content,
     const char* content_index)
 {
-    VersionIndex* vindex;
-    int err = ReadVersionIndex(storage_api, version_index, &vindex);
+    Longtail_VersionIndex* vindex;
+    int err = Longtail_ReadVersionIndex(storage_api, version_index, &vindex);
     if (err)
     {
         fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
         return 0;
     }
 
-    ContentIndex* cindex = 0;
+    Longtail_ContentIndex* cindex = 0;
     if (content_index)
     {
-        err = ReadContentIndex(storage_api, content_index, &cindex);
+        err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex);
         if (err)
         {
             Longtail_Free(vindex);
@@ -800,7 +801,7 @@ int Cmd_CreateVersion(
     else
     {
         Progress progress("Reading content");
-        int err = ReadContent(
+        int err = Longtail_ReadContent(
             storage_api,
             hash_api,
             job_api,
@@ -817,7 +818,7 @@ int Cmd_CreateVersion(
         }
     }
 
-    err = ValidateContent(
+    err = Longtail_ValidateContent(
         cindex,
         vindex);
     if (err) {
@@ -832,7 +833,7 @@ int Cmd_CreateVersion(
     int ok = 0;
     {
         Progress progress("Writing version");
-        ok = (0 == CreatePath(storage_api, create_version)) && (0 == WriteVersion(
+        ok = (0 == CreatePath(storage_api, create_version)) && (0 == Longtail_WriteVersion(
             storage_api,
             storage_api,
             compression_registry,
@@ -857,10 +858,10 @@ int Cmd_CreateVersion(
 }
 
 int Cmd_UpdateVersion(
-    StorageAPI* storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
-    CompressionRegistry* compression_registry,
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    Longtail_CompressionRegistry* compression_registry,
     const char* update_version,
     const char* version_index,
     const char* content,
@@ -868,10 +869,10 @@ int Cmd_UpdateVersion(
     const char* target_version_index,
     int target_chunk_size)
 {
-    VersionIndex* source_vindex = 0;
+    Longtail_VersionIndex* source_vindex = 0;
     if (version_index)
     {
-        int err = ReadVersionIndex(storage_api, version_index, &source_vindex);
+        int err = Longtail_ReadVersionIndex(storage_api, version_index, &source_vindex);
         if (err)
         {
             fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index, err);
@@ -880,8 +881,8 @@ int Cmd_UpdateVersion(
     }
     else
     {
-        struct FileInfos* file_infos;
-        int err = GetFilesRecursively(
+        struct Longtail_FileInfos* file_infos;
+        int err = Longtail_GetFilesRecursively(
             storage_api,
             update_version,
             &file_infos);
@@ -898,7 +899,7 @@ int Cmd_UpdateVersion(
             return 0;
         }
         Progress progress("Indexing version");
-        err = CreateVersionIndex(
+        err = Longtail_CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
@@ -921,8 +922,8 @@ int Cmd_UpdateVersion(
         }
     }
 
-    VersionIndex* target_vindex;
-    int err = ReadVersionIndex(storage_api, target_version_index, &target_vindex);
+    Longtail_VersionIndex* target_vindex;
+    int err = Longtail_ReadVersionIndex(storage_api, target_version_index, &target_vindex);
     if (err)
     {
         Longtail_Free(source_vindex);
@@ -931,10 +932,10 @@ int Cmd_UpdateVersion(
         return 0;
     }
 
-    ContentIndex* cindex = 0;
+    Longtail_ContentIndex* cindex = 0;
     if (content_index)
     {
-        err = ReadContentIndex(storage_api, content_index, &cindex);
+        err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex);
         if (err)
         {
             Longtail_Free(target_vindex);
@@ -948,7 +949,7 @@ int Cmd_UpdateVersion(
     else
     {
         Progress progress("Reading content");
-        int err = ReadContent(
+        int err = Longtail_ReadContent(
             storage_api,
             hash_api,
             job_api,
@@ -967,7 +968,7 @@ int Cmd_UpdateVersion(
         }
     }
 
-    err = ValidateContent(
+    err = Longtail_ValidateContent(
         cindex,
         target_vindex);
     if (err)
@@ -980,8 +981,8 @@ int Cmd_UpdateVersion(
         return 0;
     }
 
-    struct VersionDiff* version_diff;
-    err = CreateVersionDiff(
+    struct Longtail_VersionDiff* version_diff;
+    err = Longtail_CreateVersionDiff(
         source_vindex,
         target_vindex,
         &version_diff);
@@ -1000,7 +1001,7 @@ int Cmd_UpdateVersion(
     int ok = 0;
     {
         Progress progress("Updating version");
-        ok = (0 == CreatePath(storage_api, update_version)) && (0 == ChangeVersion(
+        ok = (0 == CreatePath(storage_api, update_version)) && (0 == Longtail_ChangeVersion(
             storage_api,
             storage_api,
             hash_api,
@@ -1034,11 +1035,11 @@ int Cmd_UpdateVersion(
 }
 
 int Cmd_UpSyncVersion(
-    StorageAPI* source_storage_api,
-    StorageAPI* target_storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
-    CompressionRegistry* compression_registry,
+    Longtail_StorageAPI* source_storage_api,
+    Longtail_StorageAPI* target_storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    Longtail_CompressionRegistry* compression_registry,
     const char* version_path,
     const char* version_index_path,
     const char* content_path,
@@ -1050,8 +1051,8 @@ int Cmd_UpSyncVersion(
     int target_block_size,
     int target_chunk_size)
 {
-    VersionIndex* vindex;
-    int err = ReadVersionIndex(source_storage_api, version_index_path, &vindex);
+    Longtail_VersionIndex* vindex;
+    int err = Longtail_ReadVersionIndex(source_storage_api, version_index_path, &vindex);
     if (err)
     {
         if (err != ENOENT)
@@ -1059,8 +1060,8 @@ int Cmd_UpSyncVersion(
             fprintf(stderr, "Failed to read version index from `%s`, %d\n", version_index_path, err);
             return 0;
         }
-        struct FileInfos* file_infos;
-        int err = GetFilesRecursively(
+        struct Longtail_FileInfos* file_infos;
+        int err = Longtail_GetFilesRecursively(
             source_storage_api,
             version_path,
             &file_infos);
@@ -1080,7 +1081,7 @@ int Cmd_UpSyncVersion(
         }
 
         Progress progress("Indexing version");
-        err = CreateVersionIndex(
+        err = Longtail_CreateVersionIndex(
             source_storage_api,
             hash_api,
             job_api,
@@ -1102,10 +1103,10 @@ int Cmd_UpSyncVersion(
             return 0;
         }
     }
-    struct ContentIndex* cindex = 0;
+    struct Longtail_ContentIndex* cindex = 0;
     if (content_index_path)
     {
-        err = ReadContentIndex(
+        err = Longtail_Longtail_ReadContentIndex(
             source_storage_api,
             content_index_path,
             &cindex);
@@ -1114,7 +1115,7 @@ int Cmd_UpSyncVersion(
     {
         if (!content_path && content_index_path)
         {
-            err = CreateContentIndex(
+            err = Longtail_CreateContentIndex(
                 hash_api,
                 0,
                 0,
@@ -1139,7 +1140,7 @@ int Cmd_UpSyncVersion(
                 return 0;
             }
             Progress progress("Reading content");
-            int err = ReadContent(
+            int err = Longtail_ReadContent(
                 source_storage_api,
                 hash_api,
                 job_api,
@@ -1157,8 +1158,8 @@ int Cmd_UpSyncVersion(
         }
     }
 
-    ContentIndex* missing_content_index;
-    err = CreateMissingContent(
+    Longtail_ContentIndex* missing_content_index;
+    err = Longtail_CreateMissingContent(
         hash_api,
         cindex,
         vindex,
@@ -1178,7 +1179,7 @@ int Cmd_UpSyncVersion(
     int ok = 0;
     {
         Progress progress("Writing content");
-        ok = (0 == CreatePath(target_storage_api, missing_content_path)) && (0 == WriteContent(
+        ok = (0 == CreatePath(target_storage_api, missing_content_path)) && (0 == Longtail_WriteContent(
             source_storage_api,
             target_storage_api,
             compression_registry,
@@ -1203,8 +1204,8 @@ int Cmd_UpSyncVersion(
     }
 
 /*
-    ContentIndex* new_content_index;
-    err = MergeContentIndex(cindex, missing_content_index, &new_content_index);
+    Longtail_ContentIndex* new_content_index;
+    err = Longtail_MergeContentIndex(cindex, missing_content_index, &new_content_index);
     if (err)
     {
         fprintf(stderr, "Failed creating a new content index with the added content, %d\n", err);
@@ -1217,7 +1218,7 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 */
-    ok = (0 == CreateParentPath(target_storage_api, version_index_path)) && (0 == WriteVersionIndex(
+    ok = (0 == CreateParentPath(target_storage_api, version_index_path)) && (0 == Longtail_WriteVersionIndex(
         target_storage_api,
         vindex,
         version_index_path));
@@ -1235,7 +1236,7 @@ int Cmd_UpSyncVersion(
         return 0;
     }
 
-    ok = (0 == CreateParentPath(target_storage_api, content_index_path)) && (0 == WriteContentIndex(
+    ok = (0 == CreateParentPath(target_storage_api, content_index_path)) && (0 == Longtail_Longtail_WriteContentIndex(
         target_storage_api,
         missing_content_index,
         missing_content_index_path));
@@ -1282,11 +1283,11 @@ int Cmd_UpSyncVersion(
 }
 
 int Cmd_DownSyncVersion(
-    StorageAPI* source_storage_api,
-    StorageAPI* target_storage_api,
-    HashAPI* hash_api,
-    JobAPI* job_api,
-    CompressionRegistry* compression_registry,
+    Longtail_StorageAPI* source_storage_api,
+    Longtail_StorageAPI* target_storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    Longtail_CompressionRegistry* compression_registry,
     const char* target_version_index_path,
     const char* have_content_index_path,
     const char* have_content_path,
@@ -1297,18 +1298,18 @@ int Cmd_DownSyncVersion(
     int target_block_size,
     int target_chunk_size)
 {
-    VersionIndex* vindex_target;
-    int err = ReadVersionIndex(source_storage_api, target_version_index_path, &vindex_target);
+    Longtail_VersionIndex* vindex_target;
+    int err = Longtail_ReadVersionIndex(source_storage_api, target_version_index_path, &vindex_target);
     if (err)
     {
         fprintf(stderr, "Failed to read version index from `%s`, %d\n", target_version_index_path, err);
         return 0;
     }
 
-    ContentIndex* existing_cindex = 0;
+    Longtail_ContentIndex* existing_cindex = 0;
     if (have_content_index_path)
     {
-        err = ReadContentIndex(source_storage_api, have_content_index_path, &existing_cindex);
+        err = Longtail_Longtail_ReadContentIndex(source_storage_api, have_content_index_path, &existing_cindex);
         if (err)
         {
             fprintf(stderr, "Failed to read content index from `%s`, %d\n", have_content_index_path, err);
@@ -1325,7 +1326,7 @@ int Cmd_DownSyncVersion(
             return 0;
         }
         Progress progress("Reading content");
-        int err = ReadContent(
+        int err = Longtail_ReadContent(
             source_storage_api,
             hash_api, job_api,
             Progress::ProgressFunc,
@@ -1341,8 +1342,8 @@ int Cmd_DownSyncVersion(
         }
     }
 
-    ContentIndex* cindex_missing;
-    err = CreateMissingContent(
+    Longtail_ContentIndex* cindex_missing;
+    err = Longtail_CreateMissingContent(
         hash_api,
         existing_cindex,
         vindex_target,
@@ -1363,8 +1364,8 @@ int Cmd_DownSyncVersion(
     Longtail_Free(vindex_target);
     vindex_target = 0;
 
-    ContentIndex* cindex_remote;
-    err = ReadContentIndex(source_storage_api, remote_content_index_path, &cindex_remote);
+    Longtail_ContentIndex* cindex_remote;
+    err = Longtail_Longtail_ReadContentIndex(source_storage_api, remote_content_index_path, &cindex_remote);
     if (err)
     {
         if (!remote_content_path)
@@ -1375,7 +1376,7 @@ int Cmd_DownSyncVersion(
             return 0;
         }
         Progress progress("Reading content");
-        err = ReadContent(
+        err = Longtail_ReadContent(
             source_storage_api,
             hash_api, job_api,
             Progress::ProgressFunc,
@@ -1391,8 +1392,8 @@ int Cmd_DownSyncVersion(
         }
     }
 
-    ContentIndex* request_content;
-    err = RetargetContent(
+    Longtail_ContentIndex* request_content;
+    err = Longtail_RetargetContent(
         cindex_remote,
         cindex_missing,
         &request_content);
@@ -1518,10 +1519,10 @@ int main(int argc, char** argv)
 
     Longtail_SetLogLevel(log_level);
 
-    CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
-    StorageAPI* fs_storage_api = CreateFSStorageAPI();
-    HashAPI* hash_api = CreateMeowHashAPI();
-    JobAPI* job_api = CreateBikeshedJobAPI(GetCPUCount());
+    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_StorageAPI* fs_storage_api = Longtail_CreateFSStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
 
     if (test_version_raw && test_base_path_raw)
     {
@@ -1532,7 +1533,7 @@ int main(int argc, char** argv)
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
         char content[512];
         sprintf(content, "%s/chunks", test_base_path);
-        if (!Cmd_CreateContentIndex(
+        if (!Cmd_Longtail_CreateContentIndex(
             fs_storage_api,
             hash_api,
             job_api,
@@ -1545,7 +1546,7 @@ int main(int argc, char** argv)
         sprintf(create_version_index, "%s/%s.lvi", test_base_path, test_version);
         char version[512];
         sprintf(version, "%s/local/%s", test_base_path, test_version);
-        if (!Cmd_CreateVersionIndex(
+        if (!Cmd_Longtail_CreateVersionIndex(
             fs_storage_api,
             hash_api,
             job_api,
@@ -1563,7 +1564,7 @@ int main(int argc, char** argv)
         char version_index[512];
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         sprintf(version, "%s/local/%s", test_base_path, test_version);
-        if (!Cmd_CreateMissingContentIndex(
+        if (!Cmd_Longtail_CreateMissingContentIndex(
             fs_storage_api,
             hash_api,
             job_api,
@@ -1655,7 +1656,7 @@ int main(int argc, char** argv)
         sprintf(incremental_version_index, "%s/remote/%s.lvi", test_base_path, test_version);
         char incremental_version[512];
         sprintf(incremental_version, "%s/remote/incremental", test_base_path);
-        if (!Cmd_CreateVersionIndex(
+        if (!Cmd_Longtail_CreateVersionIndex(
             fs_storage_api,
             hash_api,
             job_api,
@@ -1667,15 +1668,15 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        struct VersionIndex* source_vindex;
-        int err = ReadVersionIndex(fs_storage_api, create_version_index, &source_vindex);
+        struct Longtail_VersionIndex* source_vindex;
+        int err = Longtail_ReadVersionIndex(fs_storage_api, create_version_index, &source_vindex);
         if (err)
         {
             fprintf(stderr, "Failed to read version index `%s`, %d\n", create_version_index, err);
             return 1;
         }
-        struct VersionIndex* target_vindex;
-        err = ReadVersionIndex(fs_storage_api, incremental_version_index, &target_vindex);
+        struct Longtail_VersionIndex* target_vindex;
+        err = Longtail_ReadVersionIndex(fs_storage_api, incremental_version_index, &target_vindex);
         if (err)
         {
             Longtail_Free(source_vindex);
@@ -1683,8 +1684,8 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        struct VersionDiff* diff;
-        err = CreateVersionDiff(
+        struct Longtail_VersionDiff* diff;
+        err = Longtail_CreateVersionDiff(
             source_vindex,
             target_vindex,
             &diff);
@@ -1716,7 +1717,7 @@ int main(int argc, char** argv)
         sprintf(content_index, "%s/chunks.lci", test_base_path);
         sprintf(version_index, "%s/%s.lvi", test_base_path, test_version);
         sprintf(version, "%s/local/%s", test_base_path, test_version);
-        if (!Cmd_CreateMissingContentIndex(
+        if (!Cmd_Longtail_CreateMissingContentIndex(
             fs_storage_api,
             hash_api,
             job_api,
@@ -1768,7 +1769,7 @@ int main(int argc, char** argv)
             goto end;
         }
 
-        int ok = Cmd_CreateVersionIndex(
+        int ok = Cmd_Longtail_CreateVersionIndex(
             fs_storage_api,
             hash_api,
             job_api,
@@ -1784,7 +1785,7 @@ int main(int argc, char** argv)
     {
         if (content && (!content_index && !merge_content_index))
         {
-            int ok = Cmd_CreateContentIndex(
+            int ok = Cmd_Longtail_CreateContentIndex(
                 fs_storage_api,
                 hash_api,
                 job_api,
@@ -1807,7 +1808,7 @@ int main(int argc, char** argv)
 
     if (create_content_index && version)
     {
-        int ok = Cmd_CreateMissingContentIndex(
+        int ok = Cmd_Longtail_CreateMissingContentIndex(
             fs_storage_api,
             hash_api,
             job_api,
@@ -1993,10 +1994,10 @@ int main(int argc, char** argv)
     return 1;
 
 end:
-    DestroyJobAPI(job_api);
-    DestroyHashAPI(hash_api);
-    DestroyStorageAPI(fs_storage_api);
-    DestroyCompressionRegistry(compression_registry);
+    Longtail_DestroyJobAPI(job_api);
+    Longtail_DestroyHashAPI(hash_api);
+    Longtail_DestroyStorageAPI(fs_storage_api);
+    Longtail_DestroyCompressionRegistry(compression_registry);
 
     Longtail_Free((void*)create_version_index);
     Longtail_Free((void*)version);

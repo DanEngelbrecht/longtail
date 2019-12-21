@@ -104,11 +104,11 @@ static int Win32ErrorToErrno(DWORD err)
     }
 }
 
-size_t Longtail_GetCPUCount()
+uint32_t Longtail_GetCPUCount()
 {
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
-    return (size_t)sysinfo.dwNumberOfProcessors;
+    return (uint32_t)sysinfo.dwNumberOfProcessors;
 }
 
 void Longtail_Sleep(uint64_t timeout_us)
@@ -589,9 +589,9 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
 #include <sys/stat.h>
 #include <pthread.h>
 
-size_t Longtail_GetCPUCount()
+uint32_t Longtail_GetCPUCount()
 {
-   return (size_t)sysconf(_SC_NPROCESSORS_ONLN);
+   return (uint32_t)sysconf(_SC_NPROCESSORS_ONLN);
 }
 
 void Longtail_Sleep(uint64_t timeout_us)

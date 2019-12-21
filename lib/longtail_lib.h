@@ -6,26 +6,24 @@
 extern "C" {
 #endif
 
-extern uint32_t GetCPUCount();
+extern struct Longtail_HashAPI* Longtail_CreateMeowHashAPI();
+extern void Longtail_DestroyHashAPI(struct Longtail_HashAPI* hash_api);
 
-extern struct HashAPI* CreateMeowHashAPI();
-extern void DestroyHashAPI(struct HashAPI* hash_api);
+extern struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI();
+extern struct Longtail_StorageAPI* Longtail_CreateInMemStorageAPI();
+extern void Longtail_DestroyStorageAPI(struct Longtail_StorageAPI* storage_api);
 
-extern struct StorageAPI* CreateFSStorageAPI();
-extern struct StorageAPI* CreateInMemStorageAPI();
-extern void DestroyStorageAPI(struct StorageAPI* storage_api);
+extern struct Longtail_CompressionAPI* Longtail_CreateLizardCompressionAPI();
+extern void Longtail_DestroyCompressionAPI(struct Longtail_CompressionAPI* compression_api);
 
-extern struct CompressionAPI* CreateLizardCompressionAPI();
-extern void DestroyCompressionAPI(struct CompressionAPI* compression_api);
+extern struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count);
+extern void Longtail_DestroyJobAPI(struct Longtail_JobAPI* job_api);
 
-extern struct JobAPI* CreateBikeshedJobAPI(uint32_t worker_count);
-extern void DestroyJobAPI(struct JobAPI* job_api);
+extern struct Longtail_CompressionRegistry* Longtail_CreateDefaultCompressionRegistry();
+extern void Longtail_DestroyCompressionRegistry(struct Longtail_CompressionRegistry* compression_registry);
 
-extern struct CompressionRegistry* CreateDefaultCompressionRegistry();
-extern void DestroyCompressionRegistry(struct CompressionRegistry* compression_registry);
-
-extern const uint32_t NO_COMPRESSION_TYPE;
-extern const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE;
+extern const uint32_t LONGTAIL_NO_COMPRESSION_TYPE;
+extern const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE;
 
 #ifdef __cplusplus
 }
