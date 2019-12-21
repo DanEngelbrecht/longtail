@@ -19,24 +19,23 @@ if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
     export ASAN=""
-    export CXXFLAGS="-Wno-deprecated-register -Wno-deprecated"
     export ARCH="-m64 -maes -mssse3"
 
     . ./build_options.sh
     export OUTPUT=$TARGET
     export THIRD_PARTY_LIB="$TARGET-third-party.a"
+    export CXXFLAGS="-Wno-deprecated-register -Wno-deprecated $CXXFLAGS"
 else
     export OPT="-g"
     export ASAN="-fsanitize=address -fno-omit-frame-pointer"
     #CXXFLAGS="-Wall -Weverything -pedantic -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
-    export CXXFLAGS="-Wno-deprecated-register -Wno-deprecated"
     export ARCH="-m64 -maes -mssse3"
 
     . ./build_options.sh
     export OUTPUT=${TARGET}_debug
     export THIRD_PARTY_LIB="$TARGET-third-party-debug.a"
 
-    export CXXFLAGS="$CXXFLAGS $CXXFLAGS_DEBUG"
+    export CXXFLAGS="-Wno-deprecated-register -Wno-deprecated $CXXFLAGS_DEBUG"
 fi
 
 if [ ! -e "$BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB" ]; then

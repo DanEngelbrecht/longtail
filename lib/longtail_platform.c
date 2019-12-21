@@ -636,25 +636,27 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     thread->m_ThreadFunc                = thread_func;
     thread->m_ContextData               = context_data;
     thread->m_Exited                    = 0;
-    thread->m_ExitLock                  = 0;
-    thread->m_ExitConditionalVariable   = 0;
 
     int err = 0;
+    int attr_err = EINVAL;
+    int exit_lock_err = EINVAL;
+    int exit_cont_err = EINVAL;
+    int thread_err = EINVAL;
 
     pthread_attr_t attr;
-    int attr_err = pthread_attr_init(&attr);
+    attr_err = pthread_attr_init(&attr);
     if (attr_err != 0) {
         err = attr_err;
         goto error;
     }
 
-    int exit_lock_err = pthread_mutex_init(&thread->m_ExitLock, 0);
+    exit_lock_err = pthread_mutex_init(&thread->m_ExitLock, 0);
     if (exit_lock_err != 0) {
         err = exit_lock_err;
         goto error;
     }
 
-    int exit_cont_err = pthread_cond_init(&thread->m_ExitConditionalVariable, 0);
+    exit_cont_err = pthread_cond_init(&thread->m_ExitConditionalVariable, 0);
     if (exit_cont_err != 0) {
         err = exit_cont_err;
         goto error;
@@ -668,7 +670,7 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
         }
     }
 
-    int thread_err = pthread_create(&thread->m_Handle, &attr, ThreadStartFunction, (void*)thread);
+    thread_err = pthread_create(&thread->m_Handle, &attr, ThreadStartFunction, (void*)thread);
     if (thread_err != 0)
     {
         err = thread_err;
@@ -719,7 +721,7 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
         return result;
     }
     struct timespec ts;
-    int err = GetTimeSpec(&ts, timeout_us))
+    int err = GetTimeSpec(&ts, timeout_us);
     if (err != 0){
         return err;
     }
@@ -738,7 +740,7 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
     }
     pthread_mutex_unlock(&thread->m_ExitLock);
     err = pthread_join(thread->m_Handle, 0);
-    if (result == 0)
+    if (err == 0)
     {
         thread->m_Handle = 0;
     }
@@ -1232,22 +1234,22 @@ int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, 
         return errno;
     }
     size_t written = fwrite(input, (size_t)length, 1, f);
-    if written != 1u)
+    if (written != 1u)
     {
         return errno;
     }
     return 0;
 }
 
-uint64_t Longtail_GetFileSize(HLongtail_OpenFile handle)
+int Longtail_GetFileSize(HLongtail_OpenFile handle, uint64_t* out_size)
 {
     FILE* f = (FILE*)handle;
     if (-1 == fseek(f, 0, SEEK_END))
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Can't determine size of file: %d\n", errno);
-        return 0;
+        return errno;
     }
-    return (uint64_t)ftell(f);
+    *out_size = (uint64_t)ftell(f);
+    return 0;
 }
 
 void Longtail_CloseFile(HLongtail_OpenFile handle)

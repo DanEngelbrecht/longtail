@@ -14,6 +14,7 @@
 #include "../third-party/meow_hash/meow_hash_x64_aesni.h"
 
 #include <stdio.h>
+#include <errno.h>
 
 const uint32_t NO_COMPRESSION_TYPE = 0u;
 const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'\0') << 8) + ((uint32_t)'d');
@@ -1107,6 +1108,7 @@ static void Bikeshed_Dispose(struct ManagedJobAPI* job_api)
     }
 	Longtail_Free(bikeshed_job_api->m_Workers);
 	Longtail_Free(bikeshed_job_api->m_Shed);
+	ReadyCallback_Dispose(&bikeshed_job_api->m_ReadyCallback);
 }
 
 static void Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)

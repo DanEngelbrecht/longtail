@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdarg.h>
+#include <errno.h>
 
 //#define SLOW_VALIDATION 1
 
@@ -153,7 +154,7 @@ void Longtail_CallLogger(int level, const char* fmt, ...)
 
 char* Longtail_Strdup(const char* path)
 {
-    char* r = Longtail_Alloc(strlen(path) + 1);
+    char* r = (char*)Longtail_Alloc(strlen(path) + 1);
     LONGTAIL_FATAL_ASSERT_PRIVATE(r, return 0)
     strcpy(r, path);
     return r;
@@ -2586,7 +2587,7 @@ struct BlockDecompressorJob
     struct CompressionRegistry* m_CompressionRegistry;
     const char* m_ContentFolder;
     TLongtail_Hash m_BlockHash;
-    char* m_BlockData;
+    void* m_BlockData;
     int m_Err;
 };
 
@@ -2766,7 +2767,7 @@ void WritePartialAssetFromBlocks(void* context)
             break;
         }
         block_hashes[d] =job->m_BlockDecompressorJobs[d].m_BlockHash;
-        block_datas[d] =job->m_BlockDecompressorJobs[d].m_BlockData;
+        block_datas[d] =(char*)job->m_BlockDecompressorJobs[d].m_BlockData;
     }
 
     if (job->m_Err)
@@ -3011,7 +3012,7 @@ void WriteAssetsFromBlock(void* context)
     struct HashToIndexItem* content_chunk_lookup = job->m_ContentChunkLookup;
 
     TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-    char* block_data = job->m_DecompressBlockJob.m_BlockData;
+    char* block_data = (char*)job->m_DecompressBlockJob.m_BlockData;
     if (job->m_DecompressBlockJob.m_Err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 ", %d", block_hash, job->m_DecompressBlockJob.m_Err)
