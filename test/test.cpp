@@ -1415,7 +1415,7 @@ TEST(Longtail, WriteVersion)
     DestroyStorageAPI(storage_api);
 }
 
-void Bench()
+static void Bench()
 {
     if (1) return;
 
@@ -1631,7 +1631,7 @@ void Bench()
     #undef HOME
 }
 
-void LifelikeTest()
+static void LifelikeTest()
 {
     if (1) return;
 

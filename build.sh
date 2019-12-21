@@ -15,6 +15,8 @@ else
     RELEASE_MODE="debug"
 fi
 
+export BASE_CXXFLAGS="-Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic"
+
 if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
@@ -24,18 +26,18 @@ if [ "$RELEASE_MODE" = "release" ]; then
     . ./build_options.sh
     export OUTPUT=$TARGET
     export THIRD_PARTY_LIB="$TARGET-third-party.a"
-    export CXXFLAGS="-Wno-deprecated-register -Wno-deprecated $CXXFLAGS"
+    export CXXFLAGS="$BASE_CXXFLAGS $CXXFLAGS"
 else
     export OPT="-g"
     export ASAN="-fsanitize=address -fno-omit-frame-pointer"
-    #CXXFLAGS="-Wall -Weverything -pedantic -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
+    BASE_CXXFLAGS="$BASE_CXXFLAGS -Wall -Weverything -pedantic -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
     export ARCH="-m64 -maes -mssse3"
 
     . ./build_options.sh
     export OUTPUT=${TARGET}_debug
     export THIRD_PARTY_LIB="$TARGET-third-party-debug.a"
 
-    export CXXFLAGS="-Wno-deprecated-register -Wno-deprecated $CXXFLAGS_DEBUG"
+    export CXXFLAGS="$BASE_CXXFLAGS $CXXFLAGS_DEBUG"
 fi
 
 if [ ! -e "$BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB" ]; then

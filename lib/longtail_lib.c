@@ -76,6 +76,7 @@ static void ThreadWorker_Init(struct ThreadWorker* thread_worker)
 
 static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
 {
+    ThreadWorker_DisposeThread(thread_worker);
 }
 
 static int32_t ThreadWorker_Execute(void* context)
@@ -1104,7 +1105,7 @@ static void Bikeshed_Dispose(struct ManagedJobAPI* job_api)
     }
     for (uint32_t i = 0; i < bikeshed_job_api->m_WorkerCount; ++i)
     {
-        ThreadWorker_DisposeThread(&bikeshed_job_api->m_Workers[i]);
+        ThreadWorker_Dispose(&bikeshed_job_api->m_Workers[i]);
     }
 	Longtail_Free(bikeshed_job_api->m_Workers);
 	Longtail_Free(bikeshed_job_api->m_Shed);

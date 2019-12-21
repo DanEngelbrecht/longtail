@@ -532,7 +532,7 @@ extern void * stbds_shmode_func(size_t elemsize, int mode);
     ((t) = stbds_hmput_default_wrapper((t), sizeof *(t)), (t)[-1] = (s))
 
 #define stbds_hmfree(p)        \
-    ((void) ((p) != NULL ? stbds_hmfree_func((p)-1,sizeof*(p),STBDS_OFFSETOF((p),key)),0 : 0),(p)=NULL)
+    ((void) ((p) != NULL ? stbds_hmfree_func((p)-1,sizeof*(p),(size_t)STBDS_OFFSETOF((p),key)),0 : 0),(p)=NULL)
 
 #define stbds_hmgets(t, k)    (*stbds_hmgetp(t,k))
 #define stbds_hmget(t, k)     (stbds_hmgetp(t,k)->value)
