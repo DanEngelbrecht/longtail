@@ -74,11 +74,6 @@ static void ThreadWorker_Init(struct ThreadWorker* thread_worker)
     thread_worker->thread = 0;
 }
 
-static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
-{
-    ThreadWorker_DisposeThread(thread_worker);
-}
-
 static int32_t ThreadWorker_Execute(void* context)
 {
     struct ThreadWorker* thread_worker = (struct ThreadWorker*)(context);
@@ -118,6 +113,11 @@ void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
 {
     Longtail_DeleteThread(thread_worker->thread);
 	Longtail_Free(thread_worker->thread);
+}
+
+static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
+{
+    ThreadWorker_DisposeThread(thread_worker);
 }
 
 struct ManagedHashAPI
@@ -568,7 +568,7 @@ static int InMemStorageAPI_OpenWriteFile(struct StorageAPI* storage_api, const c
         path_entry->m_ParentHash = parent_path_hash;
         path_entry->m_FileName = Longtail_Strdup(InMemStorageAPI_GetFileNamePart(path));
         path_entry->m_Content = 0;
-        hmput(instance->m_PathHashToContent, path_hash, entry_index);
+        hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     }
     arrsetcap(path_entry->m_Content, initial_size == 0 ? 16 : (uint32_t)initial_size);
     arrsetlen(path_entry->m_Content, (uint32_t)initial_size);
@@ -657,7 +657,7 @@ static int InMemStorageAPI_CreateDir(struct StorageAPI* storage_api, const char*
     path_entry->m_ParentHash = parent_path_hash;
     path_entry->m_FileName = Longtail_Strdup(InMemStorageAPI_GetFileNamePart(path));
     path_entry->m_Content = 0;
-    hmput(instance->m_PathHashToContent, path_hash, entry_index);
+    hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     return 0;
 }

@@ -1631,7 +1631,6 @@ int CreateContentIndex(
     uint64_t* stored_chunk_indexes = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * max_chunks_per_block);
     LONGTAIL_FATAL_ASSERT_PRIVATE(stored_chunk_indexes, return ENOMEM)
 
-    uint32_t current_size = 0;
     uint64_t i = 0;
     uint32_t chunk_count_in_block = 0;
     uint32_t block_count = 0;
@@ -1643,7 +1642,7 @@ int CreateContentIndex(
 
         uint64_t chunk_index = chunk_indexes[i];
 
-        current_size = chunk_sizes[chunk_index];
+        uint32_t current_size = chunk_sizes[chunk_index];
         current_compression_type = chunk_compression_types[chunk_index];
 
         stored_chunk_indexes[chunk_count_in_block] = chunk_index;
@@ -1694,21 +1693,6 @@ int CreateContentIndex(
         ++i;
     }
 
-    if (current_size > 0)
-    {
-        int err = CreateBlockIndex(
-            Longtail_Alloc(GetBlockIndexSize(chunk_count_in_block)),
-            hash_api,
-            current_compression_type,
-            chunk_count_in_block,
-            stored_chunk_indexes,
-            chunk_hashes,
-            chunk_sizes,
-            &block_indexes[block_count]);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return err)
-        ++block_count;
-    }
-
     Longtail_Free(stored_chunk_indexes);
     stored_chunk_indexes = 0;
     Longtail_Free(chunk_indexes);
@@ -1726,7 +1710,7 @@ int CreateContentIndex(
     InitContentIndex(content_index);
 
     uint64_t asset_index = 0;
-    for (uint32_t b = 0; b < block_count; ++i)
+    for (uint32_t b = 0; b < block_count; ++b)
     {
         struct BlockIndex* block_index = block_indexes[b];
         content_index->m_BlockHashes[b] = *block_index->m_BlockHash;
@@ -3981,7 +3965,7 @@ int GetPathsForContentBlocks(
         *out_paths = CreatePaths(0, 0);
         return *out_paths == 0 ? ENOMEM : 0;
     }
-    uint32_t max_path_count = *content_index->m_BlockCount;
+    uint32_t max_path_count = (uint32_t)*content_index->m_BlockCount;
     uint32_t max_path_data_size = max_path_count * (MAX_BLOCK_NAME_LENGTH + 4);
     struct Paths* paths = CreatePaths(max_path_count, max_path_data_size);
     if (paths == 0)
