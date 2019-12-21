@@ -731,7 +731,7 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
     }
     while (!thread->m_Exited)
     {
-        int err = pthread_cond_timedwait(&thread->m_ExitConditionalVariable, &thread->m_ExitLock, &ts);
+        err = pthread_cond_timedwait(&thread->m_ExitConditionalVariable, &thread->m_ExitLock, &ts);
         if (err == ETIMEDOUT)
         {
             pthread_mutex_unlock(&thread->m_ExitLock);
@@ -980,7 +980,7 @@ int Longtail_IsDir(const char* path)
     {
         return 0;
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
     return 0;
 }
 
@@ -997,7 +997,7 @@ int Longtail_IsFile(const char* path)
     {
         return 0;
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
     return 0;
 }
 
@@ -1186,7 +1186,7 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
     }
     if  (initial_size > 0)
     {
-        int err = ftruncate64(fileno(f), initial_size);
+        int err = ftruncate64(fileno(f), (off64_t)initial_size);
         if (err != 0)
         {
             int e = errno;

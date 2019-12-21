@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-extern int GetCPUCount();
+extern uint32_t GetCPUCount();
 
 extern struct HashAPI* CreateMeowHashAPI();
 extern void DestroyHashAPI(struct HashAPI* hash_api);

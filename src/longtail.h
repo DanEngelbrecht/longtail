@@ -83,7 +83,7 @@ typedef void* JobAPI_Jobs;
 
 struct JobAPI
 {
-    int (*GetWorkerCount)(struct JobAPI* job_api);
+    uint32_t (*GetWorkerCount)(struct JobAPI* job_api);
     int (*ReserveJobs)(struct JobAPI* job_api, uint32_t job_count);
     int (*CreateJobs)(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[], JobAPI_Jobs* out_jobs);
     int (*AddDependecies)(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs);

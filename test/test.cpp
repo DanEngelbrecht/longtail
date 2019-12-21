@@ -50,7 +50,7 @@ int CreateParentPath(struct StorageAPI* storage_api, const char* path)
 
 
 
-int MakePath(StorageAPI* storage_api, const char* path)
+static int MakePath(StorageAPI* storage_api, const char* path)
 {
     char* dir_path = Longtail_Strdup(path);
     char* last_path_delimiter = (char*)strrchr(dir_path, '/');
@@ -105,7 +105,7 @@ static int CreateFakeContent(StorageAPI* storage_api, const char* parent_path, u
         }
         uint64_t content_size = 64000 + 1 + i;
         char* data = (char*)Longtail_Alloc(sizeof(char) * content_size);
-        memset(data, i, content_size);
+        memset(data, (int)i, content_size);
         int err = storage_api->Write(storage_api, content_file, 0, content_size, data);
         Longtail_Free(data);
         if (err)
@@ -136,8 +136,8 @@ TEST(Longtail, VersionIndex)
 
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
-    const uint64_t asset_sizes[5] = {64003, 64003, 64002, 64001, 64001};
-    const uint32_t chunk_sizes[5] = {64003, 64003, 64002, 64001, 64001};
+    const uint64_t asset_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
+    const uint32_t chunk_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
     const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
@@ -169,17 +169,17 @@ TEST(Longtail, VersionIndex)
 
 TEST(Longtail, ContentIndex)
 {
-    const char* assets_path = "";
+//    const char* assets_path = "";
     const uint64_t asset_count = 5;
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
-    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
-    const uint32_t asset_sizes[5] = { 43593, 43593, 43592, 43591, 43591 };
+//    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
+    const uint32_t asset_sizes[5] = { 43593u, 43593u, 43592u, 43591u, 43591u };
     const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
-    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
-    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+//    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
+//    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
 
-    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     HashAPI* hash_api = CreateMeowHashAPI();
     ASSERT_NE((HashAPI*)0, hash_api);
     HashAPI_HContext c;
@@ -212,10 +212,10 @@ TEST(Longtail, ContentIndex)
     ASSERT_EQ(1u, content_index->m_ChunkBlockIndexes[4]);
 
     ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[0]);
-    ASSERT_EQ(43593, content_index->m_ChunkBlockOffsets[1]);
-    ASSERT_EQ(43593 * 2, content_index->m_ChunkBlockOffsets[2]);
+    ASSERT_EQ(43593u, content_index->m_ChunkBlockOffsets[1]);
+    ASSERT_EQ(43593u * 2u, content_index->m_ChunkBlockOffsets[2]);
     ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[3]);
-    ASSERT_EQ(43591, content_index->m_ChunkBlockOffsets[4]);
+    ASSERT_EQ(43591u, content_index->m_ChunkBlockOffsets[4]);
 
     Longtail_Free(content_index);
 
@@ -263,8 +263,8 @@ TEST(Longtail, ContentIndexSerialization)
     Longtail_Free(compression_types);
     Longtail_Free(version1_paths);
 
-    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     ContentIndex* cindex;
     ASSERT_EQ(0, CreateContentIndex(
         hash_api,
@@ -369,8 +369,8 @@ TEST(Longtail, WriteContent)
     Longtail_Free(version1_paths);
     version1_paths = 0;
 
-    static const uint32_t MAX_BLOCK_SIZE = 32;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
     ContentIndex* cindex;
     ASSERT_EQ(0, CreateContentIndex(
         hash_api,
@@ -487,20 +487,20 @@ TEST(Longtail, CreateMissingContent)
 {
     HashAPI* hash_api = CreateMeowHashAPI();
 
-    const char* assets_path = "";
+//    const char* assets_path = "";
     const uint64_t asset_count = 5;
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint64_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint32_t chunk_sizes[5] = {43593, 43593, 43592, 43591, 43591};
-    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
-    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+//    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
+//    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
     const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
 
-    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     ContentIndex* content_index;
     ASSERT_EQ(0, CreateContentIndex(
         hash_api,
@@ -561,12 +561,12 @@ TEST(Longtail, CreateMissingContent)
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockIndexes[0]);
     ASSERT_EQ(asset_content_hashes[3], missing_content_index->m_ChunkHashes[1]);
     ASSERT_EQ(asset_sizes[3], missing_content_index->m_ChunkLengths[1]);
-    ASSERT_EQ(43591, missing_content_index->m_ChunkBlockOffsets[1]);
+    ASSERT_EQ(43591u, missing_content_index->m_ChunkBlockOffsets[1]);
 
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockIndexes[2]);
     ASSERT_EQ(asset_content_hashes[2], missing_content_index->m_ChunkHashes[2]);
     ASSERT_EQ(asset_sizes[2], missing_content_index->m_ChunkLengths[2]);
-    ASSERT_EQ(43591 * 2, missing_content_index->m_ChunkBlockOffsets[2]);
+    ASSERT_EQ(43591u * 2u, missing_content_index->m_ChunkBlockOffsets[2]);
 
     ASSERT_EQ(1u, missing_content_index->m_ChunkBlockIndexes[3]);
     ASSERT_EQ(asset_content_hashes[1], missing_content_index->m_ChunkHashes[3]);
@@ -617,7 +617,7 @@ TEST(Longtail, VersionIndexDirectories)
         16384,
         &local_version_index));
     ASSERT_NE((VersionIndex*)0, local_version_index);
-    ASSERT_EQ(16, *local_version_index->m_AssetCount);
+    ASSERT_EQ(16u, *local_version_index->m_AssetCount);
 
     Longtail_Free(compression_types);
     Longtail_Free(local_version_index);
@@ -691,14 +691,14 @@ TEST(Longtail, MergeContentIndex)
     ContentIndex* cindex6;
     ASSERT_EQ(0, MergeContentIndex(cindex4, cindex5, &cindex6));
     ASSERT_NE((ContentIndex*)0, cindex6);
-    ASSERT_EQ(4, *cindex6->m_BlockCount);
-    ASSERT_EQ(6, *cindex6->m_ChunkCount);
+    ASSERT_EQ(4u, *cindex6->m_BlockCount);
+    ASSERT_EQ(6u, *cindex6->m_ChunkCount);
 
     ContentIndex* cindex7;
     ASSERT_EQ(0, MergeContentIndex(cindex6, cindex1, &cindex7));
     ASSERT_NE((ContentIndex*)0, cindex7);
-    ASSERT_EQ(4, *cindex7->m_BlockCount);
-    ASSERT_EQ(6, *cindex7->m_ChunkCount);
+    ASSERT_EQ(4u, *cindex7->m_BlockCount);
+    ASSERT_EQ(6u, *cindex7->m_ChunkCount);
 
     Longtail_Free(cindex7);
     Longtail_Free(cindex6);
@@ -718,7 +718,7 @@ TEST(Longtail, VersionDiff)
     HashAPI* hash_api = CreateMeowHashAPI();
     JobAPI* job_api = CreateBikeshedJobAPI(0);
 
-    const uint32_t OLD_ASSET_COUNT = 9;
+    const uint32_t OLD_ASSET_COUNT = 9u;
 
     const char* OLD_TEST_FILENAMES[] = {
         "ContentChangedSameLength.txt",
@@ -790,7 +790,7 @@ TEST(Longtail, VersionDiff)
         0
     };
 
-    const uint32_t NEW_ASSET_COUNT = 9;
+    const uint32_t NEW_ASSET_COUNT = 9u;
 
     const char* NEW_TEST_FILENAMES[] = {
         "ContentChangedSameLength.txt",
@@ -942,8 +942,8 @@ TEST(Longtail, VersionDiff)
     Longtail_Free(new_version_paths);
     new_version_paths = 0;
 
-    static const uint32_t MAX_BLOCK_SIZE = 32;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
 
     ContentIndex* content_index;
     ASSERT_EQ(0, CreateContentIndex(
@@ -975,9 +975,9 @@ TEST(Longtail, VersionDiff)
         &version_diff));
     ASSERT_NE((VersionDiff*)0, version_diff);
 
-    ASSERT_EQ(3, *version_diff->m_SourceRemovedCount);
-    ASSERT_EQ(3, *version_diff->m_TargetAddedCount);
-    ASSERT_EQ(6, *version_diff->m_ModifiedCount);
+    ASSERT_EQ(3u, *version_diff->m_SourceRemovedCount);
+    ASSERT_EQ(3u, *version_diff->m_TargetAddedCount);
+    ASSERT_EQ(6u, *version_diff->m_ModifiedCount);
 
     ASSERT_EQ(0, ChangeVersion(
         storage,
@@ -1005,7 +1005,7 @@ TEST(Longtail, VersionDiff)
     FileInfos* updated_version_paths;
     ASSERT_EQ(0, GetFilesRecursively(storage, "old", &updated_version_paths));
     ASSERT_NE((FileInfos*)0, updated_version_paths);
-    const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10;
+    const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10u;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
     Longtail_Free(updated_version_paths);
 
@@ -1039,7 +1039,7 @@ TEST(Longtail, VersionDiff)
 
 TEST(Longtail, FullScale)
 {
-    return;
+    if ((1)) return;
     StorageAPI* local_storage = CreateInMemStorageAPI();
     CompressionRegistry* compression_registry = CreateDefaultCompressionRegistry();
     HashAPI* hash_api = CreateMeowHashAPI();
@@ -1070,7 +1070,7 @@ TEST(Longtail, FullScale)
         16384,
         &local_version_index));
     ASSERT_NE((VersionIndex*)0, local_version_index);
-    ASSERT_EQ(5, *local_version_index->m_AssetCount);
+    ASSERT_EQ(5u, *local_version_index->m_AssetCount);
     Longtail_Free(local_compression_types);
     local_compression_types = 0;
 
@@ -1093,12 +1093,12 @@ TEST(Longtail, FullScale)
         16384,
         &remote_version_index));
     ASSERT_NE((VersionIndex*)0, remote_version_index);
-    ASSERT_EQ(10, *remote_version_index->m_AssetCount);
+    ASSERT_EQ(10u, *remote_version_index->m_AssetCount);
     Longtail_Free(remote_compression_types);
     remote_compression_types = 0;
 
-    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
 
     ContentIndex* local_content_index;
     ASSERT_EQ(0, CreateContentIndex(
@@ -1226,7 +1226,7 @@ TEST(Longtail, WriteVersion)
     HashAPI* hash_api = CreateMeowHashAPI();
     JobAPI* job_api = CreateBikeshedJobAPI(0);
 
-    const uint32_t asset_count = 8;
+    const uint32_t asset_count = 8u;
 
     const char* TEST_FILENAMES[] = {
         "TheLongFile.txt",
@@ -1345,8 +1345,8 @@ TEST(Longtail, WriteVersion)
     Longtail_Free(version1_paths);
     version1_paths = 0;
 
-    static const uint32_t MAX_BLOCK_SIZE = 32;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3;
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
     ContentIndex* cindex;
     ASSERT_EQ(0, CreateContentIndex(
         hash_api,
@@ -1417,13 +1417,13 @@ TEST(Longtail, WriteVersion)
 
 static void Bench()
 {
-    if (1) return;
+    if ((1)) return;
 
 
 #if 0
     #define HOME "D:\\Temp\\longtail"
 
-    const uint32_t VERSION_COUNT = 6;
+    const uint32_t VERSION_COUNT = 6u;
     const char* VERSION[VERSION_COUNT] = {
         "git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor",
         "git916600e1ecb9da13f75835cd1b2d2e6a67f1a92d_Win64_Editor",
@@ -1435,7 +1435,7 @@ static void Bench()
 #else
     #define HOME "C:\\Temp\\longtail"
 
-    const uint32_t VERSION_COUNT = 2;
+    const uint32_t VERSION_COUNT = 2u;
     const char* VERSION[VERSION_COUNT] = {
         "git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor",
         "gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor"
@@ -1444,7 +1444,7 @@ static void Bench()
 
     const char* SOURCE_VERSION_PREFIX = HOME "\\local\\";
     const char* VERSION_INDEX_SUFFIX = ".lvi";
-    const char* CONTENT_INDEX_SUFFIX = ".lci";
+    //const char* CONTENT_INDEX_SUFFIX = ".lci";
 
     const char* CONTENT_FOLDER = HOME "\\chunks";
 
@@ -1458,8 +1458,8 @@ static void Bench()
     HashAPI* hash_api = CreateMeowHashAPI();
     JobAPI* job_api = CreateBikeshedJobAPI(0);
 
-    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     ContentIndex* full_content_index;
     ASSERT_EQ(0, CreateContentIndex(
             hash_api,
@@ -1573,7 +1573,7 @@ static void Bench()
                     ASSERT_EQ(0, storage_api->Write(storage_api, t, 0, block_file_size, buffer));
 
                     Longtail_Free(buffer);
-                    buffer = 0,
+                    buffer = 0;
 
                     storage_api->CloseFile(storage_api, s);
                     storage_api->CloseFile(storage_api, t);
@@ -1633,7 +1633,7 @@ static void Bench()
 
 static void LifelikeTest()
 {
-    if (1) return;
+    if ((1)) return;
 
 //    #define HOME "test\\data"
     #define HOME "D:\\Temp\\longtail"
@@ -1657,7 +1657,7 @@ static void LifelikeTest()
     const char* local_content_index_path = HOME "\\local.lci";
 
     const char* remote_content_path = HOME "\\remote_content";
-    const char* remote_content_index_path = HOME "\\remote.lci";
+    //const char* remote_content_index_path = HOME "\\remote.lci";
 
     const char* remote_path_1 = HOME "\\remote\\" VERSION1_FOLDER;
     const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
@@ -1694,8 +1694,8 @@ static void LifelikeTest()
     printf("%u assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
 
     printf("Creating local content index...\n");
-    static const uint32_t MAX_BLOCK_SIZE = 65536 * 2;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096;
+    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     ContentIndex* local_content_index;
     ASSERT_EQ(0, CreateContentIndex(
         hash_api,
@@ -1930,7 +1930,7 @@ TEST(Longtail, ChunkerLargeFile)
         static int FeederFunc(void* context, struct Chunker* chunker, uint32_t requested_size, char* buffer, uint32_t* out_size)
         {
             FeederContext* c = (FeederContext*)context;
-            uint32_t read_count = c->size - c->offset;
+            uint32_t read_count = (uint32_t)(c->size - c->offset);
             if (read_count > 0)
             {
                 if (requested_size < read_count)
@@ -1942,7 +1942,6 @@ TEST(Longtail, ChunkerLargeFile)
                 {
                     return err;
                 }
-                uint8_t* p = (uint8_t*)buffer;
                 size_t r = fread(buffer, (size_t)read_count, 1, c->f);
                 if (r != 1)
                 {
@@ -1965,7 +1964,7 @@ TEST(Longtail, ChunkerLargeFile)
         &feeder_context,
         &chunker));
 
-    const uint32_t expected_chunk_count = 20;
+    const uint32_t expected_chunk_count = 20u;
     const struct ChunkRange expected_chunks[expected_chunk_count] =
     {
         { (const uint8_t*)0, 0,       81590},

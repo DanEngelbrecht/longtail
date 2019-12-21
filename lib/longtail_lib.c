@@ -7,11 +7,20 @@
 
 #include "longtail_platform.h"
 
+#if defined(__GNUC__) || defined(__clang__)
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif 
+
 #include "../third-party/bikeshed/bikeshed.h"
 #include "../third-party/lizard/lib/lizard_common.h"
 #include "../third-party/lizard/lib/lizard_decompress.h"
 #include "../third-party/lizard/lib/lizard_compress.h"
 #include "../third-party/meow_hash/meow_hash_x64_aesni.h"
+
+#if defined(__GNUC__) || defined(__clang__)
+    #pragma GCC diagnostic pop
+#endif
 
 #include <stdio.h>
 #include <errno.h>
@@ -19,9 +28,9 @@
 const uint32_t NO_COMPRESSION_TYPE = 0u;
 const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'\0') << 8) + ((uint32_t)'d');
 
-int GetCPUCount()
+uint32_t GetCPUCount()
 {
-    return (int)Longtail_GetCPUCount();
+    return (uint32_t)Longtail_GetCPUCount();
 }
 
 struct ReadyCallback
@@ -53,7 +62,7 @@ static void ReadyCallback_Init(struct ReadyCallback* ready_callback)
     int err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &ready_callback->m_Semaphore);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create semaphore for ReadyCallback error: %d", err);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create semaphore for ReadyCallback error: %d", err)
     }
 }
 
@@ -88,7 +97,7 @@ static int32_t ThreadWorker_Execute(void* context)
     return 0;
 }
 
-int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_shed, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
+static int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_shed, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
 {
     thread_worker->shed               = in_shed;
     thread_worker->stop               = in_stop;
@@ -100,16 +109,16 @@ int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_sh
     return 0;
 }
 
-void ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
+static void ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
 {
     int err = Longtail_JoinThread(thread_worker->thread, LONGTAIL_TIMEOUT_INFINITE);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtain_JoinThread failed with error %d", err);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtain_JoinThread failed with error %d", err)
     }
 }
 
-void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
+static void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
 {
     Longtail_DeleteThread(thread_worker->thread);
 	Longtail_Free(thread_worker->thread);
@@ -148,12 +157,12 @@ static void MeowHash_Hash(struct HashAPI* hash_api, HashAPI_HContext context, ui
 static uint64_t MeowHash_EndContext(struct HashAPI* hash_api, HashAPI_HContext context)
 {
     meow_state* state = (meow_state*)context;
-    uint64_t hash = MeowU64From(MeowEnd(state, 0), 0);
+    uint64_t hash = (uint64_t)MeowU64From(MeowEnd(state, 0), 0);
 	Longtail_Free(state);
     return hash;
 }
 
-int MeowHash_HashBuffer(struct HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
+static int MeowHash_HashBuffer(struct HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
 {
     meow_state state;
     MeowBegin(&state, MeowDefaultSeed);
@@ -434,7 +443,7 @@ struct InMemStorageAPI
 static void InMemStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
 {
     struct InMemStorageAPI* in_mem_storage_api = (struct InMemStorageAPI*)storage_api;
-    size_t c = arrlen(in_mem_storage_api->m_PathEntries);
+    size_t c = (size_t)arrlen(in_mem_storage_api->m_PathEntries);
     while(c--)
     {
         struct PathEntry* path_entry = &in_mem_storage_api->m_PathEntries[c];
@@ -490,7 +499,7 @@ static int InMemStorageAPI_GetSize(struct StorageAPI* storage_api, StorageAPI_HO
         return ENOENT;
     }
     struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
-    uint64_t size = arrlen(path_entry->m_Content);
+    uint64_t size = (uint64_t)arrlen(path_entry->m_Content);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     *out_size = size;
     return 0;
@@ -868,7 +877,7 @@ static uint64_t InMemStorageAPI_GetEntrySize(struct StorageAPI* storage_api, Sto
     {
         return 0;
     }
-    return arrlen(instance->m_PathEntries[*i].m_Content);
+    return (uint64_t)arrlen(instance->m_PathEntries[*i].m_Content);
 }
 
 static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
@@ -901,7 +910,7 @@ static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     int err = Longtail_CreateSpinLock(&storage_api[1], &storage_api->m_SpinLock);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create spinlock for in mem storage api error: %d", err);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create spinlock for in mem storage api error: %d", err)
     }
 }
 
@@ -969,7 +978,7 @@ static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-static int Bikeshed_GetWorkerCount(struct JobAPI* job_api)
+static uint32_t Bikeshed_GetWorkerCount(struct JobAPI* job_api)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     return bikeshed_job_api->m_WorkerCount;
@@ -1015,7 +1024,7 @@ static int Bikeshed_CreateJobs(struct JobAPI* job_api, uint32_t job_count, JobAP
         Longtail_AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, -((int32_t)job_count));
         return ENOMEM;
     }
-    int32_t job_range_start = new_job_count - job_count;
+    uint32_t job_range_start = (uint32_t)(new_job_count - job_count);
 
     BikeShed_TaskFunc* func = (BikeShed_TaskFunc*)Longtail_Alloc(sizeof(BikeShed_TaskFunc) * job_count);
     void** ctx = (void**)Longtail_Alloc(sizeof(void*) * job_count);
@@ -1035,7 +1044,7 @@ static int Bikeshed_CreateJobs(struct JobAPI* job_api, uint32_t job_count, JobAP
         Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
     }
 
-    Longtail_AtomicAdd32(&bikeshed_job_api->m_PendingJobCount, job_count);
+    Longtail_AtomicAdd32(&bikeshed_job_api->m_PendingJobCount, (int)job_count);
 
 	Longtail_Free(ctx);
 	Longtail_Free(func);
@@ -1068,7 +1077,7 @@ static int Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAPI
     {
         if (process_func)
         {
-            process_func(context, bikeshed_job_api->m_ReservedJobCount, bikeshed_job_api->m_JobsCompleted);
+            process_func(context, (uint32_t)bikeshed_job_api->m_ReservedJobCount, (uint32_t)bikeshed_job_api->m_JobsCompleted);
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
         {
@@ -1082,7 +1091,7 @@ static int Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAPI
     }
     if (process_func)
     {
-        process_func(context, bikeshed_job_api->m_SubmittedJobCount, bikeshed_job_api->m_SubmittedJobCount);
+        process_func(context, (uint32_t)bikeshed_job_api->m_SubmittedJobCount, (uint32_t)bikeshed_job_api->m_SubmittedJobCount);
     }
     bikeshed_job_api->m_SubmittedJobCount = 0;
 	Longtail_Free(bikeshed_job_api->m_ReservedTasksIDs);

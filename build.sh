@@ -15,7 +15,7 @@ else
     RELEASE_MODE="debug"
 fi
 
-export BASE_CXXFLAGS="-Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic"
+export BASE_CXXFLAGS="-Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template"
 
 if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3

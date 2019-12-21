@@ -9,15 +9,15 @@
 
 #include "../src/longtail.h"
 
-void TestAssert(const char* expression, const char* file, int line)
+static void TestAssert(const char* expression, const char* file, int line)
 {
     fprintf(stderr, "%s(%d): Assert failed `%s`\n", file, line, expression);
     exit(-1);
 }
 
-const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
+static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-void LogStdErr(void* , int level, const char* log)
+static void LogStdErr(void* , int level, const char* log)
 {
     fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
 }
@@ -38,5 +38,5 @@ int main(int argc, char** argv)
         _CrtDumpMemoryLeaks();
     }
 #endif
-    return 0;
+    return result;
 }
