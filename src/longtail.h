@@ -69,6 +69,8 @@ struct Longtail_CompressionAPI
     void (*DeleteDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context);
 };
 
+int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
+
 struct Longtail_CompressionRegistry;
 
 struct Longtail_CompressionRegistry* Longtail_CreateCompressionRegistry(
@@ -166,12 +168,12 @@ int Longtail_CreateContentIndex(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_Longtail_WriteContentIndex(
+int Longtail_WriteContentIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_ContentIndex* content_index,
     const char* path);
 
-int Longtail_Longtail_ReadContentIndex(
+int Longtail_ReadContentIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_ContentIndex** out_content_index);

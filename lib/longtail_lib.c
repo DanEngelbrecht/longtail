@@ -7,11 +7,6 @@
 
 #include "longtail_platform.h"
 
-#if defined(__GNUC__) || defined(__clang__)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
-#endif 
-
 #include "../third-party/bikeshed/bikeshed.h"
 #include "../third-party/lizard/lib/lizard_common.h"
 #include "../third-party/lizard/lib/lizard_decompress.h"

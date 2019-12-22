@@ -1,17 +1,6 @@
 #include "longtail.h"
 
-#if defined(__GNUC__) || defined(__clang__)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
-    #pragma GCC diagnostic ignored "-Wsign-conversion"
-    #pragma GCC diagnostic ignored "-Watomic-implicit-seq-cst"
-#endif 
-
 #include "stb_ds.h"
-
-#if defined(__GNUC__) || defined(__clang__)
-    #pragma GCC diagnostic pop
-#endif
 
 #include <stdio.h>
 #include <inttypes.h>
@@ -191,7 +180,7 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
     return err;
 }
 
-static int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
+int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL)
@@ -1732,7 +1721,7 @@ int Longtail_CreateContentIndex(
     return 0;
 }
 
-int Longtail_Longtail_WriteContentIndex(
+int Longtail_WriteContentIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_ContentIndex* content_index,
     const char* path)
@@ -1741,25 +1730,25 @@ int Longtail_Longtail_WriteContentIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_Longtail_WriteContentIndex: Write index to `%s`, chunks %u, blocks %u", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteContentIndex: Write index to `%s`, chunks %u, blocks %u", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
 
     int err = EnsureParentPathExists(storage_api, path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Longtail_WriteContentIndex: Failed to create parent folder for `%s`, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex: Failed to create parent folder for `%s`, %d", path, err)
         return err;
     }
     Longtail_StorageAPI_HOpenFile file_handle;
     err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Longtail_WriteContentIndex: Failed to create `%s`, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex: Failed to create `%s`, %d", path, err)
         return err;
     }
     err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &content_index[1]);
     if (err){
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Longtail_WriteContentIndex: Failed to write to `%s`, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex: Failed to write to `%s`, %d", path, err)
         storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return err;
@@ -1769,7 +1758,7 @@ int Longtail_Longtail_WriteContentIndex(
     return 0;
 }
 
-int Longtail_Longtail_ReadContentIndex(
+int Longtail_ReadContentIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_ContentIndex** out_content_index)
@@ -1777,25 +1766,25 @@ int Longtail_Longtail_ReadContentIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_Longtail_ReadContentIndex from `%s`", path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadContentIndex from `%s`", path)
     Longtail_StorageAPI_HOpenFile file_handle;
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Longtail_ReadContentIndex: Failed to open `%s`, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex: Failed to open `%s`, %d", path, err)
         return err;
     }
     uint64_t content_index_data_size;
     err = storage_api->GetSize(storage_api, file_handle, &content_index_data_size);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Longtail_ReadContentIndex: Failed to get size of `%s`, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex: Failed to get size of `%s`, %d", path, err)
         return err;
     }
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc((size_t)(sizeof(struct Longtail_ContentIndex) + content_index_data_size));
     if (!content_index)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Longtail_ReadContentIndex: Failed allocate memory for `%s`", path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex: Failed allocate memory for `%s`", path)
         Longtail_Free(content_index);
         content_index = 0;
         storage_api->CloseFile(storage_api, file_handle);
@@ -1805,7 +1794,7 @@ int Longtail_Longtail_ReadContentIndex(
     err = storage_api->Read(storage_api, file_handle, 0, content_index_data_size, &content_index[1]);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Longtail_ReadContentIndex: Failed to read from `%s`, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex: Failed to read from `%s`, %d", path, err)
         Longtail_Free(content_index);
         content_index = 0;
         storage_api->CloseFile(storage_api, file_handle);

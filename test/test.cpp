@@ -280,10 +280,10 @@ TEST(Longtail, ContentIndexSerialization)
     Longtail_Free(vindex);
     vindex = 0;
 
-    ASSERT_EQ(0, Longtail_Longtail_WriteContentIndex(local_storage, cindex, "cindex.lci"));
+    ASSERT_EQ(0, Longtail_WriteContentIndex(local_storage, cindex, "cindex.lci"));
 
     Longtail_ContentIndex* cindex2;
-    ASSERT_EQ(0, Longtail_Longtail_ReadContentIndex(local_storage, "cindex.lci", &cindex2));
+    ASSERT_EQ(0, Longtail_ReadContentIndex(local_storage, "cindex.lci", &cindex2));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex2);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
@@ -1708,7 +1708,7 @@ static void LifelikeTest()
         &local_content_index));
 
     printf("Writing local content index...\n");
-    ASSERT_EQ(0, Longtail_Longtail_WriteContentIndex(storage_api, local_content_index, local_content_index_path));
+    ASSERT_EQ(0, Longtail_WriteContentIndex(storage_api, local_content_index, local_content_index_path));
     printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
 
     if (1)

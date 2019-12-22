@@ -337,7 +337,7 @@ static int Cmd_Longtail_CreateContentIndex(
         }
     }
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        (0 == Longtail_Longtail_WriteContentIndex(
+        (0 == Longtail_WriteContentIndex(
             storage_api,
             cindex,
             create_content_index));
@@ -359,14 +359,14 @@ static int Cmd_MergeContentIndex(
     const char* merge_content_index)
 {
     Longtail_ContentIndex* cindex1;
-    int err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex1);
+    int err = Longtail_ReadContentIndex(storage_api, content_index, &cindex1);
     if (err)
     {
         fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
         return 0;
     }
     Longtail_ContentIndex* cindex2;
-    err = Longtail_Longtail_ReadContentIndex(storage_api, merge_content_index, &cindex2);
+    err = Longtail_ReadContentIndex(storage_api, merge_content_index, &cindex2);
     if (err)
     {
         Longtail_Free(cindex1);
@@ -388,7 +388,7 @@ static int Cmd_MergeContentIndex(
     }
 
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        (0 == Longtail_Longtail_WriteContentIndex(
+        (0 == Longtail_WriteContentIndex(
             storage_api,
             cindex,
             create_content_index));
@@ -473,7 +473,7 @@ static int Cmd_Longtail_CreateMissingContentIndex(
     Longtail_ContentIndex* existing_cindex = 0;
     if (content_index)
     {
-        int err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &existing_cindex);
+        int err = Longtail_ReadContentIndex(storage_api, content_index, &existing_cindex);
         if (err)
         {
             Longtail_Free(vindex);
@@ -541,7 +541,7 @@ static int Cmd_Longtail_CreateMissingContentIndex(
     }
 
     int ok = (0 == CreateParentPath(storage_api, create_content_index)) &&
-        (0 == Longtail_Longtail_WriteContentIndex(
+        (0 == Longtail_WriteContentIndex(
             storage_api,
             cindex,
             create_content_index));
@@ -626,7 +626,7 @@ static int Cmd_CreateContent(
     Longtail_ContentIndex* cindex = 0;
     if (content_index)
     {
-        int err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex);
+        int err = Longtail_ReadContentIndex(storage_api, content_index, &cindex);
         if (err)
         {
             fprintf(stderr, "Failed to read content index from `%s`, %d\n", content_index, err);
@@ -701,13 +701,13 @@ int Cmd_ListMissingBlocks(
     const char* content_index)
 {
     Longtail_ContentIndex* have_content_index;
-    int err = Longtail_Longtail_ReadContentIndex(storage_api, list_missing_blocks. &have_content_index);
+    int err = Longtail_ReadContentIndex(storage_api, list_missing_blocks. &have_content_index);
     if (err)
     {
         return 0;
     }
     Longtail_ContentIndex* need_content_index;
-    err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &need_content_index);
+    err = Longtail_ReadContentIndex(storage_api, content_index, &need_content_index);
     if (err)
     {
         Longtail_Free(have_content_index);
@@ -789,7 +789,7 @@ static int Cmd_CreateVersion(
     Longtail_ContentIndex* cindex = 0;
     if (content_index)
     {
-        err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex);
+        err = Longtail_ReadContentIndex(storage_api, content_index, &cindex);
         if (err)
         {
             Longtail_Free(vindex);
@@ -935,7 +935,7 @@ static int Cmd_UpdateVersion(
     Longtail_ContentIndex* cindex = 0;
     if (content_index)
     {
-        err = Longtail_Longtail_ReadContentIndex(storage_api, content_index, &cindex);
+        err = Longtail_ReadContentIndex(storage_api, content_index, &cindex);
         if (err)
         {
             Longtail_Free(target_vindex);
@@ -1106,7 +1106,7 @@ static int Cmd_UpSyncVersion(
     struct Longtail_ContentIndex* cindex = 0;
     if (content_index_path)
     {
-        err = Longtail_Longtail_ReadContentIndex(
+        err = Longtail_ReadContentIndex(
             source_storage_api,
             content_index_path,
             &cindex);
@@ -1236,7 +1236,7 @@ static int Cmd_UpSyncVersion(
         return 0;
     }
 
-    ok = (0 == CreateParentPath(target_storage_api, content_index_path)) && (0 == Longtail_Longtail_WriteContentIndex(
+    ok = (0 == CreateParentPath(target_storage_api, content_index_path)) && (0 == Longtail_WriteContentIndex(
         target_storage_api,
         missing_content_index,
         missing_content_index_path));
@@ -1309,7 +1309,7 @@ static int Cmd_DownSyncVersion(
     Longtail_ContentIndex* existing_cindex = 0;
     if (have_content_index_path)
     {
-        err = Longtail_Longtail_ReadContentIndex(source_storage_api, have_content_index_path, &existing_cindex);
+        err = Longtail_ReadContentIndex(source_storage_api, have_content_index_path, &existing_cindex);
         if (err)
         {
             fprintf(stderr, "Failed to read content index from `%s`, %d\n", have_content_index_path, err);
@@ -1365,7 +1365,7 @@ static int Cmd_DownSyncVersion(
     vindex_target = 0;
 
     Longtail_ContentIndex* cindex_remote;
-    err = Longtail_Longtail_ReadContentIndex(source_storage_api, remote_content_index_path, &cindex_remote);
+    err = Longtail_ReadContentIndex(source_storage_api, remote_content_index_path, &cindex_remote);
     if (err)
     {
         if (!remote_content_path)
