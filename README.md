@@ -3,208 +3,94 @@
 |master      | [![Build Status](https://travis-ci.org/DanEngelbrecht/longtail.svg?branch=master)](https://travis-ci.org/DanEngelbrecht/longtail?branch=master) |
 
 # longtail
-Experimental incremental asset delivery format
+Experimental incremental asset delivery format - closely related to the casync project by Lennart Poettering (https://github.com/systemd/casync). When I started tinkering with this I did not know of that project but has since learned from it but choosen different approaches to a few things. If casync does what you need there is no point in diving into this besides curiousity. If there are aspects of casync that does not work for you (you need in-place updating of folders, or you need all the performance using threading) then it might be interesting.
+
+# Current state
+Proof of Concent pre-alpha. It works and is reasonably tested but unit tests does not cover nearly as much as it should and some parts are not "safe" such as validating file formats etc.
+
+It is *very* fast though, most functions that takes time are very multithreaded and fairly efficient and care has been taken to handle really large files (such as multi-gigabyte PAK files for games) reasonably fast.
 
 # Cloning
 git clone --recurse-submodules https://github.com/DanEngelbrecht/longtail.git
 
-# tests
-To build builds, call `build/d_clang.sh` for debug and `build/r_clang.sh` for release on OSX/Linux, `build\d_cl.bat` for debug and `build\r_cl.bat` for release on Windows.
+# Platforms
+The target platforms are Windows, Linux and MacOS and it *should* build and run on all of them, but as this is early on the different platforms may break from time to time.
+
+# Tests
+To build unit tests, cd to `test`, call `../build/build.sh` for debug and `../build/build.sh release` for release on OSX/Linux, `..\build\build.bat` for debug and `..\build\build.bat release` for release on Windows.
 
 Run test with `output/test_debug` for debug and `output/test` for release on OSX/Linux, `output\test_debug.exe` for debug and `output\test.exe` for release on Windows.
 
+# Command line tool
+To build the command line tool, cd to `cmd`, call `../build/build.sh` for debug and `../build/build.sh release` for release on OSX/Linux, `..\build\build.bat` for debug and `..\build\build.bat release` for release on Windows.
+
+Run the command line tool with `output/longtail_debug` for debug and `output/longtail` for release on OSX/Linux, `output\longtail_debug.exe` for debug and `output\longtail.exe` for release on Windows.
+
 # Concepts
 
+## "Zero-parse" data formats
+The format for the data is stored in a "zero-parse" format - as long as the CPU architecture is little-endian, writing or reading one of the data formats - VersionIndex, ContentIndex or ContentBlock is just a matter of reading it into a chunk of memory and can be used in place. There are no pointers or complex data types (unless you count compression of the ContentBlock chunk data).
+
+## Abstracted platform
+The core of the library is in the `src` folder and it defines a set of APIs that it need to operate. Each API is a structure with a number of C style function callbacks.
+
+* HashAPI - To hash a block of data
+* StorageAPI - To read/write files to a storage medium
+* CompressionAPI - To compress/decompress blocks of data
+* JobAPI - To execute tasks in paralell (with dependencies)
+
+It also has hooks for ASSERTs and logging.
+
+Besides a very limited number of standard C library includes it also depends on the excellent `stb_ds.h` by Sean Barrett (http://nothings.org/stb_ds) for dynamic arrays and hash maps.
+
+Although the core does not have any platform dependent code there are pre-built helpers in the `lib` folder that implements standard disk storage and basic OS primitives (posix/win32), hashing (using the super-fast meowhash by Mollyrocket https://mollyrocket.com/meowhash), compression (using Lizard by Przemyslaw Skibinski https://github.com/inikep/lizard) and task scheduling (using Bikeshed by me https://github.com/DanEngelbrecht/bikeshed).
+
+Longtail also borrows the chunking algorithm used to split up assets into chunks from the casync project by Lennart Poettering (https://github.com/systemd/casync).
+
+## Content Adressable Storage
+Kinda, but not really - it started out that way but for various reasons it is only so in an indirect way, you can't get directly from a chunk hash to where it is located without going through a content index.
+
+Each chunk of data only contains one asset at most - one asset can be spread across multiple chunks. To make the store not suffer from a huge amount of small files chunks are bundled into blocks.
+
+Not sure if this is how it will continue to work, but this is the current state of things.
+
+# Data Types
+
 ## Version Index
-Lookup table from asset path hash to asset content hash. A table of this can represent a full set of a games content for a specific point in version history. It can be a set of a patch or a subset of a piece of asset content.
+A version index is a collection of assets (or files if you will) indexed into chunks, each asset is associated with a size and zero to many chunks and a content hash which is a combined hash of all the assets individual chunk hashes. Each asset also get a (relative) path and hash of the path for the asset.
+The version index in itself *does not* contain any of the data of the assets, it merely points out which chunks (via hashes) it needs to be reconstructed.
 
-This is the "manifest" of the games content. Small, efficient and easy to diff to make patches and easy to extend with new asset data.
+A version index is a particular version of a collection of assets, either a complete set of assets or a subset. Version indexes can be combined or updated/overriden.
 
-## Block
-A chunk of data containing one or more assets content. Name of block is stringified version of the blocks contents hash. Easy to validate for errors and makes naming blocks unique.
+This is the "manifest" of a part of a game (or other) content- Small, efficient and easy to diff and make patches as well as easy to extend or replace with new asset data.
 
-### Block content
-Each block contains information on the assets inside it. The block has asset content hash and length for each asset inside the block as a list at the end of the block.
+A version index can easily be constructed from a set of files/folders.
 
-| DATA | DATA LENGTH |
-|-|-|
-| AssetA | variable |
-| AssetB | variable |
-| AssetA Content Hash | 64 bit |
-| AssetA Content Length | 64 bit |  
-| AssetB Content Hash | 64 bit |
-| AssetB Content Length | 64 bit |
-| Asset Count | 64 bit |
-
-The structure is ZIP-file like, this makes it easy to stream out asset content to a block and then finishing it up by adding the content index at the end.
-To read it, jump to end of block, read how many assets there are, back up to index start (using asset count) and calculate the asset offsets to build the content index.
-
-Each block is compressed separately so it is a good idea to bunch smaller assets together to reduce size and IO operations.
+## Content Block
+A content block contains one or more `chunks` of data with minimal meta data such as compress/uncompressed size and the hash of the uncompressed data of each chunk. Then Content Block is identified by a combined hash of all the chunk hashes inside the block.
 
 ## Content Index
-Lookup table from asset content hash to block, offset in block and length. This is updated as new blocks are added and old blocks are purged.
+A content index is a collection of ContentBlocks. This content index is used via the Version Index to reconstruct assets to a path.
 
-### Duplicates
-If an asset is present in more than one block, how do we represent that in the Content Index? It really does not matter to which block it points to, it is the content that matters so duplicates is only wasting space.
+A content index can easily be constructed from a set of content blocks or you can create it based on a Version Index.
 
-*How to resolve purging of blocks the most efficient way so we keep the blocks with the least amount of obsolete data?*
+## Version Diff
+Represents the difference between two Version Indexes - it contains which asset paths was created, modfied or deleted. 
 
-# Asset requests
+# So, what can it do?
+It can scan a folder on the file system, hash it and chunk it up, create content blocks and content index for the data.
 
-## Known, locally present asset
-Check Content Index for the block needed, open block and read using offset and length from the Content Index.
+It can create a diff between one folder and another, find out which chunks it needs to go between said version and apply the change to a folder. It can write one version to a *new* folder or it can *update* an existing folder.
 
-## Known, not locally present asset
-Check Content Index for the block needed, request the non-local block and store it locally. Scan the block for assets and insert them in the Content Index, open block and read using offset and length from the Content Index.
+It is *very* fast, it is significantly faster att all the stages than desync (by Frank Olbricht https://github.com/folbricht/desync) which itself does threading of tasks to speed it up compared to casync. This is when compared on the use cases that *I* care about, it might not be faster in *your* use cases.
 
-## Unknown asset
-Request block hash containing asset content hash, request the block and store it locally. Scan the block for assets and insert them in the Content Index, open block and read using offset and length from the Content Index.
+Modifying an existing folder is something desync can't (currently) do and is crucial to achive reasonable speed when working with large amount of data (multi-gigabyte folders).
 
-# RSync-style application
-lvi = longtail version index
-lci = longtail content index
-lbl = longtail block list
+# What can't it do?
+I would not rely on it for any serious production settings at this moment as the primary work has so far been in the proof of concept state.
 
-longtail build-version-index <asset-path> >local_version.lvi
-longtail build-content-index <content-path> >local_content.lci
-longtail update-content-index local_version.lvi <asset-path> local_content.lci <content-path>
-wget <remote-content-index> >remote_content.lci
-longtail build-version-content-index <asset-path> local_content.lci >upload_content.lbl
-wput <remote-content-path> <content-path> <upload_content.lbl
-wput <remote-path> local_content.lci
+Also, it only has two forms of storage - disk and memory, it does not have http, S3, GCS or any other fancy stuff in it.
 
-??? Better granularity? Should we diff against assets?
+This has been an active choice, as the library is writting in C99 for ultimate portability some sacrifices had to be done. It has minimal dependencies and no complicated build system but it is written so adding other storage mechanisms or exchanging hashing or other parts are reasonably easy. 
 
-## Local
-- Assets (implicit paths) - can be built on the fly from Version Index and Content Cache. Any missing content needs to be fetched from remote
-- Version Index (possibly cached)
-  - path hash[] -> {parent path hash, name offset, asset hash}[]
-    names[]
-
-### Content Cache
-- Content Index (contains no path information)
-  - asset hash[] -> {block hash, offset, length}
-- Blocks (contains no path information)
-  - asset data[]
-  - {asset hash, block offset, size}[]
-  - asset count
-
-## Content Cache
-The Content cache can either be a dedicated remote cache or a local folder of a destination target. To build the local Assets you also need a Version Index.
-
-- Content Index (contains no path information)
-  - asset hash[] -> {block hash, offset, length}
-- Blocks (contains no path information)
-  - asset data[]
-  - {asset hash, block offset, size}[]
-  - asset count
-
-
-
-## Remote
-- Assets (implicit paths) - can be built on the fly from Version Index and Content Cache. Any missing content needs to be fetched from remote
-- Version Index (possibly cached)
-  - path hash[] -> {parent path hash, name offset, asset hash}[]
-    names[]
-
-
-
-
-Scan source folder
-    Build Local Version Index
-        Convert paths -> path hash
-        Calculate hash of each file
-Bundle source assets into blocks
-    Customizable association algorithm
-    Custimizable compression algorithm
-    Build Blocks
-        Cache them locally
-    Update Local Content Index
-
-Get target Remote Content Index
-Copy missing blocks from Local Content Index to Remote Content Index
-Update Remote Content Index
-Copy Local Version Index to Remote Version Index
-Build Version Index
-    Convert paths -> path hash
-    Calculate hash of each file
-Remove unwanted assets from Remote Folder
-    Remove any files in Remote Content Index not in Local Content Index
-        Diff Remote Version Index with Remote Version Index
-        Remove assets
-        Update Remote Version Index
-Add missing assets to Remote Folder
-    Add assets in Local Version Index not in Remote Version Index
-        Diff Local Version Index with Remote Version Index
-        Add assets from Remote Content Index
-            Get asset path hash from Local Version Index
-            Convert asset path hash to asset path
-            Look up block in Content Index
-            Copy asset from Remote Content Index to destination folder
-
-As new assets are added they move into "new" blocks but untouched assets remains in their old blocks, this means fast-changing assets will be kept in small delta like packets while slow-changing assets will not be transmitted. It *can* lead to lots of small fragmented blocks if only a few small assets will be changed (and never the same assets). This can be remedied with re-blocking the Content Index cache by bundling up existing blocks.
-
-A Content Index Cache can easily be cleaned up using the Content Index, any block that is not pointed to by the Content Index may be deleted.
-
-The Local Index and the Remote Index does not *have* to be the same layout - if they differ it will only have the risk of transmitting redundant data.
-
-# WIP
-MHash . https://github.com/cmuratori/meow_hash
-
-MHash for block identiy, also signifies content
-Resource identifier MHash - both path and version?
-Should be easy to create an incremental diff
-A HTTP (or similar) service that serves up content blocks based on MHash
-Use MHash to validate packages to avoid poisioning
-Multiple block types with different compression types - don't zip optimally compressed audio fex
-Dynamic block creation?
-Local block cache - MHash based
-
-Look at unreal storage API - client implementation must be easily pluggable for this!
-
-Only download initial content index
-
-Content indexes can reference other content indexes? Do have minimal download first and then look up bigger indexes?
-
-Server should be able to:
-    Serve MHash blocks (in batch!)
-    Serve Context Indexes
-    Consume MHash blocks
-    ? Possibly hint about likely soon needed MHash blocks
-
-Tools should be able to:
-    Create MHash blocks
-    Create Context Indexes
-    Diff Context Indexes and produce list of different MHash blocks
-    Group types of data that "belongs together"
-    Group types of data that needs same type of compression
-
-Wishlist:
-    Blocks should be of a fixed size
-    Assets should be able to span multiple blocks
-    Multiple Assets allowed in same block
-    Go from asset path (and version) to block(s) MHash, offset(s) in block.
-    Random access of files?
-    Completely async api? Start with sync
-
-struct Entry
-{
-    MHash m_AssetHash; // Path + version
-    uint32_t m_FirstBlock; // First block where it is located in m_BlockEntries array
-    uint32_t m_BlockCount; // Number of blocks this resource spans
-};
-
-Entry m_Entries[];
-BlockEntry m_BlockEntries[];
-
-struct BlockEntry
-{
-    MHash m_BlockHash;
-    uint32_t m_StartOffset;
-    uint32_t m_DataLengthInBlock;
-};
-
-struct Block
-{
-    uint8_t m_CompressedData[BLOCK_SIZE];
-};
+I'm also tinkering with a Golang wrapper for the library which I also intend to open source if I don't end up adding it to this repo.
