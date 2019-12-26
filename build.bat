@@ -122,22 +122,22 @@ IF NOT EXIST !BASE_DIR!build\third-party-!RELEASE_MODE! (
 if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo Compiling third party dependencies to library !THIRD_PARTY_LIB!
     del /q !BASE_DIR!build\third-party-!RELEASE_MODE!\*.obj >nul 2>&1
-    pushd !BASE_DIR!build\third-party-!RELEASE_MODE!
+    cd !BASE_DIR!build\third-party-!RELEASE_MODE!
     cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC%
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
     echo Creating third party dependencies library !THIRD_PARTY_LIB!
     lib.exe /nologo *.obj /OUT:!BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
     set LIB_BUILD_ERROR=%ERRORLEVEL%
-    popd
+    cd !BASE_DIR!
     if !LIB_COMPILE_ERROR! neq 0 exit /b !LIB_COMPILE_ERROR!
     if !LIB_BUILD_ERROR! neq 0 exit /b !LIB_BUILD_ERROR!
 )
 
-pushd !BASE_DIR!\build
+cd !BASE_DIR!\build
 echo Building %OUTPUT%
 cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fd:%OUTPUT%.pdb /link /out:%OUTPUT%.exe /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
 set BUILD_ERROR=%ERRORLEVEL%
-popd
+cd !BASE_DIR!
 
 if !BUILD_ERROR! neq 0 exit /b !BUILD_ERROR!
 
