@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-export BASE_DIR="$( cd "$( dirname "$SCRIPT" )" >/dev/null 2>&1 && pwd )"
+export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export THIRDPARTY_DIR=${BASE_DIR}/third-party/
 
 if [ "$1" = "build-third-party" ] || [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] ; then

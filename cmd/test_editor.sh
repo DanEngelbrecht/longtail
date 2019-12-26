@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 LONGTAIL=../build/longtail_debug
 BASEPATH=~/Temp/longtail

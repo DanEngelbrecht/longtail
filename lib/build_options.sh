@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 export TARGET=longtail_lib
 export TARGET_MODE="lib"

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 if [ -z "$5" ]; then
     echo "gcs_get.sh <longtail-executable> <version_name> <target_folder> <cache_folder> <gcs_bucket_uri>"
