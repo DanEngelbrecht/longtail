@@ -762,6 +762,8 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
 # include <mach/semaphore.h>
 # include <mach/task.h>
 
+#define off64_t off_t
+
 struct Longtail_Sema
 {
     semaphore_t m_Semaphore;
