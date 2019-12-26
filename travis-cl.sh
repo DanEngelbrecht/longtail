@@ -10,5 +10,7 @@ cd cmd
 ../build.bat
 ../build.bat release
 cd ..
-./build/test_debug.exe
-./build/test.exe
+cd test
+../build/test_debug.exe
+../build/test.exe
+cd ..
