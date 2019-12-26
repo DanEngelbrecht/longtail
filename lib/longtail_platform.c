@@ -204,7 +204,7 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
     semaphore->m_Handle = CreateSemaphore(NULL, initial_count, 0x7fffffff, NULL);
     if (semaphore->m_Handle == INVALID_HANDLE_VALUE)
     {
-        return Win32ErrorToErrno(GetLastError());;
+        return Win32ErrorToErrno(GetLastError());
     }
     *out_sema = semaphore;
     return 0;
@@ -788,25 +788,23 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
     return 0;
 }
 
-bool Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
+int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 {
     while (count--)
     {
-        if (KERN_SUCCESS != semaphore_signal(semaphore->m_Semaphore))
+        kern_return_t ret = semaphore_signal(semaphore->m_Semaphore);
+        if (ret != KERN_SUCCESS)
         {
-            return false;
+            return (int)ret;
         }
     }
-    return true;
+    return 0;
 }
 
-bool Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    if (KERN_SUCCESS != semaphore_wait(semaphore->m_Semaphore))
-    {
-        return false;
-    }
-    return true;
+    kern_return_t ret = semaphore_wait(semaphore->m_Semaphore);
+    return (int)ret;
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
@@ -864,7 +862,7 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
     HLongtail_Sema semaphore = (HLongtail_Sema)mem;
     int err = sem_init(&semaphore->m_Semaphore, 0, (unsigned int)initial_count);
     if (err != 0){
-        return 0;
+        return err;
     }
     *out_sema = semaphore;
     return 0;
@@ -874,21 +872,18 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 {
     while (count--)
     {
-        if (0 != sem_post(&semaphore->m_Semaphore))
+        int err = sem_post(&semaphore->m_Semaphore);
+        if (err != 0)
         {
-            return 0;
+            return err;
         }
     }
-    return 1;
+    return 0;
 }
 
 int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    if (0 != sem_wait(&semaphore->m_Semaphore))
-    {
-        return 0;
-    }
-    return 1;
+    return sem_wait(&semaphore->m_Semaphore);
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
@@ -911,7 +906,7 @@ int Longtail_CreateSpinLock(void* mem, HLongtail_SpinLock* out_spin_lock)
     HLongtail_SpinLock spin_lock = (HLongtail_SpinLock)mem;
     int err = pthread_spin_init(&spin_lock->m_Lock, 0);
     if (err != 0) {
-        return 0;
+        return err;
     }
     *out_spin_lock = spin_lock;
     return 0;
