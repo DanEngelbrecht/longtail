@@ -3,12 +3,14 @@
 set -e
 
 cd test
-sh ../build.sh
-sh ../build.sh release
+bash ../build.sh
+bash ../build.sh release
 cd ..
 cd cmd
-sh ../build.sh
-sh ../build.sh release
+bash ../build.sh
+bash ../build.sh release
 cd ..
-./build/test_debug
-./build/test
+cd test
+../build/test_debug
+../build/test
+cd ..
