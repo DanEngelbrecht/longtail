@@ -9,6 +9,6 @@ popd
 pushd cmd
 ../build.bat
 ../build.bat release
-popd test
+popd
 ./build/test_debug.exe
 ./build/test.exe
