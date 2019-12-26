@@ -755,6 +755,12 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
 }
 
 #ifdef __APPLE__
+# include <os/lock.h>
+# include <dispatch/dispatch.h>
+# include <mach/mach_init.h>
+# include <mach/mach_error.h>
+# include <mach/semaphore.h>
+# include <mach/task.h>
 
 struct Longtail_Sema
 {
