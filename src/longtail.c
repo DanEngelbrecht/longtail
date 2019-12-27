@@ -25,6 +25,19 @@ void Longtail_NukeFree(void* p);
 #endif // defined(LONGTAIL_ASSERTS)
 */
 
+#if defined(_WIN32)
+    #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+    #define QSORT(base, count, size, func, context) qsort_s(base, count, size, func, context)
+#elif defined(__clang__) || defined(__GNUC__)
+    #if defined(__APPLE__)
+        #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, context, func)
+    #else
+        #define SORTFUNC(name) int name(const void* a_ptr, const void* b_ptr, void* context)
+        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, func, context)
+    #endif
+#endif
+
 #if defined(LONGTAIL_ASSERTS)
 
 static Longtail_Assert Longtail_Assert_private = 0;
@@ -130,10 +143,6 @@ void Longtail_CallLogger(int level, const char* fmt, ...)
     va_end(argptr);
     Longtail_Log_private(Longtail_LogContext, level, buffer);
 }
-
-#if defined(__clang__)
-    #define qsort_s qsort_r
-#endif
 
 char* Longtail_Strdup(const char* path)
 {
@@ -3062,11 +3071,7 @@ struct BlockJobCompareContext
     struct ContentLookup* cl;
 };
 
-#if defined(__clang__)
-static int BlockJobCompare(const void* a_ptr, const void* b_ptr, void* context)
-#elif defined(_MSC_VER) || defined(__GNUC__)
-static int BlockJobCompare(void* context, const void* a_ptr, const void* b_ptr)
-#endif
+static SORTFUNC(BlockJobCompare)
 {
     struct BlockJobCompareContext* c = (struct BlockJobCompareContext*)context;
     struct HashToIndexItem* chunk_hash_to_block_index = c->cl->m_ChunkHashToBlockIndex;
@@ -3196,7 +3201,7 @@ static int BuildAssetWriteList(
             chunk_hashes,   // chunk_hashes
             cl  // cl
         };
-    qsort_s(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
+    QSORT(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
     *out_asset_write_list = awl;
     return 0;
 }
@@ -4136,11 +4141,7 @@ static int CompareIndexs(const void* a_ptr, const void* b_ptr)
 }
 */
 
-#if defined(__clang__)
-static int SortPathShortToLong(const void* a_ptr, const void* b_ptr, void* context)
-#elif defined(_MSC_VER) || defined(__GNUC__)
-static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_ptr)
-#endif
+static SORTFUNC(SortPathShortToLong)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0)
     LONGTAIL_FATAL_ASSERT_PRIVATE(a_ptr != 0, return 0)
@@ -4156,11 +4157,7 @@ static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_p
     return (a_len > b_len) ? 1 : (a_len < b_len) ? -1 : 0;
 }
 
-#if defined(__clang__)
-static int SortPathLongToShort(const void* a_ptr, const void* b_ptr, void* context)
-#elif defined(_MSC_VER) || defined(__GNUC__)
-static int SortPathLongToShort(void* context, const void* a_ptr, const void* b_ptr)
-#endif
+static SORTFUNC(SortPathLongToShort)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0)
     LONGTAIL_FATAL_ASSERT_PRIVATE(a_ptr != 0, return 0)
@@ -4369,8 +4366,8 @@ int Longtail_CreateVersionDiff(
     memmove(version_diff->m_SourceModifiedAssetIndexes, modified_source_indexes, sizeof(uint32_t) * modified_count);
     memmove(version_diff->m_TargetModifiedAssetIndexes, modified_target_indexes, sizeof(uint32_t) * modified_count);
 
-    qsort_s(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
-    qsort_s(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
+    QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
+    QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
 
     Longtail_Free(removed_source_asset_indexes);
     removed_source_asset_indexes = 0;

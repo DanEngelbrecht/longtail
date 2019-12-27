@@ -1,14 +1,16 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -e
 
-pushd test
+cd test
 ../build.bat
 ../build.bat release
-popd
-pushd cmd
+cd ..
+cd cmd
 ../build.bat
 ../build.bat release
-popd test
-./build/test_debug.exe
-./build/test.exe
+cd ..
+cd test
+../build/test_debug.exe
+../build/test.exe
+cd ..

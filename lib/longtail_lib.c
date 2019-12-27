@@ -13,10 +13,6 @@
 #include "../third-party/lizard/lib/lizard_compress.h"
 #include "../third-party/meow_hash/meow_hash_x64_aesni.h"
 
-#if defined(__GNUC__) || defined(__clang__)
-    #pragma GCC diagnostic pop
-#endif
-
 #include <stdio.h>
 #include <errno.h>
 

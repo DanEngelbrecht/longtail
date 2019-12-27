@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 export TARGET=test
 export SRC="$BASE_DIR/src/longtail.c $BASE_DIR/lib/longtail_lib.c $BASE_DIR/lib/longtail_platform.c"

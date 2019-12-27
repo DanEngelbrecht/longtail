@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export THIRDPARTY_DIR=${BASE_DIR}/third-party/
@@ -15,8 +15,11 @@ else
     RELEASE_MODE="debug"
 fi
 
-export BASE_CXXFLAGS="-Wno-implicit-int-conversion -Wno-sign-conversion -Wno-extra-semi-stmt -Wno-missing-prototypes -Wno-atomic-implicit-seq-cst -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
+export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
 # -pedantic
+# -Wno-atomic-implicit-seq-cst
+# -Wno-extra-semi-stmt
+# -Wno-implicit-int-conversion
 if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
@@ -48,22 +51,22 @@ mkdir -p $BASE_DIR/build/third-party-$RELEASE_MODE
 
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
-    pushd $BASE_DIR/build/third-party-$RELEASE_MODE
+    cd $BASE_DIR/build/third-party-$RELEASE_MODE
     rm -rf $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
-    clang++ -c $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
+    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
     ar rc $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
-    popd
+    cd $BASE_DIR
 fi
 
 if [ "$TARGET_MODE" = "lib" ]; then
     mkdir -p $BASE_DIR/build/lib-$RELEASE_MODE
     rm -rf $BASE_DIR/build/lib-$RELEASE_MODE/*.o
-    pushd $BASE_DIR/build/lib-$RELEASE_MODE
-    clang++ -c $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC
+    cd $BASE_DIR/build/lib-$RELEASE_MODE
+    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC
     echo $BASE_DIR/build/$TARGET
     ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
-    popd
+    cd $BASE_DIR
 else
     echo Building $OUTPUT
-    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -stdlib=libc++ -std=c++14 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi

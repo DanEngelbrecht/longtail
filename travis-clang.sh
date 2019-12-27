@@ -1,14 +1,16 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -e
 
-pushd test
-sh ../build.sh
-sh ../build.sh release
-popd
-pushd cmd
-sh ../build.sh
-sh ../build.sh release
-popd
-./build/test_debug
-./build/test
+cd test
+bash ../build.sh
+bash ../build.sh release
+cd ..
+cd cmd
+bash ../build.sh
+bash ../build.sh release
+cd ..
+cd test
+../build/test_debug
+../build/test
+cd ..
