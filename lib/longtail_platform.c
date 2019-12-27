@@ -763,6 +763,7 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
 # include <mach/task.h>
 
 #define off64_t off_t
+#define ftruncate64 ftruncate
 
 struct Longtail_Sema
 {
