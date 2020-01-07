@@ -461,7 +461,7 @@ static int AppendPath(struct Longtail_Paths** paths, const char* path, uint32_t*
         memmove(new_paths->m_Offsets, (*paths)->m_Offsets, sizeof(uint32_t) * *(*paths)->m_PathCount);
         memmove(new_paths->m_Data, (*paths)->m_Data, (*paths)->m_DataSize);
 
-        Longtail_Free(paths);
+        Longtail_Free(*paths);
         *paths = new_paths;
     }
 
