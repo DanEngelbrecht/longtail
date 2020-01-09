@@ -443,12 +443,12 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
 {
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-        char* validatePath = Longtail_ConcatPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
+        const char* validatePath = Longtail_ConcatPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
         DWORD attr = GetFileAttributes(validatePath);
-        Longtail_Free(validatePath);
+        Longtail_Free((char*)validatePath);
         if (attr == INVALID_FILE_ATTRIBUTES)
         {
-            // Silly, silly windows - if we try to scan a folder to fast after it has been deleted we see if when scanning but it is not really there...
+            // Silly, silly windows - if we try to scan a folder to fast after it has contents deleted we see if when scanning but it is not really there...
             return 0;
         }
         return fs_iterator->m_FindData.cFileName;
