@@ -338,6 +338,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                     err = entry_processor(context, asset_folder, dir_name, 1, 0);
                     if (err)
                     {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process dir `%s` in `%s` failed with %d", dir_name, asset_folder, err)
                         break;
                     }
                     if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
@@ -361,6 +362,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                         err = entry_processor(context, asset_folder, file_name, 0, size);
                         if (err)
                         {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process file `%s` in `%s` failed with %d", file_name, asset_folder, err)
                             break;
                         }
                     }
@@ -373,8 +375,18 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
         {
             err = 0;
         }
+        else if (err != 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: StartFind on `%s` failed with %d", asset_folder, err)
+            break;
+        }
         Longtail_Free((void*)asset_folder);
         asset_folder = 0;
+    }
+    while (folder_index < (uint32_t)arrlen(folder_paths))
+    {
+        const char* asset_folder = folder_paths[folder_index++];
+        Longtail_Free((void*)asset_folder);
     }
     arrfree(folder_paths);
     folder_paths = 0;
@@ -1196,6 +1208,7 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(paths != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex: From `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
 
     uint32_t path_count = *paths->m_PathCount;
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
@@ -1900,10 +1913,9 @@ struct WriteBlockJob
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-    sprintf(out_name, "0x%016" PRIx64, block_hash);
-//    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
-//    memmove(out_name, &out_name[5], 4);
-//    out_name[4] = '/';
+    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
+    memmove(out_name, &out_name[5], 4);
+    out_name[4] = '/';
 }
 
 static int ReadBlockData(
@@ -3969,6 +3981,8 @@ int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RetargetContent: From %u pick %u chunks", (uint32_t)*reference_content_index->m_ChunkCount, (uint32_t)*content_index->m_ChunkCount)
+
     struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
     for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
     {
@@ -4072,6 +4086,8 @@ int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* remote_content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex: Merge %u with %u chunks", (uint32_t)*local_content_index->m_ChunkCount, (uint32_t)*remote_content_index->m_ChunkCount)
+
     LONGTAIL_FATAL_ASSERT_PRIVATE(local_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(remote_content_index != 0, return EINVAL)
 
@@ -4229,6 +4245,8 @@ int Longtail_CreateVersionDiff(
     const struct Longtail_VersionIndex* target_version,
     struct Longtail_VersionDiff** out_version_diff)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Diff %u with %u assets", (uint32_t)*source_version->m_AssetCount, (uint32_t)*target_version->m_AssetCount)
+
     LONGTAIL_FATAL_ASSERT_PRIVATE(source_version != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(target_version != 0, return EINVAL)
 
