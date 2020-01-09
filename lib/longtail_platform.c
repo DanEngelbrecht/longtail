@@ -767,7 +767,7 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
     thread->m_Handle = 0;
 }
 
-#if !defined(__clang__) || defined(APPLE)
+#if !defined(__clang__) || defined(__APPLE__)
 #define off64_t off_t
 #define ftruncate64 ftruncate
 #endif
