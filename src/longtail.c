@@ -1,5 +1,9 @@
 #include "longtail.h"
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE)
+#define __USE_GNU
+#endif
+
 #include "stb_ds.h"
 
 #include <stdio.h>

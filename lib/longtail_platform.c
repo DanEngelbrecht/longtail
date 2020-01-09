@@ -689,6 +689,7 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
         goto error;
     }
     pthread_attr_destroy(&attr);
+    *out_thread = thread;
     return 0;
 
 error:
@@ -766,6 +767,11 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
     thread->m_Handle = 0;
 }
 
+#if !defined(__clang__) || defined(__APPLE__)
+#define off64_t off_t
+#define ftruncate64 ftruncate
+#endif
+
 #ifdef __APPLE__
 # include <os/lock.h>
 # include <dispatch/dispatch.h>
@@ -773,9 +779,6 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
 # include <mach/mach_error.h>
 # include <mach/semaphore.h>
 # include <mach/task.h>
-
-#define off64_t off_t
-#define ftruncate64 ftruncate
 
 struct Longtail_Sema
 {
@@ -948,12 +951,12 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
 
 
 
-void Longtail_NormalizePath(char* )
+void Longtail_NormalizePath(char* path)
 {
     // Nothing to do
 }
 
-void Longtail_DenormalizePath(char* )
+void Longtail_DenormalizePath(char* path)
 {
     // Nothing to do
 }
