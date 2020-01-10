@@ -1074,9 +1074,9 @@ size_t Longtail_GetVersionIndexSize(
             GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, path_data_size);
 }
 
-static void InitVersionIndex(struct Longtail_VersionIndex* version_index, size_t version_index_data_size)
+static int InitVersionIndex(struct Longtail_VersionIndex* version_index, size_t version_index_size)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL)
 
     char* p = (char*)version_index;
     p += sizeof(struct Longtail_VersionIndex);
@@ -1097,6 +1097,11 @@ static void InitVersionIndex(struct Longtail_VersionIndex* version_index, size_t
     p += sizeof(uint32_t);
 
     uint32_t asset_chunk_index_count = *version_index->m_AssetChunkIndexCount;
+
+    if (Longtail_GetVersionIndexSize(asset_count, chunk_count, asset_chunk_index_count, 0) > version_index_size)
+    {
+        return EBADF;
+    }
 
     version_index->m_PathHashes = (TLongtail_Hash*)(void*)p;
     p += (sizeof(TLongtail_Hash) * asset_count);
@@ -1130,9 +1135,12 @@ static void InitVersionIndex(struct Longtail_VersionIndex* version_index, size_t
 
     size_t version_index_name_data_start = (size_t)p;
 
+    size_t version_index_data_size = version_index_size - sizeof(struct Longtail_VersionIndex);
     version_index->m_NameDataSize = (uint32_t)(version_index_data_size - (version_index_name_data_start - version_index_data_start));
 
     version_index->m_NameData = (char*)p;
+
+    return 0;
 }
 
 struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
@@ -1175,7 +1183,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     *version_index->m_ChunkCount = chunk_count;
     *version_index->m_AssetChunkIndexCount = asset_chunk_index_count;
 
-    InitVersionIndex(version_index, mem_size - sizeof(struct Longtail_VersionIndex));
+    InitVersionIndex(version_index, mem_size);
 
     memmove(version_index->m_PathHashes, path_hashes, sizeof(TLongtail_Hash) * asset_count);
     memmove(version_index->m_ContentHashes, content_hashes, sizeof(TLongtail_Hash) * asset_count);
@@ -1407,7 +1415,8 @@ int Longtail_ReadVersionIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadVersionIndex: Failed to get size of file `%s`, %d", path, err)
         return err;
     }
-    struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)Longtail_Alloc((size_t)(sizeof(struct Longtail_VersionIndex) + version_index_data_size));
+    size_t version_index_size = version_index_data_size + sizeof(struct Longtail_VersionIndex);
+    struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)Longtail_Alloc(version_index_size);
     if (!version_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex: Failed to allocate memory for `%s`", path)
@@ -1426,8 +1435,14 @@ int Longtail_ReadVersionIndex(
         storage_api->CloseFile(storage_api, file_handle);
         return err;
     }
-    InitVersionIndex(version_index, (size_t)version_index_data_size);
+    err = InitVersionIndex(version_index, version_index_size);
     storage_api->CloseFile(storage_api, file_handle);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadVersionIndex: Bad format of file `%s`, %d", path, err)
+        Longtail_Free(version_index);
+        return err;
+    }
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
     *out_version_index = version_index;
     return 0;
@@ -1544,9 +1559,9 @@ static size_t GetContentIndexSize(uint64_t block_count, uint64_t chunk_count)
         GetContentIndexDataSize(block_count, chunk_count);
 }
 
-static void InitContentIndex(struct Longtail_ContentIndex* content_index)
+static int InitContentIndex(struct Longtail_ContentIndex* content_index, uint64_t content_index_size)
 {
-    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
 
     char* p = (char*)&content_index[1];
     content_index->m_BlockCount = (uint64_t*)(void*)p;
@@ -1556,6 +1571,11 @@ static void InitContentIndex(struct Longtail_ContentIndex* content_index)
 
     uint64_t block_count = *content_index->m_BlockCount;
     uint64_t chunk_count = *content_index->m_ChunkCount;
+
+    if (GetContentIndexSize(block_count, chunk_count) > content_index_size)
+    {
+        return EBADF;
+    }
 
     content_index->m_BlockHashes = (TLongtail_Hash*)(void*)p;
     p += (sizeof(TLongtail_Hash) * block_count);
@@ -1567,6 +1587,8 @@ static void InitContentIndex(struct Longtail_ContentIndex* content_index)
     p += (sizeof(uint32_t) * chunk_count);
     content_index->m_ChunkLengths = (uint32_t*)(void*)p;
     p += (sizeof(uint32_t) * chunk_count);
+
+    return 0;
 }
 
 static uint64_t GetUniqueHashes(uint64_t hash_count, const TLongtail_Hash* hashes, uint64_t* out_unique_hash_indexes)
@@ -1625,7 +1647,7 @@ int Longtail_CreateContentIndex(
         content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
         *content_index->m_BlockCount = 0;
         *content_index->m_ChunkCount = 0;
-        InitContentIndex(content_index);
+        InitContentIndex(content_index, content_index_size);
         *out_content_index = content_index;
         return 0;
     }
@@ -1715,7 +1737,7 @@ int Longtail_CreateContentIndex(
     content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
     *content_index->m_BlockCount = block_count;
     *content_index->m_ChunkCount = unique_chunk_count;
-    InitContentIndex(content_index);
+    InitContentIndex(content_index, content_index_size);
 
     uint64_t asset_index = 0;
     for (uint32_t b = 0; b < block_count; ++b)
@@ -1807,7 +1829,8 @@ int Longtail_ReadContentIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex: Failed to get size of `%s`, %d", path, err)
         return err;
     }
-    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc((size_t)(sizeof(struct Longtail_ContentIndex) + content_index_data_size));
+    uint64_t content_index_size = sizeof(struct Longtail_ContentIndex) + content_index_data_size;
+    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc((size_t)(content_index_size));
     if (!content_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex: Failed allocate memory for `%s`", path)
@@ -1827,8 +1850,14 @@ int Longtail_ReadContentIndex(
         file_handle = 0;
         return err;
     }
-    InitContentIndex(content_index);
+    err = InitContentIndex(content_index, content_index_size);
     storage_api->CloseFile(storage_api, file_handle);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex: Bad format of file `%s`, %d", path, err)
+        Longtail_Free(content_index);
+        return err;
+    }
     *out_content_index = content_index;
     return 0;
 }
@@ -3698,14 +3727,14 @@ int Longtail_ReadContent(
 
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContent: Found %" PRIu64 " chunks in %" PRIu64 " blocks from `%s`", chunk_count, block_count, content_path)
 
-    size_t content_index_data_size = GetContentIndexDataSize(block_count, chunk_count);
-    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(sizeof(struct Longtail_ContentIndex) + content_index_data_size);
+    size_t content_index_size = GetContentIndexSize(block_count, chunk_count);
+    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return ENOMEM)
     content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
     content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
     *content_index->m_BlockCount = block_count;
     *content_index->m_ChunkCount = chunk_count;
-    InitContentIndex(content_index);
+    InitContentIndex(content_index, content_index_size);
 
     uint64_t block_offset = 0;
     uint64_t chunk_offset = 0;
@@ -4051,7 +4080,7 @@ int Longtail_RetargetContent(
     resulting_content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
     *resulting_content_index->m_BlockCount = requested_block_count;
     *resulting_content_index->m_ChunkCount = chunk_count;
-    InitContentIndex(resulting_content_index);
+    InitContentIndex(resulting_content_index, content_index_size);
 
     memmove(resulting_content_index->m_BlockHashes, requested_block_hashes, sizeof(TLongtail_Hash) * requested_block_count);
 
@@ -4112,7 +4141,7 @@ int Longtail_MergeContentIndex(
     content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
     *content_index->m_BlockCount = block_count;
     *content_index->m_ChunkCount = chunk_count;
-    InitContentIndex(content_index);
+    InitContentIndex(content_index, content_index_size);
 
     for (uint64_t b = 0; b < local_block_count; ++b)
     {
