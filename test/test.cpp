@@ -3,6 +3,7 @@
 #include "../third-party/jctest/src/jc_test.h"
 
 #include "../lib/longtail_lib.h"
+#include "../lib/longtail_meowhash.h"
 
 #include <inttypes.h>
 #include <stdio.h>

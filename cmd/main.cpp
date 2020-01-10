@@ -1,5 +1,6 @@
 #include "../src/longtail.h"
 #include "../lib/longtail_lib.h"
+#include "../lib/longtail_meowhash.h"
 #include "../lib/longtail_platform.h"
 #include "../src/stb_ds.h"
 
