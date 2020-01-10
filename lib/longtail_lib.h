@@ -7,6 +7,7 @@ extern "C" {
 #endif
 
 extern struct Longtail_HashAPI* Longtail_CreateMeowHashAPI();
+extern struct Longtail_HashAPI* Longtail_CreateXXHashAPI();
 extern void Longtail_DestroyHashAPI(struct Longtail_HashAPI* hash_api);
 
 extern struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI();

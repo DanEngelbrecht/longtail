@@ -5,13 +5,26 @@
 #include "../src/longtail.h"
 #include "../src/stb_ds.h"
 
+#if defined(__GNUC__) || defined(__clang__)
+    #if defined(__SSE4_1__) && defined(__AES__)
+        #define CAN_COMPILE_MEOWHASH
+    #endif
+#else
+    #define CAN_COMPILE_MEOWHASH
+#endif
+
 #include "longtail_platform.h"
 
 #include "../third-party/bikeshed/bikeshed.h"
 #include "../third-party/lizard/lib/lizard_common.h"
 #include "../third-party/lizard/lib/lizard_decompress.h"
 #include "../third-party/lizard/lib/lizard_compress.h"
-#include "../third-party/meow_hash/meow_hash_x64_aesni.h"
+
+#include "../third-party/lizard/lib/xxhash/xxhash.h"
+
+#if defined(CAN_COMPILE_MEOWHASH)
+    #include "../third-party/meow_hash/meow_hash_x64_aesni.h"
+#endif
 
 #include <stdio.h>
 #include <errno.h>
@@ -121,6 +134,8 @@ struct ManagedHashAPI
     void (*Dispose)(struct ManagedHashAPI* managed_hash_api);
 };
 
+#if defined(CAN_COMPILE_MEOWHASH)
+
 struct MeowHashAPI
 {
     struct ManagedHashAPI m_ManagedAPI;
@@ -169,12 +184,86 @@ static void MeowHash_Init(struct MeowHashAPI* hash_api)
     hash_api->m_ManagedAPI.m_API.HashBuffer = MeowHash_HashBuffer;
     hash_api->m_ManagedAPI.Dispose = MeowHash_Dispose;
 }
+#endif // defined(CAN_COMPILE_MEOWHASH)
+
+
+
+////////////////////////////////////
+
+
+
+struct XXHashAPI
+{
+    struct ManagedHashAPI m_ManagedAPI;
+};
+
+static int XXHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
+{
+    XXH64_state_t* state = XXH64_createState();
+    int err = XXH64_reset(state, 0);
+    if (err)
+    {
+        XXH64_freeState(state);
+        return err; // TODO: Need to convert to errno
+    }
+    *out_context = (Longtail_HashAPI_HContext)state;
+    return 0;
+}
+
+static void XXHash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data)
+{
+    XXH64_state_t* state = (XXH64_state_t*)context;
+    XXH64_update(state, data, length);
+}
+
+static uint64_t XXHash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context)
+{
+    XXH64_state_t* state = (XXH64_state_t*)context;
+    uint64_t hash = (uint64_t)XXH64_digest(state);
+	XXH64_freeState(state);
+    return hash;
+}
+
+static int XXHash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
+{
+    *out_hash = (uint64_t)XXH64(data, length, 0);
+    return 0;
+}
+
+static void XXHash_Dispose(struct ManagedHashAPI* hash_api)
+{
+}
+
+static void XXHash_Init(struct XXHashAPI* hash_api)
+{
+    hash_api->m_ManagedAPI.m_API.BeginContext = XXHash_BeginContext;
+    hash_api->m_ManagedAPI.m_API.Hash = XXHash_Hash;
+    hash_api->m_ManagedAPI.m_API.EndContext = XXHash_EndContext;
+    hash_api->m_ManagedAPI.m_API.HashBuffer = XXHash_HashBuffer;
+    hash_api->m_ManagedAPI.Dispose = XXHash_Dispose;
+}
+
+
+
+////////////////////////////////////
+
 
 struct Longtail_HashAPI* Longtail_CreateMeowHashAPI()
 {
+#if defined(CAN_COMPILE_MEOWHASH)
     struct MeowHashAPI* meow_hash = (struct MeowHashAPI*)Longtail_Alloc(sizeof(struct MeowHashAPI));
     MeowHash_Init(meow_hash);
     return &meow_hash->m_ManagedAPI.m_API;
+#else
+    return 0;
+#endif
+}
+
+struct Longtail_HashAPI* Longtail_CreateXXHashAPI()
+{
+    struct XXHashAPI* xx_hash = (struct XXHashAPI*)Longtail_Alloc(sizeof(struct XXHashAPI));
+    XXHash_Init(xx_hash);
+    return &xx_hash->m_ManagedAPI.m_API;
 }
 
 void Longtail_DestroyHashAPI(struct Longtail_HashAPI* hash_api)
