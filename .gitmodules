@@ -3,4 +3,4 @@
 	url = https://github.com/inikep/lizard.git
 [submodule "third-party/blake2"]
 	path = third-party/blake2
-	url = git@github.com:BLAKE2/BLAKE2.git
+	url = https://github.com/BLAKE2/BLAKE2.git
