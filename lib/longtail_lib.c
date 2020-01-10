@@ -11,7 +11,7 @@
 #include "../third-party/lizard/lib/lizard_common.h"
 #include "../third-party/lizard/lib/lizard_decompress.h"
 #include "../third-party/lizard/lib/lizard_compress.h"
-#include "../third-party/meow_hash/meow_hash_x64_aesni.h"
+#include "../third-party/lizard/lib/xxhash/xxhash.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -115,71 +115,67 @@ static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
     ThreadWorker_DisposeThread(thread_worker);
 }
 
-struct ManagedHashAPI
+struct XXHashAPI
 {
-    struct Longtail_HashAPI m_API;
-    void (*Dispose)(struct ManagedHashAPI* managed_hash_api);
+    struct Longtail_ManagedHashAPI m_ManagedAPI;
 };
 
-struct MeowHashAPI
+static int XXHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
-    struct ManagedHashAPI m_ManagedAPI;
-};
-
-static int MeowHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
-{
-    meow_state* state = (meow_state*)Longtail_Alloc(sizeof(meow_state));
-    MeowBegin(state, MeowDefaultSeed);
+    XXH64_state_t* state = XXH64_createState();
+    int err = XXH64_reset(state, 0);
+    if (err)
+    {
+        XXH64_freeState(state);
+        return err; // TODO: Need to convert to errno
+    }
     *out_context = (Longtail_HashAPI_HContext)state;
     return 0;
 }
 
-static void MeowHash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data)
+static void XXHash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data)
 {
-    meow_state* state = (meow_state*)context;
-    MeowAbsorb(state, length, data);
+    XXH64_state_t* state = (XXH64_state_t*)context;
+    XXH64_update(state, data, length);
 }
 
-static uint64_t MeowHash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context)
+static uint64_t XXHash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context)
 {
-    meow_state* state = (meow_state*)context;
-    uint64_t hash = (uint64_t)MeowU64From(MeowEnd(state, 0), 0);
-	Longtail_Free(state);
+    XXH64_state_t* state = (XXH64_state_t*)context;
+    uint64_t hash = (uint64_t)XXH64_digest(state);
+	XXH64_freeState(state);
     return hash;
 }
 
-static int MeowHash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
+static int XXHash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
 {
-    meow_state state;
-    MeowBegin(&state, MeowDefaultSeed);
-    MeowAbsorb(&state, length, data);
-    *out_hash = MeowU64From(MeowEnd(&state, 0), 0);
+    *out_hash = (uint64_t)XXH64(data, length, 0);
     return 0;
 }
 
-static void MeowHash_Dispose(struct ManagedHashAPI* hash_api)
+static void XXHash_Dispose(struct Longtail_ManagedHashAPI* hash_api)
 {
 }
 
-static void MeowHash_Init(struct MeowHashAPI* hash_api)
+static void XXHash_Init(struct XXHashAPI* hash_api)
 {
-    hash_api->m_ManagedAPI.m_API.BeginContext = MeowHash_BeginContext;
-    hash_api->m_ManagedAPI.m_API.Hash = MeowHash_Hash;
-    hash_api->m_ManagedAPI.m_API.EndContext = MeowHash_EndContext;
-    hash_api->m_ManagedAPI.m_API.HashBuffer = MeowHash_HashBuffer;
-    hash_api->m_ManagedAPI.Dispose = MeowHash_Dispose;
+    hash_api->m_ManagedAPI.m_API.BeginContext = XXHash_BeginContext;
+    hash_api->m_ManagedAPI.m_API.Hash = XXHash_Hash;
+    hash_api->m_ManagedAPI.m_API.EndContext = XXHash_EndContext;
+    hash_api->m_ManagedAPI.m_API.HashBuffer = XXHash_HashBuffer;
+    hash_api->m_ManagedAPI.Dispose = XXHash_Dispose;
 }
 
-struct Longtail_HashAPI* Longtail_CreateMeowHashAPI()
+struct Longtail_HashAPI* Longtail_CreateXXHashAPI()
 {
-    struct MeowHashAPI* meow_hash = (struct MeowHashAPI*)Longtail_Alloc(sizeof(struct MeowHashAPI));
-    MeowHash_Init(meow_hash);
-    return &meow_hash->m_ManagedAPI.m_API;
+    struct XXHashAPI* xx_hash = (struct XXHashAPI*)Longtail_Alloc(sizeof(struct XXHashAPI));
+    XXHash_Init(xx_hash);
+    return &xx_hash->m_ManagedAPI.m_API;
 }
 
 void Longtail_DestroyHashAPI(struct Longtail_HashAPI* hash_api)
 {
-    struct ManagedHashAPI* managed = (struct ManagedHashAPI*)hash_api;
+    struct Longtail_ManagedHashAPI* managed = (struct Longtail_ManagedHashAPI*)hash_api;
     managed->Dispose(managed);
     Longtail_Free(hash_api);
 }
@@ -193,18 +189,12 @@ void Longtail_DestroyHashAPI(struct Longtail_HashAPI* hash_api)
 
 
 
-struct ManagedStorageAPI
-{
-    struct Longtail_StorageAPI m_API;
-    void (*Dispose)(struct ManagedStorageAPI* managed_storage_api);
-};
-
 struct FSStorageAPI
 {
-    struct ManagedStorageAPI m_StorageAPI;
+    struct Longtail_ManagedStorageAPI m_StorageAPI;
 };
 
-static void FSStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
+static void FSStorageAPI_Dispose(struct Longtail_ManagedStorageAPI* storage_api)
 {
 }
 
@@ -419,14 +409,14 @@ struct Lookup
 
 struct InMemStorageAPI
 {
-    struct ManagedStorageAPI m_StorageAPI;
+    struct Longtail_ManagedStorageAPI m_StorageAPI;
     struct Longtail_HashAPI* m_HashAPI;
     struct Lookup* m_PathHashToContent;
     struct PathEntry* m_PathEntries;
     HLongtail_SpinLock m_SpinLock;
 };
 
-static void InMemStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
+static void InMemStorageAPI_Dispose(struct Longtail_ManagedStorageAPI* storage_api)
 {
     struct InMemStorageAPI* in_mem_storage_api = (struct InMemStorageAPI*)storage_api;
     size_t c = (size_t)arrlen(in_mem_storage_api->m_PathEntries);
@@ -890,7 +880,7 @@ static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_StorageAPI.m_API.GetEntrySize = InMemStorageAPI_GetEntrySize;
     storage_api->m_StorageAPI.Dispose = InMemStorageAPI_Dispose;
 
-    storage_api->m_HashAPI = Longtail_CreateMeowHashAPI();
+    storage_api->m_HashAPI = Longtail_CreateXXHashAPI();
     storage_api->m_PathHashToContent = 0;
     storage_api->m_PathEntries = 0;
     int err = Longtail_CreateSpinLock(&storage_api[1], &storage_api->m_SpinLock);
@@ -911,7 +901,7 @@ struct Longtail_StorageAPI* Longtail_CreateInMemStorageAPI()
 
 void Longtail_DestroyStorageAPI(struct Longtail_StorageAPI* storage_api)
 {
-    struct ManagedStorageAPI* managed = (struct ManagedStorageAPI*)storage_api;
+    struct Longtail_ManagedStorageAPI* managed = (struct Longtail_ManagedStorageAPI*)storage_api;
     managed->Dispose(managed);
     Longtail_Free(managed);
 }
@@ -919,12 +909,6 @@ void Longtail_DestroyStorageAPI(struct Longtail_StorageAPI* storage_api)
 
 
 
-
-struct ManagedJobAPI
-{
-    struct Longtail_JobAPI m_API;
-    void (*Dispose)(struct ManagedJobAPI* managed_job_api);
-};
 
 struct JobWrapper
 {
@@ -935,7 +919,7 @@ struct JobWrapper
 
 struct BikeshedJobAPI
 {
-    struct ManagedJobAPI m_ManagedAPI;
+    struct Longtail_ManagedJobAPI m_ManagedAPI;
 
     struct ReadyCallback m_ReadyCallback;
     Bikeshed m_Shed;
@@ -1089,7 +1073,7 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, void* contex
     return 0;
 }
 
-static void Bikeshed_Dispose(struct ManagedJobAPI* job_api)
+static void Bikeshed_Dispose(struct Longtail_ManagedJobAPI* job_api)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     Longtail_AtomicAdd32(&bikeshed_job_api->m_Stop, 1);
@@ -1147,23 +1131,17 @@ struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count)
 
 void Longtail_DestroyJobAPI(struct Longtail_JobAPI* job_api)
 {
-    struct ManagedJobAPI* managed = (struct ManagedJobAPI*)job_api;
+    struct Longtail_ManagedJobAPI* managed = (struct Longtail_ManagedJobAPI*)job_api;
     managed->Dispose(managed);
     Longtail_Free(job_api);
 }
 
-struct ManagedCompressionAPI
-{
-    struct Longtail_CompressionAPI m_API;
-    void (*Dispose)(struct ManagedCompressionAPI* managed_compression_api);
-};
-
 struct LizardCompressionAPI
 {
-    struct ManagedCompressionAPI m_CompressionAPI;
+    struct Longtail_ManagedCompressionAPI m_CompressionAPI;
 };
 
-void LizardCompressionAPI_Dispose(struct ManagedCompressionAPI* compression_api)
+void LizardCompressionAPI_Dispose(struct Longtail_ManagedCompressionAPI* compression_api)
 {
 }
 
@@ -1250,7 +1228,7 @@ struct Longtail_CompressionAPI* Longtail_CreateLizardCompressionAPI()
 
 void Longtail_DestroyCompressionAPI(struct Longtail_CompressionAPI* compression_api)
 {
-    struct ManagedCompressionAPI* managed = (struct ManagedCompressionAPI*)compression_api;
+    struct Longtail_ManagedCompressionAPI* managed = (struct Longtail_ManagedCompressionAPI*)compression_api;
     managed->Dispose(managed);
     Longtail_Free(managed);
 }

@@ -404,11 +404,11 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     char scan_pattern[MAX_PATH];
     strcpy(scan_pattern, path);
     strncat(scan_pattern, "\\*.*", MAX_PATH - strlen(scan_pattern));
-    fs_iterator->m_Path = strdup(path);
+    fs_iterator->m_Path = Longtail_Strdup(path);
     fs_iterator->m_Handle = FindFirstFileA(scan_pattern, &fs_iterator->m_FindData);
     if (fs_iterator->m_Handle == INVALID_HANDLE_VALUE)
     {
-        free(fs_iterator->m_Path);
+        Longtail_Free(fs_iterator->m_Path);
         return Win32ErrorToErrno(GetLastError());
     }
     return Skip(fs_iterator);
@@ -425,7 +425,7 @@ int Longtail_FindNext(HLongtail_FSIterator fs_iterator)
 
 void Longtail_CloseFind(HLongtail_FSIterator fs_iterator)
 {
-    free(fs_iterator->m_Path);
+    Longtail_Free(fs_iterator->m_Path);
     FindClose(fs_iterator->m_Handle);
     fs_iterator->m_Handle = INVALID_HANDLE_VALUE;
 }

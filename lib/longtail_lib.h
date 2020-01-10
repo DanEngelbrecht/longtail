@@ -1,12 +1,13 @@
 #pragma once
 
 #include <stdint.h>
+#include "../src/longtail.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern struct Longtail_HashAPI* Longtail_CreateMeowHashAPI();
+extern struct Longtail_HashAPI* Longtail_CreateXXHashAPI();
 extern void Longtail_DestroyHashAPI(struct Longtail_HashAPI* hash_api);
 
 extern struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI();
@@ -24,6 +25,34 @@ extern void Longtail_DestroyCompressionRegistry(struct Longtail_CompressionRegis
 
 extern const uint32_t LONGTAIL_NO_COMPRESSION_TYPE;
 extern const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE;
+
+
+
+
+
+struct Longtail_ManagedHashAPI
+{
+    struct Longtail_HashAPI m_API;
+    void (*Dispose)(struct Longtail_ManagedHashAPI* managed_hash_api);
+};
+
+struct Longtail_ManagedStorageAPI
+{
+    struct Longtail_StorageAPI m_API;
+    void (*Dispose)(struct Longtail_ManagedStorageAPI* managed_storage_api);
+};
+
+struct Longtail_ManagedJobAPI
+{
+    struct Longtail_JobAPI m_API;
+    void (*Dispose)(struct Longtail_ManagedJobAPI* managed_job_api);
+};
+
+struct Longtail_ManagedCompressionAPI
+{
+    struct Longtail_CompressionAPI m_API;
+    void (*Dispose)(struct Longtail_ManagedCompressionAPI* managed_compression_api);
+};
 
 #ifdef __cplusplus
 }

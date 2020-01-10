@@ -3,6 +3,7 @@
 #include "../third-party/jctest/src/jc_test.h"
 
 #include "../lib/longtail_lib.h"
+#include "../lib/longtail_meowhash.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -180,7 +181,7 @@ TEST(Longtail, Longtail_ContentIndex)
 
     static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
-    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateXXHashAPI();
     ASSERT_NE((Longtail_HashAPI*)0, hash_api);
     Longtail_HashAPI_HContext c;
     int err = hash_api->BeginContext(hash_api, &c);
@@ -1223,7 +1224,7 @@ TEST(Longtail, Longtail_WriteVersion)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateXXHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
     const uint32_t asset_count = 8u;
