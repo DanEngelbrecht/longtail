@@ -317,7 +317,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
     Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateXXHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
     const char* TEST_FILENAMES[5] = {
