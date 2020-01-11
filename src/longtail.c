@@ -4,7 +4,7 @@
 #define __USE_GNU
 #endif
 
-#include "stb_ds.h"
+#include "ext/stb_ds.h"
 
 #include <stdio.h>
 #include <inttypes.h>

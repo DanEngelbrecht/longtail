@@ -1,7 +1,5 @@
-#define STB_DS_IMPLEMENTATION
-#include "../src/stb_ds.h"
-
 #include "../src/longtail.h"
+#include "../src/ext/stb_ds.h"
 
 #include "ext/jc_test.h"
 

@@ -1,11 +1,10 @@
-#define STB_DS_IMPLEMENTATION
 #include "../src/longtail.h"
+#include "../src/ext/stb_ds.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/lizard/longtail_lizard.h"
 #include "../lib/longtail_platform.h"
-#include "../src/stb_ds.h"
 
 #define KGFLAGS_IMPLEMENTATION
 #include "ext/kgflags.h"

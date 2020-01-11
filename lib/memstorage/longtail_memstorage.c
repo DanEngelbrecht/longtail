@@ -2,7 +2,7 @@
 
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
-#include "../../src/stb_ds.h"
+#include "../../src/ext/stb_ds.h"
 #include "../xxhash/longtail_xxhash.h"
 
 #include <errno.h>
