@@ -1,4 +1,4 @@
-#include "longtail_blake2hash.h"
+#include "longtail_blake2.h"
 
 #include "../../src/longtail.h"
 #include "ext/blake2.h"
