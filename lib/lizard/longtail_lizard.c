@@ -103,6 +103,7 @@ struct Longtail_CompressionAPI* Longtail_CreateLizardCompressionAPI()
 }
 
 #include "ext/entropy/entropy_common.c"
+#undef FORCE_INLINE
 #include "ext/entropy/fse_compress.c"
 #undef CHECK_F
 #include "ext/entropy/fse_decompress.c"

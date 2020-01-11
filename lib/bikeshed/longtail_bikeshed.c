@@ -6,6 +6,8 @@
 #define BIKESHED_IMPLEMENTATION
 #include "ext/bikeshed.h"
 
+#include <errno.h>
+
 struct ReadyCallback
 {
     struct Bikeshed_ReadyCallback cb;
