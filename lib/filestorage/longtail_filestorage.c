@@ -1,0 +1,211 @@
+#include "longtail_filestorage.h"
+
+#include "../../src/longtail.h"
+#include "../longtail_platform.h"
+
+struct FSStorageAPI
+{
+    struct Longtail_StorageAPI m_FSStorageAPI;
+};
+
+static void FSStorageAPI_Dispose(struct Longtail_API* storage_api)
+{
+    Longtail_Free(storage_api);
+}
+
+static int FSStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    HLongtail_OpenFile r;
+    int err = Longtail_OpenReadFile(tmp_path, &r);
+    Longtail_Free(tmp_path);
+    if (err != 0)
+    {
+        return err;
+    }
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)r;
+    return 0;
+}
+
+static int FSStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
+{
+    return Longtail_GetFileSize((HLongtail_OpenFile)f, out_size);
+}
+
+static int FSStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
+{
+    return Longtail_Read((HLongtail_OpenFile)f, offset,length, output);
+}
+
+static int FSStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    HLongtail_OpenFile r;
+    int err = Longtail_OpenWriteFile(tmp_path, initial_size, &r);
+    Longtail_Free(tmp_path);
+    if (err)
+    {
+        return err;
+    }
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)r;
+    return 0;
+}
+
+static int FSStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+{
+    return Longtail_Write((HLongtail_OpenFile)f, offset,length, input);
+}
+
+static int FSStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
+{
+    return Longtail_SetFileSize((HLongtail_OpenFile)f, length);
+}
+
+static void FSStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
+{
+    Longtail_CloseFile((HLongtail_OpenFile)f);
+}
+
+static int FSStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    int err = Longtail_CreateDirectory(tmp_path);
+    Longtail_Free(tmp_path);
+    return err;
+}
+
+static int FSStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
+{
+    char* tmp_source_path = Longtail_Strdup(source_path);
+    Longtail_DenormalizePath(tmp_source_path);
+    char* tmp_target_path = Longtail_Strdup(target_path);
+    Longtail_DenormalizePath(tmp_target_path);
+    int err = Longtail_MoveFile(tmp_source_path, tmp_target_path);
+    Longtail_Free(tmp_target_path);
+    Longtail_Free(tmp_source_path);
+    return err;
+}
+
+static char* FSStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
+{
+    // TODO: Trove is inconsistent - it works on normalized paths!
+    char* path = (char*)Longtail_ConcatPath(root_path, sub_path);
+    Longtail_NormalizePath(path);
+    return path;
+}
+
+static int FSStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    int is_dir = Longtail_IsDir(tmp_path);
+    Longtail_Free(tmp_path);
+    return is_dir;
+}
+
+static int FSStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    int is_file = Longtail_IsFile(tmp_path);
+    Longtail_Free(tmp_path);
+    return is_file;
+}
+
+static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    int err = Longtail_RemoveDir(tmp_path);
+    Longtail_Free(tmp_path);
+    return err;
+}
+
+static int FSStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    int err = Longtail_RemoveFile(tmp_path);
+    Longtail_Free(tmp_path);
+    return err;
+}
+
+static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
+{
+    Longtail_StorageAPI_HIterator iterator = (Longtail_StorageAPI_HIterator)Longtail_Alloc(Longtail_GetFSIteratorSize());
+    char* tmp_path = Longtail_Strdup(path);
+    Longtail_DenormalizePath(tmp_path);
+    int err = Longtail_StartFind((HLongtail_FSIterator)iterator, tmp_path);
+    Longtail_Free(tmp_path);
+    if (err)
+    {
+		Longtail_Free(iterator);
+        iterator = 0;
+        return err;
+    }
+    *out_iterator = iterator;
+    return 0;
+}
+
+static int FSStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    return Longtail_FindNext((HLongtail_FSIterator)iterator);
+}
+
+static void FSStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    Longtail_CloseFind((HLongtail_FSIterator)iterator);
+	Longtail_Free(iterator);
+}
+
+static const char* FSStorageAPI_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    return Longtail_GetFileName((HLongtail_FSIterator)iterator);
+}
+
+static const char* FSStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    return Longtail_GetDirectoryName((HLongtail_FSIterator)iterator);
+}
+
+static uint64_t FSStorageAPI_GetEntrySize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    return Longtail_GetEntrySize((HLongtail_FSIterator)iterator);
+}
+
+static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
+{
+    storage_api->m_FSStorageAPI.m_API.Dispose = FSStorageAPI_Dispose;
+    storage_api->m_FSStorageAPI.OpenReadFile = FSStorageAPI_OpenReadFile;
+    storage_api->m_FSStorageAPI.GetSize = FSStorageAPI_GetSize;
+    storage_api->m_FSStorageAPI.Read = FSStorageAPI_Read;
+    storage_api->m_FSStorageAPI.OpenWriteFile = FSStorageAPI_OpenWriteFile;
+    storage_api->m_FSStorageAPI.Write = FSStorageAPI_Write;
+    storage_api->m_FSStorageAPI.SetSize = FSStorageAPI_SetSize;
+    storage_api->m_FSStorageAPI.CloseFile = FSStorageAPI_CloseFile;
+    storage_api->m_FSStorageAPI.CreateDir = FSStorageAPI_CreateDir;
+    storage_api->m_FSStorageAPI.RenameFile = FSStorageAPI_RenameFile;
+    storage_api->m_FSStorageAPI.ConcatPath = FSStorageAPI_ConcatPath;
+    storage_api->m_FSStorageAPI.IsDir = FSStorageAPI_IsDir;
+    storage_api->m_FSStorageAPI.IsFile = FSStorageAPI_IsFile;
+    storage_api->m_FSStorageAPI.RemoveDir = FSStorageAPI_RemoveDir;
+    storage_api->m_FSStorageAPI.RemoveFile = FSStorageAPI_RemoveFile;
+    storage_api->m_FSStorageAPI.StartFind = FSStorageAPI_StartFind;
+    storage_api->m_FSStorageAPI.FindNext = FSStorageAPI_FindNext;
+    storage_api->m_FSStorageAPI.CloseFind = FSStorageAPI_CloseFind;
+    storage_api->m_FSStorageAPI.GetFileName = FSStorageAPI_GetFileName;
+    storage_api->m_FSStorageAPI.GetDirectoryName = FSStorageAPI_GetDirectoryName;
+    storage_api->m_FSStorageAPI.GetEntrySize = FSStorageAPI_GetEntrySize;
+}
+
+
+struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI()
+{
+    struct FSStorageAPI* storage_api = (struct FSStorageAPI*)Longtail_Alloc(sizeof(struct FSStorageAPI));
+    FSStorageAPI_Init(storage_api);
+    return &storage_api->m_FSStorageAPI;
+}
+

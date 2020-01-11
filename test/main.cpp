@@ -5,7 +5,7 @@
 #endif
 
 #define JC_TEST_IMPLEMENTATION
-#include "../third-party/jctest/src/jc_test.h"
+#include "ext/jc_test.h"
 
 #include "../src/longtail.h"
 
