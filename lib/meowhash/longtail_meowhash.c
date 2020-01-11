@@ -1,12 +1,12 @@
 #include "longtail_meowhash.h"
 
-#include "longtail_lib.h"
+#include "../../src/longtail.h"
 
-#include "../third-party/meow_hash/meow_hash_x64_aesni.h"
+#include "ext/meow_hash_x64_aesni.h"
 
 struct MeowHashAPI
 {
-    struct Longtail_ManagedHashAPI m_ManagedAPI;
+    struct Longtail_HashAPI m_MeowHashAPI;
 };
 
 static int MeowHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
@@ -40,23 +40,24 @@ static int MeowHash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t lengt
     return 0;
 }
 
-static void MeowHash_Dispose(struct Longtail_ManagedHashAPI* hash_api)
+static void MeowHash_Dispose(struct Longtail_API* hash_api)
 {
+    Longtail_Free(hash_api);
 }
 
 static void MeowHash_Init(struct MeowHashAPI* hash_api)
 {
-    hash_api->m_ManagedAPI.m_API.BeginContext = MeowHash_BeginContext;
-    hash_api->m_ManagedAPI.m_API.Hash = MeowHash_Hash;
-    hash_api->m_ManagedAPI.m_API.EndContext = MeowHash_EndContext;
-    hash_api->m_ManagedAPI.m_API.HashBuffer = MeowHash_HashBuffer;
-    hash_api->m_ManagedAPI.Dispose = MeowHash_Dispose;
+    hash_api->m_MeowHashAPI.m_API.Dispose = MeowHash_Dispose;
+    hash_api->m_MeowHashAPI.BeginContext = MeowHash_BeginContext;
+    hash_api->m_MeowHashAPI.Hash = MeowHash_Hash;
+    hash_api->m_MeowHashAPI.EndContext = MeowHash_EndContext;
+    hash_api->m_MeowHashAPI.HashBuffer = MeowHash_HashBuffer;
 }
 
 struct Longtail_HashAPI* Longtail_CreateMeowHashAPI()
 {
     struct MeowHashAPI* meow_hash = (struct MeowHashAPI*)Longtail_Alloc(sizeof(struct MeowHashAPI));
     MeowHash_Init(meow_hash);
-    return &meow_hash->m_ManagedAPI.m_API;
+    return &meow_hash->m_MeowHashAPI;
 }
 

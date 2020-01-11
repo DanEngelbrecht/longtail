@@ -7,9 +7,18 @@
 extern "C" {
 #endif
 
+struct Longtail_API
+{
+    void (*Dispose)(struct Longtail_API* api);
+};
+
+void Longtail_DisposeAPI(struct Longtail_API* api);
+#define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
+
 typedef struct Longtail_HashAPI_Context* Longtail_HashAPI_HContext;
 struct Longtail_HashAPI
 {
+    struct Longtail_API m_API;
     int (*BeginContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context);
     void (*Hash)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data);
     uint64_t (*EndContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context);
@@ -21,6 +30,7 @@ typedef struct Longtail_StorageAPI_Iterator* Longtail_StorageAPI_HIterator;
 
 struct Longtail_StorageAPI
 {
+    struct Longtail_API m_API;
     int (*OpenReadFile)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
     int (*GetSize)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
     int (*Read)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output);
@@ -56,6 +66,7 @@ typedef struct Longtail_CompressionAPI_Settings* Longtail_CompressionAPI_HSettin
 
 struct Longtail_CompressionAPI
 {
+    struct Longtail_API m_API;
     Longtail_CompressionAPI_HSettings (*GetDefaultSettings)(struct Longtail_CompressionAPI* compression_api);
     Longtail_CompressionAPI_HSettings (*GetMaxCompressionSetting)(struct Longtail_CompressionAPI* compression_api);
 
@@ -69,15 +80,12 @@ struct Longtail_CompressionAPI
     void (*DeleteDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context);
 };
 
-int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
-
-struct Longtail_CompressionRegistry;
-
-struct Longtail_CompressionRegistry* Longtail_CreateCompressionRegistry(
-    uint32_t compression_type_count,
-    const uint32_t* compression_types,
-    const struct Longtail_CompressionAPI** compression_apis,
-    const Longtail_CompressionAPI_HSettings* compression_settings);
+struct Longtail_CompressionRegistryAPI
+{
+    struct Longtail_API m_API;
+    struct Longtail_CompressionAPI* (*GetCompressionAPI)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type);
+    Longtail_CompressionAPI_HSettings (*GetCompressionSettings)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type);
+};
 
 typedef void (*Longtail_JobAPI_JobFunc)(void* context);
 typedef void (*Longtail_JobAPI_ProgressFunc)(void* context, uint32_t total_count, uint32_t done_count);
@@ -85,6 +93,7 @@ typedef void* Longtail_JobAPI_Jobs;
 
 struct Longtail_JobAPI
 {
+    struct Longtail_API m_API;
     uint32_t (*GetWorkerCount)(struct Longtail_JobAPI* job_api);
     int (*ReserveJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count);
     int (*CreateJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs);
@@ -128,6 +137,7 @@ struct PathLookup;
 struct ChunkHashToAssetPart;
 struct Longtail_VersionDiff;
 
+int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
 char* Longtail_Strdup(const char* path);
 
 int Longtail_GetFilesRecursively(
@@ -181,7 +191,7 @@ int Longtail_ReadContentIndex(
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
     struct Longtail_StorageAPI* target_storage_api,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -224,7 +234,7 @@ int Longtail_MergeContentIndex(
 int Longtail_WriteVersion(
     struct Longtail_StorageAPI* content_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -245,7 +255,7 @@ int Longtail_ChangeVersion(
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
@@ -320,6 +330,14 @@ int Longtail_ValidateContent(
 int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
+
+extern struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
+        uint32_t compression_type_count,
+        const uint32_t* compression_types,
+        const struct Longtail_CompressionAPI** compression_apis,
+        const Longtail_CompressionAPI_HSettings* compression_settings);
+
+extern const uint32_t LONGTAIL_NO_COMPRESSION_TYPE;
 
 ///////////// Test functions
 

@@ -1,11 +1,11 @@
 #include "longtail_blake2hash.h"
 
-#include "longtail_lib.h"
-#include "../third-party/blake2/sse/blake2.h"
+#include "../../src/longtail.h"
+#include "ext/blake2.h"
 
 struct Blake2HashAPI
 {
-    struct Longtail_ManagedHashAPI m_ManagedAPI;
+    struct Longtail_HashAPI m_Blake2HashAPI;
 };
 
 static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
@@ -45,23 +45,25 @@ static int Blake2Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t len
     return blake2s(out_hash, sizeof(uint64_t), data, length, 0, 0);
 }
 
-static void Blake2Hash_Dispose(struct Longtail_ManagedHashAPI* hash_api)
+static void Blake2Hash_Dispose(struct Longtail_API* hash_api)
 {
+    Longtail_Free(hash_api);
 }
 
 static void Blake2Hash_Init(struct Blake2HashAPI* hash_api)
 {
-    hash_api->m_ManagedAPI.m_API.BeginContext = Blake2Hash_BeginContext;
-    hash_api->m_ManagedAPI.m_API.Hash = Blake2Hash_Hash;
-    hash_api->m_ManagedAPI.m_API.EndContext = Blake2Hash_EndContext;
-    hash_api->m_ManagedAPI.m_API.HashBuffer = Blake2Hash_HashBuffer;
-    hash_api->m_ManagedAPI.Dispose = Blake2Hash_Dispose;
+    hash_api->m_Blake2HashAPI.m_API.Dispose = Blake2Hash_Dispose;
+    hash_api->m_Blake2HashAPI.BeginContext = Blake2Hash_BeginContext;
+    hash_api->m_Blake2HashAPI.Hash = Blake2Hash_Hash;
+    hash_api->m_Blake2HashAPI.EndContext = Blake2Hash_EndContext;
+    hash_api->m_Blake2HashAPI.HashBuffer = Blake2Hash_HashBuffer;
 }
 
 struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
 {
     struct Blake2HashAPI* blake2_hash = (struct Blake2HashAPI*)Longtail_Alloc(sizeof(struct Blake2HashAPI));
     Blake2Hash_Init(blake2_hash);
-    return &blake2_hash->m_ManagedAPI.m_API;
+    return &blake2_hash->m_Blake2HashAPI;
 }
 
+#include "ext/blake2s.c"

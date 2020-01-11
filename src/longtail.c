@@ -68,6 +68,14 @@ void Longtail_SetAssert(Longtail_Assert assert_func)
 #endif // defined(LONGTAIL_ASSERTS)
 }
 
+void Longtail_DisposeAPI(struct Longtail_API* api)
+{
+    if (api->Dispose)
+    {
+        api->Dispose(api);
+    }
+}
+
 static Longtail_Alloc_Func Longtail_Alloc_private = 0;
 static Longtail_Free_Func Free_private = 0;
 
@@ -238,66 +246,6 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
 
 
 
-struct Longtail_CompressionRegistry
-{
-    uint32_t m_Count;
-    uint32_t* m_Types;
-    struct Longtail_CompressionAPI** m_APIs;
-    Longtail_CompressionAPI_HSettings* m_Settings;
-};
-
-struct Longtail_CompressionRegistry* Longtail_CreateCompressionRegistry(
-    uint32_t compression_type_count,
-    const uint32_t* compression_types,
-    const struct Longtail_CompressionAPI** compression_apis,
-    const Longtail_CompressionAPI_HSettings* compression_settings)
-{
-    size_t size = sizeof(struct Longtail_CompressionRegistry) +
-        sizeof(uint32_t) * compression_type_count +
-        sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
-        sizeof(Longtail_CompressionAPI_HSettings) * compression_type_count;
-    struct Longtail_CompressionRegistry* registry = (struct Longtail_CompressionRegistry*)Longtail_Alloc(size);
-    LONGTAIL_FATAL_ASSERT_PRIVATE(registry, return 0)
-    registry->m_Count = compression_type_count;
-    char* p = (char*)&registry[1];
-    registry->m_Types = (uint32_t*)(void*)p;
-    p += sizeof(uint32_t) * compression_type_count;
-
-    registry->m_APIs = (struct Longtail_CompressionAPI**)(void*)p;
-    p += sizeof(struct Longtail_CompressionAPI*) * compression_type_count;
-
-    registry->m_Settings = (Longtail_CompressionAPI_HSettings*)(void*)p;
-
-    memmove(registry->m_Types, compression_types, sizeof(uint32_t) * compression_type_count);
-    memmove(registry->m_APIs, compression_apis, sizeof(struct Longtail_CompressionAPI*) * compression_type_count);
-    memmove(registry->m_Settings, compression_settings, sizeof(const Longtail_CompressionAPI_HSettings) * compression_type_count);
-
-    return registry;
-}
-
-static struct Longtail_CompressionAPI* GetCompressionAPI(struct Longtail_CompressionRegistry* compression_registry, uint32_t compression_type)
-{
-    for (uint32_t i = 0; i < compression_registry->m_Count; ++i)
-    {
-        if (compression_registry->m_Types[i] == compression_type)
-        {
-            return compression_registry->m_APIs[i];
-        }
-    }
-    return 0;
-}
-
-static Longtail_CompressionAPI_HSettings GetCompressionSettings(struct Longtail_CompressionRegistry* compression_registry, uint32_t compression_type)
-{
-    for (uint32_t i = 0; i < compression_registry->m_Count; ++i)
-    {
-        if (compression_registry->m_Types[i] == compression_type)
-        {
-            return compression_registry->m_Settings[i];
-        }
-    }
-    return 0;
-}
 
 
 
@@ -1930,7 +1878,7 @@ struct WriteBlockJob
 {
     struct Longtail_StorageAPI* m_SourceStorageAPI;
     struct Longtail_StorageAPI* m_TargetStorageAPI;
-    struct Longtail_CompressionRegistry* m_CompressionRegistry;
+    struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
     const char* m_ContentFolder;
     const char* m_AssetsFolder;
     TLongtail_Hash m_BlockHash;
@@ -1953,13 +1901,13 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 
 static int ReadBlockData(
     struct Longtail_StorageAPI* storage_api,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     const char* content_folder,
     TLongtail_Hash block_hash,
     void** out_block_data)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_folder != 0, return EINVAL)
 
     char file_name[MAX_BLOCK_NAME_LENGTH + 4];
@@ -2030,7 +1978,7 @@ static int ReadBlockData(
     uint32_t compression_type = *compression_type_ptr;
     if (0 != compression_type)
     {
-        struct Longtail_CompressionAPI* compression_api = GetCompressionAPI(compression_registry, compression_type);
+        struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
         if (!compression_api)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadBlockData: Compression type not supported `%u`", compression_type)
@@ -2147,7 +2095,7 @@ static void Longtail_WriteContentBlockJob(void* context)
     struct WriteBlockJob* job = (struct WriteBlockJob*)context;
     struct Longtail_StorageAPI* source_storage_api = job->m_SourceStorageAPI;
     struct Longtail_StorageAPI* target_storage_api = job->m_TargetStorageAPI;
-    struct Longtail_CompressionRegistry* compression_registry = job->m_CompressionRegistry;
+    struct Longtail_CompressionRegistryAPI* compression_registry_api = job->m_CompressionRegistryAPI;
 
     const struct Longtail_ContentIndex* content_index = job->m_ContentIndex;
     const char* content_folder = job->m_ContentFolder;
@@ -2273,7 +2221,7 @@ static void Longtail_WriteContentBlockJob(void* context)
 
     if (compression_type != 0)
     {
-        struct Longtail_CompressionAPI* compression_api = GetCompressionAPI(compression_registry, compression_type);
+        struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
         if (!compression_api)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Compression type not supported `%u`", compression_type)
@@ -2284,7 +2232,7 @@ static void Longtail_WriteContentBlockJob(void* context)
             job->m_Err = EBADF;
             return;
         }
-        Longtail_CompressionAPI_HSettings compression_settings = GetCompressionSettings(compression_registry, compression_type);
+        Longtail_CompressionAPI_HSettings compression_settings = compression_registry_api->GetCompressionSettings(compression_registry_api, compression_type);
         Longtail_CompressionAPI_HCompressionContext compression_context;
         int err = compression_api->CreateCompressionContext(compression_api, compression_settings, &compression_context);
         LONGTAIL_FATAL_ASSERT_PRIVATE(!err, job->m_Err = err; return)
@@ -2425,7 +2373,7 @@ static void Longtail_WriteContentBlockJob(void* context)
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
     struct Longtail_StorageAPI* target_storage_api,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -2436,7 +2384,7 @@ int Longtail_WriteContent(
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(source_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(target_storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL)
@@ -2493,7 +2441,7 @@ int Longtail_WriteContent(
         struct WriteBlockJob* job = &write_block_jobs[job_count++];
         job->m_SourceStorageAPI = source_storage_api;
         job->m_TargetStorageAPI = target_storage_api;
-        job->m_CompressionRegistry = compression_registry;
+        job->m_CompressionRegistryAPI = compression_registry_api;
         job->m_ContentFolder = content_folder;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
@@ -2598,7 +2546,7 @@ static int CreateContentLookup(
 struct BlockDecompressorJob
 {
     struct Longtail_StorageAPI* m_ContentStorageAPI;
-    struct Longtail_CompressionRegistry* m_CompressionRegistry;
+    struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
     const char* m_ContentFolder;
     TLongtail_Hash m_BlockHash;
     void* m_BlockData;
@@ -2612,7 +2560,7 @@ static void BlockDecompressor(void* context)
     struct BlockDecompressorJob* job = (struct BlockDecompressorJob*)context;
     job->m_Err = ReadBlockData(
         job->m_ContentStorageAPI,
-        job->m_CompressionRegistry,
+        job->m_CompressionRegistryAPI,
         job->m_ContentFolder,
         job->m_BlockHash,
         &job->m_BlockData);
@@ -2634,7 +2582,7 @@ struct WritePartialAssetFromBlocksJob
 {
     struct Longtail_StorageAPI* m_ContentStorageAPI;
     struct Longtail_StorageAPI* m_VersionStorageAPI;
-    struct Longtail_CompressionRegistry* m_CompressionRegistry;
+    struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
     struct Longtail_JobAPI* m_JobAPI;
     const struct Longtail_ContentIndex* m_ContentIndex;
     const struct Longtail_VersionIndex* m_VersionIndex;
@@ -2660,7 +2608,7 @@ void WritePartialAssetFromBlocks(void* context);
 static int CreatePartialAssetWriteJob(
     struct Longtail_StorageAPI* content_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
@@ -2675,7 +2623,7 @@ static int CreatePartialAssetWriteJob(
 {
     job->m_ContentStorageAPI = content_storage_api;
     job->m_VersionStorageAPI = version_storage_api;
-    job->m_CompressionRegistry = compression_registry;
+    job->m_CompressionRegistryAPI = compression_registry_api;
     job->m_JobAPI = job_api;
     job->m_ContentIndex = content_index;
     job->m_VersionIndex = version_index;
@@ -2720,7 +2668,7 @@ static int CreatePartialAssetWriteJob(
         {
             struct BlockDecompressorJob* block_job = &job->m_BlockDecompressorJobs[job->m_BlockDecompressorJobCount];
             block_job->m_ContentStorageAPI = content_storage_api;
-            block_job->m_CompressionRegistry = compression_registry;
+            block_job->m_CompressionRegistryAPI = compression_registry_api;
             block_job->m_ContentFolder = content_folder;
             block_job->m_BlockHash = block_hash;
             block_job->m_Err = EINVAL;
@@ -2867,7 +2815,7 @@ void WritePartialAssetFromBlocks(void* context)
         int err = CreatePartialAssetWriteJob(
             job->m_ContentStorageAPI,
             job->m_VersionStorageAPI,
-            job->m_CompressionRegistry,
+            job->m_CompressionRegistryAPI,
             job->m_JobAPI,
             job->m_ContentIndex,
             job->m_VersionIndex,
@@ -3254,7 +3202,7 @@ static int BuildAssetWriteList(
 static int WriteAssets(
     struct Longtail_StorageAPI* content_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -3267,7 +3215,7 @@ static int WriteAssets(
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL)
@@ -3350,7 +3298,7 @@ static int WriteAssets(
         struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
         struct BlockDecompressorJob* block_job = &job->m_DecompressBlockJob;
         block_job->m_ContentStorageAPI = content_storage_api;
-        block_job->m_CompressionRegistry = compression_registry;
+        block_job->m_CompressionRegistryAPI = compression_registry_api;
         block_job->m_ContentFolder = content_path;
         block_job->m_BlockHash = content_index->m_BlockHashes[block_index];
         Longtail_JobAPI_JobFunc decompress_funcs[1] = { BlockDecompressor };
@@ -3436,7 +3384,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
         err = CreatePartialAssetWriteJob(
             content_storage_api,
             version_storage_api,
-            compression_registry,
+            compression_registry_api,
             job_api,
             content_index,
             version_index,
@@ -3487,7 +3435,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
 int Longtail_WriteVersion(
     struct Longtail_StorageAPI* content_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -3498,7 +3446,7 @@ int Longtail_WriteVersion(
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL)
@@ -3550,7 +3498,7 @@ int Longtail_WriteVersion(
     err = WriteAssets(
         content_storage_api,
         version_storage_api,
-        compression_registry,
+        compression_registry_api,
         job_api,
         job_progress_func,
         job_progress_context,
@@ -4455,7 +4403,7 @@ int Longtail_ChangeVersion(
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
-    struct Longtail_CompressionRegistry* compression_registry,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
@@ -4467,7 +4415,7 @@ int Longtail_ChangeVersion(
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(hash_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(job_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(compression_registry_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(source_version != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(target_version != 0, return EINVAL)
@@ -4648,7 +4596,7 @@ int Longtail_ChangeVersion(
     err = WriteAssets(
         content_storage_api,
         version_storage_api,
-        compression_registry,
+        compression_registry_api,
         job_api,
         job_progress_func,
         job_progress_context,
@@ -4809,6 +4757,89 @@ int Longtail_ValidateVersion(
     return 0;
 }
 
+const uint32_t LONGTAIL_NO_COMPRESSION_TYPE = 0u;
+
+struct Default_CompressionRegistry
+{
+    struct Longtail_CompressionRegistryAPI m_CompressionRegistryAPI;
+    uint32_t m_Count;
+    uint32_t* m_Types;
+    struct Longtail_CompressionAPI** m_APIs;
+    Longtail_CompressionAPI_HSettings* m_Settings;
+};
+
+static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
+{
+    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
+    for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
+    {
+        default_compression_registry->m_APIs[c]->m_API.Dispose(&default_compression_registry->m_APIs[c]->m_API);
+    }
+    Longtail_Free(default_compression_registry);
+}
+
+static struct Longtail_CompressionAPI* Default_GetCompressionAPI(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type)
+{
+    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
+    for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
+    {
+        if (default_compression_registry->m_Types[i] == compression_type)
+        {
+            return default_compression_registry->m_APIs[i];
+        }
+    }
+    return 0;
+}
+
+static Longtail_CompressionAPI_HSettings Default_GetCompressionSettings(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type)
+{
+    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
+    for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
+    {
+        if (default_compression_registry->m_Types[i] == compression_type)
+        {
+            return default_compression_registry->m_Settings[i];
+        }
+    }
+    return 0;
+}
+
+struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
+    uint32_t compression_type_count,
+    const uint32_t* compression_types,
+    const struct Longtail_CompressionAPI** compression_apis,
+    const Longtail_CompressionAPI_HSettings* compression_settings)
+{
+    size_t size = sizeof(struct Default_CompressionRegistry) +
+        sizeof(uint32_t) * compression_type_count +
+        sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
+        sizeof(Longtail_CompressionAPI_HSettings) * compression_type_count;
+    struct Default_CompressionRegistry* registry = (struct Default_CompressionRegistry*)Longtail_Alloc(size);
+    if (!registry)
+    {
+        return 0;
+    }
+
+    registry->m_CompressionRegistryAPI.m_API.Dispose = DefaultCompressionRegistry_Dispose;
+    registry->m_CompressionRegistryAPI.GetCompressionAPI = Default_GetCompressionAPI;
+    registry->m_CompressionRegistryAPI.GetCompressionSettings = Default_GetCompressionSettings;
+
+    registry->m_Count = compression_type_count;
+    char* p = (char*)&registry[1];
+    registry->m_Types = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t) * compression_type_count;
+
+    registry->m_APIs = (struct Longtail_CompressionAPI**)(void*)p;
+    p += sizeof(struct Longtail_CompressionAPI*) * compression_type_count;
+
+    registry->m_Settings = (Longtail_CompressionAPI_HSettings*)(void*)p;
+
+    memmove(registry->m_Types, compression_types, sizeof(uint32_t) * compression_type_count);
+    memmove(registry->m_APIs, compression_apis, sizeof(struct Longtail_CompressionAPI*) * compression_type_count);
+    memmove(registry->m_Settings, compression_settings, sizeof(const Longtail_CompressionAPI_HSettings) * compression_type_count);
+
+    return &registry->m_CompressionRegistryAPI;
+}
 
 static uint32_t hashTable[] = {
     0x458be752, 0xc10748cc, 0xfbbcdbb8, 0x6ded5b68,

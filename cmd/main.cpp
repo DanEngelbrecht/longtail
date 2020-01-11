@@ -1,11 +1,14 @@
+#define STB_DS_IMPLEMENTATION
 #include "../src/longtail.h"
-#include "../lib/longtail_lib.h"
-#include "../lib/longtail_meowhash.h"
+#include "../lib/bikeshed/longtail_bikeshed.h"
+#include "../lib/filestorage/longtail_filestorage.h"
+#include "../lib/meowhash/longtail_meowhash.h"
+#include "../lib/lizard/longtail_lizard.h"
 #include "../lib/longtail_platform.h"
 #include "../src/stb_ds.h"
 
 #define KGFLAGS_IMPLEMENTATION
-#include "../third-party/kgflags/kgflags.h"
+#include "ext/kgflags.h"
 
 #include <stdio.h>
 #include <inttypes.h>
@@ -203,6 +206,31 @@ static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileI
     return result;
 }
 
+Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
+{
+    Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
+    if (lizard_compression == 0)
+    {
+        return 0;
+    }
+    Longtail_CompressionAPI_HSettings lizard_settings = lizard_compression->GetDefaultSettings(lizard_compression);
+
+    uint32_t compression_types[1] = {LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE};
+    struct Longtail_CompressionAPI* compression_apis[1] = {lizard_compression};
+    Longtail_CompressionAPI_HSettings compression_settings[1] = {lizard_settings};
+
+    Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
+        1,
+        (const uint32_t*)compression_types,
+        (const Longtail_CompressionAPI **)compression_apis,
+        (const Longtail_CompressionAPI_HSettings*)compression_settings);
+    if (registry == 0)
+    {
+        SAFE_DISPOSE_API(lizard_compression);
+        return 0;
+    }
+    return registry;
+}
 
 
 
@@ -562,7 +590,7 @@ static int Cmd_CreateContent(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
-    Longtail_CompressionRegistry* compression_registry,
+    Longtail_CompressionRegistryAPI* compression_registry,
     const char* create_content,
     const char* content_index,
     const char* version,
@@ -773,7 +801,7 @@ static int Cmd_CreateVersion(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
-    Longtail_CompressionRegistry* compression_registry,
+    Longtail_CompressionRegistryAPI* compression_registry,
     const char* create_version,
     const char* version_index,
     const char* content,
@@ -862,7 +890,7 @@ static int Cmd_UpdateVersion(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
-    Longtail_CompressionRegistry* compression_registry,
+    Longtail_CompressionRegistryAPI* compression_registry,
     const char* update_version,
     const char* version_index,
     const char* content,
@@ -1040,7 +1068,7 @@ static int Cmd_UpSyncVersion(
     Longtail_StorageAPI* target_storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
-    Longtail_CompressionRegistry* compression_registry,
+    Longtail_CompressionRegistryAPI* compression_registry,
     const char* version_path,
     const char* version_index_path,
     const char* content_path,
@@ -1288,7 +1316,7 @@ static int Cmd_DownSyncVersion(
     Longtail_StorageAPI* target_storage_api,
     Longtail_HashAPI* hash_api,
     Longtail_JobAPI* job_api,
-    Longtail_CompressionRegistry* compression_registry,
+    Longtail_CompressionRegistryAPI* compression_registry,
     const char* target_version_index_path,
     const char* have_content_index_path,
     const char* have_content_path,
@@ -1520,7 +1548,7 @@ int main(int argc, char** argv)
 
     Longtail_SetLogLevel(log_level);
 
-    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_StorageAPI* fs_storage_api = Longtail_CreateFSStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
@@ -1995,10 +2023,10 @@ int main(int argc, char** argv)
     return 1;
 
 end:
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyStorageAPI(fs_storage_api);
-    Longtail_DestroyCompressionRegistry(compression_registry);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(fs_storage_api);
+    SAFE_DISPOSE_API(compression_registry);
 
     Longtail_Free((void*)create_version_index);
     Longtail_Free((void*)version);

@@ -1,10 +1,17 @@
+#define STB_DS_IMPLEMENTATION
+#include "../src/stb_ds.h"
+
 #include "../src/longtail.h"
 
 #include "../third-party/jctest/src/jc_test.h"
 
-#include "../lib/longtail_lib.h"
-#include "../lib/longtail_meowhash.h"
-#include "../lib/longtail_blake2hash.h"
+#include "../lib/bikeshed/longtail_bikeshed.h"
+#include "../lib/filestorage/longtail_filestorage.h"
+#include "../lib/lizard/longtail_lizard.h"
+#include "../lib/memstorage/longtail_memstorage.h"
+#include "../lib/meowhash/longtail_meowhash.h"
+#include "../lib/blake2/longtail_blake2hash.h"
+#include "../lib/xxhash/longtail_xxhash.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -221,7 +228,7 @@ TEST(Longtail, Longtail_ContentIndex)
 
     Longtail_Free(content_index);
 
-    Longtail_DestroyHashAPI(hash_api);
+    SAFE_DISPOSE_API(hash_api);
 }
 
 static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
@@ -307,16 +314,42 @@ TEST(Longtail, ContentIndexSerialization)
     Longtail_Free(cindex2);
     cindex2 = 0;
 
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyStorageAPI(local_storage);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(local_storage);
+}
+
+Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
+{
+    Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
+    if (lizard_compression == 0)
+    {
+        return 0;
+    }
+    Longtail_CompressionAPI_HSettings lizard_settings = lizard_compression->GetDefaultSettings(lizard_compression);
+
+    uint32_t compression_types[1] = {LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE};
+    struct Longtail_CompressionAPI* compression_apis[1] = {lizard_compression};
+    Longtail_CompressionAPI_HSettings compression_settings[1] = {lizard_settings};
+
+    Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
+        1,
+        (const uint32_t*)compression_types,
+        (const Longtail_CompressionAPI **)compression_apis,
+        (const Longtail_CompressionAPI_HSettings*)compression_settings);
+    if (registry == 0)
+    {
+        SAFE_DISPOSE_API(lizard_compression);
+        return 0;
+    }
+    return registry;
 }
 
 TEST(Longtail, Longtail_WriteContent)
 {
     Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
     Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateXXHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
@@ -437,11 +470,11 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_Free(cindex);
     Longtail_Free(vindex);
 
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyCompressionRegistry(compression_registry);
-    Longtail_DestroyStorageAPI(target_storage);
-    Longtail_DestroyStorageAPI(source_storage);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(target_storage);
+    SAFE_DISPOSE_API(source_storage);
 }
 
 #if 0
@@ -580,7 +613,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
 
     Longtail_Free(missing_content_index);
 
-    Longtail_DestroyHashAPI(hash_api);
+    SAFE_DISPOSE_API(hash_api);
 }
 
 TEST(Longtail, GetMissingAssets)
@@ -625,9 +658,9 @@ TEST(Longtail, VersionIndexDirectories)
     Longtail_Free(local_version_index);
     Longtail_Free(local_paths);
 
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyStorageAPI(local_storage);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(local_storage);
 }
 
 TEST(Longtail, Longtail_MergeContentIndex)
@@ -710,13 +743,13 @@ TEST(Longtail, Longtail_MergeContentIndex)
     Longtail_Free(cindex2);
     Longtail_Free(cindex1);
 
-    Longtail_DestroyHashAPI(hash_api);
+    SAFE_DISPOSE_API(hash_api);
 }
 
 TEST(Longtail, Longtail_VersionDiff)
 {
     Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
@@ -1033,17 +1066,17 @@ TEST(Longtail, Longtail_VersionDiff)
         test_data = 0;
     }
 
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyCompressionRegistry(compression_registry);
-    Longtail_DestroyStorageAPI(storage);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage);
 }
 
 TEST(Longtail, FullScale)
 {
     if ((1)) return;
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
@@ -1214,17 +1247,17 @@ TEST(Longtail, FullScale)
     Longtail_Free(remote_version_index);
     Longtail_Free(local_version_index);
 
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyCompressionRegistry(compression_registry);
-    Longtail_DestroyStorageAPI(local_storage);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(local_storage);
 }
 
 
 TEST(Longtail, Longtail_WriteVersion)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
@@ -1411,10 +1444,10 @@ TEST(Longtail, Longtail_WriteVersion)
     vindex = 0;
     Longtail_Free(cindex);
     cindex = 0;
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyCompressionRegistry(compression_registry);
-    Longtail_DestroyStorageAPI(storage_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
 }
 
 static void Bench()
@@ -1456,7 +1489,7 @@ static void Bench()
     const char* TARGET_VERSION_PREFIX = HOME "\\remote\\";
 
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
@@ -1625,10 +1658,10 @@ static void Bench()
 
     Longtail_Free(full_content_index);
 
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyCompressionRegistry(compression_registry);
-    Longtail_DestroyStorageAPI(storage_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
 
     #undef HOME
 }
@@ -1666,7 +1699,7 @@ static void LifelikeTest()
 
     printf("Indexing `%s`...\n", local_path_1);
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    Longtail_CompressionRegistry* compression_registry = Longtail_CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
@@ -1892,10 +1925,10 @@ static void LifelikeTest()
     Longtail_Free(version1);
     version1 = 0;
 
-    Longtail_DestroyJobAPI(job_api);
-    Longtail_DestroyHashAPI(hash_api);
-    Longtail_DestroyCompressionRegistry(compression_registry);
-    Longtail_DestroyStorageAPI(storage_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
 
     return;
 }
