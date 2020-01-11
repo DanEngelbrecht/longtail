@@ -1929,6 +1929,7 @@ static int DecompressBlock(
             err = compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &uncompressed_buffer[total_produced_size], compressed_size - total_consumed_size, uncompressed_size - total_produced_size, &consumed_size, &produced_size);
             if (err)
             {
+                compression_api->DeleteDecompressionContext(compression_api, decompression_context);
                 Longtail_DisposeAPI(&compression_api->m_API);
                 return err;
             }
@@ -1937,6 +1938,7 @@ static int DecompressBlock(
         }
         decompressed_size = total_produced_size;
     }
+    compression_api->DeleteDecompressionContext(compression_api, decompression_context);
     return 0;
 }
 

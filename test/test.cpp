@@ -283,6 +283,7 @@ TEST(Longtail, LongtailBrotli)
     ASSERT_STREQ(raw_data, decompressed_buffer);
     Longtail_Free(decompressed_buffer);
     Longtail_Free(compressed_buffer);
+    compression_api->DeleteDecompressionContext(compression_api, decompression_context);
 
     Longtail_DisposeAPI(&compression_api->m_API);
 }
