@@ -45,7 +45,7 @@ static size_t LizardCompressionAPI_GetMaxCompressedSize(struct Longtail_Compress
     return (size_t)Lizard_compressBound((int)size);
 }
 
-static int LizardCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_size)
+static int LizardCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* consumed_size, size_t* produced_size)
 {
     int compression_setting = *(int*)context;
     int compressed_size = Lizard_compress(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
@@ -53,7 +53,8 @@ static int LizardCompressionAPI_Compress(struct Longtail_CompressionAPI* compres
     {
         return ENOMEM;
     }
-    *out_size = (size_t)(compressed_size);
+    *consumed_size = (size_t)(uncompressed_size);
+    *produced_size = (size_t)(compressed_size);
     return 0;
 }
 
@@ -61,19 +62,27 @@ static void LizardCompressionAPI_DeleteCompressionContext(struct Longtail_Compre
 {
 }
 
-static Longtail_CompressionAPI_HDecompressionContext LizardCompressionAPI_CreateDecompressionContext(struct Longtail_CompressionAPI* compression_api)
+static int LizardCompressionAPI_FinishCompress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, char* compressed, size_t max_compressed_size, size_t* out_size)
 {
-    return (Longtail_CompressionAPI_HDecompressionContext)LizardCompressionAPI_GetDefaultSettings(compression_api);
+    *out_size = 0;
+    return 0;
 }
 
-static int LizardCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* out_size)
+static int LizardCompressionAPI_CreateDecompressionContext(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext* out_context)
+{
+    *out_context = (Longtail_CompressionAPI_HDecompressionContext)LizardCompressionAPI_GetDefaultSettings(compression_api);
+    return 0;
+}
+
+static int LizardCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* consumed_size, size_t* produced_size)
 {
     int result = Lizard_decompress_safe(compressed, uncompressed, (int)compressed_size, (int)uncompressed_size);
     if (result < 0)
     {
         return EBADF;
     }
-    *out_size = (size_t)(result);
+    *consumed_size = compressed_size;
+    *produced_size = (size_t)(result);
     return 0;
 }
 
@@ -89,6 +98,7 @@ static void LizardCompressionAPI_Init(struct LizardCompressionAPI* compression_a
     compression_api->m_LizardCompressionAPI.CreateCompressionContext = LizardCompressionAPI_CreateCompressionContext;
     compression_api->m_LizardCompressionAPI.GetMaxCompressedSize = LizardCompressionAPI_GetMaxCompressedSize;
     compression_api->m_LizardCompressionAPI.Compress = LizardCompressionAPI_Compress;
+    compression_api->m_LizardCompressionAPI.FinishCompress = LizardCompressionAPI_FinishCompress;
     compression_api->m_LizardCompressionAPI.DeleteCompressionContext = LizardCompressionAPI_DeleteCompressionContext;
     compression_api->m_LizardCompressionAPI.CreateDecompressionContext = LizardCompressionAPI_CreateDecompressionContext;
     compression_api->m_LizardCompressionAPI.Decompress = LizardCompressionAPI_Decompress;

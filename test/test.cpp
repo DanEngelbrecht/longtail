@@ -8,7 +8,7 @@
 #include "../lib/lizard/longtail_lizard.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
-#include "../lib/blake2/longtail_blake2hash.h"
+#include "../lib/blake2/longtail_blake2.h"
 #include "../lib/xxhash/longtail_xxhash.h"
 
 #include <inttypes.h>
@@ -129,6 +129,26 @@ TEST(Longtail, LongtailMalloc)
     void* p = Longtail_Alloc(77);
     ASSERT_NE((void*)0, p);
     Longtail_Free(p);
+}
+
+TEST(Longtail, LongtailBrotli)
+{
+}
+
+TEST(Longtail, LongtailLizard)
+{
+}
+
+TEST(Longtail, LongtailBlake2)
+{
+}
+
+TEST(Longtail, LongtailXXHash)
+{
+}
+
+TEST(Longtail, LongtailMeowHash)
+{
 }
 
 TEST(Longtail, Longtail_VersionIndex)

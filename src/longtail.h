@@ -72,11 +72,12 @@ struct Longtail_CompressionAPI
 
     int (*CreateCompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, Longtail_CompressionAPI_HCompressionContext* out_context);
     size_t (*GetMaxCompressedSize)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, size_t size);
-    int (*Compress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_size);
+    int (*Compress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* consumed_size, size_t* produced_size);
+    int (*FinishCompress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, char* compressed, size_t max_compressed_size, size_t* out_size);
     void (*DeleteCompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context);
 
-    Longtail_CompressionAPI_HDecompressionContext (*CreateDecompressionContext)(struct Longtail_CompressionAPI* compression_api);
-    int (*Decompress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* out_size);
+    int (*CreateDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext* out_context);
+    int (*Decompress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* consumed_size, size_t* produced_size);
     void (*DeleteDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context);
 };
 
