@@ -3,7 +3,7 @@
 
 #include "../src/longtail.h"
 
-#include "../third-party/jctest/src/jc_test.h"
+#include "ext/jc_test.h"
 
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/filestorage/longtail_filestorage.h"
