@@ -111,21 +111,3 @@ struct Longtail_CompressionAPI* Longtail_CreateLizardCompressionAPI()
     LizardCompressionAPI_Init(compression_api);
     return &compression_api->m_LizardCompressionAPI;
 }
-
-#include "ext/entropy/entropy_common.c"
-#undef FORCE_INLINE
-#include "ext/entropy/fse_compress.c"
-#undef CHECK_F
-#include "ext/entropy/fse_decompress.c"
-#undef CHECK_F
-#include "ext/entropy/huf_compress.c"
-#undef CHECK_F
-#include "ext/entropy/huf_decompress.c"
-#undef CHECK_F
-
-#include "ext/lizard_compress.c"
-#include "ext/lizard_decompress.c"
-#include "ext/lizard_frame.c"
-
-//#define XXH_STATIC_LINKING_ONLY
-//#include "ext/xxhash/xxhash.c"

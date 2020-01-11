@@ -1899,6 +1899,47 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
     out_name[4] = '/';
 }
 
+static int DecompressBlock(
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
+    uint32_t compression_type,
+    size_t compressed_size,
+    size_t uncompressed_size,
+    const char* compressed_buffer,
+    char* uncompressed_buffer)
+{
+    struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
+    if (!compression_api)
+    {
+        return EBADF;
+    }
+    Longtail_CompressionAPI_HDecompressionContext decompression_context;
+    int err = compression_api->CreateDecompressionContext(compression_api, &decompression_context);
+    if (err)
+    {
+        return err;
+    }
+    size_t decompressed_size = 0;
+    {
+        size_t total_consumed_size = 0;
+        size_t total_produced_size = 0;
+        while (total_consumed_size < compressed_size)
+        {
+            size_t consumed_size = 0;
+            size_t produced_size = 0;
+            err = compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &uncompressed_buffer[total_produced_size], compressed_size - total_consumed_size, uncompressed_size - total_produced_size, &consumed_size, &produced_size);
+            if (err)
+            {
+                Longtail_DisposeAPI(&compression_api->m_API);
+                return err;
+            }
+            total_consumed_size += consumed_size;
+            total_produced_size += produced_size;
+        }
+        decompressed_size = total_produced_size;
+    }
+    return 0;
+}
+
 static int ReadBlockData(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_CompressionRegistryAPI* compression_registry_api,
@@ -1978,48 +2019,18 @@ static int ReadBlockData(
     uint32_t compression_type = *compression_type_ptr;
     if (0 != compression_type)
     {
-        struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
-        if (!compression_api)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadBlockData: Compression type not supported `%u`", compression_type)
-            Longtail_Free(block_path);
-            block_path = 0;
-            Longtail_Free(block_data);
-            block_data = 0;
-            return EBADF;
-        }
         uint32_t uncompressed_size = ((uint32_t*)(void*)compressed_block_content)[0];
         uint32_t compressed_size = ((uint32_t*)(void*)compressed_block_content)[1];
         block_data = (char*)Longtail_Alloc(uncompressed_size);
         LONGTAIL_FATAL_ASSERT_PRIVATE(block_data, return ENOMEM)
-        Longtail_CompressionAPI_HDecompressionContext compression_context;
-        err = compression_api->CreateDecompressionContext(compression_api, &compression_context);
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to create decompressor for block `%s`, %d", block_path, err)
-            Longtail_Free(block_data);
-            block_data = 0;
-            Longtail_Free(block_path);
-            block_path = 0;
-            Longtail_Free(compressed_block_content);
-            compressed_block_content = 0;
-            return ENOMEM;
-        }
-        size_t total_uncompressed_size = 0;
-        size_t total_consumed_count = 0;
-        const char* decompress_read_buffer =  &compressed_block_content[sizeof(uint32_t) * 2];
-        char* decompress_write_buffer =  (char*)block_data;
-        while (total_consumed_count < uncompressed_size)
-        {
-            size_t consumed_count = 0;
-            size_t produced_count = 0;
-            err = compression_api->Decompress(compression_api, compression_context, &decompress_read_buffer[total_consumed_count], &decompress_write_buffer[uncompressed_size], compressed_size - total_consumed_count, uncompressed_size - total_uncompressed_size, &consumed_count, &produced_count);
-            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, return err)
-            total_consumed_count += consumed_count;
-            total_uncompressed_size += produced_count;
-        }
+        err = DecompressBlock(
+            compression_registry_api,
+            compression_type,
+            compressed_size,
+            uncompressed_size,
+            &compressed_block_content[sizeof(uint32_t) * 2],
+            block_data);
 
-        compression_api->DeleteDecompressionContext(compression_api, compression_context);
         Longtail_Free(compressed_block_content);
         compressed_block_content = 0;
 
@@ -2100,6 +2111,77 @@ static int ReadBlockIndex(
     *out_block_index = block_index;
     return 0;
 }
+
+
+int CompressBlock(
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
+    uint32_t compression_type,
+    size_t uncompressed_size,
+    size_t* compressed_size,
+    const char* uncompressed_buffer,
+    char** out_compressed_buffer,
+    size_t compressed_prefix_size)
+{
+    struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
+    if (!compression_api)
+    {
+        return EBADF;
+    }
+    Longtail_CompressionAPI_HCompressionContext compression_context;
+    int err = compression_api->CreateCompressionContext(compression_api, compression_registry_api->GetCompressionSettings(compression_registry_api, compression_type), &compression_context);
+    if (err)
+    {
+        return err;
+    }
+
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, uncompressed_size);
+
+    *out_compressed_buffer = (char*)Longtail_Alloc(compressed_prefix_size + max_compressed_size);
+    if (!(*out_compressed_buffer))
+    {
+        compression_api->DeleteCompressionContext(compression_api, compression_context);
+        return ENOMEM;
+    }
+
+    char* compressed_buffer = &(*out_compressed_buffer)[compressed_prefix_size];
+
+    *compressed_size = 0;
+    {
+        size_t total_consumed_size = 0;
+        size_t total_produced_size = 0;
+        while (total_consumed_size < uncompressed_size)
+        {
+            size_t consumed_size = 0;
+            size_t produced_size = 0;
+            err = compression_api->Compress(compression_api, compression_context, &uncompressed_buffer[total_consumed_size], &compressed_buffer[total_produced_size], uncompressed_size - total_consumed_size, max_compressed_size - total_produced_size, &consumed_size, &produced_size);
+            if (err)
+            {
+                Longtail_Free(*out_compressed_buffer);
+                compression_api->DeleteCompressionContext(compression_api, compression_context);
+                return err;
+            }
+            total_consumed_size += consumed_size;
+            total_produced_size += produced_size;
+        }
+
+        size_t produced_size;
+        err = compression_api->FinishCompress(compression_api, compression_context, &compressed_buffer[total_produced_size], max_compressed_size - total_produced_size, &produced_size);
+        if (err)
+        {
+            Longtail_Free(*out_compressed_buffer);
+            compression_api->DeleteCompressionContext(compression_api, compression_context);
+            return err;
+        }
+        total_produced_size += produced_size;
+        *compressed_size = total_produced_size;
+    }
+
+    compression_api->DeleteCompressionContext(compression_api, compression_context);
+
+    return 0;
+}
+
+
 
 static void Longtail_WriteContentBlockJob(void* context)
 {
@@ -2234,55 +2316,26 @@ static void Longtail_WriteContentBlockJob(void* context)
 
     if (compression_type != 0)
     {
-        struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
-        if (!compression_api)
+        size_t compressed_size;
+        char* compressed_buffer;
+        int err = CompressBlock(
+            compression_registry_api,
+            compression_type,
+            block_data_size,
+            &compressed_size,
+            write_buffer,
+            &compressed_buffer,
+            sizeof(uint32_t) + sizeof(uint32_t));
+        ((uint32_t*)(void*)compressed_buffer)[0] = (uint32_t)block_data_size;
+        ((uint32_t*)(void*)compressed_buffer)[1] = (uint32_t)compressed_size;
+        if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Compression type not supported `%u`", compression_type)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            job->m_Err = EBADF;
+            job->m_Err = err;
             return;
         }
-        Longtail_CompressionAPI_HSettings compression_settings = compression_registry_api->GetCompressionSettings(compression_registry_api, compression_type);
-        Longtail_CompressionAPI_HCompressionContext compression_context;
-        int err = compression_api->CreateCompressionContext(compression_api, compression_settings, &compression_context);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, job->m_Err = err; return)
-        const size_t max_dst_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, block_data_size);
-        char* compressed_buffer = (char*)Longtail_Alloc((sizeof(uint32_t) * 2) + max_dst_size);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(compressed_buffer, job->m_Err = ENOMEM; return)
-        ((uint32_t*)(void*)compressed_buffer)[0] = (uint32_t)block_data_size;
-
-        size_t compressed_size = 0;
-        size_t total_consumed_count = 0;
-        char* compress_write_buffer =  &((char*)compressed_buffer)[sizeof(int32_t) * 2];
-        const char* compress_read_buffer =  (const char*)write_buffer;
-        while (total_consumed_count < block_data_size)
-        {
-            size_t consumed_count = 0;
-            size_t produced_count = 0;
-            err = compression_api->Compress(compression_api, compression_context, &compress_read_buffer[total_consumed_count], &compress_write_buffer[compressed_size], block_data_size - total_consumed_count, max_dst_size - compressed_size, &consumed_count, &produced_count);
-            LONGTAIL_FATAL_ASSERT_PRIVATE(!err, job->m_Err = err; return)
-            total_consumed_count += consumed_count;
-            compressed_size += produced_count;
-        }
-        size_t finish_compress_size;
-        err = compression_api->FinishCompress(compression_api, compression_context, &((char*)compressed_buffer)[sizeof(int32_t) * 2 + compressed_size], max_dst_size - compressed_size, &finish_compress_size);
-        LONGTAIL_FATAL_ASSERT_PRIVATE(!err, job->m_Err = err; return)
-        compressed_size += finish_compress_size;
-        compression_api->DeleteCompressionContext(compression_api, compression_context);
-        if (compressed_size <= 0)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to compress data for block for `%s`", tmp_block_path)
-            Longtail_Free(compressed_buffer);
-            compressed_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            job->m_Err = EBADF;
-            return;
-        }
-        ((uint32_t*)(void*)compressed_buffer)[1] = (uint32_t)compressed_size;
 
         Longtail_Free(block_data_buffer);
         block_data_buffer = 0;

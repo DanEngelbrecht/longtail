@@ -8,7 +8,7 @@
 
 #include <errno.h>
 
-const uint32_t LONGTAIL_BROTLI_COMPRESSION_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'r') << 16) + (((uint32_t)'t') << 8) + ((uint32_t)'l');
+const uint32_t LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'r') << 16) + (((uint32_t)'t') << 8) + ((uint32_t)'0');
 
 struct BrotliCompressionAPI
 {
@@ -56,19 +56,22 @@ static int BrotliCompressionAPI_Compress(struct Longtail_CompressionAPI* compres
 
     const uint8_t* uncompressed_ptr = (const uint8_t*)uncompressed;
     uint8_t* compressed_ptr = (uint8_t*)compressed;
-    *consumed_size = uncompressed_size;
-    *produced_size = max_compressed_size;
+    size_t available_in = uncompressed_size;
+    size_t available_out = max_compressed_size;
     if (!BrotliEncoderCompressStream(
         state,
         BROTLI_OPERATION_PROCESS,
-        consumed_size,
+        &available_in,
         &uncompressed_ptr,
-        produced_size,
+        &available_out,
         &compressed_ptr,
         0))
     {
         return EINVAL;
     }
+
+    *consumed_size = uncompressed_size - available_in;
+    *produced_size = max_compressed_size - available_out;
 
     return 0;
 }
@@ -79,18 +82,22 @@ static int BrotliCompressionAPI_FinishCompress(struct Longtail_CompressionAPI* c
 
     const uint8_t* uncompressed_ptr = 0;
     uint8_t* compressed_ptr = (uint8_t*)compressed;
-    size_t consumed_size = 0;
-    size_t produced_size = max_compressed_size;
-    while (BrotliEncoderCompressStream(
-        state,
-        BROTLI_OPERATION_FINISH,
-        &consumed_size,
-        &uncompressed_ptr,
-        &produced_size,
-        &compressed_ptr,
-        0))
-    {
+    size_t available_in = 0;
+    size_t available_out = max_compressed_size;
+    while (!BrotliEncoderIsFinished(state)) {
+        if (!BrotliEncoderCompressStream(
+            state,
+            BROTLI_OPERATION_FINISH,
+            &available_in,
+            &uncompressed_ptr,
+            &available_out,
+            &compressed_ptr,
+            0))
+        {
+            return EINVAL;
+        }
     }
+    *out_size = max_compressed_size - available_out;
     return 0;
 }
 
@@ -113,21 +120,27 @@ static int BrotliCompressionAPI_CreateDecompressionContext(struct Longtail_Compr
 
 static int BrotliCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* consumed_size, size_t* produced_size)
 {
+    BrotliDecoderState* state = (BrotliDecoderState*)context;
     const uint8_t* compressed_ptr = (const uint8_t*)compressed;
     uint8_t* uncompressed_ptr = (uint8_t*)uncompressed;
-    *consumed_size = compressed_size;
-    *produced_size = uncompressed_size;
-    BrotliDecoderState* state = (BrotliDecoderState*)context;
-    if(BROTLI_DECODER_RESULT_ERROR == BrotliDecoderDecompressStream(
-        state,
-        consumed_size,
-        &compressed_ptr,
-        produced_size,
-        &uncompressed_ptr,
-        0))
+    size_t available_in = compressed_size;
+    size_t available_out = uncompressed_size;
+    while(available_in > 0)
     {
-        return EINVAL;
+        BrotliDecoderResult res = BrotliDecoderDecompressStream(
+            state,
+            &available_in,
+            &compressed_ptr,
+            &available_out,
+            &uncompressed_ptr,
+            0);
+        if (res == BROTLI_DECODER_RESULT_ERROR)
+        {
+            return EBADF;
+        }
     }
+    *consumed_size = compressed_size - available_in;
+    *produced_size = uncompressed_size - available_out;
     return 0;
 }
 

@@ -65,5 +65,3 @@ struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
     Blake2Hash_Init(blake2_hash);
     return &blake2_hash->m_Blake2HashAPI;
 }
-
-#include "ext/blake2s.c"

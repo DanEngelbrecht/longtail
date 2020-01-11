@@ -4,12 +4,12 @@
 #include "ext/jc_test.h"
 
 #include "../lib/bikeshed/longtail_bikeshed.h"
+#include "../lib/brotli/longtail_brotli.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/lizard/longtail_lizard.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/blake2/longtail_blake2.h"
-#include "../lib/xxhash/longtail_xxhash.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -131,19 +131,163 @@ TEST(Longtail, LongtailMalloc)
     Longtail_Free(p);
 }
 
-TEST(Longtail, LongtailBrotli)
-{
-}
-
 TEST(Longtail, LongtailLizard)
 {
+    Longtail_CompressionAPI* compression_api = Longtail_CreateLizardCompressionAPI();
+    ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
+
+    const char* raw_data =
+        "A very long file that should be able to be recreated"
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+        "And in the end it is not the same, it is different, just because why not";
+
+    size_t data_len = strlen(raw_data) + 1;
+
+    Longtail_CompressionAPI_HCompressionContext compression_context;
+    ASSERT_EQ(0, compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api), &compression_context));
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, data_len);
+    char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
+    ASSERT_NE((char*)0, compressed_buffer);
+    size_t compressed_size = 0;
+    {
+        size_t total_consumed_size = 0;
+        size_t total_produced_size = 0;
+        while (total_consumed_size < data_len)
+        {
+            size_t consumed_size = 0;
+            size_t produced_size = 0;
+            ASSERT_EQ(0, compression_api->Compress(compression_api, compression_context, &raw_data[total_consumed_size], &compressed_buffer[total_produced_size], data_len - total_consumed_size, max_compressed_size - total_produced_size, &consumed_size, &produced_size));
+            total_consumed_size += consumed_size;
+            total_produced_size += produced_size;
+        }
+
+        size_t produced_size;
+        ASSERT_EQ(0, compression_api->FinishCompress(compression_api, compression_context, &compressed_buffer[total_produced_size], max_compressed_size - total_produced_size, &produced_size));
+        total_produced_size += produced_size;
+        compressed_size = total_produced_size;
+    }
+
+    compression_api->DeleteCompressionContext(compression_api, compression_context);
+
+    Longtail_CompressionAPI_HDecompressionContext decompression_context;
+    ASSERT_EQ(0, compression_api->CreateDecompressionContext(compression_api, &decompression_context));
+    char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
+    ASSERT_NE((char*)0, decompressed_buffer);
+    size_t decompressed_size = 0;
+    {
+        size_t total_consumed_size = 0;
+        size_t total_produced_size = 0;
+        while (total_consumed_size < compressed_size)
+        {
+            size_t consumed_size = 0;
+            size_t produced_size = 0;
+            ASSERT_EQ(0, compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &decompressed_buffer[total_produced_size], compressed_size - total_consumed_size, data_len - total_produced_size, &consumed_size, &produced_size));
+            total_consumed_size += consumed_size;
+            total_produced_size += produced_size;
+        }
+        decompressed_size = total_produced_size;
+    }
+    ASSERT_EQ(data_len, decompressed_size);
+    ASSERT_STREQ(raw_data, decompressed_buffer);
+    Longtail_Free(decompressed_buffer);
+    Longtail_Free(compressed_buffer);
+
+    Longtail_DisposeAPI(&compression_api->m_API);
+}
+
+TEST(Longtail, LongtailBrotli)
+{
+    Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
+    ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
+
+    const char* raw_data =
+        "A very long file that should be able to be recreated"
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+        "And in the end it is not the same, it is different, just because why not";
+
+    size_t data_len = strlen(raw_data) + 1;
+
+    Longtail_CompressionAPI_HCompressionContext compression_context;
+    ASSERT_EQ(0, compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api), &compression_context));
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, data_len);
+    char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
+    ASSERT_NE((char*)0, compressed_buffer);
+    size_t compressed_size = 0;
+    {
+        size_t total_consumed_size = 0;
+        size_t total_produced_size = 0;
+        while (total_consumed_size < data_len)
+        {
+            size_t consumed_size = 0;
+            size_t produced_size = 0;
+            ASSERT_EQ(0, compression_api->Compress(compression_api, compression_context, &raw_data[total_consumed_size], &compressed_buffer[total_produced_size], data_len - total_consumed_size, max_compressed_size - total_produced_size, &consumed_size, &produced_size));
+            total_consumed_size += consumed_size;
+            total_produced_size += produced_size;
+        }
+
+        size_t produced_size;
+        ASSERT_EQ(0, compression_api->FinishCompress(compression_api, compression_context, &compressed_buffer[total_produced_size], max_compressed_size - total_produced_size, &produced_size));
+        total_produced_size += produced_size;
+        compressed_size = total_produced_size;
+    }
+
+    compression_api->DeleteCompressionContext(compression_api, compression_context);
+
+    Longtail_CompressionAPI_HDecompressionContext decompression_context;
+    ASSERT_EQ(0, compression_api->CreateDecompressionContext(compression_api, &decompression_context));
+    char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
+    ASSERT_NE((char*)0, decompressed_buffer);
+    size_t decompressed_size = 0;
+    {
+        size_t total_consumed_size = 0;
+        size_t total_produced_size = 0;
+        while (total_consumed_size < compressed_size)
+        {
+            size_t consumed_size = 0;
+            size_t produced_size = 0;
+            ASSERT_EQ(0, compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &decompressed_buffer[total_produced_size], compressed_size - total_consumed_size, data_len - total_produced_size, &consumed_size, &produced_size));
+            total_consumed_size += consumed_size;
+            total_produced_size += produced_size;
+        }
+        decompressed_size = total_produced_size;
+    }
+    ASSERT_EQ(data_len, decompressed_size);
+    ASSERT_STREQ(raw_data, decompressed_buffer);
+    Longtail_Free(decompressed_buffer);
+    Longtail_Free(compressed_buffer);
+
+    Longtail_DisposeAPI(&compression_api->m_API);
 }
 
 TEST(Longtail, LongtailBlake2)
-{
-}
-
-TEST(Longtail, LongtailXXHash)
 {
 }
 
@@ -255,7 +399,7 @@ static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileI
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
     for (uint32_t i = 0; i < count; ++i)
     {
-        result[i] = LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE;
+        result[i] = (i & 1) ? LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE : LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE;
     }
     return result;
 }
@@ -346,12 +490,19 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     }
     Longtail_CompressionAPI_HSettings lizard_settings = lizard_compression->GetDefaultSettings(lizard_compression);
 
-    uint32_t compression_types[1] = {LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[1] = {lizard_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[1] = {lizard_settings};
+    Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
+    if (brotli_compression == 0)
+    {
+        return 0;
+    }
+    Longtail_CompressionAPI_HSettings brotli_settings = brotli_compression->GetDefaultSettings(brotli_compression);
+
+    uint32_t compression_types[2] = {LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE, LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE};
+    struct Longtail_CompressionAPI* compression_apis[2] = {lizard_compression, brotli_compression};
+    Longtail_CompressionAPI_HSettings compression_settings[2] = {lizard_settings, brotli_settings};
 
     Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        1,
+        2,
         (const uint32_t*)compression_types,
         (const Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);
@@ -368,7 +519,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
     Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateXXHashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
     const char* TEST_FILENAMES[5] = {

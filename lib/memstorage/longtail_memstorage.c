@@ -3,27 +3,39 @@
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
 #include "../../src/ext/stb_ds.h"
-#include "../xxhash/longtail_xxhash.h"
 
 #include <errno.h>
+
+static const uint32_t Prime = 0x01000193;
+static const uint32_t Seed  = 0x811C9DC5;
+
+static uint32_t fnv1a(const void* data, uint32_t numBytes)
+{
+    uint32_t hash = Seed;
+    const unsigned char* ptr = (const unsigned char*)data;
+    while (numBytes--)
+    {
+        hash = ((*ptr++) ^ hash) * Prime;
+    }
+    return hash;
+}
 
 struct PathEntry
 {
     char* m_FileName;
-    TLongtail_Hash m_ParentHash;
+    uint32_t m_ParentHash;
     uint8_t* m_Content;
 };
 
 struct Lookup
 {
-    TLongtail_Hash key;
+    uint32_t key;
     uint32_t value;
 };
 
 struct InMemStorageAPI
 {
     struct Longtail_StorageAPI m_InMemStorageAPI;
-    struct Longtail_HashAPI* m_HashAPI;
     struct Lookup* m_PathHashToContent;
     struct PathEntry* m_PathEntries;
     HLongtail_SpinLock m_SpinLock;
@@ -46,31 +58,24 @@ static void InMemStorageAPI_Dispose(struct Longtail_API* storage_api)
     in_mem_storage_api->m_PathHashToContent = 0;
     arrfree(in_mem_storage_api->m_PathEntries);
     in_mem_storage_api->m_PathEntries = 0;
-    in_mem_storage_api->m_HashAPI->m_API.Dispose(&in_mem_storage_api->m_HashAPI->m_API);
     Longtail_Free(storage_api);
 }
 
-static uint64_t InMemStorageAPI_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path)
+static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 {
-    uint64_t hash;
-    int err = hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), (void*)path, &hash);
-    if (err != 0)
-    {
-        return (uint64_t)-1;
-    }
-    return hash;
+    return fnv1a((void*)path, (uint32_t)strlen(path));
 }
 
 static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
+    uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it != -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        *out_open_file = (Longtail_StorageAPI_HOpenFile)path_hash;
+        *out_open_file = (Longtail_StorageAPI_HOpenFile)(uintptr_t)path_hash;
         return 0;
     }
     Longtail_UnlockSpinLock(instance->m_SpinLock);
@@ -81,7 +86,7 @@ static int InMemStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Long
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = (TLongtail_Hash)f;
+    uint32_t path_hash = (uint32_t)(uintptr_t)f;
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it == -1) {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
@@ -98,7 +103,7 @@ static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtai
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = (TLongtail_Hash)f;
+    uint32_t path_hash = (uint32_t)(uintptr_t)f;
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it == -1) {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
@@ -115,7 +120,7 @@ static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtai
     return 0;
 }
 
-static TLongtail_Hash InMemStorageAPI_GetParentPathHash(struct InMemStorageAPI* instance, const char* path)
+static uint32_t InMemStorageAPI_GetParentPathHash(struct InMemStorageAPI* instance, const char* path)
 {
     const char* dir_path_begin = strrchr(path, '/');
     if (!dir_path_begin)
@@ -126,7 +131,7 @@ static TLongtail_Hash InMemStorageAPI_GetParentPathHash(struct InMemStorageAPI* 
     char* dir_path = (char*)Longtail_Alloc(dir_length + 1);
     strncpy(dir_path, path, dir_length);
     dir_path[dir_length] = '\0';
-    TLongtail_Hash hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, dir_path);
+    uint32_t hash = InMemStorageAPI_GetPathHash(dir_path);
     Longtail_Free(dir_path);
     return hash;
 }
@@ -145,13 +150,13 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash parent_path_hash = InMemStorageAPI_GetParentPathHash(instance, path);
+    uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(instance, path);
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
         return ENOENT;
     }
-    TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
+    uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     struct PathEntry* path_entry = 0;
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it != -1)
@@ -171,7 +176,7 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
     arrsetcap(path_entry->m_Content, initial_size == 0 ? 16 : (uint32_t)initial_size);
     arrsetlen(path_entry->m_Content, (uint32_t)initial_size);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    *out_open_file = (Longtail_StorageAPI_HOpenFile)path_hash;
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)(uintptr_t)path_hash;
     return 0;
 }
 
@@ -179,7 +184,7 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = (TLongtail_Hash)f;
+    uint32_t path_hash = (uint32_t)(uintptr_t)f;
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it == -1)
     {
@@ -208,7 +213,7 @@ static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Long
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = (TLongtail_Hash)f;
+    uint32_t path_hash = (uint32_t)(uintptr_t)f;
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it == -1)
     {
@@ -229,13 +234,13 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash parent_path_hash = InMemStorageAPI_GetParentPathHash(instance, path);
+    uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(instance, path);
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
         return ENOENT;
     }
-    TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
+    uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
     if (source_path_ptr != -1)
     {
@@ -264,7 +269,7 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash source_path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, source_path);
+    uint32_t source_path_hash = InMemStorageAPI_GetPathHash(source_path);
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, source_path_hash);
     if (source_path_ptr == -1)
     {
@@ -273,7 +278,7 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
     }
     struct PathEntry* source_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
 
-    TLongtail_Hash target_path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, target_path);
+    uint32_t target_path_hash = InMemStorageAPI_GetPathHash(target_path);
     intptr_t target_path_ptr = hmgeti(instance->m_PathHashToContent, target_path_hash);
     if (target_path_ptr != -1)
     {
@@ -307,7 +312,7 @@ static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const 
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash source_path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
+    uint32_t source_path_hash = InMemStorageAPI_GetPathHash(path);
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, source_path_hash);
     if (source_path_ptr == -1)
     {
@@ -322,7 +327,7 @@ static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
+    uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
     if (source_path_ptr == -1)
     {
@@ -338,7 +343,7 @@ static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, co
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
+    uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
     if (source_path_ptr == -1)
     {
@@ -366,7 +371,7 @@ static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, c
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
+    uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
     if (source_path_ptr == -1)
     {
@@ -394,7 +399,7 @@ static int InMemStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, co
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = path[0] ? InMemStorageAPI_GetPathHash(instance->m_HashAPI, path) : 0;
+    uint32_t path_hash = path[0] ? InMemStorageAPI_GetPathHash(path) : 0;
     ptrdiff_t* i = (ptrdiff_t*)Longtail_Alloc(sizeof(ptrdiff_t));
     *i = 0;
     while (*i < arrlen(instance->m_PathEntries))
@@ -415,7 +420,7 @@ static int InMemStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Lon
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     ptrdiff_t* i = (ptrdiff_t*)iterator;
-    TLongtail_Hash path_hash = instance->m_PathEntries[*i].m_ParentHash;
+    uint32_t path_hash = instance->m_PathEntries[*i].m_ParentHash;
     *i += 1;
     while (*i < arrlen(instance->m_PathEntries))
     {
@@ -493,7 +498,6 @@ static int InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_InMemStorageAPI.GetDirectoryName = InMemStorageAPI_GetDirectoryName;
     storage_api->m_InMemStorageAPI.GetEntrySize = InMemStorageAPI_GetEntrySize;
 
-    storage_api->m_HashAPI = Longtail_CreateXXHashAPI();
     storage_api->m_PathHashToContent = 0;
     storage_api->m_PathEntries = 0;
     return Longtail_CreateSpinLock(&storage_api[1], &storage_api->m_SpinLock);
