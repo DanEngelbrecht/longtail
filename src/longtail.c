@@ -1326,6 +1326,25 @@ int Longtail_CreateVersionIndex(
     return 0;
 }
 
+int Longtail_WriteVersionIndexToBuffer(
+    const struct Longtail_VersionIndex* version_index,
+    void** out_buffer,
+    size_t* out_size)
+{
+    LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(out_buffer != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(out_size != 0, return EINVAL)
+    size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (*version_index->m_ChunkCount), (*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
+    *out_buffer = Longtail_Alloc(index_data_size);
+    if (!(*out_buffer))
+    {
+        return ENOMEM;
+    }
+    memcpy(*out_buffer, &version_index[1], index_data_size);
+    *out_size = index_data_size;
+    return 0;
+}
+
 int Longtail_WriteVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_VersionIndex* version_index,
@@ -1361,6 +1380,32 @@ int Longtail_WriteVersionIndex(
     storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
 
+    return 0;
+}
+
+int Longtail_ReadVersionIndexFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_VersionIndex** out_version_index)
+{
+    LONGTAIL_FATAL_ASSERT_PRIVATE(buffer != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(size != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(out_version_index != 0, return EINVAL)
+
+    size_t version_index_size = sizeof(struct Longtail_VersionIndex) + size;
+    struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)Longtail_Alloc(version_index_size);
+    if (!version_index)
+    {
+        return ENOMEM;
+    }
+    memcpy(&version_index[1], buffer, size);
+    int err = InitVersionIndex(version_index, version_index_size);
+    if (err)
+    {
+        Longtail_Free(version_index);
+        return err;
+    }
+    *out_version_index = version_index;
     return 0;
 }
 
@@ -1761,6 +1806,25 @@ int Longtail_CreateContentIndex(
     return 0;
 }
 
+int Longtail_WriteContentIndexToBuffer(
+    const struct Longtail_ContentIndex* content_index,
+    void** out_buffer,
+    size_t* out_size)
+{
+    LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(out_buffer != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(out_size != 0, return EINVAL)
+    size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
+    *out_buffer = Longtail_Alloc(index_data_size);
+    if (!(*out_buffer))
+    {
+        return ENOMEM;
+    }
+    memcpy(*out_buffer, &content_index[1], index_data_size);
+    *out_size = index_data_size;
+    return 0;
+}
+
 int Longtail_WriteContentIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_ContentIndex* content_index,
@@ -1795,6 +1859,32 @@ int Longtail_WriteContentIndex(
     }
     storage_api->CloseFile(storage_api, file_handle);
 
+    return 0;
+}
+
+int Longtail_ReadContentIndexFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    LONGTAIL_FATAL_ASSERT_PRIVATE(buffer != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(size != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE(out_content_index != 0, return EINVAL)
+
+    size_t content_index_size = size + sizeof(struct Longtail_ContentIndex);
+    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
+    if (!content_index)
+    {
+        return ENOMEM;
+    }
+    memcpy(&content_index[1], buffer, size);
+    int err = InitContentIndex(content_index, content_index_size);
+    if (err)
+    {
+        Longtail_Free(content_index);
+        return err;
+    }
+    *out_content_index = content_index;
     return 0;
 }
 

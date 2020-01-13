@@ -160,12 +160,22 @@ int Longtail_CreateVersionIndex(
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
+int Longtail_WriteVersionIndexToBuffer(
+    const struct Longtail_VersionIndex* version_index,
+    void** out_buffer,
+    size_t* out_size);
+
+int Longtail_ReadVersionIndexFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_VersionIndex** out_version_index);
+
 int Longtail_WriteVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_VersionIndex* version_index,
     const char* path);
 
- int Longtail_ReadVersionIndex(
+int Longtail_ReadVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_VersionIndex** out_version_index);
@@ -178,6 +188,16 @@ int Longtail_CreateContentIndex(
     const uint32_t* chunk_compression_types,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
+    struct Longtail_ContentIndex** out_content_index);
+
+int Longtail_WriteContentIndexToBuffer(
+    const struct Longtail_ContentIndex* content_index,
+    void** out_buffer,
+    size_t* out_size);
+
+int Longtail_ReadContentIndexFromBuffer(
+    const void* buffer,
+    size_t size,
     struct Longtail_ContentIndex** out_content_index);
 
 int Longtail_WriteContentIndex(
