@@ -4094,6 +4094,7 @@ int Longtail_RetargetContent(
     struct Longtail_ContentIndex** out_content_index)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RetargetContent: From %u pick %u chunks", (uint32_t)*reference_content_index->m_ChunkCount, (uint32_t)*content_index->m_ChunkCount)
+    LONGTAIL_FATAL_ASSERT_PRIVATE((*reference_content_index->m_HashAPI) == (*content_index->m_HashAPI), return EINVAL)
 
     struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
     for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
@@ -4155,8 +4156,12 @@ int Longtail_RetargetContent(
     struct Longtail_ContentIndex* resulting_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     LONGTAIL_FATAL_ASSERT_PRIVATE(resulting_content_index, return ENOMEM)
 
-    resulting_content_index->m_BlockCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex)];
-    resulting_content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
+    resulting_content_index->m_Version = (uint32_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex)];
+    resulting_content_index->m_HashAPI = (uint32_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t)];
+    resulting_content_index->m_BlockCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
+    resulting_content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)];
+    *resulting_content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_0_0_1;
+    *resulting_content_index->m_HashAPI = *reference_content_index->m_HashAPI;
     *resulting_content_index->m_BlockCount = requested_block_count;
     *resulting_content_index->m_ChunkCount = chunk_count;
     InitContentIndex(resulting_content_index, content_index_size);
