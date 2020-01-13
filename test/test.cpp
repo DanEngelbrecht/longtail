@@ -333,7 +333,8 @@ TEST(Longtail, Longtail_VersionIndex)
         *paths->m_PathCount,
         chunk_sizes,
         asset_content_hashes,
-        asset_compression_types);
+        asset_compression_types,
+        0u); // Dummy hash API
 
     Longtail_Free(version_index);
     Longtail_Free(paths);
@@ -744,7 +745,8 @@ TEST(Longtail, Longtail_CreateMissingContent)
         *paths->m_PathCount,
         chunk_sizes,
         asset_content_hashes,
-        asset_compression_types);
+        asset_compression_types,
+        0u);    // Dummy hash API
     Longtail_Free(paths);
 
     Longtail_ContentIndex* missing_content_index;

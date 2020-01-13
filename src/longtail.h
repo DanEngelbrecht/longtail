@@ -19,6 +19,7 @@ typedef struct Longtail_HashAPI_Context* Longtail_HashAPI_HContext;
 struct Longtail_HashAPI
 {
     struct Longtail_API m_API;
+    uint32_t (*GetIdentifier)(struct Longtail_HashAPI* hash_api);
     int (*BeginContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context);
     void (*Hash)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data);
     uint64_t (*EndContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context);
@@ -280,6 +281,8 @@ struct Longtail_FileInfos
 
 struct Longtail_ContentIndex
 {
+    uint32_t* m_Version;
+    uint32_t* m_HashAPI;
     uint64_t* m_BlockCount;
     uint64_t* m_ChunkCount;
 
@@ -292,6 +295,8 @@ struct Longtail_ContentIndex
 
 struct Longtail_VersionIndex
 {
+    uint32_t* m_Version;
+    uint32_t* m_HashAPI;
     uint32_t* m_AssetCount;
     uint32_t* m_ChunkCount;
     uint32_t* m_AssetChunkIndexCount;
@@ -367,7 +372,8 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_compression_types);
+    const uint32_t* chunk_compression_types,
+    uint32_t hash_api_identifier);
 
 struct Longtail_Chunker;
 

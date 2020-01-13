@@ -7,6 +7,7 @@ extern "C" {
 #endif
 
 extern struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI();
+extern const uint32_t LONGTAIL_BLAKE2_HASH_TYPE;
 
 #ifdef __cplusplus
 }

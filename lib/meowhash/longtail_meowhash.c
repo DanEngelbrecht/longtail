@@ -4,10 +4,17 @@
 
 #include "ext/meow_hash_x64_aesni.h"
 
+const uint32_t LONGTAIL_MEOW_HASH_TYPE = (((uint32_t)'m') << 24) + (((uint32_t)'e') << 16) + (((uint32_t)'o') << 8) + ((uint32_t)'w');
+
 struct MeowHashAPI
 {
     struct Longtail_HashAPI m_MeowHashAPI;
 };
+
+static uint32_t MeowHash_GetIdentifier(struct Longtail_HashAPI* hash_api)
+{
+    return LONGTAIL_MEOW_HASH_TYPE;
+}
 
 static int MeowHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
@@ -48,6 +55,7 @@ static void MeowHash_Dispose(struct Longtail_API* hash_api)
 static void MeowHash_Init(struct MeowHashAPI* hash_api)
 {
     hash_api->m_MeowHashAPI.m_API.Dispose = MeowHash_Dispose;
+    hash_api->m_MeowHashAPI.GetIdentifier = MeowHash_GetIdentifier;
     hash_api->m_MeowHashAPI.BeginContext = MeowHash_BeginContext;
     hash_api->m_MeowHashAPI.Hash = MeowHash_Hash;
     hash_api->m_MeowHashAPI.EndContext = MeowHash_EndContext;
