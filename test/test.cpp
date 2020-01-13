@@ -335,6 +335,15 @@ TEST(Longtail, Longtail_VersionIndex)
         asset_content_hashes,
         asset_compression_types);
 
+    void* store_buffer = 0;
+    size_t store_size = 0;
+    ASSERT_EQ(0, Longtail_WriteVersionIndexToBuffer(version_index, &store_buffer, &store_size));
+    Longtail_VersionIndex* version_index_copy;
+    ASSERT_EQ(0, Longtail_ReadVersionIndexFromBuffer(store_buffer, store_size, &version_index_copy));
+    ASSERT_EQ(*version_index->m_AssetCount, *version_index_copy->m_AssetCount);
+    Longtail_Free(version_index_copy);
+    Longtail_Free(store_buffer);
+
     Longtail_Free(version_index);
     Longtail_Free(paths);
 }
@@ -388,6 +397,16 @@ TEST(Longtail, Longtail_ContentIndex)
     ASSERT_EQ(43593u * 2u, content_index->m_ChunkBlockOffsets[2]);
     ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[3]);
     ASSERT_EQ(43591u, content_index->m_ChunkBlockOffsets[4]);
+
+    void* store_buffer = 0;
+    size_t store_size = 0;
+    ASSERT_EQ(0, Longtail_WriteContentIndexToBuffer(content_index, &store_buffer, &store_size));
+    Longtail_ContentIndex* content_index_copy;
+    ASSERT_EQ(0, Longtail_ReadContentIndexFromBuffer(store_buffer, store_size, &content_index_copy));
+    ASSERT_EQ(*content_index->m_BlockCount, *content_index_copy->m_BlockCount);
+    ASSERT_EQ(*content_index->m_ChunkCount, *content_index_copy->m_ChunkCount);
+    Longtail_Free(content_index_copy);
+    Longtail_Free(store_buffer);
 
     Longtail_Free(content_index);
 
