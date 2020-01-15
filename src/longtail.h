@@ -110,11 +110,26 @@ typedef void (*Longtail_Log)(void* context, int level, const char* str);
 void Longtail_SetLog(Longtail_Log log_func, void* context);
 void Longtail_SetLogLevel(int level);
 
-#define LONGTAIL_LOG_LEVEL_DEBUG     0
-#define LONGTAIL_LOG_LEVEL_INFO      1
-#define LONGTAIL_LOG_LEVEL_WARNING   2
-#define LONGTAIL_LOG_LEVEL_ERROR     3
-#define LONGTAIL_LOG_LEVEL_OFF       4
+#if defined(LONGTAIL_ASSERTS)
+    extern Longtail_Assert Longtail_Assert_private;
+#    define LONGTAIL_FATAL_ASSERT(x, bail) \
+        if (!(x)) \
+        { \
+            if (Longtail_Assert_private) \
+            { \
+                Longtail_Assert_private(#x, __FILE__, __LINE__); \
+            } \
+            bail; \
+        }
+#else // defined(LONGTAIL_ASSERTS)
+#    define LONGTAIL_FATAL_ASSERT(x, y)
+#endif // defined(LONGTAIL_ASSERTS)
+
+#define LONGTAIL_LOG_LEVEL_INFO     0
+#define LONGTAIL_LOG_LEVEL_DEBUG    1
+#define LONGTAIL_LOG_LEVEL_WARNING  2
+#define LONGTAIL_LOG_LEVEL_ERROR    3
+#define LONGTAIL_LOG_LEVEL_OFF      4
 
 #ifndef LONGTAIL_LOG
     void Longtail_CallLogger(int level, const char* fmt, ...);

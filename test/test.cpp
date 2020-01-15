@@ -124,14 +124,14 @@ static int CreateFakeContent(Longtail_StorageAPI* storage_api, const char* paren
     return 1;
 }
 
-TEST(Longtail, LongtailMalloc)
+TEST(Longtail, Longtail_Malloc)
 {
     void* p = Longtail_Alloc(77);
     ASSERT_NE((void*)0, p);
     Longtail_Free(p);
 }
 
-TEST(Longtail, LongtailLizard)
+TEST(Longtail, Longtail_Lizard)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLizardCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
@@ -209,7 +209,7 @@ TEST(Longtail, LongtailLizard)
     Longtail_DisposeAPI(&compression_api->m_API);
 }
 
-TEST(Longtail, LongtailBrotli)
+TEST(Longtail, Longtail_Brotli)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
@@ -288,11 +288,11 @@ TEST(Longtail, LongtailBrotli)
     Longtail_DisposeAPI(&compression_api->m_API);
 }
 
-TEST(Longtail, LongtailBlake2)
+TEST(Longtail, Longtail_Blake2)
 {
 }
 
-TEST(Longtail, LongtailMeowHash)
+TEST(Longtail, Longtail_MeowHash)
 {
 }
 
@@ -2307,4 +2307,98 @@ TEST(Longtail, ChunkerLargeFile)
 
     fclose(large_file);
     large_file = 0;
+}
+
+TEST(Longtail, FileSystemStorage)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+
+    const uint32_t ASSET_COUNT = 9u;
+
+    const char* TEST_FILENAMES[] = {
+        "ContentChangedSameLength.txt",
+        "WillBeRenamed.txt",
+        "ContentSameButShorter.txt",
+        "folder/ContentSameButLonger.txt",
+        "OldRenamedFolder/MovedToNewFolder.txt",
+        "JustDifferent.txt",
+        "EmptyFileInFolder/.init.py",
+        "a/file/in/folder/LongWithChangedStart.dll",
+        "a/file/in/other/folder/LongChangedAtEnd.exe"
+    };
+
+    const char* TEST_STRINGS[] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "This is the documentation we are all craving to understand the complexities of life",
+        "More than chunk less than block",
+        "",
+        "A very long file that should be able to be recreated"
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+            "And in the end it is not the same, it is different, just because why not",
+        "A very long file that should be able to be recreated"
+            "Another big file but this does not contain the data as the one above, however it does start out the same as the other file,right?"
+            "Yet we also repeat this line, this is the first time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the second time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the third time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fourth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fifth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the sixth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the eigth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the ninth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the tenth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the elevth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the twelth time you see this, but it will also show up again and again with only small changes"
+            "I realize I'm not very good at writing out the numbering with the 'th stuff at the end. Not much reason to use that before."
+            "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
+            "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
+            "That will look like garbage, will that really be a good idea?"
+            "This is the end tough..."
+    };
+
+    const char* root_path = "testdata/sample_folder";
+
+    Longtail_FileInfos* file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, root_path, &file_infos));
+    ASSERT_EQ(17u, *file_infos->m_Paths.m_PathCount);
+    Longtail_Free(file_infos);
+
+    for (uint32_t a = 0; a < ASSET_COUNT; ++a)
+    {
+        char* full_path = storage_api->ConcatPath(storage_api, root_path, TEST_FILENAMES[a]);
+        ASSERT_NE((char*)0, full_path);
+        Longtail_StorageAPI_HOpenFile f;
+        ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, full_path, &f));
+        uint64_t expected_size = (uint64_t)strlen(TEST_STRINGS[a]);
+        uint64_t size;
+        ASSERT_EQ(0, storage_api->GetSize(storage_api, f, &size));
+        char* data = (char*)Longtail_Alloc(size);
+        ASSERT_EQ(0, storage_api->Read(storage_api, f, 0, size, data));
+        ASSERT_EQ(expected_size, size);
+        for (uint64_t b = 0; b < size; ++b)
+        {
+            ASSERT_EQ(data[b], TEST_STRINGS[a][b]);
+        }
+        Longtail_Free(data);
+        storage_api->CloseFile(storage_api, f);
+        Longtail_Free(full_path);
+    }
+
+    SAFE_DISPOSE_API(storage_api);
 }
