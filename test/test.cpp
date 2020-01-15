@@ -124,14 +124,14 @@ static int CreateFakeContent(Longtail_StorageAPI* storage_api, const char* paren
     return 1;
 }
 
-TEST(Longtail, LongtailMalloc)
+TEST(Longtail, Longtail_Malloc)
 {
     void* p = Longtail_Alloc(77);
     ASSERT_NE((void*)0, p);
     Longtail_Free(p);
 }
 
-TEST(Longtail, LongtailLizard)
+TEST(Longtail, Longtail_Lizard)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLizardCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
@@ -209,7 +209,7 @@ TEST(Longtail, LongtailLizard)
     Longtail_DisposeAPI(&compression_api->m_API);
 }
 
-TEST(Longtail, LongtailBrotli)
+TEST(Longtail, Longtail_Brotli)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
@@ -288,11 +288,11 @@ TEST(Longtail, LongtailBrotli)
     Longtail_DisposeAPI(&compression_api->m_API);
 }
 
-TEST(Longtail, LongtailBlake2)
+TEST(Longtail, Longtail_Blake2)
 {
 }
 
-TEST(Longtail, LongtailMeowHash)
+TEST(Longtail, Longtail_MeowHash)
 {
 }
 
