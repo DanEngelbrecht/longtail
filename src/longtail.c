@@ -4051,6 +4051,29 @@ static int DiffHashes(
     news = 0;
     Longtail_Free(refs);
     refs = 0;
+
+    if (added > 0)
+    {
+        // Reorder the new hashes so they are in the same order that they where when they were created
+        // so chunks that belongs together are group together in blocks
+        struct HashToIndexItem* added_hashes_lookup = 0;
+        for (uint64_t i = 0; i < added; ++i)
+        {
+            hmput(added_hashes_lookup, added_hashes[i], i);
+        }
+        added = 0;
+        for (uint64_t i = 0; i < new_hash_count; ++i)
+        {
+            TLongtail_Hash hash = new_hashes[i];
+            intptr_t hash_ptr = hmgeti(added_hashes_lookup, hash);
+            if (hash_ptr == -1)
+            {
+                continue;
+            }
+            added_hashes[added++] = hash;
+        }
+        hmfree(added_hashes_lookup);
+    }
     return 0;
 }
 
