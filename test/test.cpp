@@ -854,22 +854,24 @@ TEST(Longtail, Longtail_CreateMissingContent)
     ASSERT_EQ(4u, *missing_content_index->m_ChunkCount);
 
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockIndexes[0]);
-    ASSERT_EQ(asset_content_hashes[4], missing_content_index->m_ChunkHashes[0]);
-    ASSERT_EQ(asset_sizes[4], missing_content_index->m_ChunkLengths[0]);
+    ASSERT_EQ(asset_content_hashes[4], missing_content_index->m_ChunkHashes[3]);
+    ASSERT_EQ(asset_sizes[4], missing_content_index->m_ChunkLengths[3]);
 
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockIndexes[0]);
-    ASSERT_EQ(asset_content_hashes[3], missing_content_index->m_ChunkHashes[1]);
-    ASSERT_EQ(asset_sizes[3], missing_content_index->m_ChunkLengths[1]);
-    ASSERT_EQ(43591u, missing_content_index->m_ChunkBlockOffsets[1]);
+    ASSERT_EQ(asset_content_hashes[3], missing_content_index->m_ChunkHashes[2]);
+    ASSERT_EQ(asset_sizes[3], missing_content_index->m_ChunkLengths[2]);
 
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockIndexes[2]);
-    ASSERT_EQ(asset_content_hashes[2], missing_content_index->m_ChunkHashes[2]);
-    ASSERT_EQ(asset_sizes[2], missing_content_index->m_ChunkLengths[2]);
-    ASSERT_EQ(43591u * 2u, missing_content_index->m_ChunkBlockOffsets[2]);
+    ASSERT_EQ(asset_content_hashes[2], missing_content_index->m_ChunkHashes[1]);
+    ASSERT_EQ(asset_sizes[2], missing_content_index->m_ChunkLengths[1]);
 
     ASSERT_EQ(1u, missing_content_index->m_ChunkBlockIndexes[3]);
-    ASSERT_EQ(asset_content_hashes[1], missing_content_index->m_ChunkHashes[3]);
-    ASSERT_EQ(asset_sizes[1], missing_content_index->m_ChunkLengths[3]);
+    ASSERT_EQ(asset_content_hashes[1], missing_content_index->m_ChunkHashes[0]);
+    ASSERT_EQ(asset_sizes[1], missing_content_index->m_ChunkLengths[0]);
+
+    ASSERT_EQ(0u, missing_content_index->m_ChunkBlockOffsets[0]);
+    ASSERT_EQ(43593u, missing_content_index->m_ChunkBlockOffsets[1]);
+    ASSERT_EQ(43593u + 43592u, missing_content_index->m_ChunkBlockOffsets[2]);
     ASSERT_EQ(0u, missing_content_index->m_ChunkBlockOffsets[3]);
 
     Longtail_Free(version_index);
