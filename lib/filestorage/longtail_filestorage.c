@@ -3,7 +3,7 @@
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
 
-#if defined(_WIN32)
+#if defined(_MSC_VER)
     #include <malloc.h>
     #define alloca _alloca
 #else
