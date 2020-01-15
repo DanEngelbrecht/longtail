@@ -104,34 +104,6 @@ void Longtail_SetLogLevel(int level)
     Longtail_LogLevel_private = level;
 }
 
-/*
-static void* Longtail_NukeMalloc(size_t s)
-{
-    size_t aligned_size = ((s + sizeof(size_t) - 1) / sizeof(size_t)) * sizeof(size_t);
-    size_t dbg_size = sizeof(size_t) + aligned_size + sizeof(size_t);
-    char* r = (char*)malloc(dbg_size);
-    LONGTAIL_FATAL_ASSERT(r !=0, return 0)
-    *(size_t*)r = dbg_size;
-    *(size_t*)&r[dbg_size - sizeof(size_t)] = dbg_size;
-    memset(&r[sizeof(size_t)], 127, aligned_size);
-    return &r[sizeof(size_t)];
-}
-
-static void Longtail_NukeFree(void* p)
-{
-    if (!p)
-    {
-        return;
-    }
-    char* r = ((char*)p) - sizeof(size_t);
-    size_t s1 = *(size_t*)r;
-    size_t s2 = *(size_t*)(&r[s1 - sizeof(size_t)]);
-    LONGTAIL_FATAL_ASSERT(s1 == s2, return )
-    memset(r, 255, s1);
-    Longtail_Free(r);
-}
-*/
-
 void Longtail_CallLogger(int level, const char* fmt, ...)
 {
     if (!Longtail_Log_private || (level < Longtail_LogLevel_private))
@@ -165,9 +137,8 @@ static int GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLon
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     uint64_t hash;
     int err = hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), (void*)path, &hash);
-    if (err != 0)
+    if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "GetPathHash: Failed to create hash context for path `%s`", path)
         return err;
     }
     *out_hash = (TLongtail_Hash)hash;
@@ -254,7 +225,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
     LONGTAIL_FATAL_ASSERT(root_folder != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(entry_processor != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree: Scanning folder `%s`", root_folder)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "RecurseTree: Scanning folder `%s`", root_folder)
 
     uint32_t folder_index = 0;
 
@@ -802,7 +773,7 @@ static int ChunkAssets(
     LONGTAIL_FATAL_ASSERT(max_chunk_size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(chunk_count != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ChunkAssets: Hashing and chunking folder `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ChunkAssets: Hashing and chunking folder `%s` with %" PRIu64 " assets", root_path, *paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
 
     uint64_t max_hash_size = max_chunk_size * 1024;
@@ -828,7 +799,7 @@ static int ChunkAssets(
     int err = job_api->ReserveJobs(job_api, job_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to reserve %u jobs for folder `%s`, %d", (uint32_t)*paths->m_PathCount, root_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ChunkAssets: Failed to reserve %" PRIu64 " jobs for folder `%s`, %d", paths->m_PathCount, root_path, err)
         return err;
     }
 
@@ -1176,7 +1147,7 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT(root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(paths != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(max_chunk_size != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex: From `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionIndex: From `%s` with %u assets", root_path, *paths->m_PathCount)
 
     uint32_t path_count = *paths->m_PathCount;
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
@@ -1213,7 +1184,7 @@ int Longtail_CreateVersionIndex(
         max_chunk_size,
         &assets_chunk_index_count);
     if (err) {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex: Failed to chunk and hash assets in `%s`, %d", root_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionIndex: Failed to chunk and hash assets in `%s`, %d", root_path, err)
         Longtail_Free(asset_chunk_compression_types);
         asset_chunk_compression_types = 0;
         Longtail_Free(asset_chunk_start_index);
@@ -1319,7 +1290,8 @@ int Longtail_WriteVersionIndexToBuffer(
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_size != 0, return EINVAL)
-    size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (*version_index->m_ChunkCount), (*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteVersionIndexToBuffer: %u assets", version_index->m_AssetCount)
+    size_t index_data_size = GetVersionIndexDataSize(*version_index->m_AssetCount, *version_index->m_ChunkCount, *version_index->m_AssetChunkIndexCount, version_index->m_NameDataSize);
     *out_buffer = Longtail_Alloc(index_data_size);
     if (!(*out_buffer))
     {
@@ -1338,8 +1310,8 @@ int Longtail_WriteVersionIndex(
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteVersionIndex: Writing index to `%s` containing %u assets in %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
-    size_t index_data_size = GetVersionIndexDataSize((uint32_t)(*version_index->m_AssetCount), (*version_index->m_ChunkCount), (*version_index->m_AssetChunkIndexCount), version_index->m_NameDataSize);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteVersionIndex: Writing index to `%s` containing %u assets in %u chunks", path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
+    size_t index_data_size = GetVersionIndexDataSize(*version_index->m_AssetCount, *version_index->m_ChunkCount, *version_index->m_AssetChunkIndexCount, version_index->m_NameDataSize);
 
     int err = EnsureParentPathExists(storage_api, path);
     if (err)
@@ -1376,6 +1348,7 @@ int Longtail_ReadVersionIndexFromBuffer(
     LONGTAIL_FATAL_ASSERT(buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_version_index != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndexFromBuffer: Buffer size %u", size)
 
     size_t version_index_size = sizeof(struct Longtail_VersionIndex) + size;
     struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)Longtail_Alloc(version_index_size);
@@ -1402,7 +1375,7 @@ int Longtail_ReadVersionIndex(
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadVersionIndex: Reading from `%s`", path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndex: Reading from `%s`", path)
     Longtail_StorageAPI_HOpenFile file_handle;
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err != 0)
@@ -1445,7 +1418,7 @@ int Longtail_ReadVersionIndex(
         Longtail_Free(version_index);
         return err;
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks.", path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadVersionIndex: Read index from `%s` containing %u assets in  %u chunks", path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
     *out_version_index = version_index;
     return 0;
 }
@@ -1650,7 +1623,7 @@ int Longtail_CreateContentIndex(
     LONGTAIL_FATAL_ASSERT(max_block_size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(max_chunks_per_block != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateContentIndex: Creating index for %" PRIu64 " chunks", chunk_count)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateContentIndex: Creating index for %" PRIu64 " chunks", chunk_count)
     if (chunk_count == 0)
     {
         size_t content_index_size = GetContentIndexSize(0, 0);
@@ -1799,6 +1772,8 @@ int Longtail_WriteContentIndexToBuffer(
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_size != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContentIndexToBuffer: %" PRIu64 " blocks", *content_index->m_BlockCount)
+
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
     *out_buffer = Longtail_Alloc(index_data_size);
     if (!(*out_buffer))
@@ -1819,7 +1794,7 @@ int Longtail_WriteContentIndex(
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteContentIndex: Write index to `%s`, chunks %u, blocks %u", path, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContentIndex: Write index to `%s`, chunks %" PRIu64 ", blocks %" PRIu64 "", path, *content_index->m_ChunkCount, *content_index->m_BlockCount)
     size_t index_data_size = GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
 
     int err = EnsureParentPathExists(storage_api, path);
@@ -1855,6 +1830,7 @@ int Longtail_ReadContentIndexFromBuffer(
     LONGTAIL_FATAL_ASSERT(buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContentIndexFromBuffer: Buffer size %u", size)
 
     size_t content_index_size = size + sizeof(struct Longtail_ContentIndex);
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
@@ -1881,7 +1857,7 @@ int Longtail_ReadContentIndex(
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadContentIndex from `%s`", path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContentIndex from `%s`", path)
     Longtail_StorageAPI_HOpenFile file_handle;
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err)
@@ -2598,7 +2574,7 @@ int Longtail_WriteContent(
     {
         total_chunk_size += content_index->m_ChunkLengths[c];
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteContent: Writing content from `%s` to `%s`, chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", assets_folder, content_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent: Writing content from `%s` to `%s`, chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", assets_folder, content_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -3660,7 +3636,7 @@ int Longtail_WriteVersion(
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteVersion: Write version from `%s` to `%s`, assets %u, chunks %u", content_path, version_path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteVersion: Write version from `%s` to `%s`, assets %u, chunks %u", content_path, version_path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
     if (*version_index->m_AssetCount == 0)
     {
         return 0;
@@ -3807,7 +3783,7 @@ int Longtail_ReadContent(
     LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadContent: Reading from `%s`", content_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContent: Reading from `%s`", content_path)
 
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
@@ -3838,7 +3814,7 @@ int Longtail_ReadContent(
         return err;
     }
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContent: Scanning %u files from `%s`", *paths->m_PathCount, content_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadContent: Scanning %u files from `%s`", *paths->m_PathCount, content_path)
 
     struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc(sizeof(struct ScanBlockJob) * *paths->m_PathCount);
     LONGTAIL_FATAL_ASSERT(scan_jobs, return ENOMEM)
@@ -3880,7 +3856,7 @@ int Longtail_ReadContent(
         }
     }
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContent: Found %" PRIu64 " chunks in %" PRIu64 " blocks from `%s`", chunk_count, block_count, content_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadContent: Found %" PRIu64 " chunks in %" PRIu64 " blocks from `%s`", chunk_count, block_count, content_path)
 
     size_t content_index_size = GetContentIndexSize(block_count, chunk_count);
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
@@ -4082,7 +4058,7 @@ int Longtail_CreateMissingContent(
     LONGTAIL_FATAL_ASSERT(max_block_size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(max_chunks_per_block != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks", *version_index->m_ChunkCount, *content_index->m_ChunkCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateMissingContent: Checking for %u version chunks in %" PRIu64 " content chunks", *version_index->m_ChunkCount, *content_index->m_ChunkCount)
     uint64_t chunk_count = *version_index->m_ChunkCount;
     TLongtail_Hash* added_hashes = (TLongtail_Hash*)Longtail_Alloc((size_t)(sizeof(TLongtail_Hash) * chunk_count));
     LONGTAIL_FATAL_ASSERT(added_hashes, return ENOMEM)
@@ -4163,6 +4139,12 @@ int Longtail_GetPathsForContentBlocks(
     struct Longtail_ContentIndex* content_index,
     struct Longtail_Paths** out_paths)
 {
+    LONGTAIL_FATAL_ASSERT(content_index, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_paths, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(*content_index->m_BlockCount > 0xffffffffu, return EINVAL)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetPathsForContentBlocks: For %" PRIu64 " blocks", *content_index->m_BlockCount)
+
     if (*content_index->m_BlockCount == 0)
     {
         *out_paths = CreatePaths(0, 0);
@@ -4197,7 +4179,11 @@ int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RetargetContent: From %u pick %u chunks", (uint32_t)*reference_content_index->m_ChunkCount, (uint32_t)*content_index->m_ChunkCount)
+    LONGTAIL_FATAL_ASSERT(reference_content_index, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(content_index, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_content_index, return EINVAL)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_RetargetContent: From %" PRIu64 " pick %" PRIu64 " chunks", *reference_content_index->m_ChunkCount, *content_index->m_ChunkCount)
     LONGTAIL_FATAL_ASSERT((*reference_content_index->m_HashAPI) == (*content_index->m_HashAPI), return EINVAL)
 
     struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
@@ -4307,11 +4293,11 @@ int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* remote_content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex: Merge %u with %u chunks", (uint32_t)*local_content_index->m_ChunkCount, (uint32_t)*remote_content_index->m_ChunkCount)
-
     LONGTAIL_FATAL_ASSERT(local_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(remote_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT((*local_content_index->m_HashAPI) == (*remote_content_index->m_HashAPI), return EINVAL)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_MergeContentIndex: Merge %" PRIu64 " with %" PRIu64 " chunks", *local_content_index->m_ChunkCount, *remote_content_index->m_ChunkCount)
 
     uint64_t local_block_count = *local_content_index->m_BlockCount;
     uint64_t remote_block_count = *remote_content_index->m_BlockCount;
@@ -4471,10 +4457,11 @@ int Longtail_CreateVersionDiff(
     const struct Longtail_VersionIndex* target_version,
     struct Longtail_VersionDiff** out_version_diff)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Diff %u with %u assets", (uint32_t)*source_version->m_AssetCount, (uint32_t)*target_version->m_AssetCount)
-
     LONGTAIL_FATAL_ASSERT(source_version != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(target_version != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_version_diff != 0, return EINVAL)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Diff %u with %u assets", *source_version->m_AssetCount, *target_version->m_AssetCount)
 
     struct HashToIndexItem* source_path_hash_to_index = 0;
     struct HashToIndexItem* target_path_hash_to_index = 0;
@@ -4540,7 +4527,7 @@ int Longtail_CreateVersionDiff(
                 modified_source_indexes[modified_count] = source_asset_index;
                 modified_target_indexes[modified_count] = target_asset_index;
                 ++modified_count;
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching content for asset `%s`", source_path)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Mismatching content for asset `%s`", source_path)
             }
             ++source_index;
             ++target_index;
@@ -4548,7 +4535,7 @@ int Longtail_CreateVersionDiff(
         else if (source_path_hash < target_path_hash)
         {
             source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Removed asset `%s`", source_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Removed asset `%s`", source_path)
             removed_source_asset_indexes[source_removed_count] = source_asset_index;
             ++source_removed_count;
             ++source_index;
@@ -4556,7 +4543,7 @@ int Longtail_CreateVersionDiff(
         else
         {
             target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Added asset `%s`", target_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Added asset `%s`", target_path)
             added_target_asset_indexes[target_added_count] = target_asset_index;
             ++target_added_count;
             ++target_index;
@@ -4568,7 +4555,7 @@ int Longtail_CreateVersionDiff(
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
         uint32_t source_asset_index = (uint32_t)hmget(source_path_hash_to_index, source_path_hash);
         const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Removed asset `%s`", source_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Removed asset `%s`", source_path)
         removed_source_asset_indexes[source_removed_count] = source_asset_index;
         ++source_removed_count;
         ++source_index;
@@ -4579,22 +4566,22 @@ int Longtail_CreateVersionDiff(
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
         uint32_t target_asset_index = (uint32_t)hmget(target_path_hash_to_index, target_path_hash);
         const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Added asset `%s`", target_path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Added asset `%s`", target_path)
         added_target_asset_indexes[target_added_count] = target_asset_index;
         ++target_added_count;
         ++target_index;
     }
     if (source_removed_count > 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Found %u removed assets", source_removed_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Found %u removed assets", source_removed_count)
     }
     if (target_added_count > 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Found %u added assets", target_added_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Found %u added assets", target_added_count)
     }
     if (modified_count > 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Mismatching content for %u assets found", modified_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching content for %u assets found", modified_count)
     }
 
     struct Longtail_VersionDiff* version_diff = (struct Longtail_VersionDiff*)Longtail_Alloc(GetVersionDiffSize(source_removed_count, target_added_count, modified_count));
@@ -4668,7 +4655,7 @@ int Longtail_ChangeVersion(
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount, version_path, content_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount, version_path, content_path)
 
     int err = EnsureParentPathExists(version_storage_api, version_path);
     if (err)
@@ -4868,6 +4855,11 @@ int Longtail_ValidateContent(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index)
 {
+    LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ValidateContent: %" PRIu64 " content chunks with %u version chunks", *content_index->m_ChunkCount, *version_index->m_ChunkCount)
+
     struct ContentLookup* content_lookup;
     int err = CreateContentLookup(
         *content_index->m_BlockCount,
@@ -5193,27 +5185,11 @@ static uint32_t discriminatorFromAvg(double avg)
 {
     LONGTAIL_FATAL_ASSERT(params != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(feeder != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(params->min >= ChunkerWindowSize, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(params->min <= params->max, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(params->min <= params->avg, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(params->avg <= params->max, return EINVAL)
 
-    if (params->min < ChunkerWindowSize)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Chunker: Min chunk size too small, must be over %u", ChunkerWindowSize)
-        return EINVAL;
-    }
-    if (params->min > params->max)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Chunker: Min (%u) chunk size must not be greater than max (%u)", (uint32_t)params->min, (uint32_t)params->max)
-        return EINVAL;
-    }
-    if (params->min > params->avg)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Chunker: Min (%u) chunk size must not be greater than avg (%u)", (uint32_t)params->min, (uint32_t)params->avg)
-        return EINVAL;
-    }
-    if (params->avg > params->max)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Chunker: Avg (%u) chunk size must not be greater than max (%u)", (uint32_t)params->avg, (uint32_t)params->max)
-        return EINVAL;
-    }
     struct Longtail_Chunker* c = (struct Longtail_Chunker*)Longtail_Alloc((size_t)((sizeof(struct Longtail_Chunker) + params->max)));
     LONGTAIL_FATAL_ASSERT(c, return ENOMEM)
     c->params = *params;

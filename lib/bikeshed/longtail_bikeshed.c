@@ -120,11 +120,7 @@ static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task
 {
     struct JobWrapper* wrapper = (struct JobWrapper*)context;
     wrapper->m_JobFunc(wrapper->m_Context);
-    if (wrapper->m_JobAPI->m_PendingJobCount <= 0)
-    {
-        // TODO! Error handling!
-        return BIKESHED_TASK_RESULT_COMPLETE;
-    }
+    LONGTAIL_FATAL_ASSERT(wrapper->m_JobAPI->m_PendingJobCount > 0, return BIKESHED_TASK_RESULT_COMPLETE)
     Longtail_AtomicAdd32(&wrapper->m_JobAPI->m_PendingJobCount, -1);
     Longtail_AtomicAdd32(&wrapper->m_JobAPI->m_JobsCompleted, 1);
     return BIKESHED_TASK_RESULT_COMPLETE;
