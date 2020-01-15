@@ -1,0 +1,1 @@
+Another sample string that does not match any other string but -reconstructed properly, than you very much
