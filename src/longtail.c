@@ -2029,7 +2029,7 @@ struct WriteBlockJob
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
     sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
-    memmove(out_name, &out_name[5], 4);
+    memmove(out_name, &out_name[7], 4);
     out_name[4] = '/';
 }
 
@@ -2607,7 +2607,13 @@ int Longtail_WriteContent(
     LONGTAIL_FATAL_ASSERT_PRIVATE(assets_folder != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_folder != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteContent: Writing content from `%s` to `%s`, chunks %u, blocks %u", assets_folder, content_folder, (uint32_t)*content_index->m_ChunkCount, (uint32_t)*content_index->m_BlockCount)
+    uint64_t chunk_count = *content_index->m_ChunkCount;
+    uint64_t total_chunk_size = 0;
+    for (uint64_t c = 0; c < chunk_count; ++c)
+    {
+        total_chunk_size += content_index->m_ChunkLengths[c];
+    }
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteContent: Writing content from `%s` to `%s`, chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", assets_folder, content_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
