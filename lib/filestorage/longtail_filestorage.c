@@ -3,14 +3,12 @@
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
 
-#if defined(_MSC_VER)
-    #include <malloc.h>
-    #define alloca _alloca
-#else
-    #include <alloca.h>
-#endif
-
+#include <malloc.h>
 #include <string.h>
+
+#if defined(_MSC_VER)
+    #define alloca _alloca
+#endif
 
 struct FSStorageAPI
 {
