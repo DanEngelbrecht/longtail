@@ -3,10 +3,17 @@
 #include "../../src/longtail.h"
 #include "ext/blake2.h"
 
+const uint32_t LONGTAIL_BLAKE2_HASH_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'l') << 16) + (((uint32_t)'k') << 8) + ((uint32_t)'2');
+
 struct Blake2HashAPI
 {
     struct Longtail_HashAPI m_Blake2HashAPI;
 };
+
+static uint32_t Blake2Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
+{
+    return LONGTAIL_BLAKE2_HASH_TYPE;
+}
 
 static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
@@ -53,6 +60,7 @@ static void Blake2Hash_Dispose(struct Longtail_API* hash_api)
 static void Blake2Hash_Init(struct Blake2HashAPI* hash_api)
 {
     hash_api->m_Blake2HashAPI.m_API.Dispose = Blake2Hash_Dispose;
+    hash_api->m_Blake2HashAPI.GetIdentifier = Blake2Hash_GetIdentifier;
     hash_api->m_Blake2HashAPI.BeginContext = Blake2Hash_BeginContext;
     hash_api->m_Blake2HashAPI.Hash = Blake2Hash_Hash;
     hash_api->m_Blake2HashAPI.EndContext = Blake2Hash_EndContext;

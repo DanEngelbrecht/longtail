@@ -333,7 +333,8 @@ TEST(Longtail, Longtail_VersionIndex)
         *paths->m_PathCount,
         chunk_sizes,
         asset_content_hashes,
-        asset_compression_types);
+        asset_compression_types,
+        0u); // Dummy hash API
 
     void* store_buffer = 0;
     size_t store_size = 0;
@@ -408,6 +409,79 @@ TEST(Longtail, Longtail_ContentIndex)
     Longtail_Free(content_index_copy);
     Longtail_Free(store_buffer);
 
+    Longtail_Free(content_index);
+
+    SAFE_DISPOSE_API(hash_api);
+}
+
+TEST(Longtail, Longtail_RetargetContentIndex)
+{
+//    const char* assets_path = "";
+    const uint64_t asset_count = 5;
+    const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
+//    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
+    const uint32_t asset_sizes[5] = { 43593u, 43593u, 43592u, 43591u, 43591u };
+    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
+//    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
+//    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
+
+    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    ASSERT_NE((Longtail_HashAPI*)0, hash_api);
+    Longtail_HashAPI_HContext c;
+    int err = hash_api->BeginContext(hash_api, &c);
+    ASSERT_EQ(0, err);
+    ASSERT_NE((Longtail_HashAPI_HContext)0, c);
+    hash_api->EndContext(hash_api, c);
+    Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        asset_count,
+        asset_content_hashes,
+        asset_sizes,
+        asset_compression_types,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &content_index));
+
+    ASSERT_EQ(2u, *content_index->m_BlockCount);
+    ASSERT_EQ(5u, *content_index->m_ChunkCount);
+    for (uint32_t i = 0; i < *content_index->m_ChunkCount; ++i)
+    {
+        ASSERT_EQ(asset_content_hashes[i], content_index->m_ChunkHashes[i]);
+        ASSERT_EQ(asset_sizes[i], content_index->m_ChunkLengths[i]);
+    }
+    ASSERT_EQ(0u, content_index->m_ChunkBlockIndexes[0]);
+    ASSERT_EQ(0u, content_index->m_ChunkBlockIndexes[1]);
+    ASSERT_EQ(0u, content_index->m_ChunkBlockIndexes[2]);
+    ASSERT_EQ(1u, content_index->m_ChunkBlockIndexes[3]);
+    ASSERT_EQ(1u, content_index->m_ChunkBlockIndexes[4]);
+
+    ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[0]);
+    ASSERT_EQ(43593u, content_index->m_ChunkBlockOffsets[1]);
+    ASSERT_EQ(43593u * 2u, content_index->m_ChunkBlockOffsets[2]);
+    ASSERT_EQ(0u, content_index->m_ChunkBlockOffsets[3]);
+    ASSERT_EQ(43591u, content_index->m_ChunkBlockOffsets[4]);
+
+    Longtail_ContentIndex* other_content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        asset_count - 1,
+        &asset_content_hashes[1],
+        &asset_sizes[1],
+        &asset_compression_types[1],
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &other_content_index));
+
+    Longtail_ContentIndex* retargetted_content_index;
+    ASSERT_EQ(0, Longtail_RetargetContent(
+        content_index,
+        other_content_index,
+        &retargetted_content_index));
+    Longtail_Free(retargetted_content_index);
+    Longtail_Free(other_content_index);
     Longtail_Free(content_index);
 
     SAFE_DISPOSE_API(hash_api);
@@ -763,7 +837,8 @@ TEST(Longtail, Longtail_CreateMissingContent)
         *paths->m_PathCount,
         chunk_sizes,
         asset_content_hashes,
-        asset_compression_types);
+        asset_compression_types,
+        0u);    // Dummy hash API
     Longtail_Free(paths);
 
     Longtail_ContentIndex* missing_content_index;

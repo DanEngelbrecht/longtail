@@ -29,6 +29,11 @@ void Longtail_NukeFree(void* p);
 #endif // defined(LONGTAIL_ASSERTS)
 */
 
+#define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
+#define LONGTAIL_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
+#define LONGTAIL_VERSION_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
+#define LONGTAIL_CONTENT_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
+
 #if defined(_WIN32)
     #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
     #define QSORT(base, count, size, func, context) qsort_s(base, count, size, func, context)
@@ -994,6 +999,8 @@ static size_t GetVersionIndexDataSize(
     uint32_t path_data_size)
 {
     size_t version_index_data_size =
+        sizeof(uint32_t) +                              // m_Version
+        sizeof(uint32_t) +                              // m_HashAPI
         sizeof(uint32_t) +                              // m_AssetCount
         sizeof(uint32_t) +                              // m_ChunkCount
         sizeof(uint32_t) +                              // m_AssetChunkIndexCount
@@ -1030,6 +1037,17 @@ static int InitVersionIndex(struct Longtail_VersionIndex* version_index, size_t 
     p += sizeof(struct Longtail_VersionIndex);
 
     size_t version_index_data_start = (size_t)(uintptr_t)p;
+
+    version_index->m_Version = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_1)
+    {
+        return EBADF;
+    }
+
+    version_index->m_HashAPI = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
 
     version_index->m_AssetCount = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
@@ -1105,7 +1123,8 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_compression_types)
+    const uint32_t* chunk_compression_types,
+    uint32_t hash_api_identifier)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(mem != 0, return 0)
     LONGTAIL_FATAL_ASSERT_PRIVATE(mem_size != 0, return 0)
@@ -1124,9 +1143,13 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     uint32_t asset_count = *paths->m_PathCount;
     struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)mem;
     uint32_t* p = (uint32_t*)(void*)&version_index[1];
-    version_index->m_AssetCount = &p[0];
-    version_index->m_ChunkCount = &p[1];
-    version_index->m_AssetChunkIndexCount = &p[2];
+    version_index->m_Version = &p[0];
+    version_index->m_HashAPI = &p[1];
+    version_index->m_AssetCount = &p[2];
+    version_index->m_ChunkCount = &p[3];
+    version_index->m_AssetChunkIndexCount = &p[4];
+    *version_index->m_Version = LONGTAIL_VERSION_INDEX_VERSION_0_0_1;
+    *version_index->m_HashAPI = hash_api_identifier;
     *version_index->m_AssetCount = asset_count;
     *version_index->m_ChunkCount = chunk_count;
     *version_index->m_AssetChunkIndexCount = asset_chunk_index_count;
@@ -1272,7 +1295,8 @@ int Longtail_CreateVersionIndex(
         unique_chunk_count,             // chunk_count
         compact_chunk_sizes,            // chunk_sizes
         compact_chunk_hashes,           // chunk_hashes
-        compact_chunk_compression_types); // chunk_compression_types
+        compact_chunk_compression_types,// chunk_compression_types
+        hash_api->GetIdentifier(hash_api));
     LONGTAIL_FATAL_ASSERT_PRIVATE(version_index != 0, return EINVAL)
 
     Longtail_Free(compact_chunk_compression_types);
@@ -1534,6 +1558,8 @@ static int CreateBlockIndex(
 static size_t GetContentIndexDataSize(uint64_t block_count, uint64_t chunk_count)
 {
     size_t block_index_data_size = (size_t)(
+        sizeof(uint32_t) +                          // m_Version
+        sizeof(uint32_t) +                          // m_HashAPI
         sizeof(uint64_t) +                          // m_BlockCount
         sizeof(uint64_t) +                          // m_ChunkCount
         (sizeof(TLongtail_Hash) * block_count) +    // m_BlockHashes[]
@@ -1557,6 +1583,16 @@ static int InitContentIndex(struct Longtail_ContentIndex* content_index, uint64_
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index != 0, return EINVAL)
 
     char* p = (char*)&content_index[1];
+    content_index->m_Version = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    if ((*content_index->m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_0_0_1)
+    {
+        return EBADF;
+    }
+
+    content_index->m_HashAPI = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
     content_index->m_BlockCount = (uint64_t*)(void*)p;
     p += sizeof(uint64_t);
     content_index->m_ChunkCount = (uint64_t*)(void*)p;
@@ -1636,8 +1672,12 @@ int Longtail_CreateContentIndex(
         struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
         LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return ENOMEM)
 
-        content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
-        content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
+        content_index->m_Version = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
+        content_index->m_HashAPI = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t)];
+        content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
+        content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)];
+        *content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_0_0_1;
+        *content_index->m_HashAPI = hash_api->GetIdentifier(hash_api);
         *content_index->m_BlockCount = 0;
         *content_index->m_ChunkCount = 0;
         InitContentIndex(content_index, content_index_size);
@@ -1726,8 +1766,12 @@ int Longtail_CreateContentIndex(
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return ENOMEM)
 
-    content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
-    content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
+    content_index->m_Version = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
+    content_index->m_HashAPI = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t)];
+    content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
+    content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)];
+    *content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_0_0_1;
+    *content_index->m_HashAPI = hash_api->GetIdentifier(hash_api);
     *content_index->m_BlockCount = block_count;
     *content_index->m_ChunkCount = unique_chunk_count;
     InitContentIndex(content_index, content_index_size);
@@ -3850,8 +3894,13 @@ int Longtail_ReadContent(
     size_t content_index_size = GetContentIndexSize(block_count, chunk_count);
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     LONGTAIL_FATAL_ASSERT_PRIVATE(content_index, return ENOMEM)
-    content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
-    content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
+
+    content_index->m_Version = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
+    content_index->m_HashAPI = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t)];
+    content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
+    content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)];
+    *content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_0_0_1;
+    *content_index->m_HashAPI = hash_api->GetIdentifier(hash_api);
     *content_index->m_BlockCount = block_count;
     *content_index->m_ChunkCount = chunk_count;
     InitContentIndex(content_index, content_index_size);
@@ -4135,6 +4184,7 @@ int Longtail_RetargetContent(
     struct Longtail_ContentIndex** out_content_index)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RetargetContent: From %u pick %u chunks", (uint32_t)*reference_content_index->m_ChunkCount, (uint32_t)*content_index->m_ChunkCount)
+    LONGTAIL_FATAL_ASSERT_PRIVATE((*reference_content_index->m_HashAPI) == (*content_index->m_HashAPI), return EINVAL)
 
     struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
     for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
@@ -4196,8 +4246,12 @@ int Longtail_RetargetContent(
     struct Longtail_ContentIndex* resulting_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     LONGTAIL_FATAL_ASSERT_PRIVATE(resulting_content_index, return ENOMEM)
 
-    resulting_content_index->m_BlockCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex)];
-    resulting_content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
+    resulting_content_index->m_Version = (uint32_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex)];
+    resulting_content_index->m_HashAPI = (uint32_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t)];
+    resulting_content_index->m_BlockCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
+    resulting_content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)resulting_content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)];
+    *resulting_content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_0_0_1;
+    *resulting_content_index->m_HashAPI = *reference_content_index->m_HashAPI;
     *resulting_content_index->m_BlockCount = requested_block_count;
     *resulting_content_index->m_ChunkCount = chunk_count;
     InitContentIndex(resulting_content_index, content_index_size);
@@ -4243,6 +4297,7 @@ int Longtail_MergeContentIndex(
 
     LONGTAIL_FATAL_ASSERT_PRIVATE(local_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(remote_content_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_PRIVATE((*local_content_index->m_HashAPI) == (*remote_content_index->m_HashAPI), return EINVAL)
 
     uint64_t local_block_count = *local_content_index->m_BlockCount;
     uint64_t remote_block_count = *remote_content_index->m_BlockCount;
@@ -4257,8 +4312,12 @@ int Longtail_MergeContentIndex(
         return ENOMEM;
     }
 
-    content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
-    content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint64_t)];
+    content_index->m_Version = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
+    content_index->m_HashAPI = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t)];
+    content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
+    content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)];
+    *content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_0_0_1;
+    *content_index->m_HashAPI = *local_content_index->m_HashAPI;
     *content_index->m_BlockCount = block_count;
     *content_index->m_ChunkCount = chunk_count;
     InitContentIndex(content_index, content_index_size);
