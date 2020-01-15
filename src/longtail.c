@@ -4262,8 +4262,7 @@ int Longtail_RetargetContent(
     return 0;
 }
 
-// TODO: This could be more efficient - if a block exists in both local_content_index and remote_content_index it will
-// be present twice in the resulting content index. This is fine but a waste.
+// TODO: This could be more efficient - we should only include blocks from remote_content_index that contains chunks not in local_content_index
 int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* local_content_index,
     struct Longtail_ContentIndex* remote_content_index,
