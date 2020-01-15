@@ -11,8 +11,6 @@
 #include <stdarg.h>
 #include <errno.h>
 
-//#define SLOW_VALIDATION
-
 /*
 #if defined(LONGTAIL_ASSERTS)
 void* Longtail_NukeMalloc(size_t s);
@@ -1910,9 +1908,6 @@ struct AssetPart
     const char* m_Path;
     uint64_t m_Start;
     uint32_t m_CompressionType;
-#if defined(SLOW_VALIDATION)
-    uint32_t m_CunkSize;    // TODO: Just for validation, remove
-#endif // SLOW_VALIDATION
 };
 
 struct ChunkHashToAssetPart
@@ -1949,19 +1944,9 @@ static int CreateAssetPartLookup(
                     path,
                     asset_chunk_offset,
                     compression_type
-#if defined(SLOW_VALIDATION)
-                    , chunk_size
-#endif // SLOW_VALIDATION
                 };
                 hmput(asset_part_lookup, chunk_hash, asset_part);
             }
-#if defined(SLOW_VALIDATION)
-            else
-            {
-                struct AssetPart* asset_part = &asset_part_lookup[lookup_ptr].value;
-                LONGTAIL_FATAL_ASSERT(asset_part->m_CunkSize == chunk_size, return EINVAL)
-            }
-#endif // SLOW_VALIDATION
             asset_chunk_offset += chunk_size;
         }
     }
@@ -2532,15 +2517,6 @@ static void Longtail_WriteContentBlockJob(void* context)
         job->m_Err = err;
         return;
     }
-#if defined(SLOW_VALIDATION)
-    void* block_data;
-    int err = ReadBlockData(target_storage_api, compression_api, content_folder, block_hash, &block_data);
-    LONGTAIL_FATAL_ASSERT(!err, return; )
-    Longtail_Free(block_data);
-    block_data = 0;
-    job->m_Err = err;
-#endif
-
     Longtail_Free((char*)tmp_block_path);
     tmp_block_path = 0;
 
