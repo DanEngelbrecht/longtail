@@ -4,9 +4,9 @@
 #include "../longtail_platform.h"
 
 #if defined(__clang__) || defined(__GNUC__)
-    #include <alloca.h>
+    extern void* alloca(size_t size);
 #elif defined(_MSC_VER)
-    #include <malloc.h>
+    extern void* _alloca(size_t size);
     #define alloca _alloca
 #endif
 
