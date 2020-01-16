@@ -3,7 +3,7 @@
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
 
-#if defined(__clang__)
+#if defined(__clang__) || defined(__GNUC__)
     #include <alloca.h>
 #else
     #include <malloc.h>
