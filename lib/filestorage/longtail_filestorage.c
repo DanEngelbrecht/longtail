@@ -22,7 +22,7 @@ static void FSStorageAPI_Dispose(struct Longtail_API* storage_api)
 
 #define TMP_STR(str) \
     size_t len_##str = strlen(str); \
-    char* tmp_##str = (char*)alloca(len_##str); \
+    char* tmp_##str = (char*)alloca(len_##str + 1); \
     memmove(tmp_##str, str, len_##str); \
     tmp_##str[len_##str] = '\0';
 
@@ -134,10 +134,9 @@ static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const
 
 static int FSStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    char* tmp_path = Longtail_Strdup(path);
+    TMP_STR(path)
     Longtail_DenormalizePath(tmp_path);
     int err = Longtail_RemoveFile(tmp_path);
-    Longtail_Free(tmp_path);
     return err;
 }
 

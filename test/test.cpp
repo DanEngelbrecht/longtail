@@ -2376,7 +2376,7 @@ TEST(Longtail, FileSystemStorage)
 
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, root_path, &file_infos));
-    ASSERT_EQ(17u, *file_infos->m_Paths.m_PathCount);
+    ASSERT_EQ(18u, *file_infos->m_Paths.m_PathCount);
     Longtail_Free(file_infos);
 
     for (uint32_t a = 0; a < ASSET_COUNT; ++a)
