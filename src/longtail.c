@@ -5140,7 +5140,6 @@ struct Longtail_Chunker
     uint32_t off;
     uint32_t hValue;
     uint8_t hWindow[ChunkerWindowSize];
-    int32_t hIdx;
     uint32_t hDiscriminator;
     Longtail_Chunker_Feeder fFeeder;
     void* cFeederContext;
@@ -5172,7 +5171,6 @@ static uint32_t discriminatorFromAvg(double avg)
     c->buf.len = 0;
     c->off = 0;
     c->hValue = 0;
-    c->hIdx = 0;
     c->hDiscriminator = discriminatorFromAvg((double)params->avg);
     c->fFeeder = feeder;
     c->cFeederContext = context;
@@ -5223,8 +5221,6 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
     {
         // All done
         struct Longtail_ChunkRange r = {0, c->processed_count + c->off, 0};
-        c->hIdx = 0;
-        c->hValue = 0;
         return r;
     }
 
@@ -5234,50 +5230,45 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
         // Less than min-size left, just consume it all
         struct Longtail_ChunkRange r = {&c->buf.data[c->off], c->processed_count + c->off, left};
         c->off += left;
-        c->hIdx = 0;
-        c->hValue = 0;
         return r;
     }
 
+    uint32_t hash = 0;
     struct Longtail_ChunkRange scoped_data = {&c->buf.data[c->off], c->processed_count + c->off, left};
     {
         struct Longtail_ChunkRange window = {&scoped_data.buf[c->params.min - ChunkerWindowSize], c->processed_count + c->off + c->params.min - ChunkerWindowSize, ChunkerWindowSize};
         for (uint32_t i = 0; i < ChunkerWindowSize; ++i)
         {
             uint8_t b = window.buf[i];
-            c->hValue ^= _rotl(hashTable[b], (int)(ChunkerWindowSize-i-1u));
+            hash ^= _rotl(hashTable[b], (int)(ChunkerWindowSize-i-1u));
             c->hWindow[i] = b;
         }
     }
 
     uint32_t pos = c->params.min;
+    uint32_t idx = 0;
+
+    uint32_t data_len = scoped_data.len;
+    uint8_t* window = c->hWindow;
+    const uint32_t discriminator = c->hDiscriminator - 1;
+    const uint8_t* scoped_buf = scoped_data.buf;
     while(1)
     {
-        uint8_t in = scoped_data.buf[pos];
-        uint8_t out = c->hWindow[c->hIdx];
-        c->hWindow[c->hIdx] = in;
-        c->hIdx = (c->hIdx == ChunkerWindowSize - 1) ? 0 : c->hIdx + 1;
-        c->hValue = _rotl(c->hValue, 1) ^
+        uint8_t in = scoped_buf[pos];
+        uint8_t out = window[idx];
+        window[idx++] = in;
+        hash = _rotl(hash, 1) ^
             _rotl(hashTable[out], (int)(ChunkerWindowSize)) ^
             hashTable[in];
 
+        if (idx == ChunkerWindowSize)
+                idx = 0;
         ++pos;
 
-        if (pos >= scoped_data.len)
+        if ((pos >= data_len) || ((hash % c->hDiscriminator) == discriminator))
         {
-            struct Longtail_ChunkRange r = {scoped_data.buf, c->processed_count + c->off, pos};
+            struct Longtail_ChunkRange r = {scoped_buf, c->processed_count + c->off, pos};
             c->off += pos;
-            c->hIdx = 0;
-            c->hValue = 0;
-            return r;
-        }
-
-        if ((c->hValue % c->hDiscriminator) == (c->hDiscriminator - 1))
-        {
-            struct Longtail_ChunkRange r = {scoped_data.buf, c->processed_count + c->off, pos};
-            c->off += pos;
-            c->hIdx = 0;
-            c->hValue = 0;
             return r;
         }
     }
