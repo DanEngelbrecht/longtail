@@ -600,6 +600,7 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
 #include <unistd.h>
 #include <sys/stat.h>
 #include <pthread.h>
+#include <pwd.h>
 
 uint32_t Longtail_GetCPUCount()
 {
@@ -1099,11 +1100,24 @@ static int Skip(HLongtail_FSIterator fs_iterator)
 
 int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
 {
-    fs_iterator->m_DirPath = Longtail_Strdup(path);
-    fs_iterator->m_DirStream = opendir(path);
+    if (path[0] == '~')
+    {
+        struct passwd *pw = getpwuid(getuid());
+        const char *homedir = pw->pw_dir;
+        fs_iterator->m_DirPath = (char*)Longtail_Alloc(strlen(homedir) + strlen(path));
+        strcpy(fs_iterator->m_DirPath, homedir);
+        strcpy(&fs_iterator->m_DirPath[strlen(homedir)], &path[1]);
+    }
+    else
+    {
+        fs_iterator->m_DirPath = Longtail_Strdup(path);
+    }
+
+    fs_iterator->m_DirStream = opendir(fs_iterator->m_DirPath);
     if (0 == fs_iterator->m_DirStream)
     {
         int e = errno;
+        printf("opendir(%s): %d", path, e);
         Longtail_Free(fs_iterator->m_DirPath);
         if (e == 0)
         {
@@ -1116,6 +1130,7 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     if (fs_iterator->m_DirEntry == 0)
     {
         int e = errno;
+        printf("readdir(%s): %d", path, e);
         closedir(fs_iterator->m_DirStream);
         Longtail_Free(fs_iterator->m_DirPath);
         if (e == 0)
@@ -1127,6 +1142,7 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     int err = Skip(fs_iterator);
     if (err)
     {
+        printf("Skip(%s): %d", path, err);
         closedir(fs_iterator->m_DirStream);
         Longtail_Free(fs_iterator->m_DirPath);
         return err;
