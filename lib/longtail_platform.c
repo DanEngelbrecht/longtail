@@ -1104,7 +1104,7 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     if (0 == fs_iterator->m_DirStream)
     {
         Longtail_Free(fs_iterator->m_DirPath);
-        return 0;
+        return EINVAL;
     }
 
     fs_iterator->m_DirEntry = readdir(fs_iterator->m_DirStream);
@@ -1112,15 +1112,15 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     {
         closedir(fs_iterator->m_DirStream);
         Longtail_Free(fs_iterator->m_DirPath);
-        return 0;
+        return ENOENT;
     }
-    int has_files = Skip(fs_iterator);
-    if (has_files)
+    int err = Skip(fs_iterator);
+    if (err)
     {
-        return 1;
+        closedir(fs_iterator->m_DirStream);
+        Longtail_Free(fs_iterator->m_DirPath);
+        return ENOENT;
     }
-    closedir(fs_iterator->m_DirStream);
-    Longtail_Free(fs_iterator->m_DirPath);
     return 0;
 }
 

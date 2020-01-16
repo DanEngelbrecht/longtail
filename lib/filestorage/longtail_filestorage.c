@@ -3,7 +3,12 @@
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
 
-#include <malloc.h>
+#if defined(__clang__)
+    #include <alloca.h>
+#else
+    #include <malloc.h>
+#endif
+
 #include <string.h>
 
 #if defined(_MSC_VER)
