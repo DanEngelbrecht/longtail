@@ -5,15 +5,12 @@
 
 #if defined(__clang__) || defined(__GNUC__)
     #include <alloca.h>
-#else
+#elif defined(_MSC_VER)
     #include <malloc.h>
+    #define alloca _alloca
 #endif
 
 #include <string.h>
-
-#if defined(_MSC_VER)
-    #define alloca _alloca
-#endif
 
 struct FSStorageAPI
 {
