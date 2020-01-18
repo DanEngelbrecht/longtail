@@ -4,7 +4,11 @@
 #include "../longtail_platform.h"
 
 #if defined(__clang__) || defined(__GNUC__)
+#if defined(WIN32)
+    #include <malloc.h>
+#else
     #include <alloca.h>
+#endif
 #elif defined(_MSC_VER)
     #include <malloc.h>
     #define alloca _alloca
