@@ -155,7 +155,7 @@ enum cpu_feature get_cpu_features()
         uint32_t regs[4] = {0};
         uint32_t * eax = &regs[0], * ebx = &regs[1], * ecx = &regs[2], * edx = &regs[3];
         (void)edx;
-        enum cpu_feature features = 0;
+        int features = 0;
         cpuid(regs, 0);
         const int max_id = *eax;
         cpuid(regs, 1);
@@ -188,8 +188,8 @@ enum cpu_feature get_cpu_features()
                 }
             }
         }
-        g_cpu_features = features;
-        return features;
+        g_cpu_features = (enum cpu_feature)features;
+        return g_cpu_features;
 #elif defined(IS_ARM)
         /* How to detect NEON? */
         return 0;
@@ -206,10 +206,10 @@ void blake3_compress_in_place(uint32_t cv[8],
 {
     const enum cpu_feature features = get_cpu_features();
 #if defined(IS_X86)
-    if(features & AVX512VL) {
-        blake3_compress_in_place_avx512(cv, block, block_len, counter, flags);
-        return;
-    } 
+//    if(features & AVX512VL) {
+//        blake3_compress_in_place_avx512(cv, block, block_len, counter, flags);
+//        return;
+//    } 
     if(features & SSE41) {
         blake3_compress_in_place_sse41(cv, block, block_len, counter, flags);
         return;
@@ -225,10 +225,10 @@ void blake3_compress_xof(const uint32_t cv[8],
 {
     const enum cpu_feature features = get_cpu_features();
 #if defined(IS_X86)
-    if(features & AVX512VL) {
-        blake3_compress_xof_avx512(cv, block, block_len, counter, flags, out);
-        return;
-    }
+//    if(features & AVX512VL) {
+//        blake3_compress_xof_avx512(cv, block, block_len, counter, flags, out);
+//        return;
+//    }
     if(features & SSE41) {
         blake3_compress_xof_sse41(cv, block, block_len, counter, flags, out);
         return;
@@ -245,14 +245,14 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 {
     const enum cpu_feature features = get_cpu_features();
 #if defined(IS_X86)
-    if(features & AVX512F) {
-        blake3_hash_many_avx512(inputs, num_inputs, blocks, key, counter, increment_counter, flags, flags_start, flags_end, out);
-        return;
-    }
-    if(features & AVX2) {
-        blake3_hash_many_avx2(inputs, num_inputs, blocks, key, counter, increment_counter, flags, flags_start, flags_end, out);
-        return;
-    }
+//    if(features & AVX512F) {
+//        blake3_hash_many_avx512(inputs, num_inputs, blocks, key, counter, increment_counter, flags, flags_start, flags_end, out);
+//        return;
+//    }
+//    if(features & AVX2) {
+//        blake3_hash_many_avx2(inputs, num_inputs, blocks, key, counter, increment_counter, flags, flags_start, flags_end, out);
+//        return;
+//    }
     if(features & SSE41) {
         blake3_hash_many_sse41(inputs, num_inputs, blocks, key, counter, increment_counter, flags, flags_start, flags_end, out);
         return;
