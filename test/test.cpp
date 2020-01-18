@@ -10,6 +10,7 @@
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/blake2/longtail_blake2.h"
+#include "../lib/blake3/longtail_blake3.h"
 #include "../lib/zstd/longtail_zstd.h"
 
 #include <inttypes.h>
@@ -370,10 +371,35 @@ TEST(Longtail, Longtail_ZStd)
 
 TEST(Longtail, Longtail_Blake2)
 {
+    const char* test_string = "This is the first test string which is fairly long and should - reconstructed properly, than you very much";
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    uint64_t hash;
+    ASSERT_EQ(0, hash_api->HashBuffer(hash_api, (uint32_t)(strlen(test_string) + 1), test_string, &hash));
+    ASSERT_EQ(0xd336e5afa4fa1f4d, hash);
+    Longtail_DisposeAPI(&hash_api->m_API);
+}
+
+TEST(Longtail, Longtail_Blake3)
+{
+    const char* test_string = "This is the first test string which is fairly long and should - reconstructed properly, than you very much";
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    uint64_t hash;
+    ASSERT_EQ(0, hash_api->HashBuffer(hash_api, (uint32_t)(strlen(test_string) + 1), test_string, &hash));
+    ASSERT_EQ(0xd38bbe79f1f03fda, hash);
+    Longtail_DisposeAPI(&hash_api->m_API);
 }
 
 TEST(Longtail, Longtail_MeowHash)
 {
+    const char* test_string = "This is the first test string which is fairly long and should - reconstructed properly, than you very much";
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    uint64_t hash;
+    ASSERT_EQ(0, hash_api->HashBuffer(hash_api, (uint32_t)(strlen(test_string) + 1), test_string, &hash));
+    ASSERT_EQ(0x4edc68dac105c4ee, hash);
+    Longtail_DisposeAPI(&hash_api->m_API);
 }
 
 TEST(Longtail, Longtail_VersionIndex)

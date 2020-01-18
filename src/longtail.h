@@ -21,9 +21,9 @@ struct Longtail_HashAPI
     struct Longtail_API m_API;
     uint32_t (*GetIdentifier)(struct Longtail_HashAPI* hash_api);
     int (*BeginContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context);
-    void (*Hash)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data);
+    void (*Hash)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, const void* data);
     uint64_t (*EndContext)(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context);
-    int (*HashBuffer)(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash);
+    int (*HashBuffer)(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash);
 };
 
 typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
