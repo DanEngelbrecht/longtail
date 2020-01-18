@@ -137,6 +137,7 @@ TEST(Longtail, Longtail_Lizard)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLizardCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
+    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_LIZARD_DEFAULT_COMPRESSION;
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -158,52 +159,17 @@ TEST(Longtail, Longtail_Lizard)
         "And in the end it is not the same, it is different, just because why not";
 
     size_t data_len = strlen(raw_data) + 1;
-
-    Longtail_CompressionAPI_HCompressionContext compression_context;
-    ASSERT_EQ(0, compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api), &compression_context));
-    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, data_len);
+    size_t compressed_size = 0;
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
     char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
     ASSERT_NE((char*)0, compressed_buffer);
-    size_t compressed_size = 0;
-    {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < data_len)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            ASSERT_EQ(0, compression_api->Compress(compression_api, compression_context, &raw_data[total_consumed_size], &compressed_buffer[total_produced_size], data_len - total_consumed_size, max_compressed_size - total_produced_size, &consumed_size, &produced_size));
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
+    ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
 
-        size_t produced_size;
-        ASSERT_EQ(0, compression_api->FinishCompress(compression_api, compression_context, &compressed_buffer[total_produced_size], max_compressed_size - total_produced_size, &produced_size));
-        total_produced_size += produced_size;
-        compressed_size = total_produced_size;
-    }
-
-    compression_api->DeleteCompressionContext(compression_api, compression_context);
-
-    Longtail_CompressionAPI_HDecompressionContext decompression_context;
-    ASSERT_EQ(0, compression_api->CreateDecompressionContext(compression_api, &decompression_context));
     char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
     ASSERT_NE((char*)0, decompressed_buffer);
-    size_t decompressed_size = 0;
-    {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < compressed_size)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            ASSERT_EQ(0, compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &decompressed_buffer[total_produced_size], compressed_size - total_consumed_size, data_len - total_produced_size, &consumed_size, &produced_size));
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
-        decompressed_size = total_produced_size;
-    }
-    ASSERT_EQ(data_len, decompressed_size);
+    size_t uncompressed_size;
+    ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
+    ASSERT_EQ(data_len, uncompressed_size);
     ASSERT_STREQ(raw_data, decompressed_buffer);
     Longtail_Free(decompressed_buffer);
     Longtail_Free(compressed_buffer);
@@ -215,6 +181,7 @@ TEST(Longtail, Longtail_Brotli)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
+    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_BROTLI_TEXT_MAX_QUALITY;
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -236,56 +203,20 @@ TEST(Longtail, Longtail_Brotli)
         "And in the end it is not the same, it is different, just because why not";
 
     size_t data_len = strlen(raw_data) + 1;
-
-    Longtail_CompressionAPI_HCompressionContext compression_context;
-    ASSERT_EQ(0, compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api), &compression_context));
-    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, data_len);
+    size_t compressed_size = 0;
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
     char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
     ASSERT_NE((char*)0, compressed_buffer);
-    size_t compressed_size = 0;
-    {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < data_len)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            ASSERT_EQ(0, compression_api->Compress(compression_api, compression_context, &raw_data[total_consumed_size], &compressed_buffer[total_produced_size], data_len - total_consumed_size, max_compressed_size - total_produced_size, &consumed_size, &produced_size));
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
+    ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
 
-        size_t produced_size;
-        ASSERT_EQ(0, compression_api->FinishCompress(compression_api, compression_context, &compressed_buffer[total_produced_size], max_compressed_size - total_produced_size, &produced_size));
-        total_produced_size += produced_size;
-        compressed_size = total_produced_size;
-    }
-
-    compression_api->DeleteCompressionContext(compression_api, compression_context);
-
-    Longtail_CompressionAPI_HDecompressionContext decompression_context;
-    ASSERT_EQ(0, compression_api->CreateDecompressionContext(compression_api, &decompression_context));
     char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
     ASSERT_NE((char*)0, decompressed_buffer);
-    size_t decompressed_size = 0;
-    {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < compressed_size)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            ASSERT_EQ(0, compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &decompressed_buffer[total_produced_size], compressed_size - total_consumed_size, data_len - total_produced_size, &consumed_size, &produced_size));
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
-        decompressed_size = total_produced_size;
-    }
-    ASSERT_EQ(data_len, decompressed_size);
+    size_t uncompressed_size;
+    ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
+    ASSERT_EQ(data_len, uncompressed_size);
     ASSERT_STREQ(raw_data, decompressed_buffer);
     Longtail_Free(decompressed_buffer);
     Longtail_Free(compressed_buffer);
-    compression_api->DeleteDecompressionContext(compression_api, decompression_context);
 
     Longtail_DisposeAPI(&compression_api->m_API);
 }
@@ -294,6 +225,7 @@ TEST(Longtail, Longtail_ZStd)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateZStdCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
+    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_LIZARD_MAX_COMPRESSION;
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -315,56 +247,20 @@ TEST(Longtail, Longtail_ZStd)
         "And in the end it is not the same, it is different, just because why not";
 
     size_t data_len = strlen(raw_data) + 1;
-
-    Longtail_CompressionAPI_HCompressionContext compression_context;
-    ASSERT_EQ(0, compression_api->CreateCompressionContext(compression_api, compression_api->GetDefaultSettings(compression_api), &compression_context));
-    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, data_len);
+    size_t compressed_size = 0;
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
     char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
     ASSERT_NE((char*)0, compressed_buffer);
-    size_t compressed_size = 0;
-    {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < data_len)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            ASSERT_EQ(0, compression_api->Compress(compression_api, compression_context, &raw_data[total_consumed_size], &compressed_buffer[total_produced_size], data_len - total_consumed_size, max_compressed_size - total_produced_size, &consumed_size, &produced_size));
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
+    ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
 
-        size_t produced_size;
-        ASSERT_EQ(0, compression_api->FinishCompress(compression_api, compression_context, &compressed_buffer[total_produced_size], max_compressed_size - total_produced_size, &produced_size));
-        total_produced_size += produced_size;
-        compressed_size = total_produced_size;
-    }
-
-    compression_api->DeleteCompressionContext(compression_api, compression_context);
-
-    Longtail_CompressionAPI_HDecompressionContext decompression_context;
-    ASSERT_EQ(0, compression_api->CreateDecompressionContext(compression_api, &decompression_context));
     char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
     ASSERT_NE((char*)0, decompressed_buffer);
-    size_t decompressed_size = 0;
-    {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < compressed_size)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            ASSERT_EQ(0, compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &decompressed_buffer[total_produced_size], compressed_size - total_consumed_size, data_len - total_produced_size, &consumed_size, &produced_size));
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
-        decompressed_size = total_produced_size;
-    }
-    ASSERT_EQ(data_len, decompressed_size);
+    size_t uncompressed_size;
+    ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
+    ASSERT_EQ(data_len, uncompressed_size);
     ASSERT_STREQ(raw_data, decompressed_buffer);
     Longtail_Free(decompressed_buffer);
     Longtail_Free(compressed_buffer);
-    compression_api->DeleteDecompressionContext(compression_api, decompression_context);
 
     Longtail_DisposeAPI(&compression_api->m_API);
 }
@@ -593,11 +489,26 @@ TEST(Longtail, Longtail_RetargetContentIndex)
     SAFE_DISPOSE_API(hash_api);
 }
 
+const uint32_t LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0');
+const uint32_t LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1');
+const uint32_t LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2');
+const uint32_t LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'10');
+const uint32_t LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'11');
+const uint32_t LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'12');
+
+const uint32_t LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
+const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
+const uint32_t LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
+
+const uint32_t LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
+const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
+const uint32_t LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
+
 static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
-    const uint32_t compression_types[4] = {0, LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE, LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE, LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
+    const uint32_t compression_types[4] = {0, LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE, LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE, LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
     for (uint32_t i = 0; i < count; ++i)
     {
         result[i] = compression_types[i % 4];
@@ -689,37 +600,67 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     {
         return 0;
     }
-    Longtail_CompressionAPI_HSettings lizard_settings = lizard_compression->GetDefaultSettings(lizard_compression);
 
     Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
     if (brotli_compression == 0)
     {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
         return 0;
     }
-    Longtail_CompressionAPI_HSettings brotli_settings = brotli_compression->GetDefaultSettings(brotli_compression);
 
     Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
     if (zstd_compression == 0)
     {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
+        Longtail_DisposeAPI(&brotli_compression->m_API);
         return 0;
     }
-    Longtail_CompressionAPI_HSettings zstd_settings = zstd_compression->GetDefaultSettings(zstd_compression);
 
-    uint32_t compression_types[3] = {
+    uint32_t compression_types[12] = {
+        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE,
+        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
+        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE,
+        LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE,
+        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE,
+        LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE,
+
+        LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE,
         LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[3] = {
-        lizard_compression,
+        LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE,
+
+        LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE,
+        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE,
+        LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE};
+    struct Longtail_CompressionAPI* compression_apis[12] = {
         brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        lizard_compression,
+        lizard_compression,
+        lizard_compression,
+        zstd_compression,
+        zstd_compression,
         zstd_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[3] = {
-        lizard_settings,
-        brotli_settings,
-        zstd_settings};
+    Longtail_CompressionAPI_HSettings compression_settings[12] = {
+        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
+        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
+        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
+        LONGTAIL_BROTLI_TEXT_MIN_QUALITY,
+        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY,
+        LONGTAIL_BROTLI_TEXT_MAX_QUALITY,
+        LONGTAIL_LIZARD_MIN_COMPRESSION,
+        LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
+        LONGTAIL_LIZARD_MAX_COMPRESSION,
+        LONGTAIL_ZSTD_MIN_COMPRESSION,
+        LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
+        LONGTAIL_ZSTD_MAX_COMPRESSION};
+
 
     Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        3,
+        12,
         (const uint32_t*)compression_types,
         (const Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);

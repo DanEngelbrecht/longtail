@@ -1,13 +1,15 @@
 #pragma once
 
-#include <stdint.h>
+#include "../../src/longtail.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 extern struct Longtail_CompressionAPI* Longtail_CreateLizardCompressionAPI();
-extern const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE;
+extern Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MIN_COMPRESSION;
+extern Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_DEFAULT_COMPRESSION;
+extern Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MAX_COMPRESSION;
 
 #ifdef __cplusplus
 }

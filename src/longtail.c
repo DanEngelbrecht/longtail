@@ -1987,38 +1987,23 @@ static int DecompressBlock(
     const char* compressed_buffer,
     char* uncompressed_buffer)
 {
-    struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
-    if (!compression_api)
-    {
-        return EBADF;
-    }
-    Longtail_CompressionAPI_HDecompressionContext decompression_context;
-    int err = compression_api->CreateDecompressionContext(compression_api, &decompression_context);
+    struct Longtail_CompressionAPI* compression_api;
+    Longtail_CompressionAPI_HSettings compression_settings;
+    int err = compression_registry_api->GetCompressionType(compression_registry_api, compression_type, &compression_api, &compression_settings);
     if (err)
     {
         return err;
     }
-    size_t decompressed_size = 0;
+    size_t size;
+    err = compression_api->Decompress(compression_api, compressed_buffer, uncompressed_buffer, compressed_size, uncompressed_size, &size);
+    if (err)
     {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < compressed_size)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            err = compression_api->Decompress(compression_api, decompression_context, &compressed_buffer[total_consumed_size], &uncompressed_buffer[total_produced_size], compressed_size - total_consumed_size, uncompressed_size - total_produced_size, &consumed_size, &produced_size);
-            if (err)
-            {
-                compression_api->DeleteDecompressionContext(compression_api, decompression_context);
-                Longtail_DisposeAPI(&compression_api->m_API);
-                return err;
-            }
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
-        decompressed_size = total_produced_size;
+        return err;
     }
-    compression_api->DeleteDecompressionContext(compression_api, decompression_context);
+    if (size != uncompressed_size)
+    {
+        return EBADF;
+    }
     return 0;
 }
 
@@ -2204,62 +2189,28 @@ int CompressBlock(
     char** out_compressed_buffer,
     size_t compressed_prefix_size)
 {
-    struct Longtail_CompressionAPI* compression_api = compression_registry_api->GetCompressionAPI(compression_registry_api, compression_type);
-    if (!compression_api)
-    {
-        return EBADF;
-    }
-    Longtail_CompressionAPI_HCompressionContext compression_context;
-    int err = compression_api->CreateCompressionContext(compression_api, compression_registry_api->GetCompressionSettings(compression_registry_api, compression_type), &compression_context);
+    struct Longtail_CompressionAPI* compression_api;
+    Longtail_CompressionAPI_HSettings compression_settings;
+    int err = compression_registry_api->GetCompressionType(compression_registry_api, compression_type, &compression_api, &compression_settings);
     if (err)
     {
         return err;
     }
 
-    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_context, uncompressed_size);
-
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, uncompressed_size);
     *out_compressed_buffer = (char*)Longtail_Alloc(compressed_prefix_size + max_compressed_size);
     if (!(*out_compressed_buffer))
     {
-        compression_api->DeleteCompressionContext(compression_api, compression_context);
         return ENOMEM;
     }
 
     char* compressed_buffer = &(*out_compressed_buffer)[compressed_prefix_size];
-
-    *compressed_size = 0;
+    err = compression_api->Compress(compression_api, compression_settings, uncompressed_buffer, compressed_buffer, uncompressed_size, max_compressed_size, compressed_size);
+    if (err)
     {
-        size_t total_consumed_size = 0;
-        size_t total_produced_size = 0;
-        while (total_consumed_size < uncompressed_size)
-        {
-            size_t consumed_size = 0;
-            size_t produced_size = 0;
-            err = compression_api->Compress(compression_api, compression_context, &uncompressed_buffer[total_consumed_size], &compressed_buffer[total_produced_size], uncompressed_size - total_consumed_size, max_compressed_size - total_produced_size, &consumed_size, &produced_size);
-            if (err)
-            {
-                Longtail_Free(*out_compressed_buffer);
-                compression_api->DeleteCompressionContext(compression_api, compression_context);
-                return err;
-            }
-            total_consumed_size += consumed_size;
-            total_produced_size += produced_size;
-        }
-
-        size_t produced_size;
-        err = compression_api->FinishCompress(compression_api, compression_context, &compressed_buffer[total_produced_size], max_compressed_size - total_produced_size, &produced_size);
-        if (err)
-        {
-            Longtail_Free(*out_compressed_buffer);
-            compression_api->DeleteCompressionContext(compression_api, compression_context);
-            return err;
-        }
-        total_produced_size += produced_size;
-        *compressed_size = total_produced_size;
+        Longtail_Free(*out_compressed_buffer);
+        return err;
     }
-
-    compression_api->DeleteCompressionContext(compression_api, compression_context);
-
     return 0;
 }
 
@@ -4982,38 +4933,33 @@ struct Default_CompressionRegistry
 
 static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
 {
+    struct Longtail_CompressionAPI* last_api = 0;
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
     for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
     {
-        default_compression_registry->m_APIs[c]->m_API.Dispose(&default_compression_registry->m_APIs[c]->m_API);
+        struct Longtail_CompressionAPI* api = default_compression_registry->m_APIs[c];
+        if (api != last_api)
+        {
+            api->m_API.Dispose(&api->m_API);
+            last_api = api;
+        }
     }
     Longtail_Free(default_compression_registry);
 }
 
-static struct Longtail_CompressionAPI* Default_GetCompressionAPI(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type)
+static int Default_GetCompressionType(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings)
 {
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
     for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
     {
         if (default_compression_registry->m_Types[i] == compression_type)
         {
-            return default_compression_registry->m_APIs[i];
+            *out_compression_api = default_compression_registry->m_APIs[i];
+            *out_settings = default_compression_registry->m_Settings[i];
+            return 0;
         }
     }
-    return 0;
-}
-
-static Longtail_CompressionAPI_HSettings Default_GetCompressionSettings(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type)
-{
-    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
-    for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
-    {
-        if (default_compression_registry->m_Types[i] == compression_type)
-        {
-            return default_compression_registry->m_Settings[i];
-        }
-    }
-    return 0;
+    return ENOENT;
 }
 
 struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
@@ -5033,8 +4979,7 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
     }
 
     registry->m_CompressionRegistryAPI.m_API.Dispose = DefaultCompressionRegistry_Dispose;
-    registry->m_CompressionRegistryAPI.GetCompressionAPI = Default_GetCompressionAPI;
-    registry->m_CompressionRegistryAPI.GetCompressionSettings = Default_GetCompressionSettings;
+    registry->m_CompressionRegistryAPI.GetCompressionType = Default_GetCompressionType;
 
     registry->m_Count = compression_type_count;
     char* p = (char*)&registry[1];
