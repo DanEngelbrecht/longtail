@@ -6,7 +6,7 @@
 Experimental incremental asset delivery format - closely related to the casync project by Lennart Poettering (https://github.com/systemd/casync). When I started tinkering with this I did not know of that project but has since learned from it but choosen different approaches to a few things. If casync does what you need there is no point in diving into this besides curiousity. If there are aspects of casync that does not work for you (you need in-place updating of folders, or you need all the performance using threading) then it might be interesting.
 
 # Current state
-Proof of Concent pre-alpha. It works and is reasonably tested but unit tests does not cover nearly as much as it should and some parts are not "safe" such as validating file formats etc.
+Alpha, most stuff is there and working. It is reasonably tested but unit tests does not cover nearly as much as it should and some parts are not "safe" such as validating file formats etc.
 
 It is *very* fast though, most functions that takes time are very multithreaded and fairly efficient and care has been taken to handle really large files (such as multi-gigabyte PAK files for games) reasonably fast.
 
@@ -22,6 +22,10 @@ To build unit tests, cd to `test`, call `../build/build.sh` for debug and `../bu
 Run test with `output/test_debug` for debug and `output/test` for release on OSX/Linux, `output\test_debug.exe` for debug and `output\test.exe` for release on Windows.
 
 # Command line tool
+The preferred way of testing with the command line is to use https://github.com/DanEngelbrecht/go_longtail.git which provides a nicer Go front end to longtail.
+
+You can build the C command line but it is not as maintained and up to date.
+
 To build the command line tool, cd to `cmd`, call `../build/build.sh` for debug and `../build/build.sh release` for release on OSX/Linux, `..\build\build.bat` for debug and `..\build\build.bat release` for release on Windows.
 
 Run the command line tool with `output/longtail_debug` for debug and `output/longtail` for release on OSX/Linux, `output\longtail_debug.exe` for debug and `output\longtail.exe` for release on Windows.
@@ -43,7 +47,26 @@ It also has hooks for ASSERTs and logging.
 
 Besides a very limited number of standard C library includes it also depends on the excellent `stb_ds.h` by Sean Barrett (http://nothings.org/stb_ds) for dynamic arrays and hash maps.
 
-Although the core does not have any platform dependent code there are pre-built helpers in the `lib` folder that implements standard disk storage and basic OS primitives (posix/win32), hashing (using the super-fast meowhash by Mollyrocket https://mollyrocket.com/meowhash), compression (using Lizard by Przemyslaw Skibinski https://github.com/inikep/lizard) and task scheduling (using Bikeshed by me https://github.com/DanEngelbrecht/bikeshed).
+Although the core does not have any platform dependent code there are pre-built helpers in the `lib` folder that implements a cross-platform base library which is used by various api implementations.
+
+Currently there are:
+
+### HashAPI
+* BLAKE2 - by BLAKE2 https://github.com/BLAKE2/BLAKE2
+* BLAKE3 - by BLAKE3 team  https://github.com/BLAKE2/BLAKE2
+* MeowHash - by Mollyrocket https://mollyrocket.com/meowhash
+
+### StorageAPI
+* In-memory storage - used for test etc
+* Native file system storage - basic file io using the platform layer in the `lib` folder
+
+### CompressionAPI
+* Brotli - by Google https://github.com/google/brotli
+* Lizard - by Przemyslaw Skibinski https://github.com/inikep/lizard
+* Zstandard - by Facebook https://github.com/facebook/zstd
+
+### JobAPI
+* Bikeshed - by Dan Engelbrecht https://github.com/DanEngelbrecht/bikeshed
 
 Longtail also borrows the chunking algorithm used to split up assets into chunks from the casync project by Lennart Poettering (https://github.com/systemd/casync).
 
