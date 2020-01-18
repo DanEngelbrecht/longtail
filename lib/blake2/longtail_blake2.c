@@ -28,7 +28,7 @@ static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_H
     return 0;
 }
 
-static void Blake2Hash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data)
+static void Blake2Hash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, const void* data)
 {
     blake2s_state* state = (blake2s_state*)context;
     blake2s_update(state, data, length);
@@ -47,7 +47,7 @@ static uint64_t Blake2Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtai
     return hash;
 }
 
-static int Blake2Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
+static int Blake2Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash)
 {
     return blake2s(out_hash, sizeof(uint64_t), data, length, 0, 0);
 }

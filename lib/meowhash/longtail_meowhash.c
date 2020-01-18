@@ -24,10 +24,10 @@ static int MeowHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_Has
     return 0;
 }
 
-static void MeowHash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data)
+static void MeowHash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, const void* data)
 {
     meow_state* state = (meow_state*)context;
-    MeowAbsorb(state, length, data);
+    MeowAbsorb(state, length, (void*)data);
 }
 
 static uint64_t MeowHash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context)
@@ -38,11 +38,11 @@ static uint64_t MeowHash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_
     return hash;
 }
 
-static int MeowHash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
+static int MeowHash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash)
 {
     meow_state state;
     MeowBegin(&state, MeowDefaultSeed);
-    MeowAbsorb(&state, length, data);
+    MeowAbsorb(&state, length, (void*)data);
     *out_hash = MeowU64From(MeowEnd(&state, 0), 0);
     return 0;
 }
