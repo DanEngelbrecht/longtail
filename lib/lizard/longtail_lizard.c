@@ -11,9 +11,9 @@ static int LizardCompressionAPI_MinCompressionSetting       = LIZARD_MIN_CLEVEL;
 static int LizardCompressionAPI_DefaultCompressionSetting   = 44;
 static int LizardCompressionAPI_MaxCompressionSetting       = LIZARD_MAX_CLEVEL;
 
-extern Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MIN_COMPRESSION      = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_MinCompressionSetting;
-extern Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_DEFAULT_COMPRESSION  = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_DefaultCompressionSetting;
-extern Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MAX_COMPRESSION      = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_MaxCompressionSetting;
+Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MIN_COMPRESSION      = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_MinCompressionSetting;
+Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_DEFAULT_COMPRESSION  = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_DefaultCompressionSetting;
+Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MAX_COMPRESSION      = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_MaxCompressionSetting;
 
 struct LizardCompressionAPI
 {

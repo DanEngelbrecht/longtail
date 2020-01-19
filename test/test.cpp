@@ -595,20 +595,20 @@ TEST(Longtail, ContentIndexSerialization)
 
 Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
 {
-    Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
+    struct Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
     if (lizard_compression == 0)
     {
         return 0;
     }
 
-    Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
+    struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
     if (brotli_compression == 0)
     {
         Longtail_DisposeAPI(&lizard_compression->m_API);
         return 0;
     }
 
-    Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
+    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
     if (zstd_compression == 0)
     {
         Longtail_DisposeAPI(&lizard_compression->m_API);
@@ -659,10 +659,10 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         LONGTAIL_ZSTD_MAX_COMPRESSION};
 
 
-    Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
+    struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
         12,
         (const uint32_t*)compression_types,
-        (const Longtail_CompressionAPI **)compression_apis,
+        (const struct Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);
     if (registry == 0)
     {
