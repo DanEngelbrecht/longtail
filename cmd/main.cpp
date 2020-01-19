@@ -3,7 +3,9 @@
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
+#include "../lib/brotli/longtail_brotli.h"
 #include "../lib/lizard/longtail_lizard.h"
+#include "../lib/zstd/longtail_zstd.h"
 #include "../lib/longtail_platform.h"
 
 #define KGFLAGS_IMPLEMENTATION
@@ -183,6 +185,10 @@ struct Progress
     }
 };
 
+const uint32_t LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1');
+const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
+const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
+
 static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
@@ -212,14 +218,39 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     {
         return 0;
     }
-    Longtail_CompressionAPI_HSettings lizard_settings = lizard_compression->GetDefaultSettings(lizard_compression);
 
-    uint32_t compression_types[1] = {LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[1] = {lizard_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[1] = {lizard_settings};
+    Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
+    if (brotli_compression == 0)
+    {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
+        return 0;
+    }
+
+    Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
+    if (zstd_compression == 0)
+    {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
+        Longtail_DisposeAPI(&brotli_compression->m_API);
+        return 0;
+    }
+
+    uint32_t compression_types[3] = {
+        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
+
+        LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
+
+        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
+    struct Longtail_CompressionAPI* compression_apis[3] = {
+        brotli_compression,
+        lizard_compression,
+        zstd_compression};
+    Longtail_CompressionAPI_HSettings compression_settings[3] = {
+        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
+        LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
+        LONGTAIL_ZSTD_DEFAULT_COMPRESSION};
 
     Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        1,
+        12,
         (const uint32_t*)compression_types,
         (const Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);

@@ -68,25 +68,16 @@ typedef struct Longtail_CompressionAPI_Settings* Longtail_CompressionAPI_HSettin
 struct Longtail_CompressionAPI
 {
     struct Longtail_API m_API;
-    Longtail_CompressionAPI_HSettings (*GetDefaultSettings)(struct Longtail_CompressionAPI* compression_api);
-    Longtail_CompressionAPI_HSettings (*GetMaxCompressionSetting)(struct Longtail_CompressionAPI* compression_api);
 
-    int (*CreateCompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, Longtail_CompressionAPI_HCompressionContext* out_context);
-    size_t (*GetMaxCompressedSize)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, size_t size);
-    int (*Compress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* consumed_size, size_t* produced_size);
-    int (*FinishCompress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, char* compressed, size_t max_compressed_size, size_t* out_size);
-    void (*DeleteCompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context);
-
-    int (*CreateDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext* out_context);
-    int (*Decompress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* consumed_size, size_t* produced_size);
-    void (*DeleteDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context);
+    size_t (*GetMaxCompressedSize)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, size_t size);
+    int (*Compress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size);
+    int (*Decompress)(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size);
 };
 
 struct Longtail_CompressionRegistryAPI
 {
     struct Longtail_API m_API;
-    struct Longtail_CompressionAPI* (*GetCompressionAPI)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type);
-    Longtail_CompressionAPI_HSettings (*GetCompressionSettings)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type);
+    int (*GetCompressionType)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings);
 };
 
 typedef void (*Longtail_JobAPI_JobFunc)(void* context);
