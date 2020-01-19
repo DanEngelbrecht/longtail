@@ -47,7 +47,7 @@ int BrotliCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_ap
     struct BrotliSettings* brotli_settings = (struct BrotliSettings*)settings;
 
     *out_compressed_size = max_compressed_size;
-    if (BROTLI_FALSE == BrotliEncoderCompress(brotli_settings->m_Quality, brotli_settings->m_WindowBits, brotli_settings->m_Mode, uncompressed_size, uncompressed, out_compressed_size, compressed))
+    if (BROTLI_FALSE == BrotliEncoderCompress(brotli_settings->m_Quality, brotli_settings->m_WindowBits, brotli_settings->m_Mode, uncompressed_size, (const uint8_t*)uncompressed, out_compressed_size, (uint8_t*)compressed))
     {
         return EINVAL;
     }
@@ -59,9 +59,9 @@ int BrotliCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_
     *out_uncompressed_size = max_uncompressed_size;
     BrotliDecoderResult result = BrotliDecoderDecompress(
         compressed_size,
-        compressed,
+        (const uint8_t*)compressed,
         out_uncompressed_size,
-        uncompressed);
+        (uint8_t*)uncompressed);
     switch (result)
     {
         case BROTLI_DECODER_RESULT_ERROR:
