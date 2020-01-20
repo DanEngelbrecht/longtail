@@ -537,6 +537,11 @@ static int StorageChunkFeederFunc(void* context, struct Longtail_Chunker* chunke
 
 // ChunkerWindowSize is the number of bytes in the rolling hash window
 #define ChunkerWindowSize 48u
+#define ChunkerWindowSizeMask 0x2fu
+
+#define MIN_CHUNKER_SIZE(max_chunk_size) (((max_chunk_size / 8) < ChunkerWindowSize) ? ChunkerWindowSize : (max_chunk_size / 8))
+#define AVG_CHUNKER_SIZE(max_chunk_size) ((max_chunk_size < ChunkerWindowSize) ? ChunkerWindowSize : max_chunk_size)
+#define MAX_CHUNKER_SIZE(max_chunk_size) (max_chunk_size * 4)
 
 struct HashJob
 {
@@ -638,11 +643,9 @@ static void DynamicChunking(void* context)
     }
     else
     {
-        uint32_t min_chunk_size = hash_job->m_MaxChunkSize / 8;
-        min_chunk_size = min_chunk_size < ChunkerWindowSize ? ChunkerWindowSize : min_chunk_size;
-        uint32_t avg_chunk_size = hash_job->m_MaxChunkSize / 2;
-        avg_chunk_size = avg_chunk_size < ChunkerWindowSize ? ChunkerWindowSize : avg_chunk_size;
-        uint32_t max_chunk_size = hash_job->m_MaxChunkSize * 2;
+        uint32_t min_chunk_size = MIN_CHUNKER_SIZE(hash_job->m_MaxChunkSize);
+        uint32_t avg_chunk_size = AVG_CHUNKER_SIZE(hash_job->m_MaxChunkSize);
+        uint32_t max_chunk_size = MAX_CHUNKER_SIZE(hash_job->m_MaxChunkSize);
 
         struct StorageChunkFeederContext feeder_context =
         {
@@ -774,9 +777,11 @@ static int ChunkAssets(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ChunkAssets: Hashing and chunking folder `%s` with %" PRIu64 " assets", root_path, *paths->m_PathCount)
     uint32_t asset_count = *paths->m_PathCount;
 
-    uint64_t max_hash_size = max_chunk_size * 1024;
+    uint64_t max_hash_size = max_chunk_size * 512;
     uint32_t job_count = 0;
-    uint64_t min_chunk_size = max_chunk_size / 8;
+
+    uint64_t min_chunk_size = MIN_CHUNKER_SIZE(max_chunk_size);
+
     uint64_t max_chunk_count = 0;
     for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
@@ -2755,7 +2760,7 @@ static int CreatePartialAssetWriteJob(
     Longtail_JobAPI_JobFunc decompress_funcs[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     void* decompress_ctx[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
 
-    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 2u;
+    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
     const uint32_t max_parallell_decompress_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
     while (chunk_index_offset != chunk_index_end && job->m_BlockDecompressorJobCount < max_parallell_decompress_jobs)
@@ -3334,7 +3339,7 @@ static int WriteAssets(
     LONGTAIL_FATAL_ASSERT(content_lookup != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(awl != 0, return EINVAL)
 
-    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 2u;
+    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
     const uint32_t max_parallell_decompress_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
     uint32_t asset_job_count = 0;
@@ -3343,14 +3348,15 @@ static int WriteAssets(
         uint32_t asset_index = awl->m_AssetIndexJobs[a];
         uint32_t chunk_index_start = version_index->m_AssetChunkIndexStarts[asset_index];
         uint32_t chunk_start_index_offset = chunk_index_start;
-        uint32_t chunk_index_end = chunk_index_start + version_index->m_AssetChunkCounts[asset_index];
-        uint32_t chunk_index_offset = chunk_start_index_offset;
-
-        if (chunk_index_offset == chunk_index_end)
+        uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
+        if (chunk_count == 0)
         {
             asset_job_count += 1;   // Write job
             continue;
         }
+
+        uint32_t chunk_index_end = chunk_index_start + chunk_count;
+        uint32_t chunk_index_offset = chunk_start_index_offset;
 
         while(chunk_index_offset != chunk_index_end)
         {
@@ -5197,24 +5203,26 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
     uint8_t* window = c->hWindow;
     const uint32_t discriminator = c->hDiscriminator - 1;
     const uint8_t* scoped_buf = scoped_data.buf;
-    while(1)
+    const uint32_t d = c->hDiscriminator;
+    while(pos < data_len)
     {
-        uint8_t in = scoped_buf[pos];
+        uint8_t in = scoped_buf[pos++];
         uint8_t out = window[idx];
         window[idx++] = in;
         hash = _rotl(hash, 1) ^
             _rotl(hashTable[out], (int)(ChunkerWindowSize)) ^
             hashTable[in];
 
-        if (idx == ChunkerWindowSize)
-                idx = 0;
-        ++pos;
-
-        if ((pos >= data_len) || ((hash % c->hDiscriminator) == discriminator))
+        if ((hash % d) == discriminator)
         {
-            struct Longtail_ChunkRange r = {scoped_buf, c->processed_count + c->off, pos};
-            c->off += pos;
-            return r;
+            break;
+        }
+        if (idx == ChunkerWindowSize)
+        {
+            idx = 0;
         }
     }
+    struct Longtail_ChunkRange r = {scoped_buf, c->processed_count + c->off, pos};
+    c->off += pos;
+    return r;
 }
