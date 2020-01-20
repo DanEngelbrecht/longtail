@@ -537,7 +537,6 @@ static int StorageChunkFeederFunc(void* context, struct Longtail_Chunker* chunke
 
 // ChunkerWindowSize is the number of bytes in the rolling hash window
 #define ChunkerWindowSize 48u
-#define ChunkerWindowSizeMask 0x2fu
 
 #define MIN_CHUNKER_SIZE(max_chunk_size) (((max_chunk_size / 8) < ChunkerWindowSize) ? ChunkerWindowSize : (max_chunk_size / 8))
 #define AVG_CHUNKER_SIZE(max_chunk_size) ((max_chunk_size < ChunkerWindowSize) ? ChunkerWindowSize : max_chunk_size)
