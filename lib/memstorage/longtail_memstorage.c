@@ -463,15 +463,20 @@ static const char* InMemStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* 
     return instance->m_PathEntries[*i].m_FileName;
 }
 
-static uint64_t InMemStorageAPI_GetEntrySize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+static int InMemStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t* i = (uint32_t*)iterator;
     if (instance->m_PathEntries[*i].m_Content == 0)
     {
-        return 0;
+        *out_size = 0;
     }
-    return (uint64_t)arrlen(instance->m_PathEntries[*i].m_Content);
+    else
+    {
+        *out_size = (uint64_t)arrlen(instance->m_PathEntries[*i].m_Content);
+    }
+    *out_permissions = (uint16_t)-1;
+    return 0;
 }
 
 static int InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
@@ -496,7 +501,7 @@ static int InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_InMemStorageAPI.CloseFind = InMemStorageAPI_CloseFind;
     storage_api->m_InMemStorageAPI.GetFileName = InMemStorageAPI_GetFileName;
     storage_api->m_InMemStorageAPI.GetDirectoryName = InMemStorageAPI_GetDirectoryName;
-    storage_api->m_InMemStorageAPI.GetEntrySize = InMemStorageAPI_GetEntrySize;
+    storage_api->m_InMemStorageAPI.GetEntryProperties = InMemStorageAPI_GetEntryProperties;
 
     storage_api->m_PathHashToContent = 0;
     storage_api->m_PathEntries = 0;

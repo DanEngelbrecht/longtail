@@ -309,6 +309,7 @@ TEST(Longtail, Longtail_VersionIndex)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const uint64_t asset_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
+    const uint16_t asset_permissions[5] = {0x10, 0x11, 0x12, 0x13, 0x14};
     const uint32_t chunk_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
@@ -326,6 +327,7 @@ TEST(Longtail, Longtail_VersionIndex)
         asset_path_hashes,
         asset_content_hashes,
         asset_sizes,
+        asset_permissions,
         asset_chunk_start_index,
         asset_chunk_counts,
         *paths->m_PathCount,
@@ -521,6 +523,7 @@ TEST(Longtail, ContentIndexSerialization)
         "source/version1",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
+        version1_paths->m_Permissions,
         compression_types,
         16384,
         &vindex));
@@ -658,6 +661,7 @@ TEST(Longtail, Longtail_WriteContent)
         "local",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
+        version1_paths->m_Permissions,
         compression_types,
         16,
         &vindex));
@@ -791,6 +795,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint64_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint32_t chunk_sizes[5] = {43593, 43593, 43592, 43591, 43591};
+    const uint16_t asset_permissions[5] = {0x20, 0x30, 0x40, 0x50, 0x60};
 //    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
 //    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
@@ -830,6 +835,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
         asset_path_hashes,
         asset_content_hashes,
         asset_sizes,
+        asset_permissions,
         asset_chunk_start_index,
         asset_chunk_counts,
         *paths->m_PathCount,
@@ -914,6 +920,7 @@ TEST(Longtail, VersionIndexDirectories)
         "",
         &local_paths->m_Paths,
         local_paths->m_FileSizes,
+        local_paths->m_Permissions,
         compression_types,
         16384,
         &local_version_index));
@@ -1210,6 +1217,7 @@ TEST(Longtail, Longtail_VersionDiff)
         "old",
         &old_version_paths->m_Paths,
         old_version_paths->m_FileSizes,
+        old_version_paths->m_Permissions,
         old_compression_types,
         16,
         &old_vindex));
@@ -1234,6 +1242,7 @@ TEST(Longtail, Longtail_VersionDiff)
         "new",
         &new_version_paths->m_Paths,
         new_version_paths->m_FileSizes,
+        new_version_paths->m_Permissions,
         new_compression_types,
         16,
         &new_vindex));
@@ -1278,7 +1287,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     ASSERT_EQ(3u, *version_diff->m_SourceRemovedCount);
     ASSERT_EQ(3u, *version_diff->m_TargetAddedCount);
-    ASSERT_EQ(6u, *version_diff->m_ModifiedCount);
+    ASSERT_EQ(6u, *version_diff->m_ModifiedContentCount);
 
     ASSERT_EQ(0, Longtail_ChangeVersion(
         storage,
@@ -1367,6 +1376,7 @@ TEST(Longtail, FullScale)
         "",
         &local_paths->m_Paths,
         local_paths->m_FileSizes,
+        local_paths->m_Permissions,
         local_compression_types,
         16384,
         &local_version_index));
@@ -1390,6 +1400,7 @@ TEST(Longtail, FullScale)
         "",
         &remote_paths->m_Paths,
         remote_paths->m_FileSizes,
+        remote_paths->m_Permissions,
         remote_compression_types,
         16384,
         &remote_version_index));
@@ -1637,6 +1648,7 @@ TEST(Longtail, Longtail_WriteVersion)
         "local",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
+        version1_paths->m_Permissions,
         version1_compression_types,
         50,
         &vindex));
@@ -1794,6 +1806,7 @@ static void Bench()
             version_source_folder,
             &version_source_paths->m_Paths,
             version_source_paths->m_FileSizes,
+            version_source_paths->m_Permissions,
             version_compression_types,
             16384,
             &version_index));
@@ -1984,6 +1997,7 @@ static void LifelikeTest()
         local_path_1,
         &local_path_1_paths->m_Paths,
         local_path_1_paths->m_FileSizes,
+        local_path_1_paths->m_Permissions,
         local_compression_types,
         16384,
         &version1));
@@ -2058,6 +2072,7 @@ static void LifelikeTest()
         local_path_2,
         &local_path_2_paths->m_Paths,
         local_path_2_paths->m_FileSizes,
+        local_path_2_paths->m_Permissions,
         local_2_compression_types,
         16384,
         &version2));

@@ -215,7 +215,7 @@ struct HashToIndexItem
     uint64_t value;
 };
 
-typedef int (*ProcessEntry)(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size);
+typedef int (*ProcessEntry)(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size, uint16_t permissions);
 
 static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
 {
@@ -246,7 +246,15 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                 const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator);
                 if (dir_name)
                 {
-                    err = entry_processor(context, asset_folder, dir_name, 1, 0);
+                    uint64_t size;
+                    uint16_t permissions;
+                    err = storage_api->GetEntryProperties(storage_api, fs_iterator, &size, &permissions);
+                    if (err)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Get size and permissions for dir `%s` in `%s` failed with %d", dir_name, asset_folder, err)
+                        break;
+                    }
+                    err = entry_processor(context, asset_folder, dir_name, 1, size, permissions);
                     if (err)
                     {
                         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process dir `%s` in `%s` failed with %d", dir_name, asset_folder, err)
@@ -269,8 +277,15 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                     const char* file_name = storage_api->GetFileName(storage_api, fs_iterator);
                     if (file_name)
                     {
-                        uint64_t size = storage_api->GetEntrySize(storage_api, fs_iterator);
-                        err = entry_processor(context, asset_folder, file_name, 0, size);
+                        uint64_t size;
+                        uint16_t permissions;
+                        err = storage_api->GetEntryProperties(storage_api, fs_iterator, &size, &permissions);
+                        if (err)
+                        {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Get size and permissions for file `%s` in `%s` failed with %d", file_name, asset_folder, err)
+                            break;
+                        }
+                        err = entry_processor(context, asset_folder, file_name, 0, size, permissions);
                         if (err)
                         {
                             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process file `%s` in `%s` failed with %d", file_name, asset_folder, err)
@@ -403,9 +418,10 @@ struct AddFile_Context {
     uint32_t m_RootPathLength;
     struct Longtail_Paths* m_Paths;
     uint64_t* m_FileSizes;
+    uint16_t* m_Permissions;
 };
 
-static int AddFile(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size)
+static int AddFile(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size, uint16_t permissions)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(root_path != 0, return EINVAL)
@@ -439,6 +455,7 @@ static int AddFile(void* context, const char* root_path, const char* file_name, 
     }
 
     arrpush(paths_context->m_FileSizes, size);
+    arrpush(paths_context->m_Permissions, permissions);
 
     Longtail_Free(full_path);
     full_path = 0;
@@ -461,6 +478,7 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), paths, 0};
     paths = 0;
     arrsetcap(context.m_FileSizes, 4096);
+    arrsetcap(context.m_Permissions, 4096);
 
     int err = RecurseTree(storage_api, root_path, AddFile, &context);
     if(err)
@@ -468,6 +486,8 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_GetFilesRecursively: Failed get files in folder `%s`, %d", root_path, err)
         Longtail_Free(context.m_Paths);
         context.m_Paths = 0;
+        arrfree(context.m_Permissions);
+        context.m_Permissions = 0;
         arrfree(context.m_FileSizes);
         context.m_FileSizes = 0;
         return err;
@@ -477,6 +497,7 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     struct Longtail_FileInfos* result = (struct Longtail_FileInfos*)Longtail_Alloc(
         sizeof(struct Longtail_FileInfos) +
         sizeof(uint64_t) * asset_count +
+        sizeof(uint16_t) * asset_count +
         GetPathsSize(asset_count, context.m_Paths->m_DataSize));
     LONGTAIL_FATAL_ASSERT(result, return ENOMEM)
 
@@ -485,13 +506,17 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     *result->m_Paths.m_PathCount = asset_count;
     result->m_FileSizes = (uint64_t*)(void*)&result->m_Paths.m_PathCount[1];
     result->m_Paths.m_Offsets = (uint32_t*)(void*)(&result->m_FileSizes[asset_count]);
+    result->m_Permissions = (uint16_t*)(void*)&result->m_Paths.m_Offsets[asset_count];
     result->m_Paths.m_Data = (char*)&result->m_Paths.m_Offsets[asset_count];
     memmove(result->m_FileSizes, context.m_FileSizes, sizeof(uint64_t) * asset_count);
+    memmove(result->m_Permissions, context.m_Permissions, sizeof(uint16_t) * asset_count);
     memmove(result->m_Paths.m_Offsets, context.m_Paths->m_Offsets, sizeof(uint32_t) * asset_count);
     memmove(result->m_Paths.m_Data, context.m_Paths->m_Data, result->m_Paths.m_DataSize);
 
     Longtail_Free(context.m_Paths);
     context.m_Paths = 0;
+    arrfree(context.m_Permissions);
+    context.m_Permissions = 0;
     arrfree(context.m_FileSizes);
     context.m_FileSizes = 0;
 
@@ -968,6 +993,7 @@ static size_t GetVersionIndexDataSize(
         (sizeof(uint32_t) * chunk_count) +              // m_ChunkSizes
         (sizeof(uint32_t) * chunk_count) +              // m_ChunkCompressionTypes
         (sizeof(uint32_t) * asset_count) +              // m_NameOffsets
+        (sizeof(uint16_t) * asset_count) +              // m_Permissions
         path_data_size;
 
     return version_index_data_size;
@@ -1053,6 +1079,9 @@ static int InitVersionIndex(struct Longtail_VersionIndex* version_index, size_t 
     version_index->m_NameOffsets = (uint32_t*)(void*)p;
     p += (sizeof(uint32_t) * asset_count);
 
+    version_index->m_Permissions = (uint16_t*)(void*)p;
+    p += (sizeof(uint16_t) * asset_count);
+
     size_t version_index_name_data_start = (size_t)p;
 
     size_t version_index_data_size = version_index_size - sizeof(struct Longtail_VersionIndex);
@@ -1070,6 +1099,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     const TLongtail_Hash* path_hashes,
     const TLongtail_Hash* content_hashes,
     const uint64_t* content_sizes,
+    const uint16_t* asset_permissions,
     const uint32_t* asset_chunk_index_starts,
     const uint32_t* asset_chunk_counts,
     uint32_t asset_chunk_index_count,
@@ -1113,7 +1143,6 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     memmove(version_index->m_PathHashes, path_hashes, sizeof(TLongtail_Hash) * asset_count);
     memmove(version_index->m_ContentHashes, content_hashes, sizeof(TLongtail_Hash) * asset_count);
     memmove(version_index->m_AssetSizes, content_sizes, sizeof(uint64_t) * asset_count);
-    memmove(version_index->m_NameOffsets, paths, sizeof(uint32_t) * asset_count);
     memmove(version_index->m_AssetChunkCounts, asset_chunk_counts, sizeof(uint32_t) * asset_count);
     memmove(version_index->m_AssetChunkIndexStarts, asset_chunk_index_starts, sizeof(uint32_t) * asset_count);
     memmove(version_index->m_AssetChunkIndexes, asset_chunk_indexes, sizeof(uint32_t) * asset_chunk_index_count);
@@ -1121,6 +1150,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     memmove(version_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
     memmove(version_index->m_ChunkCompressionTypes, chunk_compression_types, sizeof(uint32_t) * chunk_count);
     memmove(version_index->m_NameOffsets, paths->m_Offsets, sizeof(uint32_t) * asset_count);
+    memmove(version_index->m_Permissions, asset_permissions, sizeof(uint16_t) * asset_count);
     memmove(version_index->m_NameData, paths->m_Data, paths->m_DataSize);
 
     return version_index;
@@ -1135,6 +1165,7 @@ int Longtail_CreateVersionIndex(
     const char* root_path,
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
+    const uint16_t* asset_permissions,
     const uint32_t* asset_compression_types,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
@@ -1242,6 +1273,7 @@ int Longtail_CreateVersionIndex(
         path_hashes,                    // path_hashes
         content_hashes,                 // content_hashes
         asset_sizes,                    // content_sizes
+        asset_permissions,              // asset_permissions
         asset_chunk_start_index,        // asset_chunk_index_starts
         asset_chunk_counts,             // asset_chunk_counts
         assets_chunk_index_count,       // asset_chunk_index_count
@@ -3686,7 +3718,7 @@ struct Longtail_ReadContentContext {
     uint64_t m_ChunkCount;
 };
 
-static int Longtail_ReadContentAddPath(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size)
+static int Longtail_ReadContentAddPath(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size, uint16_t permissions)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(root_path != 0, return EINVAL)
@@ -4376,22 +4408,24 @@ static SORTFUNC(SortPathLongToShort)
     return (a_len < b_len) ? 1 : (a_len > b_len) ? -1 : 0;
 }
 
-static size_t GetVersionDiffDataSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_count)
+static size_t GetVersionDiffDataSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_content_count, uint32_t modified_permission_count)
 {
     return
-        sizeof(uint32_t) +                  // m_SourceRemovedCount
-        sizeof(uint32_t) +                  // m_TargetAddedCount
-        sizeof(uint32_t) +                  // m_ModifiedCount
-        sizeof(uint32_t) * removed_count +  // m_SourceRemovedAssetIndexes
-        sizeof(uint32_t) * added_count +    // m_TargetAddedAssetIndexes
-        sizeof(uint32_t) * modified_count + // m_SourceModifiedAssetIndexes
-        sizeof(uint32_t) * modified_count;  // m_TargetModifiedAssetIndexes
+        sizeof(uint32_t) +                              // m_SourceRemovedCount
+        sizeof(uint32_t) +                              // m_TargetAddedCount
+        sizeof(uint32_t) +                              // m_ModifiedContentCount
+        sizeof(uint32_t) * removed_count +              // m_SourceRemovedAssetIndexes
+        sizeof(uint32_t) * added_count +                // m_TargetAddedAssetIndexes
+        sizeof(uint32_t) * modified_content_count +     // m_SourceContentModifiedAssetIndexes
+        sizeof(uint32_t) * modified_content_count +     // m_TargetContentModifiedAssetIndexes
+        sizeof(uint32_t) * modified_permission_count +  // m_SourcePermissionsModifiedAssetIndexes
+        sizeof(uint32_t) * modified_permission_count;   // m_TargetPermissionsModifiedAssetIndexes
 }
 
-static size_t GetVersionDiffSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_count)
+static size_t GetVersionDiffSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_content_count, uint32_t modified_permission_count)
 {
     return sizeof(struct Longtail_VersionDiff) +
-        GetVersionDiffDataSize(removed_count, added_count, modified_count);
+        GetVersionDiffDataSize(removed_count, added_count, modified_content_count, modified_permission_count);
 }
 
 static void InitVersionDiff(struct Longtail_VersionDiff* version_diff)
@@ -4407,12 +4441,16 @@ static void InitVersionDiff(struct Longtail_VersionDiff* version_diff)
     version_diff->m_TargetAddedCount = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    version_diff->m_ModifiedCount = (uint32_t*)(void*)p;
+    version_diff->m_ModifiedContentCount = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    version_diff->m_ModifiedPermissionsCount = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
     uint32_t removed_count = *version_diff->m_SourceRemovedCount;
     uint32_t added_count = *version_diff->m_TargetAddedCount;
-    uint32_t modified_count = *version_diff->m_ModifiedCount;
+    uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
+    uint32_t modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
 
     version_diff->m_SourceRemovedAssetIndexes = (uint32_t*)(void*)p;
     p += sizeof(uint32_t) * removed_count;
@@ -4420,11 +4458,17 @@ static void InitVersionDiff(struct Longtail_VersionDiff* version_diff)
     version_diff->m_TargetAddedAssetIndexes = (uint32_t*)(void*)p;
     p += sizeof(uint32_t) * added_count;
 
-    version_diff->m_SourceModifiedAssetIndexes = (uint32_t*)(void*)p;
-    p += sizeof(uint32_t) * modified_count;
+    version_diff->m_SourceContentModifiedAssetIndexes = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t) * modified_content_count;
 
-    version_diff->m_TargetModifiedAssetIndexes = (uint32_t*)(void*)p;
-    p += sizeof(uint32_t) * modified_count;
+    version_diff->m_TargetContentModifiedAssetIndexes = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t) * modified_content_count;
+
+    version_diff->m_SourcePermissionsModifiedAssetIndexes = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t) * modified_permissions_count;
+
+    version_diff->m_TargetPermissionsModifiedAssetIndexes = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t) * modified_permissions_count;
 }
 
 int Longtail_CreateVersionDiff(
@@ -4471,15 +4515,22 @@ int Longtail_CreateVersionDiff(
     uint32_t* added_target_asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * target_asset_count);
     LONGTAIL_FATAL_ASSERT(added_target_asset_indexes, return ENOMEM)
 
-    const uint32_t max_modified_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
-    uint32_t* modified_source_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_count);
-    LONGTAIL_FATAL_ASSERT(modified_source_indexes, return ENOMEM)
-    uint32_t* modified_target_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_count);
-    LONGTAIL_FATAL_ASSERT(modified_target_indexes, return ENOMEM)
+    const uint32_t max_modified_content_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
+    uint32_t* modified_source_content_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_content_count);
+    LONGTAIL_FATAL_ASSERT(modified_source_content_indexes, return ENOMEM)
+    uint32_t* modified_target_content_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_content_count);
+    LONGTAIL_FATAL_ASSERT(modified_target_content_indexes, return ENOMEM)
+
+    const uint32_t max_modified_permission_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
+    uint32_t* modified_source_permissions_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_permission_count);
+    LONGTAIL_FATAL_ASSERT(modified_source_permissions_indexes, return ENOMEM)
+    uint32_t* modified_target_permissions_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_permission_count);
+    LONGTAIL_FATAL_ASSERT(modified_target_permissions_indexes, return ENOMEM)
 
     uint32_t source_removed_count = 0;
     uint32_t target_added_count = 0;
-    uint32_t modified_count = 0;
+    uint32_t modified_content_count = 0;
+    uint32_t modified_permissions_count = 0;
 
     uint32_t source_index = 0;
     uint32_t target_index = 0;
@@ -4499,11 +4550,24 @@ int Longtail_CreateVersionDiff(
             TLongtail_Hash target_content_hash = target_version->m_ContentHashes[target_asset_index];
             if (source_content_hash != target_content_hash)
             {
-                modified_source_indexes[modified_count] = source_asset_index;
-                modified_target_indexes[modified_count] = target_asset_index;
-                ++modified_count;
+                modified_source_content_indexes[modified_content_count] = source_asset_index;
+                modified_target_content_indexes[modified_content_count] = target_asset_index;
+                ++modified_content_count;
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Mismatching content for asset `%s`", source_path)
             }
+            else
+            {
+                uint16_t source_permissions = source_version->m_Permissions[source_asset_index];
+                uint16_t target_permissions = target_version->m_Permissions[target_asset_index];
+                if (source_permissions != target_permissions)
+                {
+                    modified_source_permissions_indexes[modified_permissions_count] = source_asset_index;
+                    modified_target_permissions_indexes[modified_permissions_count] = target_asset_index;
+                    ++modified_permissions_count;
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Mismatching permissions for asset `%s`", source_path)
+                }
+            }
+
             ++source_index;
             ++target_index;
         }
@@ -4554,23 +4618,30 @@ int Longtail_CreateVersionDiff(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Found %u added assets", target_added_count)
     }
-    if (modified_count > 0)
+    if (modified_content_count > 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching content for %u assets found", modified_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching content for %u assets found", modified_content_count)
+    }
+    if (modified_permissions_count > 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching permission for %u assets found", modified_permissions_count)
     }
 
-    struct Longtail_VersionDiff* version_diff = (struct Longtail_VersionDiff*)Longtail_Alloc(GetVersionDiffSize(source_removed_count, target_added_count, modified_count));
+    struct Longtail_VersionDiff* version_diff = (struct Longtail_VersionDiff*)Longtail_Alloc(GetVersionDiffSize(source_removed_count, target_added_count, modified_content_count, modified_permissions_count));
     LONGTAIL_FATAL_ASSERT(version_diff, return ENOMEM)
     uint32_t* counts_ptr = (uint32_t*)(void*)&version_diff[1];
     counts_ptr[0] = source_removed_count;
     counts_ptr[1] = target_added_count;
-    counts_ptr[2] = modified_count;
+    counts_ptr[2] = modified_content_count;
+    counts_ptr[3] = modified_permissions_count;
     InitVersionDiff(version_diff);
 
     memmove(version_diff->m_SourceRemovedAssetIndexes, removed_source_asset_indexes, sizeof(uint32_t) * source_removed_count);
     memmove(version_diff->m_TargetAddedAssetIndexes, added_target_asset_indexes, sizeof(uint32_t) * target_added_count);
-    memmove(version_diff->m_SourceModifiedAssetIndexes, modified_source_indexes, sizeof(uint32_t) * modified_count);
-    memmove(version_diff->m_TargetModifiedAssetIndexes, modified_target_indexes, sizeof(uint32_t) * modified_count);
+    memmove(version_diff->m_SourceContentModifiedAssetIndexes, modified_source_content_indexes, sizeof(uint32_t) * modified_content_count);
+    memmove(version_diff->m_TargetContentModifiedAssetIndexes, modified_target_content_indexes, sizeof(uint32_t) * modified_content_count);
+    memmove(version_diff->m_SourcePermissionsModifiedAssetIndexes, modified_source_permissions_indexes, sizeof(uint16_t) * modified_permissions_count);
+    memmove(version_diff->m_TargetPermissionsModifiedAssetIndexes, modified_target_permissions_indexes, sizeof(uint16_t) * modified_permissions_count);
 
     QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
     QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
@@ -4581,11 +4652,17 @@ int Longtail_CreateVersionDiff(
     Longtail_Free(added_target_asset_indexes);
     added_target_asset_indexes = 0;
 
-    Longtail_Free(modified_source_indexes);
-    modified_source_indexes = 0;
+    Longtail_Free(modified_source_permissions_indexes);
+    modified_source_permissions_indexes = 0;
 
-    Longtail_Free(modified_target_indexes);
-    modified_target_indexes = 0;
+    Longtail_Free(modified_target_permissions_indexes);
+    modified_target_permissions_indexes = 0;
+
+    Longtail_Free(modified_source_content_indexes);
+    modified_source_content_indexes = 0;
+
+    Longtail_Free(modified_target_content_indexes);
+    modified_target_content_indexes = 0;
 
     Longtail_Free(target_path_hashes);
     target_path_hashes = 0;
@@ -4630,7 +4707,7 @@ int Longtail_ChangeVersion(
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedCount, version_path, content_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ChangeVersion: Removing %u assets, adding %u assets and modifying %u assets in `%s` from `%s`", *version_diff->m_SourceRemovedCount, *version_diff->m_TargetAddedCount, *version_diff->m_ModifiedContentCount, version_path, content_path)
 
     int err = EnsureParentPathExists(version_storage_api, version_path);
     if (err)
@@ -4763,23 +4840,23 @@ int Longtail_ChangeVersion(
     }
 
     uint32_t added_count = *version_diff->m_TargetAddedCount;
-    uint32_t modified_count = *version_diff->m_ModifiedCount;
-    uint32_t asset_count = added_count + modified_count;
+    uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
+    uint32_t write_asset_count = added_count + modified_content_count;
 
-    uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * asset_count);
+    uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * write_asset_count);
     LONGTAIL_FATAL_ASSERT(asset_indexes, return ENOMEM)
     for (uint32_t i = 0; i < added_count; ++i)
     {
         asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
     }
-    for (uint32_t i = 0; i < modified_count; ++i)
+    for (uint32_t i = 0; i < modified_content_count; ++i)
     {
-        asset_indexes[added_count + i] = version_diff->m_TargetModifiedAssetIndexes[i];
+        asset_indexes[added_count + i] = version_diff->m_TargetContentModifiedAssetIndexes[i];
     }
 
     struct AssetWriteList* awl;
     err = BuildAssetWriteList(
-        asset_count,
+        write_asset_count,
         asset_indexes,
         target_version->m_NameOffsets,
         target_version->m_NameData,

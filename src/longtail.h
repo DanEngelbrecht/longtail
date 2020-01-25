@@ -58,7 +58,7 @@ struct Longtail_StorageAPI
     void (*CloseFind)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
     const char* (*GetFileName)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
     const char* (*GetDirectoryName)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-    uint64_t (*GetEntrySize)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
+    int (*GetEntryProperties)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions);
 };
 
 typedef struct Longtail_CompressionAPI_CompressionContext* Longtail_CompressionAPI_HCompressionContext;
@@ -171,6 +171,7 @@ int Longtail_CreateVersionIndex(
     const char* root_path,
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
+    const uint16_t* asset_permissions,
     const uint32_t* asset_compression_types,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
@@ -278,7 +279,8 @@ int Longtail_WriteVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* content_path,
-    const char* version_path);
+    const char* version_path/*,
+    int retain_permissions*/);
 
 int Longtail_CreateVersionDiff(
     const struct Longtail_VersionIndex* source_version,
@@ -298,7 +300,8 @@ int Longtail_ChangeVersion(
     const struct Longtail_VersionIndex* target_version,
     const struct Longtail_VersionDiff* version_diff,
     const char* content_path,
-    const char* version_path);
+    const char* version_path/*,
+    int retain_permissions*/);
 
 struct Longtail_Paths
 {
@@ -312,6 +315,7 @@ struct Longtail_FileInfos
 {
     struct Longtail_Paths m_Paths;
     uint64_t* m_FileSizes;
+    uint16_t* m_Permissions;
 };
 
 struct Longtail_ContentIndex
@@ -350,6 +354,7 @@ struct Longtail_VersionIndex
 
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
+    uint16_t* m_Permissions;            // []
     char* m_NameData;
 };
 
@@ -357,11 +362,14 @@ struct Longtail_VersionDiff
 {
     uint32_t* m_SourceRemovedCount;
     uint32_t* m_TargetAddedCount;
-    uint32_t* m_ModifiedCount;
+    uint32_t* m_ModifiedContentCount;
+    uint32_t* m_ModifiedPermissionsCount;
     uint32_t* m_SourceRemovedAssetIndexes;
     uint32_t* m_TargetAddedAssetIndexes;
-    uint32_t* m_SourceModifiedAssetIndexes;
-    uint32_t* m_TargetModifiedAssetIndexes;
+    uint32_t* m_SourceContentModifiedAssetIndexes;
+    uint32_t* m_TargetContentModifiedAssetIndexes;
+    uint32_t* m_SourcePermissionsModifiedAssetIndexes;
+    uint32_t* m_TargetPermissionsModifiedAssetIndexes;
 };
 
 int Longtail_ValidateContent(
@@ -400,6 +408,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     const TLongtail_Hash* path_hashes,
     const TLongtail_Hash* content_hashes,
     const uint64_t* content_sizes,
+    const uint16_t* asset_permissions,
     const uint32_t* asset_chunk_index_starts,
     const uint32_t* asset_chunk_counts,
     uint32_t asset_chunk_index_count,
