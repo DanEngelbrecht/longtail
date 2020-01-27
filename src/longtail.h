@@ -29,6 +29,20 @@ struct Longtail_HashAPI
 typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
 typedef struct Longtail_StorageAPI_Iterator* Longtail_StorageAPI_HIterator;
 
+enum {
+    Longtail_StorageAPI_OtherExecuteAccess  = 0001,
+    Longtail_StorageAPI_OtherWriteAccess    = 0002,
+    Longtail_StorageAPI_OtherReadAccess     = 0004,
+    
+    Longtail_StorageAPI_GroupExecuteAccess  = 0010,
+    Longtail_StorageAPI_GroupWriteAccess    = 0020,
+    Longtail_StorageAPI_GroupReadAccess     = 0040,
+
+    Longtail_StorageAPI_UserExecuteAccess   = 0100,
+    Longtail_StorageAPI_UserWriteAccess     = 0200,
+    Longtail_StorageAPI_UserReadAccess      = 0400
+};
+
 struct Longtail_StorageAPI
 {
     struct Longtail_API m_API;
@@ -39,6 +53,7 @@ struct Longtail_StorageAPI
     int (*OpenWriteFile)(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file);
     int (*Write)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
     int (*SetSize)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length);
+    int (*SetPermissions)(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions);
 
     void (*CloseFile)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f);
 

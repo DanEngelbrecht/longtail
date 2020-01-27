@@ -461,7 +461,16 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
     DWORD high = fs_iterator->m_FindData.nFileSizeHigh;
     DWORD low = fs_iterator->m_FindData.nFileSizeLow;
     *out_size = (((uint64_t)high) << 32) + (uint64_t)low;
-    *out_permissions = (uint16_t)-1;
+    uint16_t permissions = Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_GroupReadAccess | Longtail_StorageAPI_OtherReadAccess;
+    if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        permissions = permissions | Longtail_StorageAPI_UserExecuteAccess | Longtail_StorageAPI_GroupExecuteAccess | Longtail_StorageAPI_OtherExecuteAccess;
+    }
+    if ((fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_READONLY) == 0)
+    {
+        permissions = permissions | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess;
+    }
+    *out_permissions = permissions;
     return 0;
 }
 
@@ -518,6 +527,37 @@ int Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length)
     if (!SetEndOfFile(h))
     {
         return Win32ErrorToErrno(GetLastError());
+    }
+    return 0;
+}
+
+int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
+{
+    DWORD attrs = GetFileAttributesA(path);
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+    {
+        int e = Win32ErrorToErrno(GetLastError());
+        if (e == ENOENT){
+            return 0;
+        }
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
+        return e;
+    }
+    if ((permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess) == 0)
+    {
+        if ((attrs & FILE_ATTRIBUTE_READONLY) == 0)
+        {
+            attrs = attrs | FILE_ATTRIBUTE_READONLY;
+            if (FALSE == SetFileAttributesA(path, attrs))
+            {
+                int e = Win32ErrorToErrno(GetLastError());
+                if (e == ENOENT){
+                    return 0;
+                }
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
+                return e;
+            }
+        }
     }
     return 0;
 }
@@ -1257,6 +1297,11 @@ int Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length)
         return 0;
     }
     return errno;
+}
+
+int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
+{
+    return chmod(path, permissions);
 }
 
 int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output)

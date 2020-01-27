@@ -273,6 +273,7 @@ static int Cmd_Longtail_CreateVersionIndex(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -484,6 +485,7 @@ static int Cmd_Longtail_CreateMissingContentIndex(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -637,6 +639,7 @@ static int Cmd_CreateContent(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -936,6 +939,7 @@ static int Cmd_UpdateVersion(
             update_version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &source_vindex);
@@ -1118,6 +1122,7 @@ static int Cmd_UpSyncVersion(
             version_path,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -1568,7 +1573,8 @@ int main(int argc, char** argv)
             create_content_index,
             content))
         {
-            return 1;
+            result = 1;
+            goto end;
         }
         char create_version_index[512];
         sprintf(create_version_index, "%s/%s.lvi", test_base_path, test_version);
@@ -1583,7 +1589,8 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            return 1;
+            result = 1;
+            goto end;
         }
 
         sprintf(create_content_index, "%s/%s.lci", test_base_path, test_version);
@@ -1605,7 +1612,8 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            return 1;
+            result = 1;
+            goto end;
         }
 
         char create_content[512];
@@ -1625,7 +1633,8 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to create content `%s` from `%s`\n", create_content, version);
-            return 1;
+            result = 1;
+            goto end;
         }
 
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
@@ -1638,7 +1647,8 @@ int main(int argc, char** argv)
             content_index,
             merge_content_index))
         {
-            return 1;
+            result = 1;
+            goto end;
         }
 /*
         sprintf(create_version, "%s/remote/%s", test_base_path, test_version);
@@ -1657,7 +1667,8 @@ int main(int argc, char** argv)
         {
             fprintf(stderr, "Failed to create version `%s` to `%s`\n", create_version, version_index);
             Longtail_Free(compression_registry);
-            return 1;
+            result = 1;
+            goto end;
         }
 */
         char update_version[512];
@@ -1678,7 +1689,8 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to update version `%s` to `%s`\n", update_version, target_version_index);
-            return 1;
+            result = 1;
+            goto end;
         }
         char incremental_version_index[512];
         sprintf(incremental_version_index, "%s/remote/%s.lvi", test_base_path, test_version);
@@ -1693,7 +1705,8 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            return 1;
+            result = 1;
+            goto end;
         }
 
         struct Longtail_VersionIndex* source_vindex;
@@ -1701,7 +1714,8 @@ int main(int argc, char** argv)
         if (err)
         {
             fprintf(stderr, "Failed to read version index `%s`, %d\n", create_version_index, err);
-            return 1;
+            result = 1;
+            goto end;
         }
         struct Longtail_VersionIndex* target_vindex;
         err = Longtail_ReadVersionIndex(fs_storage_api, incremental_version_index, &target_vindex);
@@ -1709,7 +1723,8 @@ int main(int argc, char** argv)
         {
             Longtail_Free(source_vindex);
             fprintf(stderr, "Failed to read version index `%s`, %d\n", incremental_version_index, err);
-            return 1;
+            result = 1;
+            goto end;
         }
 
         struct Longtail_VersionDiff* diff;
@@ -1722,21 +1737,25 @@ int main(int argc, char** argv)
             Longtail_Free(target_vindex);
             Longtail_Free(source_vindex);
             fprintf(stderr, "Failed to create version diff between `%s` and `%s`, %d\n", create_version_index, incremental_version_index, err);
-            return 1;
+            result = 1;
+            goto end;
         }
         Longtail_Free(source_vindex);
         Longtail_Free(target_vindex);
         if (*diff->m_SourceRemovedCount != 0)
         {
-            return 1;
+            result = 1;
+            goto end;
         }
         if (*diff->m_TargetAddedCount != 0)
         {
-            return 1;
+            result = 1;
+            goto end;
         }
-        if (*diff->m_ModifiedCount != 0)
+        if (*diff->m_ModifiedContentCount != 0)
         {
-            return 1;
+            result = 1;
+            goto end;
         }
         Longtail_Free(diff);
 
@@ -1758,7 +1777,8 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            return 1;
+            result = 1;
+            goto end;
         }
 
         Longtail_Free((char*)test_version);
@@ -2019,7 +2039,7 @@ int main(int argc, char** argv)
     }
 
     kgflags_print_usage();
-    return 1;
+    result = 1;
 
 end:
     SAFE_DISPOSE_API(job_api);
