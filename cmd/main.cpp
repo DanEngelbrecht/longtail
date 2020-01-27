@@ -1575,8 +1575,7 @@ int main(int argc, char** argv)
             create_content_index,
             content))
         {
-            result = 1;
-            goto end;
+            return 1;
         }
         char create_version_index[512];
         sprintf(create_version_index, "%s/%s.lvi", test_base_path, test_version);
@@ -1591,8 +1590,7 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            result = 1;
-            goto end;
+            return 1;
         }
 
         sprintf(create_content_index, "%s/%s.lci", test_base_path, test_version);
@@ -1614,8 +1612,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            result = 1;
-            goto end;
+            return 1;
         }
 
         char create_content[512];
@@ -1635,8 +1632,7 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to create content `%s` from `%s`\n", create_content, version);
-            result = 1;
-            goto end;
+            return 1;
         }
 
         sprintf(create_content_index, "%s/chunks.lci", test_base_path);
@@ -1649,8 +1645,7 @@ int main(int argc, char** argv)
             content_index,
             merge_content_index))
         {
-            result = 1;
-            goto end;
+            return 1;
         }
 /*
         sprintf(create_version, "%s/remote/%s", test_base_path, test_version);
@@ -1691,8 +1686,7 @@ int main(int argc, char** argv)
             target_chunk_size))
         {
             fprintf(stderr, "Failed to update version `%s` to `%s`\n", update_version, target_version_index);
-            result = 1;
-            goto end;
+            return 1;
         }
         char incremental_version_index[512];
         sprintf(incremental_version_index, "%s/remote/%s.lvi", test_base_path, test_version);
@@ -1707,8 +1701,7 @@ int main(int argc, char** argv)
             0,
             target_chunk_size))
         {
-            result = 1;
-            goto end;
+            return 1;
         }
 
         struct Longtail_VersionIndex* source_vindex;
@@ -1716,8 +1709,7 @@ int main(int argc, char** argv)
         if (err)
         {
             fprintf(stderr, "Failed to read version index `%s`, %d\n", create_version_index, err);
-            result = 1;
-            goto end;
+            return 1;
         }
         struct Longtail_VersionIndex* target_vindex;
         err = Longtail_ReadVersionIndex(fs_storage_api, incremental_version_index, &target_vindex);
@@ -1725,8 +1717,7 @@ int main(int argc, char** argv)
         {
             Longtail_Free(source_vindex);
             fprintf(stderr, "Failed to read version index `%s`, %d\n", incremental_version_index, err);
-            result = 1;
-            goto end;
+            return 1;
         }
 
         struct Longtail_VersionDiff* diff;
@@ -1739,25 +1730,21 @@ int main(int argc, char** argv)
             Longtail_Free(target_vindex);
             Longtail_Free(source_vindex);
             fprintf(stderr, "Failed to create version diff between `%s` and `%s`, %d\n", create_version_index, incremental_version_index, err);
-            result = 1;
-            goto end;
+            return 1;
         }
         Longtail_Free(source_vindex);
         Longtail_Free(target_vindex);
         if (*diff->m_SourceRemovedCount != 0)
         {
-            result = 1;
-            goto end;
+            return 1;
         }
         if (*diff->m_TargetAddedCount != 0)
         {
-            result = 1;
-            goto end;
+            return 1;
         }
         if (*diff->m_ModifiedContentCount != 0)
         {
-            result = 1;
-            goto end;
+            return 1;
         }
         Longtail_Free(diff);
 
@@ -1779,8 +1766,7 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             target_chunk_size))
         {
-            result = 1;
-            goto end;
+            return 1;
         }
 
         Longtail_Free((char*)test_version);
