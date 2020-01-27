@@ -183,7 +183,7 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
         path_entry->m_ParentHash = parent_path_hash;
         path_entry->m_FileName = Longtail_Strdup(InMemStorageAPI_GetFileNamePart(path));
         path_entry->m_Content = 0;
-        path_entry->m_Permissions = 644;
+        path_entry->m_Permissions = 0644;
         hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     }
     arrsetcap(path_entry->m_Content, initial_size == 0 ? 16 : (uint32_t)initial_size);
@@ -295,7 +295,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
     path_entry->m_ParentHash = parent_path_hash;
     path_entry->m_FileName = Longtail_Strdup(InMemStorageAPI_GetFileNamePart(path));
     path_entry->m_Content = 0;
-    path_entry->m_Permissions = 775;
+    path_entry->m_Permissions = 0775;
     hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     return 0;

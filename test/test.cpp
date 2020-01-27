@@ -309,7 +309,7 @@ TEST(Longtail, Longtail_VersionIndex)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const uint64_t asset_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
-    const uint16_t asset_permissions[5] = {0x10, 0x11, 0x12, 0x13, 0x14};
+    const uint32_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
     const uint32_t chunk_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
@@ -795,7 +795,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint64_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint32_t chunk_sizes[5] = {43593, 43593, 43592, 43591, 43591};
-    const uint16_t asset_permissions[5] = {0x20, 0x30, 0x40, 0x50, 0x60};
+    const uint32_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
 //    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
 //    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
@@ -1026,9 +1026,9 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
-    const uint32_t OLD_ASSET_COUNT = 9u;
+    const uint32_t OLD_ASSET_COUNT = 10u;
 
-    const char* OLD_TEST_FILENAMES[] = {
+    const char* OLD_TEST_FILENAMES[OLD_ASSET_COUNT] = {
         "ContentChangedSameLength.txt",
         "WillBeRenamed.txt",
         "ContentSameButShorter.txt",
@@ -1037,10 +1037,11 @@ TEST(Longtail, Longtail_VersionDiff)
         "JustDifferent.txt",
         "EmptyFileInFolder/.init.py",
         "a/file/in/folder/LongWithChangedStart.dll",
-        "a/file/in/other/folder/LongChangedAtEnd.exe"
+        "a/file/in/other/folder/LongChangedAtEnd.exe",
+        "permissions_changed.txt"
     };
 
-    const char* OLD_TEST_STRINGS[] = {
+    const char* OLD_TEST_STRINGS[OLD_ASSET_COUNT] = {
         "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
         "Short string",
         "Another sample string that does not match any other string but -reconstructed properly, than you very much",
@@ -1082,10 +1083,11 @@ TEST(Longtail, Longtail_VersionDiff)
             "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
             "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
             "That will look like garbage, will that really be a good idea?"
-            "This is the end tough..."
+            "This is the end tough...",
+        "Content stays the same but permissions change"
     };
 
-    const size_t OLD_TEST_SIZES[] = {
+    const size_t OLD_TEST_SIZES[OLD_ASSET_COUNT] = {
         strlen(OLD_TEST_STRINGS[0]) + 1,
         strlen(OLD_TEST_STRINGS[1]) + 1,
         strlen(OLD_TEST_STRINGS[2]) + 1,
@@ -1095,12 +1097,25 @@ TEST(Longtail, Longtail_VersionDiff)
         strlen(OLD_TEST_STRINGS[6]) + 1,
         strlen(OLD_TEST_STRINGS[7]) + 1,
         strlen(OLD_TEST_STRINGS[8]) + 1,
-        0
+        strlen(OLD_TEST_STRINGS[9]) + 1
     };
 
-    const uint32_t NEW_ASSET_COUNT = 9u;
+    const uint16_t OLD_TEST_PERMISSIONS[OLD_ASSET_COUNT] = {
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0755,
+        0646
+    };
 
-    const char* NEW_TEST_FILENAMES[] = {
+    const uint32_t NEW_ASSET_COUNT = 10u;
+
+    const char* NEW_TEST_FILENAMES[NEW_ASSET_COUNT] = {
         "ContentChangedSameLength.txt",
         "HasBeenRenamed.txt",
         "ContentSameButShorter.txt",
@@ -1109,10 +1124,11 @@ TEST(Longtail, Longtail_VersionDiff)
         "JustDifferent.txt",
         "EmptyFileInFolder/.init.py",
         "a/file/in/folder/LongWithChangedStart.dll",
-        "a/file/in/other/folder/LongChangedAtEnd.exe"
+        "a/file/in/other/folder/LongChangedAtEnd.exe",
+        "permissions_changed.txt"
     };
 
-    const char* NEW_TEST_STRINGS[] = {
+    const char* NEW_TEST_STRINGS[NEW_ASSET_COUNT] = {
         "This is the first test string which is fairly long and *will* - reconstructed properly, than you very much",   // Content changed, same length
         "Short string", // Renamed
         "Another sample string that does not match any other string but -reconstructed properly.",   // Shorter, same base content
@@ -1154,10 +1170,11 @@ TEST(Longtail, Longtail_VersionDiff)
             "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
             "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
             "That will look like garbage, will that really be a good idea?"
-            "This is the end tough...!"  // Modified at start
+            "This is the end tough...!",  // Modified at end
+        "Content stays the same but permissions change" // Permissions changed
     };
 
-    const size_t NEW_TEST_SIZES[] = {
+    const size_t NEW_TEST_SIZES[NEW_ASSET_COUNT] = {
         strlen(NEW_TEST_STRINGS[0]) + 1,
         strlen(NEW_TEST_STRINGS[1]) + 1,
         strlen(NEW_TEST_STRINGS[2]) + 1,
@@ -1167,7 +1184,20 @@ TEST(Longtail, Longtail_VersionDiff)
         strlen(NEW_TEST_STRINGS[6]) + 1,
         strlen(NEW_TEST_STRINGS[7]) + 1,
         strlen(NEW_TEST_STRINGS[8]) + 1,
-        0
+        strlen(NEW_TEST_STRINGS[9]) + 1
+    };
+
+    const uint16_t NEW_TEST_PERMISSIONS[NEW_ASSET_COUNT] = {
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0755,
+        0644
     };
 
     for (uint32_t i = 0; i < OLD_ASSET_COUNT; ++i)
@@ -1176,7 +1206,6 @@ TEST(Longtail, Longtail_VersionDiff)
         ASSERT_NE(0, CreateParentPath(storage, file_name));
         Longtail_StorageAPI_HOpenFile w;
         ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
-        Longtail_Free(file_name);
         ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
         if (OLD_TEST_SIZES[i])
         {
@@ -1184,6 +1213,8 @@ TEST(Longtail, Longtail_VersionDiff)
         }
         storage->CloseFile(storage, w);
         w = 0;
+        storage->SetPermissions(storage, file_name, OLD_TEST_PERMISSIONS[i]);
+        Longtail_Free(file_name);
     }
 
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
@@ -1192,7 +1223,6 @@ TEST(Longtail, Longtail_VersionDiff)
         ASSERT_NE(0, CreateParentPath(storage, file_name));
         Longtail_StorageAPI_HOpenFile w;
         ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
-        Longtail_Free(file_name);
         ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
         if (NEW_TEST_SIZES[i])
         {
@@ -1200,6 +1230,8 @@ TEST(Longtail, Longtail_VersionDiff)
         }
         storage->CloseFile(storage, w);
         w = 0;
+        storage->SetPermissions(storage, file_name, NEW_TEST_PERMISSIONS[i]);
+        Longtail_Free(file_name);
     }
 
     Longtail_FileInfos* old_version_paths;
@@ -1288,6 +1320,7 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(3u, *version_diff->m_SourceRemovedCount);
     ASSERT_EQ(3u, *version_diff->m_TargetAddedCount);
     ASSERT_EQ(6u, *version_diff->m_ModifiedContentCount);
+    ASSERT_EQ(1u, *version_diff->m_ModifiedPermissionsCount);
 
     ASSERT_EQ(0, Longtail_ChangeVersion(
         storage,
@@ -1302,7 +1335,8 @@ TEST(Longtail, Longtail_VersionDiff)
         new_vindex,
         version_diff,
         "chunks",
-        "old"));
+        "old",
+        1));
 
     Longtail_Free(content_index);
 
@@ -1492,7 +1526,8 @@ TEST(Longtail, FullScale)
         merged_content_index,
         remote_version_index,
         "",
-        ""));
+        "",
+        1));
 
     for(uint32_t i = 0; i < 10; ++i)
     {
@@ -1694,7 +1729,8 @@ TEST(Longtail, Longtail_WriteVersion)
         cindex,
         vindex,
         "chunks",
-        "remote"));
+        "remote",
+        1));
 
     for (uint32_t i = 0; i < asset_count; ++i)
     {
@@ -1924,7 +1960,8 @@ static void Bench()
             full_content_index,
             version_index,
             CONTENT_FOLDER,
-            version_target_folder));
+            version_target_folder,
+            1));
 
         version_indexes[i] = version_index;
         version_index = 0;
@@ -2053,7 +2090,8 @@ static void LifelikeTest()
         local_content_index,
         version1,
         local_content_path,
-        remote_path_1));
+        remote_path_1,
+        1));
     printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
 
     printf("Indexing `%s`...\n", local_path_2);
@@ -2188,7 +2226,8 @@ static void LifelikeTest()
         merged_local_content,
         version2,
         local_content_path,
-        remote_path_2));
+        remote_path_2,
+        1));
     printf("Reconstructed %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
 
 //    Longtail_Free(existing_blocks);

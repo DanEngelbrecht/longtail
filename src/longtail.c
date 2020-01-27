@@ -418,7 +418,7 @@ struct AddFile_Context {
     uint32_t m_RootPathLength;
     struct Longtail_Paths* m_Paths;
     uint64_t* m_FileSizes;
-    uint16_t* m_Permissions;
+    uint32_t* m_Permissions;
 };
 
 static int AddFile(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size, uint16_t permissions)
@@ -455,7 +455,7 @@ static int AddFile(void* context, const char* root_path, const char* file_name, 
     }
 
     arrpush(paths_context->m_FileSizes, size);
-    arrpush(paths_context->m_Permissions, permissions);
+    arrpush(paths_context->m_Permissions, (uint32_t)permissions);
 
     Longtail_Free(full_path);
     full_path = 0;
@@ -496,8 +496,8 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     uint32_t asset_count = *context.m_Paths->m_PathCount;
     struct Longtail_FileInfos* result = (struct Longtail_FileInfos*)Longtail_Alloc(
         sizeof(struct Longtail_FileInfos) +
-        sizeof(uint64_t) * asset_count +
-        sizeof(uint16_t) * asset_count +
+        sizeof(uint64_t) * asset_count +    // Asset sizes
+        sizeof(uint32_t) * asset_count +    // Permissions
         GetPathsSize(asset_count, context.m_Paths->m_DataSize));
     LONGTAIL_FATAL_ASSERT(result, return ENOMEM)
 
@@ -505,11 +505,11 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     result->m_Paths.m_PathCount = (uint32_t*)(void*)&result[1];
     *result->m_Paths.m_PathCount = asset_count;
     result->m_FileSizes = (uint64_t*)(void*)&result->m_Paths.m_PathCount[1];
-    result->m_Paths.m_Offsets = (uint32_t*)(void*)(&result->m_FileSizes[asset_count]);
-    result->m_Permissions = (uint16_t*)(void*)&result->m_Paths.m_Offsets[asset_count];
+    result->m_Permissions = (uint32_t*)(void*)&result->m_FileSizes[asset_count];
+    result->m_Paths.m_Offsets = (uint32_t*)(void*)(&result->m_Permissions[asset_count]);
     result->m_Paths.m_Data = (char*)&result->m_Paths.m_Offsets[asset_count];
     memmove(result->m_FileSizes, context.m_FileSizes, sizeof(uint64_t) * asset_count);
-    memmove(result->m_Permissions, context.m_Permissions, sizeof(uint16_t) * asset_count);
+    memmove(result->m_Permissions, context.m_Permissions, sizeof(uint32_t) * asset_count);
     memmove(result->m_Paths.m_Offsets, context.m_Paths->m_Offsets, sizeof(uint32_t) * asset_count);
     memmove(result->m_Paths.m_Data, context.m_Paths->m_Data, result->m_Paths.m_DataSize);
 
@@ -993,7 +993,7 @@ static size_t GetVersionIndexDataSize(
         (sizeof(uint32_t) * chunk_count) +              // m_ChunkSizes
         (sizeof(uint32_t) * chunk_count) +              // m_ChunkCompressionTypes
         (sizeof(uint32_t) * asset_count) +              // m_NameOffsets
-        (sizeof(uint16_t) * asset_count) +              // m_Permissions
+        (sizeof(uint32_t) * asset_count) +              // m_Permissions
         path_data_size;
 
     return version_index_data_size;
@@ -1079,8 +1079,8 @@ static int InitVersionIndex(struct Longtail_VersionIndex* version_index, size_t 
     version_index->m_NameOffsets = (uint32_t*)(void*)p;
     p += (sizeof(uint32_t) * asset_count);
 
-    version_index->m_Permissions = (uint16_t*)(void*)p;
-    p += (sizeof(uint16_t) * asset_count);
+    version_index->m_Permissions = (uint32_t*)(void*)p;
+    p += (sizeof(uint32_t) * asset_count);
 
     size_t version_index_name_data_start = (size_t)p;
 
@@ -1099,7 +1099,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     const TLongtail_Hash* path_hashes,
     const TLongtail_Hash* content_hashes,
     const uint64_t* content_sizes,
-    const uint16_t* asset_permissions,
+    const uint32_t* asset_permissions,
     const uint32_t* asset_chunk_index_starts,
     const uint32_t* asset_chunk_counts,
     uint32_t asset_chunk_index_count,
@@ -1150,7 +1150,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     memmove(version_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
     memmove(version_index->m_ChunkCompressionTypes, chunk_compression_types, sizeof(uint32_t) * chunk_count);
     memmove(version_index->m_NameOffsets, paths->m_Offsets, sizeof(uint32_t) * asset_count);
-    memmove(version_index->m_Permissions, asset_permissions, sizeof(uint16_t) * asset_count);
+    memmove(version_index->m_Permissions, asset_permissions, sizeof(uint32_t) * asset_count);
     memmove(version_index->m_NameData, paths->m_Data, paths->m_DataSize);
 
     return version_index;
@@ -1165,7 +1165,7 @@ int Longtail_CreateVersionIndex(
     const char* root_path,
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
-    const uint16_t* asset_permissions,
+    const uint32_t* asset_permissions,
     const uint32_t* asset_compression_types,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
@@ -2781,6 +2781,7 @@ struct WritePartialAssetFromBlocksJob
     const char* m_VersionFolder;
     struct ContentLookup* m_ContentLookup;
     uint32_t m_AssetIndex;
+    int m_RetainPermissions;
 
     struct BlockDecompressorJob m_BlockDecompressorJobs[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     uint32_t m_BlockDecompressorJobCount;
@@ -2807,6 +2808,7 @@ static int CreatePartialAssetWriteJob(
     const char* version_folder,
     struct ContentLookup* content_lookup,
     uint32_t asset_index,
+    int retain_permissions,
     struct WritePartialAssetFromBlocksJob* job,
     uint32_t asset_chunk_index_offset,
     Longtail_StorageAPI_HOpenFile asset_output_file,
@@ -2822,6 +2824,7 @@ static int CreatePartialAssetWriteJob(
     job->m_VersionFolder = version_folder;
     job->m_ContentLookup = content_lookup;
     job->m_AssetIndex = asset_index;
+    job->m_RetainPermissions = retain_permissions;
     job->m_BlockDecompressorJobCount = 0;
     job->m_AssetChunkIndexOffset = asset_chunk_index_offset;
     job->m_AssetChunkCount = 0;
@@ -3014,6 +3017,7 @@ void WritePartialAssetFromBlocks(void* context)
             job->m_VersionFolder,
             job->m_ContentLookup,
             job->m_AssetIndex,
+            job->m_RetainPermissions,
             job,    // Reuse job
             write_chunk_index_offset + write_chunk_count,
             job->m_AssetOutputFile,
@@ -3127,6 +3131,19 @@ void WritePartialAssetFromBlocks(void* context)
     job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
     job->m_AssetOutputFile = 0;
 
+    if (job->m_RetainPermissions)
+    {
+        char* full_asset_path = job->m_VersionStorageAPI->ConcatPath(job->m_VersionStorageAPI, job->m_VersionFolder, asset_path);
+        int err = job->m_VersionStorageAPI->SetPermissions(job->m_VersionStorageAPI, full_asset_path, (uint16_t)job->m_VersionIndex->m_Permissions[job->m_AssetIndex]);
+        Longtail_Free(full_asset_path);
+        full_asset_path = 0;
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to set permissions for asset `%s`, %d", asset_path, err)
+            job->m_Err = err;
+        }
+    }
+
     job->m_Err = 0;
 }
 
@@ -3142,6 +3159,7 @@ struct WriteAssetsFromBlockJob
     uint32_t* m_AssetIndexes;
     uint32_t m_AssetCount;
     struct HashToIndexItem* m_ContentChunkLookup;
+    int m_RetainPermissions;
     int m_Err;
 };
 
@@ -3230,8 +3248,20 @@ static void WriteAssetsFromBlock(void* context)
         version_storage_api->CloseFile(version_storage_api, asset_file);
         asset_file = 0;
 
-        Longtail_Free(full_asset_path);
-        full_asset_path = 0;
+        if (job->m_RetainPermissions)
+        {
+            err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, (uint16_t)version_index->m_Permissions[asset_index]);
+            Longtail_Free(full_asset_path);
+            full_asset_path = 0;
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to set permissions for asset `%s`, %d", asset_path, err)
+                Longtail_Free(block_data);
+                block_data = 0;
+                job->m_Err = err;
+                return;
+            }
+        }
     }
 
     Longtail_Free(block_data);
@@ -3402,7 +3432,8 @@ static int WriteAssets(
     const char* content_path,
     const char* version_path,
     struct ContentLookup* content_lookup,
-    struct AssetWriteList* awl)
+    struct AssetWriteList* awl,
+    int retain_permssions)
 {
     LONGTAIL_FATAL_ASSERT(content_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_storage_api != 0, return EINVAL)
@@ -3506,6 +3537,7 @@ static int WriteAssets(
         job->m_BlockIndex = (uint64_t)block_index;
         job->m_ContentChunkLookup = content_lookup->m_ChunkHashToChunkIndex;
         job->m_AssetIndexes = &awl->m_BlockJobAssetIndexes[j];
+        job->m_RetainPermissions = retain_permssions;
         job->m_Err = EINVAL;
 
         job->m_AssetCount = 1;
@@ -3583,6 +3615,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
             version_path,
             content_lookup,
             awl->m_AssetIndexJobs[a],
+            retain_permssions,
             &asset_jobs[a],
             0,
             (Longtail_StorageAPI_HOpenFile)0,
@@ -3633,7 +3666,8 @@ int Longtail_WriteVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* content_path,
-    const char* version_path)
+    const char* version_path,
+    int retain_permissions)
 {
     LONGTAIL_FATAL_ASSERT(content_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_storage_api != 0, return EINVAL)
@@ -3698,7 +3732,8 @@ int Longtail_WriteVersion(
         content_path,
         version_path,
         content_lookup,
-        awl);
+        awl,
+        retain_permissions);
 
     Longtail_Free(awl);
     awl = 0;
@@ -4414,6 +4449,7 @@ static size_t GetVersionDiffDataSize(uint32_t removed_count, uint32_t added_coun
         sizeof(uint32_t) +                              // m_SourceRemovedCount
         sizeof(uint32_t) +                              // m_TargetAddedCount
         sizeof(uint32_t) +                              // m_ModifiedContentCount
+        sizeof(uint32_t) +                              // m_ModifiedPermissionsCount
         sizeof(uint32_t) * removed_count +              // m_SourceRemovedAssetIndexes
         sizeof(uint32_t) * added_count +                // m_TargetAddedAssetIndexes
         sizeof(uint32_t) * modified_content_count +     // m_SourceContentModifiedAssetIndexes
@@ -4640,8 +4676,8 @@ int Longtail_CreateVersionDiff(
     memmove(version_diff->m_TargetAddedAssetIndexes, added_target_asset_indexes, sizeof(uint32_t) * target_added_count);
     memmove(version_diff->m_SourceContentModifiedAssetIndexes, modified_source_content_indexes, sizeof(uint32_t) * modified_content_count);
     memmove(version_diff->m_TargetContentModifiedAssetIndexes, modified_target_content_indexes, sizeof(uint32_t) * modified_content_count);
-    memmove(version_diff->m_SourcePermissionsModifiedAssetIndexes, modified_source_permissions_indexes, sizeof(uint16_t) * modified_permissions_count);
-    memmove(version_diff->m_TargetPermissionsModifiedAssetIndexes, modified_target_permissions_indexes, sizeof(uint16_t) * modified_permissions_count);
+    memmove(version_diff->m_SourcePermissionsModifiedAssetIndexes, modified_source_permissions_indexes, sizeof(uint32_t) * modified_permissions_count);
+    memmove(version_diff->m_TargetPermissionsModifiedAssetIndexes, modified_target_permissions_indexes, sizeof(uint32_t) * modified_permissions_count);
 
     QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
     QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
@@ -4693,7 +4729,8 @@ int Longtail_ChangeVersion(
     const struct Longtail_VersionIndex* target_version,
     const struct Longtail_VersionDiff* version_diff,
     const char* content_path,
-    const char* version_path)
+    const char* version_path,
+    int retain_permissions)
 {
     LONGTAIL_FATAL_ASSERT(content_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_storage_api != 0, return EINVAL)
@@ -4889,7 +4926,8 @@ int Longtail_ChangeVersion(
         content_path,
         version_path,
         content_lookup,
-        awl);
+        awl,
+        retain_permissions);
 
     Longtail_Free(asset_indexes);
     asset_indexes = 0;
@@ -4899,6 +4937,29 @@ int Longtail_ChangeVersion(
 
     DeleteContentLookup(content_lookup);
     content_lookup = 0;
+
+    if (err)
+    {
+        return err;
+    }
+
+    if (retain_permissions)
+    {
+        for (uint32_t i = 0; i < *version_diff->m_ModifiedPermissionsCount; ++i)
+        {
+            uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
+            const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
+            char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+            uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
+            err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
+            Longtail_Free(full_path);
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed to set permissions for asset `%s`, %d", asset_path, err)
+                break;
+            }
+        }
+    }
 
     return err;
 }

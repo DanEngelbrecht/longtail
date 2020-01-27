@@ -543,7 +543,7 @@ int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
         return e;
     }
-    if ((permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess) == 0)
+    if ((permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess)) == 0)
     {
         if ((attrs & FILE_ATTRIBUTE_READONLY) == 0)
         {

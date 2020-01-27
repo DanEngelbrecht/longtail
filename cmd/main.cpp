@@ -874,7 +874,8 @@ static int Cmd_CreateVersion(
             cindex,
             vindex,
             content,
-            create_version));
+            create_version,
+            1));
     }
     Longtail_Free(vindex);
     vindex = 0;
@@ -1046,7 +1047,8 @@ static int Cmd_UpdateVersion(
             target_vindex,
             version_diff,
             content,
-            update_version));
+            update_version,
+            1));
     }
 
     Longtail_Free(cindex);
