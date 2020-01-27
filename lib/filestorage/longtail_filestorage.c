@@ -80,6 +80,13 @@ static int FSStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtai
     return Longtail_SetFileSize((HLongtail_OpenFile)f, length);
 }
 
+static int FSStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions)
+{
+    TMP_STR(path)
+    Longtail_DenormalizePath(tmp_path);
+    return Longtail_SetFilePermissions(tmp_path, permissions);
+}
+
 static void FSStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
 {
     Longtail_CloseFile((HLongtail_OpenFile)f);
@@ -183,9 +190,9 @@ static const char* FSStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* sto
     return Longtail_GetDirectoryName((HLongtail_FSIterator)iterator);
 }
 
-static uint64_t FSStorageAPI_GetEntrySize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+static int FSStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions)
 {
-    return Longtail_GetEntrySize((HLongtail_FSIterator)iterator);
+    return Longtail_GetEntryProperties((HLongtail_FSIterator)iterator, out_size, out_permissions);
 }
 
 static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
@@ -197,6 +204,7 @@ static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
     storage_api->m_FSStorageAPI.OpenWriteFile = FSStorageAPI_OpenWriteFile;
     storage_api->m_FSStorageAPI.Write = FSStorageAPI_Write;
     storage_api->m_FSStorageAPI.SetSize = FSStorageAPI_SetSize;
+    storage_api->m_FSStorageAPI.SetPermissions = FSStorageAPI_SetPermissions;
     storage_api->m_FSStorageAPI.CloseFile = FSStorageAPI_CloseFile;
     storage_api->m_FSStorageAPI.CreateDir = FSStorageAPI_CreateDir;
     storage_api->m_FSStorageAPI.RenameFile = FSStorageAPI_RenameFile;
@@ -210,7 +218,7 @@ static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
     storage_api->m_FSStorageAPI.CloseFind = FSStorageAPI_CloseFind;
     storage_api->m_FSStorageAPI.GetFileName = FSStorageAPI_GetFileName;
     storage_api->m_FSStorageAPI.GetDirectoryName = FSStorageAPI_GetDirectoryName;
-    storage_api->m_FSStorageAPI.GetEntrySize = FSStorageAPI_GetEntrySize;
+    storage_api->m_FSStorageAPI.GetEntryProperties = FSStorageAPI_GetEntryProperties;
 }
 
 

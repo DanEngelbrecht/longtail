@@ -456,11 +456,22 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
     return 0;
 }
 
-uint64_t Longtail_GetEntrySize(HLongtail_FSIterator fs_iterator)
+int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions)
 {
     DWORD high = fs_iterator->m_FindData.nFileSizeHigh;
     DWORD low = fs_iterator->m_FindData.nFileSizeLow;
-    return (((uint64_t)high) << 32) + (uint64_t)low;
+    *out_size = (((uint64_t)high) << 32) + (uint64_t)low;
+    uint16_t permissions = Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_GroupReadAccess | Longtail_StorageAPI_OtherReadAccess;
+    if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        permissions = permissions | Longtail_StorageAPI_UserExecuteAccess | Longtail_StorageAPI_GroupExecuteAccess | Longtail_StorageAPI_OtherExecuteAccess;
+    }
+    if ((fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_READONLY) == 0)
+    {
+        permissions = permissions | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess;
+    }
+    *out_permissions = permissions;
+    return 0;
 }
 
 int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
@@ -516,6 +527,37 @@ int Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length)
     if (!SetEndOfFile(h))
     {
         return Win32ErrorToErrno(GetLastError());
+    }
+    return 0;
+}
+
+int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
+{
+    DWORD attrs = GetFileAttributesA(path);
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+    {
+        int e = Win32ErrorToErrno(GetLastError());
+        if (e == ENOENT){
+            return 0;
+        }
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
+        return e;
+    }
+    if ((permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess)) == 0)
+    {
+        if ((attrs & FILE_ATTRIBUTE_READONLY) == 0)
+        {
+            attrs = attrs | FILE_ATTRIBUTE_READONLY;
+            if (FALSE == SetFileAttributesA(path, attrs))
+            {
+                int e = Win32ErrorToErrno(GetLastError());
+                if (e == ENOENT){
+                    return 0;
+                }
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
+                return e;
+            }
+        }
     }
     return 0;
 }
@@ -767,7 +809,25 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
     pthread_mutex_destroy(&thread->m_ExitLock);
     thread->m_Handle = 0;
 }
+/*
+    struct stat path_stat;
+    int err = stat(path, &path_stat);
+    if (0 == err)
+    {
+        return S_ISDIR(path_stat.st_mode);
+    }
 
+
+Chown()
+Chmod
+int chmod(const char *path, stat().st_mode);
+int chown(const char *path, stat().st_uid, stat().st_gid);
+
+
+mode_t = unsigned short
+uid = short
+gid = short
+*/
 #if !defined(__clang__) || defined(__APPLE__)
 #define off64_t off_t
 #define ftruncate64 ftruncate
@@ -1177,12 +1237,8 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
     return fs_iterator->m_DirEntry->d_name;
 }
 
-uint64_t Longtail_GetEntrySize(HLongtail_FSIterator fs_iterator)
+int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions)
 {
-    if (fs_iterator->m_DirEntry->d_type != DT_REG)
-    {
-        return 0;
-    }
     size_t dir_len = strlen(fs_iterator->m_DirPath);
     size_t file_len = strlen(fs_iterator->m_DirEntry->d_name);
     char* path = (char*)Longtail_Alloc(dir_len + 1 + file_len + 1);
@@ -1191,10 +1247,18 @@ uint64_t Longtail_GetEntrySize(HLongtail_FSIterator fs_iterator)
     memcpy(&path[dir_len + 1], fs_iterator->m_DirEntry->d_name, file_len);
     path[dir_len + 1 + file_len] = '\0';
     struct stat stat_buf;
-    int ok = stat(path, &stat_buf);
-    uint64_t size = ok ? 0 : (uint64_t)stat_buf.st_size;
+    int res = stat(path, &stat_buf);
+    if (res == 0)
+    {
+        *out_size = (uint64_t)stat_buf.st_size;
+        *out_permissions = (uint16_t)stat_buf.st_mode;
+    }
+    else
+    {
+        res = errno;
+    }
     Longtail_Free(path);
-    return size;
+    return res;
 }
 
 int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
@@ -1241,6 +1305,11 @@ int Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length)
         return 0;
     }
     return errno;
+}
+
+int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
+{
+    return chmod(path, permissions);
 }
 
 int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output)

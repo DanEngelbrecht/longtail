@@ -304,6 +304,7 @@ static int Cmd_Longtail_CreateVersionIndex(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -515,6 +516,7 @@ static int Cmd_Longtail_CreateMissingContentIndex(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -668,6 +670,7 @@ static int Cmd_CreateContent(
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -902,7 +905,8 @@ static int Cmd_CreateVersion(
             cindex,
             vindex,
             content,
-            create_version));
+            create_version,
+            1));
     }
     Longtail_Free(vindex);
     vindex = 0;
@@ -967,6 +971,7 @@ static int Cmd_UpdateVersion(
             update_version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &source_vindex);
@@ -1073,7 +1078,8 @@ static int Cmd_UpdateVersion(
             target_vindex,
             version_diff,
             content,
-            update_version));
+            update_version,
+            1));
     }
 
     Longtail_Free(cindex);
@@ -1149,6 +1155,7 @@ static int Cmd_UpSyncVersion(
             version_path,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
+            file_infos->m_Permissions,
             compression_types,
             target_chunk_size,
             &vindex);
@@ -1688,7 +1695,8 @@ int main(int argc, char** argv)
         {
             fprintf(stderr, "Failed to create version `%s` to `%s`\n", create_version, version_index);
             Longtail_Free(compression_registry);
-            return 1;
+            result = 1;
+            goto end;
         }
 */
         char update_version[512];
@@ -1765,7 +1773,7 @@ int main(int argc, char** argv)
         {
             return 1;
         }
-        if (*diff->m_ModifiedCount != 0)
+        if (*diff->m_ModifiedContentCount != 0)
         {
             return 1;
         }
@@ -2050,7 +2058,7 @@ int main(int argc, char** argv)
     }
 
     kgflags_print_usage();
-    return 1;
+    result = 1;
 
 end:
     SAFE_DISPOSE_API(job_api);

@@ -57,13 +57,14 @@ int         Longtail_FindNext(HLongtail_FSIterator fs_iterator);
 void        Longtail_CloseFind(HLongtail_FSIterator fs_iterator);
 const char* Longtail_GetFileName(HLongtail_FSIterator fs_iterator);
 const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator);
-uint64_t    Longtail_GetEntrySize(HLongtail_FSIterator fs_iterator);
+int         Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions);
 
 typedef struct Longtail_OpenFile_private* HLongtail_OpenFile;
 
 int     Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file);
 int     Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file);
 int     Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length);
+int		Longtail_SetFilePermissions(const char* path, uint64_t permissions);
 int     Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output);
 int     Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, const void* input);
 int     Longtail_GetFileSize(HLongtail_OpenFile handle, uint64_t* out_size);
