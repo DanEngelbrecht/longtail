@@ -7,6 +7,7 @@
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/lizard/longtail_lizard.h"
+#include "../lib/lz4/longtail_lz4.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/blake2/longtail_blake2.h"
@@ -177,6 +178,50 @@ TEST(Longtail, Longtail_Lizard)
     Longtail_DisposeAPI(&compression_api->m_API);
 }
 
+TEST(Longtail, Longtail_LZ4)
+{
+    Longtail_CompressionAPI* compression_api = Longtail_CreateLZ4CompressionAPI();
+    ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
+    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_LZ4_DEFAULT_COMPRESSION;
+
+    const char* raw_data =
+        "A very long file that should be able to be recreated"
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+        "And in the end it is not the same, it is different, just because why not";
+
+    size_t data_len = strlen(raw_data) + 1;
+    size_t compressed_size = 0;
+    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
+    char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
+    ASSERT_NE((char*)0, compressed_buffer);
+    ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
+
+    char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
+    ASSERT_NE((char*)0, decompressed_buffer);
+    size_t uncompressed_size;
+    ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
+    ASSERT_EQ(data_len, uncompressed_size);
+    ASSERT_STREQ(raw_data, decompressed_buffer);
+    Longtail_Free(decompressed_buffer);
+    Longtail_Free(compressed_buffer);
+
+    Longtail_DisposeAPI(&compression_api->m_API);
+}
+
 TEST(Longtail, Longtail_Brotli)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
@@ -225,7 +270,7 @@ TEST(Longtail, Longtail_ZStd)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateZStdCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_LIZARD_MAX_COMPRESSION;
+    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_ZSTD_MAX_COMPRESSION;
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -502,6 +547,8 @@ const uint32_t LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE     = (((uint32_t)'1') << 24
 const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
 const uint32_t LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
 
+const uint32_t LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2');
+
 const uint32_t LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
 const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
 const uint32_t LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
@@ -510,10 +557,10 @@ static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileI
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
-    const uint32_t compression_types[4] = {0, LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE, LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE, LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
+    const uint32_t compression_types[5] = {0, LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE, LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE, LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE, LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
     for (uint32_t i = 0; i < count; ++i)
     {
-        result[i] = compression_types[i % 4];
+        result[i] = compression_types[i % 5];
     }
     return result;
 }
@@ -604,10 +651,18 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         return 0;
     }
 
+    struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
+    if (lz4_compression == 0)
+    {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
+        return 0;
+    }
+
     struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
     if (brotli_compression == 0)
     {
         Longtail_DisposeAPI(&lizard_compression->m_API);
+        Longtail_DisposeAPI(&lz4_compression->m_API);
         return 0;
     }
 
@@ -615,11 +670,12 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     if (zstd_compression == 0)
     {
         Longtail_DisposeAPI(&lizard_compression->m_API);
+        Longtail_DisposeAPI(&lz4_compression->m_API);
         Longtail_DisposeAPI(&brotli_compression->m_API);
         return 0;
     }
 
-    uint32_t compression_types[12] = {
+    uint32_t compression_types[13] = {
         LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE,
         LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
         LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE,
@@ -631,10 +687,12 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
         LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE,
 
+        LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE,
+
         LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE,
         LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE,
         LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[12] = {
+    struct Longtail_CompressionAPI* compression_apis[13] = {
         brotli_compression,
         brotli_compression,
         brotli_compression,
@@ -644,10 +702,11 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         lizard_compression,
         lizard_compression,
         lizard_compression,
+        lz4_compression,
         zstd_compression,
         zstd_compression,
         zstd_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[12] = {
+    Longtail_CompressionAPI_HSettings compression_settings[13] = {
         LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
         LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
         LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
@@ -657,19 +716,23 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         LONGTAIL_LIZARD_MIN_COMPRESSION,
         LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
         LONGTAIL_LIZARD_MAX_COMPRESSION,
+        LONGTAIL_LZ4_DEFAULT_COMPRESSION,
         LONGTAIL_ZSTD_MIN_COMPRESSION,
         LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
         LONGTAIL_ZSTD_MAX_COMPRESSION};
 
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        12,
+        13,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);
     if (registry == 0)
     {
         SAFE_DISPOSE_API(lizard_compression);
+        SAFE_DISPOSE_API(lz4_compression);
+        SAFE_DISPOSE_API(brotli_compression);
+        SAFE_DISPOSE_API(zstd_compression);
         return 0;
     }
     return registry;
