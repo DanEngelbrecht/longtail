@@ -33,7 +33,7 @@ enum {
     Longtail_StorageAPI_OtherExecuteAccess  = 0001,
     Longtail_StorageAPI_OtherWriteAccess    = 0002,
     Longtail_StorageAPI_OtherReadAccess     = 0004,
-    
+
     Longtail_StorageAPI_GroupExecuteAccess  = 0010,
     Longtail_StorageAPI_GroupWriteAccess    = 0020,
     Longtail_StorageAPI_GroupReadAccess     = 0040,
