@@ -20,10 +20,10 @@ BLAKE3_SRC="$BASE_DIR/lib/blake3/*.c"
 BLAKE3_THIRDPARTY_SRC="$BASE_DIR/lib/blake3/ext/*.c"
 
 LIZARD_SRC="$BASE_DIR/lib/lizard/*.c"
-LIZARD_THIRDPARTY_SRC="$BASE_DIR/lib/lizard/ext/*.c $BASE_DIR/lib/lizard/ext/entropy/*.c
+LIZARD_THIRDPARTY_SRC="$BASE_DIR/lib/lizard/ext/*.c $BASE_DIR/lib/lizard/ext/entropy/*.c"
 
 LZ4_SRC="$BASE_DIR/lib/lz4/*.c"
-LZ4_THIRDPARTY_SRC="$BASE_DIR/lib/lz4/ext/*.c
+LZ4_THIRDPARTY_SRC="$BASE_DIR/lib/lz4/ext/*.c"
 
 BROTLI_SRC="$BASE_DIR/lib/brotli/*.c"
 BROTLI_THIRDPARTY_SRC="$BASE_DIR/lib/brotli/ext/common/*.c $BASE_DIR/lib/brotli/ext/dec/*.c $BASE_DIR/lib/brotli/ext/enc/*.c $BASE_DIR/lib/brotli/ext/fuzz/*.c"
