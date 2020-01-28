@@ -55,6 +55,7 @@ You can contact the author at :
 #include "lizard_decompress.h"
 #include "lizard_common.h"  /* LIZARD_DICT_SIZE */
 #define XXH_STATIC_LINKING_ONLY
+#define XXH_PRIVATE_API
 #include "xxhash/xxhash.h"
 #include <stdio.h>
 

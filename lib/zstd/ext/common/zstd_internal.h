@@ -32,6 +32,9 @@
 #ifndef XXH_STATIC_LINKING_ONLY
 #  define XXH_STATIC_LINKING_ONLY  /* XXH64_state_t */
 #endif
+#ifndef XXH_PRIVATE_API
+#  define XXH_PRIVATE_API
+#endif
 #include "xxhash.h"                /* XXH_reset, update, digest */
 
 #if defined (__cplusplus)
