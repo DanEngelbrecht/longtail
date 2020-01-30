@@ -11,7 +11,7 @@ Alpha, most stuff is there and working. It is reasonably tested but unit tests d
 It is *very* fast though, most functions that takes time are very multithreaded and fairly efficient and care has been taken to handle really large files (such as multi-gigabyte PAK files for games) reasonably fast.
 
 # Cloning
-git clone --recurse-submodules https://github.com/DanEngelbrecht/longtail.git
+git clone https://github.com/DanEngelbrecht/longtail.git
 
 # Platforms
 The target platforms are Windows, Linux and MacOS and it *should* build and run on all of them, but as this is early on the different platforms may break from time to time.
