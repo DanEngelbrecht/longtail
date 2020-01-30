@@ -22,7 +22,7 @@ To build unit tests, cd to `test`, call `../build/build.sh` for debug and `../bu
 Run test with `output/test_debug` for debug and `output/test` for release on OSX/Linux, `output\test_debug.exe` for debug and `output\test.exe` for release on Windows.
 
 # Command line tool
-The preferred way of testing with the command line is to use https://github.com/DanEngelbrecht/go_longtail.git which provides a nicer Go front end to longtail.
+The preferred way of testing with the command line is to use https://github.com/DanEngelbrecht/golongtail.git which provides a nicer Go front end to longtail.
 
 You can build the C command line but it is not as maintained and up to date.
 
