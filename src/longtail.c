@@ -1457,16 +1457,7 @@ int Longtail_ReadVersionIndex(
     return 0;
 }
 
-struct BlockIndex
-{
-    TLongtail_Hash* m_BlockHash;
-    uint32_t* m_ChunkCompressionType;
-    TLongtail_Hash* m_ChunkHashes; //[]
-    uint32_t* m_ChunkSizes; // []
-    uint32_t* m_ChunkCount;
-};
-
-static size_t GetBlockIndexDataSize(uint32_t chunk_count)
+size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count)
 {
     return
         sizeof(TLongtail_Hash) +                    // m_BlockHash
@@ -1476,11 +1467,11 @@ static size_t GetBlockIndexDataSize(uint32_t chunk_count)
         sizeof(uint32_t);                           // m_ChunkCount
 }
 
-static struct BlockIndex* InitBlockIndex(void* mem, uint32_t chunk_count)
+struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count)
 {
     LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
 
-    struct BlockIndex* block_index = (struct BlockIndex*)mem;
+    struct Longtail_BlockIndex* block_index = (struct Longtail_BlockIndex*)mem;
     char* p = (char*)&block_index[1];
 
     block_index->m_BlockHash = (TLongtail_Hash*)(void*)p;
@@ -1501,11 +1492,11 @@ static struct BlockIndex* InitBlockIndex(void* mem, uint32_t chunk_count)
     return block_index;
 }
 
-static size_t GetBlockIndexSize(uint32_t chunk_count)
+size_t Longtail_GetBlockIndexSize(uint32_t chunk_count)
 {
     size_t block_index_size =
-        sizeof(struct BlockIndex) +
-        GetBlockIndexDataSize(chunk_count);
+        sizeof(struct Longtail_BlockIndex) +
+        Longtail_GetBlockIndexDataSize(chunk_count);
 
     return block_index_size;
 }
@@ -1518,7 +1509,7 @@ static int CreateBlockIndex(
     uint64_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
-    struct BlockIndex** out_block_index)
+    struct Longtail_BlockIndex** out_block_index)
 {
     LONGTAIL_FATAL_ASSERT(mem != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(hash_api != 0, return EINVAL)
@@ -1527,7 +1518,7 @@ static int CreateBlockIndex(
     LONGTAIL_FATAL_ASSERT(chunk_hashes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(chunk_sizes != 0, return EINVAL)
 
-    struct BlockIndex* block_index = InitBlockIndex(mem, chunk_count_in_block);
+    struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(mem, chunk_count_in_block);
     for (uint32_t i = 0; i < chunk_count_in_block; ++i)
     {
         uint64_t chunk_index = chunk_indexes[i];
@@ -1680,7 +1671,7 @@ int Longtail_CreateContentIndex(
     LONGTAIL_FATAL_ASSERT(chunk_indexes, return ENOMEM)
     uint64_t unique_chunk_count = GetUniqueHashes(chunk_count, chunk_hashes, chunk_indexes);
 
-    struct BlockIndex** block_indexes = (struct BlockIndex**)Longtail_Alloc(sizeof(struct BlockIndex*) * unique_chunk_count);
+    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(sizeof(struct Longtail_BlockIndex*) * unique_chunk_count);
     LONGTAIL_FATAL_ASSERT(block_indexes, return ENOMEM)
 
     uint64_t* stored_chunk_indexes = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * max_chunks_per_block);
@@ -1734,7 +1725,7 @@ int Longtail_CreateContentIndex(
         }
 
         int err = CreateBlockIndex(
-            Longtail_Alloc(GetBlockIndexSize(chunk_count_in_block)),
+            Longtail_Alloc(Longtail_GetBlockIndexSize(chunk_count_in_block)),
             hash_api,
             current_compression_type,
             chunk_count_in_block,
@@ -1771,7 +1762,7 @@ int Longtail_CreateContentIndex(
     uint64_t asset_index = 0;
     for (uint32_t b = 0; b < block_count; ++b)
     {
-        struct BlockIndex* block_index = block_indexes[b];
+        struct Longtail_BlockIndex* block_index = block_indexes[b];
         content_index->m_BlockHashes[b] = *block_index->m_BlockHash;
         uint32_t chunk_offset = 0;
         for (uint32_t a = 0; a < *block_index->m_ChunkCount; ++a)
@@ -2093,7 +2084,7 @@ static int ReadBlockData(
     }
 
     uint32_t chunk_count = *(const uint32_t*)(void*)(&compressed_block_content[compressed_block_size - sizeof(uint32_t)]);
-    size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
+    size_t block_index_data_size = Longtail_GetBlockIndexDataSize(chunk_count);
     if (compressed_block_size < block_index_data_size)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "ReadBlockData: Malformed content block (size to small) `%s`", block_path)
@@ -2158,7 +2149,7 @@ static int ReadBlockData(
 static int ReadBlockIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* full_block_path,
-    struct BlockIndex** out_block_index)
+    struct Longtail_BlockIndex** out_block_index)
 {
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(full_block_path != 0, return EINVAL)
@@ -2190,16 +2181,16 @@ static int ReadBlockIndex(
         storage_api->CloseFile(storage_api, f);
         return err;
     }
-    size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
+    size_t block_index_data_size = Longtail_GetBlockIndexDataSize(chunk_count);
     if (s < block_index_data_size)
     {
         storage_api->CloseFile(storage_api, f);
         return EBADF;
     }
 
-    void* block_index_mem = Longtail_Alloc(GetBlockIndexSize(chunk_count));
+    void* block_index_mem = Longtail_Alloc(Longtail_GetBlockIndexSize(chunk_count));
     LONGTAIL_FATAL_ASSERT(block_index_mem, return ENOMEM)
-    struct BlockIndex* block_index = InitBlockIndex(block_index_mem, chunk_count);
+    struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(block_index_mem, chunk_count);
 
     err = storage_api->Read(storage_api, f, s - block_index_data_size, block_index_data_size, &block_index[1]);
     storage_api->CloseFile(storage_api, f);
@@ -2469,15 +2460,15 @@ static void Longtail_WriteContentBlockJob(void* context)
         }
         write_offset = aligned_size;
     }
-    struct BlockIndex* block_index_ptr = (struct BlockIndex*)Longtail_Alloc(GetBlockIndexSize(chunk_count));
+    struct Longtail_BlockIndex* block_index_ptr = (struct Longtail_BlockIndex*)Longtail_Alloc(Longtail_GetBlockIndexSize(chunk_count));
     LONGTAIL_FATAL_ASSERT(block_index_ptr, job->m_Err = ENOMEM; return)
-    InitBlockIndex(block_index_ptr, chunk_count);
+    Longtail_InitBlockIndex(block_index_ptr, chunk_count);
     memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
     memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
     *block_index_ptr->m_BlockHash = block_hash;
     *block_index_ptr->m_ChunkCompressionType = compression_type;
     *block_index_ptr->m_ChunkCount = chunk_count;
-    size_t block_index_data_size = GetBlockIndexDataSize(chunk_count);
+    size_t block_index_data_size = Longtail_GetBlockIndexDataSize(chunk_count);
     err = target_storage_api->Write(target_storage_api, block_file_handle, write_offset, block_index_data_size, &block_index_ptr[1]);
     if (err)
     {
@@ -3745,7 +3736,7 @@ struct ScanBlockJob
     struct Longtail_HashAPI* m_HashAPI;
     const char* m_ContentPath;
     const char* m_BlockPath;
-    struct BlockIndex* m_BlockIndex;
+    struct Longtail_BlockIndex* m_BlockIndex;
     int m_Err;
 };
 
