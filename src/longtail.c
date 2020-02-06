@@ -1984,12 +1984,9 @@ static int CreateAssetPartLookup(
 struct WriteBlockJob
 {
     struct Longtail_StorageAPI* m_SourceStorageAPI;
-    struct Longtail_StorageAPI* m_TargetStorageAPI;
-    struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
-    const char* m_ContentFolder;
+    struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
     const char* m_AssetsFolder;
     TLongtail_Hash m_BlockHash;
-    const char* m_BlockPath;
     const struct Longtail_ContentIndex* m_ContentIndex;
     struct ChunkHashToAssetPart* m_AssetPartLookup;
     uint64_t m_FirstChunkIndex;
@@ -2249,21 +2246,13 @@ static void Longtail_WriteContentBlockJob(void* context)
 
     struct WriteBlockJob* job = (struct WriteBlockJob*)context;
     struct Longtail_StorageAPI* source_storage_api = job->m_SourceStorageAPI;
-    struct Longtail_StorageAPI* target_storage_api = job->m_TargetStorageAPI;
-    struct Longtail_CompressionRegistryAPI* compression_registry_api = job->m_CompressionRegistryAPI;
+    struct Longtail_BlockStoreAPI* block_store_api = job->m_BlockStoreAPI;
 
     const struct Longtail_ContentIndex* content_index = job->m_ContentIndex;
-    const char* content_folder = job->m_ContentFolder;
     uint64_t first_chunk_index = job->m_FirstChunkIndex;
     uint32_t chunk_count = job->m_ChunkCount;
     uint64_t block_index = content_index->m_ChunkBlockIndexes[first_chunk_index];
     TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-
-    char tmp_block_name[MAX_BLOCK_NAME_LENGTH + 4];
-    GetBlockName(job->m_BlockHash, tmp_block_name);
-    strcat(tmp_block_name, ".tmp");
-
-    char* tmp_block_path = (char*)target_storage_api->ConcatPath(target_storage_api, content_folder, tmp_block_name);
 
     uint32_t block_data_size = 0;
     for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
@@ -2287,11 +2276,9 @@ static void Longtail_WriteContentBlockJob(void* context)
         intptr_t asset_part_index = hmgeti_ts(job->m_AssetPartLookup, chunk_hash, tmp);
         if (asset_part_index == -1)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64 " in `%s`", chunk_hash, content_folder)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64, chunk_hash)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             job->m_Err = EINVAL;
             return;
         }
@@ -2302,8 +2289,6 @@ static void Longtail_WriteContentBlockJob(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Directory should not have any chunks `%s`", asset_path)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             job->m_Err = EINVAL;
             return;
         }
@@ -2312,7 +2297,7 @@ static void Longtail_WriteContentBlockJob(void* context)
         uint64_t asset_content_offset = asset_part->m_Start;
         if (chunk_index != first_chunk_index && compression_type != asset_part->m_CompressionType)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_WriteContentBlockJob: Warning: Inconsistend compression type for chunks inside block 0x%" PRIx64 " in `%s`, retaining %u", block_hash, content_folder, compression_type)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_WriteContentBlockJob: Warning: Inconsistend compression type for chunks inside block 0x%" PRIx64 ", retaining %u", block_hash, compression_type)
         }
         else
         {
@@ -2325,8 +2310,6 @@ static void Longtail_WriteContentBlockJob(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to open asset file `%s`, %d", full_path, err)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             job->m_Err = err;
             return;
         }
@@ -2337,8 +2320,6 @@ static void Longtail_WriteContentBlockJob(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to get size of asset file `%s`, %d", full_path, err)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             job->m_Err = err;
             return;
         }
@@ -2347,8 +2328,6 @@ static void Longtail_WriteContentBlockJob(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Mismatching asset size in asset `%s`, size is %" PRIu64 ", but expecting at least %" PRIu64 "", full_path, asset_file_size, asset_content_offset + chunk_size)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             source_storage_api->CloseFile(source_storage_api, file_handle);
             file_handle = 0;
             job->m_Err = EBADF;
@@ -2360,8 +2339,6 @@ static void Longtail_WriteContentBlockJob(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to read from asset file `%s`, %d", full_path, err)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             source_storage_api->CloseFile(source_storage_api, file_handle);
             file_handle = 0;
             job->m_Err = err;
@@ -2374,92 +2351,6 @@ static void Longtail_WriteContentBlockJob(void* context)
         full_path = 0;
     }
 
-    if (compression_type != 0)
-    {
-        size_t compressed_size;
-        char* compressed_buffer;
-        int err = CompressBlock(
-            compression_registry_api,
-            compression_type,
-            block_data_size,
-            &compressed_size,
-            write_buffer,
-            &compressed_buffer,
-            sizeof(uint32_t) + sizeof(uint32_t));
-        ((uint32_t*)(void*)compressed_buffer)[0] = (uint32_t)block_data_size;
-        ((uint32_t*)(void*)compressed_buffer)[1] = (uint32_t)compressed_size;
-        if (err)
-        {
-            Longtail_Free(block_data_buffer);
-            block_data_buffer = 0;
-            Longtail_Free((char*)tmp_block_path);
-            job->m_Err = err;
-            return;
-        }
-
-        Longtail_Free(block_data_buffer);
-        block_data_buffer = 0;
-        block_data_size = (uint32_t)(sizeof(uint32_t) + sizeof(uint32_t) + compressed_size);
-        block_data_buffer = compressed_buffer;
-    }
-
-    int err = EnsureParentPathExists(target_storage_api, tmp_block_path);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to create parent path for `%s`, %d", tmp_block_path, err)
-        Longtail_Free(block_data_buffer);
-        block_data_buffer = 0;
-        Longtail_Free((char*)tmp_block_path);
-        job->m_Err = err;
-        return;
-    }
-
-    Longtail_StorageAPI_HOpenFile block_file_handle;
-    err = target_storage_api->OpenWriteFile(target_storage_api, tmp_block_path, 0, &block_file_handle);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to create block file `%s`, %d", tmp_block_path, err)
-        Longtail_Free(block_data_buffer);
-        block_data_buffer = 0;
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        job->m_Err = err;
-        return;
-    }
-    err = target_storage_api->Write(target_storage_api, block_file_handle, 0, block_data_size, block_data_buffer);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to write to block file `%s`, %d", tmp_block_path, err)
-        target_storage_api->CloseFile(target_storage_api, block_file_handle);
-        block_file_handle = 0;
-        Longtail_Free(block_data_buffer);
-        block_data_buffer = 0;
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        job->m_Err = err;
-        return;
-    }
-    Longtail_Free(block_data_buffer);
-    block_data_buffer = 0;
-    uint32_t write_offset = block_data_size;
-
-    uint32_t aligned_size = (((write_offset + 15) / 16) * 16);
-    uint32_t padding = aligned_size - write_offset;
-    if (padding)
-    {
-        err = target_storage_api->Write(target_storage_api, block_file_handle, write_offset, padding, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0");
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to write to block file `%s`, %d", tmp_block_path, err)
-            target_storage_api->CloseFile(target_storage_api, block_file_handle);
-            block_file_handle = 0;
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            job->m_Err = err;
-            return;
-        }
-        write_offset = aligned_size;
-    }
     struct Longtail_BlockIndex* block_index_ptr = (struct Longtail_BlockIndex*)Longtail_Alloc(Longtail_GetBlockIndexSize(chunk_count));
     LONGTAIL_FATAL_ASSERT(block_index_ptr, job->m_Err = ENOMEM; return)
     Longtail_InitBlockIndex(block_index_ptr, chunk_count);
@@ -2468,59 +2359,39 @@ static void Longtail_WriteContentBlockJob(void* context)
     *block_index_ptr->m_BlockHash = block_hash;
     *block_index_ptr->m_ChunkCompressionType = compression_type;
     *block_index_ptr->m_ChunkCount = chunk_count;
-    size_t block_index_data_size = Longtail_GetBlockIndexDataSize(chunk_count);
-    err = target_storage_api->Write(target_storage_api, block_file_handle, write_offset, block_index_data_size, &block_index_ptr[1]);
+
+    struct Longtail_StoredBlock stored_block;
+    stored_block.Dispose = 0;
+    stored_block.m_BlockIndex = block_index_ptr;
+    stored_block.m_BlockData = block_data_buffer;
+    int err = block_store_api->PutStoredBlock(block_store_api, &stored_block);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to write to block file `%s`, %d", tmp_block_path, err)
-        target_storage_api->CloseFile(target_storage_api, block_file_handle);
-        block_file_handle = 0;
-        Longtail_Free(block_index_ptr);
-        block_index_ptr = 0;
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        job->m_Err = err;
-        return;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to store block 0x%" PRIx64 ", %d", err)
     }
+
     Longtail_Free(block_index_ptr);
-    block_index_ptr = 0;
+    Longtail_Free(block_data_buffer);
 
-    target_storage_api->CloseFile(target_storage_api, block_file_handle);
-    err = target_storage_api->RenameFile(target_storage_api, tmp_block_path, job->m_BlockPath);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to rename block file from `%s` to `%s`, %d", tmp_block_path, job->m_BlockPath, err)
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        job->m_Err = err;
-        return;
-    }
-    Longtail_Free((char*)tmp_block_path);
-    tmp_block_path = 0;
-
-    job->m_Err = 0;
+    job->m_Err = err;
 }
 
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
-    struct Longtail_StorageAPI* target_storage_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry_api,
+    struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
     struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
-    const char* assets_folder,
-    const char* content_folder)
+    const char* assets_folder)
 {
     LONGTAIL_FATAL_ASSERT(source_storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(target_storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(compression_registry_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(block_store_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(assets_folder != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(content_folder != 0, return EINVAL)
 
     uint64_t chunk_count = *content_index->m_ChunkCount;
     uint64_t total_chunk_size = 0;
@@ -2528,7 +2399,7 @@ int Longtail_WriteContent(
     {
         total_chunk_size += content_index->m_ChunkLengths[c];
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent: Writing content from `%s` to `%s`, chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", assets_folder, content_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent: Writing content from `%s`, chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", assets_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -2538,7 +2409,7 @@ int Longtail_WriteContent(
     int err = job_api->ReserveJobs(job_api, (uint32_t)block_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to reserve jobs when writing to `%s`, %d", content_folder, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to reserve jobs when writing from `%s`, %d", assets_folder, err)
         return err;
     }
 
@@ -2562,28 +2433,29 @@ int Longtail_WriteContent(
             ++chunk_count;
         }
 
-        char block_name[MAX_BLOCK_NAME_LENGTH];
-        GetBlockName(block_hash, block_name);
-        char file_name[64];
-        sprintf(file_name, "%s.lrb", block_name);
-        char* block_path = target_storage_api->ConcatPath(target_storage_api, content_folder, file_name);
-        if (target_storage_api->IsFile(target_storage_api, block_path))
+        int err = block_store_api->GetStoredBlock(block_store_api, block_hash, 0);
+        if (err == 0)
         {
-            Longtail_Free((char*)block_path);
-            block_path = 0;
             block_start_chunk_index += chunk_count;
             continue;
         }
 
+        if (err != ENOENT)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to check block 0x%" PRIx64 ", %d", block_hash, err)
+            hmfree(asset_part_lookup);
+            asset_part_lookup = 0;
+            Longtail_Free(write_block_jobs);
+            write_block_jobs = 0;
+            return err;
+        }
+
         struct WriteBlockJob* job = &write_block_jobs[job_count++];
         job->m_SourceStorageAPI = source_storage_api;
-        job->m_TargetStorageAPI = target_storage_api;
-        job->m_CompressionRegistryAPI = compression_registry_api;
-        job->m_ContentFolder = content_folder;
+        job->m_BlockStoreAPI = block_store_api;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
         job->m_BlockHash = block_hash;
-        job->m_BlockPath = block_path;
         job->m_AssetPartLookup = asset_part_lookup;
         job->m_FirstChunkIndex = block_start_chunk_index;
         job->m_ChunkCount = chunk_count;
@@ -2610,11 +2482,9 @@ int Longtail_WriteContent(
         struct WriteBlockJob* job = &write_block_jobs[job_count];
         if (job->m_Err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to write content to `%s`, %d", content_folder, job->m_Err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to write content, %d", job->m_Err)
             err = err ? err : job->m_Err;
         }
-        Longtail_Free((void*)job->m_BlockPath);
-        job->m_BlockPath = 0;
     }
 
     hmfree(asset_part_lookup);

@@ -6,6 +6,7 @@
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/filestorage/longtail_filestorage.h"
+#include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/lizard/longtail_lizard.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/memstorage/longtail_memstorage.h"
@@ -745,6 +746,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage, hash_api, job_api, compression_registry, "chunks");
 
     const char* TEST_FILENAMES[5] = {
         "local/TheLongFile.txt",
@@ -814,15 +816,13 @@ TEST(Longtail, Longtail_WriteContent)
 
     ASSERT_EQ(0, Longtail_WriteContent(
         source_storage,
-        target_storage,
-        compression_registry,
+        block_store_api,
         job_api,
         0,
         0,
         cindex,
         vindex,
-        "local",
-        "chunks"));
+        "local"));
 
     Longtail_ContentIndex* cindex2;
     ASSERT_EQ(0, Longtail_ReadContent(
@@ -864,6 +864,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_Free(cindex);
     Longtail_Free(vindex);
 
+    SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -1152,6 +1153,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage, hash_api, job_api, compression_registry, "chunks");
 
     const uint32_t OLD_ASSET_COUNT = 10u;
 
@@ -1427,15 +1429,13 @@ TEST(Longtail, Longtail_VersionDiff)
 
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
-        storage,
-        compression_registry,
+        block_store_api,
         job_api,
         0,
         0,
         content_index,
         new_vindex,
-        "new",
-        "chunks"));
+        "new"));
 
     Longtail_VersionDiff* version_diff;
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
@@ -1502,6 +1502,7 @@ TEST(Longtail, Longtail_VersionDiff)
         test_data = 0;
     }
 
+    SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -1515,6 +1516,7 @@ TEST(Longtail, FullScale)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage, hash_api, job_api, compression_registry, "");
 
     CreateFakeContent(local_storage, 0, 5);
 
@@ -1586,14 +1588,12 @@ TEST(Longtail, FullScale)
 
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
-        local_storage,
-        compression_registry,
+        block_store_api,
         job_api,
         0,
         0,
         local_content_index,
         local_version_index,
-        "",
         ""));
 
     Longtail_ContentIndex* remote_content_index;
@@ -1609,14 +1609,12 @@ TEST(Longtail, FullScale)
 
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
-        remote_storage,
-        compression_registry,
+        block_store_api,
         job_api,
         0,
         0,
         remote_content_index,
         remote_version_index,
-        "",
         ""));
 
     Longtail_ContentIndex* missing_content;
@@ -1631,14 +1629,12 @@ TEST(Longtail, FullScale)
  
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
-        local_storage,
-        compression_registry,
+        block_store_api,
         job_api,
         0,
         0,
         missing_content,
         remote_version_index,
-        "",
         ""));
 
     Longtail_ContentIndex* merged_content_index;
@@ -1686,6 +1682,7 @@ TEST(Longtail, FullScale)
     Longtail_Free(remote_version_index);
     Longtail_Free(local_version_index);
 
+    SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -1699,6 +1696,7 @@ TEST(Longtail, Longtail_WriteVersion)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, compression_registry, "chunks");
 
     const uint32_t asset_count = 8u;
 
@@ -1836,15 +1834,13 @@ TEST(Longtail, Longtail_WriteVersion)
 
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
-        storage_api,
-        compression_registry,
+        block_store_api,
         job_api,
         0,
         0,
         cindex,
         vindex,
-        "local",
-        "chunks"));
+        "local"));
 
     ASSERT_EQ(0, Longtail_WriteVersion(
         storage_api,
@@ -1885,6 +1881,7 @@ TEST(Longtail, Longtail_WriteVersion)
     vindex = 0;
     Longtail_Free(cindex);
     cindex = 0;
+    SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -1998,17 +1995,18 @@ static void Bench()
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
+        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, compression_registry, delta_upload_content_folder);
+        ASSERT_NE((Longtail_BlockStoreAPI*)0, block_store_api);
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
-            storage_api,
-            compression_registry,
+            block_store_api,
             job_api,
             0,
             0,
             missing_content_index,
             version_index,
-            version_source_folder,
-            delta_upload_content_folder));
+            version_source_folder));
+        SAFE_DISPOSE_API(block_store_api);
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
         Longtail_StorageAPI_HIterator fs_iterator;
@@ -2145,6 +2143,8 @@ static void LifelikeTest()
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, compression_registry, local_content_path);
+    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, compression_registry, remote_content_path);
 
     Longtail_FileInfos* local_path_1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, local_path_1, &local_path_1_paths));
@@ -2195,15 +2195,13 @@ static void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
         Longtail_WriteContent(
             storage_api,
-            storage_api,
-            compression_registry,
+            local_block_store_api,
             job_api,
             0,
             0,
             local_content_index,
             version1,
-            local_path_1,
-            local_content_path);
+            local_path_1);
     }
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
@@ -2266,15 +2264,13 @@ static void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
-            storage_api,
-            compression_registry,
+            local_block_store_api,
             job_api,
             0,
             0,
             missing_content,
             version2,
-            local_path_2,
-            local_content_path));
+            local_path_2));
     }
 
     if (1)
@@ -2283,15 +2279,13 @@ static void LifelikeTest()
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
-            storage_api,
-            compression_registry,
+            remote_block_store_api,
             job_api,
             0,
             0,
             missing_content,
             version2,
-            local_path_2,
-            remote_content_path));
+            local_path_2));
     }
 
 //    Longtail_ContentIndex* remote_content_index;

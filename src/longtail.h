@@ -247,15 +247,13 @@ int Longtail_ReadContentIndex(
 
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
-    struct Longtail_StorageAPI* target_storage_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry,
+    struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
     struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
-    const char* assets_folder,
-    const char* content_folder);
+    const char* assets_folder);
 
 int Longtail_ReadContent(
     struct Longtail_StorageAPI* storage_api,

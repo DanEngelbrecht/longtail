@@ -107,8 +107,18 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_data_size += stored_block->m_BlockIndex->m_ChunkSizes[chunk_index];
     }
 
+    int err = EnsureParentPathExists(fsblockstore_api->m_StorageAPI, block_path);
+    if (err)
+    {
+        Longtail_Free((char*)tmp_block_path);
+        tmp_block_path = 0;
+        Longtail_Free((char*)block_path);
+        block_path = 0;
+        return err;
+    }
+
     Longtail_StorageAPI_HOpenFile block_file_handle;
-    int err = fsblockstore_api->m_StorageAPI->OpenWriteFile(fsblockstore_api->m_StorageAPI, block_path, 0, &block_file_handle);
+    err = fsblockstore_api->m_StorageAPI->OpenWriteFile(fsblockstore_api->m_StorageAPI, tmp_block_path, 0, &block_file_handle);
     if (err)
     {
         Longtail_Free((char*)tmp_block_path);
@@ -120,6 +130,12 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, 0, block_data_size, stored_block->m_BlockData);
     if (err)
     {
+        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
+        Longtail_Free((char*)tmp_block_path);
+        tmp_block_path = 0;
+        Longtail_Free((char*)block_path);
+        block_path = 0;
+        return err;
     }
 
     uint32_t write_offset = block_data_size;
