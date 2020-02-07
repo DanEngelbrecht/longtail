@@ -211,6 +211,8 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     }
     if (!out_stored_block)
     {
+        Longtail_Free((char*)block_path);
+        block_path = 0;
         return 0;
     }
 
@@ -223,8 +225,8 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_path = 0;
         return err;
     }
-    uint64_t s;
-    err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, f, &s);
+    uint64_t compressed_block_size;
+    err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, f, &compressed_block_size);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to get size of block `%s`, %d", block_path, err)
@@ -233,8 +235,17 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_path = 0;
         return err;
     }
-    if (s < (sizeof(uint32_t)))
+    if (compressed_block_size < (sizeof(uint32_t)))
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
+        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
+        Longtail_Free((char*)block_path);
+        block_path = 0;
+        return err;
+    }
+    if (compressed_block_size > 0xffffffff)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
         Longtail_Free((char*)block_path);
         block_path = 0;
@@ -242,7 +253,7 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     }
 
     uint32_t chunk_count = 0;
-    err = fsblockstore_api->m_StorageAPI->Read(fsblockstore_api->m_StorageAPI, f, s - sizeof(uint32_t), sizeof(uint32_t), &chunk_count);
+    err = fsblockstore_api->m_StorageAPI->Read(fsblockstore_api->m_StorageAPI, f, compressed_block_size - sizeof(uint32_t), sizeof(uint32_t), &chunk_count);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to read from block `%s`, %d", block_path, err)
@@ -252,7 +263,7 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         return err;
     }
     size_t block_index_data_size = Longtail_GetBlockIndexDataSize(chunk_count);
-    if (s < block_index_data_size)
+    if (compressed_block_size < block_index_data_size)
     {
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
         Longtail_Free((char*)block_path);
@@ -260,7 +271,6 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         return EBADF;
     }
 
-    size_t compressed_block_size = s - block_index_data_size;
     char* compressed_block_content = (char*)Longtail_Alloc(compressed_block_size);
     LONGTAIL_FATAL_ASSERT(compressed_block_content, return ENOMEM)
     err = fsblockstore_api->m_StorageAPI->Read(fsblockstore_api->m_StorageAPI, f, 0, compressed_block_size, compressed_block_content);
@@ -277,9 +287,21 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         return err;
     }
 
-    uint32_t block_data_size = (uint32_t)compressed_block_size; // TODO: We should verify that blocks are not larger than 32-bit
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
     char* block_data = compressed_block_content;
     const TLongtail_Hash* block_hash_ptr = (const TLongtail_Hash*)(void*)&block_data[compressed_block_size - block_index_data_size];
+    TLongtail_Hash verify_block_hash = *block_hash_ptr;
+    if (block_hash != verify_block_hash)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_GetStoredBlock: Malformed content block (mismatching block hash) `%s`", block_path)
+        Longtail_Free(block_data);
+        block_data = 0;
+        Longtail_Free(block_path);
+        block_path = 0;
+        return EBADF;
+    }
+
+    uint32_t block_data_size = (uint32_t)(compressed_block_size - block_index_size); // TODO: We should verify that blocks are not larger than 32-bit
     const uint32_t* compression_type_ptr = (const uint32_t*)(void*)&block_hash_ptr[1];
     uint32_t compression_type = *compression_type_ptr;
     if (0 != compression_type)
@@ -310,7 +332,6 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         }
     }
 
-    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
     size_t block_mem_size = sizeof(struct Longtail_StoredBlock) + 
         block_index_size +
         block_data_size;
@@ -319,9 +340,14 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     LONGTAIL_FATAL_ASSERT(stored_block, return ENOMEM)
     stored_block->m_BlockIndex = (struct Longtail_BlockIndex*)&stored_block[1];
     struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(stored_block->m_BlockIndex, chunk_count);
+    memmove(&block_index[1], block_hash_ptr, block_index_data_size);
     stored_block->m_BlockData = &((uint8_t*)stored_block->m_BlockIndex)[block_index_size];
  
     stored_block->Dispose = FSStoredBlock_Dispose;
+    Longtail_Free(compressed_block_content);
+    compressed_block_content = 0;
+    Longtail_Free(block_path);
+    block_path = 0;
 
     *out_stored_block = stored_block;
     return 0;

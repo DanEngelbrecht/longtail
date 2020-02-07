@@ -739,6 +739,130 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     return registry;
 }
 
+TEST(Longtail, Longtail_BlockStore_Uncompressed)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, compression_registry, "chunks");
+
+    struct Longtail_ContentIndex* store_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, 0, 0, &store_index));
+    ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
+    ASSERT_EQ(0, *store_index->m_BlockCount);
+    ASSERT_EQ(0, *store_index->m_ChunkCount);
+    Longtail_Free(store_index);
+
+    Longtail_StoredBlock put_block;
+    put_block.Dispose = 0;
+    put_block.m_BlockIndex = 0;
+    put_block.m_BlockData = 0;
+
+    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, 0));
+
+    size_t block_index_size = Longtail_GetBlockIndexSize(2);
+    void* block_index_mem = Longtail_Alloc(block_index_size);
+    put_block.m_BlockIndex = Longtail_InitBlockIndex(block_index_mem, 1);
+    *put_block.m_BlockIndex->m_BlockHash = 0xdeadbeef;
+    *put_block.m_BlockIndex->m_ChunkCompressionType = 0;
+    put_block.m_BlockIndex->m_ChunkHashes[0] = 0xf001fa5;
+    put_block.m_BlockIndex->m_ChunkHashes[1] = 0xfff1fa5;
+    put_block.m_BlockIndex->m_ChunkSizes[0] = 4711;
+    put_block.m_BlockIndex->m_ChunkSizes[1] = 1147;
+    *put_block.m_BlockIndex->m_ChunkCount = 2;
+
+    put_block.m_BlockData = Longtail_Alloc(4711 + 1147);
+    memset(put_block.m_BlockData, 77, 4711);
+    memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
+
+    ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block));
+    Longtail_Free(put_block.m_BlockIndex);
+
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, 0));
+    Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block));
+    ASSERT_NE((Longtail_StoredBlock*)0, get_block);
+    ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
+    ASSERT_EQ(0, *get_block->m_BlockIndex->m_ChunkCompressionType);
+    ASSERT_EQ(0xf001fa5, get_block->m_BlockIndex->m_ChunkHashes[0]);
+    ASSERT_EQ(0xfff1fa5, get_block->m_BlockIndex->m_ChunkHashes[1]);
+    ASSERT_EQ(4711, get_block->m_BlockIndex->m_ChunkSizes[0]);
+    ASSERT_EQ(1147, get_block->m_BlockIndex->m_ChunkSizes[1]);
+    ASSERT_EQ(2, *get_block->m_BlockIndex->m_ChunkCount);
+    ASSERT_EQ(0, memcmp(put_block.m_BlockData, get_block->m_BlockData, 4711 + 1147));
+    Longtail_Free(put_block.m_BlockData);
+    get_block->Dispose(get_block);
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
+}
+
+TEST(Longtail, Longtail_BlockStore_Compressed)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, compression_registry, "chunks");
+
+    struct Longtail_ContentIndex* store_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, 0, 0, &store_index));
+    ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
+    ASSERT_EQ(0, *store_index->m_BlockCount);
+    ASSERT_EQ(0, *store_index->m_ChunkCount);
+    Longtail_Free(store_index);
+
+    Longtail_StoredBlock put_block;
+    put_block.Dispose = 0;
+    put_block.m_BlockIndex = 0;
+    put_block.m_BlockData = 0;
+
+    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, 0));
+
+    size_t block_index_size = Longtail_GetBlockIndexSize(2);
+    void* block_index_mem = Longtail_Alloc(block_index_size);
+    put_block.m_BlockIndex = Longtail_InitBlockIndex(block_index_mem, 1);
+    *put_block.m_BlockIndex->m_BlockHash = 0xdeadbeef;
+    *put_block.m_BlockIndex->m_ChunkCompressionType = LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE;
+    put_block.m_BlockIndex->m_ChunkHashes[0] = 0xf001fa5;
+    put_block.m_BlockIndex->m_ChunkHashes[1] = 0xfff1fa5;
+    put_block.m_BlockIndex->m_ChunkSizes[0] = 4711;
+    put_block.m_BlockIndex->m_ChunkSizes[0] = 1147;
+    *put_block.m_BlockIndex->m_ChunkCount = 2;
+
+    put_block.m_BlockData = Longtail_Alloc(4711 + 1147);
+    memset(put_block.m_BlockData, 77, 4711);
+    memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
+
+    ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block));
+    Longtail_Free(put_block.m_BlockIndex);
+
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, 0));
+    Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block));
+    ASSERT_NE((Longtail_StoredBlock*)0, get_block);
+    ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
+    ASSERT_EQ(0, *get_block->m_BlockIndex->m_ChunkCompressionType);
+    ASSERT_EQ(0xf001fa5, get_block->m_BlockIndex->m_ChunkHashes[0]);
+    ASSERT_EQ(0xfff1fa5, get_block->m_BlockIndex->m_ChunkHashes[1]);
+    ASSERT_EQ(4711, get_block->m_BlockIndex->m_ChunkSizes[0]);
+    ASSERT_EQ(1147, get_block->m_BlockIndex->m_ChunkSizes[1]);
+    ASSERT_EQ(2, *get_block->m_BlockIndex->m_ChunkCount);
+    ASSERT_EQ(0, memcmp(put_block.m_BlockData, get_block->m_BlockData, 4711 + 1147));
+    Longtail_Free(put_block.m_BlockData);
+    get_block->Dispose(get_block);
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
+}
+
 TEST(Longtail, Longtail_WriteContent)
 {
     Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
