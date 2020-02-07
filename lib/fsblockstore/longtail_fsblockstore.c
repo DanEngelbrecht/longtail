@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-struct FSBlockStoreJobAPI
+struct FSBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
@@ -38,7 +38,7 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
     out_name[4] = '/';
 }
 
-static char* GetBlockPath(struct FSBlockStoreJobAPI* fsblockstore_api, TLongtail_Hash block_hash)
+static char* GetBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtail_Hash block_hash)
 {
     char block_name[MAX_BLOCK_NAME_LENGTH];
     GetBlockName(block_hash, block_name);
@@ -47,7 +47,7 @@ static char* GetBlockPath(struct FSBlockStoreJobAPI* fsblockstore_api, TLongtail
     return fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, file_name);
 }
 
-static char* GetTempBlockPath(struct FSBlockStoreJobAPI* fsblockstore_api, TLongtail_Hash block_hash)
+static char* GetTempBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtail_Hash block_hash)
 {
     char block_name[MAX_BLOCK_NAME_LENGTH];
     GetBlockName(block_hash, block_name);
@@ -205,7 +205,7 @@ static int ReadContent(
 
 static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
 {
-    struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)block_store_api;
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
 
     char* block_path = GetBlockPath(fsblockstore_api, *stored_block->m_BlockIndex->m_BlockHash);
     if (fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
@@ -295,7 +295,7 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
 
 static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
 {
-    struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)block_store_api;
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     char* block_path = GetBlockPath(fsblockstore_api, block_hash);
     if (!fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
     {
@@ -371,7 +371,7 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
 
 static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index)
 {
-    struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)block_store_api;
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     if (!fsblockstore_api->m_ContentIndexBuffer)
     {
         int err = ReadContent(
@@ -402,7 +402,7 @@ static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api,
 
 static int FSBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
 {
-    struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)block_store_api;
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     *out_path = GetBlockPath(fsblockstore_api, block_hash);
     return 0;
 }
@@ -410,14 +410,14 @@ static int FSBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_
 
 static void FSBlockStore_Dispose(struct Longtail_API* api)
 {
-    struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)api;
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
     Longtail_Free(fsblockstore_api->m_ContentPath);
     Longtail_Free(fsblockstore_api->m_ContentIndexBuffer);
     Longtail_Free(fsblockstore_api);
 }
 
 static int FSBlockStore_Init(
-    struct FSBlockStoreJobAPI* api,
+    struct FSBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
 	struct Longtail_JobAPI* job_api,
 	const char* content_path)
@@ -440,7 +440,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
 	struct Longtail_JobAPI* job_api,
 	const char* content_path)
 {
-    struct FSBlockStoreJobAPI* api = (struct FSBlockStoreJobAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreJobAPI));
+    struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreAPI));
     FSBlockStore_Init(
         api,
         storage_api,
