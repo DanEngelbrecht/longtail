@@ -56,6 +56,251 @@ static char* GetTempBlockPath(struct FSBlockStoreJobAPI* fsblockstore_api, TLong
     return fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, file_name);
 }
 
+static int ReadBlockIndex(
+    struct Longtail_StorageAPI* storage_api,
+    const char* block_path,
+    struct Longtail_BlockIndex** out_block_index)
+{
+    Longtail_StorageAPI_HOpenFile f;
+    int err = storage_api->OpenReadFile(storage_api, block_path, &f);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to open block `%s`, %d", block_path, err)
+        return err;
+    }
+    uint64_t block_size;
+    err = storage_api->GetSize(storage_api, f, &block_size);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to get size of block `%s`, %d", block_path, err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    if (block_size < (sizeof(TLongtail_Hash) + sizeof(uint32_t)))
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    if (block_size > 0xffffffff)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    uint64_t read_offset = 0;
+    TLongtail_Hash block_hash;
+    err = storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash), &block_hash);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    read_offset += sizeof(TLongtail_Hash);
+    uint32_t chunk_count;
+    err = storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t), &chunk_count);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+
+    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
+    void* block_index_mem = Longtail_Alloc(block_index_size);
+    struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(block_index_mem, chunk_count);
+    err = storage_api->Read(storage_api, f, 0, block_index_data_size, &block_index[1]);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
+        Longtail_Free(block_index);
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    *out_block_index = block_index;
+    return 0;
+}
+
+struct ScanBlockJob
+{
+    struct Longtail_StorageAPI* m_StorageAPI;
+    const char* m_ContentPath;
+    const char* m_BlockPath;
+    struct Longtail_BlockIndex* m_BlockIndex;
+    int m_Err;
+};
+
+int EndsWith(const char *str, const char *suffix)
+{
+    if (!str || !suffix)
+        return 0;
+    size_t lenstr = strlen(str);
+    size_t lensuffix = strlen(suffix);
+    if (lensuffix >  lenstr)
+        return 0;
+    return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
+static void ScanBlock(void* context)
+{
+    LONGTAIL_FATAL_ASSERT(context != 0, return)
+
+    struct ScanBlockJob* job = (struct ScanBlockJob*)context;
+    const char* block_path = job->m_BlockPath;
+    if (!EndsWith(block_path, ".lrb"))
+    {
+        job->m_Err = ENOENT;
+        return;
+    }
+
+    struct Longtail_StorageAPI* storage_api = job->m_StorageAPI;
+    const char* content_path = job->m_ContentPath;
+    char* full_block_path = storage_api->ConcatPath(storage_api, content_path, block_path);
+
+    job->m_Err = ReadBlockIndex(
+        storage_api,
+        full_block_path,
+        &job->m_BlockIndex);
+
+    Longtail_Free(full_block_path);
+    full_block_path = 0;
+}
+
+static int ReadContent(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_JobAPI* job_api,
+    uint32_t content_index_hash_identifier,
+    Longtail_JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
+    const char* content_path,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent: Reading from `%s`", content_path)
+
+    struct Longtail_FileInfos* file_infos;
+    int err = Longtail_GetFilesRecursively(
+        storage_api,
+        content_path,
+        &file_infos);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore::ReadContent: Failed to scan folder `%s`, %d", content_path, err)
+        return err;
+    }
+
+    const uint32_t default_path_count = 512;
+    const uint32_t default_path_data_size = default_path_count * 128;
+
+    err = job_api->ReserveJobs(job_api, *file_infos->m_Paths.m_PathCount);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent: Failed to reserve jobs for `%s`, %d", content_path, err)
+        Longtail_Free(file_infos);
+        file_infos = 0;
+        return err;
+    }
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "FSBlockStore::ReadContent: Scanning %u files from `%s`", *file_infos->m_Paths.m_PathCount, content_path)
+
+    struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc(sizeof(struct ScanBlockJob) * *file_infos->m_Paths.m_PathCount);
+    LONGTAIL_FATAL_ASSERT(scan_jobs, return ENOMEM)
+
+    for (uint32_t path_index = 0; path_index < *file_infos->m_Paths.m_PathCount; ++path_index)
+    {
+        struct ScanBlockJob* job = &scan_jobs[path_index];
+        const char* block_path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[path_index]];
+        job->m_BlockIndex = 0;
+
+        job->m_StorageAPI = storage_api;
+        job->m_ContentPath = content_path;
+        job->m_BlockPath = block_path;
+        job->m_BlockIndex = 0;
+        job->m_Err = EINVAL;
+
+        Longtail_JobAPI_JobFunc job_func[] = {ScanBlock};
+        void* ctx[] = {job};
+        Longtail_JobAPI_Jobs jobs;
+        err = job_api->CreateJobs(job_api, 1, job_func, ctx, &jobs);
+        LONGTAIL_FATAL_ASSERT(!err, return err)
+        err = job_api->ReadyJobs(job_api, 1, jobs);
+        LONGTAIL_FATAL_ASSERT(!err, return err)
+    }
+
+    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    LONGTAIL_FATAL_ASSERT(!err, return err)
+
+    uint64_t block_count = 0;
+    uint64_t chunk_count = 0;
+    for (uint32_t path_index = 0; path_index < *file_infos->m_Paths.m_PathCount; ++path_index)
+    {
+        struct ScanBlockJob* job = &scan_jobs[path_index];
+        if (job->m_Err == 0)
+        {
+            ++block_count;
+            chunk_count += *job->m_BlockIndex->m_ChunkCount;
+        }
+    }
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "FSBlockStore::ReadContent: Found %" PRIu64 " chunks in %" PRIu64 " blocks from `%s`", chunk_count, block_count, content_path)
+
+    size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
+    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
+    LONGTAIL_FATAL_ASSERT(content_index, return ENOMEM)
+
+    // TODO: This is a bit low level to be outside of longtail, but will do for now
+    content_index->m_Version = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex)];
+    content_index->m_HashAPI = (uint32_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t)];
+    content_index->m_BlockCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t)];
+    content_index->m_ChunkCount = (uint64_t*)(void*)&((char*)content_index)[sizeof(struct Longtail_ContentIndex) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)];
+    *content_index->m_Version = Longtail_CurrentContentIndexVersion;
+    *content_index->m_HashAPI = content_index_hash_identifier;
+    *content_index->m_BlockCount = block_count;
+    *content_index->m_ChunkCount = chunk_count;
+    Longtail_InitContentIndex(content_index, content_index_size);
+
+    uint64_t block_offset = 0;
+    uint64_t chunk_offset = 0;
+    for (uint32_t path_index = 0; path_index < *file_infos->m_Paths.m_PathCount; ++path_index)
+    {
+        struct ScanBlockJob* job = &scan_jobs[path_index];
+        if (job->m_BlockIndex)
+        {
+            content_index->m_BlockHashes[block_offset] = *job->m_BlockIndex->m_BlockHash;
+            uint32_t block_chunk_count = *job->m_BlockIndex->m_ChunkCount;
+            memmove(&content_index->m_ChunkHashes[chunk_offset], job->m_BlockIndex->m_ChunkHashes, sizeof(TLongtail_Hash) * block_chunk_count);
+            memmove(&content_index->m_ChunkLengths[chunk_offset], job->m_BlockIndex->m_ChunkSizes, sizeof(uint32_t) * block_chunk_count);
+            uint32_t chunk_block_offset = 0;
+            for (uint32_t block_chunk_index = 0; block_chunk_index < block_chunk_count; ++block_chunk_index)
+            {
+                content_index->m_ChunkBlockIndexes[chunk_offset + block_chunk_index] = block_offset;
+                content_index->m_ChunkBlockOffsets[chunk_offset + block_chunk_index] = chunk_block_offset;
+                chunk_block_offset += content_index->m_ChunkLengths[chunk_offset + block_chunk_index];
+            }
+
+            ++block_offset;
+            chunk_offset += block_chunk_count;
+
+            Longtail_Free(job->m_BlockIndex);
+            job->m_BlockIndex = 0;
+        }
+    }
+
+    Longtail_Free(scan_jobs);
+    scan_jobs = 0;
+
+    Longtail_Free(file_infos);
+    file_infos = 0;
+
+    *out_content_index = content_index;
+    return 0;
+}
+
 static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
 {
     struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)block_store_api;
@@ -182,7 +427,7 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_path = 0;
         return err;
     }
-    if (block_size < (sizeof(uint32_t)))
+    if (block_size < (sizeof(TLongtail_Hash) + sizeof(uint32_t)))
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block `%s`, %d", block_path, err)
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
@@ -255,8 +500,7 @@ static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api,
     struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)block_store_api;
     if (!fsblockstore_api->m_ContentIndexBuffer)
     {
-        // TODO: Longtail_ReadContent should be a local function
-        int err = Longtail_ReadContent(
+        int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
             fsblockstore_api->m_JobAPI,
             default_hash_api_identifier,
@@ -272,9 +516,10 @@ static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api,
         if (err)
         {
             Longtail_Free(*out_content_index);
-            out_content_index = 0;
+            *out_content_index = 0;
             return err;
         }
+        return 0;
     }
 
     int err = Longtail_ReadContentIndexFromBuffer(fsblockstore_api->m_ContentIndexBuffer, fsblockstore_api->m_ContentIndexSize, out_content_index);

@@ -889,14 +889,7 @@ TEST(Longtail, Longtail_WriteContent)
         "local"));
 
     Longtail_ContentIndex* cindex2;
-    ASSERT_EQ(0, Longtail_ReadContent(
-        target_storage,
-        job_api,
-        hash_api->GetIdentifier(hash_api),
-        0,
-        0,
-        "chunks",
-        &cindex2));
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, hash_api->GetIdentifier(hash_api), 0, 0, &cindex2));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex2);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
@@ -1501,6 +1494,8 @@ TEST(Longtail, Longtail_VersionDiff)
         content_index,
         new_vindex,
         "new"));
+    Longtail_Free(content_index);
+    content_index = 0;
 
     Longtail_VersionDiff* version_diff;
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
@@ -1514,8 +1509,9 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(6u, *version_diff->m_ModifiedContentCount);
     ASSERT_EQ(1u, *version_diff->m_ModifiedPermissionsCount);
 
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, hash_api->GetIdentifier(hash_api), 0, 0, &content_index));
     ASSERT_EQ(0, Longtail_ChangeVersion(
-        storage,
+        block_store_api,
         storage,
         hash_api,
         job_api,
@@ -1526,7 +1522,6 @@ TEST(Longtail, Longtail_VersionDiff)
         old_vindex,
         new_vindex,
         version_diff,
-        "chunks",
         "old",
         1));
 
@@ -1708,7 +1703,7 @@ TEST(Longtail, FullScale)
     Longtail_ContentIndex* merged_content_index;
     ASSERT_EQ(0, Longtail_MergeContentIndex(local_content_index, missing_content, &merged_content_index));
     ASSERT_EQ(0, Longtail_WriteVersion(
-        local_storage,
+        block_store_api,
         local_storage,
         compression_registry,
         job_api,
@@ -1716,7 +1711,6 @@ TEST(Longtail, FullScale)
         0,
         merged_content_index,
         remote_version_index,
-        "",
         "",
         1));
 
@@ -1912,7 +1906,7 @@ TEST(Longtail, Longtail_WriteVersion)
         "local"));
 
     ASSERT_EQ(0, Longtail_WriteVersion(
-        storage_api,
+        block_store_api,
         storage_api,
         compression_registry,
         job_api,
@@ -1920,7 +1914,6 @@ TEST(Longtail, Longtail_WriteVersion)
         0,
         cindex,
         vindex,
-        "chunks",
         "remote",
         1));
 
@@ -2064,11 +2057,11 @@ static void Bench()
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
-        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, delta_upload_content_folder);
-        ASSERT_NE((Longtail_BlockStoreAPI*)0, block_store_api);
+        Longtail_BlockStoreAPI* delta_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, delta_upload_content_folder);
+        ASSERT_NE((Longtail_BlockStoreAPI*)0, delta_block_store_api);
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
-            block_store_api,
+            delta_block_store_api,
             compression_registry,
             job_api,
             0,
@@ -2076,7 +2069,8 @@ static void Bench()
             missing_content_index,
             version_index,
             version_source_folder));
-        SAFE_DISPOSE_API(block_store_api);
+        SAFE_DISPOSE_API(delta_block_store_api);
+        delta_block_store_api = 0;
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
         Longtail_StorageAPI_HIterator fs_iterator;
@@ -2145,8 +2139,9 @@ static void Bench()
         char version_target_folder[256];
         sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
         printf("Reconstructing %u assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
+        Longtail_BlockStoreAPI* content_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, CONTENT_FOLDER);
         ASSERT_EQ(0, Longtail_WriteVersion(
-            storage_api,
+            content_block_store_api,
             storage_api,
             compression_registry,
             job_api,
@@ -2154,9 +2149,9 @@ static void Bench()
             0,
             full_content_index,
             version_index,
-            CONTENT_FOLDER,
             version_target_folder,
             1));
+        SAFE_DISPOSE_API(content_block_store_api);
 
         version_indexes[i] = version_index;
         version_index = 0;
@@ -2277,7 +2272,7 @@ static void LifelikeTest()
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
     ASSERT_EQ(0, Longtail_WriteVersion(
-        storage_api,
+        local_block_store_api,
         storage_api,
         compression_registry,
         job_api,
@@ -2285,7 +2280,6 @@ static void LifelikeTest()
         0,
         local_content_index,
         version1,
-        local_content_path,
         remote_path_1,
         1));
     printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
@@ -2411,7 +2405,7 @@ static void LifelikeTest()
 
     printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
     ASSERT_EQ(0, Longtail_WriteVersion(
-        storage_api,
+        local_block_store_api,
         storage_api,
         compression_registry,
         job_api,
@@ -2419,7 +2413,6 @@ static void LifelikeTest()
         0,
         merged_local_content,
         version2,
-        local_content_path,
         remote_path_2,
         1));
     printf("Reconstructed %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);

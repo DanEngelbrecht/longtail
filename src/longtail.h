@@ -215,6 +215,14 @@ int Longtail_ReadVersionIndex(
     const char* path,
     struct Longtail_VersionIndex** out_version_index);
 
+size_t Longtail_GetContentIndexSize(
+    uint64_t block_count,
+    uint64_t chunk_count);
+
+int Longtail_InitContentIndex(
+    struct Longtail_ContentIndex* content_index,
+    uint64_t content_index_size);
+
 int Longtail_CreateContentIndex(
     struct Longtail_HashAPI* hash_api,
     uint64_t chunk_count,
@@ -256,15 +264,6 @@ int Longtail_WriteContent(
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
-int Longtail_ReadContent(
-    struct Longtail_StorageAPI* storage_api,
-    struct Longtail_JobAPI* job_api,
-    uint32_t content_index_hash_identifier,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
-    const char* content_path,
-    struct Longtail_ContentIndex** out_content_index);
-
 int Longtail_CreateMissingContent(
     struct Longtail_HashAPI* hash_api,
     const struct Longtail_ContentIndex* content_index,
@@ -288,7 +287,7 @@ int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex** out_content_index);
 
 int Longtail_WriteVersion(
-    struct Longtail_StorageAPI* content_storage_api,
+    struct Longtail_BlockStoreAPI* block_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_JobAPI* job_api,
@@ -296,7 +295,6 @@ int Longtail_WriteVersion(
     void* job_progress_context,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
-    const char* content_path,
     const char* version_path,
     int retain_permissions);
 
@@ -306,7 +304,7 @@ int Longtail_CreateVersionDiff(
     struct Longtail_VersionDiff** out_version_diff);
 
 int Longtail_ChangeVersion(
-    struct Longtail_StorageAPI* content_storage_api,
+    struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
@@ -317,7 +315,6 @@ int Longtail_ChangeVersion(
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
     const struct Longtail_VersionDiff* version_diff,
-    const char* content_path,
     const char* version_path,
     int retain_permissions);
 
@@ -356,6 +353,8 @@ struct Longtail_FileInfos
     uint64_t* m_FileSizes;
     uint32_t* m_Permissions;
 };
+
+extern uint32_t Longtail_CurrentContentIndexVersion;
 
 struct Longtail_ContentIndex
 {
