@@ -15,6 +15,16 @@ struct Longtail_API
 void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
+typedef uint64_t TLongtail_Hash;
+struct Longtail_Paths;
+struct Longtail_FileInfos;
+struct Longtail_VersionIndex;
+struct Longtail_StoredBlock;
+struct Longtail_ContentIndex;
+struct PathLookup;
+struct ChunkHashToAssetPart;
+struct Longtail_VersionDiff;
+
 typedef struct Longtail_HashAPI_Context* Longtail_HashAPI_HContext;
 struct Longtail_HashAPI
 {
@@ -159,22 +169,8 @@ void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free
 void* Longtail_Alloc(size_t s);
 void Longtail_Free(void* p);
 
-typedef uint64_t TLongtail_Hash;
-struct Longtail_Paths;
-struct Longtail_FileInfos;
-struct Longtail_VersionIndex;
-struct Longtail_ContentIndex;
-struct PathLookup;
-struct ChunkHashToAssetPart;
-struct Longtail_VersionDiff;
-
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
 char* Longtail_Strdup(const char* path);
-
-int ReadBlockIndex(
-    struct Longtail_StorageAPI* storage_api,
-    const char* full_block_path,
-    struct Longtail_BlockIndex** out_block_index);
 
 int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
