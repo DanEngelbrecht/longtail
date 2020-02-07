@@ -248,6 +248,7 @@ int Longtail_ReadContentIndex(
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
     struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
@@ -257,8 +258,8 @@ int Longtail_WriteContent(
 
 int Longtail_ReadContent(
     struct Longtail_StorageAPI* storage_api,
-    struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
+    uint32_t content_index_hash_identifier,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
     const char* content_path,
@@ -323,10 +324,10 @@ int Longtail_ChangeVersion(
 struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
+    uint32_t* m_ChunkCount;
     uint32_t* m_ChunkCompressionType;
     TLongtail_Hash* m_ChunkHashes; //[]
     uint32_t* m_ChunkSizes; // []
-    uint32_t* m_ChunkCount;
 };
 
 size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
@@ -338,6 +339,7 @@ struct Longtail_StoredBlock
     int (*Dispose)(struct Longtail_StoredBlock* stored_block);
     struct Longtail_BlockIndex* m_BlockIndex;
     void* m_BlockData;
+    uint32_t m_BlockDataSize;
 };
 
 struct Longtail_Paths
