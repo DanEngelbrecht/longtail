@@ -294,10 +294,6 @@ int Longtail_CreateMissingContent(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_GetPathsForContentBlocks(
-    struct Longtail_ContentIndex* content_index,
-    struct Longtail_Paths** out_paths);
-
 int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
     const struct Longtail_ContentIndex* content_index,
@@ -491,6 +487,12 @@ int Longtail_MakePaths(
     uint32_t path_count,
     const char* const* path_names,
     struct Longtail_Paths** out_paths);
+
+size_t Longtail_GetVersionIndexDataSize(
+    uint32_t asset_count,
+    uint32_t chunk_count,
+    uint32_t asset_chunk_index_count,
+    uint32_t path_data_size);
 
 size_t Longtail_GetVersionIndexSize(
     uint32_t asset_count,
