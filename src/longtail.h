@@ -239,6 +239,14 @@ int Longtail_InitContentIndexFromData(
     void* data,
     uint64_t data_size);
 
+int Longtail_InitiContentIndex(
+    struct Longtail_ContentIndex* content_index,
+    void* data,
+    uint64_t data_size,
+    uint32_t hash_api,
+    uint64_t block_count,
+    uint64_t chunk_count);
+
 int Longtail_CreateContentIndexFromBlocks(
     uint32_t hash_identifier,
     uint64_t block_count,
