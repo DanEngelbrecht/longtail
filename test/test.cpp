@@ -745,10 +745,10 @@ TEST(Longtail, Longtail_BlockStore_Uncompressed)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, "chunks");
 
     struct Longtail_ContentIndex* store_index;
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, 0, 0, &store_index));
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, hash_api->GetIdentifier(hash_api), 0, 0, &store_index));
     ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
     ASSERT_EQ(0, *store_index->m_BlockCount);
     ASSERT_EQ(0, *store_index->m_ChunkCount);
@@ -809,7 +809,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage, hash_api, job_api, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage, job_api, "chunks");
 
     const char* TEST_FILENAMES[5] = {
         "local/TheLongFile.txt",
@@ -1217,7 +1217,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage, hash_api, job_api, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage, job_api, "chunks");
 
     const uint32_t OLD_ASSET_COUNT = 10u;
 
@@ -1581,7 +1581,7 @@ TEST(Longtail, FullScale)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage, hash_api, job_api, "");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage, job_api, "");
 
     CreateFakeContent(local_storage, 0, 5);
 
@@ -1764,7 +1764,7 @@ TEST(Longtail, Longtail_WriteVersion)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, "chunks");
 
     const uint32_t asset_count = 8u;
 
@@ -2064,7 +2064,7 @@ static void Bench()
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
-        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, delta_upload_content_folder);
+        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, delta_upload_content_folder);
         ASSERT_NE((Longtail_BlockStoreAPI*)0, block_store_api);
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
@@ -2213,8 +2213,8 @@ static void LifelikeTest()
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, local_content_path);
-    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, hash_api, job_api, remote_content_path);
+    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, local_content_path);
+    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, remote_content_path);
 
     Longtail_FileInfos* local_path_1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, local_path_1, &local_path_1_paths));

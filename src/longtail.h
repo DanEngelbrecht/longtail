@@ -115,7 +115,7 @@ struct Longtail_BlockStoreAPI
     struct Longtail_API m_API;
     int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block);
     int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
-    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index);
+    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index);
 };
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);

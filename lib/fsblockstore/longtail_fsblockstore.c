@@ -12,7 +12,6 @@ struct FSBlockStoreJobAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
-    struct Longtail_HashAPI* m_HashAPI;
     struct Longtail_JobAPI* m_JobAPI;
     char* m_ContentPath;
     void* m_ContentIndexBuffer;
@@ -251,7 +250,7 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     return 0;
 }
 
-static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index)
+static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index)
 {
     struct FSBlockStoreJobAPI* fsblockstore_api = (struct FSBlockStoreJobAPI*)block_store_api;
     if (!fsblockstore_api->m_ContentIndexBuffer)
@@ -260,7 +259,7 @@ static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api,
         int err = Longtail_ReadContent(
             fsblockstore_api->m_StorageAPI,
             fsblockstore_api->m_JobAPI,
-            fsblockstore_api->m_HashAPI->GetIdentifier(fsblockstore_api->m_HashAPI),
+            default_hash_api_identifier,
             progress_func,
             context,
             fsblockstore_api->m_ContentPath,
@@ -293,7 +292,6 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
 static int FSBlockStore_Init(
     struct FSBlockStoreJobAPI* api,
     struct Longtail_StorageAPI* storage_api,
-	struct Longtail_HashAPI* hash_api,
 	struct Longtail_JobAPI* job_api,
 	const char* content_path)
 {
@@ -302,7 +300,6 @@ static int FSBlockStore_Init(
     api->m_BlockStoreAPI.GetStoredBlock = FSBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = FSBlockStore_GetIndex;
     api->m_StorageAPI = storage_api;
-    api->m_HashAPI = hash_api;
     api->m_JobAPI = job_api;
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndexBuffer = 0;
@@ -312,7 +309,6 @@ static int FSBlockStore_Init(
 
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
-	struct Longtail_HashAPI* hash_api,
 	struct Longtail_JobAPI* job_api,
 	const char* content_path)
 {
@@ -320,7 +316,6 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     FSBlockStore_Init(
         api,
         storage_api,
-        hash_api,
         job_api,
         content_path);
     return &api->m_BlockStoreAPI;
