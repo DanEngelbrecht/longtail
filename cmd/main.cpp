@@ -447,8 +447,8 @@ static int Cmd_Longtail_CreateContentIndex(
         int err = block_store_api->GetIndex(
             block_store_api,
             hash_api->GetIdentifier(hash_api),
-            &progress,
             Progress::ProgressFunc,
+            &progress,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)
@@ -612,8 +612,8 @@ static int Cmd_Longtail_CreateMissingContentIndex(
         int err = block_store_api->GetIndex(
             block_store_api,
             hash_api->GetIdentifier(hash_api),
-            &progress,
             Progress::ProgressFunc,
+            &progress,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)
@@ -931,8 +931,8 @@ static int Cmd_CreateVersion(
         int err = block_store_api->GetIndex(
             block_store_api,
             hash_api->GetIdentifier(hash_api),
-            &progress,
             Progress::ProgressFunc,
+            &progress,
             &cindex);
         if (err)
         {
@@ -1083,8 +1083,8 @@ static int Cmd_UpdateVersion(
         int err = block_store_api->GetIndex(
             block_store_api,
             hash_api->GetIdentifier(hash_api),
-            &progress,
             Progress::ProgressFunc,
+            &progress,
             &cindex);
         if (err)
         {
@@ -1276,8 +1276,8 @@ static int Cmd_UpSyncVersion(
             int err = block_store_api->GetIndex(
                 block_store_api,
                 hash_api->GetIdentifier(hash_api),
-                &progress,
                 Progress::ProgressFunc,
+                &progress,
                 &cindex);
             SAFE_DISPOSE_API(block_store_api);
             if (err)
@@ -1468,8 +1468,8 @@ static int Cmd_DownSyncVersion(
         int err = block_store_api->GetIndex(
             block_store_api,
             hash_api->GetIdentifier(hash_api),
-            &progress,
             Progress::ProgressFunc,
+            &progress,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)
@@ -1520,8 +1520,8 @@ static int Cmd_DownSyncVersion(
         int err = block_store_api->GetIndex(
             block_store_api,
             hash_api->GetIdentifier(hash_api),
-            &progress,
             Progress::ProgressFunc,
+            &progress,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)

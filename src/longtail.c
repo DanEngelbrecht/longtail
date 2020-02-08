@@ -893,7 +893,7 @@ static int ChunkAssets(
         }
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    err = job_api->WaitForAllJobs(job_api, job_progress_func, job_progress_context);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     err = 0;
@@ -2646,7 +2646,7 @@ int Longtail_WriteContent(
         block_start_chunk_index += chunk_count;
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    err = job_api->WaitForAllJobs(job_api, job_progress_func, job_progress_context);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     err = 0;
@@ -3601,7 +3601,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_progress_context, job_progress_func);
+    err = job_api->WaitForAllJobs(job_api, job_progress_func, job_progress_context);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     err = 0;

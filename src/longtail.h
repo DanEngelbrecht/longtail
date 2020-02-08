@@ -16,6 +16,7 @@ void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
 typedef uint64_t TLongtail_Hash;
+struct Longtail_BlockIndex;
 struct Longtail_Paths;
 struct Longtail_FileInfos;
 struct Longtail_VersionIndex;
@@ -117,7 +118,7 @@ struct Longtail_JobAPI
     int (*CreateJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs);
     int (*AddDependecies)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs);
     int (*ReadyJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
-    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, void* context, Longtail_JobAPI_ProgressFunc progress_func);
+    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context);
 };
 
 struct Longtail_BlockStoreAPI
@@ -125,7 +126,7 @@ struct Longtail_BlockStoreAPI
     struct Longtail_API m_API;
     int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block);
     int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
-    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index);
+    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index);
     int (*GetStoredBlockPath)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
 };
 
