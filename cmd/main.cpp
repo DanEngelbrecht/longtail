@@ -1,6 +1,7 @@
 #include "../src/longtail.h"
 #include "../src/ext/stb_ds.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
+#include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/brotli/longtail_brotli.h"
@@ -121,7 +122,7 @@ struct HashToIndex
     uint64_t value;
 };
 
-static int PrintFormattedBlockList(Longtail_ContentIndex* content_index, const char* format_string)
+static int PrintFormattedBlockList(Longtail_BlockStoreAPI* block_store_api, Longtail_ContentIndex* content_index, const char* format_string)
 {
     const char* format_start = format_string;
     const char* format_first_end = strstr(format_string, "{blockname}");
@@ -129,17 +130,16 @@ static int PrintFormattedBlockList(Longtail_ContentIndex* content_index, const c
     {
         return 0;
     }
-    Longtail_Paths* paths;
-    int err = Longtail_GetPathsForContentBlocks(content_index, &paths);
-    if (err)
-    {
-        return 0;
-    }
     size_t first_length = (size_t)((intptr_t)format_first_end - (intptr_t)format_start);
     const char* format_second_start = &format_first_end[strlen("{blockname}")];
     for (uint64_t b = 0; b < *content_index->m_BlockCount; ++b)
     {
-        const char* block_name = &paths->m_Data[paths->m_Offsets[b]];
+        char* block_name;
+        int err = block_store_api->GetStoredBlockPath(block_store_api, content_index->m_BlockHashes[b], &block_name);
+        if (err)
+        {
+            return 0;
+        }
 
         char output_str[512];
         memmove(output_str, format_string, first_length);
@@ -147,6 +147,8 @@ static int PrintFormattedBlockList(Longtail_ContentIndex* content_index, const c
         strcpy(&output_str[first_length + strlen(block_name)], format_second_start);
 
         printf("%s\n", output_str);
+
+        Longtail_Free(block_name);
     }
     return 1;
 }
@@ -1300,20 +1302,20 @@ static int Cmd_UpSyncVersion(
         return 0;
     }
 
+    Longtail_BlockStoreAPI* missing_content_block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage_api, missing_content_path);
     int ok = 0;
     {
         Progress progress("Writing content");
         ok = (0 == CreatePath(target_storage_api, missing_content_path)) && (0 == Longtail_WriteContent(
             source_storage_api,
-            target_storage_api,
+            missing_content_block_store_api,
             compression_registry,
             job_api,
             Progress::ProgressFunc,
             &progress,
             missing_content_index,
             vindex,
-            version_path,
-            missing_content_path));
+            version_path));
     }
     if (!ok)
     {
@@ -1378,7 +1380,7 @@ static int Cmd_UpSyncVersion(
         return 0;
     }
 
-    if (!PrintFormattedBlockList(missing_content_index, output_format))
+    if (!PrintFormattedBlockList(missing_content_block_store_api, missing_content_index, output_format))
     {
         fprintf(stderr, "Failed to format block output using format `%s`\n", output_format);
         Longtail_Free(missing_content_index);
@@ -1389,6 +1391,8 @@ static int Cmd_UpSyncVersion(
         cindex = 0;
         return 0;
     }
+
+    SAFE_DISPOSE_API(missing_content_block_store_api);
 /*    Longtail_Free(new_content_index);
     new_content_index = 0;
 */
