@@ -1735,6 +1735,41 @@ int Longtail_ReadBlockIndex(
     return 0;
 }
 
+static int DisposeStoredBlock(struct Longtail_StoredBlock* stored_block)
+{
+    Longtail_Free(stored_block);
+    return 0;
+}
+
+int Longtail_CreateStoredBlock(
+    TLongtail_Hash block_hash,
+    uint32_t chunk_count,
+    uint32_t compression_type,
+    TLongtail_Hash* chunk_hashes,
+    uint32_t* chunk_sizes,
+    uint32_t block_data_size,
+    struct Longtail_StoredBlock** out_stored_block)
+{
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock) + block_index_size + block_data_size);
+    if (stored_block == 0)
+    {
+        return ENOMEM;
+    }
+    stored_block->m_BlockIndex = Longtail_InitBlockIndex(&stored_block[1], chunk_count);
+    *stored_block->m_BlockIndex->m_BlockHash = block_hash;
+    *stored_block->m_BlockIndex->m_ChunkCount = chunk_count;
+    *stored_block->m_BlockIndex->m_ChunkCompressionType = compression_type;
+    memmove(stored_block->m_BlockIndex->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    memmove(stored_block->m_BlockIndex->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
+
+    stored_block->Dispose = DisposeStoredBlock;
+    stored_block->m_BlockData = ((uint8_t*)stored_block->m_BlockIndex) + block_index_size;
+    stored_block->m_BlockDataSize = block_data_size;
+    *out_stored_block = stored_block;
+    return 0;
+}
+
 size_t Longtail_GetContentIndexDataSize(uint64_t block_count, uint64_t chunk_count)
 {
     size_t block_index_data_size = (size_t)(

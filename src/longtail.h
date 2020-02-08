@@ -383,8 +383,14 @@ int Longtail_ReadBlockIndex(
     const char* path,
     struct Longtail_BlockIndex** out_block_index);
 
-
-
+int Longtail_CreateStoredBlock(
+    TLongtail_Hash block_hash,
+    uint32_t chunk_count,
+    uint32_t compression_type,
+    TLongtail_Hash* chunk_hashes,
+    uint32_t* chunk_sizes,
+    uint32_t block_data_size,
+    struct Longtail_StoredBlock** out_stored_block);
 
 struct Longtail_BlockIndex
 {

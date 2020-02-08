@@ -740,6 +740,54 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     return registry;
 }
 
+TEST(Longtail, Longtail_CreateStoredBlock)
+{
+    TLongtail_Hash block_hash = 0x77aa661199bb0011;
+    const uint32_t chunk_count = 4;
+    TLongtail_Hash chunk_hashes[chunk_count] = {0xdeadbeefbeefdead, 0xa11ab011a66a5a55, 0xeadbeefbeefdeadd, 0x11ab011a66a5a55a};
+    uint32_t chunk_sizes[chunk_count] = {10, 20, 30, 40};
+    uint32_t block_data_size = 0;
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        block_data_size += chunk_sizes[c];
+    }
+    struct Longtail_StoredBlock* stored_block;
+    ASSERT_EQ(0, Longtail_CreateStoredBlock(
+        block_hash,
+        4,
+        0,
+        chunk_hashes,
+        chunk_sizes,
+        block_data_size,
+        &stored_block));
+    uint32_t offset = 0;
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        for (uint32_t b = 0; b < chunk_sizes[c]; ++b)
+        {
+            ((uint8_t*)stored_block->m_BlockData)[offset +b] = c + 1;
+        }
+        offset += chunk_sizes[c];
+    }
+
+    ASSERT_EQ(block_data_size, stored_block->m_BlockDataSize);
+    ASSERT_EQ(block_hash, *stored_block->m_BlockIndex->m_BlockHash);
+    ASSERT_EQ(chunk_count, *stored_block->m_BlockIndex->m_ChunkCount);
+    ASSERT_EQ(0, *stored_block->m_BlockIndex->m_ChunkCompressionType);
+    offset = 0;
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        ASSERT_EQ(chunk_hashes[c], stored_block->m_BlockIndex->m_ChunkHashes[c]);
+        ASSERT_EQ(chunk_sizes[c], stored_block->m_BlockIndex->m_ChunkSizes[c]);
+        for (uint32_t b = 0; b < chunk_sizes[c]; ++b)
+        {
+            ASSERT_EQ(((uint8_t*)stored_block->m_BlockData)[offset +b], c + 1);
+        }
+        offset += chunk_sizes[c];
+    }
+    stored_block->Dispose(stored_block);
+}
+
 TEST(Longtail, Longtail_FSBlockStore)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
