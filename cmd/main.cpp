@@ -442,10 +442,11 @@ static int Cmd_Longtail_CreateContentIndex(
     else
     {
         Progress progress("Reading content");
-        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, content);
+        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, content);
         Longtail_ContentIndex* cindex = 0;
         int err = block_store_api->GetIndex(
             block_store_api,
+            job_api,
             hash_api->GetIdentifier(hash_api),
             Progress::ProgressFunc,
             &progress,
@@ -607,10 +608,11 @@ static int Cmd_Longtail_CreateMissingContentIndex(
     else if (content)
     {
         Progress progress("Reading content");
-        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, content);
+        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, content);
         Longtail_ContentIndex* cindex = 0;
         int err = block_store_api->GetIndex(
             block_store_api,
+            job_api,
             hash_api->GetIdentifier(hash_api),
             Progress::ProgressFunc,
             &progress,
@@ -793,7 +795,7 @@ static int Cmd_CreateContent(
     int ok = 0;
     {
         Progress progress("Writing content");
-        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, create_content);
+        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, create_content);
         ok = (0 == CreatePath(storage_api, create_content)) && (0 == Longtail_WriteContent(
             storage_api,
             block_store_api,
@@ -911,7 +913,7 @@ static int Cmd_CreateVersion(
         return 0;
     }
 
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, content);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, content);
     Longtail_ContentIndex* cindex = 0;
     if (content_index)
     {
@@ -930,6 +932,7 @@ static int Cmd_CreateVersion(
         Longtail_ContentIndex* cindex = 0;
         int err = block_store_api->GetIndex(
             block_store_api,
+            job_api,
             hash_api->GetIdentifier(hash_api),
             Progress::ProgressFunc,
             &progress,
@@ -1062,7 +1065,7 @@ static int Cmd_UpdateVersion(
 
     Longtail_ContentIndex* cindex = 0;
     Longtail_BlockStoreAPI* block_store_api = 0;
-    block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, job_api, content);
+    block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, content);
     if (content_index)
     {
         err = Longtail_ReadContentIndex(storage_api, content_index, &cindex);
@@ -1082,6 +1085,7 @@ static int Cmd_UpdateVersion(
         Longtail_ContentIndex* cindex = 0;
         int err = block_store_api->GetIndex(
             block_store_api,
+            job_api,
             hash_api->GetIdentifier(hash_api),
             Progress::ProgressFunc,
             &progress,
@@ -1271,10 +1275,11 @@ static int Cmd_UpSyncVersion(
                 return 0;
             }
             Progress progress("Reading content");
-            Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(source_storage_api, job_api, content_path);
+            Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(source_storage_api, content_path);
             Longtail_ContentIndex* cindex = 0;
             int err = block_store_api->GetIndex(
                 block_store_api,
+                job_api,
                 hash_api->GetIdentifier(hash_api),
                 Progress::ProgressFunc,
                 &progress,
@@ -1310,7 +1315,6 @@ static int Cmd_UpSyncVersion(
 
     Longtail_BlockStoreAPI* missing_content_block_store_api = Longtail_CreateFSBlockStoreAPI(
         target_storage_api,
-        job_api,
         missing_content_path);
     int ok = 0;
     {
@@ -1463,10 +1467,11 @@ static int Cmd_DownSyncVersion(
             return 0;
         }
         Progress progress("Reading content");
-        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(source_storage_api, job_api, have_content_path);
+        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(source_storage_api, have_content_path);
         Longtail_ContentIndex* cindex = 0;
         int err = block_store_api->GetIndex(
             block_store_api,
+            job_api,
             hash_api->GetIdentifier(hash_api),
             Progress::ProgressFunc,
             &progress,
@@ -1515,10 +1520,11 @@ static int Cmd_DownSyncVersion(
             return 0;
         }
         Progress progress("Reading content");
-        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage_api, job_api, remote_content_path);
+        Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage_api, remote_content_path);
         Longtail_ContentIndex* cindex = 0;
         int err = block_store_api->GetIndex(
             block_store_api,
+            job_api,
             hash_api->GetIdentifier(hash_api),
             Progress::ProgressFunc,
             &progress,
@@ -1552,7 +1558,7 @@ static int Cmd_DownSyncVersion(
     Longtail_Free(cindex_missing);
     cindex_missing = 0;
 
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(source_storage_api, job_api, have_content_path);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(source_storage_api, have_content_path);
     if (!PrintFormattedBlockList(block_store_api, request_content, output_format))
     {
         SAFE_DISPOSE_API(block_store_api);

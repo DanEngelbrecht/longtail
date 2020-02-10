@@ -12,7 +12,6 @@ struct FSBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
-    struct Longtail_JobAPI* m_JobAPI;
     char* m_ContentPath;
     void* m_ContentIndexBuffer;
     uint64_t m_ContentIndexSize;
@@ -369,14 +368,14 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     return 0;
 }
 
-static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
+static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
 {
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     if (!fsblockstore_api->m_ContentIndexBuffer)
     {
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
-            fsblockstore_api->m_JobAPI,
+            job_api,
             default_hash_api_identifier,
             progress_func,
             progress_context,
@@ -419,7 +418,6 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
 static int FSBlockStore_Init(
     struct FSBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
-	struct Longtail_JobAPI* job_api,
 	const char* content_path)
 {
     api->m_BlockStoreAPI.m_API.Dispose = FSBlockStore_Dispose;
@@ -428,7 +426,6 @@ static int FSBlockStore_Init(
     api->m_BlockStoreAPI.GetIndex = FSBlockStore_GetIndex;
     api->m_BlockStoreAPI.GetStoredBlockPath = FSBlockStore_GetStoredBlockPath;
     api->m_StorageAPI = storage_api;
-    api->m_JobAPI = job_api;
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndexBuffer = 0;
     api->m_ContentIndexSize = 0;
@@ -437,14 +434,12 @@ static int FSBlockStore_Init(
 
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
-	struct Longtail_JobAPI* job_api,
 	const char* content_path)
 {
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreAPI));
     FSBlockStore_Init(
         api,
         storage_api,
-        job_api,
         content_path);
     return &api->m_BlockStoreAPI;
 }

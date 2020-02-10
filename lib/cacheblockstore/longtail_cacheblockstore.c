@@ -68,10 +68,10 @@ static int CacheBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_s
     return 0;
 }
 
-static int CacheBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
+static int CacheBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
 {
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
-    return cacheblockstore_api->m_RemoteBlockStoreAPI->GetIndex(cacheblockstore_api->m_RemoteBlockStoreAPI, default_hash_api_identifier, progress_func, progress_context, out_content_index);
+    return cacheblockstore_api->m_RemoteBlockStoreAPI->GetIndex(cacheblockstore_api->m_RemoteBlockStoreAPI, job_api, default_hash_api_identifier, progress_func, progress_context, out_content_index);
 }
 
 static int CacheBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
