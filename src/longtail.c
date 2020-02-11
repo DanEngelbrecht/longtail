@@ -1119,10 +1119,10 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
     LONGTAIL_FATAL_ASSERT(mem_size != 0, return 0)
     LONGTAIL_FATAL_ASSERT(paths != 0, return 0)
-    LONGTAIL_FATAL_ASSERT(path_hashes != 0, return 0)
-    LONGTAIL_FATAL_ASSERT(content_hashes != 0, return 0)
-    LONGTAIL_FATAL_ASSERT(content_sizes != 0, return 0)
-    LONGTAIL_FATAL_ASSERT(asset_chunk_index_starts != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(chunk_count == 0 || path_hashes != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(chunk_count == 0 || content_hashes != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(chunk_count == 0 || content_sizes != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(asset_chunk_counts == 0 || asset_chunk_index_starts != 0, return 0)
     LONGTAIL_FATAL_ASSERT(*paths->m_PathCount == 0 || asset_chunk_counts != 0, return 0)
     LONGTAIL_FATAL_ASSERT(asset_chunk_index_count >= chunk_count, return 0)
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || asset_chunk_indexes != 0, return 0)
@@ -1184,6 +1184,35 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionIndex: From `%s` with %u assets", root_path, *paths->m_PathCount)
 
     uint32_t path_count = *paths->m_PathCount;
+
+    if (path_count == 0)
+    {
+        size_t version_index_size = Longtail_GetVersionIndexSize(path_count, 0, 0, 0);
+        void* version_index_mem = Longtail_Alloc(version_index_size);
+        LONGTAIL_FATAL_ASSERT(version_index_mem, return ENOMEM)
+
+        struct Longtail_VersionIndex* version_index = Longtail_BuildVersionIndex(
+            version_index_mem,              // mem
+            version_index_size,             // mem_size
+            paths,                          // paths
+            0,                    // path_hashes
+            0,                 // content_hashes
+            0,                    // content_sizes
+            0,              // asset_permissions
+            0,        // asset_chunk_index_starts
+            0,             // asset_chunk_counts
+            0,       // asset_chunk_index_count
+            0,            // asset_chunk_indexes
+            0,             // chunk_count
+            0,            // chunk_sizes
+            0,           // chunk_hashes
+            0,// chunk_compression_types
+            hash_api->GetIdentifier(hash_api));
+        LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
+        *out_version_index = version_index;
+        return 0;
+    }
+
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
     LONGTAIL_FATAL_ASSERT(path_hashes != 0, return ENOMEM)
     TLongtail_Hash* content_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);

@@ -567,6 +567,36 @@ static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileI
     return result;
 }
 
+TEST(Longtail, CreateEmptyVersionIndex)
+{
+    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "data/non-existent", &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        local_storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        "source/version1",
+        &version1_paths->m_Paths,
+        version1_paths->m_FileSizes,
+        version1_paths->m_Permissions,
+        compression_types,
+        16384,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+    Longtail_Free(vindex);
+    Longtail_Free(compression_types);
+    Longtail_Free(version1_paths);
+}
+
 TEST(Longtail, ContentIndexSerialization)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
