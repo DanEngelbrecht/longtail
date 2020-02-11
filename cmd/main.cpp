@@ -155,9 +155,12 @@ static int PrintFormattedBlockList(Longtail_BlockStoreAPI* block_store_api, Long
 
 struct Progress
 {
+    struct Longtail_ProgressAPI m_API;
     Progress(const char* task)
         : m_OldPercent(0)
     {
+        m_API.m_API.Dispose = 0;
+        m_API.OnProgress = ProgressFunc;
         fprintf(stderr, "%s: ", task);
     }
     ~Progress()
@@ -165,9 +168,9 @@ struct Progress
         fprintf(stderr, " Done\n");
     }
     uint32_t m_OldPercent;
-    static void ProgressFunc(void* context, uint32_t total, uint32_t jobs_done)
+    static void ProgressFunc(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
     {
-        Progress* p = (Progress*)context;
+        Progress* p = (Progress*)progress_api;
         if (jobs_done < total)
         {
             uint32_t percent_done = (100 * jobs_done) / total;
@@ -359,8 +362,7 @@ static int Cmd_Longtail_CreateVersionIndex(
             storage_api,
             hash_api,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
@@ -448,8 +450,7 @@ static int Cmd_Longtail_CreateContentIndex(
             block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)
@@ -573,8 +574,7 @@ static int Cmd_Longtail_CreateMissingContentIndex(
             storage_api,
             hash_api,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
@@ -614,8 +614,7 @@ static int Cmd_Longtail_CreateMissingContentIndex(
             block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)
@@ -729,8 +728,7 @@ static int Cmd_CreateContent(
             storage_api,
             hash_api,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
@@ -801,8 +799,7 @@ static int Cmd_CreateContent(
             block_store_api,
             compression_registry,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             cindex,
             vindex,
             version));
@@ -934,8 +931,7 @@ static int Cmd_CreateVersion(
             block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             &cindex);
         if (err)
         {
@@ -967,8 +963,7 @@ static int Cmd_CreateVersion(
             storage_api,
             compression_registry,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             cindex,
             vindex,
             content,
@@ -1033,8 +1028,7 @@ static int Cmd_UpdateVersion(
             storage_api,
             hash_api,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             update_version,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
@@ -1087,8 +1081,7 @@ static int Cmd_UpdateVersion(
             block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             &cindex);
         if (err)
         {
@@ -1139,8 +1132,7 @@ static int Cmd_UpdateVersion(
             storage_api,
             hash_api,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             compression_registry,
             cindex,
             source_vindex,
@@ -1219,8 +1211,7 @@ static int Cmd_UpSyncVersion(
             source_storage_api,
             hash_api,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             version_path,
             &file_infos->m_Paths,
             file_infos->m_FileSizes,
@@ -1281,8 +1272,7 @@ static int Cmd_UpSyncVersion(
                 block_store_api,
                 job_api,
                 hash_api->GetIdentifier(hash_api),
-                Progress::ProgressFunc,
-                &progress,
+                &progress.m_API,
                 &cindex);
             SAFE_DISPOSE_API(block_store_api);
             if (err)
@@ -1324,8 +1314,7 @@ static int Cmd_UpSyncVersion(
             missing_content_block_store_api,
             compression_registry,
             job_api,
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             missing_content_index,
             vindex,
             version_path));
@@ -1473,8 +1462,7 @@ static int Cmd_DownSyncVersion(
             block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)
@@ -1526,8 +1514,7 @@ static int Cmd_DownSyncVersion(
             block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
-            Progress::ProgressFunc,
-            &progress,
+            &progress.m_API,
             &cindex);
         SAFE_DISPOSE_API(block_store_api);
         if (err)

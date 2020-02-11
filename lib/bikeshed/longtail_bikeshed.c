@@ -217,15 +217,15 @@ static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_coun
     return 0;
 }
 
-static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_ProgressFunc process_func, void* progress_context)
+static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t old_pending_count = 0;
     while (bikeshed_job_api->m_PendingJobCount > 0)
     {
-        if (process_func)
+        if (progressAPI)
         {
-            process_func(progress_context, (uint32_t)bikeshed_job_api->m_ReservedJobCount, (uint32_t)bikeshed_job_api->m_JobsCompleted);
+            progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_api->m_ReservedJobCount, (uint32_t)bikeshed_job_api->m_JobsCompleted);
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
         {
@@ -237,9 +237,9 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
         }
         Longtail_Sleep(1000);
     }
-    if (process_func)
+    if (progressAPI)
     {
-        process_func(progress_context, (uint32_t)bikeshed_job_api->m_SubmittedJobCount, (uint32_t)bikeshed_job_api->m_SubmittedJobCount);
+        progressAPI->OnProgress(progressAPI, (uint32_t)bikeshed_job_api->m_SubmittedJobCount, (uint32_t)bikeshed_job_api->m_SubmittedJobCount);
     }
     bikeshed_job_api->m_SubmittedJobCount = 0;
 	Longtail_Free(bikeshed_job_api->m_ReservedTasksIDs);

@@ -767,8 +767,7 @@ static int ChunkAssets(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
     const struct Longtail_Paths* paths,
     TLongtail_Hash* path_hashes,
@@ -893,7 +892,7 @@ static int ChunkAssets(
         }
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_progress_func, job_progress_context);
+    err = job_api->WaitForAllJobs(job_api, progress_api);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     err = 0;
@@ -1167,8 +1166,7 @@ int Longtail_CreateVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
@@ -1204,8 +1202,7 @@ int Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
         job_api,
-        job_progress_func,
-        job_progress_context,
+        progress_api,
         root_path,
         paths,
         path_hashes,
@@ -2587,8 +2584,7 @@ int Longtail_WriteContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder)
@@ -2681,7 +2677,7 @@ int Longtail_WriteContent(
         block_start_chunk_index += chunk_count;
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_progress_func, job_progress_context);
+    err = job_api->WaitForAllJobs(job_api, progress_api);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     err = 0;
@@ -3440,8 +3436,7 @@ static int WriteAssets(
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_path,
@@ -3636,7 +3631,7 @@ Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Ta
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_progress_func, job_progress_context);
+    err = job_api->WaitForAllJobs(job_api, progress_api);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     err = 0;
@@ -3672,8 +3667,7 @@ int Longtail_WriteVersion(
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_path,
@@ -3734,8 +3728,7 @@ int Longtail_WriteVersion(
         version_storage_api,
         compression_registry_api,
         job_api,
-        job_progress_func,
-        job_progress_context,
+        progress_api,
         content_index,
         version_index,
         version_path,
@@ -4491,8 +4484,7 @@ int Longtail_ChangeVersion(
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CompressionRegistryAPI* compression_registry_api,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,
@@ -4687,8 +4679,7 @@ int Longtail_ChangeVersion(
         version_storage_api,
         compression_registry_api,
         job_api,
-        job_progress_func,
-        job_progress_context,
+        progress_api,
         content_index,
         target_version,
         version_path,

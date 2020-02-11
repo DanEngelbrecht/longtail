@@ -106,9 +106,14 @@ struct Longtail_CompressionRegistryAPI
     int (*GetCompressionType)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings);
 };
 
-typedef void (*Longtail_JobAPI_JobFunc)(void* context);
-typedef void (*Longtail_JobAPI_ProgressFunc)(void* context, uint32_t total_count, uint32_t done_count);
+struct Longtail_ProgressAPI
+{
+    struct Longtail_API m_API;
+    void (*OnProgress)(struct Longtail_ProgressAPI* progressAPI, uint32_t total_count, uint32_t done_count);
+};
+
 typedef void* Longtail_JobAPI_Jobs;
+typedef void (*Longtail_JobAPI_JobFunc)(void* context);
 
 struct Longtail_JobAPI
 {
@@ -118,7 +123,7 @@ struct Longtail_JobAPI
     int (*CreateJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs);
     int (*AddDependecies)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs);
     int (*ReadyJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
-    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context);
+    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI);
 };
 
 struct Longtail_BlockStoreAPI
@@ -126,7 +131,7 @@ struct Longtail_BlockStoreAPI
     struct Longtail_API m_API;
     int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block);
     int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
-    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index);
+    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index);
     int (*GetStoredBlockPath)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
 };
 
@@ -183,8 +188,7 @@ int Longtail_CreateVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
@@ -197,8 +201,7 @@ int Longtail_CreateVersionIndexFromBlocks(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
@@ -289,8 +292,7 @@ int Longtail_WriteContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
@@ -318,8 +320,7 @@ int Longtail_WriteVersion(
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_path,
@@ -335,8 +336,7 @@ int Longtail_ChangeVersion(
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CompressionRegistryAPI* compression_registry,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,

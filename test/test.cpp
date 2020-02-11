@@ -586,7 +586,6 @@ TEST(Longtail, ContentIndexSerialization)
         hash_api,
         job_api,
         0,
-        0,
         "source/version1",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
@@ -797,7 +796,7 @@ TEST(Longtail, Longtail_FSBlockStore)
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks");
 
     struct Longtail_ContentIndex* store_index;
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, 0, &store_index));
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &store_index));
     ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
     ASSERT_EQ(0, *store_index->m_BlockCount);
     ASSERT_EQ(0, *store_index->m_ChunkCount);
@@ -863,7 +862,7 @@ TEST(Longtail, Longtail_CacheBlockStore)
     Longtail_BlockStoreAPI* cache_block_store_api = Longtail_CreateCacheBlockStoreAPI(local_block_store_api, remote_block_store_api);
 
     struct Longtail_ContentIndex* store_index;
-    ASSERT_EQ(0, cache_block_store_api->GetIndex(cache_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, 0, &store_index));
+    ASSERT_EQ(0, cache_block_store_api->GetIndex(cache_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &store_index));
     ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
     ASSERT_EQ(0, *store_index->m_BlockCount);
     ASSERT_EQ(0, *store_index->m_ChunkCount);
@@ -967,7 +966,6 @@ TEST(Longtail, Longtail_WriteContent)
         hash_api,
         job_api,
         0,
-        0,
         "local",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
@@ -1001,13 +999,12 @@ TEST(Longtail, Longtail_WriteContent)
         compression_registry,
         job_api,
         0,
-        0,
         cindex,
         vindex,
         "local"));
 
     Longtail_ContentIndex* cindex2;
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, 0, &cindex2));
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &cindex2));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex2);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
@@ -1059,7 +1056,6 @@ TEST(Longtail, TestVeryLargeFile)
         storage_api,
         hash_api,
         job_api,
-        0,
         0,
         assets_path,
         &paths->m_Paths,
@@ -1218,7 +1214,6 @@ TEST(Longtail, VersionIndexDirectories)
         local_storage,
         hash_api,
         job_api,
-        0,
         0,
         "",
         &local_paths->m_Paths,
@@ -1549,7 +1544,6 @@ TEST(Longtail, Longtail_VersionDiff)
         hash_api,
         job_api,
         0,
-        0,
         "old",
         &old_version_paths->m_Paths,
         old_version_paths->m_FileSizes,
@@ -1573,7 +1567,6 @@ TEST(Longtail, Longtail_VersionDiff)
         storage,
         hash_api,
         job_api,
-        0,
         0,
         "new",
         &new_version_paths->m_Paths,
@@ -1608,7 +1601,6 @@ TEST(Longtail, Longtail_VersionDiff)
         compression_registry,
         job_api,
         0,
-        0,
         content_index,
         new_vindex,
         "new"));
@@ -1627,13 +1619,12 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(6u, *version_diff->m_ModifiedContentCount);
     ASSERT_EQ(1u, *version_diff->m_ModifiedPermissionsCount);
 
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, 0, &content_index));
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &content_index));
     ASSERT_EQ(0, Longtail_ChangeVersion(
         block_store_api,
         storage,
         hash_api,
         job_api,
-        0,
         0,
         compression_registry,
         content_index,
@@ -1713,7 +1704,6 @@ TEST(Longtail, FullScale)
         hash_api,
         job_api,
         0,
-        0,
         "",
         &local_paths->m_Paths,
         local_paths->m_FileSizes,
@@ -1736,7 +1726,6 @@ TEST(Longtail, FullScale)
         remote_storage,
         hash_api,
         job_api,
-        0,
         0,
         "",
         &remote_paths->m_Paths,
@@ -1770,7 +1759,6 @@ TEST(Longtail, FullScale)
         compression_registry,
         job_api,
         0,
-        0,
         local_content_index,
         local_version_index,
         ""));
@@ -1792,7 +1780,6 @@ TEST(Longtail, FullScale)
         compression_registry,
         job_api,
         0,
-        0,
         remote_content_index,
         remote_version_index,
         ""));
@@ -1813,7 +1800,6 @@ TEST(Longtail, FullScale)
         compression_registry,
         job_api,
         0,
-        0,
         missing_content,
         remote_version_index,
         ""));
@@ -1825,7 +1811,6 @@ TEST(Longtail, FullScale)
         local_storage,
         compression_registry,
         job_api,
-        0,
         0,
         merged_content_index,
         remote_version_index,
@@ -1984,7 +1969,6 @@ TEST(Longtail, Longtail_WriteVersion)
         hash_api,
         job_api,
         0,
-        0,
         "local",
         &version1_paths->m_Paths,
         version1_paths->m_FileSizes,
@@ -2018,7 +2002,6 @@ TEST(Longtail, Longtail_WriteVersion)
         compression_registry,
         job_api,
         0,
-        0,
         cindex,
         vindex,
         "local"));
@@ -2028,7 +2011,6 @@ TEST(Longtail, Longtail_WriteVersion)
         storage_api,
         compression_registry,
         job_api,
-        0,
         0,
         cindex,
         vindex,
@@ -2142,7 +2124,6 @@ static void Bench()
             hash_api,
             job_api,
             0,
-            0,
             version_source_folder,
             &version_source_paths->m_Paths,
             version_source_paths->m_FileSizes,
@@ -2182,7 +2163,6 @@ static void Bench()
             delta_block_store_api,
             compression_registry,
             job_api,
-            0,
             0,
             missing_content_index,
             version_index,
@@ -2264,7 +2244,6 @@ static void Bench()
             compression_registry,
             job_api,
             0,
-            0,
             full_content_index,
             version_index,
             version_target_folder,
@@ -2340,7 +2319,6 @@ static void LifelikeTest()
         hash_api,
         job_api,
         0,
-        0,
         local_path_1,
         &local_path_1_paths->m_Paths,
         local_path_1_paths->m_FileSizes,
@@ -2382,7 +2360,6 @@ static void LifelikeTest()
             compression_registry,
             job_api,
             0,
-            0,
             local_content_index,
             version1,
             local_path_1);
@@ -2394,7 +2371,6 @@ static void LifelikeTest()
         storage_api,
         compression_registry,
         job_api,
-        0,
         0,
         local_content_index,
         version1,
@@ -2413,7 +2389,6 @@ static void LifelikeTest()
         storage_api,
         hash_api,
         job_api,
-        0,
         0,
         local_path_2,
         &local_path_2_paths->m_Paths,
@@ -2451,7 +2426,6 @@ static void LifelikeTest()
             compression_registry,
             job_api,
             0,
-            0,
             missing_content,
             version2,
             local_path_2));
@@ -2466,7 +2440,6 @@ static void LifelikeTest()
             remote_block_store_api,
             compression_registry,
             job_api,
-            0,
             0,
             missing_content,
             version2,
@@ -2527,7 +2500,6 @@ static void LifelikeTest()
         storage_api,
         compression_registry,
         job_api,
-        0,
         0,
         merged_local_content,
         version2,
