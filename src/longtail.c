@@ -1650,6 +1650,7 @@ int Longtail_ReadBlockIndexFromBuffer(
         Longtail_Free(block_index);
         return err;
     }
+    *out_block_index = block_index;
     return 0;
 }
 
