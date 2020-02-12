@@ -356,7 +356,7 @@ int Longtail_InitBlockIndexFromData(
 
 int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
-    uint32_t chunk_compression_type,
+    uint32_t data_compression_type,
     uint32_t chunk_count,
     const uint64_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
@@ -383,6 +383,12 @@ int Longtail_ReadBlockIndex(
     const char* path,
     struct Longtail_BlockIndex** out_block_index);
 
+size_t Longtail_GetStoredBlockSize(size_t block_data_size);
+int Longtail_InitStoredBlockFromData(
+    struct Longtail_StoredBlock* stored_block,
+    void* block_data,
+    size_t block_data_size);
+
 int Longtail_CreateStoredBlock(
     TLongtail_Hash block_hash,
     uint32_t chunk_count,
@@ -396,7 +402,7 @@ struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
     uint32_t* m_ChunkCount;
-    uint32_t* m_ChunkCompressionType;
+    uint32_t* m_DataCompressionType;
     TLongtail_Hash* m_ChunkHashes; //[]
     uint32_t* m_ChunkSizes; // []
 };

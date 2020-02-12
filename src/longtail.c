@@ -1491,7 +1491,7 @@ size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count)
     return
         sizeof(TLongtail_Hash) +                    // m_BlockHash
         sizeof(uint32_t) +                          // m_ChunkCount
-        sizeof(uint32_t) +                          // m_ChunkCompressionType
+        sizeof(uint32_t) +                          // m_DataCompressionType
         (sizeof(TLongtail_Hash) * chunk_count) +    // m_ChunkHashes
         (sizeof(uint32_t) * chunk_count);           // m_ChunkSizes
 }
@@ -1509,7 +1509,7 @@ struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_co
     block_index->m_ChunkCount = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    block_index->m_ChunkCompressionType = (uint32_t*)(void*)p;
+    block_index->m_DataCompressionType = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
     block_index->m_ChunkHashes = (TLongtail_Hash*)(void*)p;
@@ -1537,7 +1537,7 @@ int Longtail_InitBlockIndexFromData(
     block_index->m_ChunkCount = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    block_index->m_ChunkCompressionType = (uint32_t*)(void*)p;
+    block_index->m_DataCompressionType = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
     uint32_t chunk_count = *block_index->m_ChunkCount;
@@ -1568,7 +1568,7 @@ size_t Longtail_GetBlockIndexSize(uint32_t chunk_count)
 
 int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
-    uint32_t chunk_compression_type,
+    uint32_t data_compression_type,
     uint32_t chunk_count,
     const uint64_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
@@ -1599,7 +1599,7 @@ int Longtail_CreateBlockIndex(
         Longtail_Free(mem);
         return err;
     }
-    *block_index->m_ChunkCompressionType = chunk_compression_type;
+    *block_index->m_DataCompressionType = data_compression_type;
     *block_index->m_ChunkCount = chunk_count;
 
     *out_block_index = block_index;
@@ -1768,6 +1768,27 @@ static int DisposeStoredBlock(struct Longtail_StoredBlock* stored_block)
     return 0;
 }
 
+size_t Longtail_GetStoredBlockSize(size_t block_data_size)
+{
+    return sizeof(struct Longtail_StoredBlock) + sizeof(struct Longtail_BlockIndex) + block_data_size;
+}
+
+int Longtail_InitStoredBlockFromData(
+    struct Longtail_StoredBlock* stored_block,
+    void* block_data,
+    size_t block_data_size)
+{
+    stored_block->m_BlockIndex = (struct Longtail_BlockIndex*)&stored_block[1];
+    int err = Longtail_InitBlockIndexFromData(
+        stored_block->m_BlockIndex,
+        block_data,
+        block_data_size);
+    stored_block->m_BlockData = &((uint8_t*)stored_block->m_BlockIndex)[Longtail_GetBlockIndexSize(*stored_block->m_BlockIndex->m_ChunkCount)];
+    stored_block->m_BlockDataSize = (uint32_t)(block_data_size - Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount));
+    stored_block->Dispose = 0;
+    return 0;
+}
+
 int Longtail_CreateStoredBlock(
     TLongtail_Hash block_hash,
     uint32_t chunk_count,
@@ -1786,7 +1807,7 @@ int Longtail_CreateStoredBlock(
     stored_block->m_BlockIndex = Longtail_InitBlockIndex(&stored_block[1], chunk_count);
     *stored_block->m_BlockIndex->m_BlockHash = block_hash;
     *stored_block->m_BlockIndex->m_ChunkCount = chunk_count;
-    *stored_block->m_BlockIndex->m_ChunkCompressionType = compression_type;
+    *stored_block->m_BlockIndex->m_DataCompressionType = compression_type;
     memmove(stored_block->m_BlockIndex->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
     memmove(stored_block->m_BlockIndex->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
 
@@ -2364,7 +2385,7 @@ static int ReadBlockData(
     }
 
     void* block_data = 0;
-    uint32_t compression_type = *stored_block->m_BlockIndex->m_ChunkCompressionType;
+    uint32_t compression_type = *stored_block->m_BlockIndex->m_DataCompressionType;
     if (0 != compression_type)
     {
         uint32_t uncompressed_size = ((uint32_t*)(void*)stored_block->m_BlockData)[0];
@@ -2589,7 +2610,7 @@ static void Longtail_WriteContentBlockJob(void* context)
     memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
     memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
     *block_index_ptr->m_BlockHash = block_hash;
-    *block_index_ptr->m_ChunkCompressionType = compression_type;
+    *block_index_ptr->m_DataCompressionType = compression_type;
     *block_index_ptr->m_ChunkCount = chunk_count;
 
     struct Longtail_StoredBlock stored_block;

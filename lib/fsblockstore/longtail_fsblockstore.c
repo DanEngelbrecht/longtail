@@ -334,8 +334,8 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_path = 0;
         return err;
     }
-    uint64_t block_size;
-    err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, f, &block_size);
+    uint64_t stored_block_data_size;
+    err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, f, &stored_block_data_size);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to get size of block `%s`, %d", block_path, err)
@@ -345,11 +345,11 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         return err;
     }
 
-    size_t block_mem_size = sizeof(struct Longtail_StoredBlock) + sizeof(struct Longtail_BlockIndex) + block_size;
+    size_t block_mem_size = Longtail_GetStoredBlockSize(stored_block_data_size);
     struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
     LONGTAIL_FATAL_ASSERT(stored_block, return ENOMEM)
-    stored_block->m_BlockIndex = (struct Longtail_BlockIndex*)&stored_block[1];
-    err = fsblockstore_api->m_StorageAPI->Read(fsblockstore_api->m_StorageAPI, f, 0, block_size, &stored_block->m_BlockIndex[1]);
+    void* block_data = &((uint8_t*)stored_block)[block_mem_size - stored_block_data_size];
+    err = fsblockstore_api->m_StorageAPI->Read(fsblockstore_api->m_StorageAPI, f, 0, stored_block_data_size, block_data);
     fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
     f = 0;
     if (err)
@@ -361,10 +361,10 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_path = 0;
         return err;
     }
-    err = Longtail_InitBlockIndexFromData(
-        stored_block->m_BlockIndex,
-        &stored_block->m_BlockIndex[1],
-        block_size);
+    err = Longtail_InitStoredBlockFromData(
+        stored_block,
+        block_data,
+        stored_block_data_size);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format from block `%s`, %d", block_path, err)
@@ -374,8 +374,6 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_path = 0;
         return err;
     }
-    stored_block->m_BlockData = &((uint8_t*)stored_block->m_BlockIndex)[Longtail_GetBlockIndexSize(*stored_block->m_BlockIndex->m_ChunkCount)];
-    stored_block->m_BlockDataSize = (uint32_t)(block_size - Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount));
     stored_block->Dispose = FSStoredBlock_Dispose;
     Longtail_Free(block_path);
     block_path = 0;
