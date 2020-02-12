@@ -345,6 +345,9 @@ TEST(Longtail, Longtail_MeowHash)
     Longtail_DisposeAPI(&hash_api->m_API);
 }
 
+// TODO: Need tests for Longtail_WriteBlockIndexToBuffer, Longtail_WriteReadIndexFromBuffer
+// TODO: Add test for reading/writing stored blocks by doing separate write/read of index and data of a block
+
 TEST(Longtail, Longtail_VersionIndex)
 {
     const char* asset_paths[5] = {
