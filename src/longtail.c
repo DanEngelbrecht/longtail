@@ -2385,7 +2385,7 @@ static int ReadBlockData(
     }
 
     void* block_data = 0;
-    uint32_t compression_type = *stored_block->m_BlockIndex->m_DataCompressionType;
+    uint32_t compression_type = 0;//*stored_block->m_BlockIndex->m_DataCompressionType;
     if (0 != compression_type)
     {
         uint32_t uncompressed_size = ((uint32_t*)(void*)stored_block->m_BlockData)[0];
@@ -2577,7 +2577,7 @@ static void Longtail_WriteContentBlockJob(void* context)
         full_path = 0;
     }
 
-    if (compression_type != 0)
+    if (compression_type != 0 && 0)
     {
         size_t compressed_size;
         char* compressed_buffer;
@@ -2621,7 +2621,7 @@ static void Longtail_WriteContentBlockJob(void* context)
     int err = block_store_api->PutStoredBlock(block_store_api, &stored_block);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to store block 0x%" PRIx64 ", %d", err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to store block 0x%" PRIx64 ", %d", block_hash, err)
     }
 
     Longtail_Free(block_index_ptr);

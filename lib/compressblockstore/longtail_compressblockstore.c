@@ -68,9 +68,9 @@ static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* bloc
     header_ptr[1] = (uint32_t)compressed_chunk_data_size;
     compressed_stored_block->m_BlockChunksDataSize = (uint32_t)(sizeof(uint32_t) + sizeof(uint32_t) + compressed_chunk_data_size);
     err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, compressed_stored_block);
+    Longtail_Free(compressed_stored_block);
     if (err)
     {
-        Longtail_Free(compressed_stored_block);
         return err;
     }
     return 0;

@@ -2128,7 +2128,8 @@ TEST(Longtail, Longtail_WriteVersion)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks");
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
 
     const uint32_t asset_count = 8u;
 
@@ -2310,6 +2311,7 @@ TEST(Longtail, Longtail_WriteVersion)
     vindex = 0;
     Longtail_Free(cindex);
     cindex = 0;
+    SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
