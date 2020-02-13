@@ -255,7 +255,7 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     }
     write_offset += block_index_data_size;
 
-    err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, stored_block->m_BlockDataSize, stored_block->m_BlockData);
+    err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, stored_block->m_BlockChunksDataSize, stored_block->m_BlockData);
     if (err)
     {
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
@@ -266,7 +266,7 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         block_path = 0;
         return err;
     }
-    write_offset = stored_block->m_BlockDataSize;
+    write_offset = stored_block->m_BlockChunksDataSize;
 
     fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
     err = fsblockstore_api->m_StorageAPI->RenameFile(fsblockstore_api->m_StorageAPI, tmp_block_path, block_path);

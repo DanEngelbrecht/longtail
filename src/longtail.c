@@ -1784,7 +1784,7 @@ int Longtail_InitStoredBlockFromData(
         block_data,
         block_data_size);
     stored_block->m_BlockData = &((uint8_t*)stored_block->m_BlockIndex)[Longtail_GetBlockIndexSize(*stored_block->m_BlockIndex->m_ChunkCount)];
-    stored_block->m_BlockDataSize = (uint32_t)(block_data_size - Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount));
+    stored_block->m_BlockChunksDataSize = (uint32_t)(block_data_size - Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount));
     stored_block->Dispose = 0;
     return 0;
 }
@@ -1813,7 +1813,7 @@ int Longtail_CreateStoredBlock(
 
     stored_block->Dispose = DisposeStoredBlock;
     stored_block->m_BlockData = ((uint8_t*)stored_block->m_BlockIndex) + block_index_size;
-    stored_block->m_BlockDataSize = block_data_size;
+    stored_block->m_BlockChunksDataSize = block_data_size;
     *out_stored_block = stored_block;
     return 0;
 }
@@ -2390,7 +2390,7 @@ static int ReadBlockData(
     {
         uint32_t uncompressed_size = ((uint32_t*)(void*)stored_block->m_BlockData)[0];
         uint32_t compressed_size = ((uint32_t*)(void*)stored_block->m_BlockData)[1];
-        if (compressed_size > stored_block->m_BlockDataSize)
+        if (compressed_size > stored_block->m_BlockChunksDataSize)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Malformed compressed block 0x%" PRIx64 ", %d", block_hash, err)
             stored_block->Dispose(stored_block);
@@ -2417,9 +2417,9 @@ static int ReadBlockData(
     }
     else
     {
-        block_data = Longtail_Alloc(stored_block->m_BlockDataSize);
+        block_data = Longtail_Alloc(stored_block->m_BlockChunksDataSize);
         LONGTAIL_FATAL_ASSERT(block_data, return ENOMEM)
-        memmove(block_data, stored_block->m_BlockData, stored_block->m_BlockDataSize);
+        memmove(block_data, stored_block->m_BlockData, stored_block->m_BlockChunksDataSize);
     }
 
     stored_block->Dispose(stored_block);
@@ -2617,7 +2617,7 @@ static void Longtail_WriteContentBlockJob(void* context)
     stored_block.Dispose = 0;
     stored_block.m_BlockIndex = block_index_ptr;
     stored_block.m_BlockData = block_data_buffer;
-    stored_block.m_BlockDataSize = block_data_size;
+    stored_block.m_BlockChunksDataSize = block_data_size;
     int err = block_store_api->PutStoredBlock(block_store_api, &stored_block);
     if (err)
     {

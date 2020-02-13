@@ -412,7 +412,7 @@ struct Longtail_StoredBlock
     int (*Dispose)(struct Longtail_StoredBlock* stored_block);
     struct Longtail_BlockIndex* m_BlockIndex;
     void* m_BlockData;
-    uint32_t m_BlockDataSize;
+    uint32_t m_BlockChunksDataSize;
 };
 
 struct Longtail_Paths
