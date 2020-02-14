@@ -402,6 +402,8 @@ TEST(Longtail, Longtail_ReadWriteBlockIndexInBuffer)
         buffer,
         size,
         &block_index_copy));
+    
+    Longtail_Free(buffer);
 
     ASSERT_NE(0u, *block_index_copy->m_BlockHash);
     ASSERT_EQ(2u, *block_index_copy->m_ChunkCount);
@@ -741,6 +743,9 @@ TEST(Longtail, CreateEmptyVersionIndex)
     Longtail_Free(vindex);
     Longtail_Free(compression_types);
     Longtail_Free(version1_paths);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(local_storage);
 }
 
 TEST(Longtail, ContentIndexSerialization)

@@ -44,8 +44,7 @@ static int CacheBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_s
         return err;
     }
 
-    struct Longtail_StoredBlock* remote_stored_block;
-    err = cacheblockstore_api->m_RemoteBlockStoreAPI->GetStoredBlock(cacheblockstore_api->m_RemoteBlockStoreAPI, block_hash, &remote_stored_block);
+    err = cacheblockstore_api->m_RemoteBlockStoreAPI->GetStoredBlock(cacheblockstore_api->m_RemoteBlockStoreAPI, block_hash, out_stored_block);
     if (err == ENOENT)
     {
         return err;
@@ -57,12 +56,11 @@ static int CacheBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_s
     }
     if (out_stored_block)
     {
-        err = cacheblockstore_api->m_LocalBlockStoreAPI->PutStoredBlock(cacheblockstore_api->m_LocalBlockStoreAPI, remote_stored_block);
+        err = cacheblockstore_api->m_LocalBlockStoreAPI->PutStoredBlock(cacheblockstore_api->m_LocalBlockStoreAPI, *out_stored_block);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "CacheBlockStore_PutStoredBlock: Failed store block in local block store, %d", err)
         }
-        *out_stored_block = remote_stored_block;
     }
     return 0;
 }
