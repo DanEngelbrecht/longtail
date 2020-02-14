@@ -53,7 +53,7 @@ static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* bloc
     err = compression_api->Compress(
         compression_api,
         compression_settings,
-        stored_block->m_BlockData,
+        (const char*)stored_block->m_BlockData,
         (char*)&header_ptr[2],
         block_chunk_data_size,
         max_compressed_chunk_data_size,
