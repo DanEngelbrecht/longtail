@@ -87,25 +87,6 @@ struct Longtail_StorageAPI
     int (*GetEntryProperties)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions);
 };
 
-typedef struct Longtail_CompressionAPI_CompressionContext* Longtail_CompressionAPI_HCompressionContext;
-typedef struct Longtail_CompressionAPI_DecompressionContext* Longtail_CompressionAPI_HDecompressionContext;
-typedef struct Longtail_CompressionAPI_Settings* Longtail_CompressionAPI_HSettings;
-
-struct Longtail_CompressionAPI
-{
-    struct Longtail_API m_API;
-
-    size_t (*GetMaxCompressedSize)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, size_t size);
-    int (*Compress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size);
-    int (*Decompress)(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size);
-};
-
-struct Longtail_CompressionRegistryAPI
-{
-    struct Longtail_API m_API;
-    int (*GetCompressionType)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings);
-};
-
 struct Longtail_ProgressAPI
 {
     struct Longtail_API m_API;
@@ -490,12 +471,6 @@ int Longtail_ValidateContent(
 int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
-
-extern struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
-        uint32_t compression_type_count,
-        const uint32_t* compression_types,
-        const struct Longtail_CompressionAPI** compression_apis,
-        const Longtail_CompressionAPI_HSettings* compression_settings);
 
 extern const uint32_t LONGTAIL_NO_COMPRESSION_TYPE;
 

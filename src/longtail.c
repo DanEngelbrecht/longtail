@@ -2732,7 +2732,7 @@ struct WritePartialAssetFromBlocksJob
 
 void WritePartialAssetFromBlocks(void* context);
 
-// Returns the write sync task, or the write task if there is no need for decompression of block
+// Returns the write sync task, or the write task if there is no need for block_readion of block
 static int CreatePartialAssetWriteJob(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
@@ -2768,13 +2768,13 @@ static int CreatePartialAssetWriteJob(
     uint32_t chunk_index_end = chunk_index_start + version_index->m_AssetChunkCounts[asset_index];
     uint32_t chunk_index_offset = chunk_start_index_offset;
 
-    Longtail_JobAPI_JobFunc decompress_funcs[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
-    void* decompress_ctx[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
+    Longtail_JobAPI_JobFunc block_read_funcs[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
+    void* block_read_ctx[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
 
     const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
-    const uint32_t max_parallell_decompress_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
+    const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
-    while (chunk_index_offset != chunk_index_end && job->m_BlockReaderJobCount < max_parallell_decompress_jobs)
+    while (chunk_index_offset != chunk_index_end && job->m_BlockReaderJobCount < max_parallell_block_read_jobs)
     {
         uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
         TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
@@ -2797,8 +2797,8 @@ static int CreatePartialAssetWriteJob(
             block_job->m_BlockHash = block_hash;
             block_job->m_Err = EINVAL;
             block_job->m_BlockData = 0;
-            decompress_funcs[job->m_BlockReaderJobCount] = BlockReader;
-            decompress_ctx[job->m_BlockReaderJobCount] = block_job;
+            block_read_funcs[job->m_BlockReaderJobCount] = BlockReader;
+            block_read_ctx[job->m_BlockReaderJobCount] = block_job;
             ++job->m_BlockReaderJobCount;
         }
         ++job->m_AssetChunkCount;
@@ -2813,8 +2813,8 @@ static int CreatePartialAssetWriteJob(
 
     if (job->m_BlockReaderJobCount > 0)
     {
-        Longtail_JobAPI_Jobs decompression_jobs;
-        err = job_api->CreateJobs(job_api, job->m_BlockReaderJobCount, decompress_funcs, decompress_ctx, &decompression_jobs);
+        Longtail_JobAPI_Jobs block_readion_jobs;
+        err = job_api->CreateJobs(job_api, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_readion_jobs);
         LONGTAIL_FATAL_ASSERT(!err, return err)
         Longtail_JobAPI_JobFunc sync_write_funcs[1] = { WriteReady };
         void* sync_write_ctx[1] = { 0 };
@@ -2824,9 +2824,9 @@ static int CreatePartialAssetWriteJob(
 
         err = job_api->AddDependecies(job_api, 1, write_job, 1, write_sync_job);
         LONGTAIL_FATAL_ASSERT(!err, return err)
-        err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockReaderJobCount, decompression_jobs);
+        err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockReaderJobCount, block_readion_jobs);
         LONGTAIL_FATAL_ASSERT(!err, return err)
-        err = job_api->ReadyJobs(job_api, job->m_BlockReaderJobCount, decompression_jobs);
+        err = job_api->ReadyJobs(job_api, job->m_BlockReaderJobCount, block_readion_jobs);
         LONGTAIL_FATAL_ASSERT(!err, return err)
 
         *out_jobs = write_sync_job;
@@ -2842,10 +2842,10 @@ void WritePartialAssetFromBlocks(void* context)
 
     // Need to fetch all the data we need from the context since we will reuse it
     job->m_Err = 0;
-    uint32_t block_decompressor_job_count = job->m_BlockReaderJobCount;
+    uint32_t block_block_reador_job_count = job->m_BlockReaderJobCount;
     TLongtail_Hash block_hashes[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     char* block_datas[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
-    for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+    for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
     {
         if (job->m_BlockReaderJobs[d].m_Err)
         {
@@ -2858,8 +2858,8 @@ void WritePartialAssetFromBlocks(void* context)
 
     if (job->m_Err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to decompress blocks, %d", job->m_Err)
-        for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to block_read blocks, %d", job->m_Err)
+        for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
             Longtail_Free(block_datas[d]);
         }
@@ -2874,7 +2874,7 @@ void WritePartialAssetFromBlocks(void* context)
     if (!job->m_AssetOutputFile && job->m_AssetChunkIndexOffset)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Skipping write to asset `%s` due to previous write failure", asset_path)
-        for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+        for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
             Longtail_Free(block_datas[d]);
         }
@@ -2890,7 +2890,7 @@ void WritePartialAssetFromBlocks(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create parent folder for `%s` in `%s`, %d", asset_path, job->m_VersionFolder, err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
-            for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 Longtail_Free(block_datas[d]);
             }
@@ -2899,7 +2899,7 @@ void WritePartialAssetFromBlocks(void* context)
         }
         if (IsDirPath(full_asset_path))
         {
-            LONGTAIL_FATAL_ASSERT(block_decompressor_job_count == 0, job->m_Err = EINVAL; return)
+            LONGTAIL_FATAL_ASSERT(block_block_reador_job_count == 0, job->m_Err = EINVAL; return)
             err = SafeCreateDir(job->m_VersionStorageAPI, full_asset_path);
             if (err)
             {
@@ -2922,7 +2922,7 @@ void WritePartialAssetFromBlocks(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Unable to create asset `%s` in `%s`, %d", asset_path, job->m_VersionFolder, err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
-            for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 Longtail_Free(block_datas[d]);
             }
@@ -2953,15 +2953,15 @@ void WritePartialAssetFromBlocks(void* context)
 
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create next write/decompress job for asset `%s`, %d", asset_path, err)
-            for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create next write/block_read job for asset `%s`, %d", asset_path, err)
+            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 Longtail_Free(block_datas[d]);
             }
             job->m_Err = err;
             return;
         }
-        // Decompression of blocks will start immediately
+        // block_readion of blocks will start immediately
     }
 
     uint32_t chunk_index_offset = write_chunk_index_offset;
@@ -2983,18 +2983,18 @@ void WritePartialAssetFromBlocks(void* context)
         uint64_t content_chunk_index = hmget_ts(job->m_ContentLookup->m_ChunkHashToChunkIndex, chunk_hash, tmp);
         uint64_t block_index = job->m_ContentIndex->m_ChunkBlockIndexes[content_chunk_index];
         TLongtail_Hash block_hash = job->m_ContentIndex->m_BlockHashes[block_index];
-        uint32_t decompressed_block_index = 0;
-        while (block_hashes[decompressed_block_index] != block_hash)
+        uint32_t block_readed_block_index = 0;
+        while (block_hashes[block_readed_block_index] != block_hash)
         {
-            if (decompressed_block_index == block_decompressor_job_count)
+            if (block_readed_block_index == block_block_reador_job_count)
             {
                 break;
             }
-            ++decompressed_block_index;
+            ++block_readed_block_index;
         }
-        if(decompressed_block_index == block_decompressor_job_count)
+        if(block_readed_block_index == block_block_reador_job_count)
         {
-            for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 Longtail_Free(block_datas[d]);
             }
@@ -3008,7 +3008,7 @@ void WritePartialAssetFromBlocks(void* context)
             job->m_Err = EINVAL;
             return;
         }
-        char* block_data = block_datas[decompressed_block_index];
+        char* block_data = block_datas[block_readed_block_index];
 
         uint32_t chunk_offset = job->m_ContentIndex->m_ChunkBlockOffsets[content_chunk_index];
         uint32_t chunk_size = job->m_ContentIndex->m_ChunkLengths[content_chunk_index];
@@ -3020,7 +3020,7 @@ void WritePartialAssetFromBlocks(void* context)
             job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
 
-            for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 Longtail_Free(block_datas[d]);
             }
@@ -3037,7 +3037,7 @@ void WritePartialAssetFromBlocks(void* context)
         ++chunk_index_offset;
     }
 
-    for (uint32_t d = 0; d < block_decompressor_job_count; ++d)
+    for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
     {
         Longtail_Free(block_datas[d]);
     }
@@ -3081,7 +3081,7 @@ struct WriteAssetsFromBlockJob
     const struct Longtail_ContentIndex* m_ContentIndex;
     const struct Longtail_VersionIndex* m_VersionIndex;
     const char* m_VersionFolder;
-    struct BlockReaderJob m_DecompressBlockJob;
+    struct BlockReaderJob m_block_readBlockJob;
     uint64_t m_BlockIndex;
     uint32_t* m_AssetIndexes;
     uint32_t m_AssetCount;
@@ -3104,15 +3104,15 @@ static void WriteAssetsFromBlock(void* context)
     uint32_t asset_count = job->m_AssetCount;
     struct HashToIndexItem* content_chunk_lookup = job->m_ContentChunkLookup;
 
-    if (job->m_DecompressBlockJob.m_Err)
+    if (job->m_block_readBlockJob.m_Err)
     {
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 ", %d", block_hash, job->m_DecompressBlockJob.m_Err)
-        job->m_Err = job->m_DecompressBlockJob.m_Err;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 ", %d", block_hash, job->m_block_readBlockJob.m_Err)
+        job->m_Err = job->m_block_readBlockJob.m_Err;
         return;
     }
 
-    char* block_data = (char*)job->m_DecompressBlockJob.m_BlockData;
+    char* block_data = (char*)job->m_block_readBlockJob.m_BlockData;
 
     for (uint32_t i = 0; i < asset_count; ++i)
     {
@@ -3368,7 +3368,7 @@ static int WriteAssets(
     LONGTAIL_FATAL_ASSERT(awl != 0, return EINVAL)
 
     const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
-    const uint32_t max_parallell_decompress_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
+    const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
     uint32_t asset_job_count = 0;
     for (uint32_t a = 0; a < awl->m_AssetJobCount; ++a)
@@ -3388,9 +3388,9 @@ static int WriteAssets(
 
         while(chunk_index_offset != chunk_index_end)
         {
-            uint32_t decompress_job_count = 0;
+            uint32_t block_read_job_count = 0;
             TLongtail_Hash block_hashes[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
-            while (chunk_index_offset != chunk_index_end && decompress_job_count < max_parallell_decompress_jobs)
+            while (chunk_index_offset != chunk_index_end && block_read_job_count < max_parallell_block_read_jobs)
             {
                 uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
                 TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
@@ -3398,7 +3398,7 @@ static int WriteAssets(
                 uint64_t block_index = hmget_ts(content_lookup->m_ChunkHashToBlockIndex, chunk_hash, tmp);
                 TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
                 int has_block = 0;
-                for (uint32_t d = 0; d < decompress_job_count; ++d)
+                for (uint32_t d = 0; d < block_read_job_count; ++d)
                 {
                     if (block_hashes[d] == block_hash)
                     {
@@ -3408,13 +3408,13 @@ static int WriteAssets(
                 }
                 if (!has_block)
                 {
-                    block_hashes[decompress_job_count++] = block_hash;
+                    block_hashes[block_read_job_count++] = block_hash;
                 }
                 ++chunk_index_offset;
             }
             asset_job_count += 1;   // Write job
             asset_job_count += 1;   // Sync job
-            asset_job_count += decompress_job_count;
+            asset_job_count += block_read_job_count;
         }
     }
 
@@ -3440,13 +3440,13 @@ static int WriteAssets(
         uint64_t block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, first_chunk_hash);
 
         struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
-        struct BlockReaderJob* block_job = &job->m_DecompressBlockJob;
+        struct BlockReaderJob* block_job = &job->m_block_readBlockJob;
         block_job->m_BlockStoreAPI = block_store_api;
         block_job->m_BlockHash = content_index->m_BlockHashes[block_index];
-        Longtail_JobAPI_JobFunc decompress_funcs[1] = { BlockReader };
-        void* decompress_ctxs[1] = {block_job};
-        Longtail_JobAPI_Jobs decompression_job;
-        err = job_api->CreateJobs(job_api, 1, decompress_funcs, decompress_ctxs, &decompression_job);
+        Longtail_JobAPI_JobFunc block_read_funcs[1] = { BlockReader };
+        void* block_read_ctxs[1] = {block_job};
+        Longtail_JobAPI_Jobs block_readion_job;
+        err = job_api->CreateJobs(job_api, 1, block_read_funcs, block_read_ctxs, &block_readion_job);
         LONGTAIL_FATAL_ASSERT(!err, return err)
 
         job->m_VersionStorageAPI = version_storage_api;
@@ -3483,38 +3483,38 @@ static int WriteAssets(
         Longtail_JobAPI_Jobs block_write_job;
         err = job_api->CreateJobs(job_api, 1, func, ctx, &block_write_job);
         LONGTAIL_FATAL_ASSERT(!err, return err)
-        err = job_api->AddDependecies(job_api, 1, block_write_job, 1, decompression_job);
+        err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_readion_job);
         LONGTAIL_FATAL_ASSERT(!err, return err)
-        err = job_api->ReadyJobs(job_api, 1, decompression_job);
+        err = job_api->ReadyJobs(job_api, 1, block_readion_job);
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 /*
-DecompressorCount = blocks_remaning > 8 ? 8 : blocks_remaning
+block_readorCount = blocks_remaning > 8 ? 8 : blocks_remaning
 
-Create Decompressor Tasks [DecompressorCount]
+Create block_reador Tasks [block_readorCount]
 Create WriteSync Task
 Create Write Task
-    Depends on Decompressor Tasks [DecompressorCount]
+    Depends on block_reador Tasks [block_readorCount]
     Depends on WriteSync Task
 
-Ready Decompressor Tasks [DecompressorCount]
+Ready block_reador Tasks [block_readorCount]
 Ready WriteSync Task
 
 WaitForAllTasks()
 
 JOBS:
 
-Write Task Execute (When Decompressor Tasks [DecompressorCount] and WriteSync Task is complete)
-    NewDecompressorCount = blocks_remaning > 8 ? 8 : blocks_remaning
-    if ([DecompressorCount] > 0)
-        Create Decompressor Tasks for up to remaining blocks [NewDecompressorCount]
+Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Task is complete)
+    Newblock_readorCount = blocks_remaning > 8 ? 8 : blocks_remaning
+    if ([block_readorCount] > 0)
+        Create block_reador Tasks for up to remaining blocks [Newblock_readorCount]
         Create WriteSync Task
         Create Write Task
-            Depends on Decompressor Tasks [NewDecompressorCount]
+            Depends on block_reador Tasks [Newblock_readorCount]
             Depends on WriteSync Task
-        Ready Decompressor Tasks [NewDecompressorCount]
-    Write and Longtail_Free Decompressed Tasks Data [DecompressorCount] To Disk
-    if ([DecompressorCount] > 0)
+        Ready block_reador Tasks [Newblock_readorCount]
+    Write and Longtail_Free block_readed Tasks Data [block_readorCount] To Disk
+    if ([block_readorCount] > 0)
         Ready WriteSync Task
 */
 
@@ -4771,82 +4771,6 @@ int Longtail_ValidateVersion(
 }
 
 const uint32_t LONGTAIL_NO_COMPRESSION_TYPE = 0u;
-
-struct Default_CompressionRegistry
-{
-    struct Longtail_CompressionRegistryAPI m_CompressionRegistryAPI;
-    uint32_t m_Count;
-    uint32_t* m_Types;
-    struct Longtail_CompressionAPI** m_APIs;
-    Longtail_CompressionAPI_HSettings* m_Settings;
-};
-
-static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
-{
-    struct Longtail_CompressionAPI* last_api = 0;
-    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
-    for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
-    {
-        struct Longtail_CompressionAPI* api = default_compression_registry->m_APIs[c];
-        if (api != last_api)
-        {
-            api->m_API.Dispose(&api->m_API);
-            last_api = api;
-        }
-    }
-    Longtail_Free(default_compression_registry);
-}
-
-static int Default_GetCompressionType(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings)
-{
-    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
-    for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
-    {
-        if (default_compression_registry->m_Types[i] == compression_type)
-        {
-            *out_compression_api = default_compression_registry->m_APIs[i];
-            *out_settings = default_compression_registry->m_Settings[i];
-            return 0;
-        }
-    }
-    return ENOENT;
-}
-
-struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
-    uint32_t compression_type_count,
-    const uint32_t* compression_types,
-    const struct Longtail_CompressionAPI** compression_apis,
-    const Longtail_CompressionAPI_HSettings* compression_settings)
-{
-    size_t size = sizeof(struct Default_CompressionRegistry) +
-        sizeof(uint32_t) * compression_type_count +
-        sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
-        sizeof(Longtail_CompressionAPI_HSettings) * compression_type_count;
-    struct Default_CompressionRegistry* registry = (struct Default_CompressionRegistry*)Longtail_Alloc(size);
-    if (!registry)
-    {
-        return 0;
-    }
-
-    registry->m_CompressionRegistryAPI.m_API.Dispose = DefaultCompressionRegistry_Dispose;
-    registry->m_CompressionRegistryAPI.GetCompressionType = Default_GetCompressionType;
-
-    registry->m_Count = compression_type_count;
-    char* p = (char*)&registry[1];
-    registry->m_Types = (uint32_t*)(void*)p;
-    p += sizeof(uint32_t) * compression_type_count;
-
-    registry->m_APIs = (struct Longtail_CompressionAPI**)(void*)p;
-    p += sizeof(struct Longtail_CompressionAPI*) * compression_type_count;
-
-    registry->m_Settings = (Longtail_CompressionAPI_HSettings*)(void*)p;
-
-    memmove(registry->m_Types, compression_types, sizeof(uint32_t) * compression_type_count);
-    memmove(registry->m_APIs, compression_apis, sizeof(struct Longtail_CompressionAPI*) * compression_type_count);
-    memmove(registry->m_Settings, compression_settings, sizeof(const Longtail_CompressionAPI_HSettings) * compression_type_count);
-
-    return &registry->m_CompressionRegistryAPI;
-}
 
 static uint32_t hashTable[] = {
     0x458be752, 0xc10748cc, 0xfbbcdbb8, 0x6ded5b68,

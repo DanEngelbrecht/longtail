@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../src/longtail.h"
+#include "../compressblockstore/longtail_compressblockstore.h"
 
 #ifdef __cplusplus
 extern "C" {

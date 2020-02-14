@@ -202,3 +202,84 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
         compression_registry);
     return &api->m_BlockStoreAPI;
 }
+
+
+
+
+
+struct Default_CompressionRegistry
+{
+    struct Longtail_CompressionRegistryAPI m_CompressionRegistryAPI;
+    uint32_t m_Count;
+    uint32_t* m_Types;
+    struct Longtail_CompressionAPI** m_APIs;
+    Longtail_CompressionAPI_HSettings* m_Settings;
+};
+
+static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
+{
+    struct Longtail_CompressionAPI* last_api = 0;
+    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
+    for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
+    {
+        struct Longtail_CompressionAPI* api = default_compression_registry->m_APIs[c];
+        if (api != last_api)
+        {
+            api->m_API.Dispose(&api->m_API);
+            last_api = api;
+        }
+    }
+    Longtail_Free(default_compression_registry);
+}
+
+static int Default_GetCompressionType(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings)
+{
+    struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
+    for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
+    {
+        if (default_compression_registry->m_Types[i] == compression_type)
+        {
+            *out_compression_api = default_compression_registry->m_APIs[i];
+            *out_settings = default_compression_registry->m_Settings[i];
+            return 0;
+        }
+    }
+    return ENOENT;
+}
+
+struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
+    uint32_t compression_type_count,
+    const uint32_t* compression_types,
+    const struct Longtail_CompressionAPI** compression_apis,
+    const Longtail_CompressionAPI_HSettings* compression_settings)
+{
+    size_t size = sizeof(struct Default_CompressionRegistry) +
+        sizeof(uint32_t) * compression_type_count +
+        sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
+        sizeof(Longtail_CompressionAPI_HSettings) * compression_type_count;
+    struct Default_CompressionRegistry* registry = (struct Default_CompressionRegistry*)Longtail_Alloc(size);
+    if (!registry)
+    {
+        return 0;
+    }
+
+    registry->m_CompressionRegistryAPI.m_API.Dispose = DefaultCompressionRegistry_Dispose;
+    registry->m_CompressionRegistryAPI.GetCompressionType = Default_GetCompressionType;
+
+    registry->m_Count = compression_type_count;
+    char* p = (char*)&registry[1];
+    registry->m_Types = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t) * compression_type_count;
+
+    registry->m_APIs = (struct Longtail_CompressionAPI**)(void*)p;
+    p += sizeof(struct Longtail_CompressionAPI*) * compression_type_count;
+
+    registry->m_Settings = (Longtail_CompressionAPI_HSettings*)(void*)p;
+
+    memmove(registry->m_Types, compression_types, sizeof(uint32_t) * compression_type_count);
+    memmove(registry->m_APIs, compression_apis, sizeof(struct Longtail_CompressionAPI*) * compression_type_count);
+    memmove(registry->m_Settings, compression_settings, sizeof(const Longtail_CompressionAPI_HSettings) * compression_type_count);
+
+    return &registry->m_CompressionRegistryAPI;
+}
+
