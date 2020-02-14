@@ -39,26 +39,23 @@ static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* bloc
     {
         return err;
     }
-    uint32_t block_data_size = stored_block->m_BlockChunksDataSize;
+    uint32_t block_chunk_data_size = stored_block->m_BlockChunksDataSize;
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
-    size_t block_index_data_size = Longtail_GetBlockIndexDataSize(chunk_count);
-    size_t max_compressed_chunk_data_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, block_data_size);
-    size_t stored_block_size = Longtail_GetStoredBlockSize(block_index_data_size + sizeof(uint32_t) + sizeof(uint32_t) + max_compressed_chunk_data_size);
-    struct Longtail_StoredBlock* compressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(stored_block_size);
-
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    size_t max_compressed_chunk_data_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, block_chunk_data_size);
+    struct Longtail_StoredBlock* compressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock) + block_index_size + sizeof(uint32_t) + sizeof(uint32_t) + max_compressed_chunk_data_size);
     compressed_stored_block->m_BlockIndex = Longtail_InitBlockIndex(&compressed_stored_block[1], chunk_count);
-    uint8_t* block_index_data_ptr = (uint8_t*)&compressed_stored_block->m_BlockIndex[1];
-    memmove(block_index_data_ptr, &stored_block->m_BlockIndex[1], block_index_data_size);
 
-    uint32_t* header_ptr = (uint32_t*)(&block_index_data_ptr[block_index_data_size]);
+    uint32_t* header_ptr = (uint32_t*)(&((uint8_t*)compressed_stored_block->m_BlockIndex)[block_index_size]);
     compressed_stored_block->m_BlockData = header_ptr;
+    memmove(compressed_stored_block->m_BlockIndex, stored_block->m_BlockIndex, block_index_size);
     size_t compressed_chunk_data_size;
     err = compression_api->Compress(
         compression_api,
         compression_settings,
-        (const char*)stored_block->m_BlockData,
+        stored_block->m_BlockData,
         (char*)&header_ptr[2],
-        stored_block->m_BlockChunksDataSize,
+        block_chunk_data_size,
         max_compressed_chunk_data_size,
         &compressed_chunk_data_size);
     if (err)
@@ -66,7 +63,7 @@ static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* bloc
         Longtail_Free(compressed_stored_block);
         return err;
     }
-    header_ptr[0] = stored_block->m_BlockChunksDataSize;
+    header_ptr[0] = block_chunk_data_size;
     header_ptr[1] = (uint32_t)compressed_chunk_data_size;
     compressed_stored_block->m_BlockChunksDataSize = (uint32_t)(sizeof(uint32_t) + sizeof(uint32_t) + compressed_chunk_data_size);
     err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, compressed_stored_block);
