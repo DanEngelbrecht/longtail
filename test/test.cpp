@@ -3015,7 +3015,6 @@ TEST(Longtail, FileSystemStorage)
     {
         char* full_path = storage_api->ConcatPath(storage_api, root_path, TEST_FILENAMES[a]);
         ASSERT_NE((char*)0, full_path);
-        printf("full path `%s`\n", full_path);
         Longtail_StorageAPI_HOpenFile f;
         ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, full_path, &f));
         uint64_t expected_size = (uint64_t)strlen(TEST_STRINGS[a]);
