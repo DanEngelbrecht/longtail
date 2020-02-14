@@ -222,7 +222,7 @@ static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileI
 //            (0 == strcmp(extension_start, ".pak")) ||
             (0 == strcmp(extension_start, ".rar")) )
         {
-            result[i] = LONGTAIL_NO_COMPRESSION_TYPE;
+            result[i] = 0;
             continue;
         }
         result[i] = LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE;

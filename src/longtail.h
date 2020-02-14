@@ -174,7 +174,7 @@ int Longtail_CreateVersionIndex(
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_permissions,
-    const uint32_t* asset_compression_types,
+    const uint32_t* asset_tags,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
@@ -187,7 +187,7 @@ int Longtail_CreateVersionIndexFromBlocks(
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_permissions,
-    const uint32_t* asset_compression_types,
+    const uint32_t* asset_tags,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
@@ -243,7 +243,7 @@ int Longtail_CreateContentIndex(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
-    const uint32_t* chunk_compression_types,
+    const uint32_t* chunk_tags,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
@@ -334,7 +334,7 @@ int Longtail_InitBlockIndexFromData(
 
 int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
-    uint32_t data_compression_type,
+    uint32_t tag,
     uint32_t chunk_count,
     const uint64_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
@@ -370,7 +370,7 @@ int Longtail_InitStoredBlockFromData(
 int Longtail_CreateStoredBlock(
     TLongtail_Hash block_hash,
     uint32_t chunk_count,
-    uint32_t compression_type,
+    uint32_t tag,
     TLongtail_Hash* chunk_hashes,
     uint32_t* chunk_sizes,
     uint32_t block_data_size,
@@ -380,7 +380,7 @@ struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
     uint32_t* m_ChunkCount;
-    uint32_t* m_DataCompressionType;
+    uint32_t* m_Tag;
     TLongtail_Hash* m_ChunkHashes; //[]
     uint32_t* m_ChunkSizes; // []
 };
@@ -442,7 +442,7 @@ struct Longtail_VersionIndex
     TLongtail_Hash* m_ChunkHashes;      // []
 
     uint32_t* m_ChunkSizes;             // []
-    uint32_t* m_ChunkCompressionTypes;  // []
+    uint32_t* m_ChunkTags;              // []
 
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
@@ -471,8 +471,6 @@ int Longtail_ValidateContent(
 int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
-
-extern const uint32_t LONGTAIL_NO_COMPRESSION_TYPE;
 
 ///////////// Test functions
 
@@ -508,7 +506,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_compression_types,
+    const uint32_t* chunk_tags,
     uint32_t hash_api_identifier);
 
 struct Longtail_Chunker;

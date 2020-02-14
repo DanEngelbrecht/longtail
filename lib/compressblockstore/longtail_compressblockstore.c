@@ -23,7 +23,7 @@ static int CompressedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_blo
 static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
 {
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
-    uint32_t compressionType = *stored_block->m_BlockIndex->m_DataCompressionType;
+    uint32_t compressionType = *stored_block->m_BlockIndex->m_Tag;
     if (compressionType == 0)
     {
         return block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, stored_block);
@@ -88,7 +88,7 @@ static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* bloc
         return 0;
     }
 
-    uint32_t compressionType = *(*out_stored_block)->m_BlockIndex->m_DataCompressionType;
+    uint32_t compressionType = *(*out_stored_block)->m_BlockIndex->m_Tag;
     if (compressionType == 0)
     {
         return 0;
