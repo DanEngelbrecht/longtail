@@ -3010,19 +3010,23 @@ TEST(Longtail, FileSystemStorage)
     {
         char* full_path = storage_api->ConcatPath(storage_api, root_path, TEST_FILENAMES[a]);
         ASSERT_NE((char*)0, full_path);
+        printf("full path `%s`\n", full_path);
         Longtail_StorageAPI_HOpenFile f;
         ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, full_path, &f));
         uint64_t expected_size = (uint64_t)strlen(TEST_STRINGS[a]);
         uint64_t size;
         ASSERT_EQ(0, storage_api->GetSize(storage_api, f, &size));
-        char* data = (char*)Longtail_Alloc(size);
-        ASSERT_EQ(0, storage_api->Read(storage_api, f, 0, size, data));
         ASSERT_EQ(expected_size, size);
-        for (uint64_t b = 0; b < size; ++b)
+        if (size > 0)
         {
-            ASSERT_EQ(data[b], TEST_STRINGS[a][b]);
+            char* data = (char*)Longtail_Alloc(size);
+            ASSERT_EQ(0, storage_api->Read(storage_api, f, 0, size, data));
+            for (uint64_t b = 0; b < size; ++b)
+            {
+                ASSERT_EQ(data[b], TEST_STRINGS[a][b]);
+            }
+            Longtail_Free(data);
         }
-        Longtail_Free(data);
         storage_api->CloseFile(storage_api, f);
         Longtail_Free(full_path);
     }
