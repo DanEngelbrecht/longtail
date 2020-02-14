@@ -1638,7 +1638,7 @@ int Longtail_ReadBlockIndexFromBuffer(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadBlockIndexFromBuffer: Buffer size %u", size)
 
     size_t block_index_size = size + sizeof(struct Longtail_BlockIndex);
-    struct Longtail_BlockIndex* block_index = Longtail_Alloc(block_index_size);
+    struct Longtail_BlockIndex* block_index = (struct Longtail_BlockIndex*)Longtail_Alloc(block_index_size);
     if (!block_index)
     {
         return ENOMEM;
@@ -2404,8 +2404,8 @@ static int ReadBlockData(
             compression_type,
             compressed_size,
             uncompressed_size,
-            &((uint8_t*)stored_block->m_BlockData)[sizeof(uint32_t) * 2],
-            block_data);
+            &((char*)stored_block->m_BlockData)[sizeof(uint32_t) * 2],
+            (char*)block_data);
 
         if (err)
         {
