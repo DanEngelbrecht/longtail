@@ -290,7 +290,6 @@ int Longtail_ReadContentIndex(
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
     struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_ContentIndex* content_index,
@@ -318,7 +317,6 @@ int Longtail_MergeContentIndex(
 int Longtail_WriteVersion(
     struct Longtail_BlockStoreAPI* block_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     const struct Longtail_ContentIndex* content_index,
@@ -337,7 +335,6 @@ int Longtail_ChangeVersion(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,

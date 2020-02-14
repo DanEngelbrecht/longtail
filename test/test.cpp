@@ -1225,7 +1225,8 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage, "chunks");
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
 
     const char* TEST_FILENAMES[5] = {
         "local/TheLongFile.txt",
@@ -1295,7 +1296,6 @@ TEST(Longtail, Longtail_WriteContent)
     ASSERT_EQ(0, Longtail_WriteContent(
         source_storage,
         block_store_api,
-        compression_registry,
         job_api,
         0,
         cindex,
@@ -1336,6 +1336,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_Free(vindex);
 
     SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -1622,7 +1623,8 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage, "chunks");
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
 
     const uint32_t OLD_ASSET_COUNT = 10u;
 
@@ -1897,7 +1899,6 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
         block_store_api,
-        compression_registry,
         job_api,
         0,
         content_index,
@@ -1925,7 +1926,6 @@ TEST(Longtail, Longtail_VersionDiff)
         hash_api,
         job_api,
         0,
-        compression_registry,
         content_index,
         old_vindex,
         new_vindex,
@@ -1971,6 +1971,7 @@ TEST(Longtail, Longtail_VersionDiff)
     }
 
     SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -1984,7 +1985,8 @@ TEST(Longtail, FullScale)
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage, "");
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage, "");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
 
     CreateFakeContent(local_storage, 0, 5);
 
@@ -2055,7 +2057,6 @@ TEST(Longtail, FullScale)
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
         block_store_api,
-        compression_registry,
         job_api,
         0,
         local_content_index,
@@ -2076,7 +2077,6 @@ TEST(Longtail, FullScale)
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
         block_store_api,
-        compression_registry,
         job_api,
         0,
         remote_content_index,
@@ -2096,7 +2096,6 @@ TEST(Longtail, FullScale)
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
         block_store_api,
-        compression_registry,
         job_api,
         0,
         missing_content,
@@ -2108,7 +2107,6 @@ TEST(Longtail, FullScale)
     ASSERT_EQ(0, Longtail_WriteVersion(
         block_store_api,
         local_storage,
-        compression_registry,
         job_api,
         0,
         merged_content_index,
@@ -2147,6 +2145,7 @@ TEST(Longtail, FullScale)
     Longtail_Free(local_version_index);
 
     SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -2299,7 +2298,6 @@ TEST(Longtail, Longtail_WriteVersion)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
-        compression_registry,
         job_api,
         0,
         cindex,
@@ -2309,7 +2307,6 @@ TEST(Longtail, Longtail_WriteVersion)
     ASSERT_EQ(0, Longtail_WriteVersion(
         block_store_api,
         storage_api,
-        compression_registry,
         job_api,
         0,
         cindex,
@@ -2457,12 +2454,12 @@ static void Bench()
         char delta_upload_content_folder[256];
         sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
-        Longtail_BlockStoreAPI* delta_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, delta_upload_content_folder);
+        Longtail_BlockStoreAPI* fs_delta_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, delta_upload_content_folder);
+        Longtail_BlockStoreAPI* delta_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_delta_block_store_api, compression_registry);
         ASSERT_NE((Longtail_BlockStoreAPI*)0, delta_block_store_api);
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             delta_block_store_api,
-            compression_registry,
             job_api,
             0,
             missing_content_index,
@@ -2470,6 +2467,8 @@ static void Bench()
             version_source_folder));
         SAFE_DISPOSE_API(delta_block_store_api);
         delta_block_store_api = 0;
+        SAFE_DISPOSE_API(fs_delta_block_store_api);
+        fs_delta_block_store_api = 0;
 
         printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
         Longtail_StorageAPI_HIterator fs_iterator;
@@ -2538,11 +2537,11 @@ static void Bench()
         char version_target_folder[256];
         sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
         printf("Reconstructing %u assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
-        Longtail_BlockStoreAPI* content_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, CONTENT_FOLDER);
+        Longtail_BlockStoreAPI* fs_content_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, CONTENT_FOLDER);
+        Longtail_BlockStoreAPI* content_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_content_block_store_api, compression_registry);
         ASSERT_EQ(0, Longtail_WriteVersion(
             content_block_store_api,
             storage_api,
-            compression_registry,
             job_api,
             0,
             full_content_index,
@@ -2550,6 +2549,7 @@ static void Bench()
             version_target_folder,
             1));
         SAFE_DISPOSE_API(content_block_store_api);
+        SAFE_DISPOSE_API(fs_content_block_store_api);
 
         version_indexes[i] = version_index;
         version_index = 0;
@@ -2606,8 +2606,10 @@ static void LifelikeTest()
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
-    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, local_content_path);
-    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, remote_content_path);
+    Longtail_BlockStoreAPI* fs_local_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, local_content_path);
+    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_local_block_store_api, compression_registry);
+    Longtail_BlockStoreAPI* fs_remote_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, remote_content_path);
+    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_remote_block_store_api, compression_registry);
 
     Longtail_FileInfos* local_path_1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, local_path_1, &local_path_1_paths));
@@ -2658,7 +2660,6 @@ static void LifelikeTest()
         Longtail_WriteContent(
             storage_api,
             local_block_store_api,
-            compression_registry,
             job_api,
             0,
             local_content_index,
@@ -2670,7 +2671,6 @@ static void LifelikeTest()
     ASSERT_EQ(0, Longtail_WriteVersion(
         local_block_store_api,
         storage_api,
-        compression_registry,
         job_api,
         0,
         local_content_index,
@@ -2724,7 +2724,6 @@ static void LifelikeTest()
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             local_block_store_api,
-            compression_registry,
             job_api,
             0,
             missing_content,
@@ -2739,7 +2738,6 @@ static void LifelikeTest()
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             remote_block_store_api,
-            compression_registry,
             job_api,
             0,
             missing_content,
@@ -2799,7 +2797,6 @@ static void LifelikeTest()
     ASSERT_EQ(0, Longtail_WriteVersion(
         local_block_store_api,
         storage_api,
-        compression_registry,
         job_api,
         0,
         merged_local_content,
@@ -2823,6 +2820,10 @@ static void LifelikeTest()
     Longtail_Free(version1);
     version1 = 0;
 
+    SAFE_DISPOSE_API(remote_block_store_api);
+    SAFE_DISPOSE_API(fs_remote_block_store_api);
+    SAFE_DISPOSE_API(local_block_store_api);
+    SAFE_DISPOSE_API(fs_local_block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
