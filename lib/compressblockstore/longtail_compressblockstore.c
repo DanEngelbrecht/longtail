@@ -20,27 +20,28 @@ static int CompressedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_blo
     return 0;
 }
 
-static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
+static int CompressBlock(struct Longtail_CompressionRegistryAPI* compression_registry, struct Longtail_StoredBlock* uncompressed_stored_block, struct Longtail_StoredBlock** out_compressed_stored_block)
 {
-    struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
-    uint32_t compressionType = *stored_block->m_BlockIndex->m_Tag;
+    uint32_t compressionType = *uncompressed_stored_block->m_BlockIndex->m_Tag;
     if (compressionType == 0)
     {
-        return block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, stored_block);
+        *out_compressed_stored_block = 0;
+        return 0;
     }
     struct Longtail_CompressionAPI* compression_api;
     Longtail_CompressionAPI_HSettings compression_settings;
-    int err = block_store->m_CompressionRegistryAPI->GetCompressionType(
-        block_store->m_CompressionRegistryAPI,
+    int err = compression_registry->GetCompressionType(
+        compression_registry,
         compressionType,
         &compression_api,
         &compression_settings);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_PutStoredBlock: Can't find compression implementation for, %u", compressionType)
         return err;
     }
-    uint32_t block_chunk_data_size = stored_block->m_BlockChunksDataSize;
-    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
+    uint32_t block_chunk_data_size = uncompressed_stored_block->m_BlockChunksDataSize;
+    uint32_t chunk_count = *uncompressed_stored_block->m_BlockIndex->m_ChunkCount;
     size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
     size_t max_compressed_chunk_data_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, block_chunk_data_size);
     struct Longtail_StoredBlock* compressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock) + block_index_size + sizeof(uint32_t) + sizeof(uint32_t) + max_compressed_chunk_data_size);
@@ -48,84 +49,68 @@ static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* bloc
 
     uint32_t* header_ptr = (uint32_t*)(&((uint8_t*)compressed_stored_block->m_BlockIndex)[block_index_size]);
     compressed_stored_block->m_BlockData = header_ptr;
-    memmove(compressed_stored_block->m_BlockIndex, stored_block->m_BlockIndex, block_index_size);
+    memmove(compressed_stored_block->m_BlockIndex, uncompressed_stored_block->m_BlockIndex, block_index_size);
     size_t compressed_chunk_data_size;
     err = compression_api->Compress(
         compression_api,
         compression_settings,
-        (const char*)stored_block->m_BlockData,
+        (const char*)uncompressed_stored_block->m_BlockData,
         (char*)&header_ptr[2],
         block_chunk_data_size,
         max_compressed_chunk_data_size,
         &compressed_chunk_data_size);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_PutStoredBlock: Can't compress block with %u", compressionType)
         Longtail_Free(compressed_stored_block);
         return err;
     }
     header_ptr[0] = block_chunk_data_size;
     header_ptr[1] = (uint32_t)compressed_chunk_data_size;
     compressed_stored_block->m_BlockChunksDataSize = (uint32_t)(sizeof(uint32_t) + sizeof(uint32_t) + compressed_chunk_data_size);
-    err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, compressed_stored_block);
-    Longtail_Free(compressed_stored_block);
-    if (err)
-    {
-        return err;
-    }
+    compressed_stored_block->Dispose = CompressedStoredBlock_Dispose;
+    *out_compressed_stored_block = compressed_stored_block;
     return 0;
 }
 
-static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+static int CompressBlockStore_PutStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StoredBlock* stored_block,
+    struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
-    int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block, 0);
+    struct Longtail_StoredBlock* compressed_stored_block;
+    int err = CompressBlock(block_store->m_CompressionRegistryAPI, stored_block, &compressed_stored_block);
     if (err)
     {
-        if (async_complete_api)
+        return err;
+    }
+    if (compressed_stored_block)
+    {
+        err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, compressed_stored_block, async_complete_api);
+        compressed_stored_block->Dispose(compressed_stored_block);
+        if (err)
         {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_PutStoredBlock: Failed to store block in backing store, %d", err)
         }
         return err;
     }
-    if (!out_stored_block)
-    {
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, 0);
-            return 0;
-        }
-        return 0;
-    }
+    return block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, stored_block, async_complete_api);
+}
 
-    uint32_t compressionType = *(*out_stored_block)->m_BlockIndex->m_Tag;
-    if (compressionType == 0)
-    {
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, 0);
-            return 0;
-        }
-        return 0;
-    }
-    struct Longtail_StoredBlock* compressed_stored_block = *out_stored_block;
-    *out_stored_block = 0;
-
+static int DecompressBlock(struct Longtail_CompressionRegistryAPI* compression_registry, struct Longtail_StoredBlock* compressed_stored_block, struct Longtail_StoredBlock** out_stored_block)
+{
+    uint32_t compressionType = *compressed_stored_block->m_BlockIndex->m_Tag;
     struct Longtail_CompressionAPI* compression_api;
     Longtail_CompressionAPI_HSettings compression_settings;
-    err = block_store->m_CompressionRegistryAPI->GetCompressionType(
-        block_store->m_CompressionRegistryAPI,
+    int err = compression_registry->GetCompressionType(
+        compression_registry,
         compressionType,
         &compression_api,
         &compression_settings);
     if (err)
     {
-        compressed_stored_block->Dispose(compressed_stored_block);
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
-        }
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Can't find compression implementation for, %u", compressionType)
         return err;
     }
 
@@ -154,22 +139,120 @@ static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* bloc
         &real_uncompressed_size);
     if (real_uncompressed_size != uncompressed_size)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Can't decompress block with %u", compressionType)
         Longtail_Free(uncompressed_stored_block);
-        compressed_stored_block->Dispose(compressed_stored_block);
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, EBADF);
-            return 0;
-        }
         return EBADF;
     }
     compressed_stored_block->Dispose(compressed_stored_block);
     uncompressed_stored_block->Dispose = CompressedStoredBlock_Dispose;
     *out_stored_block = uncompressed_stored_block;
+    return 0;
+}
+
+struct OnGetBackingStoreAsync_API
+{
+    struct Longtail_AsyncCompleteAPI m_API;
+    struct CompressBlockStoreAPI* m_BlockStore;
+    struct Longtail_StoredBlock** m_OutStoredBlock;
+    struct Longtail_AsyncCompleteAPI* m_AsyncCompleteAPI;
+};
+
+static int OnGetBackingStoreComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+{
+    struct OnGetBackingStoreAsync_API* async_block_store = (struct OnGetBackingStoreAsync_API*)async_complete_api;
+    if (err)
+    {
+        if (err != ENOENT)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Failed to get block from backing store, %d", err)
+        }
+        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, err);
+        Longtail_Free(async_block_store);
+        return 0;
+    }
+    if (!async_block_store->m_OutStoredBlock)
+    {
+        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0);
+        Longtail_Free(async_block_store);
+        return 0;
+    }
+
+    uint32_t compressionType = *(*async_block_store->m_OutStoredBlock)->m_BlockIndex->m_Tag;
+    if (compressionType == 0)
+    {
+        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0);
+        Longtail_Free(async_block_store);
+        return 0;
+    }
+
+    err = DecompressBlock(
+        async_block_store->m_BlockStore->m_CompressionRegistryAPI,
+        *async_block_store->m_OutStoredBlock,
+        async_block_store->m_OutStoredBlock);
+    if (err)
+    {
+        (*async_block_store->m_OutStoredBlock)->Dispose(*async_block_store->m_OutStoredBlock);
+        (*async_block_store->m_OutStoredBlock) = 0;
+        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, err);
+        Longtail_Free(async_block_store);
+        return err;
+    }
+    async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0);
+    Longtail_Free(async_block_store);
+    return 0;
+}
+
+static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
     if (async_complete_api)
     {
-        async_complete_api->OnComplete(async_complete_api, 0);
+        struct OnGetBackingStoreAsync_API* on_fetch_backing_store_async_api = (struct OnGetBackingStoreAsync_API*)Longtail_Alloc(sizeof(struct OnGetBackingStoreAsync_API));
+
+        on_fetch_backing_store_async_api->m_API.OnComplete = OnGetBackingStoreComplete;
+        on_fetch_backing_store_async_api->m_API.m_API.Dispose = 0;
+        on_fetch_backing_store_async_api->m_BlockStore = block_store;
+        on_fetch_backing_store_async_api->m_OutStoredBlock = out_stored_block;
+        on_fetch_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
+
+        int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block, &on_fetch_backing_store_async_api->m_API);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Failed to async get block from backing store, %d", err)
+            Longtail_Free(on_fetch_backing_store_async_api);
+            return err;
+        }
         return 0;
+    }
+    int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block, 0);
+    if (err)
+    {
+        if (err != ENOENT)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Failed to get block from backing store, %d", err)
+        }
+        return err;
+    }
+    if (!out_stored_block)
+    {
+        return 0;
+    }
+
+    uint32_t compressionType = *(*out_stored_block)->m_BlockIndex->m_Tag;
+    if (compressionType == 0)
+    {
+        return 0;
+    }
+
+    err = DecompressBlock(
+        block_store->m_CompressionRegistryAPI,
+        *out_stored_block,
+        out_stored_block);
+    if (err)
+    {
+        (*out_stored_block)->Dispose(*out_stored_block);
+        (*out_stored_block) = 0;
+        return err;
     }
     return 0;
 }

@@ -1006,7 +1006,7 @@ TEST(Longtail, Longtail_FSBlockStore)
     memset(put_block.m_BlockData, 77, 4711);
     memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
 
-    ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block));
+    ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block, 0));
     Longtail_Free(put_block.m_BlockIndex);
 
     ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, 0, 0));
@@ -1072,7 +1072,7 @@ TEST(Longtail, Longtail_CacheBlockStore)
     memset(put_block.m_BlockData, 77, 4711);
     memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
 
-    ASSERT_EQ(0, remote_block_store_api->PutStoredBlock(remote_block_store_api, &put_block));
+    ASSERT_EQ(0, remote_block_store_api->PutStoredBlock(remote_block_store_api, &put_block, 0));
     Longtail_Free(put_block.m_BlockIndex);
 
     ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, 0, 0));
@@ -1162,9 +1162,9 @@ TEST(Longtail, Longtail_CompressBlockStore)
         memset(&((uint8_t*)put_block2->m_BlockData)[1147], 77, 4711);
     }
 
-    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block));
+    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block, 0));
     Longtail_Free(put_block);
-    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block2));
+    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block2, 0));
     Longtail_Free(put_block2);
 
     ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, 0, 0));

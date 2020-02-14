@@ -203,7 +203,10 @@ static int ReadContent(
     return err;
 }
 
-static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
+static int FSBlockStore_PutStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StoredBlock* stored_block,
+    struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
 
@@ -212,6 +215,10 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     {
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, 0);
+        }
         return 0;
     }
 
@@ -219,10 +226,16 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     int err = EnsureParentPathExists(fsblockstore_api->m_StorageAPI, block_path);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to create parent path for `%s`, %d", tmp_block_path, err)
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
 
@@ -231,11 +244,17 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     err = fsblockstore_api->m_StorageAPI->OpenWriteFile(fsblockstore_api->m_StorageAPI, tmp_block_path, 0, &block_file_handle);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to open block for write file `%s`, %d", tmp_block_path, err)
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
 
@@ -245,6 +264,7 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, block_index_data_size, &stored_block->m_BlockIndex[1]);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write block index to file `%s`, %d", tmp_block_path, err)
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
         block_file_handle = 0;
@@ -252,6 +272,11 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     write_offset += block_index_data_size;
@@ -259,12 +284,18 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, stored_block->m_BlockChunksDataSize, stored_block->m_BlockData);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write chunk data to file `%s`, %d", tmp_block_path, err)
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     write_offset = stored_block->m_BlockChunksDataSize;
@@ -277,7 +308,7 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         err = fsblockstore_api->m_StorageAPI->RemoveFile(fsblockstore_api->m_StorageAPI, tmp_block_path);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to remote temp block file from `%s`, %d", block_path, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to remove temp block file from `%s`, %d", block_path, err)
             err = 0;
         }
     }
@@ -290,6 +321,11 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     Longtail_Free((char*)tmp_block_path);
@@ -306,10 +342,18 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         Longtail_Free(tmp);
     }
 
+    if (async_complete_api)
+    {
+        async_complete_api->OnComplete(async_complete_api, 0);
+    }
     return 0;
 }
 
-static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+static int FSBlockStore_GetStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint64_t block_hash,
+    struct Longtail_StoredBlock** out_stored_block,
+    struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     char* block_path = GetBlockPath(fsblockstore_api, block_hash);

@@ -2328,8 +2328,11 @@ static int CreateAssetPartLookup(
 
 struct WriteBlockJob
 {
+    struct Longtail_AsyncCompleteAPI m_AsyncCompleteAPI;
     struct Longtail_StorageAPI* m_SourceStorageAPI;
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
+    struct Longtail_JobAPI* m_JobAPI;
+    uint32_t m_JobID;
     const char* m_AssetsFolder;
     TLongtail_Hash m_BlockHash;
     const struct Longtail_ContentIndex* m_ContentIndex;
@@ -2339,11 +2342,33 @@ struct WriteBlockJob
     int m_Err;
 };
 
+static int BlockWriterJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+{
+    struct WriteBlockJob* job = (struct WriteBlockJob*)async_complete_api;
+    job->m_Err = err;
+    job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
+    return 0;
+}
+
+static int DisposePutBlock(struct Longtail_StoredBlock* stored_block)
+{
+    Longtail_Free(stored_block->m_BlockIndex);
+    Longtail_Free(stored_block->m_BlockData);
+    Longtail_Free(stored_block);
+    return 0;
+}
+
 static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return 0)
 
     struct WriteBlockJob* job = (struct WriteBlockJob*)context;
+    if (job->m_AsyncCompleteAPI.OnComplete)
+    {
+        // We got a notification so we are complete
+        return 0;
+    }
+
     struct Longtail_StorageAPI* source_storage_api = job->m_SourceStorageAPI;
     struct Longtail_BlockStoreAPI* block_store_api = job->m_BlockStoreAPI;
 
@@ -2459,22 +2484,25 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
     *block_index_ptr->m_Tag = tag;
     *block_index_ptr->m_ChunkCount = chunk_count;
 
-    struct Longtail_StoredBlock stored_block;
-    stored_block.Dispose = 0;
-    stored_block.m_BlockIndex = block_index_ptr;
-    stored_block.m_BlockData = block_data_buffer;
-    stored_block.m_BlockChunksDataSize = block_data_size;
-    int err = block_store_api->PutStoredBlock(block_store_api, &stored_block);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock));
+    stored_block->Dispose = DisposePutBlock;
+    stored_block->m_BlockIndex = block_index_ptr;
+    stored_block->m_BlockData = block_data_buffer;
+    stored_block->m_BlockChunksDataSize = block_data_size;
+
+    job->m_JobID = job_id;
+    job->m_AsyncCompleteAPI.OnComplete = BlockWriterJobOnComplete;
+
+    int err = block_store_api->PutStoredBlock(block_store_api, stored_block, &job->m_AsyncCompleteAPI);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to store block 0x%" PRIx64 ", %d", block_hash, err)
+        stored_block->Dispose(stored_block);
+        job->m_Err = err;
+        return 0;
     }
 
-    Longtail_Free(block_index_ptr);
-    Longtail_Free(block_data_buffer);
-
-    job->m_Err = err;
-    return 0;
+    return EBUSY;
 }
 
 int Longtail_WriteContent(
@@ -2551,8 +2579,11 @@ int Longtail_WriteContent(
         }
 
         struct WriteBlockJob* job = &write_block_jobs[job_count++];
+        job->m_AsyncCompleteAPI.m_API.Dispose = 0;
+        job->m_AsyncCompleteAPI.OnComplete = 0;
         job->m_SourceStorageAPI = source_storage_api;
         job->m_BlockStoreAPI = block_store_api;
+        job->m_JobAPI = job_api;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
         job->m_BlockHash = block_hash;
@@ -2677,7 +2708,7 @@ static int BlockReader(void* context, uint32_t job_id)
 
     if (job->m_AsyncCompleteAPI.OnComplete)
     {
-        // We got a noticiation so we are complete
+        // We got a notification so we are complete
         return 0;
     }
 
