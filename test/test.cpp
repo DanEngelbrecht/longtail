@@ -988,7 +988,7 @@ TEST(Longtail, Longtail_FSBlockStore)
     put_block.m_BlockIndex = 0;
     put_block.m_BlockData = 0;
 
-    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, 0));
+    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, 0, 0));
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
     void* block_index_mem = Longtail_Alloc(block_index_size);
@@ -1009,9 +1009,9 @@ TEST(Longtail, Longtail_FSBlockStore)
     ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block));
     Longtail_Free(put_block.m_BlockIndex);
 
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, 0));
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, 0, 0));
     Longtail_StoredBlock* get_block;
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block));
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block, 0));
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
@@ -1054,7 +1054,7 @@ TEST(Longtail, Longtail_CacheBlockStore)
     put_block.m_BlockIndex = 0;
     put_block.m_BlockData = 0;
 
-    ASSERT_EQ(ENOENT, cache_block_store_api->GetStoredBlock(cache_block_store_api, 4711, 0));
+    ASSERT_EQ(ENOENT, cache_block_store_api->GetStoredBlock(cache_block_store_api, 4711, 0, 0));
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
     void* block_index_mem = Longtail_Alloc(block_index_size);
@@ -1075,9 +1075,9 @@ TEST(Longtail, Longtail_CacheBlockStore)
     ASSERT_EQ(0, remote_block_store_api->PutStoredBlock(remote_block_store_api, &put_block));
     Longtail_Free(put_block.m_BlockIndex);
 
-    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, 0));
+    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, 0, 0));
     Longtail_StoredBlock* get_block;
-    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block));
+    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block, 0));
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
@@ -1117,7 +1117,7 @@ TEST(Longtail, Longtail_CompressBlockStore)
     ASSERT_EQ(0, *store_index->m_ChunkCount);
     Longtail_Free(store_index);
 
-    ASSERT_EQ(ENOENT, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, 0));
+    ASSERT_EQ(ENOENT, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, 0, 0));
 
     Longtail_StoredBlock* put_block;
 
@@ -1167,9 +1167,9 @@ TEST(Longtail, Longtail_CompressBlockStore)
     ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block2));
     Longtail_Free(put_block2);
 
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, 0));
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, 0, 0));
     Longtail_StoredBlock* get_block;
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block));
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block, 0));
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
@@ -1189,7 +1189,7 @@ TEST(Longtail, Longtail_CompressBlockStore)
     }
     get_block->Dispose(get_block);
 
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xbeaddeef, &get_block));
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xbeaddeef, &get_block, 0));
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xbeaddeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE, *get_block->m_BlockIndex->m_Tag);

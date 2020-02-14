@@ -589,22 +589,22 @@ struct HashJob
     int m_Err;
 };
 
-static void DynamicChunking(void* context)
+static int DynamicChunking(void* context, uint32_t job_id)
 {
-    LONGTAIL_FATAL_ASSERT(context != 0, return)
+    LONGTAIL_FATAL_ASSERT(context != 0, return 0)
     struct HashJob* hash_job = (struct HashJob*)context;
 
     hash_job->m_Err = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
     if (hash_job->m_Err)
     {
-        return;
+        return 0;
     }
 
     if (IsDirPath(hash_job->m_Path))
     {
         hash_job->m_Err = 0;
         *hash_job->m_AssetChunkCount = 0;
-        return;
+        return 0;
     }
     uint32_t chunk_count = 0;
 
@@ -618,7 +618,7 @@ static void DynamicChunking(void* context)
         Longtail_Free(path);
         path = 0;
         hash_job->m_Err = err;
-        return;
+        return 0;
     }
 
     uint64_t hash_size = hash_job->m_SizeRange;
@@ -630,7 +630,7 @@ static void DynamicChunking(void* context)
     else if (hash_size <= ChunkerWindowSize || hash_job->m_MaxChunkSize <= ChunkerWindowSize)
     {
         char* buffer = (char*)Longtail_Alloc((size_t)hash_size);
-        LONGTAIL_FATAL_ASSERT(buffer, hash_job->m_Err = ENOMEM; return)
+        LONGTAIL_FATAL_ASSERT(buffer, hash_job->m_Err = ENOMEM; return 0)
         err = storage_api->Read(storage_api, file_handle, 0, hash_size, buffer);
         if (err)
         {
@@ -642,7 +642,7 @@ static void DynamicChunking(void* context)
             Longtail_Free(path);
             path = 0;
             hash_job->m_Err = err;
-            return;
+            return 0;
         }
 
         err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, (uint32_t)hash_size, buffer, &hash_job->m_ChunkHashes[chunk_count]);
@@ -656,7 +656,7 @@ static void DynamicChunking(void* context)
             Longtail_Free(path);
             path = 0;
             hash_job->m_Err = err;
-            return;
+            return 0;
         }
 
         Longtail_Free(buffer);
@@ -700,7 +700,7 @@ static void DynamicChunking(void* context)
             Longtail_Free(path);
             path = 0;
             hash_job->m_Err = err;
-            return;
+            return 0;
         }
 
         Longtail_HashAPI_HContext asset_hash_context;
@@ -713,14 +713,14 @@ static void DynamicChunking(void* context)
             Longtail_Free(path);
             path = 0;
             hash_job->m_Err = err;
-            return;
+            return 0;
         }
 
         uint64_t remaining = hash_size;
         struct Longtail_ChunkRange r = Longtail_NextChunk(chunker);
         while (r.len)
         {
-            LONGTAIL_FATAL_ASSERT(remaining >= r.len, hash_job->m_Err = EINVAL; return)
+            LONGTAIL_FATAL_ASSERT(remaining >= r.len, hash_job->m_Err = EINVAL; return 0)
             err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, r.len, (void*)r.buf, &hash_job->m_ChunkHashes[chunk_count]);
             if (err != 0)
             {
@@ -733,7 +733,7 @@ static void DynamicChunking(void* context)
                 Longtail_Free(path);
                 path = 0;
                 hash_job->m_Err = err;
-                return;
+                return 0;
             }
             hash_job->m_ChunkSizes[chunk_count] = r.len;
             hash_job->m_ChunkTags[chunk_count] = hash_job->m_ContentTag;
@@ -744,7 +744,7 @@ static void DynamicChunking(void* context)
             remaining -= r.len;
             r = Longtail_NextChunk(chunker);
         }
-        LONGTAIL_FATAL_ASSERT(remaining == 0, hash_job->m_Err = EINVAL; return)
+        LONGTAIL_FATAL_ASSERT(remaining == 0, hash_job->m_Err = EINVAL; return 0)
 
         content_hash = hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
         Longtail_Free(chunker);
@@ -754,13 +754,14 @@ static void DynamicChunking(void* context)
     storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
     
-    LONGTAIL_FATAL_ASSERT(chunk_count <= hash_job->m_MaxChunkCount, hash_job->m_Err = EINVAL; return)
+    LONGTAIL_FATAL_ASSERT(chunk_count <= hash_job->m_MaxChunkCount, hash_job->m_Err = EINVAL; return 0)
     *hash_job->m_AssetChunkCount = chunk_count;
 
     Longtail_Free((char*)path);
     path = 0;
 
     hash_job->m_Err = 0;
+    return 0;
 }
 
 static int ChunkAssets(
@@ -2338,37 +2339,9 @@ struct WriteBlockJob
     int m_Err;
 };
 
-static int ReadBlockData(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    TLongtail_Hash block_hash,
-    void** out_block_data)
+static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
 {
-    LONGTAIL_FATAL_ASSERT(block_store_api != 0, return EINVAL)
-
-    struct Longtail_StoredBlock* stored_block;
-    int err = block_store_api->GetStoredBlock(block_store_api, block_hash, &stored_block);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to read block 0x%" PRIx64 ", %d", block_hash, err)
-        return err;
-    }
-
-    // TODO: We should keep the block as is, not memcopy!
-    void* block_data = Longtail_Alloc(stored_block->m_BlockChunksDataSize);
-    LONGTAIL_FATAL_ASSERT(block_data, return ENOMEM)
-    memmove(block_data, stored_block->m_BlockData, stored_block->m_BlockChunksDataSize);
-
-    stored_block->Dispose(stored_block);
-    stored_block = 0;
-
-    *out_block_data = block_data;
-    return 0;
-}
-
-
-static void Longtail_WriteContentBlockJob(void* context)
-{
-    LONGTAIL_FATAL_ASSERT(context != 0, return)
+    LONGTAIL_FATAL_ASSERT(context != 0, return 0)
 
     struct WriteBlockJob* job = (struct WriteBlockJob*)context;
     struct Longtail_StorageAPI* source_storage_api = job->m_SourceStorageAPI;
@@ -2383,13 +2356,13 @@ static void Longtail_WriteContentBlockJob(void* context)
     uint32_t block_data_size = 0;
     for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
     {
-        LONGTAIL_FATAL_ASSERT(content_index->m_ChunkBlockIndexes[chunk_index] == block_index, job->m_Err = EINVAL; return)
+        LONGTAIL_FATAL_ASSERT(content_index->m_ChunkBlockIndexes[chunk_index] == block_index, job->m_Err = EINVAL; return 0)
         uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
         block_data_size += chunk_size;
     }
 
     char* block_data_buffer = (char*)Longtail_Alloc(block_data_size);
-    LONGTAIL_FATAL_ASSERT(block_data_buffer, job->m_Err = ENOMEM; return)
+    LONGTAIL_FATAL_ASSERT(block_data_buffer, job->m_Err = ENOMEM; return 0)
     char* write_buffer = block_data_buffer;
     char* write_ptr = write_buffer;
 
@@ -2406,7 +2379,7 @@ static void Longtail_WriteContentBlockJob(void* context)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             job->m_Err = EINVAL;
-            return;
+            return 0;
         }
         struct AssetPart* asset_part = &job->m_AssetPartLookup[asset_part_index].value;
         const char* asset_path = asset_part->m_Path;
@@ -2416,7 +2389,7 @@ static void Longtail_WriteContentBlockJob(void* context)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             job->m_Err = EINVAL;
-            return;
+            return 0;
         }
 
         char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
@@ -2437,7 +2410,7 @@ static void Longtail_WriteContentBlockJob(void* context)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             job->m_Err = err;
-            return;
+            return 0;
         }
         uint64_t asset_file_size;
         err = source_storage_api->GetSize(source_storage_api, file_handle, &asset_file_size);
@@ -2447,7 +2420,7 @@ static void Longtail_WriteContentBlockJob(void* context)
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             job->m_Err = err;
-            return;
+            return 0;
         }
         if (asset_file_size < (asset_content_offset + chunk_size))
         {
@@ -2457,7 +2430,7 @@ static void Longtail_WriteContentBlockJob(void* context)
             source_storage_api->CloseFile(source_storage_api, file_handle);
             file_handle = 0;
             job->m_Err = EBADF;
-            return;
+            return 0;
         }
         err = source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
         if (err)
@@ -2468,7 +2441,7 @@ static void Longtail_WriteContentBlockJob(void* context)
             source_storage_api->CloseFile(source_storage_api, file_handle);
             file_handle = 0;
             job->m_Err = err;
-            return;
+            return 0;
         }
         write_ptr += chunk_size;
 
@@ -2478,7 +2451,7 @@ static void Longtail_WriteContentBlockJob(void* context)
     }
 
     struct Longtail_BlockIndex* block_index_ptr = (struct Longtail_BlockIndex*)Longtail_Alloc(Longtail_GetBlockIndexSize(chunk_count));
-    LONGTAIL_FATAL_ASSERT(block_index_ptr, job->m_Err = ENOMEM; return)
+    LONGTAIL_FATAL_ASSERT(block_index_ptr, job->m_Err = ENOMEM; return 0)
     Longtail_InitBlockIndex(block_index_ptr, chunk_count);
     memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
     memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
@@ -2501,6 +2474,7 @@ static void Longtail_WriteContentBlockJob(void* context)
     Longtail_Free(block_data_buffer);
 
     job->m_Err = err;
+    return 0;
 }
 
 int Longtail_WriteContent(
@@ -2559,7 +2533,7 @@ int Longtail_WriteContent(
             ++chunk_count;
         }
 
-        int err = block_store_api->GetStoredBlock(block_store_api, block_hash, 0);
+        int err = block_store_api->GetStoredBlock(block_store_api, block_hash, 0, 0);
         if (err == 0)
         {
             block_start_chunk_index += chunk_count;
@@ -2678,31 +2652,51 @@ static int CreateContentLookup(
 
 struct BlockReaderJob
 {
+    struct Longtail_AsyncCompleteAPI m_AsyncCompleteAPI;
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
+    struct Longtail_JobAPI* m_JobAPI;
+    uint32_t m_JobID;
     TLongtail_Hash m_BlockHash;
-    void* m_BlockData;
+    struct Longtail_StoredBlock* m_StoredBlock;
     int m_Err;
 };
 
-static void BlockReader(void* context)
+int BlockReaderJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
-    LONGTAIL_FATAL_ASSERT(context != 0, return)
-
-    struct BlockReaderJob* job = (struct BlockReaderJob*)context;
-    job->m_Err = ReadBlockData(
-        job->m_BlockStoreAPI,
-        job->m_BlockHash,
-        &job->m_BlockData);
-    if (job->m_Err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockReader: Failed to read block 0x%" PRIx64 ", %d", job->m_BlockHash, job->m_Err)
-        return;
-    }
+    struct BlockReaderJob* job = (struct BlockReaderJob*)async_complete_api;
+    job->m_Err = err;
+    job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
+    return 0;
 }
 
-static void WriteReady(void* context)
+static int BlockReader(void* context, uint32_t job_id)
+{
+    LONGTAIL_FATAL_ASSERT(context != 0, return 0)
+
+    struct BlockReaderJob* job = (struct BlockReaderJob*)context;
+
+    if (job->m_AsyncCompleteAPI.OnComplete)
+    {
+        // We got a noticiation so we are complete
+        return 0;
+    }
+
+    job->m_JobID = job_id;
+    job->m_AsyncCompleteAPI.OnComplete = BlockReaderJobOnComplete;
+    
+    int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockHash, &job->m_StoredBlock, &job->m_AsyncCompleteAPI);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to read block 0x%" PRIx64 ", %d", job->m_BlockHash, err)
+        return err;
+    }
+    return EBUSY;
+}
+
+static int WriteReady(void* context, uint32_t job_id)
 {
     // Nothing to do here, we are just a syncronization point
+    return 0;
 }
 
 #define MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE  64u
@@ -2730,7 +2724,7 @@ struct WritePartialAssetFromBlocksJob
     int m_Err;
 };
 
-void WritePartialAssetFromBlocks(void* context);
+int WritePartialAssetFromBlocks(void* context, uint32_t job_id);
 
 // Returns the write sync task, or the write task if there is no need for block_readion of block
 static int CreatePartialAssetWriteJob(
@@ -2795,8 +2789,12 @@ static int CreatePartialAssetWriteJob(
             struct BlockReaderJob* block_job = &job->m_BlockReaderJobs[job->m_BlockReaderJobCount];
             block_job->m_BlockStoreAPI = block_store_api;
             block_job->m_BlockHash = block_hash;
+            block_job->m_AsyncCompleteAPI.m_API.Dispose = 0;
+            block_job->m_AsyncCompleteAPI.OnComplete = 0;
+            block_job->m_JobAPI = job_api;
+            block_job->m_JobID = 0;
             block_job->m_Err = EINVAL;
-            block_job->m_BlockData = 0;
+            block_job->m_StoredBlock = 0;
             block_read_funcs[job->m_BlockReaderJobCount] = BlockReader;
             block_read_ctx[job->m_BlockReaderJobCount] = block_job;
             ++job->m_BlockReaderJobCount;
@@ -2836,7 +2834,7 @@ static int CreatePartialAssetWriteJob(
     return 0;
 }
 
-void WritePartialAssetFromBlocks(void* context)
+static int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
 {
     struct WritePartialAssetFromBlocksJob* job = (struct WritePartialAssetFromBlocksJob*)context;
 
@@ -2844,7 +2842,7 @@ void WritePartialAssetFromBlocks(void* context)
     job->m_Err = 0;
     uint32_t block_block_reador_job_count = job->m_BlockReaderJobCount;
     TLongtail_Hash block_hashes[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
-    char* block_datas[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
+    struct Longtail_StoredBlock* stored_block[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
     {
         if (job->m_BlockReaderJobs[d].m_Err)
@@ -2852,8 +2850,8 @@ void WritePartialAssetFromBlocks(void* context)
             job->m_Err = job->m_BlockReaderJobs[d].m_Err;
             break;
         }
-        block_hashes[d] =job->m_BlockReaderJobs[d].m_BlockHash;
-        block_datas[d] =(char*)job->m_BlockReaderJobs[d].m_BlockData;
+        block_hashes[d] = job->m_BlockReaderJobs[d].m_BlockHash;
+        stored_block[d] = job->m_BlockReaderJobs[d].m_StoredBlock;
     }
 
     if (job->m_Err)
@@ -2861,9 +2859,9 @@ void WritePartialAssetFromBlocks(void* context)
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to block_read blocks, %d", job->m_Err)
         for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
-            Longtail_Free(block_datas[d]);
+            stored_block[d]->Dispose(stored_block[d]);
         }
-        return;
+        return 0;
     }
 
     uint32_t write_chunk_index_offset = job->m_AssetChunkIndexOffset;
@@ -2876,10 +2874,10 @@ void WritePartialAssetFromBlocks(void* context)
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Skipping write to asset `%s` due to previous write failure", asset_path)
         for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
-            Longtail_Free(block_datas[d]);
+            stored_block[d]->Dispose(stored_block[d]);
         }
         job->m_Err = ENOENT;
-        return;
+        return 0;
     }
     if (!job->m_AssetOutputFile)
     {
@@ -2892,14 +2890,14 @@ void WritePartialAssetFromBlocks(void* context)
             full_asset_path = 0;
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
-                Longtail_Free(block_datas[d]);
+                stored_block[d]->Dispose(stored_block[d]);
             }
             job->m_Err = err;
-            return;
+            return 0;
         }
         if (IsDirPath(full_asset_path))
         {
-            LONGTAIL_FATAL_ASSERT(block_block_reador_job_count == 0, job->m_Err = EINVAL; return)
+            LONGTAIL_FATAL_ASSERT(block_block_reador_job_count == 0, job->m_Err = EINVAL; return 0)
             err = SafeCreateDir(job->m_VersionStorageAPI, full_asset_path);
             if (err)
             {
@@ -2907,12 +2905,12 @@ void WritePartialAssetFromBlocks(void* context)
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
                 job->m_Err = err;
-                return;
+                return 0;
             }
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             job->m_Err = 0;
-            return;
+            return 0;
         }
 
         uint64_t asset_size = job->m_VersionIndex->m_AssetSizes[job->m_AssetIndex];
@@ -2924,10 +2922,10 @@ void WritePartialAssetFromBlocks(void* context)
             full_asset_path = 0;
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
-                Longtail_Free(block_datas[d]);
+                stored_block[d]->Dispose(stored_block[d]);
             }
             job->m_Err = err;
-            return;
+            return 0;
         }
         Longtail_Free(full_asset_path);
         full_asset_path = 0;
@@ -2956,10 +2954,10 @@ void WritePartialAssetFromBlocks(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to create next write/block_read job for asset `%s`, %d", asset_path, err)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
-                Longtail_Free(block_datas[d]);
+                stored_block[d]->Dispose(stored_block[d]);
             }
             job->m_Err = err;
-            return;
+            return 0;
         }
         // block_readion of blocks will start immediately
     }
@@ -2996,19 +2994,19 @@ void WritePartialAssetFromBlocks(void* context)
         {
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
-                Longtail_Free(block_datas[d]);
+                stored_block[d]->Dispose(stored_block[d]);
             }
             job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
             if (sync_write_job)
             {
                 int err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
-                LONGTAIL_FATAL_ASSERT(!err, job->m_Err = EINVAL; return)
+                LONGTAIL_FATAL_ASSERT(!err, job->m_Err = EINVAL; return 0)
             }
             job->m_Err = EINVAL;
-            return;
+            return 0;
         }
-        char* block_data = block_datas[block_readed_block_index];
+        char* block_data = stored_block[block_readed_block_index]->m_BlockData;
 
         uint32_t chunk_offset = job->m_ContentIndex->m_ChunkBlockOffsets[content_chunk_index];
         uint32_t chunk_size = job->m_ContentIndex->m_ChunkLengths[content_chunk_index];
@@ -3022,15 +3020,15 @@ void WritePartialAssetFromBlocks(void* context)
 
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
-                Longtail_Free(block_datas[d]);
+                stored_block[d]->Dispose(stored_block[d]);
             }
             if (sync_write_job)
             {
                 err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
-                LONGTAIL_FATAL_ASSERT(!err, job->m_Err = err; return)
+                LONGTAIL_FATAL_ASSERT(!err, job->m_Err = err; return 0)
             }
             job->m_Err = err;
-            return;
+            return 0;
         }
         write_offset += chunk_size;
 
@@ -3039,7 +3037,7 @@ void WritePartialAssetFromBlocks(void* context)
 
     for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
     {
-        Longtail_Free(block_datas[d]);
+        stored_block[d]->Dispose(stored_block[d]);
     }
 
     if (sync_write_job)
@@ -3050,10 +3048,10 @@ void WritePartialAssetFromBlocks(void* context)
         {
             job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_Err = err;
-            return;
+            return 0;
         }
         job->m_Err = 0;
-        return;
+        return 0;
     }
 
     job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
@@ -3073,6 +3071,7 @@ void WritePartialAssetFromBlocks(void* context)
     }
 
     job->m_Err = 0;
+    return 0;
 }
 
 struct WriteAssetsFromBlockJob
@@ -3081,7 +3080,7 @@ struct WriteAssetsFromBlockJob
     const struct Longtail_ContentIndex* m_ContentIndex;
     const struct Longtail_VersionIndex* m_VersionIndex;
     const char* m_VersionFolder;
-    struct BlockReaderJob m_block_readBlockJob;
+    struct BlockReaderJob m_BlockReadJob;
     uint64_t m_BlockIndex;
     uint32_t* m_AssetIndexes;
     uint32_t m_AssetCount;
@@ -3090,9 +3089,9 @@ struct WriteAssetsFromBlockJob
     int m_Err;
 };
 
-static void WriteAssetsFromBlock(void* context)
+static int WriteAssetsFromBlock(void* context, uint32_t job_id)
 {
-    LONGTAIL_FATAL_ASSERT(context != 0, return)
+    LONGTAIL_FATAL_ASSERT(context != 0, return 0)
 
     struct WriteAssetsFromBlockJob* job = (struct WriteAssetsFromBlockJob*)context;
     struct Longtail_StorageAPI* version_storage_api = job->m_VersionStorageAPI;
@@ -3104,15 +3103,15 @@ static void WriteAssetsFromBlock(void* context)
     uint32_t asset_count = job->m_AssetCount;
     struct HashToIndexItem* content_chunk_lookup = job->m_ContentChunkLookup;
 
-    if (job->m_block_readBlockJob.m_Err)
+    if (job->m_BlockReadJob.m_Err)
     {
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 ", %d", block_hash, job->m_block_readBlockJob.m_Err)
-        job->m_Err = job->m_block_readBlockJob.m_Err;
-        return;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to read block 0x%" PRIx64 ", %d", block_hash, job->m_BlockReadJob.m_Err)
+        job->m_Err = job->m_BlockReadJob.m_Err;
+        return 0;
     }
 
-    char* block_data = (char*)job->m_block_readBlockJob.m_BlockData;
+    const char* block_data = (char*)job->m_BlockReadJob.m_StoredBlock->m_BlockData;
 
     for (uint32_t i = 0; i < asset_count; ++i)
     {
@@ -3125,10 +3124,10 @@ static void WriteAssetsFromBlock(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to create parent folder for `%s`, %d", full_asset_path, err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
-            Longtail_Free(block_data);
-            block_data = 0;
+            job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+            job->m_BlockReadJob.m_StoredBlock = 0;
             job->m_Err = err;
-            return;
+            return 0;
         }
 
         Longtail_StorageAPI_HOpenFile asset_file;
@@ -3138,10 +3137,10 @@ static void WriteAssetsFromBlock(void* context)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Unable to create asset `%s`, %d", full_asset_path, err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
-            Longtail_Free(block_data);
-            block_data = 0;
+            job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+            job->m_BlockReadJob.m_StoredBlock = 0;
             job->m_Err = err;
-            return;
+            return 0;
         }
 
         uint64_t asset_write_offset = 0;
@@ -3163,10 +3162,10 @@ static void WriteAssetsFromBlock(void* context)
                 asset_file = 0;
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
-                Longtail_Free(block_data);
-                block_data = 0;
+                job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+                job->m_BlockReadJob.m_StoredBlock = 0;
                 job->m_Err = err;
-                return;
+                return 0;
             }
             asset_write_offset += chunk_size;
         }
@@ -3182,17 +3181,18 @@ static void WriteAssetsFromBlock(void* context)
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock: Failed to set permissions for asset `%s`, %d", asset_path, err)
-                Longtail_Free(block_data);
-                block_data = 0;
+                job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+                job->m_BlockReadJob.m_StoredBlock = 0;
                 job->m_Err = err;
-                return;
+                return 0;
             }
         }
     }
 
-    Longtail_Free(block_data);
-    block_data = 0;
+    job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+    job->m_BlockReadJob.m_StoredBlock = 0;
     job->m_Err = 0;
+    return 0;
 }
 
 struct AssetWriteList
@@ -3440,9 +3440,15 @@ static int WriteAssets(
         uint64_t block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, first_chunk_hash);
 
         struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
-        struct BlockReaderJob* block_job = &job->m_block_readBlockJob;
+        struct BlockReaderJob* block_job = &job->m_BlockReadJob;
         block_job->m_BlockStoreAPI = block_store_api;
+        block_job->m_AsyncCompleteAPI.m_API.Dispose = 0;
+        block_job->m_AsyncCompleteAPI.OnComplete = 0;
         block_job->m_BlockHash = content_index->m_BlockHashes[block_index];
+        block_job->m_JobAPI = job_api;
+        block_job->m_JobID = 0;
+        block_job->m_Err = EINVAL;
+        block_job->m_StoredBlock = 0;
         Longtail_JobAPI_JobFunc block_read_funcs[1] = { BlockReader };
         void* block_read_ctxs[1] = {block_job};
         Longtail_JobAPI_Jobs block_readion_job;

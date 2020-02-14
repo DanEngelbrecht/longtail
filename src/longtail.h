@@ -94,7 +94,7 @@ struct Longtail_ProgressAPI
 };
 
 typedef void* Longtail_JobAPI_Jobs;
-typedef void (*Longtail_JobAPI_JobFunc)(void* context);
+typedef int (*Longtail_JobAPI_JobFunc)(void* context, uint32_t job_id);
 
 struct Longtail_JobAPI
 {
@@ -105,13 +105,20 @@ struct Longtail_JobAPI
     int (*AddDependecies)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs);
     int (*ReadyJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
     int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI);
+    int (*ResumeJob)(struct Longtail_JobAPI* job_api, uint32_t job_id);
+};
+
+struct Longtail_AsyncCompleteAPI
+{
+    struct Longtail_API m_API;
+    int (*OnComplete)(struct Longtail_AsyncCompleteAPI* async_complete_api, int err);
 };
 
 struct Longtail_BlockStoreAPI
 {
     struct Longtail_API m_API;
     int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block);
-    int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
+    int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
     int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index);
     int (*GetStoredBlockPath)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
 };

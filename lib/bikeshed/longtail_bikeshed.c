@@ -119,8 +119,13 @@ struct BikeshedJobAPI
 static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task_id, uint8_t channel, void* context)
 {
     struct JobWrapper* wrapper = (struct JobWrapper*)context;
-    wrapper->m_JobFunc(wrapper->m_Context);
+    int res = wrapper->m_JobFunc(wrapper->m_Context, task_id);
     LONGTAIL_FATAL_ASSERT(wrapper->m_JobAPI->m_PendingJobCount > 0, return BIKESHED_TASK_RESULT_COMPLETE)
+    if (res == EBUSY)
+    {
+        return BIKESHED_TASK_RESULT_BLOCKED;
+    }
+    LONGTAIL_FATAL_ASSERT(res == 0, return BIKESHED_TASK_RESULT_COMPLETE)
     Longtail_AtomicAdd32(&wrapper->m_JobAPI->m_PendingJobCount, -1);
     Longtail_AtomicAdd32(&wrapper->m_JobAPI->m_JobsCompleted, 1);
     return BIKESHED_TASK_RESULT_COMPLETE;
@@ -251,6 +256,13 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, struct Longt
     return 0;
 }
 
+static int Bikeshed_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id)
+{
+    struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
+    Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, 1, &job_id);
+    return 0;
+}
+
 static void Bikeshed_Dispose(struct Longtail_API* job_api)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
@@ -279,6 +291,7 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
     job_api->m_BikeshedAPI.AddDependecies = Bikeshed_AddDependecies;
     job_api->m_BikeshedAPI.ReadyJobs = Bikeshed_ReadyJobs;
     job_api->m_BikeshedAPI.WaitForAllJobs = Bikeshed_WaitForAllJobs;
+    job_api->m_BikeshedAPI.ResumeJob = Bikeshed_ResumeJob;
     job_api->m_Shed = 0;
     job_api->m_WorkerCount = worker_count;
     job_api->m_Workers = 0;

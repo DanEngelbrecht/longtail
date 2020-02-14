@@ -75,22 +75,37 @@ static int CompressBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* bloc
     return 0;
 }
 
-static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
+static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
-    int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block);
+    int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block, 0);
     if (err)
     {
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     if (!out_stored_block)
     {
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, 0);
+            return 0;
+        }
         return 0;
     }
 
     uint32_t compressionType = *(*out_stored_block)->m_BlockIndex->m_Tag;
     if (compressionType == 0)
     {
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, 0);
+            return 0;
+        }
         return 0;
     }
     struct Longtail_StoredBlock* compressed_stored_block = *out_stored_block;
@@ -106,6 +121,11 @@ static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* bloc
     if (err)
     {
         compressed_stored_block->Dispose(compressed_stored_block);
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
 
@@ -136,11 +156,21 @@ static int CompressBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* bloc
     {
         Longtail_Free(uncompressed_stored_block);
         compressed_stored_block->Dispose(compressed_stored_block);
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, EBADF);
+            return 0;
+        }
         return EBADF;
     }
     compressed_stored_block->Dispose(compressed_stored_block);
     uncompressed_stored_block->Dispose = CompressedStoredBlock_Dispose;
     *out_stored_block = uncompressed_stored_block;
+    if (async_complete_api)
+    {
+        async_complete_api->OnComplete(async_complete_api, 0);
+        return 0;
+    }
     return 0;
 }
 

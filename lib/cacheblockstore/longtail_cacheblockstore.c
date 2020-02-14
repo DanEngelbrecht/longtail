@@ -1,6 +1,7 @@
 #include "longtail_cacheblockstore.h"
 
 #include "../../src/longtail.h"
+#include "../longtail_platform.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -27,31 +28,52 @@ static int CacheBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_s
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_PutStoredBlock: Failed store block in remote block store, %d", err)
         return err;
     }
-    return 0;
+    return err;
 }
 
-static int CacheBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
+static int CacheBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
-    int err = cacheblockstore_api->m_LocalBlockStoreAPI->GetStoredBlock(cacheblockstore_api->m_LocalBlockStoreAPI, block_hash, out_stored_block);
+    int err = cacheblockstore_api->m_LocalBlockStoreAPI->GetStoredBlock(cacheblockstore_api->m_LocalBlockStoreAPI, block_hash, out_stored_block, 0);
     if (err == 0)
     {
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, 0);
+            return 0;
+        }
         return 0;
     }
     if (err != ENOENT)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_PutStoredBlock: Failed get block from local block store, %d", err)
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
 
-    err = cacheblockstore_api->m_RemoteBlockStoreAPI->GetStoredBlock(cacheblockstore_api->m_RemoteBlockStoreAPI, block_hash, out_stored_block);
+    err = cacheblockstore_api->m_RemoteBlockStoreAPI->GetStoredBlock(cacheblockstore_api->m_RemoteBlockStoreAPI, block_hash, out_stored_block, 0);
     if (err == ENOENT)
     {
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
+
     }
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_PutStoredBlock: Failed get block from remote block store, %d", err)
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     if (out_stored_block)
@@ -61,6 +83,17 @@ static int CacheBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_s
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "CacheBlockStore_PutStoredBlock: Failed store block in local block store, %d", err)
         }
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
+        return err;
+    }
+    if (async_complete_api)
+    {
+        async_complete_api->OnComplete(async_complete_api, 0);
+        return 0;
     }
     return 0;
 }

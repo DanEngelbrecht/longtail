@@ -76,16 +76,16 @@ int EndsWith(const char *str, const char *suffix)
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
-static void ScanBlock(void* context)
+static int ScanBlock(void* context, uint32_t job_id)
 {
-    LONGTAIL_FATAL_ASSERT(context != 0, return)
+    LONGTAIL_FATAL_ASSERT(context != 0, return 0)
 
     struct ScanBlockJob* job = (struct ScanBlockJob*)context;
     const char* block_path = job->m_BlockPath;
     if (!EndsWith(block_path, ".lrb"))
     {
         job->m_Err = ENOENT;
-        return;
+        return 0;
     }
 
     struct Longtail_StorageAPI* storage_api = job->m_StorageAPI;
@@ -99,6 +99,7 @@ static void ScanBlock(void* context)
 
     Longtail_Free(full_block_path);
     full_block_path = 0;
+    return 0;
 }
 
 static int ReadContent(
@@ -308,7 +309,7 @@ static int FSBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     return 0;
 }
 
-static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
+static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     char* block_path = GetBlockPath(fsblockstore_api, block_hash);
@@ -316,12 +317,22 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     {
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, ENOENT);
+            return 0;
+        }
         return ENOENT;
     }
     if (!out_stored_block)
     {
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, 0);
+            return 0;
+        }
         return 0;
     }
 
@@ -332,6 +343,11 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to open block `%s`, %d", block_path, err)
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     uint64_t stored_block_data_size;
@@ -342,6 +358,11 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
 
@@ -359,6 +380,11 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         stored_block = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     err = Longtail_InitStoredBlockFromData(
@@ -372,6 +398,11 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
         stored_block = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
+        if (async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, err);
+            return 0;
+        }
         return err;
     }
     stored_block->Dispose = FSStoredBlock_Dispose;
@@ -379,6 +410,11 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     block_path = 0;
 
     *out_stored_block = stored_block;
+    if (async_complete_api)
+    {
+        async_complete_api->OnComplete(async_complete_api, 0);
+        return 0;
+    }
     return 0;
 }
 
