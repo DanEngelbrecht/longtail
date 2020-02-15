@@ -485,7 +485,9 @@ static int FSBlockStore_GetIndex(
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
             return err;
         }
-        err = Longtail_WriteContentIndexToBuffer(*out_content_index, &fsblockstore_api->m_ContentIndexBuffer, &fsblockstore_api->m_ContentIndexSize);
+        size_t content_index_size;
+        err = Longtail_WriteContentIndexToBuffer(*out_content_index, &fsblockstore_api->m_ContentIndexBuffer, &content_index_size);
+        fsblockstore_api->m_ContentIndexSize = (uint64_t)content_index_size;
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         if (err)
         {
