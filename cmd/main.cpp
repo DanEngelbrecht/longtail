@@ -29,7 +29,7 @@ static void LogStdErr(void* , int level, const char* log)
 {
     fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
 }
-
+#if 0
 static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
 
 static int CreatePath(struct Longtail_StorageAPI* storage_api, const char* path)
@@ -1560,13 +1560,14 @@ static int Cmd_DownSyncVersion(
 
     return 1;
 }
+#endif // 0
 
 int main(int argc, char** argv)
 {
     int result = 0;
     Longtail_SetAssert(AssertFailure);
     Longtail_SetLog(LogStdErr, 0);
-
+#if 0
     int32_t target_chunk_size = 8;
     kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
 
@@ -2156,4 +2157,6 @@ end:
     Longtail_Free((void*)missing_content);
     Longtail_Free((void*)missing_content_index);
     return result;
+#endif
+    return 0;
 }
