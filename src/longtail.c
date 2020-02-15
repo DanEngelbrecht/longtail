@@ -2333,6 +2333,7 @@ struct WriteBlockJob
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
     uint32_t m_JobID;
+    struct Longtail_StoredBlock* m_StoredBlock;
     const char* m_AssetsFolder;
     TLongtail_Hash m_BlockHash;
     const struct Longtail_ContentIndex* m_ContentIndex;
@@ -2345,6 +2346,7 @@ struct WriteBlockJob
 static int BlockWriterJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
     struct WriteBlockJob* job = (struct WriteBlockJob*)async_complete_api;
+    job->m_StoredBlock->Dispose(job->m_StoredBlock);
     job->m_Err = err;
     job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
     return 0;
@@ -2484,20 +2486,21 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
     *block_index_ptr->m_Tag = tag;
     *block_index_ptr->m_ChunkCount = chunk_count;
 
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock));
-    stored_block->Dispose = DisposePutBlock;
-    stored_block->m_BlockIndex = block_index_ptr;
-    stored_block->m_BlockData = block_data_buffer;
-    stored_block->m_BlockChunksDataSize = block_data_size;
+    job->m_StoredBlock = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock));
+    job->m_StoredBlock->Dispose = DisposePutBlock;
+    job->m_StoredBlock->m_BlockIndex = block_index_ptr;
+    job->m_StoredBlock->m_BlockData = block_data_buffer;
+    job->m_StoredBlock->m_BlockChunksDataSize = block_data_size;
 
     job->m_JobID = job_id;
     job->m_AsyncCompleteAPI.OnComplete = BlockWriterJobOnComplete;
 
-    int err = block_store_api->PutStoredBlock(block_store_api, stored_block, &job->m_AsyncCompleteAPI);
+    int err = block_store_api->PutStoredBlock(block_store_api, job->m_StoredBlock, &job->m_AsyncCompleteAPI);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to store block 0x%" PRIx64 ", %d", block_hash, err)
-        stored_block->Dispose(stored_block);
+        job->m_StoredBlock->Dispose(job->m_StoredBlock);
+        job->m_StoredBlock = 0;
         job->m_Err = err;
         return 0;
     }
@@ -2584,6 +2587,7 @@ int Longtail_WriteContent(
         job->m_SourceStorageAPI = source_storage_api;
         job->m_BlockStoreAPI = block_store_api;
         job->m_JobAPI = job_api;
+        job->m_StoredBlock = 0;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
         job->m_BlockHash = block_hash;
