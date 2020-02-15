@@ -2865,7 +2865,7 @@ static int CreatePartialAssetWriteJob(
     return 0;
 }
 
-static int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
+int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
 {
     struct WritePartialAssetFromBlocksJob* job = (struct WritePartialAssetFromBlocksJob*)context;
 
@@ -3037,7 +3037,7 @@ static int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             job->m_Err = EINVAL;
             return 0;
         }
-        char* block_data = stored_block[block_readed_block_index]->m_BlockData;
+        char* block_data = (char*)stored_block[block_readed_block_index]->m_BlockData;
 
         uint32_t chunk_offset = job->m_ContentIndex->m_ChunkBlockOffsets[content_chunk_index];
         uint32_t chunk_size = job->m_ContentIndex->m_ChunkLengths[content_chunk_index];
