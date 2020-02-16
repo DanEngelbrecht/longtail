@@ -1,6 +1,8 @@
 #include "../src/longtail.h"
 #include "../src/ext/stb_ds.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
+#include "../lib/blake2/longtail_blake2.h"
+#include "../lib/blake3/longtail_blake3.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
@@ -1387,7 +1389,7 @@ static int Cmd_DownSyncVersion(
 }
 #endif // 0
 
-int parseLevel(const char* log_level_raw) {
+int ParseLogLevel(const char* log_level_raw) {
     if (0 == stricmp(log_level_raw, "info"))
     {
         return LONGTAIL_LOG_LEVEL_INFO;
@@ -1541,7 +1543,7 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     return registry;
 }
 
-uint32_t parseCompressionType(const char* compression_algorithm) {
+uint32_t ParseCompressionType(const char* compression_algorithm) {
 	if ((compression_algorithm == 0) || (strcmp("none", compression_algorithm) == 0))
     {
 		return 0;
@@ -1587,6 +1589,23 @@ uint32_t parseCompressionType(const char* compression_algorithm) {
 		return LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE;
     }
 	return 0xffffffff;
+}
+
+uint32_t ParseHashingType(const char* hashing_type)
+{
+    if (0 == hashing_type || (stricmp("blake3", hashing_type) == 0))
+    {
+        return LONGTAIL_BLAKE3_HASH_TYPE;
+    }
+    if (stricmp("blake2", hashing_type) == 0)
+    {
+        return LONGTAIL_BLAKE2_HASH_TYPE;
+    }
+    if (stricmp("meow", hashing_type) == 0)
+    {
+        return LONGTAIL_MEOW_HASH_TYPE;
+    }
+    return 0xffffffff;
 }
 
 static char* NormalizePath(const char* path)
@@ -1703,7 +1722,7 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        int log_level = log_level_raw ? parseLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
+        int log_level = log_level_raw ? ParseLogLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
         if (log_level == -1)
         {
             printf("Invalid log level `%s`\n", log_level_raw);
@@ -1711,10 +1730,17 @@ int main(int argc, char** argv)
         }
         Longtail_SetLogLevel(log_level);
 
-        uint32_t compression = parseCompressionType(compression_raw);
+        uint32_t compression = ParseCompressionType(compression_raw);
         if (compression == 0xffffffff)
         {
             printf("Invalid compression algorithm `%s`\n", compression_raw);
+            return 1;
+        }
+
+        uint32_t hashing = ParseHashingType(hasing_raw);
+        if (hashing == 0xffffffff)
+        {
+            printf("Invalid hashing algorithm `%s`\n", hasing_raw);
             return 1;
         }
 
@@ -1759,13 +1785,20 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        int log_level = log_level_raw ? parseLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
+        int log_level = log_level_raw ? ParseLogLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
         if (log_level == -1)
         {
             printf("Invalid log level `%s`\n", log_level_raw);
             return 1;
         }
         Longtail_SetLogLevel(log_level);
+
+        uint32_t hashing = ParseHashingType(hasing_raw);
+        if (hashing == 0xffffffff)
+        {
+            printf("Invalid hashing algorithm `%s`\n", hasing_raw);
+            return 1;
+        }
 
         const char* content_path = NormalizePath(content_path_raw ? content_path_raw : GetDefaultContentPath());
         const char* target_path = NormalizePath(target_path_raw);
