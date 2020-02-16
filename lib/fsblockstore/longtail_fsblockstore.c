@@ -336,11 +336,11 @@ static int FSBlockStore_PutStoredBlock(
     void* tmp = fsblockstore_api->m_ContentIndexBuffer;
     fsblockstore_api->m_ContentIndexBuffer = 0;
     fsblockstore_api->m_ContentIndexSize = 0;
+    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
     if (tmp)
     {
         Longtail_Free(tmp);
     }
-    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
 
     if (async_complete_api)
     {
