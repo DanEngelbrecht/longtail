@@ -149,139 +149,6 @@ struct Progress
     }
 };
 
-const uint32_t LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0');
-const uint32_t LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'a');
-const uint32_t LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'b');
-const uint32_t LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'c');
-
-const uint32_t LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
-
-const uint32_t LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2');
-
-const uint32_t LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
-
-static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
-{
-    uint32_t count = *file_infos->m_Paths.m_PathCount;
-    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
-    for (uint32_t i = 0; i < count; ++i)
-    {
-        const char* path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[i]];
-        const char* extension_start = strrchr(path, '.');
-        if ((extension_start == 0) ||
-            (0 == strcmp(extension_start, ".zip")) ||
-            (0 == strcmp(extension_start, ".7z")) ||
-//            (0 == strcmp(extension_start, ".pak")) ||
-            (0 == strcmp(extension_start, ".rar")) )
-        {
-            result[i] = 0;
-            continue;
-        }
-        result[i] = LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE;
-    }
-    return result;
-}
-
-Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
-{
-    struct Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
-    if (lizard_compression == 0)
-    {
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
-    if (lz4_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
-    if (brotli_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        Longtail_DisposeAPI(&lz4_compression->m_API);
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
-    if (zstd_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        Longtail_DisposeAPI(&lz4_compression->m_API);
-        Longtail_DisposeAPI(&brotli_compression->m_API);
-        return 0;
-    }
-
-    uint32_t compression_types[13] = {
-        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE,
-        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
-        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE,
-
-        LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE,
-        LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE,
-
-        LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE,
-
-        LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[13] = {
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        lizard_compression,
-        lizard_compression,
-        lizard_compression,
-        lz4_compression,
-        zstd_compression,
-        zstd_compression,
-        zstd_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[13] = {
-        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MIN_QUALITY,
-        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MAX_QUALITY,
-        LONGTAIL_LIZARD_MIN_COMPRESSION,
-        LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
-        LONGTAIL_LIZARD_MAX_COMPRESSION,
-        LONGTAIL_LZ4_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MIN_COMPRESSION,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MAX_COMPRESSION};
-
-
-    struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        13,
-        (const uint32_t*)compression_types,
-        (const struct Longtail_CompressionAPI **)compression_apis,
-        (const Longtail_CompressionAPI_HSettings*)compression_settings);
-    if (registry == 0)
-    {
-        SAFE_DISPOSE_API(lizard_compression);
-        SAFE_DISPOSE_API(lz4_compression);
-        SAFE_DISPOSE_API(brotli_compression);
-        SAFE_DISPOSE_API(zstd_compression);
-        return 0;
-    }
-    return registry;
-}
 
 
 
@@ -1540,6 +1407,188 @@ int parseLevel(const char* log_level_raw) {
     return -1;
 }
 
+const uint32_t LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0');
+const uint32_t LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1');
+const uint32_t LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2');
+const uint32_t LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'a');
+const uint32_t LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'b');
+const uint32_t LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'c');
+
+const uint32_t LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
+const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
+const uint32_t LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
+
+const uint32_t LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2');
+
+const uint32_t LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
+const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
+const uint32_t LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
+
+static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
+{
+    uint32_t count = *file_infos->m_Paths.m_PathCount;
+    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const char* path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[i]];
+        const char* extension_start = strrchr(path, '.');
+        if ((extension_start == 0) ||
+            (0 == strcmp(extension_start, ".zip")) ||
+            (0 == strcmp(extension_start, ".7z")) ||
+//            (0 == strcmp(extension_start, ".pak")) ||
+            (0 == strcmp(extension_start, ".rar")) )
+        {
+            result[i] = 0;
+            continue;
+        }
+        result[i] = LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE;
+    }
+    return result;
+}
+
+Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
+{
+    struct Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
+    if (lizard_compression == 0)
+    {
+        return 0;
+    }
+
+    struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
+    if (lz4_compression == 0)
+    {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
+        return 0;
+    }
+
+    struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
+    if (brotli_compression == 0)
+    {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
+        Longtail_DisposeAPI(&lz4_compression->m_API);
+        return 0;
+    }
+
+    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
+    if (zstd_compression == 0)
+    {
+        Longtail_DisposeAPI(&lizard_compression->m_API);
+        Longtail_DisposeAPI(&lz4_compression->m_API);
+        Longtail_DisposeAPI(&brotli_compression->m_API);
+        return 0;
+    }
+
+    uint32_t compression_types[13] = {
+        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE,
+        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
+        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE,
+        LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE,
+        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE,
+        LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE,
+
+        LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE,
+        LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
+        LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE,
+
+        LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE,
+
+        LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE,
+        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE,
+        LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE};
+    struct Longtail_CompressionAPI* compression_apis[13] = {
+        brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        brotli_compression,
+        lizard_compression,
+        lizard_compression,
+        lizard_compression,
+        lz4_compression,
+        zstd_compression,
+        zstd_compression,
+        zstd_compression};
+    Longtail_CompressionAPI_HSettings compression_settings[13] = {
+        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
+        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
+        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
+        LONGTAIL_BROTLI_TEXT_MIN_QUALITY,
+        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY,
+        LONGTAIL_BROTLI_TEXT_MAX_QUALITY,
+        LONGTAIL_LIZARD_MIN_COMPRESSION,
+        LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
+        LONGTAIL_LIZARD_MAX_COMPRESSION,
+        LONGTAIL_LZ4_DEFAULT_COMPRESSION,
+        LONGTAIL_ZSTD_MIN_COMPRESSION,
+        LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
+        LONGTAIL_ZSTD_MAX_COMPRESSION};
+
+
+    struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
+        13,
+        (const uint32_t*)compression_types,
+        (const struct Longtail_CompressionAPI **)compression_apis,
+        (const Longtail_CompressionAPI_HSettings*)compression_settings);
+    if (registry == 0)
+    {
+        SAFE_DISPOSE_API(lizard_compression);
+        SAFE_DISPOSE_API(lz4_compression);
+        SAFE_DISPOSE_API(brotli_compression);
+        SAFE_DISPOSE_API(zstd_compression);
+        return 0;
+    }
+    return registry;
+}
+
+uint32_t parseCompressionType(const char* compression_algorithm) {
+	if ((compression_algorithm == 0) || (strcmp("none", compression_algorithm) == 0))
+    {
+		return 0;
+    }
+	if (strcmp("brotli", compression_algorithm) == 0)
+    {
+        return LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE;
+    }
+	if (strcmp("brotli_min", compression_algorithm) == 0)
+    {
+        return LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE;
+    }
+	if (strcmp("brotli_max", compression_algorithm) == 0)
+    {
+		return LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE;
+    }
+	if (strcmp("brotli_text", compression_algorithm) == 0)
+    {
+		return LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE;
+    }
+	if (strcmp("brotli_text_min", compression_algorithm) == 0)
+    {
+		return LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE;
+    }
+	if (strcmp("brotli_text_max", compression_algorithm) == 0)
+    {
+		return LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE;
+    }
+	if (strcmp("lz4", compression_algorithm) == 0)
+    {
+		return LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE;
+    }
+	if (strcmp("zstd", compression_algorithm) == 0)
+    {
+		return LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE;
+    }
+	if (strcmp("zstd_min", compression_algorithm) == 0)
+    {
+		return LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE;
+    }
+	if (strcmp("zstd_max", compression_algorithm) == 0)
+    {
+		return LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE;
+    }
+	return 0xffffffff;
+}
+
 static char* NormalizePath(const char* path)
 {
     if (!path)
@@ -1661,6 +1710,13 @@ int main(int argc, char** argv)
             return 1;
         }
         Longtail_SetLogLevel(log_level);
+
+        uint32_t compression = parseCompressionType(compression_raw);
+        if (compression == 0xffffffff)
+        {
+            printf("Invalid compression algorithm `%s`\n", compression_raw);
+            return 1;
+        }
 
         const char* source_path = NormalizePath(source_path_raw);
         const char* source_index = source_index_raw ? NormalizePath(source_index_raw) : 0;
