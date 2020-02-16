@@ -629,6 +629,18 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
     return path;
 }
 
+char* Longtail_GetTempFolder()
+{
+    char tmp[MAX_PATH + 1];
+    DWORD res = GetTempPathA(MAX_PATH + 1, tmp);
+    if (res == 0 || res > MAX_PATH)
+    {
+        return 0;
+    }
+    return Longtail_Strdup(tmp);
+}
+
+
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -1369,6 +1381,10 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
     return path;
 }
 
+char* Longtail_GetTempFolder()
+{
+    return Longtail_Strdup("/tmp");
+}
 
 
 #endif

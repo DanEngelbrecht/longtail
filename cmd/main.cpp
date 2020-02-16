@@ -73,48 +73,6 @@ static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char*
     return err;
 }
 
-static char* NormalizePath(const char* path)
-{
-    if (!path)
-    {
-        return 0;
-    }
-    char* normalized_path = Longtail_Strdup(path);
-    size_t wi = 0;
-    size_t ri = 0;
-    while (path[ri])
-    {
-        switch (path[ri])
-        {
-        case '/':
-            if (wi && normalized_path[wi - 1] == '/')
-            {
-                ++ri;
-            }
-            else
-            {
-                normalized_path[wi++] = path[ri++];
-            }
-            break;
-        case '\\':
-            if (wi && normalized_path[wi - 1] == '/')
-            {
-                ++ri;
-            }
-            else
-            {
-                normalized_path[wi++] = '/';
-                ++ri;
-            }
-            break;
-        default:
-            normalized_path[wi++] = path[ri++];
-            break;
-        }
-    }
-    normalized_path[wi] = '\0';
-    return normalized_path;
-}
 
 struct HashToIndex
 {
@@ -1562,21 +1520,220 @@ static int Cmd_DownSyncVersion(
 }
 #endif // 0
 
+int parseLevel(const char* log_level_raw) {
+    if (0 == stricmp(log_level_raw, "info"))
+    {
+        return LONGTAIL_LOG_LEVEL_INFO;
+    }
+    if (0 == stricmp(log_level_raw, "debug"))
+    {
+        return LONGTAIL_LOG_LEVEL_DEBUG;
+    }
+    if (0 == stricmp(log_level_raw, "warn"))
+    {
+        return LONGTAIL_LOG_LEVEL_WARNING;
+    }
+    if (0 == stricmp(log_level_raw, "error"))
+    {
+        return LONGTAIL_LOG_LEVEL_ERROR;
+    }
+    return -1;
+}
+
+static char* NormalizePath(const char* path)
+{
+    if (!path)
+    {
+        return 0;
+    }
+    char* normalized_path = Longtail_Strdup(path);
+    size_t wi = 0;
+    size_t ri = 0;
+    while (path[ri])
+    {
+        switch (path[ri])
+        {
+        case '/':
+            if (wi && normalized_path[wi - 1] == '/')
+            {
+                ++ri;
+            }
+            else
+            {
+                normalized_path[wi++] = path[ri++];
+            }
+            break;
+        case '\\':
+            if (wi && normalized_path[wi - 1] == '/')
+            {
+                ++ri;
+            }
+            else
+            {
+                normalized_path[wi++] = '/';
+                ++ri;
+            }
+            break;
+        default:
+            normalized_path[wi++] = path[ri++];
+            break;
+        }
+    }
+    normalized_path[wi] = '\0';
+    return normalized_path;
+}
+
+char* GetDefaultContentPath()
+{
+    char* tmp_folder = Longtail_GetTempFolder();
+    if (!tmp_folder)
+    {
+        return 0;
+    }
+    const char* default_content_path = Longtail_ConcatPath(tmp_folder, "longtail_cache");
+    Longtail_Free(tmp_folder);
+    return (char*)default_content_path;
+}
+
 int main(int argc, char** argv)
 {
     int result = 0;
     Longtail_SetAssert(AssertFailure);
     Longtail_SetLog(LogStdErr, 0);
-#if 0
+
+    // General options
+    const char* log_level_raw = 0;
+    kgflags_string("log-level", "warn", "Log level (debug, info, warn, error)", false, &log_level_raw);
+
     int32_t target_chunk_size = 8;
     kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
-
-    int32_t max_chunks_per_block = 0;
-    kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
 
     int32_t target_block_size = 0;
     kgflags_int("target-block-size", 32768 * 12, "Target block size", false, &target_block_size);
 
+    int32_t max_chunks_per_block = 0;
+    kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
+
+    const char* storage_uri_raw = 0;
+    kgflags_string("storage-uri", 0, "Path to version index output", true, &storage_uri_raw);
+
+    const char* hasing_raw = 0;
+    kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake2, blake3, meow", false, &hasing_raw);
+
+    if (argc < 2)
+    {
+        kgflags_set_custom_description("Use command `upsync` or `downsync`");
+        kgflags_print_usage();
+        return 1;
+    }
+
+    const char* command = argv[1];
+    if (((strcmp(command, "upsync") != 0) && (strcmp(command, "downsync") != 0)))
+    {
+        kgflags_set_custom_description("Use command `upsync` or `downsync`");
+        kgflags_print_usage();
+        return 1;
+    }
+
+    if (strcmp(command, "upsync") == 0){
+        const char* source_path_raw = 0;
+        kgflags_string("source-path", 0, "Source folder path", true, &source_path_raw);
+
+        const char* source_index_raw = 0;
+        kgflags_string("source-index-path", 0, "Optional pre-computed index of source-path", false, &source_index_raw);
+
+        const char* target_path_raw = 0;
+        kgflags_string("target-path", 0, "Target file path relative to --storage-uri", true, &target_path_raw);
+
+        const char* compression_raw = 0;
+        kgflags_string("compression-algorithm", "zstd", "Comression algorithm: none, brotli, brotli_min, brotli_max, brotli_text, brotli_text_min, brotli_text_max, lz4, zstd, zstd_min, zstd_max", false, &compression_raw);
+
+        if (!kgflags_parse(argc, argv)) {
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+
+        int log_level = log_level_raw ? parseLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
+        if (log_level == -1)
+        {
+            printf("Invalid log level `%s`\n", log_level_raw);
+            return 1;
+        }
+        Longtail_SetLogLevel(log_level);
+
+        const char* source_path = NormalizePath(source_path_raw);
+        const char* source_index = source_index_raw ? NormalizePath(source_index_raw) : 0;
+        const char* target_path = NormalizePath(target_path_raw);
+
+        printf("upsync\n");
+        printf("    storage_uri_raw: `%s`\n", storage_uri_raw);
+        printf("    source_path:     `%s`\n", source_path);
+        printf("    source_index:    `%s`\n", source_index ? source_index : "<none>");
+        printf("    target_path:     `%s`\n", target_path);
+        printf("    compression_raw: `%s`\n", compression_raw);
+
+        // Upsync!
+
+        Longtail_Free((void*)source_path);
+        Longtail_Free((void*)source_index);
+        Longtail_Free((void*)target_path);
+        return 0;
+    }
+    else
+    {
+        const char* content_path_raw = 0;
+        kgflags_string("content-path", 0, "Location for downloaded/cached blocks", false, &content_path_raw);
+
+        const char* target_path_raw = 0;
+        kgflags_string("target-path", 0, "Target folder path", true, &target_path_raw);
+
+        const char* target_index_raw = 0;
+        kgflags_string("target-index-path", 0, "Optional pre-computed index of target-path", false, &target_index_raw);
+
+        const char* source_path_raw = 0;
+        kgflags_string("source-path", 0, "Source file path relative to --storage-uri", true, &source_path_raw);
+
+        bool retain_permission_raw = 0;
+        kgflags_bool("retain-permissions", true, "Disable setting permission on file/directories from source", false, &retain_permission_raw);
+
+        if (!kgflags_parse(argc, argv)) {
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+
+        int log_level = log_level_raw ? parseLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
+        if (log_level == -1)
+        {
+            printf("Invalid log level `%s`\n", log_level_raw);
+            return 1;
+        }
+        Longtail_SetLogLevel(log_level);
+
+        const char* content_path = NormalizePath(content_path_raw ? content_path_raw : GetDefaultContentPath());
+        const char* target_path = NormalizePath(target_path_raw);
+        const char* target_index = target_index_raw ? NormalizePath(target_index_raw) : 0;
+        const char* source_path = NormalizePath(source_path_raw);
+
+        printf("downsync\n");
+        printf("    storage_uri_raw:       `%s`\n", storage_uri_raw);
+        printf("    content_path:          `%s`\n", content_path);
+        printf("    target_path:           `%s`\n", target_path);
+        printf("    target_index:          `%s`\n", target_index ? target_index : "<none>");
+        printf("    source_path:           `%s`\n", source_path);
+        printf("    retain_permission_raw: `%s`\n", retain_permission_raw ? "true" : "false");
+
+        // Downsync!
+
+        Longtail_Free((void*)source_path);
+        Longtail_Free((void*)target_index);
+        Longtail_Free((void*)target_path);
+        Longtail_Free((void*)content_path);
+
+        return 0;
+    }
+#if 0
     const char* create_version_index_raw = 0;
     kgflags_string("create-version-index", 0, "Path to version index output", false, &create_version_index_raw);
 
