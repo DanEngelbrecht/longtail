@@ -2346,9 +2346,15 @@ struct WriteBlockJob
 static int BlockWriterJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
     struct WriteBlockJob* job = (struct WriteBlockJob*)async_complete_api;
+    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_StoredBlock, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_JobID, return EINVAL);
+    uint32_t job_id = job->m_JobID;
     job->m_StoredBlock->Dispose(job->m_StoredBlock);
+    job->m_StoredBlock = 0;
+    job->m_JobID = 0;
     job->m_Err = err;
-    job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
+    job->m_JobAPI->ResumeJob(job->m_JobAPI, job_id);
     return 0;
 }
 
@@ -2365,9 +2371,12 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
     LONGTAIL_FATAL_ASSERT(context != 0, return 0)
 
     struct WriteBlockJob* job = (struct WriteBlockJob*)context;
+    LONGTAIL_FATAL_ASSERT(job->m_JobID == 0, return EINVAL);
+
     if (job->m_AsyncCompleteAPI.OnComplete)
     {
         // We got a notification so we are complete
+        job->m_AsyncCompleteAPI.OnComplete = 0;
         return 0;
     }
 
@@ -2501,6 +2510,7 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to store block 0x%" PRIx64 ", %d", block_hash, err)
         job->m_StoredBlock->Dispose(job->m_StoredBlock);
         job->m_StoredBlock = 0;
+        job->m_JobID = 0;
         job->m_Err = err;
         return 0;
     }
@@ -2587,6 +2597,7 @@ int Longtail_WriteContent(
         job->m_SourceStorageAPI = source_storage_api;
         job->m_BlockStoreAPI = block_store_api;
         job->m_JobAPI = job_api;
+        job->m_JobID = 0;
         job->m_StoredBlock = 0;
         job->m_AssetsFolder = assets_folder;
         job->m_ContentIndex = content_index;
@@ -2699,6 +2710,7 @@ struct BlockReaderJob
 int BlockReaderJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
     struct BlockReaderJob* job = (struct BlockReaderJob*)async_complete_api;
+    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete, return EINVAL);
     job->m_Err = err;
     job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
     return 0;
@@ -2713,6 +2725,7 @@ static int BlockReader(void* context, uint32_t job_id)
     if (job->m_AsyncCompleteAPI.OnComplete)
     {
         // We got a notification so we are complete
+        job->m_AsyncCompleteAPI.OnComplete = 0;
         return 0;
     }
 

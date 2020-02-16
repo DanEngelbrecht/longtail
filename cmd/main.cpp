@@ -1,5 +1,9 @@
+#ifdef _MSC_VER
+#include <cstdlib>
+#include <crtdbg.h>
+#endif
+
 #include "../src/longtail.h"
-#include "../src/ext/stb_ds.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
@@ -113,43 +117,6 @@ static int PrintFormattedBlockList(Longtail_BlockStoreAPI* block_store_api, Long
     return 1;
 }
 
-struct Progress
-{
-    struct Longtail_ProgressAPI m_API;
-    Progress(const char* task)
-        : m_OldPercent(0)
-    {
-        m_API.m_API.Dispose = 0;
-        m_API.OnProgress = ProgressFunc;
-        fprintf(stderr, "%s: ", task);
-    }
-    ~Progress()
-    {
-        fprintf(stderr, " Done\n");
-    }
-    uint32_t m_OldPercent;
-    static void ProgressFunc(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
-    {
-        Progress* p = (Progress*)progress_api;
-        if (jobs_done < total)
-        {
-            uint32_t percent_done = (100 * jobs_done) / total;
-            if (percent_done - p->m_OldPercent >= 5)
-            {
-                fprintf(stderr, "%u%% ", percent_done);
-                p->m_OldPercent = percent_done;
-            }
-            return;
-        }
-        if (p->m_OldPercent != 0)
-        {
-            if (p->m_OldPercent != 100)
-            {
-                fprintf(stderr, "100%%");
-            }
-        }
-    }
-};
 
 
 
@@ -1389,6 +1356,44 @@ static int Cmd_DownSyncVersion(
 }
 #endif // 0
 
+struct Progress
+{
+    struct Longtail_ProgressAPI m_API;
+    Progress(const char* task)
+        : m_OldPercent(0)
+    {
+        m_API.m_API.Dispose = 0;
+        m_API.OnProgress = ProgressFunc;
+        fprintf(stderr, "%s: ", task);
+    }
+    ~Progress()
+    {
+        fprintf(stderr, " Done\n");
+    }
+    uint32_t m_OldPercent;
+    static void ProgressFunc(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
+    {
+        Progress* p = (Progress*)progress_api;
+        if (jobs_done < total)
+        {
+            uint32_t percent_done = (100 * jobs_done) / total;
+            if (percent_done - p->m_OldPercent >= 5)
+            {
+                fprintf(stderr, "%u%% ", percent_done);
+                p->m_OldPercent = percent_done;
+            }
+            return;
+        }
+        if (p->m_OldPercent != 0)
+        {
+            if (p->m_OldPercent != 100)
+            {
+                fprintf(stderr, "100%%");
+            }
+        }
+    }
+};
+
 int ParseLogLevel(const char* log_level_raw) {
     if (0 == stricmp(log_level_raw, "info"))
     {
@@ -1407,6 +1412,23 @@ int ParseLogLevel(const char* log_level_raw) {
         return LONGTAIL_LOG_LEVEL_ERROR;
     }
     return -1;
+}
+
+struct Longtail_HashAPI* CreateHashAPIFromIdentifier(uint32_t hash_type)
+{
+    if (hash_type == LONGTAIL_BLAKE2_HASH_TYPE)
+    {
+        return Longtail_CreateBlake2HashAPI();
+    }
+    if (hash_type == LONGTAIL_BLAKE3_HASH_TYPE)
+    {
+        return Longtail_CreateBlake3HashAPI();
+    }
+    if (hash_type == LONGTAIL_MEOW_HASH_TYPE)
+    {
+        return Longtail_CreateMeowHashAPI();
+    }
+    return 0;
 }
 
 const uint32_t LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0');
@@ -1663,8 +1685,171 @@ char* GetDefaultContentPath()
     return (char*)default_content_path;
 }
 
+int UpSync(
+    const char* storage_uri_raw,
+    const char* source_path,
+    const char* optional_source_index_path,
+    const char* target_path,
+    uint32_t target_chunk_size,
+    uint32_t target_block_size,
+    uint32_t max_chunks_per_block,
+    uint32_t hashing_type,
+    uint32_t compression_type)
+{
+    const char* storage_path = NormalizePath(storage_uri_raw);
+    struct Longtail_HashAPI* hash_api = CreateHashAPIFromIdentifier(hashing_type);
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
+    struct Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
+
+    Longtail_VersionIndex* source_version_index = 0;
+    if (optional_source_index_path)
+    {
+        int err = Longtail_ReadVersionIndex(storage_api, optional_source_index_path, &source_version_index);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_source_index_path, err);
+        }
+    }
+    if (source_version_index == 0)
+    {
+        struct Longtail_FileInfos* file_infos;
+        int err = Longtail_GetFilesRecursively(
+            storage_api,
+            source_path,
+            &file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", source_path, err);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(store_block_fsstore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_api);
+            Longtail_Free((char*)storage_path);
+            return err;
+        }
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * (*file_infos->m_Paths.m_PathCount));
+        for (uint32_t i = 0; i < (*file_infos->m_Paths.m_PathCount); ++i)
+        {
+            tags[i] = compression_type;
+        }
+        Progress create_version_progress("Indexing version");
+        err = Longtail_CreateVersionIndex(
+            storage_api,
+            hash_api,
+            job_api,
+            &create_version_progress.m_API,
+            source_path,
+            &file_infos->m_Paths,
+            file_infos->m_FileSizes,
+            file_infos->m_Permissions,
+            tags,
+            target_chunk_size,
+            &source_version_index);
+        Longtail_Free(tags);
+        Longtail_Free(file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", source_path, err);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(store_block_fsstore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_api);
+            Longtail_Free((char*)storage_path);
+            return err;
+        }
+    }
+    struct Longtail_ContentIndex* version_content_index = 0;
+    int err = Longtail_CreateContentIndex(
+        hash_api,
+        *source_version_index->m_ChunkCount,
+        source_version_index->m_ChunkHashes,
+        source_version_index->m_ChunkSizes,
+        source_version_index->m_ChunkTags,
+        target_block_size,
+        max_chunks_per_block,
+        &version_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for `%s`, %d", source_path, err);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_api);
+        Longtail_Free((char*)storage_path);
+        return err;
+    }
+
+    Progress write_content_progress("Writing blocks");
+    err = Longtail_WriteContent(
+        storage_api,
+        store_block_store_api,
+        job_api,
+        &write_content_progress.m_API,
+        version_content_index,
+        source_version_index,
+        source_path);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
+        Longtail_Free(version_content_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_api);
+        Longtail_Free((char*)storage_path);
+        return err;
+    }
+    Longtail_Free(version_content_index);
+
+    const char* target_index_path = Longtail_ConcatPath(storage_path, target_path);
+    err = Longtail_WriteVersionIndex(
+        storage_api,
+        source_version_index,
+        target_index_path);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version index for `%s` to `%s`, %d", source_path, target_index_path, err);
+        Longtail_Free((void*)target_index_path);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_api);
+        Longtail_Free((char*)storage_path);
+        return err;
+    }
+    Longtail_Free((void*)target_index_path);
+    Longtail_Free(source_version_index);
+    SAFE_DISPOSE_API(store_block_store_api);
+    SAFE_DISPOSE_API(store_block_fsstore_api);
+    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    Longtail_Free((char*)storage_path);
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
+#ifdef _MSC_VER
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif
     int result = 0;
     Longtail_SetAssert(AssertFailure);
     Longtail_SetLog(LogStdErr, 0);
@@ -1748,19 +1933,27 @@ int main(int argc, char** argv)
         const char* source_index = source_index_raw ? NormalizePath(source_index_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
 
-        printf("upsync\n");
-        printf("    storage_uri_raw: `%s`\n", storage_uri_raw);
-        printf("    source_path:     `%s`\n", source_path);
-        printf("    source_index:    `%s`\n", source_index ? source_index : "<none>");
-        printf("    target_path:     `%s`\n", target_path);
-        printf("    compression_raw: `%s`\n", compression_raw);
-
-        // Upsync!
+        int err = UpSync(
+            storage_uri_raw,
+            source_path,
+            source_index,
+            target_path,
+            target_chunk_size,
+            target_block_size,
+            max_chunks_per_block,
+            hashing,
+            compression);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)source_index);
         Longtail_Free((void*)target_path);
-        return 0;
+#ifdef _MSC_VER
+        if (0 == result)
+        {
+            _CrtDumpMemoryLeaks();
+        }
+#endif
+        return err;
     }
     else
     {
@@ -1820,6 +2013,12 @@ int main(int argc, char** argv)
         Longtail_Free((void*)target_path);
         Longtail_Free((void*)content_path);
 
+#ifdef _MSC_VER
+        if (0 == result)
+        {
+            _CrtDumpMemoryLeaks();
+        }
+#endif
         return 0;
     }
 #if 0

@@ -42,8 +42,8 @@ static char* GetBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtail_Ha
 {
     char block_name[MAX_BLOCK_NAME_LENGTH];
     GetBlockName(block_hash, block_name);
-    char file_name[64];
-    sprintf(file_name, "%s.lrb", block_name);
+    char file_name[72];
+    sprintf(file_name, "chunks/%s.lrb", block_name);
     return fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, file_name);
 }
 
@@ -51,8 +51,8 @@ static char* GetTempBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtai
 {
     char block_name[MAX_BLOCK_NAME_LENGTH];
     GetBlockName(block_hash, block_name);
-    char file_name[64];
-    sprintf(file_name, "%s.tmp", block_name);
+    char file_name[72];
+    sprintf(file_name, "chunks/%s.tmp", block_name);
     return fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, file_name);
 }
 
@@ -257,6 +257,7 @@ static int FSBlockStore_PutStoredBlock(
         }
         return err;
     }
+    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
 
     uint32_t write_offset = 0;
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
@@ -265,7 +266,6 @@ static int FSBlockStore_PutStoredBlock(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write block index to file `%s`, %d", tmp_block_path, err)
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
         block_file_handle = 0;
         Longtail_Free((char*)tmp_block_path);
@@ -285,7 +285,6 @@ static int FSBlockStore_PutStoredBlock(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write chunk data to file `%s`, %d", tmp_block_path, err)
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
@@ -312,7 +311,6 @@ static int FSBlockStore_PutStoredBlock(
             err = 0;
         }
     }
-    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
 
     if (err)
     {
@@ -334,6 +332,7 @@ static int FSBlockStore_PutStoredBlock(
     block_path = 0;
 
     // TODO: Be better - for now now, flush local cache of content index
+    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     void* tmp = fsblockstore_api->m_ContentIndexBuffer;
     fsblockstore_api->m_ContentIndexBuffer = 0;
     fsblockstore_api->m_ContentIndexSize = 0;
@@ -341,6 +340,7 @@ static int FSBlockStore_PutStoredBlock(
     {
         Longtail_Free(tmp);
     }
+    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
 
     if (async_complete_api)
     {
