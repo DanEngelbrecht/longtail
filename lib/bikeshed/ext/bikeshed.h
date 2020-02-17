@@ -891,12 +891,12 @@ int Bikeshed_ExecuteOne(Bikeshed shed, uint8_t channel)
     struct Bikeshed_Task_private* task      = &shed->m_Tasks[task_index - 1];
     Bikeshed_TaskID task_id                 = task->m_TaskID;
 
-    enum Bikeshed_TaskResult task_result    = task->m_TaskFunc(shed, task_id, channel, task->m_TaskContext);
-
     BIKESHED_FATAL_ASSERT_PRIVATE(0 == BIKESHED_ATOMICADD_PRIVATE(&task->m_ChildDependencyCount, -0x20000000), return 0)
+    enum Bikeshed_TaskResult task_result    = task->m_TaskFunc(shed, task_id, channel, task->m_TaskContext);
 
     if (task_result == BIKESHED_TASK_RESULT_COMPLETE)
     {
+        BIKESHED_FATAL_ASSERT_PRIVATE(0 == task->m_ChildDependencyCount, return 0);
         if (task->m_FirstDependencyIndex)
         {
             Bikeshed_ResolveTask_private(shed, task->m_FirstDependencyIndex);

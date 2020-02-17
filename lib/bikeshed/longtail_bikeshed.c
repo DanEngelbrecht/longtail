@@ -119,8 +119,13 @@ struct BikeshedJobAPI
 static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task_id, uint8_t channel, void* context)
 {
     struct JobWrapper* wrapper = (struct JobWrapper*)context;
-    wrapper->m_JobFunc(wrapper->m_Context);
+    int res = wrapper->m_JobFunc(wrapper->m_Context, task_id);
+    if (res == EBUSY)
+    {
+        return BIKESHED_TASK_RESULT_BLOCKED;
+    }
     LONGTAIL_FATAL_ASSERT(wrapper->m_JobAPI->m_PendingJobCount > 0, return BIKESHED_TASK_RESULT_COMPLETE)
+    LONGTAIL_FATAL_ASSERT(res == 0, return BIKESHED_TASK_RESULT_COMPLETE)
     Longtail_AtomicAdd32(&wrapper->m_JobAPI->m_PendingJobCount, -1);
     Longtail_AtomicAdd32(&wrapper->m_JobAPI->m_JobsCompleted, 1);
     return BIKESHED_TASK_RESULT_COMPLETE;
@@ -217,15 +222,15 @@ static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_coun
     return 0;
 }
 
-static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, void* context, Longtail_JobAPI_ProgressFunc process_func)
+static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t old_pending_count = 0;
     while (bikeshed_job_api->m_PendingJobCount > 0)
     {
-        if (process_func)
+        if (progressAPI)
         {
-            process_func(context, (uint32_t)bikeshed_job_api->m_ReservedJobCount, (uint32_t)bikeshed_job_api->m_JobsCompleted);
+            progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_api->m_ReservedJobCount, (uint32_t)bikeshed_job_api->m_JobsCompleted);
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
         {
@@ -237,9 +242,9 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, void* contex
         }
         Longtail_Sleep(1000);
     }
-    if (process_func)
+    if (progressAPI)
     {
-        process_func(context, (uint32_t)bikeshed_job_api->m_SubmittedJobCount, (uint32_t)bikeshed_job_api->m_SubmittedJobCount);
+        progressAPI->OnProgress(progressAPI, (uint32_t)bikeshed_job_api->m_SubmittedJobCount, (uint32_t)bikeshed_job_api->m_SubmittedJobCount);
     }
     bikeshed_job_api->m_SubmittedJobCount = 0;
 	Longtail_Free(bikeshed_job_api->m_ReservedTasksIDs);
@@ -248,6 +253,13 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, void* contex
     bikeshed_job_api->m_ReservedJobs = 0;
     bikeshed_job_api->m_JobsCompleted = 0;
     bikeshed_job_api->m_ReservedJobCount = 0;
+    return 0;
+}
+
+static int Bikeshed_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id)
+{
+    struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
+    Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, 1, &job_id);
     return 0;
 }
 
@@ -279,6 +291,7 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
     job_api->m_BikeshedAPI.AddDependecies = Bikeshed_AddDependecies;
     job_api->m_BikeshedAPI.ReadyJobs = Bikeshed_ReadyJobs;
     job_api->m_BikeshedAPI.WaitForAllJobs = Bikeshed_WaitForAllJobs;
+    job_api->m_BikeshedAPI.ResumeJob = Bikeshed_ResumeJob;
     job_api->m_Shed = 0;
     job_api->m_WorkerCount = worker_count;
     job_api->m_Workers = 0;

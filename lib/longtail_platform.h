@@ -72,6 +72,8 @@ void    Longtail_CloseFile(HLongtail_OpenFile handle);
 // Not sure about doing memory allocation here...
 const char* Longtail_ConcatPath(const char* folder, const char* file);
 
+char* Longtail_GetTempFolder();
+
 #ifdef __cplusplus
 }
 #endif
