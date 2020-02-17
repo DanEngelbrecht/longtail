@@ -1,4 +1,4 @@
-#ifdef _MSC_VER
+#if defined(_CRTDBG_MAP_ALLOC)
 #include <cstdlib>
 #include <crtdbg.h>
 #endif
@@ -61,19 +61,19 @@ struct Progress
     static void ProgressFunc(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
     {
         Progress* p = (Progress*)progress_api;
-        if (p->m_JobsDone == 0)
-        {
-            fprintf(stderr, "%s: ", p->m_Task);
-        }
-        p->m_JobsDone = jobs_done;
         if (jobs_done < total)
         {
+            if (p->m_JobsDone == 0)
+            {
+                fprintf(stderr, "%s: ", p->m_Task);
+            }
             uint32_t percent_done = (100 * jobs_done) / total;
             if (percent_done - p->m_OldPercent >= 5)
             {
                 fprintf(stderr, "%u%% ", percent_done);
                 p->m_OldPercent = percent_done;
             }
+            p->m_JobsDone = jobs_done;
             return;
         }
         if (p->m_OldPercent != 0)
@@ -83,6 +83,7 @@ struct Progress
                 fprintf(stderr, "100%%");
             }
         }
+        p->m_JobsDone = jobs_done;
     }
 };
 
@@ -755,7 +756,7 @@ int DownSync(
 
 int main(int argc, char** argv)
 {
-#ifdef _MSC_VER
+#if defined(_CRTDBG_MAP_ALLOC)
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
     Longtail_SetAssert(AssertFailure);
@@ -909,7 +910,7 @@ int main(int argc, char** argv)
         Longtail_Free((void*)target_path);
         Longtail_Free((void*)content_path);
     }
-#ifdef _MSC_VER
+#if defined(_CRTDBG_MAP_ALLOC)
     _CrtDumpMemoryLeaks();
 #endif
     return err;
