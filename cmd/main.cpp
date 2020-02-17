@@ -88,19 +88,19 @@ struct Progress
 };
 
 int ParseLogLevel(const char* log_level_raw) {
-    if (0 == stricmp(log_level_raw, "info"))
+    if (0 == strcmp(log_level_raw, "info"))
     {
         return LONGTAIL_LOG_LEVEL_INFO;
     }
-    if (0 == stricmp(log_level_raw, "debug"))
+    if (0 == strcmp(log_level_raw, "debug"))
     {
         return LONGTAIL_LOG_LEVEL_DEBUG;
     }
-    if (0 == stricmp(log_level_raw, "warn"))
+    if (0 == strcmp(log_level_raw, "warn"))
     {
         return LONGTAIL_LOG_LEVEL_WARNING;
     }
-    if (0 == stricmp(log_level_raw, "error"))
+    if (0 == strcmp(log_level_raw, "error"))
     {
         return LONGTAIL_LOG_LEVEL_ERROR;
     }
@@ -308,15 +308,15 @@ uint32_t ParseCompressionType(const char* compression_algorithm) {
 
 uint32_t ParseHashingType(const char* hashing_type)
 {
-    if (0 == hashing_type || (stricmp("blake3", hashing_type) == 0))
+    if (0 == hashing_type || (strcmp("blake3", hashing_type) == 0))
     {
         return LONGTAIL_BLAKE3_HASH_TYPE;
     }
-    if (stricmp("blake2", hashing_type) == 0)
+    if (strcmp("blake2", hashing_type) == 0)
     {
         return LONGTAIL_BLAKE2_HASH_TYPE;
     }
-    if (stricmp("meow", hashing_type) == 0)
+    if (strcmp("meow", hashing_type) == 0)
     {
         return LONGTAIL_MEOW_HASH_TYPE;
     }
