@@ -7,7 +7,7 @@ LIB_THIRDPARTY_SRC="$BASE_DIR/src/ext/*.c"
 
 CACHEBLOCKSTORE_SRC="$BASE_DIR/lib/cacheblockstore/*.c"
 
-COMPRESSBLOCKSTORE_SRC="$BASE_DIR/lib/compressblockstore\*.c"
+COMPRESSBLOCKSTORE_SRC="$BASE_DIR/lib/compressblockstore/*.c"
 
 FILESTORAGE_SRC="$BASE_DIR/lib/*.c"
 
