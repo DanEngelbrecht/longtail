@@ -7,6 +7,7 @@
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
+#include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
@@ -1360,20 +1361,31 @@ struct Progress
 {
     struct Longtail_ProgressAPI m_API;
     Progress(const char* task)
-        : m_OldPercent(0)
+        : m_Task(task)
+        , m_OldPercent(0)
+        , m_JobsDone(0)
     {
         m_API.m_API.Dispose = 0;
         m_API.OnProgress = ProgressFunc;
-        fprintf(stderr, "%s: ", task);
     }
     ~Progress()
     {
-        fprintf(stderr, " Done\n");
+        if (m_JobsDone != 0)
+        {
+            fprintf(stderr, " Done\n");
+        }
     }
+    const char* m_Task;
     uint32_t m_OldPercent;
+    uint32_t m_JobsDone;
     static void ProgressFunc(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
     {
         Progress* p = (Progress*)progress_api;
+        if (p->m_JobsDone == 0)
+        {
+            fprintf(stderr, "%s: ", p->m_Task);
+        }
+        p->m_JobsDone = jobs_done;
         if (jobs_done < total)
         {
             uint32_t percent_done = (100 * jobs_done) / total;
@@ -1737,19 +1749,21 @@ int UpSync(
         {
             tags[i] = compression_type;
         }
-        Progress create_version_progress("Indexing version");
-        err = Longtail_CreateVersionIndex(
-            storage_api,
-            hash_api,
-            job_api,
-            &create_version_progress.m_API,
-            source_path,
-            &file_infos->m_Paths,
-            file_infos->m_FileSizes,
-            file_infos->m_Permissions,
-            tags,
-            target_chunk_size,
-            &source_version_index);
+        {
+            Progress create_version_progress("Indexing version");
+            err = Longtail_CreateVersionIndex(
+                storage_api,
+                hash_api,
+                job_api,
+                &create_version_progress.m_API,
+                source_path,
+                &file_infos->m_Paths,
+                file_infos->m_FileSizes,
+                file_infos->m_Permissions,
+                tags,
+                target_chunk_size,
+                &source_version_index);
+        }
         Longtail_Free(tags);
         Longtail_Free(file_infos);
         if (err)
@@ -1789,15 +1803,17 @@ int UpSync(
         return err;
     }
 
-    Progress write_content_progress("Writing blocks");
-    err = Longtail_WriteContent(
-        storage_api,
-        store_block_store_api,
-        job_api,
-        &write_content_progress.m_API,
-        version_content_index,
-        source_version_index,
-        source_path);
+    {
+        Progress write_content_progress("Writing blocks");
+        err = Longtail_WriteContent(
+            storage_api,
+            store_block_store_api,
+            job_api,
+            &write_content_progress.m_API,
+            version_content_index,
+            source_version_index,
+            source_path);
+    }
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
@@ -1845,6 +1861,218 @@ int UpSync(
     return 0;
 }
 
+int DownSync(
+    const char* storage_uri_raw,
+    const char* content_path,
+    const char* source_path,
+    const char* target_path,
+    const char* optional_target_index_path,
+    int retain_permissions,
+    uint32_t target_chunk_size,
+    uint32_t target_block_size,
+    uint32_t max_chunks_per_block)
+{
+    const char* storage_path = NormalizePath(storage_uri_raw);
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
+    struct Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, content_path);
+    struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(store_block_localstore_api, store_block_remotestore_api);
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
+
+    const char* source_index_path = Longtail_ConcatPath(storage_path, source_path);
+    Longtail_VersionIndex* source_version_index = 0;
+    int err = Longtail_ReadVersionIndex(storage_api, source_index_path, &source_version_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_index_path, err);
+        Longtail_Free((void*)source_index_path);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+    Longtail_Free((void*)source_index_path);
+
+    struct Longtail_ContentIndex* remote_content_index;
+    {
+        Progress get_index_progress("Get content index");
+        err = store_block_store_api->GetIndex(
+            store_block_store_api,
+            job_api,
+            LONGTAIL_BLAKE3_HASH_TYPE,  // We should not really care, since if block store is empty we can't recreate any content
+            &get_index_progress.m_API,
+            &remote_content_index);
+    }
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get content index from `%s`, %d", storage_path, err);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    uint32_t hashing_type = *source_version_index->m_HashAPI;
+    struct Longtail_HashAPI* hash_api = CreateHashAPIFromIdentifier(hashing_type);
+
+    Longtail_VersionIndex* target_version_index = 0;
+    if (optional_target_index_path)
+    {
+        int err = Longtail_ReadVersionIndex(storage_api, optional_target_index_path, &target_version_index);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_target_index_path, err);
+        }
+    }
+    if (target_version_index == 0)
+    {
+        struct Longtail_FileInfos* file_infos;
+        int err = Longtail_GetFilesRecursively(
+            storage_api,
+            target_path,
+            &file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", target_path, err);
+            Longtail_Free(remote_content_index);
+            Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(store_block_cachestore_api);
+            SAFE_DISPOSE_API(store_block_localstore_api);
+            SAFE_DISPOSE_API(store_block_remotestore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_api);
+            Longtail_Free((void*)storage_path);
+            return err;
+        }
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * (*file_infos->m_Paths.m_PathCount));
+        for (uint32_t i = 0; i < (*file_infos->m_Paths.m_PathCount); ++i)
+        {
+            tags[i] = 0;
+        }
+        {
+            Progress create_version_progress("Indexing version");
+            err = Longtail_CreateVersionIndex(
+                storage_api,
+                hash_api,
+                job_api,
+                &create_version_progress.m_API,
+                target_path,
+                &file_infos->m_Paths,
+                file_infos->m_FileSizes,
+                file_infos->m_Permissions,
+                tags,
+                target_chunk_size,
+                &target_version_index);
+        }
+        Longtail_Free(tags);
+        Longtail_Free(file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
+            Longtail_Free(remote_content_index);
+            Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(store_block_cachestore_api);
+            SAFE_DISPOSE_API(store_block_localstore_api);
+            SAFE_DISPOSE_API(store_block_remotestore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_api);
+            Longtail_Free((void*)storage_path);
+            return err;
+        }
+    }
+
+    struct Longtail_VersionDiff* version_diff;
+    err = Longtail_CreateVersionDiff(
+        target_version_index,
+        source_version_index,
+        &version_diff);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create diff between `%s` and `%s`, %d", source_path, target_path, err);
+        Longtail_Free(target_version_index);
+        Longtail_Free(remote_content_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    {
+        Progress change_version_progress("Updating version");
+        err = Longtail_ChangeVersion(
+            store_block_store_api,
+            storage_api,
+            hash_api,
+            job_api,
+            &change_version_progress.m_API,
+            remote_content_index,
+            target_version_index,
+            source_version_index,
+            version_diff,
+            target_path,
+            retain_permissions ? 1 : 0);
+    }
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
+        Longtail_Free(version_diff);
+        Longtail_Free(target_version_index);
+        Longtail_Free(remote_content_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    Longtail_Free(version_diff);
+    Longtail_Free(target_version_index);
+    Longtail_Free(remote_content_index);
+    Longtail_Free(source_version_index);
+    SAFE_DISPOSE_API(store_block_store_api);
+    SAFE_DISPOSE_API(store_block_cachestore_api);
+    SAFE_DISPOSE_API(store_block_localstore_api);
+    SAFE_DISPOSE_API(store_block_remotestore_api);
+    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    Longtail_Free((void*)storage_path);
+    return err;
+}
+
 int main(int argc, char** argv)
 {
 #ifdef _MSC_VER
@@ -1870,9 +2098,6 @@ int main(int argc, char** argv)
     const char* storage_uri_raw = 0;
     kgflags_string("storage-uri", 0, "Path to version index output", true, &storage_uri_raw);
 
-    const char* hasing_raw = 0;
-    kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake2, blake3, meow", false, &hasing_raw);
-
     if (argc < 2)
     {
         kgflags_set_custom_description("Use command `upsync` or `downsync`");
@@ -1889,6 +2114,9 @@ int main(int argc, char** argv)
     }
 
     if (strcmp(command, "upsync") == 0){
+        const char* hasing_raw = 0;
+        kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake2, blake3, meow", false, &hasing_raw);
+
         const char* source_path_raw = 0;
         kgflags_string("source-path", 0, "Source folder path", true, &source_path_raw);
 
@@ -1986,27 +2214,22 @@ int main(int argc, char** argv)
         }
         Longtail_SetLogLevel(log_level);
 
-        uint32_t hashing = ParseHashingType(hasing_raw);
-        if (hashing == 0xffffffff)
-        {
-            printf("Invalid hashing algorithm `%s`\n", hasing_raw);
-            return 1;
-        }
-
         const char* content_path = NormalizePath(content_path_raw ? content_path_raw : GetDefaultContentPath());
         const char* target_path = NormalizePath(target_path_raw);
         const char* target_index = target_index_raw ? NormalizePath(target_index_raw) : 0;
         const char* source_path = NormalizePath(source_path_raw);
 
-        printf("downsync\n");
-        printf("    storage_uri_raw:       `%s`\n", storage_uri_raw);
-        printf("    content_path:          `%s`\n", content_path);
-        printf("    target_path:           `%s`\n", target_path);
-        printf("    target_index:          `%s`\n", target_index ? target_index : "<none>");
-        printf("    source_path:           `%s`\n", source_path);
-        printf("    retain_permission_raw: `%s`\n", retain_permission_raw ? "true" : "false");
-
         // Downsync!
+        int err = DownSync(
+            storage_uri_raw,
+            content_path,
+            source_path,
+            target_path,
+            target_index,
+            retain_permission_raw,
+            target_chunk_size,
+            target_block_size,
+            max_chunks_per_block);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_index);
@@ -2019,7 +2242,7 @@ int main(int argc, char** argv)
             _CrtDumpMemoryLeaks();
         }
 #endif
-        return 0;
+        return err;
     }
 #if 0
     const char* create_version_index_raw = 0;

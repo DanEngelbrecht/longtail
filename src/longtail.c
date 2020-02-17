@@ -2907,7 +2907,10 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks: Failed to block_read blocks, %d", job->m_Err)
         for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
-            stored_block[d]->Dispose(stored_block[d]);
+            if (stored_block[d])
+            {
+                stored_block[d]->Dispose(stored_block[d]);
+            }
         }
         return 0;
     }

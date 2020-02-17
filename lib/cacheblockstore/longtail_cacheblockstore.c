@@ -232,6 +232,7 @@ static int CacheBlockStore_GetStoredBlock(
         int err = cacheblockstore_api->m_LocalBlockStoreAPI->GetStoredBlock(cacheblockstore_api->m_LocalBlockStoreAPI, block_hash, out_stored_block, &on_get_stored_block_get_local_complete_api->m_API);
         if (err)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_GetStoredBlock: Failed async get block in local block store, %d", err)
             Longtail_Free(on_get_stored_block_get_local_complete_api);
             return err;
         }
