@@ -1,6 +1,7 @@
 #include "longtail_fsblockstore.h"
 
 #include "../../src/longtail.h"
+#include "../../src/ext/stb_ds.h"
 #include "../longtail_platform.h"
 
 #include <errno.h>
@@ -8,13 +9,21 @@
 #include <stdio.h>
 #include <string.h>
 
+struct BlockHashToBlockState
+{
+    uint64_t key;
+    uint32_t value;
+};
+
 struct FSBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
     char* m_ContentPath;
-    struct Longtail_ContentIndex* m_ContentIndex;
     HLongtail_SpinLock m_Lock;
+
+    struct Longtail_ContentIndex* m_ContentIndex;
+    struct BlockHashToBlockState* m_BlockState;
 };
 
 struct FSStoredBlock
@@ -209,11 +218,13 @@ static int FSBlockStore_PutStoredBlock(
 {
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
 
-    char* block_path = GetBlockPath(fsblockstore_api, *stored_block->m_BlockIndex->m_BlockHash);
-    if (fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
+    uint64_t block_hash = *stored_block->m_BlockIndex->m_BlockHash;
+
+    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+    intptr_t block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
+    if (block_ptr != -1)
     {
-        Longtail_Free((char*)block_path);
-        block_path = 0;
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         if (async_complete_api)
         {
             async_complete_api->OnComplete(async_complete_api, 0);
@@ -221,11 +232,19 @@ static int FSBlockStore_PutStoredBlock(
         return 0;
     }
 
-    char* tmp_block_path = GetTempBlockPath(fsblockstore_api, *stored_block->m_BlockIndex->m_BlockHash);
+    hmput(fsblockstore_api->m_BlockState, block_hash, 0);
+    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+
+    char* block_path = GetBlockPath(fsblockstore_api, block_hash);
+    char* tmp_block_path = GetTempBlockPath(fsblockstore_api, block_hash);
+
     int err = EnsureParentPathExists(fsblockstore_api->m_StorageAPI, block_path);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to create parent path for `%s`, %d", tmp_block_path, err)
+        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+        hmdel(fsblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
@@ -240,27 +259,12 @@ static int FSBlockStore_PutStoredBlock(
 
     Longtail_StorageAPI_HOpenFile block_file_handle;
     err = fsblockstore_api->m_StorageAPI->OpenWriteFile(fsblockstore_api->m_StorageAPI, tmp_block_path, 0, &block_file_handle);
-    if (err == EACCES)
-    {
-        if (fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, tmp_block_path) ||
-            fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
-        {
-            // Someone else is already writing the block, bail
-            Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
-            Longtail_Free((char*)block_path);
-            block_path = 0;
-            if (async_complete_api)
-            {
-                async_complete_api->OnComplete(async_complete_api, 0);
-                return 0;
-            }
-            return 0;
-        }
-    }
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to open block for write file `%s`, %d", tmp_block_path, err)
+        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+        hmdel(fsblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
@@ -282,6 +286,9 @@ static int FSBlockStore_PutStoredBlock(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write block index to file `%s`, %d", tmp_block_path, err)
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
         block_file_handle = 0;
+        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+        hmdel(fsblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
@@ -300,6 +307,10 @@ static int FSBlockStore_PutStoredBlock(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write chunk data to file `%s`, %d", tmp_block_path, err)
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
+        block_file_handle = 0;
+        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+        hmdel(fsblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
@@ -315,20 +326,12 @@ static int FSBlockStore_PutStoredBlock(
 
     fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
     err = fsblockstore_api->m_StorageAPI->RenameFile(fsblockstore_api->m_StorageAPI, tmp_block_path, block_path);
-
-    if (err == EEXIST || err == EACCES)
-    {
-        err = fsblockstore_api->m_StorageAPI->RemoveFile(fsblockstore_api->m_StorageAPI, tmp_block_path);
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to remove temp block file from `%s`, %d", block_path, err)
-            err = 0;
-        }
-    }
-
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock: Failed to rename block file from `%s` to `%s`, %d", tmp_block_path, block_path, err)
+        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+        hmdel(fsblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
@@ -347,13 +350,14 @@ static int FSBlockStore_PutStoredBlock(
 
     // We added a block, the stored file on disk is no longer valid, remove it
     const char* content_index_path = Longtail_ConcatPath(fsblockstore_api->m_ContentPath, "store.lci");
+
+    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (Longtail_IsFile(content_index_path))
     {
         Longtail_RemoveFile(content_index_path);
     }
-    Longtail_Free((void*)content_index_path);
 
-    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+    hmput(fsblockstore_api->m_BlockState, block_hash, 1);
     if (fsblockstore_api->m_ContentIndex)
     {
         struct Longtail_ContentIndex* added_content_index;
@@ -364,8 +368,7 @@ static int FSBlockStore_PutStoredBlock(
             &added_content_index);
         if (err)
         {
-            Longtail_Free(fsblockstore_api->m_ContentIndex);
-            fsblockstore_api->m_ContentIndex = 0;
+            hmdel(fsblockstore_api->m_BlockState, block_hash);
         }
         else
         {
@@ -377,8 +380,7 @@ static int FSBlockStore_PutStoredBlock(
             Longtail_Free(added_content_index);
             if (err)
             {
-                Longtail_Free(fsblockstore_api->m_ContentIndex);
-                fsblockstore_api->m_ContentIndex = 0;
+                hmdel(fsblockstore_api->m_BlockState, block_hash);
             }
             else
             {
@@ -388,6 +390,7 @@ static int FSBlockStore_PutStoredBlock(
         }
     }
     Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+    Longtail_Free((void*)content_index_path);
 
     if (async_complete_api)
     {
@@ -403,22 +406,31 @@ static int FSBlockStore_GetStoredBlock(
     struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    char* block_path = GetBlockPath(fsblockstore_api, block_hash);
-    if (!fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
+
+    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+    intptr_t block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
+    if (block_ptr == -1)
     {
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        if (async_complete_api)
+        char* block_path = GetBlockPath(fsblockstore_api, block_hash);
+        if (!fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
         {
-            async_complete_api->OnComplete(async_complete_api, ENOENT);
-            return 0;
+            Longtail_Free((void*)block_path);
+            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+            if (async_complete_api)
+            {
+                async_complete_api->OnComplete(async_complete_api, ENOENT);
+                return 0;
+            }
+            return ENOENT;
         }
-        return ENOENT;
+        Longtail_Free((void*)block_path);
+        hmput(fsblockstore_api->m_BlockState, block_hash, 1);
+        block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
     }
+    uint32_t state = fsblockstore_api->m_BlockState[block_ptr].value;
+    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
     if (!out_stored_block)
     {
-        Longtail_Free((char*)block_path);
-        block_path = 0;
         if (async_complete_api)
         {
             async_complete_api->OnComplete(async_complete_api, 0);
@@ -426,11 +438,19 @@ static int FSBlockStore_GetStoredBlock(
         }
         return 0;
     }
-
+    while (state == 0)
+    {
+        Longtail_Sleep(1000);
+        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+        state = hmget(fsblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+    }
+    char* block_path = GetBlockPath(fsblockstore_api, block_hash);
     Longtail_StorageAPI_HOpenFile f;
     int err = fsblockstore_api->m_StorageAPI->OpenReadFile(fsblockstore_api->m_StorageAPI, block_path, &f);
     if (err)
     {
+        // This can fail if someone is currently writing the block but is not finished! Should be really rare since it is just a rename?
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to open block `%s`, %d", block_path, err)
         Longtail_Free((char*)block_path);
         block_path = 0;
@@ -511,7 +531,7 @@ static int FSBlockStore_GetStoredBlock(
 
 static int FSBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-	struct Longtail_JobAPI* job_api,
+    struct Longtail_JobAPI* job_api,
     uint32_t default_hash_api_identifier,
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_ContentIndex** out_content_index)
@@ -522,7 +542,7 @@ static int FSBlockStore_GetIndex(
     {
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
-			job_api,
+            job_api,
             default_hash_api_identifier,
             progress_api,
             fsblockstore_api->m_ContentPath,
@@ -531,6 +551,13 @@ static int FSBlockStore_GetIndex(
         {
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
             return err;
+        }
+
+        uint64_t block_count = *fsblockstore_api->m_ContentIndex->m_BlockCount;
+        for (uint64_t b = 0; b < block_count; ++b)
+        {
+            uint64_t block_hash = fsblockstore_api->m_ContentIndex->m_BlockHashes[b];
+            hmput(fsblockstore_api->m_BlockState, block_hash, 1);
         }
 
         const char* content_index_path = Longtail_ConcatPath(fsblockstore_api->m_ContentPath, "store.lci");
@@ -572,6 +599,8 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
         Longtail_WriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentIndex, content_index_path);
         Longtail_Free((void*)content_index_path);
     }
+    hmfree(fsblockstore_api->m_BlockState);
+    fsblockstore_api->m_BlockState = 0;
     Longtail_DeleteSpinLock(fsblockstore_api->m_Lock);
     Longtail_Free(fsblockstore_api->m_Lock);
     Longtail_Free(fsblockstore_api->m_ContentPath);
@@ -582,7 +611,7 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
 static int FSBlockStore_Init(
     struct FSBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
-	const char* content_path)
+    const char* content_path)
 {
     api->m_BlockStoreAPI.m_API.Dispose = FSBlockStore_Dispose;
     api->m_BlockStoreAPI.PutStoredBlock = FSBlockStore_PutStoredBlock;
@@ -592,10 +621,20 @@ static int FSBlockStore_Init(
     api->m_StorageAPI = storage_api;
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndex = 0;
+    api->m_BlockState = 0;
     const char* content_index_path = Longtail_ConcatPath(api->m_ContentPath, "store.lci");
     if (Longtail_IsFile(content_index_path))
     {
-        Longtail_ReadContentIndex(api->m_StorageAPI, content_index_path, &api->m_ContentIndex);
+        int err = Longtail_ReadContentIndex(api->m_StorageAPI, content_index_path, &api->m_ContentIndex);
+        if (!err)
+        {
+            uint64_t block_count = *api->m_ContentIndex->m_BlockCount;
+            for (uint64_t b = 0; b < block_count; ++b)
+            {
+                uint64_t block_hash = api->m_ContentIndex->m_BlockHashes[b];
+                hmput(api->m_BlockState, block_hash, 1);
+            }
+        }
     }
     Longtail_Free((void*)content_index_path);
     int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
@@ -604,7 +643,7 @@ static int FSBlockStore_Init(
 
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
-	const char* content_path)
+    const char* content_path)
 {
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreAPI));
     FSBlockStore_Init(
