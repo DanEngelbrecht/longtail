@@ -242,7 +242,8 @@ static int FSBlockStore_PutStoredBlock(
     err = fsblockstore_api->m_StorageAPI->OpenWriteFile(fsblockstore_api->m_StorageAPI, tmp_block_path, 0, &block_file_handle);
     if (err == EACCES)
     {
-        if (fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, tmp_block_path))
+        if (fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, tmp_block_path) ||
+            fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
         {
             // Someone else is already writing the block, bail
             Longtail_Free((char*)tmp_block_path);
@@ -315,7 +316,7 @@ static int FSBlockStore_PutStoredBlock(
     fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
     err = fsblockstore_api->m_StorageAPI->RenameFile(fsblockstore_api->m_StorageAPI, tmp_block_path, block_path);
 
-    if (err == EEXIST)
+    if (err == EEXIST || err == EACCES)
     {
         err = fsblockstore_api->m_StorageAPI->RemoveFile(fsblockstore_api->m_StorageAPI, tmp_block_path);
         if (err)
