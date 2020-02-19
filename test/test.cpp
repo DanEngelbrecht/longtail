@@ -518,7 +518,8 @@ TEST(Longtail, Longtail_VersionIndex)
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
-    Longtail_VersionIndex* version_index = Longtail_BuildVersionIndex(
+    Longtail_VersionIndex* version_index;
+    ASSERT_EQ(0, Longtail_BuildVersionIndex(
         version_index_mem,
         version_index_size,
         paths,
@@ -534,7 +535,8 @@ TEST(Longtail, Longtail_VersionIndex)
         chunk_sizes,
         asset_content_hashes,
         asset_compression_types,
-        0u); // Dummy hash API
+        0u,
+        &version_index)); // Dummy hash API
 
     void* store_buffer = 0;
     size_t store_size = 0;
@@ -1427,7 +1429,8 @@ TEST(Longtail, Longtail_CreateMissingContent)
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
-    Longtail_VersionIndex* version_index = Longtail_BuildVersionIndex(
+    Longtail_VersionIndex* version_index;
+    ASSERT_EQ(0, Longtail_BuildVersionIndex(
         version_index_mem,
         version_index_size,
         paths,
@@ -1443,7 +1446,8 @@ TEST(Longtail, Longtail_CreateMissingContent)
         chunk_sizes,
         asset_content_hashes,
         asset_compression_types,
-        0u);    // Dummy hash API
+        0u,
+        &version_index));    // Dummy hash API
     Longtail_Free(paths);
 
     Longtail_ContentIndex* missing_content_index;

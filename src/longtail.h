@@ -129,21 +129,6 @@ typedef void (*Longtail_Log)(void* context, int level, const char* str);
 void Longtail_SetLog(Longtail_Log log_func, void* context);
 void Longtail_SetLogLevel(int level);
 
-#if defined(LONGTAIL_ASSERTS)
-    extern Longtail_Assert Longtail_Assert_private;
-#    define LONGTAIL_FATAL_ASSERT(x, bail) \
-        if (!(x)) \
-        { \
-            if (Longtail_Assert_private) \
-            { \
-                Longtail_Assert_private(#x, __FILE__, __LINE__); \
-            } \
-            bail; \
-        }
-#else // defined(LONGTAIL_ASSERTS)
-#    define LONGTAIL_FATAL_ASSERT(x, y)
-#endif // defined(LONGTAIL_ASSERTS)
-
 #define LONGTAIL_LOG_LEVEL_INFO     0
 #define LONGTAIL_LOG_LEVEL_DEBUG    1
 #define LONGTAIL_LOG_LEVEL_WARNING  2
@@ -156,6 +141,21 @@ void Longtail_SetLogLevel(int level);
         Longtail_CallLogger(level, fmt, __VA_ARGS__);
 #endif
 
+#if defined(LONGTAIL_ASSERTS)
+    extern Longtail_Assert Longtail_Assert_private;
+#    define LONGTAIL_FATAL_ASSERT(x, bail) \
+        if (!(x)) \
+        { \
+            if (Longtail_Assert_private) \
+            { \
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Assert failed `%s`\n", __FILE__, __LINE__, #x); \
+                Longtail_Assert_private(#x, __FILE__, __LINE__); \
+            } \
+            bail; \
+        }
+#else // defined(LONGTAIL_ASSERTS)
+#    define LONGTAIL_FATAL_ASSERT(x, y)
+#endif // defined(LONGTAIL_ASSERTS)
 
 typedef void* (*Longtail_Alloc_Func)(size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
@@ -498,7 +498,7 @@ size_t Longtail_GetVersionIndexSize(
     uint32_t asset_chunk_index_count,
     uint32_t path_data_size);
 
-struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
+int Longtail_BuildVersionIndex(
     void* mem,
     size_t mem_size,
     const struct Longtail_Paths* paths,
@@ -514,7 +514,8 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_tags,
-    uint32_t hash_api_identifier);
+    uint32_t hash_api_identifier,
+    struct Longtail_VersionIndex** out_version_index);
 
 struct Longtail_Chunker;
 
