@@ -231,7 +231,7 @@ int Longtail_InitContentIndexFromData(
     void* data,
     uint64_t data_size);
 
-int Longtail_InitiContentIndex(
+int Longtail_InitContentIndex(
     struct Longtail_ContentIndex* content_index,
     void* data,
     uint64_t data_size,

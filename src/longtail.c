@@ -292,7 +292,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                 err = entry_processor(context, asset_folder, dir_name, 1, size, permissions);
                 if (err)
                 {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 1, %u, %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, dir_name, size, permissions, err)
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 1, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, dir_name, size, permissions, err)
                     break;
                 }
                 if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
@@ -323,7 +323,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                     err = entry_processor(context, asset_folder, file_name, 0, size, permissions);
                     if (err)
                     {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 0, %u, %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, file_name, size, permissions, err)
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 0, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, file_name, size, permissions, err)
                         break;
                     }
                 }
@@ -365,7 +365,7 @@ static struct Longtail_Paths* CreatePaths(uint32_t path_count, uint32_t path_dat
     struct Longtail_Paths* paths = (struct Longtail_Paths*)Longtail_Alloc(paths_size);
     if (!paths)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CreatePaths(`%u`, `%u`) Longtail_Alloc(%u) failed with %d", path_count, path_data_size, paths_size, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CreatePaths(`%u`, `%u`) Longtail_Alloc(%" PRIu64 ") failed with %d", path_count, path_data_size, paths_size, ENOMEM)
         return 0;
     }
     char* p = (char*)&paths[1];
@@ -479,7 +479,7 @@ static int AddFile(void* context, const char* root_path, const char* file_name, 
         char* full_dir_path = (char*)Longtail_Alloc(full_dir_path_size);
         if (!full_dir_path)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %u, %u) Longtail_Alloc(%u) failed with %d", context, root_path, file_name, is_dir, size, permissions, full_dir_path_size, ENOMEM)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %" PRIu64 ", %u) Longtail_Alloc(%" PRIu64 ") failed with %d", context, root_path, file_name, is_dir, size, permissions, full_dir_path_size, ENOMEM)
             return ENOMEM;
         }
         strcpy(full_dir_path, full_path);
@@ -534,7 +534,7 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     int err = RecurseTree(storage_api, root_path, AddFile, &context);
     if(err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_GetFilesRecursively(%p, %s, %p) RecurseTree(%p, %s, %p, %p) failed with %d", storage_api, root_path, out_file_infos, (void*)storage_api, root_path, (void*)AddFile, (void*)&context, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilesRecursively(%p, %s, %p) RecurseTree(%p, %s, %p, %p) failed with %d", storage_api, root_path, out_file_infos, (void*)storage_api, root_path, (void*)AddFile, (void*)&context, err)
         Longtail_Free(context.m_Paths);
         context.m_Paths = 0;
         arrfree(context.m_Permissions);
@@ -552,7 +552,7 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     struct Longtail_FileInfos* result = (struct Longtail_FileInfos*)Longtail_Alloc(file_infos_size);
     if (!result)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilesRecursively(%p, %s, %p) Longtail_Alloc(%u) failed with %d", storage_api, root_path, out_file_infos, file_infos_size, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilesRecursively(%p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", storage_api, root_path, out_file_infos, file_infos_size, ENOMEM)
         Longtail_Free(context.m_Paths);
         context.m_Paths = 0;
         arrfree(context.m_Permissions);
@@ -613,7 +613,7 @@ static int StorageChunkFeederFunc(void* context, struct Longtail_Chunker* chunke
         int err = c->m_StorageAPI->Read(c->m_StorageAPI, c->m_AssetFile, c->m_StartRange + c->m_Offset, (uint32_t)read_count, buffer);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "StorageChunkFeederFunc(%p, %p, %u, %p, %p) m_StorageAPI->Read(%p, %s, %u, %u, %p) failed with %d", context, (void*)chunker, requested_size, (void*)buffer, (void*)out_size, (void*)c->m_StorageAPI, c->m_AssetPath, c->m_StartRange + c->m_Offset, read_count, (void*)buffer, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "StorageChunkFeederFunc(%p, %p, %u, %p, %p) m_StorageAPI->Read(%p, %s, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", context, (void*)chunker, requested_size, (void*)buffer, (void*)out_size, (void*)c->m_StorageAPI, c->m_AssetPath, c->m_StartRange + c->m_Offset, read_count, (void*)buffer, err)
             return err;
         }
         c->m_Offset += read_count;
@@ -657,6 +657,7 @@ static int DynamicChunking(void* context, uint32_t job_id)
     hash_job->m_Err = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
     if (hash_job->m_Err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u) GetPathHash(%p, %s, %p) failed with %d", context, job_id, (void*)hash_job->m_HashAPI, hash_job->m_Path, (void*)hash_job->m_PathHash, hash_job->m_Err)
         return 0;
     }
 
@@ -692,7 +693,7 @@ static int DynamicChunking(void* context, uint32_t job_id)
         char* buffer = (char*)Longtail_Alloc((size_t)hash_size);
         if (!buffer)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u) Longtail_Alloc(%u) failed with %d", context, job_id, hash_size, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u) Longtail_Alloc(%" PRIu64 ") failed with %d", context, job_id, hash_size, err)
             storage_api->CloseFile(storage_api, file_handle);
             file_handle = 0;
             Longtail_Free(path);
@@ -703,7 +704,7 @@ static int DynamicChunking(void* context, uint32_t job_id)
         err = storage_api->Read(storage_api, file_handle, 0, hash_size, buffer);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u) storage_api->Read(%p, %s, %u, %u, %p) failed with %d", context, job_id, (void*)storage_api, path, 0, hash_size, (void*)buffer, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u) storage_api->Read(%p, %s, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", context, job_id, (void*)storage_api, path, 0, hash_size, (void*)buffer, err)
             Longtail_Free(buffer);
             buffer = 0;
             storage_api->CloseFile(storage_api, file_handle);
@@ -902,7 +903,7 @@ static int ChunkAssets(
     uint32_t* job_chunk_counts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * job_count);
     if (!job_chunk_counts)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", root_path, job_chunk_counts_size, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, job_chunk_counts_size, err)
         return err;
     }
 
@@ -910,7 +911,7 @@ static int ChunkAssets(
     TLongtail_Hash* hashes = (TLongtail_Hash*)Longtail_Alloc(hashes_size);
     if (!hashes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", root_path, hashes_size, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, hashes_size, err)
         Longtail_Free(job_chunk_counts);
         job_chunk_counts = 0;
         return err;
@@ -920,7 +921,7 @@ static int ChunkAssets(
     uint32_t* sizes = (uint32_t*)Longtail_Alloc(sizes_size);
     if (!sizes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", root_path, sizes_size, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, sizes_size, err)
         Longtail_Free(hashes);
         hashes = 0;
         Longtail_Free(job_chunk_counts);
@@ -932,7 +933,7 @@ static int ChunkAssets(
     uint32_t* tags = (uint32_t*)Longtail_Alloc(tags_size);
     if (!tags)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", root_path, tags_size, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, tags_size, err)
         Longtail_Free(sizes);
         sizes = 0;
         Longtail_Free(hashes);
@@ -946,7 +947,7 @@ static int ChunkAssets(
     struct HashJob* hash_jobs = (struct HashJob*)Longtail_Alloc(hash_jobs_size);
     if (!hash_jobs)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", hash_jobs_size, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_jobs_size, err)
         Longtail_Free(tags);
         tags = 0;
         Longtail_Free(sizes);
@@ -1048,7 +1049,7 @@ static int ChunkAssets(
         *chunk_sizes = (uint32_t*)Longtail_Alloc(chunk_sizes_size);
         if (!*chunk_sizes)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", root_path, chunk_sizes_size, ENOMEM)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, chunk_sizes_size, ENOMEM)
             Longtail_Free(tags);
             tags = 0;
             Longtail_Free(hash_jobs);
@@ -1065,7 +1066,7 @@ static int ChunkAssets(
         *chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(chunk_hashes_size);
         if (!*chunk_hashes)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", root_path, chunk_hashes_size, ENOMEM)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, chunk_hashes_size, ENOMEM)
             Longtail_Free(*chunk_sizes);
             *chunk_sizes = 0;
             Longtail_Free(tags);
@@ -1084,7 +1085,7 @@ static int ChunkAssets(
         *chunk_tags = (uint32_t*)Longtail_Alloc(chunk_tags_size);
         if (!*chunk_hashes)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%u) failed with %d", root_path, chunk_tags_size, ENOMEM)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, chunk_tags_size, ENOMEM)
             Longtail_Free(*chunk_hashes);
             *chunk_hashes = 0;
             Longtail_Free(*chunk_sizes);
@@ -1225,7 +1226,7 @@ static int InitVersionIndexFromData(
 
     if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_1)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "InitVersionIndexFromData(%p, %p, %u) %u == %u failed with %d", (void*)version_index, data, data_size, (void*)version_index->m_Version, LONGTAIL_VERSION_INDEX_VERSION_0_0_1, EBADF)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ") %" PRIu64 " == %" PRIu64 "", (void*)version_index, data, data_size, (void*)version_index->m_Version, LONGTAIL_VERSION_INDEX_VERSION_0_0_1)
         return EBADF;
     }
 
@@ -1250,7 +1251,7 @@ static int InitVersionIndexFromData(
     size_t versiom_index_data_size = Longtail_GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, 0);
     if (versiom_index_data_size > data_size)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %u)  data_size <= %u failed with %d", (void*)version_index, data, data_size, (void*)version_index->m_Version, data_size, versiom_index_data_size, EBADF)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ")  data_size <= %" PRIu64 " failed with %d", (void*)version_index, data, data_size, (void*)version_index->m_Version, data_size, versiom_index_data_size, EBADF)
         return EBADF;
     }
 
@@ -1321,6 +1322,7 @@ int Longtail_BuildVersionIndex(
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || path_hashes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || content_hashes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || content_sizes != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(chunk_count == 0 || asset_permissions != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(asset_chunk_counts == 0 || asset_chunk_index_starts != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(*paths->m_PathCount == 0 || asset_chunk_counts != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(asset_chunk_index_count >= chunk_count, return EINVAL)
@@ -1329,7 +1331,23 @@ int Longtail_BuildVersionIndex(
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || chunk_hashes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || chunk_tags != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_version_index != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_BuildVersionIndex(%u, %u, %u)", mem_size, chunk_count, hash_api_identifier)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_BuildVersionIndex(%p, %" PRIu64 ", %p, %p, %p, %p, %p, %p, %p, %u, %p, %u,%p ,%p, %p, %u, %p)", mem,
+        mem_size,
+        paths,
+        path_hashes,
+        content_hashes,
+        content_sizes,
+        asset_permissions,
+        asset_chunk_index_starts,
+        asset_chunk_counts,
+        asset_chunk_index_count,
+        asset_chunk_indexes,
+        chunk_count,
+        chunk_sizes,
+        chunk_hashes,
+        chunk_tags,
+        hash_api_identifier,
+        out_version_index);
 
     uint32_t asset_count = *paths->m_PathCount;
     struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)mem;
@@ -1345,10 +1363,11 @@ int Longtail_BuildVersionIndex(
     *version_index->m_ChunkCount = chunk_count;
     *version_index->m_AssetChunkIndexCount = asset_chunk_index_count;
 
-    int err = InitVersionIndexFromData(version_index, &version_index[1], mem_size - sizeof(struct Longtail_VersionIndex));
+    size_t index_data_size = mem_size - sizeof(struct Longtail_VersionIndex);
+    int err = InitVersionIndexFromData(version_index, &version_index[1], index_data_size);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex(%u, %u, %u) InitVersionIndexFromData(%u) failed with %d", mem_size, chunk_count, hash_api_identifier, mem_size - sizeof(struct Longtail_VersionIndex), err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex(%" PRIu64 ", %u, %u) InitVersionIndexFromData(%p, %p, %u) failed with %d", mem_size, chunk_count, hash_api_identifier, version_index, &version_index[1], index_data_size, err)
         return err;
     }
 
@@ -1387,9 +1406,12 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(paths != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(asset_sizes != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(asset_permissions != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(asset_tags != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(max_chunk_size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_version_index != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionIndex(%s, %u)", root_path, *paths->m_PathCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %p, %p, %p, %u, %p)", storage_api, hash_api, job_api, progress_api, root_path, paths, asset_sizes, asset_permissions, asset_tags, max_chunk_size, out_version_index)
 
     uint32_t path_count = *paths->m_PathCount;
 
@@ -1399,7 +1421,7 @@ int Longtail_CreateVersionIndex(
         void* version_index_mem = Longtail_Alloc(version_index_size);
         if (!version_index_mem)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex(%s) Longtail_Alloc(%u) failed with %d", root_path, version_index_size, ENOMEM)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, version_index_size, ENOMEM)
             return ENOMEM;
         }
 
@@ -1424,30 +1446,33 @@ int Longtail_CreateVersionIndex(
             &version_index);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex(%s) Longtail_BuildVersionIndex(%u) failed with %d", root_path, version_index_size, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex(%s) Longtail_BuildVersionIndex(%" PRIu64 ") failed with %d", root_path, version_index_size, err)
             return err;
         }
         *out_version_index = version_index;
         return 0;
     }
 
-    TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
+    size_t path_hashes_size = sizeof(TLongtail_Hash) * path_count;
+    TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(path_hashes_size);
     if (!path_hashes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(TLongtail_Hash) * path_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, path_hashes_size, ENOMEM)
         return ENOMEM;
     }
-    TLongtail_Hash* content_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
+    size_t content_hashes_size = sizeof(TLongtail_Hash) * path_count;
+    TLongtail_Hash* content_hashes = (TLongtail_Hash*)Longtail_Alloc(content_hashes_size);
     if (!content_hashes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(TLongtail_Hash) * path_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, content_hashes_size, ENOMEM)
         Longtail_Free(path_hashes);
         return ENOMEM;
     }
-    uint32_t* asset_chunk_counts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * path_count);
+    size_t asset_chunk_counts_size = sizeof(uint32_t) * path_count;
+    uint32_t* asset_chunk_counts = (uint32_t*)Longtail_Alloc(asset_chunk_counts_size);
     if (!asset_chunk_counts)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(uint32_t) * path_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, asset_chunk_counts_size, ENOMEM)
         Longtail_Free(content_hashes);
         Longtail_Free(path_hashes);
         return ENOMEM;
@@ -1457,10 +1482,11 @@ int Longtail_CreateVersionIndex(
     uint32_t* asset_chunk_sizes = 0;
     uint32_t* asset_chunk_tags = 0;
     TLongtail_Hash* asset_chunk_hashes = 0;
-    uint32_t* asset_chunk_start_index = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * path_count);
+    size_t asset_chunk_start_index_size = sizeof(uint32_t) * path_count;
+    uint32_t* asset_chunk_start_index = (uint32_t*)Longtail_Alloc(asset_chunk_start_index_size);
     if (!asset_chunk_start_index)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(uint32_t) * path_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, asset_chunk_start_index_size, ENOMEM)
         Longtail_Free(asset_chunk_counts);
         Longtail_Free(content_hashes);
         Longtail_Free(path_hashes);
@@ -1486,7 +1512,7 @@ int Longtail_CreateVersionIndex(
         max_chunk_size,
         &assets_chunk_index_count);
     if (err) {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) ChunkAssets(%s) failed with %d", root_path, root_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) ChunkAssets(%s) failed with %d", root_path, root_path, err)
         Longtail_Free(asset_chunk_start_index);
         Longtail_Free(asset_chunk_counts);
         Longtail_Free(content_hashes);
@@ -1494,10 +1520,11 @@ int Longtail_CreateVersionIndex(
         return err;
     }
 
-    uint32_t* asset_chunk_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
+    size_t asset_chunk_indexes_size = sizeof(uint32_t) * assets_chunk_index_count;
+    uint32_t* asset_chunk_indexes = (uint32_t*)Longtail_Alloc(asset_chunk_indexes_size);
     if (!asset_chunk_indexes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(uint32_t) * assets_chunk_index_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, asset_chunk_indexes_size, ENOMEM)
         Longtail_Free(asset_chunk_tags);
         Longtail_Free(asset_chunk_hashes);
         Longtail_Free(asset_chunk_sizes);
@@ -1507,10 +1534,11 @@ int Longtail_CreateVersionIndex(
         Longtail_Free(path_hashes);
         return ENOMEM;
     }
-    TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * assets_chunk_index_count);
+    size_t compact_chunk_hashes_size = sizeof(TLongtail_Hash) * assets_chunk_index_count;
+    TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(compact_chunk_hashes_size);
     if (!compact_chunk_hashes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(TLongtail_Hash) * assets_chunk_index_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, compact_chunk_hashes_size, ENOMEM)
         Longtail_Free(asset_chunk_indexes);
         Longtail_Free(asset_chunk_tags);
         Longtail_Free(asset_chunk_hashes);
@@ -1521,10 +1549,11 @@ int Longtail_CreateVersionIndex(
         Longtail_Free(path_hashes);
         return ENOMEM;
     }
-    uint32_t* compact_chunk_sizes =  (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
+    size_t compact_chunk_sizes_size = sizeof(uint32_t) * assets_chunk_index_count;
+    uint32_t* compact_chunk_sizes =  (uint32_t*)Longtail_Alloc(compact_chunk_sizes_size);
     if (!compact_chunk_sizes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(uint32_t) * assets_chunk_index_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, compact_chunk_sizes_size, ENOMEM)
         Longtail_Free(compact_chunk_hashes);
         Longtail_Free(asset_chunk_indexes);
         Longtail_Free(asset_chunk_tags);
@@ -1536,10 +1565,11 @@ int Longtail_CreateVersionIndex(
         Longtail_Free(path_hashes);
         return ENOMEM;
     }
-    uint32_t* compact_chunk_tags =  (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * assets_chunk_index_count);
+    size_t compact_chunk_tags_size = sizeof(uint32_t) * assets_chunk_index_count;
+    uint32_t* compact_chunk_tags =  (uint32_t*)Longtail_Alloc(compact_chunk_tags_size);
     if (!compact_chunk_tags)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, sizeof(uint32_t) * assets_chunk_index_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, compact_chunk_tags_size, ENOMEM)
         Longtail_Free(compact_chunk_sizes);
         Longtail_Free(compact_chunk_hashes);
         Longtail_Free(asset_chunk_indexes);
@@ -1581,7 +1611,7 @@ int Longtail_CreateVersionIndex(
     void* version_index_mem = Longtail_Alloc(version_index_size);
     if (!version_index_mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_Alloc(%u) failed with %d", root_path, version_index_size, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, version_index_size, ENOMEM)
         Longtail_Free(compact_chunk_tags);
         Longtail_Free(compact_chunk_sizes);
         Longtail_Free(compact_chunk_hashes);
@@ -1617,7 +1647,7 @@ int Longtail_CreateVersionIndex(
         &version_index);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s, %u) Longtail_BuildVersionIndex() failed with %d", root_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%s) Longtail_BuildVersionIndex() failed with %d", root_path, err)
         Longtail_Free(compact_chunk_tags);
         Longtail_Free(compact_chunk_sizes);
         Longtail_Free(compact_chunk_hashes);
@@ -1656,12 +1686,12 @@ int Longtail_WriteVersionIndexToBuffer(
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_size != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteVersionIndexToBuffer(%u)", version_index->m_AssetCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteVersionIndexToBuffer(%p, %p, %p)", version_index, out_buffer, out_size)
     size_t index_data_size = Longtail_GetVersionIndexDataSize(*version_index->m_AssetCount, *version_index->m_ChunkCount, *version_index->m_AssetChunkIndexCount, version_index->m_NameDataSize);
     *out_buffer = Longtail_Alloc(index_data_size);
     if (!(*out_buffer))
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteVersionIndexToBuffer(%u) Longtail_Alloc(%u) failed with %d", version_index->m_AssetCount, index_data_size, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteVersionIndexToBuffer(%u) Longtail_Alloc(%" PRIu64 ") failed with %d", version_index->m_AssetCount, index_data_size, ENOMEM)
         return ENOMEM;
     }
     memcpy(*out_buffer, &version_index[1], index_data_size);
@@ -1696,7 +1726,7 @@ int Longtail_WriteVersionIndex(
     err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &version_index[1]);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteVersionIndex() storage_api->Write(%s, %u, %u) failed with %d", path, 0, index_data_size, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteVersionIndex() storage_api->Write(%s, %u, %" PRIu64 ") failed with %d", path, 0, index_data_size, err)
         storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return err;
@@ -1715,18 +1745,20 @@ int Longtail_ReadVersionIndexFromBuffer(
     LONGTAIL_FATAL_ASSERT(buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_version_index != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndexFromBuffer: Buffer size %u", size)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndexFromBuffer(%p, %" PRIu64 ", %p)", buffer, size, out_version_index)
 
     size_t version_index_size = sizeof(struct Longtail_VersionIndex) + size;
     struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)Longtail_Alloc(version_index_size);
     if (!version_index)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndexFromBuffer(%p, %" PRIu64 ", %p) Longtail_Alloc(%" PRIu64 ") failed with ", buffer, size, out_version_index, version_index_size, ENOMEM)
         return ENOMEM;
     }
     memcpy(&version_index[1], buffer, size);
     int err = InitVersionIndexFromData(version_index, &version_index[1], size);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndexFromBuffer(%p, %" PRIu64 ", %p) InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with ", buffer, size, out_version_index, version_index, &version_index[1], size, err)
         Longtail_Free(version_index);
         return err;
     }
@@ -1743,26 +1775,26 @@ int Longtail_ReadVersionIndex(
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_version_index != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndex: Reading from %s", path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadVersionIndex(%p, %s, %p)", storage_api, path, out_version_index)
     Longtail_StorageAPI_HOpenFile file_handle;
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadVersionIndex: Failed to open file %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex(%p, %s, %p) storage_api->OpenReadFile(%p, %s, %p) failed with %d", storage_api, path, out_version_index, storage_api, path, &file_handle, err)
         return err;
     }
     uint64_t version_index_data_size;
     err = storage_api->GetSize(storage_api, file_handle, &version_index_data_size);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadVersionIndex: Failed to get size of file %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex(%p, %s, %p) storage_api->GetSize(%p, %p, %p), %d", storage_api, path, out_version_index, storage_api, file_handle, &version_index_data_size, err)
         return err;
     }
     size_t version_index_size = version_index_data_size + sizeof(struct Longtail_VersionIndex);
     struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)Longtail_Alloc(version_index_size);
     if (!version_index)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex: Failed to allocate memory for %s", path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex(%p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", storage_api, path, out_version_index, version_index_size, ENOMEM)
         Longtail_Free(version_index);
         version_index = 0;
         storage_api->CloseFile(storage_api, file_handle);
@@ -1772,7 +1804,7 @@ int Longtail_ReadVersionIndex(
     err = storage_api->Read(storage_api, file_handle, 0, version_index_data_size, &version_index[1]);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex: Failed to read from %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_version_index, storage_api, file_handle, 0, version_index_data_size, &version_index[1], err)
         Longtail_Free(version_index);
         version_index = 0;
         storage_api->CloseFile(storage_api, file_handle);
@@ -1782,17 +1814,18 @@ int Longtail_ReadVersionIndex(
     storage_api->CloseFile(storage_api, file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadVersionIndex: Bad format of file %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex(%p, %s, %p) InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with %d", storage_api, path, out_version_index, version_index, &version_index[1], version_index_data_size, err)
         Longtail_Free(version_index);
         return err;
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadVersionIndex: Read index from %s containing %u assets in  %u chunks", path, *version_index->m_AssetCount, *version_index->m_ChunkCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReadVersionIndex(%p, %s, %p) containing %u assets in %u chunks", storage_api, path, out_version_index, version_index, *version_index->m_AssetCount, *version_index->m_ChunkCount)
     *out_version_index = version_index;
     return 0;
 }
 
 size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_GetBlockIndexDataSize(%u)", chunk_count)
     return
         sizeof(TLongtail_Hash) +                    // m_BlockHash
         sizeof(uint32_t) +                          // m_ChunkCount
@@ -1804,6 +1837,7 @@ size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count)
 struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count)
 {
     LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_InitBlockIndex(%p, %u)", mem, chunk_count)
 
     struct Longtail_BlockIndex* block_index = (struct Longtail_BlockIndex*)mem;
     char* p = (char*)&block_index[1];
@@ -1833,6 +1867,7 @@ int Longtail_InitBlockIndexFromData(
 {
     LONGTAIL_FATAL_ASSERT(block_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(data != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_InitBlockIndexFromData(%p, %p, %" PRIu64 ")", block_index, data, data_size)
 
     char* p = (char*)data;
 
@@ -1886,9 +1921,15 @@ int Longtail_CreateBlockIndex(
     LONGTAIL_FATAL_ASSERT(chunk_hashes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(chunk_sizes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_block_index != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateBlockIndex(%p, %u, %u, %p, %p, %p, %p)", hash_api, tag, chunk_count, chunk_indexes, chunk_hashes, chunk_sizes, out_block_index)
 
-    void* mem = Longtail_Alloc(Longtail_GetBlockIndexSize(chunk_count));
-    LONGTAIL_FATAL_ASSERT(mem, return ENOMEM)
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    void* mem = Longtail_Alloc(block_index_size);
+    if (mem == 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlockIndex(%p, %u, %u, %p, %p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with", hash_api, tag, chunk_count, chunk_indexes, chunk_hashes, chunk_sizes, out_block_index, block_index_size, ENOMEM)
+        return ENOMEM;
+    }
 
     struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(mem, chunk_count);
     for (uint32_t i = 0; i < chunk_count; ++i)
@@ -1897,10 +1938,13 @@ int Longtail_CreateBlockIndex(
         block_index->m_ChunkHashes[i] = chunk_hashes[chunk_index];
         block_index->m_ChunkSizes[i] = chunk_sizes[chunk_index];
     }
-    int err = hash_api->HashBuffer(hash_api, (uint32_t)(sizeof(TLongtail_Hash) * chunk_count), (void*)block_index->m_ChunkHashes, block_index->m_BlockHash);
+    size_t hash_buffer_size = sizeof(TLongtail_Hash) * chunk_count;
+    int err = hash_api->HashBuffer(hash_api, (uint32_t)(hash_buffer_size), (void*)block_index->m_ChunkHashes, block_index->m_BlockHash);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking: Failed to create hash for block index containing %u chunks", chunk_count)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlockIndex(%p, %u, %u, %p, %p, %p, %p) hash_api->HashBuffer(%p, %u, %p)",
+            hash_api, tag, chunk_count, chunk_indexes, chunk_hashes, chunk_sizes, out_block_index,
+            hash_api, hash_buffer_size, (void*)block_index->m_ChunkHashes, block_index->m_BlockHash)
         Longtail_Free(mem);
         return err;
     }
@@ -1919,12 +1963,13 @@ int Longtail_WriteBlockIndexToBuffer(
     LONGTAIL_FATAL_ASSERT(block_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_size != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteBlockIndexToBuffer: %" PRIu64 " chunks", *block_index->m_ChunkCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteBlockIndexToBuffer(%p, %p, %p)", block_index, out_buffer, out_size)
 
     size_t index_data_size = Longtail_GetBlockIndexDataSize(*block_index->m_ChunkCount);
     *out_buffer = Longtail_Alloc(index_data_size);
     if (!(*out_buffer))
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndexToBuffer(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", block_index, out_buffer, out_size, index_data_size, ENOMEM)
         return ENOMEM;
     }
     memcpy(*out_buffer, &block_index[1], index_data_size);
@@ -1940,18 +1985,20 @@ int Longtail_ReadBlockIndexFromBuffer(
     LONGTAIL_FATAL_ASSERT(buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_block_index != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadBlockIndexFromBuffer: Buffer size %u", size)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadBlockIndexFromBuffer(%p, %" PRIu64 ", %p)", buffer, size, out_block_index)
 
     size_t block_index_size = size + sizeof(struct Longtail_BlockIndex);
     struct Longtail_BlockIndex* block_index = (struct Longtail_BlockIndex*)Longtail_Alloc(block_index_size);
     if (!block_index)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndexFromBuffer(%p, %" PRIu64 ", %p) Longtail_Alloc(%" PRIu64 ") failed with %d", buffer, size, out_block_index, block_index_size, ENOMEM)
         return ENOMEM;
     }
     memcpy(&block_index[1], buffer, size);
     int err = Longtail_InitBlockIndexFromData(block_index, &block_index[1], size);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndexFromBuffer(%p, %" PRIu64 ", %p) Longtail_InitBlockIndexFromData(%p, %p, %" PRIu64 ") failed with %d", buffer, size, out_block_index, block_index, &block_index[1], size, err)
         Longtail_Free(block_index);
         return err;
     }
@@ -1968,25 +2015,25 @@ int Longtail_WriteBlockIndex(
     LONGTAIL_FATAL_ASSERT(block_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteBlockIndex: Write index to %s, chunks %" PRIu64, path, *block_index->m_ChunkCount)
-    size_t index_data_size = Longtail_GetBlockIndexDataSize(*block_index->m_ChunkCount);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteBlockIndex(%p, %p, %s)", storage_api, block_index, path)
 
     int err = EnsureParentPathExists(storage_api, path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndex: Failed to create parent folder for %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndex(%p, %p, %s) EnsureParentPathExists(%p, %s) failed with %d", storage_api, block_index, path, storage_api, path, err)
         return err;
     }
     Longtail_StorageAPI_HOpenFile file_handle;
     err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndex: Failed to create %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndex(%p, %p, %s) storage_api->OpenWriteFile(%p, %s, %u, %p) failed with %d", storage_api, block_index, path, storage_api, path, 0, &file_handle, err)
         return err;
     }
+    size_t index_data_size = Longtail_GetBlockIndexDataSize(*block_index->m_ChunkCount);
     err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &block_index[1]);
     if (err){
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndex: Failed to write to %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndex(%p, %p, %s) storage_api->Write(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, block_index, path, storage_api, file_handle, 0, index_data_size, &block_index[1], err)
         storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return err;
@@ -2004,32 +2051,33 @@ int Longtail_ReadBlockIndex(
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_block_index != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadBlockIndex(%p, %s, %p)", storage_api, path, out_block_index)
 
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadBlockIndex(%s)", path)
     Longtail_StorageAPI_HOpenFile f;
     int err = storage_api->OpenReadFile(storage_api, path, &f);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to open block %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->OpenReadFile(%p, %s, %p) failed with %d", storage_api, path, out_block_index, storage_api, path, &f, err)
         return err;
     }
     uint64_t block_size;
     err = storage_api->GetSize(storage_api, f, &block_size);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to get size of block %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->GetSize(%p, %p, %p) failed with %d", storage_api, path, out_block_index, storage_api, f, &block_size, err)
         storage_api->CloseFile(storage_api, f);
         return err;
     }
     if (block_size < (sizeof(TLongtail_Hash) + sizeof(uint32_t)))
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) truncated block, failed with %d", storage_api, path, out_block_index, err)
         storage_api->CloseFile(storage_api, f);
         return err;
     }
     if (block_size > 0xffffffff)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) block size to large failed with %d", storage_api, path, out_block_index, err)
         storage_api->CloseFile(storage_api, f);
         return err;
     }
@@ -2038,7 +2086,7 @@ int Longtail_ReadBlockIndex(
     err = storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash), &block_hash);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(TLongtail_Hash), &block_hash, err)
         storage_api->CloseFile(storage_api, f);
         return err;
     }
@@ -2047,7 +2095,7 @@ int Longtail_ReadBlockIndex(
     err = storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t), &chunk_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(uint32_t), &chunk_count, err)
         storage_api->CloseFile(storage_api, f);
         return err;
     }
@@ -2059,7 +2107,7 @@ int Longtail_ReadBlockIndex(
     err = storage_api->Read(storage_api, f, 0, block_index_data_size, &block_index[1]);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format of block %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, 0, block_index_data_size, &block_index[1], err)
         Longtail_Free(block_index);
         storage_api->CloseFile(storage_api, f);
         return err;
@@ -2086,11 +2134,18 @@ int Longtail_InitStoredBlockFromData(
 {
     LONGTAIL_FATAL_ASSERT(stored_block != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(block_data != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(block_data_size > 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_InitStoredBlockFromData(%p, %p, %" PRIu64 ")", stored_block, block_data, block_data_size)
     stored_block->m_BlockIndex = (struct Longtail_BlockIndex*)&stored_block[1];
     int err = Longtail_InitBlockIndexFromData(
         stored_block->m_BlockIndex,
         block_data,
         block_data_size);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData(%p, %p, %" PRIu64 ") Longtail_InitBlockIndexFromData(%p, %p, %" PRIu64 ") failed with %d", stored_block, block_data, block_data_size, stored_block->m_BlockIndex, block_data, block_data_size, err)
+        return err;
+    }
     stored_block->m_BlockData = &((uint8_t*)stored_block->m_BlockIndex)[Longtail_GetBlockIndexSize(*stored_block->m_BlockIndex->m_ChunkCount)];
     stored_block->m_BlockChunksDataSize = (uint32_t)(block_data_size - Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount));
     stored_block->Dispose = 0;
@@ -2109,13 +2164,21 @@ int Longtail_CreateStoredBlock(
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || chunk_hashes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(chunk_count == 0 || chunk_sizes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_stored_block != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateStoredBlock(0x%" PRIx64 ", %u, %u, %p, %p, %u, %p)", block_hash, chunk_count, tag, chunk_hashes, chunk_sizes, block_data_size, out_stored_block)
     size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock) + block_index_size + block_data_size);
+    size_t stored_block_size = sizeof(struct Longtail_StoredBlock) + block_index_size + block_data_size;
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(stored_block_size);
     if (stored_block == 0)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateStoredBlock(0x%" PRIx64 ", %u, %u, %p, %p, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", block_hash, chunk_count, tag, chunk_hashes, chunk_sizes, block_data_size, out_stored_block, stored_block_size, ENOMEM)
         return ENOMEM;
     }
     stored_block->m_BlockIndex = Longtail_InitBlockIndex(&stored_block[1], chunk_count);
+    if (!stored_block->m_BlockIndex)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateStoredBlock(0x%" PRIx64 ", %u, %u, %p, %p, %u, %p) Longtail_InitBlockIndex(%p, %u) failed with %d", block_hash, chunk_count, tag, chunk_hashes, chunk_sizes, block_data_size, out_stored_block, &stored_block[1], chunk_count, EINVAL)
+        return EINVAL;
+    }
     *stored_block->m_BlockIndex->m_BlockHash = block_hash;
     *stored_block->m_BlockIndex->m_ChunkCount = chunk_count;
     *stored_block->m_BlockIndex->m_Tag = tag;
@@ -2131,6 +2194,7 @@ int Longtail_CreateStoredBlock(
 
 size_t Longtail_GetContentIndexDataSize(uint64_t block_count, uint64_t chunk_count)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetContentIndexDataSize(%" PRIu64 ", %" PRIu64 ")", block_count, chunk_count)
     size_t block_index_data_size = (size_t)(
         sizeof(uint32_t) +                          // m_Version
         sizeof(uint32_t) +                          // m_HashAPI
@@ -2148,6 +2212,7 @@ size_t Longtail_GetContentIndexDataSize(uint64_t block_count, uint64_t chunk_cou
 
 size_t Longtail_GetContentIndexSize(uint64_t block_count, uint64_t chunk_count)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetContentIndexSize(%" PRIu64 ", %" PRIu64 ")", block_count, chunk_count)
     return sizeof(struct Longtail_ContentIndex) +
         Longtail_GetContentIndexDataSize(block_count, chunk_count);
 }
@@ -2160,6 +2225,7 @@ int Longtail_InitContentIndexFromData(
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(data != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(data_size >= sizeof(uint32_t), return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ")", content_index, data, data_size)
 
     char* p = (char*)data;
     content_index->m_Version = (uint32_t*)(void*)p;
@@ -2167,6 +2233,7 @@ int Longtail_InitContentIndexFromData(
 
     if ((*content_index->m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_0_0_1)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") invalid version %u", content_index, data, data_size, *content_index->m_Version)
         return EBADF;
     }
 
@@ -2182,6 +2249,7 @@ int Longtail_InitContentIndexFromData(
 
     if (Longtail_GetContentIndexDataSize(block_count, chunk_count) > data_size)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") Longtail_GetContentIndexDataSize(%u, %u) > %" PRIu64 "", content_index, data, data_size, block_count, chunk_count, data_size)
         return EBADF;
     }
 
@@ -2199,7 +2267,7 @@ int Longtail_InitContentIndexFromData(
     return 0;
 }
 
-int Longtail_InitiContentIndex(
+int Longtail_InitContentIndex(
     struct Longtail_ContentIndex* content_index,
     void* data,
     uint64_t data_size,
@@ -2209,6 +2277,7 @@ int Longtail_InitiContentIndex(
 {
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(data != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %" PRIu64 ", %" PRIu64 ")", content_index, data, data_size, hash_api, block_count, chunk_count)
 
     uint8_t* p = (uint8_t*)data;
     content_index->m_Version = (uint32_t*)(void*)p;
@@ -2230,7 +2299,10 @@ int Longtail_InitiContentIndex(
     return Longtail_InitContentIndexFromData(content_index, &content_index[1], data_size);
 }
 
-static uint64_t GetUniqueHashes(uint64_t hash_count, const TLongtail_Hash* hashes, uint64_t* out_unique_hash_indexes)
+static uint64_t GetUniqueHashes(
+    uint64_t hash_count,
+    const TLongtail_Hash* hashes,
+    uint64_t* out_unique_hash_indexes)
 {
     LONGTAIL_FATAL_ASSERT(hash_count != 0, return 0)
     LONGTAIL_FATAL_ASSERT(hashes != 0, return 0)
@@ -2267,6 +2339,7 @@ int Longtail_CreateContentIndexFromBlocks(
 {
     LONGTAIL_FATAL_ASSERT(block_count == 0 || block_indexes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateContentIndexFromBlocks(%u, %" PRIu64 ", %p, %p)", hash_identifier, block_count, block_indexes, out_content_index)
     uint64_t chunk_count = 0;
     for (uint64_t b = 0; b < block_count; ++b)
     {
@@ -2275,8 +2348,13 @@ int Longtail_CreateContentIndexFromBlocks(
 
     size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
+    if (!content_index)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_identifier, block_count, block_indexes, out_content_index, content_index_size, ENOMEM)
+        return ENOMEM;
+    }
     LONGTAIL_FATAL_ASSERT(content_index, return ENOMEM)
-    int err = Longtail_InitiContentIndex(
+    int err = Longtail_InitContentIndex(
         content_index,
         &content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
@@ -2285,7 +2363,7 @@ int Longtail_CreateContentIndexFromBlocks(
         chunk_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks: Failed to initialize content index %d", err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %" PRIu64 ", %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %" PRIu64 ", %" PRIu64 ") failed with %d", hash_identifier, block_count, block_indexes, out_content_index, content_index, &content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), hash_identifier, block_count, chunk_count, err)
         Longtail_Free(content_index);
         return err;
     }
@@ -2334,13 +2412,17 @@ int Longtail_CreateContentIndex(
     LONGTAIL_FATAL_ASSERT(max_chunks_per_block != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateContentIndex: Creating index for %" PRIu64 " chunks", chunk_count)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p)", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index)
     if (chunk_count == 0)
     {
         size_t content_index_size = Longtail_GetContentIndexSize(0, 0);
         struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
-        LONGTAIL_FATAL_ASSERT(content_index, return ENOMEM)
-        int err = Longtail_InitiContentIndex(
+        if (!content_index)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, content_index_size, ENOMEM)
+            return ENOMEM;
+        }
+        int err = Longtail_InitContentIndex(
             content_index,
             &content_index[1],
             content_index_size - sizeof(struct Longtail_ContentIndex),
@@ -2349,22 +2431,40 @@ int Longtail_CreateContentIndex(
             0);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex: Failed to initialize content index %d", err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %u, %u) failed with %d",
+                hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+                content_index, &content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), hash_api->GetIdentifier(hash_api), 0, 0,
+                err)
             Longtail_Free(content_index);
             return err;
         }
         *out_content_index = content_index;
         return 0;
     }
-    uint64_t* chunk_indexes = (uint64_t*)Longtail_Alloc((size_t)(sizeof(uint64_t) * chunk_count));
-    LONGTAIL_FATAL_ASSERT(chunk_indexes, return ENOMEM)
+    size_t chunk_indexes_size = sizeof(uint64_t) * chunk_count;
+    uint64_t* chunk_indexes = (uint64_t*)Longtail_Alloc(chunk_indexes_size);
+    if (!chunk_indexes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, chunk_indexes_size, ENOMEM)
+        return ENOMEM;
+    }
     uint64_t unique_chunk_count = GetUniqueHashes(chunk_count, chunk_hashes, chunk_indexes);
 
-    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(sizeof(struct Longtail_BlockIndex*) * unique_chunk_count);
-    LONGTAIL_FATAL_ASSERT(block_indexes, return ENOMEM)
+    size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * unique_chunk_count;
+    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
+    if (!block_indexes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, unique_chunk_count, ENOMEM)
+        return ENOMEM;
+    }
 
-    uint64_t* stored_chunk_indexes = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * max_chunks_per_block);
-    LONGTAIL_FATAL_ASSERT(stored_chunk_indexes, return ENOMEM)
+    size_t stored_chunk_indexes_size = sizeof(uint64_t) * max_chunks_per_block;
+    uint64_t* stored_chunk_indexes = (uint64_t*)Longtail_Alloc(stored_chunk_indexes_size);
+    if (!stored_chunk_indexes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, stored_chunk_indexes_size, ENOMEM)
+        return ENOMEM;
+    }
 
     uint64_t i = 0;
     uint32_t chunk_count_in_block = 0;
@@ -2421,7 +2521,14 @@ int Longtail_CreateContentIndex(
             chunk_hashes,
             chunk_sizes,
             &block_indexes[block_count]);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_InitContentIndex(%p, %u, %u, %p, %p, %p, %p) failed with %d",
+                hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+                hash_api, current_tag, chunk_count_in_block, stored_chunk_indexes, chunk_hashes, chunk_sizes, &block_indexes[block_count],
+                err)
+            return err;
+        }
 
         ++block_count;
         ++i;
@@ -2437,6 +2544,14 @@ int Longtail_CreateContentIndex(
         block_count,
         block_indexes,
         out_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_CreateContentIndexFromBlocks(%u, %u, %p, %p) failed with %d",
+            hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+            hash_api->GetIdentifier(hash_api), block_count, block_indexes, out_content_index,
+            err)
+        return err;
+    }
 
     for (uint32_t b = 0; b < block_count; ++b)
     {
@@ -2457,12 +2572,13 @@ int Longtail_WriteContentIndexToBuffer(
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_size != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContentIndexToBuffer: %" PRIu64 " blocks", *content_index->m_BlockCount)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContentIndexToBuffer(%p, %p, %p)", content_index, out_buffer, out_size)
 
     size_t index_data_size = Longtail_GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
     *out_buffer = Longtail_Alloc(index_data_size);
     if (!(*out_buffer))
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndexToBuffer(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", content_index, out_buffer, out_size, index_data_size, ENOMEM)
         return ENOMEM;
     }
     memcpy(*out_buffer, &content_index[1], index_data_size);
@@ -2478,18 +2594,20 @@ int Longtail_ReadContentIndexFromBuffer(
     LONGTAIL_FATAL_ASSERT(buffer != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContentIndexFromBuffer: Buffer size %u", size)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContentIndexFromBuffer(%p, %" PRIu64 ", %p)", buffer, size, out_content_index)
 
     size_t content_index_size = size + sizeof(struct Longtail_ContentIndex);
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     if (!content_index)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndexFromBuffer(%p, %" PRIu64 ", %p) Longtail_Alloc(%" PRIu64 ") failed with %d", buffer, size, out_content_index, content_index_size, ENOMEM)
         return ENOMEM;
     }
     memcpy(&content_index[1], buffer, size);
     int err = Longtail_InitContentIndexFromData(content_index, &content_index[1], size);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndexFromBuffer(%p, %" PRIu64 ", %p) Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") failed with %d", buffer, size, out_content_index, content_index, &content_index[1], size, err)
         Longtail_Free(content_index);
         return err;
     }
@@ -2505,26 +2623,25 @@ int Longtail_WriteContentIndex(
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
-
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContentIndex: Write index to %s, chunks %" PRIu64 ", blocks %" PRIu64 "", path, *content_index->m_ChunkCount, *content_index->m_BlockCount)
-    size_t index_data_size = Longtail_GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContentIndex(%p, %p, %s)", storage_api, content_index, path)
 
     int err = EnsureParentPathExists(storage_api, path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex: Failed to create parent folder for %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex(%p, %p, %s) EnsureParentPathExists(%p, %s) failed with %d", storage_api, content_index, path, storage_api, path, err)
         return err;
     }
     Longtail_StorageAPI_HOpenFile file_handle;
     err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex: Failed to create %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex(%p, %p, %s) storage_api->OpenWriteFile(%p, %s, %u, %p) failed with %d", storage_api, content_index, path, storage_api, path, 0, &file_handle, err)
         return err;
     }
+    size_t index_data_size = Longtail_GetContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
     err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &content_index[1]);
     if (err){
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex: Failed to write to %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentIndex(%p, %p, %s) storage_api->Write(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, content_index, path, storage_api, file_handle, 0, index_data_size, &content_index[1], err)
         storage_api->CloseFile(storage_api, file_handle);
         file_handle = 0;
         return err;
@@ -2542,27 +2659,27 @@ int Longtail_ReadContentIndex(
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContentIndex(%p, %s, %p)", storage_api, path, out_content_index)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ReadContentIndex from %s", path)
     Longtail_StorageAPI_HOpenFile file_handle;
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex: Failed to open %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) storage_api->OpenReadFile(%p, %s, %p) failed with %d", storage_api, path, out_content_index, storage_api, path, &file_handle, err)
         return err;
     }
     uint64_t content_index_data_size;
     err = storage_api->GetSize(storage_api, file_handle, &content_index_data_size);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex: Failed to get size of %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) storage_api->GetSize(%p, %p, %p) failed with %d", storage_api, path, out_content_index, storage_api, file_handle, &content_index_data_size, err)
         return err;
     }
     uint64_t content_index_size = sizeof(struct Longtail_ContentIndex) + content_index_data_size;
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc((size_t)(content_index_size));
     if (!content_index)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex: Failed allocate memory for %s", path)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", storage_api, path, out_content_index, content_index_size, ENOMEM)
         Longtail_Free(content_index);
         content_index = 0;
         storage_api->CloseFile(storage_api, file_handle);
@@ -2572,7 +2689,7 @@ int Longtail_ReadContentIndex(
     err = storage_api->Read(storage_api, file_handle, 0, content_index_data_size, &content_index[1]);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex: Failed to read from %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_content_index, storage_api, file_handle, 0, content_index_data_size, &content_index[1], err)
         Longtail_Free(content_index);
         content_index = 0;
         storage_api->CloseFile(storage_api, file_handle);
@@ -2583,7 +2700,7 @@ int Longtail_ReadContentIndex(
     storage_api->CloseFile(storage_api, file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex: Bad format of file %s, %d", path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") failed with %d", storage_api, path, out_content_index, content_index, &content_index[1], content_index_data_size, err)
         Longtail_Free(content_index);
         return err;
     }
@@ -2684,7 +2801,7 @@ static int DisposePutBlock(struct Longtail_StoredBlock* stored_block)
     return 0;
 }
 
-static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
+static int WriteContentBlockJob(void* context, uint32_t job_id)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
 
@@ -2716,7 +2833,12 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
     }
 
     char* block_data_buffer = (char*)Longtail_Alloc(block_data_size);
-    LONGTAIL_FATAL_ASSERT(block_data_buffer, job->m_Err = ENOMEM; return 0)
+    if (!block_data_buffer)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u) Longtail_Alloc(%" PRIu64 ") failed with %d", context, job_id, block_data_size, ENOMEM);
+        job->m_Err = ENOMEM;
+        return 0;
+    }
     char* write_buffer = block_data_buffer;
     char* write_ptr = write_buffer;
 
@@ -2727,30 +2849,16 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
         uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
         intptr_t tmp;
         intptr_t asset_part_index = hmgeti_ts(job->m_AssetPartLookup, chunk_hash, tmp);
-        if (asset_part_index == -1)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to get path for asset content 0x%" PRIx64, chunk_hash)
-            Longtail_Free(block_data_buffer);
-            block_data_buffer = 0;
-            job->m_Err = EINVAL;
-            return 0;
-        }
+        LONGTAIL_FATAL_ASSERT(asset_part_index != -1, job->m_Err = EINVAL; return 0)
         struct AssetPart* asset_part = &job->m_AssetPartLookup[asset_part_index].value;
         const char* asset_path = asset_part->m_Path;
-        if (IsDirPath(asset_path))
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Directory should not have any chunks %s", asset_path)
-            Longtail_Free(block_data_buffer);
-            block_data_buffer = 0;
-            job->m_Err = EINVAL;
-            return 0;
-        }
+        LONGTAIL_FATAL_ASSERT(!IsDirPath(asset_path), job->m_Err = EINVAL; return 0)
 
         char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
         uint64_t asset_content_offset = asset_part->m_Start;
         if (chunk_index != first_chunk_index && tag != asset_part->m_Tag)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_WriteContentBlockJob: Warning: Inconsistent tag type for chunks inside block 0x%" PRIx64 ", retaining %u", block_hash, tag)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteContentBlockJob: Warning: Inconsistent tag type for chunks inside block 0x%" PRIx64 ", retaining 0x%" PRIx64 "", block_hash, tag)
         }
         else
         {
@@ -2760,7 +2868,7 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
         int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to open asset file %s, %d", full_path, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u) source_storage_api->OpenReadFile(%p, %s, %p) failed with %d", context, job_id, source_storage_api, full_path, &file_handle, err);
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             job->m_Err = err;
@@ -2770,7 +2878,7 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
         err = source_storage_api->GetSize(source_storage_api, file_handle, &asset_file_size);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to get size of asset file %s, %d", full_path, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u) source_storage_api->GetSize(%p, %p, %p) failed with %d", context, job_id, source_storage_api, file_handle, &asset_file_size, err);
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             job->m_Err = err;
@@ -2778,7 +2886,7 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
         }
         if (asset_file_size < (asset_content_offset + chunk_size))
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Mismatching asset size in asset %s, size is %" PRIu64 ", but expecting at least %" PRIu64 "", full_path, asset_file_size, asset_content_offset + chunk_size)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u) %" PRIu64 " < %" PRIu64 " + %" PRIu64 "", context, job_id, asset_file_size, asset_content_offset, chunk_size);
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             source_storage_api->CloseFile(source_storage_api, file_handle);
@@ -2789,7 +2897,7 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
         err = source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to read from asset file %s, %d", full_path, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u) source_storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", context, job_id, source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr, err);
             Longtail_Free(block_data_buffer);
             block_data_buffer = 0;
             source_storage_api->CloseFile(source_storage_api, file_handle);
@@ -2804,7 +2912,14 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
         full_path = 0;
     }
 
-    struct Longtail_BlockIndex* block_index_ptr = (struct Longtail_BlockIndex*)Longtail_Alloc(Longtail_GetBlockIndexSize(chunk_count));
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    struct Longtail_BlockIndex* block_index_ptr = (struct Longtail_BlockIndex*)Longtail_Alloc(block_index_size);
+    if (!block_index_ptr)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u) Longtail_Alloc(%" PRIu64 ") failed with %d", context, job_id, block_index_size, ENOMEM);
+        job->m_Err = ENOMEM;
+        return 0;
+    }
     LONGTAIL_FATAL_ASSERT(block_index_ptr, job->m_Err = ENOMEM; return 0)
     Longtail_InitBlockIndex(block_index_ptr, chunk_count);
     memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
@@ -2825,7 +2940,7 @@ static int Longtail_WriteContentBlockJob(void* context, uint32_t job_id)
     int err = block_store_api->PutStoredBlock(block_store_api, job->m_StoredBlock, &job->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContentBlockJob: Failed to store block 0x%" PRIx64 ", %d", block_hash, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u) block_store_api->PutStoredBlock(%p, %p, %p) failed with %d", context, job_id, block_store_api, job->m_StoredBlock, &job->m_AsyncCompleteAPI, err);
         job->m_StoredBlock->Dispose(job->m_StoredBlock);
         job->m_StoredBlock = 0;
         job->m_JobID = 0;
@@ -2851,6 +2966,7 @@ int Longtail_WriteContent(
     LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(assets_folder != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s)", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder)
 
     uint64_t chunk_count = *content_index->m_ChunkCount;
     uint64_t total_chunk_size = 0;
@@ -2858,7 +2974,7 @@ int Longtail_WriteContent(
     {
         total_chunk_size += content_index->m_ChunkLengths[c];
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent: Writing content from %s, chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", assets_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
     uint64_t block_count = *content_index->m_BlockCount;
     if (block_count == 0)
     {
@@ -2868,7 +2984,7 @@ int Longtail_WriteContent(
     int err = job_api->ReserveJobs(job_api, (uint32_t)block_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to reserve jobs when writing from %s, %d", assets_folder, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) ReserveJobs(%p, %u) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job_api, (uint32_t)block_count, err)
         return err;
     }
 
@@ -2876,6 +2992,7 @@ int Longtail_WriteContent(
     err = CreateAssetPartLookup(version_index, &asset_part_lookup);
     if (!asset_part_lookup)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) CreateAssetPartLookup(%p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, version_index, &asset_part_lookup, err)
         return err;
     }
 
@@ -2901,7 +3018,7 @@ int Longtail_WriteContent(
 
         if (err != ENOENT)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to check block 0x%" PRIx64 ", %d", block_hash, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) block_store_api->GetStoredBlock(%p, 0x%" PRIx64 ", %p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, block_store_api, block_hash, 0, 0, err)
             hmfree(asset_part_lookup);
             asset_part_lookup = 0;
             Longtail_Free(write_block_jobs);
@@ -2925,7 +3042,7 @@ int Longtail_WriteContent(
         job->m_ChunkCount = chunk_count;
         job->m_Err = EINVAL;
 
-        Longtail_JobAPI_JobFunc func[1] = { Longtail_WriteContentBlockJob };
+        Longtail_JobAPI_JobFunc func[1] = { WriteContentBlockJob };
         void* ctx[1] = { job };
 
         Longtail_JobAPI_Jobs jobs;
@@ -2938,6 +3055,11 @@ int Longtail_WriteContent(
     }
 
     err = job_api->WaitForAllJobs(job_api, progress_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) job_api->WaitForAllJobs(%p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job_api, progress_api, err)
+        return err;
+    }
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     err = 0;
@@ -2946,7 +3068,7 @@ int Longtail_WriteContent(
         struct WriteBlockJob* job = &write_block_jobs[job_count];
         if (job->m_Err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent: Failed to write content, %d", job->m_Err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) Failed to write content for block 0x%" PRIx64 " failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job->m_BlockHash, err)
             err = err ? err : job->m_Err;
         }
     }
@@ -2994,7 +3116,11 @@ static int CreateContentLookup(
     LONGTAIL_FATAL_ASSERT(out_content_lookup != 0, return EINVAL)
 
     struct ContentLookup* cl = (struct ContentLookup*)Longtail_Alloc(sizeof(struct ContentLookup));
-    LONGTAIL_FATAL_ASSERT(cl, return ENOMEM)
+    if (!cl)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CreateContentLookup(%" PRIu64 ", %p, %" PRIu64 ", %p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", block_count, block_hashes, chunk_count, chunk_hashes, chunk_block_indexes, out_content_lookup, sizeof(struct ContentLookup), ENOMEM)
+        return ENOMEM;
+    }
     cl->m_BlockHashToBlockIndex = 0;
     cl->m_ChunkHashToChunkIndex = 0;
     cl->m_ChunkHashToBlockIndex = 0;
@@ -3055,7 +3181,7 @@ static int BlockReader(void* context, uint32_t job_id)
     int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockHash, &job->m_StoredBlock, &job->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData: Failed to read block 0x%" PRIx64 ", %d", job->m_BlockHash, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData(%p, %u) job->m_BlockStoreAPI->GetStoredBlock(%p, 0x%" PRIx64 ", %p, %p) failed with %d", context, job_id, job->m_BlockStoreAPI, job->m_BlockHash, &job->m_StoredBlock, &job->m_AsyncCompleteAPI)
         return err;
     }
     return EBUSY;
@@ -4346,7 +4472,7 @@ int Longtail_RetargetContent(
     size_t content_index_size = Longtail_GetContentIndexSize(requested_block_count, chunk_count);
     struct Longtail_ContentIndex* resulting_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     LONGTAIL_FATAL_ASSERT(resulting_content_index, return ENOMEM)
-    int err = Longtail_InitiContentIndex(
+    int err = Longtail_InitContentIndex(
         resulting_content_index,
         &resulting_content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
@@ -4417,7 +4543,7 @@ int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     LONGTAIL_FATAL_ASSERT(content_index, return ENOMEM)
 
-    int err = Longtail_InitiContentIndex(
+    int err = Longtail_InitContentIndex(
         content_index,
         &content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
