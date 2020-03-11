@@ -4896,12 +4896,20 @@ int Longtail_CreateVersionDiff(
     uint32_t source_asset_count = *source_version->m_AssetCount;
     uint32_t target_asset_count = *target_version->m_AssetCount;
 
-    size_t source_path_hashes_size = sizeof(TLongtail_Hash) * source_asset_count;
-    TLongtail_Hash* source_path_hashes = (TLongtail_Hash*)Longtail_Alloc(source_path_hashes_size);
-    LONGTAIL_FATAL_ASSERT(source_path_hashes, return ENOMEM)
-    size_t target_path_hashes_size = sizeof(TLongtail_Hash) * target_asset_count;
-    TLongtail_Hash* target_path_hashes = (TLongtail_Hash*)Longtail_Alloc(target_path_hashes_size);
-    LONGTAIL_FATAL_ASSERT(target_path_hashes, return ENOMEM)
+    uint32_t hashes_count = source_asset_count + target_asset_count;
+    size_t hashes_size = sizeof(TLongtail_Hash) * hashes_count;
+    TLongtail_Hash* hashes = (TLongtail_Hash*)Longtail_Alloc(hashes_size);
+    if (!hashes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            source_version, target_version, out_version_diff,
+            hashes_size,
+            ENOMEM)
+        return ENOMEM;
+    }
+
+    TLongtail_Hash* source_path_hashes = &hashes[0];
+    TLongtail_Hash* target_path_hashes = &hashes[source_asset_count];
 
     for (uint32_t i = 0; i < source_asset_count; ++i)
     {
@@ -4920,22 +4928,38 @@ int Longtail_CreateVersionDiff(
     qsort(source_path_hashes, source_asset_count, sizeof(TLongtail_Hash), CompareHashes);
     qsort(target_path_hashes, target_asset_count, sizeof(TLongtail_Hash), CompareHashes);
 
-    uint32_t* removed_source_asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * source_asset_count);
-    LONGTAIL_FATAL_ASSERT(removed_source_asset_indexes, return ENOMEM)
-    uint32_t* added_target_asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * target_asset_count);
-    LONGTAIL_FATAL_ASSERT(added_target_asset_indexes, return ENOMEM)
-
     const uint32_t max_modified_content_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
-    uint32_t* modified_source_content_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_content_count);
-    LONGTAIL_FATAL_ASSERT(modified_source_content_indexes, return ENOMEM)
-    uint32_t* modified_target_content_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_content_count);
-    LONGTAIL_FATAL_ASSERT(modified_target_content_indexes, return ENOMEM)
-
     const uint32_t max_modified_permission_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
-    uint32_t* modified_source_permissions_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_permission_count);
-    LONGTAIL_FATAL_ASSERT(modified_source_permissions_indexes, return ENOMEM)
-    uint32_t* modified_target_permissions_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * max_modified_permission_count);
-    LONGTAIL_FATAL_ASSERT(modified_target_permissions_indexes, return ENOMEM)
+    const uint32_t indexes_count = source_asset_count + target_asset_count + max_modified_content_count + max_modified_content_count + max_modified_permission_count + max_modified_permission_count;
+
+    size_t indexes_size = sizeof(uint32_t) * indexes_count;
+    uint32_t* indexes = (uint32_t*)Longtail_Alloc(indexes_size);
+    if (!indexes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            source_version, target_version, out_version_diff,
+            indexes_size,
+            ENOMEM)
+        Longtail_Free(hashes);
+        return ENOMEM;
+    }
+
+    uint32_t* indexes_ptr = &indexes[0];
+
+    uint32_t* removed_source_asset_indexes = indexes_ptr;
+    indexes_ptr += source_asset_count;
+    uint32_t* added_target_asset_indexes = indexes_ptr;
+    indexes_ptr += target_asset_count;
+
+    uint32_t* modified_source_content_indexes = indexes_ptr;
+    indexes_ptr += max_modified_content_count;
+    uint32_t* modified_target_content_indexes = indexes_ptr;
+    indexes_ptr += max_modified_content_count;
+
+    uint32_t* modified_source_permissions_indexes = indexes_ptr;
+    indexes_ptr += max_modified_permission_count;
+    uint32_t* modified_target_permissions_indexes = indexes_ptr;
+    indexes_ptr += max_modified_permission_count;
 
     uint32_t source_removed_count = 0;
     uint32_t target_added_count = 0;
@@ -5037,8 +5061,18 @@ int Longtail_CreateVersionDiff(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Mismatching permission for %u assets found", modified_permissions_count)
     }
 
-    struct Longtail_VersionDiff* version_diff = (struct Longtail_VersionDiff*)Longtail_Alloc(GetVersionDiffSize(source_removed_count, target_added_count, modified_content_count, modified_permissions_count));
-    LONGTAIL_FATAL_ASSERT(version_diff, return ENOMEM)
+    size_t version_diff_size = GetVersionDiffSize(source_removed_count, target_added_count, modified_content_count, modified_permissions_count);
+    struct Longtail_VersionDiff* version_diff = (struct Longtail_VersionDiff*)Longtail_Alloc(version_diff_size);
+    if (!version_diff)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            source_version, target_version, out_version_diff,
+            version_diff_size,
+            ENOMEM)
+        Longtail_Free(indexes);
+        Longtail_Free(hashes);
+        return ENOMEM;
+    }
     uint32_t* counts_ptr = (uint32_t*)(void*)&version_diff[1];
     counts_ptr[0] = source_removed_count;
     counts_ptr[1] = target_added_count;
@@ -5056,29 +5090,11 @@ int Longtail_CreateVersionDiff(
     QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
     QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
 
-    Longtail_Free(removed_source_asset_indexes);
-    removed_source_asset_indexes = 0;
+    Longtail_Free(indexes);
+    indexes = 0;
 
-    Longtail_Free(added_target_asset_indexes);
-    added_target_asset_indexes = 0;
-
-    Longtail_Free(modified_source_permissions_indexes);
-    modified_source_permissions_indexes = 0;
-
-    Longtail_Free(modified_target_permissions_indexes);
-    modified_target_permissions_indexes = 0;
-
-    Longtail_Free(modified_source_content_indexes);
-    modified_source_content_indexes = 0;
-
-    Longtail_Free(modified_target_content_indexes);
-    modified_target_content_indexes = 0;
-
-    Longtail_Free(target_path_hashes);
-    target_path_hashes = 0;
-
-    Longtail_Free(source_path_hashes);
-    source_path_hashes = 0;
+    Longtail_Free(hashes);
+    hashes = 0;
 
     hmfree(target_path_hash_to_index);
     target_path_hash_to_index = 0;
@@ -5118,13 +5134,19 @@ int Longtail_ChangeVersion(
     int err = EnsureParentPathExists(version_storage_api, version_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed to create parent path for %s, %d", version_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) EnsureParentPathExists(%p, %s) failed with %d",
+            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+            version_storage_api, version_path,
+            err)
         return err;
     }
     err = SafeCreateDir(version_storage_api, version_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed to create folder %s, %d", version_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) SafeCreateDir(%p, %s) failed with %d",
+            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+            version_storage_api, version_path,
+            err)
         return err;
     }
     struct ContentLookup* content_lookup;
@@ -5137,7 +5159,10 @@ int Longtail_ChangeVersion(
         &content_lookup);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed create content lookup for %s, %d", version_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) CreateContentLookup(%" PRIu64 ", %p, %" PRIu64 ", %p, %p, %p) failed with %d",
+            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+            *content_index->m_BlockCount, content_index->m_BlockHashes, *content_index->m_ChunkCount, content_index->m_ChunkHashes, content_index->m_ChunkBlockIndexes, &content_lookup,
+            err)
         return err;
     }
 
@@ -5147,32 +5172,13 @@ int Longtail_ChangeVersion(
         intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
         if (-1 == chunk_content_index_ptr)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ChangeVersion: Not all chunks in target version in %s is available", version_path)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) can't find chunk 0x%" PRIx64 " in content index",
+                block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                chunk_hash)
             DeleteContentLookup(content_lookup);
             content_lookup = 0;
             return EINVAL;
        }
-    }
-
-    for (uint32_t i = 0; i < *version_diff->m_TargetAddedCount; ++i)
-    {
-        uint32_t target_asset_index = version_diff->m_TargetAddedAssetIndexes[i];
-        const char* target_name = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
-        uint32_t target_chunk_count = target_version->m_AssetChunkCounts[target_asset_index];
-        uint32_t target_chunk_index_start = target_version->m_AssetChunkIndexStarts[target_asset_index];
-        for (uint32_t c = 0; c < target_chunk_count; ++c)
-        {
-            uint32_t target_chunk = target_version->m_AssetChunkIndexes[target_chunk_index_start + c];
-            TLongtail_Hash chunk_hash = target_version->m_ChunkHashes[target_chunk];
-            intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
-            if (-1 == chunk_content_index_ptr)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ChangeVersion: Not all chunks for asset %s is in target version in %s is available in content store", target_name, version_path)
-                DeleteContentLookup(content_lookup);
-                content_lookup = 0;
-                return EINVAL;
-           }
-        }
     }
 
     uint32_t retry_count = 10;
@@ -5249,8 +5255,17 @@ int Longtail_ChangeVersion(
     uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
     uint32_t write_asset_count = added_count + modified_content_count;
 
-    uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * write_asset_count);
-    LONGTAIL_FATAL_ASSERT(asset_indexes, return ENOMEM)
+    size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
+    uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(asset_indexes_size);
+    if (!asset_indexes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+            asset_indexes_size,
+            ENOMEM)
+        DeleteContentLookup(content_lookup);
+        return ENOMEM;
+    }
     for (uint32_t i = 0; i < added_count; ++i)
     {
         asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
@@ -5275,13 +5290,19 @@ int Longtail_ChangeVersion(
 
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed to create asset write list for version %s, %d", version_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) BuildAssetWriteList(%u, %p, %p, %p, %p, %p, %p, %p, %p, %p) failed with %d",
+            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+            write_asset_count, asset_indexes, target_version->m_NameOffsets, target_version->m_NameData, target_version->m_ChunkHashes, target_version->m_AssetChunkCounts, target_version->m_AssetChunkIndexStarts, target_version->m_AssetChunkIndexes, content_lookup, &awl,
+            err)
         Longtail_Free(asset_indexes);
         asset_indexes = 0;
         DeleteContentLookup(content_lookup);
         content_lookup = 0;
         return err;
     }
+
+    Longtail_Free(asset_indexes);
+    asset_indexes = 0;
 
     err = WriteAssets(
         block_store_api,
@@ -5295,9 +5316,6 @@ int Longtail_ChangeVersion(
         awl,
         retain_permissions);
 
-    Longtail_Free(asset_indexes);
-    asset_indexes = 0;
-
     Longtail_Free(awl);
     awl = 0;
 
@@ -5306,6 +5324,10 @@ int Longtail_ChangeVersion(
 
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %d) failed with %d",
+            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+            block_store_api, version_storage_api, job_api, progress_api, content_index, target_version, version_path, content_lookup, awl, retain_permissions,
+            err)
         return err;
     }
 
@@ -5318,12 +5340,16 @@ int Longtail_ChangeVersion(
             char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
             uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
             err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
-            Longtail_Free(full_path);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed to set permissions for asset %s, %d", asset_path, err)
-                break;
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) version_storage_api->SetPermissions(%p, %s, %u) failed with %d",
+                    block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                    version_storage_api, full_path, permissions,
+                    err)
+                Longtail_Free(full_path);
+                return err;
             }
+            Longtail_Free(full_path);
         }
     }
 
@@ -5350,6 +5376,10 @@ int Longtail_ValidateContent(
 
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ValidateContent(%p, %p) CreateContentLookup(%" PRIu64 ", %p, %" PRIu64 ", %p, %p, %p) failed with %d",
+            content_index, version_index,
+            *content_index->m_BlockCount, content_index->m_BlockHashes, *content_index->m_ChunkCount, content_index->m_ChunkHashes, content_index->m_ChunkBlockIndexes, &content_lookup,
+            err)
         return err;
     }
 
@@ -5368,19 +5398,26 @@ int Longtail_ValidateContent(
             intptr_t content_chunk_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
             if (content_chunk_index_ptr == -1)
             {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateContent(%p, %p) content index does not contain chunk 0x%" PRIx64 "",
+                    content_index, version_index,
+                    chunk_hash)
                 DeleteContentLookup(content_lookup);
-                content_lookup = 0;
                 return EINVAL;
             }
             uint64_t content_chunk_index = content_lookup->m_ChunkHashToChunkIndex[content_chunk_index_ptr].value;
             if (content_index->m_ChunkHashes[content_chunk_index] != chunk_hash)
             {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateContent(%p, %p) content index lookup table is corrupt",
+                    content_index, version_index)
                 DeleteContentLookup(content_lookup);
                 content_lookup = 0;
                 return EINVAL;
             }
             if (content_index->m_ChunkLengths[content_chunk_index] != chunk_size)
             {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateContent(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
+                    content_index, version_index,
+                    chunk_hash, content_index->m_ChunkLengths[content_chunk_index], chunk_size)
                 DeleteContentLookup(content_lookup);
                 content_lookup = 0;
                 return EINVAL;
@@ -5388,6 +5425,9 @@ int Longtail_ValidateContent(
         }
         if (asset_chunked_size != asset_size)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateContent(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
+                content_index, version_index,
+                &version_index->m_NameData[version_index->m_NameOffsets[asset_index]], asset_chunked_size, asset_size)
             DeleteContentLookup(content_lookup);
             content_lookup = 0;
             return EINVAL;
@@ -5411,20 +5451,6 @@ int Longtail_ValidateVersion(
 
     struct HashToIndexItem* version_chunk_lookup = 0;
 
-    struct ContentLookup* content_lookup;
-    int err = CreateContentLookup(
-        *content_index->m_BlockCount,
-        content_index->m_BlockHashes,
-        *content_index->m_ChunkCount,
-        content_index->m_ChunkHashes,
-        content_index->m_ChunkBlockIndexes,
-        &content_lookup);
-
-    if (err)
-    {
-        return err;
-    }
-
     for (uint32_t asset_index = 0; asset_index < *version_index->m_AssetCount; ++asset_index)
     {
         uint64_t asset_size = version_index->m_AssetSizes[asset_index];
@@ -5441,6 +5467,9 @@ int Longtail_ValidateVersion(
         }
         if (asset_chunked_size != asset_size)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateVersion(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
+                content_index, version_index,
+                &version_index->m_NameData[version_index->m_NameOffsets[asset_index]], asset_chunked_size, asset_size)
             hmfree(version_chunk_lookup);
             version_chunk_lookup = 0;
             return EINVAL;
@@ -5451,21 +5480,23 @@ int Longtail_ValidateVersion(
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
         uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
-        intptr_t version_chunk_index = hmgeti(version_chunk_lookup, chunk_hash);
-        if (version_chunk_index == -1)
+        intptr_t version_chunk_index_ptr = hmgeti(version_chunk_lookup, chunk_hash);
+        if (version_chunk_index_ptr == -1)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateVersion(%p, %p) version index does not contain chunk 0x%" PRIx64 "",
+                content_index, version_index,
+                chunk_hash)
             hmfree(version_chunk_lookup);
             version_chunk_lookup = 0;
             return EINVAL;
         }
-        if (version_index->m_ChunkHashes[version_chunk_index] != chunk_hash)
-        {
-            hmfree(version_chunk_lookup);
-            version_chunk_lookup = 0;
-            return EINVAL;
-        }
+        uint64_t version_chunk_index = version_chunk_lookup[version_chunk_index_ptr].value;
+        LONGTAIL_FATAL_ASSERT(version_index->m_ChunkHashes[version_chunk_index] == chunk_hash, return EINVAL)
         if (version_index->m_ChunkSizes[version_chunk_index] != chunk_size)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateVersion(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
+                content_index, version_index,
+                chunk_hash, chunk_size, version_index->m_ChunkSizes[version_chunk_index])
             hmfree(version_chunk_lookup);
             version_chunk_lookup = 0;
             return EINVAL;
@@ -5589,8 +5620,16 @@ static uint32_t discriminatorFromAvg(double avg)
     LONGTAIL_FATAL_ASSERT(params->min <= params->avg, return EINVAL)
     LONGTAIL_FATAL_ASSERT(params->avg <= params->max, return EINVAL)
 
-    struct Longtail_Chunker* c = (struct Longtail_Chunker*)Longtail_Alloc((size_t)((sizeof(struct Longtail_Chunker) + params->max)));
-    LONGTAIL_FATAL_ASSERT(c, return ENOMEM)
+    size_t chunker_size = sizeof(struct Longtail_Chunker) + params->max;
+    struct Longtail_Chunker* c = (struct Longtail_Chunker*)Longtail_Alloc(chunker_size);
+    if (!c)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateChunker(%p ,%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            params, feeder, context, out_chunker,
+            chunker_size,
+            ENOMEM)
+        return ENOMEM;
+    }
     c->params = *params;
     c->buf.data = (uint8_t*)&c[1];
     c->buf.len = 0;
@@ -5640,7 +5679,10 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
         int err = FeedChunker(c);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to feed chunker, %d", err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_NextChunk(%p) FeedChunker(%p) failed with %d",
+                c,
+                c,
+                err)
             return EmptyChunkRange;
         }
     }
