@@ -2,6 +2,7 @@
 
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
+#include <errno.h>
 
 #if defined(__clang__) || defined(__GNUC__)
 #if defined(WIN32)
