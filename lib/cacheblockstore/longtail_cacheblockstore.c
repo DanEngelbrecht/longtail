@@ -29,6 +29,7 @@ struct PutStoredBlockPutLocalComplete_API
 
 int PutStoredBlockPutLocalComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "PutStoredBlockPutLocalComplete(%p, %d)", async_complete_api, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct PutStoredBlockPutLocalComplete_API* api = (struct PutStoredBlockPutLocalComplete_API*)async_complete_api;
     if (err)
@@ -49,6 +50,7 @@ int PutStoredBlockPutLocalComplete(struct Longtail_AsyncCompleteAPI* async_compl
 
 int PutStoredBlockPutRemoteComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "PutStoredBlockPutRemoteComplete(%p, %d)", async_complete_api, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct PutStoredBlockPutRemoteComplete_API* api = (struct PutStoredBlockPutRemoteComplete_API*)async_complete_api;
     if (err)
@@ -71,6 +73,7 @@ static int CacheBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
@@ -127,6 +130,7 @@ struct OnGetStoredBlockPutLocalComplete_API
 
 int OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetStoredBlockPutLocalComplete(%p, %d)", async_complete_api, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct OnGetStoredBlockPutLocalComplete_API* api = (struct OnGetStoredBlockPutLocalComplete_API*)async_complete_api;
     if (err)
@@ -148,6 +152,7 @@ struct OnGetStoredBlockGetRemoteComplete_API
 
 int OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetStoredBlockGetRemoteComplete(%p, %d)", async_complete_api, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct OnGetStoredBlockGetRemoteComplete_API* api = (struct OnGetStoredBlockGetRemoteComplete_API*)async_complete_api;
     if (err)
@@ -187,6 +192,7 @@ struct OnGetStoredBlockGetLocalComplete_API
 
 int OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetStoredBlockGetLocalComplete(%p, %d)", async_complete_api, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct OnGetStoredBlockGetLocalComplete_API* api = (struct OnGetStoredBlockGetLocalComplete_API*)async_complete_api;
     if (err == ENOENT || err == EACCES)
@@ -226,6 +232,7 @@ static int CacheBlockStore_GetStoredBlock(
     struct Longtail_StoredBlock** out_stored_block,
     struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_hash, out_stored_block, async_complete_api)
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
     if (async_complete_api)
@@ -282,6 +289,7 @@ static int CacheBlockStore_GetStoredBlock(
 
 static int CacheBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_GetIndex(%p, %p, %u, %p, %p)", block_store_api, job_api, default_hash_api_identifier, progress_api, out_content_index)
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
@@ -290,6 +298,7 @@ static int CacheBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_a
 
 static int CacheBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_GetStoredBlockPath(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, out_path)
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_path, return EINVAL)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
@@ -299,6 +308,7 @@ static int CacheBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* blo
 
 static void CacheBlockStore_Dispose(struct Longtail_API* api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_Dispose(%p)", api)
     LONGTAIL_FATAL_ASSERT(api, return)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)api;
     Longtail_Free(cacheblockstore_api);
@@ -309,6 +319,7 @@ static int CacheBlockStore_Init(
     struct Longtail_BlockStoreAPI* local_block_store,
 	struct Longtail_BlockStoreAPI* remote_block_store)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_Dispose(%p, %p, %p)", api, local_block_store, remote_block_store)
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(local_block_store, return EINVAL)
     LONGTAIL_FATAL_ASSERT(remote_block_store, return EINVAL)
@@ -326,6 +337,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCacheBlockStoreAPI(
     struct Longtail_BlockStoreAPI* local_block_store,
 	struct Longtail_BlockStoreAPI* remote_block_store)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateCacheBlockStoreAPI(%p, %p)", local_block_store, remote_block_store)
     LONGTAIL_FATAL_ASSERT(local_block_store, return 0)
     LONGTAIL_FATAL_ASSERT(remote_block_store, return 0)
     struct CacheBlockStoreAPI* api = (struct CacheBlockStoreAPI*)Longtail_Alloc(sizeof(struct CacheBlockStoreAPI));

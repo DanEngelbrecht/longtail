@@ -33,6 +33,8 @@ struct FSStoredBlock
 
 static int FSStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSStoredBlock_Dispose(%p)", stored_block)
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
     Longtail_Free(stored_block);
     return 0;
 }
@@ -41,6 +43,7 @@ static int FSStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
+    LONGTAIL_FATAL_ASSERT(out_name, return)
     sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
     memmove(out_name, &out_name[7], 4);
     out_name[4] = '/';
@@ -48,6 +51,7 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 
 static char* GetBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtail_Hash block_hash)
 {
+    LONGTAIL_FATAL_ASSERT(fsblockstore_api, return 0)
     char block_name[MAX_BLOCK_NAME_LENGTH];
     GetBlockName(block_hash, block_name);
     char file_name[72];
@@ -57,6 +61,7 @@ static char* GetBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtail_Ha
 
 static char* GetTempBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtail_Hash block_hash)
 {
+    LONGTAIL_FATAL_ASSERT(fsblockstore_api, return 0)
     char block_name[MAX_BLOCK_NAME_LENGTH];
     GetBlockName(block_hash, block_name);
     char file_name[72];
@@ -121,8 +126,10 @@ static int ReadContent(
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent: Reading from `%s`", content_path)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %u, %p, %s, %p",
+        storage_api, job_api, content_index_hash_identifier, progress_api, content_path, out_content_index)
 
     struct Longtail_FileInfos* file_infos;
     int err = Longtail_GetFilesRecursively(
@@ -216,6 +223,10 @@ static int FSBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_PutStoredBlock(%p, %p, %p", block_store_api, stored_block, async_complete_api)
+
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
 
     uint64_t block_hash = *stored_block->m_BlockIndex->m_BlockHash;
@@ -405,6 +416,8 @@ static int FSBlockStore_GetStoredBlock(
     struct Longtail_StoredBlock** out_stored_block,
     struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p, %p", block_store_api, block_hash, out_stored_block, async_complete_api)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
 
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
@@ -536,6 +549,10 @@ static int FSBlockStore_GetIndex(
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_content_index, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %p, %u, %p, %p", block_store_api, job_api, default_hash_api_identifier, progress_api, out_content_index)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (!fsblockstore_api->m_ContentIndex)
@@ -584,6 +601,9 @@ static int FSBlockStore_GetIndex(
 
 static int FSBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
 {
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_path, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetStoredBlockPath(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, out_path)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     *out_path = GetBlockPath(fsblockstore_api, block_hash);
     return 0;
@@ -592,6 +612,7 @@ static int FSBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_
 
 static void FSBlockStore_Dispose(struct Longtail_API* api)
 {
+    LONGTAIL_FATAL_ASSERT(api, return)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
     if (fsblockstore_api->m_ContentIndex)
     {
@@ -613,6 +634,9 @@ static int FSBlockStore_Init(
     struct Longtail_StorageAPI* storage_api,
     const char* content_path)
 {
+    LONGTAIL_FATAL_ASSERT(api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(storage_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(content_path, return EINVAL)
     api->m_BlockStoreAPI.m_API.Dispose = FSBlockStore_Dispose;
     api->m_BlockStoreAPI.PutStoredBlock = FSBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = FSBlockStore_GetStoredBlock;
@@ -645,7 +669,14 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
     const char* content_path)
 {
+    LONGTAIL_FATAL_ASSERT(storage_api, return 0)
+    LONGTAIL_FATAL_ASSERT(content_path, return 0)
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreAPI));
+    if (!api)
+    {
+        // TODO: Log
+        return 0;
+    }
     FSBlockStore_Init(
         api,
         storage_api,
