@@ -72,7 +72,6 @@ static int FSStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, c
 {
     LONGTAIL_FATAL_ASSERT(storage_api, return EINVAL);
     LONGTAIL_FATAL_ASSERT(path, return EINVAL);
-    LONGTAIL_FATAL_ASSERT(initial_size, return EINVAL);
     LONGTAIL_FATAL_ASSERT(out_open_file, return EINVAL);
     TMP_STR(path)
     Longtail_DenormalizePath(tmp_path);

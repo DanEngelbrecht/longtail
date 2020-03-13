@@ -1405,9 +1405,9 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(paths != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(asset_sizes != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(asset_permissions != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(asset_tags != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(asset_sizes != 0 || *paths->m_PathCount == 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(asset_permissions != 0 || *paths->m_PathCount == 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(asset_tags != 0 || *paths->m_PathCount == 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(max_chunk_size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_version_index != 0, return EINVAL)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %p, %p, %p, %u, %p)", storage_api, hash_api, job_api, progress_api, root_path, paths, asset_sizes, asset_permissions, asset_tags, max_chunk_size, out_version_index)
@@ -2919,7 +2919,6 @@ static int WriteContentBlockJob(void* context, uint32_t job_id)
         job->m_Err = ENOMEM;
         return 0;
     }
-    LONGTAIL_FATAL_ASSERT(block_index_ptr, job->m_Err = ENOMEM; return 0)
     Longtail_InitBlockIndex(block_index_ptr, chunk_count);
     memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
     memmove(block_index_ptr->m_ChunkSizes, &content_index->m_ChunkLengths[first_chunk_index], sizeof(uint32_t) * chunk_count);
@@ -3067,7 +3066,7 @@ int Longtail_WriteContent(
         struct WriteBlockJob* job = &write_block_jobs[job_count];
         if (job->m_Err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) Failed to write content for block 0x%" PRIx64 " failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job->m_BlockHash, err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) Failed to write content for block 0x%" PRIx64 " failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job->m_BlockHash, job->m_Err)
             err = err ? err : job->m_Err;
         }
     }
