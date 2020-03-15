@@ -3072,10 +3072,14 @@ public:
 private:
     struct Longtail_StorageAPI m_StorageAPI;
     struct Longtail_HashAPI* m_HashAPI;
+    TLongtail_Atomic32 m_ExitFlag;
     HLongtail_SpinLock m_IOLock;
+    HLongtail_Sema m_RequestSema;
     HLongtail_Thread m_IOThread;
 
+    intptr_t m_PutRequestOffset;
     struct TestPutBlockRequest* m_PutRequests;
+    intptr_t m_GetRequestOffset;
     struct TestGetBlockRequest* m_GetRequests;
     struct Longtail_ContentIndex* m_ContentIndex;
 
@@ -3086,6 +3090,11 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
 {
     block_store->m_API.m_API.Dispose = TestAsyncBlockStore::Dispose;
     block_store->m_HashAPI = hash_api;
+    block_store->m_ExitFlag = 0;
+    block_store->m_PutRequestOffset = 0;
+    block_store->m_PutRequests = 0;
+    block_store->m_GetRequestOffset = 0;
+    block_store->m_GetRequests = 0;
     int err = Longtail_CreateContentIndex(
             block_store->m_HashAPI,
             0,
@@ -3094,8 +3103,7 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
             0,
             8192,
             128,
-            &block_store->m_ContentIndex
-        );
+            &block_store->m_ContentIndex);
     if (err)
     {
         return err;
@@ -3106,9 +3114,19 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
         Longtail_Free(block_store->m_ContentIndex);
         return err;
     }
+    err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &block_store->m_RequestSema);
+    if (err)
+    {
+        Longtail_DeleteSpinLock(block_store->m_IOLock);
+        Longtail_Free(block_store->m_IOLock);
+        Longtail_Free(block_store->m_ContentIndex);
+        return err;
+    }
     err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, &block_store->m_IOThread);
     if (err)
     {
+        Longtail_DeleteSema(block_store->m_RequestSema);
+        Longtail_Free(block_store->m_RequestSema);
         Longtail_DeleteSpinLock(block_store->m_IOLock);
         Longtail_Free(block_store->m_IOLock);
         return err;
@@ -3119,11 +3137,17 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
 void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
 {
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)api;
+    Longtail_AtomicAdd32(&block_store->m_ExitFlag, 1);
+    Longtail_PostSema(block_store->m_RequestSema, 1);
     Longtail_JoinThread(block_store->m_IOThread, LONGTAIL_TIMEOUT_INFINITE);
     Longtail_DeleteThread(block_store->m_IOThread);
     Longtail_Free(block_store->m_IOThread);
+    Longtail_DeleteSema(block_store->m_RequestSema);
+    Longtail_Free(block_store->m_RequestSema);
     Longtail_DeleteSpinLock(block_store->m_IOLock);
     Longtail_Free(block_store->m_IOLock);
+    arrfree(block_store->m_PutRequests);
+    arrfree(block_store->m_GetRequests);
 }
 
 int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
@@ -3155,10 +3179,10 @@ int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_sto
 int TestAsyncBlockStore::GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
 {
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
-    Longtail_LockSpinLock(block_store->m_IOLock);
 
     void* buffer;
     size_t size;
+    Longtail_LockSpinLock(block_store->m_IOLock);
     int err = Longtail_WriteContentIndexToBuffer(
         block_store->m_ContentIndex,
         &buffer,
@@ -3190,9 +3214,43 @@ int TestAsyncBlockStore::GetStoredBlockPath(struct Longtail_BlockStoreAPI* , uin
     return 0;
 }
 
+void WorkerPutRequest(TestAsyncBlockStore* block_store, struct TestPutBlockRequest* put_request)
+{
+
+}
+
+void WorkerGetRequest(TestAsyncBlockStore* block_store, struct TestGetBlockRequest* get_request)
+{
+
+}
+
 int TestAsyncBlockStore::Worker(void* context_data)
 {
-    return 0;
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)context_data;
+    while (1)
+    {
+        if (Longtail_WaitSema(block_store->m_RequestSema))
+        {
+            ptrdiff_t put_request_count = arrlen(block_store->m_PutRequests);
+            if (put_request_count > 0)
+            {
+                struct TestPutBlockRequest* put_request = &block_store->m_PutRequests[block_store->m_PutRequestOffset++];
+                WorkerPutRequest(block_store, put_request);
+                continue;
+            }
+            ptrdiff_t get_request_count = arrlen(block_store->m_GetRequests);
+            if (get_request_count > 0)
+            {
+                struct TestGetBlockRequest* get_request = &block_store->m_GetRequests[block_store->m_GetRequestOffset++];
+                WorkerGetRequest(block_store, get_request);
+                continue;
+            }
+        }
+        if (block_store->m_ExitFlag != 0)
+        {
+            return 0;
+        }
+    }
 }
 
 
