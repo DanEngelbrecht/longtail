@@ -3063,7 +3063,7 @@ class TestAsyncBlockStore
 public:
     struct Longtail_BlockStoreAPI m_API;
 
-    static int InitBlockStore(TestAsyncBlockStore* block_store);
+    static int InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api);
     static void Dispose(struct Longtail_API* api);
     static int PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
@@ -3071,21 +3071,39 @@ public:
     static int GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
 private:
     struct Longtail_StorageAPI m_StorageAPI;
+    struct Longtail_HashAPI* m_HashAPI;
     HLongtail_SpinLock m_IOLock;
     HLongtail_Thread m_IOThread;
 
     struct TestPutBlockRequest* m_PutRequests;
     struct TestGetBlockRequest* m_GetRequests;
+    struct Longtail_ContentIndex* m_ContentIndex;
 
     static int Worker(void* context_data);
 };
 
-int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store)
+int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api)
 {
     block_store->m_API.m_API.Dispose = TestAsyncBlockStore::Dispose;
-    int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &block_store->m_IOLock);
+    block_store->m_HashAPI = hash_api;
+    int err = Longtail_CreateContentIndex(
+            block_store->m_HashAPI,
+            0,
+            0,
+            0,
+            0,
+            8192,
+            128,
+            &block_store->m_ContentIndex
+        );
     if (err)
     {
+        return err;
+    }
+    err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &block_store->m_IOLock);
+    if (err)
+    {
+        Longtail_Free(block_store->m_ContentIndex);
         return err;
     }
     err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, &block_store->m_IOThread);
@@ -3110,21 +3128,65 @@ void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
 
 int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+    struct TestPutBlockRequest put_request;
+    put_request.stored_block = stored_block;
+    put_request.async_complete_api = async_complete_api;
+    Longtail_LockSpinLock(block_store->m_IOLock);
+    arrput(block_store->m_PutRequests, put_request);
+    Longtail_UnlockSpinLock(block_store->m_IOLock);
     return 0;
 }
 
 int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+    struct TestGetBlockRequest get_request;
+    get_request.block_hash = block_hash;
+    get_request.out_stored_block = out_stored_block;
+    get_request.async_complete_api = async_complete_api;
+
+    Longtail_LockSpinLock(block_store->m_IOLock);
+    arrput(block_store->m_GetRequests, get_request);
+    Longtail_UnlockSpinLock(block_store->m_IOLock);
     return 0;
 }
 
 int TestAsyncBlockStore::GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
 {
-    return 0;
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+    Longtail_LockSpinLock(block_store->m_IOLock);
+
+    void* buffer;
+    size_t size;
+    int err = Longtail_WriteContentIndexToBuffer(
+        block_store->m_ContentIndex,
+        &buffer,
+        &size);
+    Longtail_UnlockSpinLock(block_store->m_IOLock);
+    if (err)
+    {
+        return err;
+    }
+
+    err = Longtail_ReadContentIndexFromBuffer(
+        buffer,
+        size,
+        out_content_index);
+    return err;
 }
 
-int TestAsyncBlockStore::GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
+int TestAsyncBlockStore::GetStoredBlockPath(struct Longtail_BlockStoreAPI* , uint64_t block_hash, char** out_path)
 {
+    char block_name[32];
+    sprintf(&block_name[5], "0x%016" PRIx64, block_hash);
+    memmove(block_name, &block_name[7], 4);
+    block_name[4] = '/';
+    *out_path = Longtail_Strdup(block_name);
+    if (!out_path)
+    {
+        return ENOMEM;
+    }
     return 0;
 }
 
@@ -3136,10 +3198,14 @@ int TestAsyncBlockStore::Worker(void* context_data)
 
 TEST(Longtail, AsyncBlockStore)
 {
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+
     TestAsyncBlockStore block_store;
-    ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&block_store));
+    ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&block_store, hash_api));
     struct Longtail_BlockStoreAPI* block_store_api = &block_store.m_API; 
 
 
     SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(hash_api);
 }
