@@ -3172,6 +3172,7 @@ void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
     }
     arrfree(block_store->m_PutRequests);
     arrfree(block_store->m_GetRequests);
+    Longtail_Free(block_store->m_ContentIndex);
 }
 
 static int TestStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
@@ -3240,6 +3241,7 @@ int TestAsyncBlockStore::Worker(void* context_data)
 
                 Longtail_LockSpinLock(block_store->m_IOLock);
                 hmput(block_store->m_StoredBlockLookup, *stored_block->m_BlockIndex->m_BlockHash, serialized_block_data);
+                // TODO: Should update content index!
                 Longtail_UnlockSpinLock(block_store->m_IOLock);
 
                 async_complete_api->OnComplete(async_complete_api, err);
@@ -3309,6 +3311,7 @@ int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_sto
 
     Longtail_LockSpinLock(block_store->m_IOLock);
     hmput(block_store->m_StoredBlockLookup, *stored_block->m_BlockIndex->m_BlockHash, serialized_block_data);
+    // TODO: Should update content index!
     Longtail_UnlockSpinLock(block_store->m_IOLock);
     return 0;
 }
@@ -3402,7 +3405,6 @@ TEST(Longtail, AsyncBlockStore)
     ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&block_store, hash_api));
     struct Longtail_BlockStoreAPI* async_block_store_api = &block_store.m_API; 
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(async_block_store_api, compression_registry);
-
     const uint32_t asset_count = 8u;
 
     const char* TEST_FILENAMES[] = {
@@ -3581,7 +3583,6 @@ TEST(Longtail, AsyncBlockStore)
     vindex = 0;
     Longtail_Free(cindex);
     cindex = 0;
-
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(async_block_store_api);
     SAFE_DISPOSE_API(job_api);
