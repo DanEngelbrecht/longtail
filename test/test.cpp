@@ -17,6 +17,8 @@
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/zstd/longtail_zstd.h"
 
+#include "../lib/longtail_platform.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -3041,4 +3043,103 @@ TEST(Longtail, FileSystemStorage)
     }
 
     SAFE_DISPOSE_API(storage_api);
+}
+
+struct TestPutBlockRequest
+{
+    struct Longtail_StoredBlock* stored_block;
+    struct Longtail_AsyncCompleteAPI* async_complete_api;
+};
+
+struct TestGetBlockRequest
+{
+    uint64_t block_hash;
+    struct Longtail_StoredBlock** out_stored_block;
+    struct Longtail_AsyncCompleteAPI* async_complete_api;
+};
+
+class TestAsyncBlockStore
+{
+public:
+    struct Longtail_BlockStoreAPI m_API;
+
+    static int InitBlockStore(TestAsyncBlockStore* block_store);
+    static void Dispose(struct Longtail_API* api);
+    static int PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+    static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+    static int GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index);
+    static int GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
+private:
+    struct Longtail_StorageAPI m_StorageAPI;
+    HLongtail_SpinLock m_IOLock;
+    HLongtail_Thread m_IOThread;
+
+    struct TestPutBlockRequest* m_PutRequests;
+    struct TestGetBlockRequest* m_GetRequests;
+
+    static int Worker(void* context_data);
+};
+
+int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store)
+{
+    block_store->m_API.m_API.Dispose = TestAsyncBlockStore::Dispose;
+    int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &block_store->m_IOLock);
+    if (err)
+    {
+        return err;
+    }
+    err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, &block_store->m_IOThread);
+    if (err)
+    {
+        Longtail_DeleteSpinLock(block_store->m_IOLock);
+        Longtail_Free(block_store->m_IOLock);
+        return err;
+    }
+    return 0;
+}
+
+void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
+{
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)api;
+    Longtail_JoinThread(block_store->m_IOThread, LONGTAIL_TIMEOUT_INFINITE);
+    Longtail_DeleteThread(block_store->m_IOThread);
+    Longtail_Free(block_store->m_IOThread);
+    Longtail_DeleteSpinLock(block_store->m_IOLock);
+    Longtail_Free(block_store->m_IOLock);
+}
+
+int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    return 0;
+}
+
+int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    return 0;
+}
+
+int TestAsyncBlockStore::GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
+{
+    return 0;
+}
+
+int TestAsyncBlockStore::GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
+{
+    return 0;
+}
+
+int TestAsyncBlockStore::Worker(void* context_data)
+{
+    return 0;
+}
+
+
+TEST(Longtail, AsyncBlockStore)
+{
+    TestAsyncBlockStore block_store;
+    ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&block_store));
+    struct Longtail_BlockStoreAPI* block_store_api = &block_store.m_API; 
+
+
+    SAFE_DISPOSE_API(block_store_api);
 }
