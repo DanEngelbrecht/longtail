@@ -79,7 +79,7 @@ static int CacheBlockStore_PutStoredBlock(
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
 
-    struct PutStoredBlockPutRemoteComplete_API* put_stored_block_put_remote_complete_api = (struct PutStoredBlockPutRemoteComplete_API*)Longtail_Alloc(sizeof(struct PutStoredBlockPutRemoteComplete_API*));
+    struct PutStoredBlockPutRemoteComplete_API* put_stored_block_put_remote_complete_api = (struct PutStoredBlockPutRemoteComplete_API*)Longtail_Alloc(sizeof(struct PutStoredBlockPutRemoteComplete_API));
     put_stored_block_put_remote_complete_api->m_API.m_API.Dispose = 0;
     put_stored_block_put_remote_complete_api->m_API.OnComplete = PutStoredBlockPutRemoteComplete;
     put_stored_block_put_remote_complete_api->m_PendingCount = 2;
@@ -93,7 +93,7 @@ static int CacheBlockStore_PutStoredBlock(
         return err;
     }
 
-    struct PutStoredBlockPutLocalComplete_API* put_stored_block_put_local_complete_api = (struct PutStoredBlockPutLocalComplete_API*)Longtail_Alloc(sizeof(struct PutStoredBlockPutLocalComplete_API*));
+    struct PutStoredBlockPutLocalComplete_API* put_stored_block_put_local_complete_api = (struct PutStoredBlockPutLocalComplete_API*)Longtail_Alloc(sizeof(struct PutStoredBlockPutLocalComplete_API));
     put_stored_block_put_local_complete_api->m_API.m_API.Dispose = 0;
     put_stored_block_put_local_complete_api->m_API.OnComplete = PutStoredBlockPutLocalComplete;
     put_stored_block_put_local_complete_api->m_PutStoredBlockPutRemoteComplete_API = put_stored_block_put_remote_complete_api;

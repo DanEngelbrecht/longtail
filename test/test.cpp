@@ -3433,19 +3433,9 @@ int TestAsyncBlockStore::GetStoredBlockPath(struct Longtail_BlockStoreAPI* , uin
 
 TEST(Longtail, AsyncBlockStore)
 {
-    {
-        HLongtail_Sema sema;
-        int err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &sema);
-        ASSERT_EQ(0, err);
-        Longtail_PostSema(sema, 1);
-        Longtail_WaitSema(sema);
-        Longtail_DeleteSema(sema);
-        Longtail_Free(sema);
-    }
-
-
-
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_BlockStoreAPI* cache_block_store = Longtail_CreateFSBlockStoreAPI(storage_api, "cache");
+
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
@@ -3454,7 +3444,9 @@ TEST(Longtail, AsyncBlockStore)
     TestAsyncBlockStore block_store;
     ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&block_store, hash_api));
     struct Longtail_BlockStoreAPI* async_block_store_api = &block_store.m_API; 
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(async_block_store_api, compression_registry);
+    Longtail_BlockStoreAPI* compressed_block_store_api = Longtail_CreateCompressBlockStoreAPI(async_block_store_api, compression_registry);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCacheBlockStoreAPI(cache_block_store, compressed_block_store_api);
+
 #define TO_ACTUAL_TEST
 #if defined(TO_ACTUAL_TEST)
     const uint32_t asset_count = 8u;
@@ -3638,6 +3630,7 @@ TEST(Longtail, AsyncBlockStore)
 #endif
 
     SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(compressed_block_store_api);
     SAFE_DISPOSE_API(async_block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
