@@ -1014,7 +1014,8 @@ TEST(Longtail, Longtail_FSBlockStore)
     put_block.m_BlockData = 0;
 
     struct TestAsyncComplete getCB;
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 4711, 0, &getCB.m_API));
+    struct Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 4711, &get_block, &getCB.m_API));
     ASSERT_EQ(ENOENT, getCB.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
@@ -1039,13 +1040,9 @@ TEST(Longtail, Longtail_FSBlockStore)
     ASSERT_EQ(0, putCB.m_Err);
 
     struct TestAsyncComplete getCB1;
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, 0, &getCB1.m_API));
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block, &getCB1.m_API));
     ASSERT_EQ(0, getCB1.m_Err);
 
-    Longtail_StoredBlock* get_block;
-    struct TestAsyncComplete getCB2;
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block, &getCB2.m_API));
-    ASSERT_EQ(0, getCB2.m_Err);
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
@@ -1089,7 +1086,8 @@ TEST(Longtail, Longtail_CacheBlockStore)
     put_block.m_BlockData = 0;
 
     struct TestAsyncComplete getCB1;
-    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 4711, 0, &getCB1.m_API));
+    struct Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 4711, &get_block, &getCB1.m_API));
     ASSERT_EQ(ENOENT, getCB1.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
@@ -1114,10 +1112,9 @@ TEST(Longtail, Longtail_CacheBlockStore)
     ASSERT_EQ(0, putCB.m_Err);
 
     struct TestAsyncComplete getCB2;
-    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, 0, &getCB2.m_API));
+    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block, &getCB2.m_API));
     ASSERT_EQ(0, getCB2.m_Err);
 
-    Longtail_StoredBlock* get_block;
     struct TestAsyncComplete getCB3;
     ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block, &getCB3.m_API));
     ASSERT_EQ(0, getCB3.m_Err);
@@ -1161,7 +1158,8 @@ TEST(Longtail, Longtail_CompressBlockStore)
     Longtail_Free(store_index);
 
     struct TestAsyncComplete getCB0;
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, 0, &getCB0.m_API));
+    struct Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, &get_block, &getCB0.m_API));
     ASSERT_EQ(ENOENT, getCB0.m_Err);
 
     Longtail_StoredBlock* put_block;
@@ -1217,9 +1215,8 @@ TEST(Longtail, Longtail_CompressBlockStore)
     ASSERT_EQ(0, putCB2.m_Err);
 
     TestAsyncComplete getCB1;
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, 0, &getCB1.m_API));
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block, &getCB1.m_API));
     ASSERT_EQ(0, getCB1.m_Err);
-    Longtail_StoredBlock* get_block;
     TestAsyncComplete getCB2;
     ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block, &getCB2.m_API));
     ASSERT_EQ(0, getCB2.m_Err);
@@ -1348,14 +1345,19 @@ TEST(Longtail, Longtail_WriteContent)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         source_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         cindex,
         vindex,
         "local"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* cindex2;
     ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &cindex2));
@@ -1953,14 +1955,19 @@ TEST(Longtail, Longtail_VersionDiff)
             MAX_CHUNKS_PER_BLOCK,
             &content_index));
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         content_index,
         new_vindex,
         "new"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
     Longtail_Free(content_index);
     content_index = 0;
 
@@ -2111,14 +2118,19 @@ TEST(Longtail, FullScale)
             MAX_CHUNKS_PER_BLOCK,
             &local_content_index));
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         local_content_index,
         local_version_index,
         ""));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* remote_content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
@@ -2131,14 +2143,18 @@ TEST(Longtail, FullScale)
             MAX_CHUNKS_PER_BLOCK,
             &remote_content_index));
 
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         remote_content_index,
         remote_version_index,
         ""));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* missing_content;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -2150,14 +2166,18 @@ TEST(Longtail, FullScale)
         &missing_content));
     ASSERT_NE((Longtail_ContentIndex*)0, missing_content);
  
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         missing_content,
         remote_version_index,
         ""));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* merged_content_index;
     ASSERT_EQ(0, Longtail_MergeContentIndex(local_content_index, missing_content, &merged_content_index));
@@ -2352,14 +2372,19 @@ TEST(Longtail, Longtail_WriteVersion)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         cindex,
         vindex,
         "local"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     ASSERT_EQ(0, Longtail_WriteVersion(
         block_store_api,
@@ -2514,14 +2539,19 @@ static void Bench()
         Longtail_BlockStoreAPI* fs_delta_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, delta_upload_content_folder);
         Longtail_BlockStoreAPI* delta_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_delta_block_store_api, compression_registry);
         ASSERT_NE((Longtail_BlockStoreAPI*)0, delta_block_store_api);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, delta_block_store_api->GetIndex(delta_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             delta_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             missing_content_index,
             version_index,
             version_source_folder));
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
         SAFE_DISPOSE_API(delta_block_store_api);
         delta_block_store_api = 0;
         SAFE_DISPOSE_API(fs_delta_block_store_api);
@@ -2714,14 +2744,19 @@ static void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, local_block_store_api->GetIndex(local_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         Longtail_WriteContent(
             storage_api,
             local_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             local_content_index,
             version1,
             local_path_1);
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
     }
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
@@ -2778,28 +2813,38 @@ static void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, local_block_store_api->GetIndex(local_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             local_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             missing_content,
             version2,
             local_path_2));
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
     }
 
     if (1)
     {
         // Write this to disk for reference to see how big the diff is...
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, remote_block_store_api->GetIndex(remote_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             remote_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             missing_content,
             version2,
             local_path_2));
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
     }
 
 //    Longtail_ContentIndex* remote_content_index;
@@ -3317,13 +3362,8 @@ int TestAsyncBlockStore::Worker(void* context_data)
             Longtail_UnlockSpinLock(block_store->m_IOLock);
             if (serialized_block_data)
             {
-                if (out_stored_block)
-                {
-                    int err = WorkerGetRequest(serialized_block_data, out_stored_block);
-                    async_complete_api->OnComplete(async_complete_api, err);
-                    continue;
-                }
-                async_complete_api->OnComplete(async_complete_api, 0);
+                int err = WorkerGetRequest(serialized_block_data, out_stored_block);
+                async_complete_api->OnComplete(async_complete_api, err);
                 continue;
             }
             else
@@ -3342,6 +3382,10 @@ int TestAsyncBlockStore::Worker(void* context_data)
 
 int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
     struct TestPutBlockRequest put_request;
     put_request.block_hash = *stored_block->m_BlockIndex->m_BlockHash;
@@ -3356,43 +3400,27 @@ int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_sto
 
 int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
-    if (async_complete_api)
-    {
-        struct TestGetBlockRequest get_request;
-        get_request.block_hash = block_hash;
-        get_request.out_stored_block = out_stored_block;
-        get_request.async_complete_api = async_complete_api;
+    struct TestGetBlockRequest get_request;
+    get_request.block_hash = block_hash;
+    get_request.out_stored_block = out_stored_block;
+    get_request.async_complete_api = async_complete_api;
 
-        Longtail_LockSpinLock(block_store->m_IOLock);
-        arrput(block_store->m_GetRequests, get_request);
-        Longtail_UnlockSpinLock(block_store->m_IOLock);
-        Longtail_PostSema(block_store->m_RequestSema, 1);
-        return 0;
-    }
-
-    uint8_t* serialized_block_data = 0;
     Longtail_LockSpinLock(block_store->m_IOLock);
-    intptr_t i_ptr = hmgeti(block_store->m_StoredBlockLookup, block_hash);
-    if (i_ptr != -1)
-    {
-        serialized_block_data = block_store->m_StoredBlockLookup[i_ptr].value;
-    }
+    arrput(block_store->m_GetRequests, get_request);
     Longtail_UnlockSpinLock(block_store->m_IOLock);
-    if (serialized_block_data)
-    {
-        if (out_stored_block)
-        {
-            int err = WorkerGetRequest(serialized_block_data, out_stored_block);
-            return err;
-        }
-        return 0;
-    }
-    return ENOENT;
+    Longtail_PostSema(block_store->m_RequestSema, 1);
+    return 0;
 }
 
 int TestAsyncBlockStore::GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_content_index, return EINVAL)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
 
     void* buffer;
@@ -3582,14 +3610,19 @@ TEST(Longtail, AsyncBlockStore)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         cindex,
         vindex,
         "local"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     ASSERT_EQ(0, Longtail_WriteVersion(
         block_store_api,

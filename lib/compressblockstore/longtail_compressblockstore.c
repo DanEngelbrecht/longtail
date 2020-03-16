@@ -234,15 +234,9 @@ static int OnGetBackingStoreComplete(struct Longtail_AsyncCompleteAPI* async_com
     {
         if (err != ENOENT)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Failed to get block from backing store, %d", err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "CompressionBlockStore_GetStoredBlock: Failed to get block from backing store, %d", err)
         }
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, err);
-        Longtail_Free(async_block_store);
-        return 0;
-    }
-    if (!async_block_store->m_OutStoredBlock)
-    {
-        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0);
         Longtail_Free(async_block_store);
         return 0;
     }
@@ -280,54 +274,22 @@ static int CompressBlockStore_GetStoredBlock(
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_hash, out_stored_block, async_complete_api)
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
-    if (async_complete_api)
-    {
-        struct OnGetBackingStoreAsync_API* on_fetch_backing_store_async_api = (struct OnGetBackingStoreAsync_API*)Longtail_Alloc(sizeof(struct OnGetBackingStoreAsync_API));
+    struct OnGetBackingStoreAsync_API* on_fetch_backing_store_async_api = (struct OnGetBackingStoreAsync_API*)Longtail_Alloc(sizeof(struct OnGetBackingStoreAsync_API));
 
-        on_fetch_backing_store_async_api->m_API.OnComplete = OnGetBackingStoreComplete;
-        on_fetch_backing_store_async_api->m_API.m_API.Dispose = 0;
-        on_fetch_backing_store_async_api->m_BlockStore = block_store;
-        on_fetch_backing_store_async_api->m_OutStoredBlock = out_stored_block;
-        on_fetch_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
+    on_fetch_backing_store_async_api->m_API.OnComplete = OnGetBackingStoreComplete;
+    on_fetch_backing_store_async_api->m_API.m_API.Dispose = 0;
+    on_fetch_backing_store_async_api->m_BlockStore = block_store;
+    on_fetch_backing_store_async_api->m_OutStoredBlock = out_stored_block;
+    on_fetch_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
 
-        int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block, &on_fetch_backing_store_async_api->m_API);
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Failed to async get block from backing store, %d", err)
-            Longtail_Free(on_fetch_backing_store_async_api);
-            return err;
-        }
-        return 0;
-    }
-    int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block, 0);
+    int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, out_stored_block, &on_fetch_backing_store_async_api->m_API);
     if (err)
     {
-        if (err != ENOENT)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Failed to get block from backing store, %d", err)
-        }
-        return err;
-    }
-    if (!out_stored_block)
-    {
-        return 0;
-    }
-
-    uint32_t compressionType = *(*out_stored_block)->m_BlockIndex->m_Tag;
-    if (compressionType == 0)
-    {
-        return 0;
-    }
-
-    err = DecompressBlock(
-        block_store->m_CompressionRegistryAPI,
-        *out_stored_block,
-        out_stored_block);
-    if (err)
-    {
-        (*out_stored_block)->Dispose(*out_stored_block);
-        (*out_stored_block) = 0;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_GetStoredBlock: Failed to async get block from backing store, %d", err)
+        Longtail_Free(on_fetch_backing_store_async_api);
         return err;
     }
     return 0;

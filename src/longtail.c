@@ -2954,26 +2954,27 @@ int Longtail_WriteContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
-    struct Longtail_ContentIndex* content_index,
+    struct Longtail_ContentIndex* block_store_content_index,
+    struct Longtail_ContentIndex* version_content_index,
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder)
 {
     LONGTAIL_FATAL_ASSERT(source_storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(block_store_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(version_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(assets_folder != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s)", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s)", source_storage_api, block_store_api, job_api, progress_api, version_content_index, version_index, assets_folder)
 
-    uint64_t chunk_count = *content_index->m_ChunkCount;
+    uint64_t chunk_count = *version_content_index->m_ChunkCount;
     uint64_t total_chunk_size = 0;
     for (uint64_t c = 0; c < chunk_count; ++c)
     {
-        total_chunk_size += content_index->m_ChunkLengths[c];
+        total_chunk_size += version_content_index->m_ChunkLengths[c];
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, *content_index->m_ChunkCount, *content_index->m_BlockCount, total_chunk_size)
-    uint64_t block_count = *content_index->m_BlockCount;
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) chunks %" PRIu64 ", blocks %" PRIu64 ", size: %" PRIu64 " bytes", source_storage_api, block_store_api, job_api, progress_api, version_content_index, version_index, assets_folder, *version_content_index->m_ChunkCount, *version_content_index->m_BlockCount, total_chunk_size)
+    uint64_t block_count = *version_content_index->m_BlockCount;
     if (block_count == 0)
     {
         return 0;
@@ -2982,7 +2983,7 @@ int Longtail_WriteContent(
     int err = job_api->ReserveJobs(job_api, (uint32_t)block_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) ReserveJobs(%p, %u) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job_api, (uint32_t)block_count, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) ReserveJobs(%p, %u) failed with %d", source_storage_api, block_store_api, job_api, progress_api, version_content_index, version_index, assets_folder, job_api, (uint32_t)block_count, err)
         return err;
     }
 
@@ -2990,8 +2991,15 @@ int Longtail_WriteContent(
     err = CreateAssetPartLookup(version_index, &asset_part_lookup);
     if (!asset_part_lookup)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) CreateAssetPartLookup(%p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, version_index, &asset_part_lookup, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) CreateAssetPartLookup(%p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, version_content_index, version_index, assets_folder, version_index, &asset_part_lookup, err)
         return err;
+    }
+
+    struct HashToIndexItem* block_store_lookup = 0;
+    uint64_t block_store_block_count = block_store_content_index ? *block_store_content_index->m_BlockCount : 0;
+    for (uint64_t b = 0; b < block_store_block_count; ++b)
+    {
+        hmput(block_store_lookup, block_store_content_index->m_BlockHashes[b], b);
     }
 
     struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)Longtail_Alloc((size_t)(sizeof(struct WriteBlockJob) * block_count));
@@ -3000,28 +3008,18 @@ int Longtail_WriteContent(
     uint32_t job_count = 0;
     for (uint64_t block_index = 0; block_index < block_count; ++block_index)
     {
-        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        TLongtail_Hash block_hash = version_content_index->m_BlockHashes[block_index];
         uint32_t chunk_count = 0;
-        while(content_index->m_ChunkBlockIndexes[block_start_chunk_index + chunk_count] == block_index)
+        while(version_content_index->m_ChunkBlockIndexes[block_start_chunk_index + chunk_count] == block_index)
         {
             ++chunk_count;
         }
 
-        int err = block_store_api->GetStoredBlock(block_store_api, block_hash, 0, 0);
-        if (err == 0)
+        intptr_t block_index_ptr = hmgeti(block_store_lookup, block_hash);
+        if (block_index_ptr != -1)
         {
             block_start_chunk_index += chunk_count;
             continue;
-        }
-
-        if (err != ENOENT)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) block_store_api->GetStoredBlock(%p, 0x%" PRIx64 ", %p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, block_store_api, block_hash, 0, 0, err)
-            hmfree(asset_part_lookup);
-            asset_part_lookup = 0;
-            Longtail_Free(write_block_jobs);
-            write_block_jobs = 0;
-            return err;
         }
 
         struct WriteBlockJob* job = &write_block_jobs[job_count++];
@@ -3033,7 +3031,7 @@ int Longtail_WriteContent(
         job->m_JobID = 0;
         job->m_StoredBlock = 0;
         job->m_AssetsFolder = assets_folder;
-        job->m_ContentIndex = content_index;
+        job->m_ContentIndex = version_content_index;
         job->m_BlockHash = block_hash;
         job->m_AssetPartLookup = asset_part_lookup;
         job->m_FirstChunkIndex = block_start_chunk_index;
@@ -3051,11 +3049,13 @@ int Longtail_WriteContent(
 
         block_start_chunk_index += chunk_count;
     }
+    hmfree(block_store_lookup);
+    block_store_lookup = 0;
 
     err = job_api->WaitForAllJobs(job_api, progress_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) job_api->WaitForAllJobs(%p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job_api, progress_api, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) job_api->WaitForAllJobs(%p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, version_content_index, version_index, assets_folder, job_api, progress_api, err)
         return err;
     }
     LONGTAIL_FATAL_ASSERT(!err, return err)
@@ -3066,7 +3066,7 @@ int Longtail_WriteContent(
         struct WriteBlockJob* job = &write_block_jobs[job_count];
         if (job->m_Err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) Failed to write content for block 0x%" PRIx64 " failed with %d", source_storage_api, block_store_api, job_api, progress_api, content_index, version_index, assets_folder, job->m_BlockHash, job->m_Err)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) Failed to write content for block 0x%" PRIx64 " failed with %d", source_storage_api, block_store_api, job_api, progress_api, version_content_index, version_index, assets_folder, job->m_BlockHash, job->m_Err)
             err = err ? err : job->m_Err;
         }
     }

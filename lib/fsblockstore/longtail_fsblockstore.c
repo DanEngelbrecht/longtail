@@ -384,8 +384,10 @@ static int FSBlockStore_GetStoredBlock(
     struct Longtail_StoredBlock** out_stored_block,
     struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p, %p", block_store_api, block_hash, out_stored_block, async_complete_api)
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
 
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
@@ -397,11 +399,7 @@ static int FSBlockStore_GetStoredBlock(
         {
             Longtail_Free((void*)block_path);
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-            if (async_complete_api)
-            {
-                return async_complete_api->OnComplete(async_complete_api, ENOENT);
-            }
-            return ENOENT;
+            return async_complete_api->OnComplete(async_complete_api, ENOENT);
         }
         Longtail_Free((void*)block_path);
         hmput(fsblockstore_api->m_BlockState, block_hash, 1);
@@ -409,14 +407,6 @@ static int FSBlockStore_GetStoredBlock(
     }
     uint32_t state = fsblockstore_api->m_BlockState[block_ptr].value;
     Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-    if (!out_stored_block)
-    {
-        if (async_complete_api)
-        {
-            return async_complete_api->OnComplete(async_complete_api, 0);
-        }
-        return 0;
-    }
     while (state == 0)
     {
         Longtail_Sleep(1000);
@@ -433,11 +423,7 @@ static int FSBlockStore_GetStoredBlock(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to open block `%s`, %d", block_path, err)
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            return async_complete_api->OnComplete(async_complete_api, err);
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
     uint64_t stored_block_data_size;
     err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, f, &stored_block_data_size);
@@ -447,11 +433,7 @@ static int FSBlockStore_GetStoredBlock(
         fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            return async_complete_api->OnComplete(async_complete_api, err);
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
 
     size_t block_mem_size = Longtail_GetStoredBlockSize(stored_block_data_size);
@@ -468,11 +450,7 @@ static int FSBlockStore_GetStoredBlock(
         stored_block = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            return async_complete_api->OnComplete(async_complete_api, err);
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
     err = Longtail_InitStoredBlockFromData(
         stored_block,
@@ -485,22 +463,14 @@ static int FSBlockStore_GetStoredBlock(
         stored_block = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            return async_complete_api->OnComplete(async_complete_api, err);
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
     stored_block->Dispose = FSStoredBlock_Dispose;
     Longtail_Free(block_path);
     block_path = 0;
 
     *out_stored_block = stored_block;
-    if (async_complete_api)
-    {
-        return async_complete_api->OnComplete(async_complete_api, 0);
-    }
-    return 0;
+    return async_complete_api->OnComplete(async_complete_api, 0);
 }
 
 static int FSBlockStore_GetIndex(

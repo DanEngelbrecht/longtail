@@ -484,6 +484,30 @@ int UpSync(
         return err;
     }
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    {
+        Progress block_store_get_content_index("Get content index");
+        err = store_block_store_api->GetIndex(
+            store_block_store_api,
+            job_api,
+            hash_api->GetIdentifier(hash_api),
+            &block_store_get_content_index.m_API,
+            &block_store_content_index);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
+            Longtail_Free(version_content_index);
+            Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(store_block_fsstore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_api);
+            Longtail_Free((char*)storage_path);
+            return err;
+        }
+    }
     {
         Progress write_content_progress("Writing blocks");
         err = Longtail_WriteContent(
@@ -491,10 +515,14 @@ int UpSync(
             store_block_store_api,
             job_api,
             &write_content_progress.m_API,
+            block_store_content_index,
             version_content_index,
             source_version_index,
             source_path);
     }
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);

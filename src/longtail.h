@@ -280,7 +280,8 @@ int Longtail_WriteContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
-    struct Longtail_ContentIndex* content_index,
+    struct Longtail_ContentIndex* block_store_content_index,
+    struct Longtail_ContentIndex* version_content_index,
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
