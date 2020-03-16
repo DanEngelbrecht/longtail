@@ -59,7 +59,6 @@ static int Win32ErrorToErrno(DWORD err)
         case ERROR_SEM_NOT_FOUND:
         case ERROR_FILENAME_EXCED_RANGE:
         case ERROR_DIRECTORY:
-        case WAIT_ABANDONED:
         return EINVAL;
         case ERROR_INVALID_DRIVE:
         return ENODEV;
@@ -175,13 +174,15 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
     switch (result)
     {
         case WAIT_OBJECT_0:
-        return 0;
+            return 0;
+        case WAIT_ABANDONED:
+            return EINVAL;
         case WAIT_TIMEOUT:
-        return ETIME;
+            return ETIME;
         case WAIT_FAILED:
-        return Win32ErrorToErrno(GetLastError());
+            return Win32ErrorToErrno(GetLastError());
         default:
-        return EINVAL;
+            return EINVAL;
     }
 }
 
@@ -232,11 +233,14 @@ int Longtail_WaitSema(HLongtail_Sema semaphore)
     {
         case WAIT_OBJECT_0:
             return 0;
+        case WAIT_ABANDONED:
+            return EINVAL;
+        case WAIT_TIMEOUT:
+            return ETIME;
         case WAIT_FAILED:
             return Win32ErrorToErrno(GetLastError());
-            break;
         default:
-            return Win32ErrorToErrno(res);
+            return EINVAL;
     }
 }
 
