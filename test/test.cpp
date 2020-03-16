@@ -3226,7 +3226,8 @@ int TestAsyncBlockStore::Worker(void* context_data)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)context_data;
     while (1)
     {
-        Longtail_WaitSema(block_store->m_RequestSema);
+        int err = Longtail_WaitSema(block_store->m_RequestSema);
+        LONGTAIL_FATAL_ASSERT(err == 0, continue)
 
         Longtail_LockSpinLock(block_store->m_IOLock);
         ptrdiff_t put_request_count = arrlen(block_store->m_PutRequests);
