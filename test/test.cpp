@@ -3170,6 +3170,7 @@ void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
         uint8_t* d = block_store->m_StoredBlockLookup[i_ptr].value;
         arrfree(d);
     }
+    hmfree(block_store->m_StoredBlockLookup);
     arrfree(block_store->m_PutRequests);
     arrfree(block_store->m_GetRequests);
     Longtail_Free(block_store->m_ContentIndex);
@@ -3225,61 +3226,61 @@ int TestAsyncBlockStore::Worker(void* context_data)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)context_data;
     while (1)
     {
-        if (Longtail_WaitSema(block_store->m_RequestSema))
+        Longtail_WaitSema(block_store->m_RequestSema);
+
+        Longtail_LockSpinLock(block_store->m_IOLock);
+        ptrdiff_t put_request_count = arrlen(block_store->m_PutRequests);
+        if (put_request_count > block_store->m_PutRequestOffset)
         {
+            ptrdiff_t put_request_index = block_store->m_PutRequestOffset++;
+            struct TestPutBlockRequest* put_request = &block_store->m_PutRequests[put_request_index];
+            struct Longtail_StoredBlock* stored_block = put_request->stored_block;
+            struct Longtail_AsyncCompleteAPI* async_complete_api = put_request->async_complete_api;
+            Longtail_UnlockSpinLock(block_store->m_IOLock);
+            uint8_t* serialized_block_data;
+            int err = WorkerPutRequest(stored_block, &serialized_block_data);
+
             Longtail_LockSpinLock(block_store->m_IOLock);
-            ptrdiff_t put_request_count = arrlen(block_store->m_PutRequests);
-            if (put_request_count > block_store->m_PutRequestOffset)
+            hmput(block_store->m_StoredBlockLookup, *stored_block->m_BlockIndex->m_BlockHash, serialized_block_data);
+            // TODO: Should update content index!
+            Longtail_UnlockSpinLock(block_store->m_IOLock);
+
+            async_complete_api->OnComplete(async_complete_api, err);
+            continue;
+        }
+        ptrdiff_t get_request_count = arrlen(block_store->m_GetRequests);
+        if (get_request_count > block_store->m_GetRequestOffset)
+        {
+            ptrdiff_t get_request_index = block_store->m_GetRequestOffset++;
+            struct TestGetBlockRequest* get_request = &block_store->m_GetRequests[get_request_index];
+            uint64_t block_hash = get_request->block_hash;
+            struct Longtail_StoredBlock** out_stored_block = get_request->out_stored_block;
+            struct Longtail_AsyncCompleteAPI* async_complete_api = get_request->async_complete_api;
+            uint8_t* serialized_block_data = 0;
+            intptr_t i_ptr = hmgeti(block_store->m_StoredBlockLookup, block_hash);
+            if (i_ptr != -1)
             {
-                ptrdiff_t put_request_index = block_store->m_PutRequestOffset++;
-                struct TestPutBlockRequest* put_request = &block_store->m_PutRequests[put_request_index];
-                struct Longtail_StoredBlock* stored_block = put_request->stored_block;
-                struct Longtail_AsyncCompleteAPI* async_complete_api = put_request->async_complete_api;
-                Longtail_UnlockSpinLock(block_store->m_IOLock);
-                uint8_t* serialized_block_data;
-                int err = WorkerPutRequest(stored_block, &serialized_block_data);
-
-                Longtail_LockSpinLock(block_store->m_IOLock);
-                hmput(block_store->m_StoredBlockLookup, *stored_block->m_BlockIndex->m_BlockHash, serialized_block_data);
-                // TODO: Should update content index!
-                Longtail_UnlockSpinLock(block_store->m_IOLock);
-
-                async_complete_api->OnComplete(async_complete_api, err);
+                serialized_block_data = block_store->m_StoredBlockLookup[i_ptr].value;
+            }
+            Longtail_UnlockSpinLock(block_store->m_IOLock);
+            if (serialized_block_data)
+            {
+                if (out_stored_block)
+                {
+                    int err = WorkerGetRequest(serialized_block_data, out_stored_block);
+                    async_complete_api->OnComplete(async_complete_api, err);
+                    continue;
+                }
+                async_complete_api->OnComplete(async_complete_api, 0);
                 continue;
             }
-            ptrdiff_t get_request_count = arrlen(block_store->m_GetRequests);
-            if (get_request_count > block_store->m_GetRequestOffset)
+            else
             {
-                ptrdiff_t get_request_index = block_store->m_GetRequestOffset++;
-                struct TestGetBlockRequest* get_request = &block_store->m_GetRequests[get_request_index];
-                uint64_t block_hash = get_request->block_hash;
-                struct Longtail_StoredBlock** out_stored_block = get_request->out_stored_block;
-                struct Longtail_AsyncCompleteAPI* async_complete_api = get_request->async_complete_api;
-                uint8_t* serialized_block_data = 0;
-                intptr_t i_ptr = hmgeti(block_store->m_StoredBlockLookup, block_hash);
-                if (i_ptr != -1)
-                {
-                    serialized_block_data = block_store->m_StoredBlockLookup[i_ptr].value;
-                }
-                Longtail_UnlockSpinLock(block_store->m_IOLock);
-                if (serialized_block_data)
-                {
-                    if (out_stored_block)
-                    {
-                        int err = WorkerGetRequest(serialized_block_data, out_stored_block);
-                        async_complete_api->OnComplete(async_complete_api, err);
-                        continue;
-                    }
-                    async_complete_api->OnComplete(async_complete_api, 0);
-                    continue;
-                }
-                else
-                {
-                    async_complete_api->OnComplete(async_complete_api, ENOENT);
-                    continue;
-                }
+                async_complete_api->OnComplete(async_complete_api, ENOENT);
+                continue;
             }
         }
+
         if (block_store->m_ExitFlag != 0)
         {
             return 0;
@@ -3395,6 +3396,18 @@ int TestAsyncBlockStore::GetStoredBlockPath(struct Longtail_BlockStoreAPI* , uin
 
 TEST(Longtail, AsyncBlockStore)
 {
+    {
+        HLongtail_Sema sema;
+        int err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &sema);
+        ASSERT_EQ(0, err);
+        Longtail_PostSema(sema, 1);
+        Longtail_WaitSema(sema);
+        Longtail_DeleteSema(sema);
+        Longtail_Free(sema);
+    }
+
+
+
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
@@ -3405,6 +3418,8 @@ TEST(Longtail, AsyncBlockStore)
     ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&block_store, hash_api));
     struct Longtail_BlockStoreAPI* async_block_store_api = &block_store.m_API; 
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(async_block_store_api, compression_registry);
+#define TO_ACTUAL_TEST
+#if defined(TO_ACTUAL_TEST)
     const uint32_t asset_count = 8u;
 
     const char* TEST_FILENAMES[] = {
@@ -3583,6 +3598,8 @@ TEST(Longtail, AsyncBlockStore)
     vindex = 0;
     Longtail_Free(cindex);
     cindex = 0;
+#endif
+
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(async_block_store_api);
     SAFE_DISPOSE_API(job_api);

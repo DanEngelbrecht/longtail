@@ -63,6 +63,7 @@ static int CompressBlock(
     if (compressed_stored_block->m_BlockIndex == 0)
     {
         // TODO: Log
+        Longtail_Free(compressed_stored_block);
         return EINVAL;
     }
 
@@ -137,7 +138,7 @@ static int CompressBlockStore_PutStoredBlock(
         on_put_backing_store_async_api->m_API.m_API.Dispose = 0;
         on_put_backing_store_async_api->m_CompressedBlock = compressed_stored_block;
         on_put_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
-        err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, async_complete_api);
+        err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, &on_put_backing_store_async_api->m_API);
         if (err)
         {
             Longtail_Free(on_put_backing_store_async_api);
@@ -146,7 +147,12 @@ static int CompressBlockStore_PutStoredBlock(
         }
         return err;
     }
-    return block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, async_complete_api);
+    err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, async_complete_api);
+    if (compressed_stored_block)
+    {
+        compressed_stored_block->Dispose(compressed_stored_block);
+    }
+    return err;
 }
 
 static int DecompressBlock(
