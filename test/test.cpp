@@ -3635,5 +3635,6 @@ TEST(Longtail, AsyncBlockStore)
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(cache_block_store);
     SAFE_DISPOSE_API(storage_api);
 }
