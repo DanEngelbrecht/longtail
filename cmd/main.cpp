@@ -776,7 +776,7 @@ int main(int argc, char** argv)
     kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
 
     const char* storage_uri_raw = 0;
-    kgflags_string("storage-uri", 0, "Path to version index output", true, &storage_uri_raw);
+    kgflags_string("storage-uri", 0, "URI for chunks and content index for store", true, &storage_uri_raw);
 
     if (argc < 2)
     {
