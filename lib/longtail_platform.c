@@ -59,6 +59,7 @@ static int Win32ErrorToErrno(DWORD err)
         case ERROR_SEM_NOT_FOUND:
         case ERROR_FILENAME_EXCED_RANGE:
         case ERROR_DIRECTORY:
+        case WAIT_ABANDONED:
         return EINVAL;
         case ERROR_INVALID_DRIVE:
         return ENODEV;
@@ -99,6 +100,8 @@ static int Win32ErrorToErrno(DWORD err)
         case ERROR_BUSY:
         case ERROR_PIPE_BUSY:
         return EBUSY;
+        case WAIT_TIMEOUT:
+        return ETIME;
         default:
         return EINVAL;
     }
@@ -212,15 +215,29 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
 
 int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 {
-    return 0 != ReleaseSemaphore(
+    if (ReleaseSemaphore(
                     semaphore->m_Handle,
                     count,
-                    NULL);
+                    NULL))
+    {
+        return 0;
+    }
+    return EINVAL;
 }
 
 int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    return WAIT_OBJECT_0 == WaitForSingleObject(semaphore->m_Handle, INFINITE);
+    DWORD res = WaitForSingleObject(semaphore->m_Handle, INFINITE);
+    switch (res)
+    {
+        case WAIT_OBJECT_0:
+            return 0;
+        case WAIT_FAILED:
+            return Win32ErrorToErrno(GetLastError());
+            break;
+        default:
+            return Win32ErrorToErrno(res);
+    }
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
@@ -980,7 +997,11 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 
 int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    return sem_wait(&semaphore->m_Semaphore);
+    if (0 == sem_wait(&semaphore->m_Semaphore))
+    {
+        return 0;
+    }
+    return errno;
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
