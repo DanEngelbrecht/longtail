@@ -2664,7 +2664,7 @@ int Longtail_ReadContentIndex(
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) storage_api->OpenReadFile(%p, %s, %p) failed with %d", storage_api, path, out_content_index, storage_api, path, &file_handle, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadContentIndex(%p, %s, %p) storage_api->OpenReadFile(%p, %s, %p) failed with %d", storage_api, path, out_content_index, storage_api, path, &file_handle, err)
         return err;
     }
     uint64_t content_index_data_size;
