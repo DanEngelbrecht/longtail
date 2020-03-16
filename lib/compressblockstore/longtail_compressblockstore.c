@@ -122,6 +122,7 @@ static int CompressBlockStore_PutStoredBlock(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL);
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
     struct Longtail_StoredBlock* compressed_stored_block;
@@ -131,26 +132,18 @@ static int CompressBlockStore_PutStoredBlock(
         return err;
     }
     struct Longtail_StoredBlock* to_store = compressed_stored_block ? compressed_stored_block : stored_block;
-    if (async_complete_api)
+
+    struct OnPutBackingStoreAsync_API* on_put_backing_store_async_api = (struct OnPutBackingStoreAsync_API*)Longtail_Alloc(sizeof(struct OnPutBackingStoreAsync_API));
+    on_put_backing_store_async_api->m_API.OnComplete = OnPutBackingStoreComplete;
+    on_put_backing_store_async_api->m_API.m_API.Dispose = 0;
+    on_put_backing_store_async_api->m_CompressedBlock = compressed_stored_block;
+    on_put_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
+    err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, &on_put_backing_store_async_api->m_API);
+    if (err)
     {
-        struct OnPutBackingStoreAsync_API* on_put_backing_store_async_api = (struct OnPutBackingStoreAsync_API*)Longtail_Alloc(sizeof(struct OnPutBackingStoreAsync_API));
-        on_put_backing_store_async_api->m_API.OnComplete = OnPutBackingStoreComplete;
-        on_put_backing_store_async_api->m_API.m_API.Dispose = 0;
-        on_put_backing_store_async_api->m_CompressedBlock = compressed_stored_block;
-        on_put_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
-        err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, &on_put_backing_store_async_api->m_API);
-        if (err)
-        {
-            Longtail_Free(on_put_backing_store_async_api);
-            compressed_stored_block->Dispose(compressed_stored_block);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_PutStoredBlock: Failed to store block in backing store, %d", err)
-        }
-        return err;
-    }
-    err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, async_complete_api);
-    if (compressed_stored_block)
-    {
+        Longtail_Free(on_put_backing_store_async_api);
         compressed_stored_block->Dispose(compressed_stored_block);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_PutStoredBlock: Failed to store block in backing store, %d", err)
     }
     return err;
 }

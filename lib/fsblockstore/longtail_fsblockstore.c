@@ -225,6 +225,7 @@ static int FSBlockStore_PutStoredBlock(
 {
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_PutStoredBlock(%p, %p, %p", block_store_api, stored_block, async_complete_api)
 
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
@@ -236,11 +237,7 @@ static int FSBlockStore_PutStoredBlock(
     if (block_ptr != -1)
     {
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, 0);
-        }
-        return 0;
+        return async_complete_api->OnComplete(async_complete_api, 0);
     }
 
     hmput(fsblockstore_api->m_BlockState, block_hash, 0);
@@ -260,12 +257,7 @@ static int FSBlockStore_PutStoredBlock(
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
 
     Longtail_StorageAPI_HOpenFile block_file_handle;
@@ -280,12 +272,7 @@ static int FSBlockStore_PutStoredBlock(
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
 
     uint32_t write_offset = 0;
@@ -304,12 +291,7 @@ static int FSBlockStore_PutStoredBlock(
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
     write_offset += block_index_data_size;
 
@@ -326,12 +308,7 @@ static int FSBlockStore_PutStoredBlock(
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
     write_offset = stored_block->m_BlockChunksDataSize;
 
@@ -347,12 +324,7 @@ static int FSBlockStore_PutStoredBlock(
         tmp_block_path = 0;
         Longtail_Free((char*)block_path);
         block_path = 0;
-        if (async_complete_api)
-        {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
-        }
-        return err;
+        return async_complete_api->OnComplete(async_complete_api, err);
     }
     Longtail_Free((char*)tmp_block_path);
     tmp_block_path = 0;
@@ -403,11 +375,7 @@ static int FSBlockStore_PutStoredBlock(
     Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
     Longtail_Free((void*)content_index_path);
 
-    if (async_complete_api)
-    {
-        async_complete_api->OnComplete(async_complete_api, 0);
-    }
-    return 0;
+    return async_complete_api->OnComplete(async_complete_api, 0);
 }
 
 static int FSBlockStore_GetStoredBlock(
@@ -431,8 +399,7 @@ static int FSBlockStore_GetStoredBlock(
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
             if (async_complete_api)
             {
-                async_complete_api->OnComplete(async_complete_api, ENOENT);
-                return 0;
+                return async_complete_api->OnComplete(async_complete_api, ENOENT);
             }
             return ENOENT;
         }
@@ -446,8 +413,7 @@ static int FSBlockStore_GetStoredBlock(
     {
         if (async_complete_api)
         {
-            async_complete_api->OnComplete(async_complete_api, 0);
-            return 0;
+            return async_complete_api->OnComplete(async_complete_api, 0);
         }
         return 0;
     }
@@ -469,8 +435,7 @@ static int FSBlockStore_GetStoredBlock(
         block_path = 0;
         if (async_complete_api)
         {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
+            return async_complete_api->OnComplete(async_complete_api, err);
         }
         return err;
     }
@@ -484,8 +449,7 @@ static int FSBlockStore_GetStoredBlock(
         block_path = 0;
         if (async_complete_api)
         {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
+            return async_complete_api->OnComplete(async_complete_api, err);
         }
         return err;
     }
@@ -506,8 +470,7 @@ static int FSBlockStore_GetStoredBlock(
         block_path = 0;
         if (async_complete_api)
         {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
+            return async_complete_api->OnComplete(async_complete_api, err);
         }
         return err;
     }
@@ -524,8 +487,7 @@ static int FSBlockStore_GetStoredBlock(
         block_path = 0;
         if (async_complete_api)
         {
-            async_complete_api->OnComplete(async_complete_api, err);
-            return 0;
+            return async_complete_api->OnComplete(async_complete_api, err);
         }
         return err;
     }
@@ -536,8 +498,7 @@ static int FSBlockStore_GetStoredBlock(
     *out_stored_block = stored_block;
     if (async_complete_api)
     {
-        async_complete_api->OnComplete(async_complete_api, 0);
-        return 0;
+        return async_complete_api->OnComplete(async_complete_api, 0);
     }
     return 0;
 }
