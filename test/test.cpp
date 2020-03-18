@@ -17,6 +17,8 @@
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/zstd/longtail_zstd.h"
 
+#include "../lib/longtail_platform.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -518,7 +520,8 @@ TEST(Longtail, Longtail_VersionIndex)
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
-    Longtail_VersionIndex* version_index = Longtail_BuildVersionIndex(
+    Longtail_VersionIndex* version_index;
+    ASSERT_EQ(0, Longtail_BuildVersionIndex(
         version_index_mem,
         version_index_size,
         paths,
@@ -534,7 +537,8 @@ TEST(Longtail, Longtail_VersionIndex)
         chunk_sizes,
         asset_content_hashes,
         asset_compression_types,
-        0u); // Dummy hash API
+        0u,
+        &version_index)); // Dummy hash API
 
     void* store_buffer = 0;
     size_t store_size = 0;
@@ -968,6 +972,27 @@ TEST(Longtail, Longtail_CreateStoredBlock)
     stored_block->Dispose(stored_block);
 }
 
+struct TestAsyncComplete
+{
+    struct Longtail_AsyncCompleteAPI m_API;
+    TestAsyncComplete()
+        : m_Err(EINVAL)
+    {
+        m_API.m_API.Dispose = 0;
+        m_API.OnComplete = OnComplete;
+    }
+
+    static int OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+    {
+        struct TestAsyncComplete* cb = (struct TestAsyncComplete*)async_complete_api;
+        cb->m_Err = err;
+        return 0;
+    }
+
+    int m_Err;
+
+};
+
 TEST(Longtail, Longtail_FSBlockStore)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
@@ -988,7 +1013,10 @@ TEST(Longtail, Longtail_FSBlockStore)
     put_block.m_BlockIndex = 0;
     put_block.m_BlockData = 0;
 
-    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, 0, 0));
+    struct TestAsyncComplete getCB;
+    struct Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 4711, &get_block, &getCB.m_API));
+    ASSERT_EQ(ENOENT, getCB.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
     void* block_index_mem = Longtail_Alloc(block_index_size);
@@ -1006,12 +1034,15 @@ TEST(Longtail, Longtail_FSBlockStore)
     memset(put_block.m_BlockData, 77, 4711);
     memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
 
-    ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block, 0));
+    TestAsyncComplete putCB;
+    ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block, &putCB.m_API));
     Longtail_Free(put_block.m_BlockIndex);
+    ASSERT_EQ(0, putCB.m_Err);
 
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, 0, 0));
-    Longtail_StoredBlock* get_block;
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block, 0));
+    struct TestAsyncComplete getCB1;
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &get_block, &getCB1.m_API));
+    ASSERT_EQ(0, getCB1.m_Err);
+
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
@@ -1054,7 +1085,10 @@ TEST(Longtail, Longtail_CacheBlockStore)
     put_block.m_BlockIndex = 0;
     put_block.m_BlockData = 0;
 
-    ASSERT_EQ(ENOENT, cache_block_store_api->GetStoredBlock(cache_block_store_api, 4711, 0, 0));
+    struct TestAsyncComplete getCB1;
+    struct Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 4711, &get_block, &getCB1.m_API));
+    ASSERT_EQ(ENOENT, getCB1.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
     void* block_index_mem = Longtail_Alloc(block_index_size);
@@ -1072,13 +1106,16 @@ TEST(Longtail, Longtail_CacheBlockStore)
     memset(put_block.m_BlockData, 77, 4711);
     memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
 
-    ASSERT_EQ(0, remote_block_store_api->PutStoredBlock(remote_block_store_api, &put_block, 0));
+    TestAsyncComplete putCB;
+    ASSERT_EQ(0, remote_block_store_api->PutStoredBlock(remote_block_store_api, &put_block, &putCB.m_API));
     Longtail_Free(put_block.m_BlockIndex);
+    ASSERT_EQ(0, putCB.m_Err);
 
-    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, 0, 0));
-    Longtail_StoredBlock* get_block;
-    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block, 0));
+    struct TestAsyncComplete getCB2;
+    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block, &getCB2.m_API));
+    ASSERT_EQ(0, getCB2.m_Err);
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
+
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
     ASSERT_EQ(0xf001fa5, get_block->m_BlockIndex->m_ChunkHashes[0]);
@@ -1117,7 +1154,10 @@ TEST(Longtail, Longtail_CompressBlockStore)
     ASSERT_EQ(0, *store_index->m_ChunkCount);
     Longtail_Free(store_index);
 
-    ASSERT_EQ(ENOENT, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, 0, 0));
+    struct TestAsyncComplete getCB0;
+    struct Longtail_StoredBlock* get_block;
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, &get_block, &getCB0.m_API));
+    ASSERT_EQ(ENOENT, getCB0.m_Err);
 
     Longtail_StoredBlock* put_block;
 
@@ -1162,14 +1202,18 @@ TEST(Longtail, Longtail_CompressBlockStore)
         memset(&((uint8_t*)put_block2->m_BlockData)[1147], 77, 4711);
     }
 
-    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block, 0));
+    TestAsyncComplete putCB1;
+    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block, &putCB1.m_API));
     Longtail_Free(put_block);
-    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block2, 0));
+    ASSERT_EQ(0, putCB1.m_Err);
+    TestAsyncComplete putCB2;
+    ASSERT_EQ(0, compress_block_store_api->PutStoredBlock(compress_block_store_api, put_block2, &putCB2.m_API));
     Longtail_Free(put_block2);
+    ASSERT_EQ(0, putCB2.m_Err);
 
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, 0, 0));
-    Longtail_StoredBlock* get_block;
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block, 0));
+    TestAsyncComplete getCB1;
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block, &getCB1.m_API));
+    ASSERT_EQ(0, getCB1.m_Err);
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
@@ -1189,7 +1233,9 @@ TEST(Longtail, Longtail_CompressBlockStore)
     }
     get_block->Dispose(get_block);
 
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xbeaddeef, &get_block, 0));
+    struct TestAsyncComplete getCB3;
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xbeaddeef, &get_block, &getCB3.m_API));
+    ASSERT_EQ(0, getCB3.m_Err);
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xbeaddeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE, *get_block->m_BlockIndex->m_Tag);
@@ -1293,14 +1339,19 @@ TEST(Longtail, Longtail_WriteContent)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         source_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         cindex,
         vindex,
         "local"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* cindex2;
     ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &cindex2));
@@ -1427,7 +1478,8 @@ TEST(Longtail, Longtail_CreateMissingContent)
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
-    Longtail_VersionIndex* version_index = Longtail_BuildVersionIndex(
+    Longtail_VersionIndex* version_index;
+    ASSERT_EQ(0, Longtail_BuildVersionIndex(
         version_index_mem,
         version_index_size,
         paths,
@@ -1443,7 +1495,8 @@ TEST(Longtail, Longtail_CreateMissingContent)
         chunk_sizes,
         asset_content_hashes,
         asset_compression_types,
-        0u);    // Dummy hash API
+        0u,
+        &version_index));    // Dummy hash API
     Longtail_Free(paths);
 
     Longtail_ContentIndex* missing_content_index;
@@ -1896,14 +1949,19 @@ TEST(Longtail, Longtail_VersionDiff)
             MAX_CHUNKS_PER_BLOCK,
             &content_index));
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         content_index,
         new_vindex,
         "new"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
     Longtail_Free(content_index);
     content_index = 0;
 
@@ -2054,14 +2112,19 @@ TEST(Longtail, FullScale)
             MAX_CHUNKS_PER_BLOCK,
             &local_content_index));
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         local_content_index,
         local_version_index,
         ""));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* remote_content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
@@ -2074,14 +2137,18 @@ TEST(Longtail, FullScale)
             MAX_CHUNKS_PER_BLOCK,
             &remote_content_index));
 
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         remote_content_index,
         remote_version_index,
         ""));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* missing_content;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -2093,14 +2160,18 @@ TEST(Longtail, FullScale)
         &missing_content));
     ASSERT_NE((Longtail_ContentIndex*)0, missing_content);
  
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         remote_storage,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         missing_content,
         remote_version_index,
         ""));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     Longtail_ContentIndex* merged_content_index;
     ASSERT_EQ(0, Longtail_MergeContentIndex(local_content_index, missing_content, &merged_content_index));
@@ -2295,14 +2366,19 @@ TEST(Longtail, Longtail_WriteVersion)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
         job_api,
         0,
+        block_store_content_index,
         cindex,
         vindex,
         "local"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
 
     ASSERT_EQ(0, Longtail_WriteVersion(
         block_store_api,
@@ -2457,14 +2533,19 @@ static void Bench()
         Longtail_BlockStoreAPI* fs_delta_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, delta_upload_content_folder);
         Longtail_BlockStoreAPI* delta_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_delta_block_store_api, compression_registry);
         ASSERT_NE((Longtail_BlockStoreAPI*)0, delta_block_store_api);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, delta_block_store_api->GetIndex(delta_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             delta_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             missing_content_index,
             version_index,
             version_source_folder));
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
         SAFE_DISPOSE_API(delta_block_store_api);
         delta_block_store_api = 0;
         SAFE_DISPOSE_API(fs_delta_block_store_api);
@@ -2657,14 +2738,19 @@ static void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, local_block_store_api->GetIndex(local_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         Longtail_WriteContent(
             storage_api,
             local_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             local_content_index,
             version1,
             local_path_1);
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
     }
 
     printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
@@ -2721,28 +2807,38 @@ static void LifelikeTest()
     if (1)
     {
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, local_block_store_api->GetIndex(local_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             local_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             missing_content,
             version2,
             local_path_2));
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
     }
 
     if (1)
     {
         // Write this to disk for reference to see how big the diff is...
         printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
+        struct Longtail_ContentIndex* block_store_content_index;
+        ASSERT_EQ(0, remote_block_store_api->GetIndex(remote_block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
         ASSERT_EQ(0, Longtail_WriteContent(
             storage_api,
             remote_block_store_api,
             job_api,
             0,
+            block_store_content_index,
             missing_content,
             version2,
             local_path_2));
+        Longtail_Free(block_store_content_index);
+        block_store_content_index = 0;
     }
 
 //    Longtail_ContentIndex* remote_content_index;
@@ -3036,5 +3132,538 @@ TEST(Longtail, FileSystemStorage)
         Longtail_Free(full_path);
     }
 
+    SAFE_DISPOSE_API(storage_api);
+}
+
+struct TestPutBlockRequest
+{
+    uint64_t block_hash;
+    struct Longtail_StoredBlock* stored_block;
+    struct Longtail_AsyncCompleteAPI* async_complete_api;
+};
+
+struct TestGetBlockRequest
+{
+    uint64_t block_hash;
+    struct Longtail_StoredBlock** out_stored_block;
+    struct Longtail_AsyncCompleteAPI* async_complete_api;
+};
+
+struct TestStoredBlockLookup
+{
+    TLongtail_Hash key;
+    uint8_t* value;
+};
+
+class TestAsyncBlockStore
+{
+public:
+    struct Longtail_BlockStoreAPI m_API;
+
+    static int InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api);
+    static void Dispose(struct Longtail_API* api);
+    static int PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+    static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+    static int GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index);
+    static int GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
+private:
+    struct Longtail_StorageAPI m_StorageAPI;
+    struct Longtail_HashAPI* m_HashAPI;
+    TLongtail_Atomic32 m_ExitFlag;
+    HLongtail_SpinLock m_IOLock;
+    HLongtail_Sema m_RequestSema;
+    HLongtail_Thread m_IOThread;
+
+    intptr_t m_PutRequestOffset;
+    struct TestPutBlockRequest* m_PutRequests;
+    intptr_t m_GetRequestOffset;
+    struct TestGetBlockRequest* m_GetRequests;
+    struct Longtail_ContentIndex* m_ContentIndex;
+    struct TestStoredBlockLookup* m_StoredBlockLookup;
+
+    static int Worker(void* context_data);
+};
+
+int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api)
+{
+    block_store->m_API.m_API.Dispose = TestAsyncBlockStore::Dispose;
+    block_store->m_API.PutStoredBlock = TestAsyncBlockStore::PutStoredBlock;
+    block_store->m_API.GetStoredBlock = TestAsyncBlockStore::GetStoredBlock;
+    block_store->m_API.GetIndex = TestAsyncBlockStore::GetIndex;
+    block_store->m_API.GetStoredBlockPath = TestAsyncBlockStore::GetStoredBlockPath;
+    block_store->m_HashAPI = hash_api;
+    block_store->m_ExitFlag = 0;
+    block_store->m_PutRequestOffset = 0;
+    block_store->m_PutRequests = 0;
+    block_store->m_GetRequestOffset = 0;
+    block_store->m_GetRequests = 0;
+    block_store->m_StoredBlockLookup = 0;
+    int err = Longtail_CreateContentIndex(
+            block_store->m_HashAPI,
+            0,
+            0,
+            0,
+            0,
+            8192,
+            128,
+            &block_store->m_ContentIndex);
+    if (err)
+    {
+        return err;
+    }
+    err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &block_store->m_IOLock);
+    if (err)
+    {
+        Longtail_Free(block_store->m_ContentIndex);
+        return err;
+    }
+    err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &block_store->m_RequestSema);
+    if (err)
+    {
+        Longtail_DeleteSpinLock(block_store->m_IOLock);
+        Longtail_Free(block_store->m_IOLock);
+        Longtail_Free(block_store->m_ContentIndex);
+        return err;
+    }
+    err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, &block_store->m_IOThread);
+    if (err)
+    {
+        Longtail_DeleteSema(block_store->m_RequestSema);
+        Longtail_Free(block_store->m_RequestSema);
+        Longtail_DeleteSpinLock(block_store->m_IOLock);
+        Longtail_Free(block_store->m_IOLock);
+        return err;
+    }
+    return 0;
+}
+
+void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
+{
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)api;
+    Longtail_AtomicAdd32(&block_store->m_ExitFlag, 1);
+    Longtail_PostSema(block_store->m_RequestSema, 1);
+    Longtail_JoinThread(block_store->m_IOThread, LONGTAIL_TIMEOUT_INFINITE);
+    Longtail_DeleteThread(block_store->m_IOThread);
+    Longtail_Free(block_store->m_IOThread);
+    Longtail_DeleteSema(block_store->m_RequestSema);
+    Longtail_Free(block_store->m_RequestSema);
+    Longtail_DeleteSpinLock(block_store->m_IOLock);
+    Longtail_Free(block_store->m_IOLock);
+    for (ptrdiff_t i = 0; i < block_store->m_PutRequestOffset; ++i)
+    {
+        uint64_t block_hash = block_store->m_PutRequests[i].block_hash;
+        intptr_t i_ptr = hmgeti(block_store->m_StoredBlockLookup, block_hash);
+        if (i_ptr == -1)
+        {
+            continue;
+        }
+        uint8_t* d = block_store->m_StoredBlockLookup[i_ptr].value;
+        arrfree(d);
+    }
+    hmfree(block_store->m_StoredBlockLookup);
+    arrfree(block_store->m_PutRequests);
+    arrfree(block_store->m_GetRequests);
+    Longtail_Free(block_store->m_ContentIndex);
+}
+
+static int TestStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
+{
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    Longtail_Free(stored_block);
+    return 0;
+}
+
+static int WorkerPutRequest(struct Longtail_StoredBlock* stored_block, uint8_t** out_serialized_block_data)
+{
+    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
+    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
+    size_t total_block_size = block_index_data_size + stored_block->m_BlockChunksDataSize;
+    uint8_t* serialized_block_data = 0;
+    arrsetlen(serialized_block_data, total_block_size);
+    memcpy(&serialized_block_data[0], &stored_block->m_BlockIndex[1], block_index_data_size);
+    memcpy(&serialized_block_data[block_index_data_size], stored_block->m_BlockData, stored_block->m_BlockChunksDataSize);
+    *out_serialized_block_data = serialized_block_data;
+    return 0;    
+}
+
+static int WorkerGetRequest(uint8_t* serialized_block_data, struct Longtail_StoredBlock** out_stored_block)
+{
+    size_t serialized_block_data_size = size_t(arrlen(serialized_block_data));
+    size_t block_mem_size = Longtail_GetStoredBlockSize(serialized_block_data_size);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
+    if (!stored_block)
+    {
+        return ENOMEM;
+    }
+    void* block_data = &((uint8_t*)stored_block)[block_mem_size - serialized_block_data_size];
+    memcpy(block_data, serialized_block_data, serialized_block_data_size);
+    int err = Longtail_InitStoredBlockFromData(
+        stored_block,
+        block_data,
+        serialized_block_data_size);
+    if (err)
+    {
+        Longtail_Free(stored_block);
+        return err;
+    }
+    stored_block->Dispose = TestStoredBlock_Dispose;
+    *out_stored_block = stored_block;
+    return 0;
+}
+
+int TestAsyncBlockStore::Worker(void* context_data)
+{
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)context_data;
+    while (1)
+    {
+        int err = Longtail_WaitSema(block_store->m_RequestSema);
+        LONGTAIL_FATAL_ASSERT(err == 0, continue)
+
+        Longtail_LockSpinLock(block_store->m_IOLock);
+        ptrdiff_t put_request_count = arrlen(block_store->m_PutRequests);
+        if (put_request_count > block_store->m_PutRequestOffset)
+        {
+            ptrdiff_t put_request_index = block_store->m_PutRequestOffset++;
+            struct TestPutBlockRequest* put_request = &block_store->m_PutRequests[put_request_index];
+            struct Longtail_StoredBlock* stored_block = put_request->stored_block;
+            struct Longtail_AsyncCompleteAPI* async_complete_api = put_request->async_complete_api;
+            Longtail_UnlockSpinLock(block_store->m_IOLock);
+            uint8_t* serialized_block_data;
+            int err = WorkerPutRequest(stored_block, &serialized_block_data);
+
+            Longtail_LockSpinLock(block_store->m_IOLock);
+            hmput(block_store->m_StoredBlockLookup, *stored_block->m_BlockIndex->m_BlockHash, serialized_block_data);
+            // TODO: Should update content index!
+            Longtail_UnlockSpinLock(block_store->m_IOLock);
+
+            async_complete_api->OnComplete(async_complete_api, err);
+            continue;
+        }
+        ptrdiff_t get_request_count = arrlen(block_store->m_GetRequests);
+        if (get_request_count > block_store->m_GetRequestOffset)
+        {
+            ptrdiff_t get_request_index = block_store->m_GetRequestOffset++;
+            struct TestGetBlockRequest* get_request = &block_store->m_GetRequests[get_request_index];
+            uint64_t block_hash = get_request->block_hash;
+            struct Longtail_StoredBlock** out_stored_block = get_request->out_stored_block;
+            struct Longtail_AsyncCompleteAPI* async_complete_api = get_request->async_complete_api;
+            uint8_t* serialized_block_data = 0;
+            intptr_t i_ptr = hmgeti(block_store->m_StoredBlockLookup, block_hash);
+            if (i_ptr != -1)
+            {
+                serialized_block_data = block_store->m_StoredBlockLookup[i_ptr].value;
+            }
+            Longtail_UnlockSpinLock(block_store->m_IOLock);
+            if (serialized_block_data)
+            {
+                int err = WorkerGetRequest(serialized_block_data, out_stored_block);
+                async_complete_api->OnComplete(async_complete_api, err);
+                continue;
+            }
+            else
+            {
+                async_complete_api->OnComplete(async_complete_api, ENOENT);
+                continue;
+            }
+        }
+
+        if (block_store->m_ExitFlag != 0)
+        {
+            return 0;
+        }
+    }
+}
+
+int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+    struct TestPutBlockRequest put_request;
+    put_request.block_hash = *stored_block->m_BlockIndex->m_BlockHash;
+    put_request.stored_block = stored_block;
+    put_request.async_complete_api = async_complete_api;
+    Longtail_LockSpinLock(block_store->m_IOLock);
+    arrput(block_store->m_PutRequests, put_request);
+    Longtail_UnlockSpinLock(block_store->m_IOLock);
+    Longtail_PostSema(block_store->m_RequestSema, 1);
+    return 0;
+}
+
+int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+    struct TestGetBlockRequest get_request;
+    get_request.block_hash = block_hash;
+    get_request.out_stored_block = out_stored_block;
+    get_request.async_complete_api = async_complete_api;
+
+    Longtail_LockSpinLock(block_store->m_IOLock);
+    arrput(block_store->m_GetRequests, get_request);
+    Longtail_UnlockSpinLock(block_store->m_IOLock);
+    Longtail_PostSema(block_store->m_RequestSema, 1);
+    return 0;
+}
+
+int TestAsyncBlockStore::GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
+{
+    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_content_index, return EINVAL)
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+
+    void* buffer;
+    size_t size;
+    Longtail_LockSpinLock(block_store->m_IOLock);
+    int err = Longtail_WriteContentIndexToBuffer(
+        block_store->m_ContentIndex,
+        &buffer,
+        &size);
+    Longtail_UnlockSpinLock(block_store->m_IOLock);
+    if (err)
+    {
+        return err;
+    }
+
+    err = Longtail_ReadContentIndexFromBuffer(
+        buffer,
+        size,
+        out_content_index);
+    Longtail_Free(buffer);
+    buffer = 0;
+    return err;
+}
+
+int TestAsyncBlockStore::GetStoredBlockPath(struct Longtail_BlockStoreAPI* , uint64_t block_hash, char** out_path)
+{
+    char block_name[32];
+    sprintf(&block_name[5], "0x%016" PRIx64, block_hash);
+    memmove(block_name, &block_name[7], 4);
+    block_name[4] = '/';
+    *out_path = Longtail_Strdup(block_name);
+    if (!out_path)
+    {
+        return ENOMEM;
+    }
+    return 0;
+}
+
+
+
+TEST(Longtail, AsyncBlockStore)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_BlockStoreAPI* cache_block_store = Longtail_CreateFSBlockStoreAPI(storage_api, "cache");
+
+    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+
+    TestAsyncBlockStore block_store;
+    ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&block_store, hash_api));
+    struct Longtail_BlockStoreAPI* async_block_store_api = &block_store.m_API; 
+    Longtail_BlockStoreAPI* compressed_block_store_api = Longtail_CreateCompressBlockStoreAPI(async_block_store_api, compression_registry);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCacheBlockStoreAPI(cache_block_store, compressed_block_store_api);
+
+#define TO_ACTUAL_TEST
+#if defined(TO_ACTUAL_TEST)
+    const uint32_t asset_count = 8u;
+
+    const char* TEST_FILENAMES[] = {
+        "TheLongFile.txt",
+        "ShortString.txt",
+        "AnotherSample.txt",
+        "folder/ShortString.txt",
+        "WATCHIOUT.txt",
+        "empty/.init.py",
+        "TheVeryLongFile.txt",
+        "AnotherVeryLongFile.txt"
+    };
+
+    const char* TEST_STRINGS[] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "More than chunk less than block",
+        "",
+        "A very long string that should go over multiple blocks so we can test our super funky multi-threading version"
+            "restore function that spawns a bunch of decompress jobs and makes the writes to disc sequentially using dependecies"
+            "so we write in good order but still use all our cores in a reasonable fashion. So this should be a long long string"
+            "longer than seems reasonable, and here is a lot of rambling in this string. Because it is late and I just need to fill"
+            "the string but make sure it actually comes back fine"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "this is the end...",
+        "Another very long string that should go over multiple blocks so we can test our super funky multi-threading version"
+            "restore function that spawns a bunch of decompress jobs and makes the writes to disc sequentially using dependecies"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "so we write in good order but still use all our cores in a reasonable fashion. So this should be a long long string"
+            "longer than seems reasonable, and here is a lot of rambling in this string. Because it is late and I just need to fill"
+            "the string but make sure it actually comes back fine"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "this is the end..."
+    };
+
+    const size_t TEST_SIZES[] = {
+        strlen(TEST_STRINGS[0]) + 1,
+        strlen(TEST_STRINGS[1]) + 1,
+        strlen(TEST_STRINGS[2]) + 1,
+        strlen(TEST_STRINGS[3]) + 1,
+        strlen(TEST_STRINGS[4]) + 1,
+        0,
+        strlen(TEST_STRINGS[6]) + 1,
+        strlen(TEST_STRINGS[7]) + 1
+    };
+
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(storage_api, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
+        Longtail_Free(file_name);
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        if (TEST_SIZES[i])
+        {
+            ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+        }
+        storage_api->CloseFile(storage_api, w);
+        w = 0;
+    }
+
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, "local", &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
+    ASSERT_NE((uint32_t*)0, version1_compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        0,
+        "local",
+        &version1_paths->m_Paths,
+        version1_paths->m_FileSizes,
+        version1_paths->m_Permissions,
+        version1_compression_types,
+        50,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+    Longtail_Free(version1_compression_types);
+    version1_compression_types = 0;
+    Longtail_Free(version1_paths);
+    version1_paths = 0;
+
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+    Longtail_ContentIndex* cindex;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
+        vindex->m_ChunkTags,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &cindex));
+    ASSERT_NE((Longtail_ContentIndex*)0, cindex);
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, job_api, hash_api->GetIdentifier(hash_api), 0, &block_store_content_index));
+    ASSERT_EQ(0, Longtail_WriteContent(
+        storage_api,
+        block_store_api,
+        job_api,
+        0,
+        block_store_content_index,
+        cindex,
+        vindex,
+        "local"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+
+    ASSERT_EQ(0, Longtail_WriteVersion(
+        block_store_api,
+        storage_api,
+        job_api,
+        0,
+        cindex,
+        vindex,
+        "remote",
+        1));
+
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        char* file_name = storage_api->ConcatPath(storage_api, "remote", TEST_FILENAMES[i]);
+        Longtail_StorageAPI_HOpenFile r;
+        ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, file_name, &r));
+        Longtail_Free(file_name);
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, r);
+        uint64_t size;
+        ASSERT_EQ(0, storage_api->GetSize(storage_api, r, &size));
+        ASSERT_EQ(TEST_SIZES[i], size);
+        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
+        if (size)
+        {
+            ASSERT_EQ(0, storage_api->Read(storage_api, r, 0, size, test_data));
+            ASSERT_STREQ(TEST_STRINGS[i], test_data);
+        }
+        storage_api->CloseFile(storage_api, r);
+        r = 0;
+        Longtail_Free(test_data);
+        test_data = 0;
+    }
+
+    Longtail_Free(vindex);
+    vindex = 0;
+    Longtail_Free(cindex);
+    cindex = 0;
+#endif
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(compressed_block_store_api);
+    SAFE_DISPOSE_API(async_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(cache_block_store);
     SAFE_DISPOSE_API(storage_api);
 }
