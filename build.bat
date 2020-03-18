@@ -47,7 +47,7 @@ goto arg_end
 set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626
 
 if "!RELEASE_MODE!" == "release" (
-    set OPT=/O2 /Oi /Oy
+    set OPT=/O2 /Oi /Oy /GS- /Gs-
 
     call build_options.bat
     set OUTPUT=!TARGET!
