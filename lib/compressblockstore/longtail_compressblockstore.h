@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include "../../src/longtail.h"
 
+#if !defined(LONGTAIL_EXPORT)
+    #define LONGTAIL_EXPORT
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -26,11 +30,11 @@ struct Longtail_CompressionRegistryAPI
     int (*GetCompressionType)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings);
 };
 
-extern struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
+LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
 	struct Longtail_BlockStoreAPI* backing_block_store,
 	struct Longtail_CompressionRegistryAPI* compression_registry);
 
-extern struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
+LONGTAIL_EXPORT extern struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
         uint32_t compression_type_count,
         const uint32_t* compression_types,
         const struct Longtail_CompressionAPI** compression_apis,

@@ -1,4 +1,5 @@
 set TARGET=test
+set TARGET_TYPE=EXECUABLE
 
 set LIB_SRC=%BASE_DIR%lib\filestorage\*.c
 set LIB_THIRDPARTY_SRC=%BASE_DIR%\src\ext\*.c

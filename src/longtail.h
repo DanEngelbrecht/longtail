@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#if !defined(LONGTAIL_EXPORT)
+    #define LONGTAIL_EXPORT
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,7 +16,7 @@ struct Longtail_API
     void (*Dispose)(struct Longtail_API* api);
 };
 
-void Longtail_DisposeAPI(struct Longtail_API* api);
+LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
 typedef uint64_t TLongtail_Hash;
@@ -159,20 +163,20 @@ void Longtail_SetLogLevel(int level);
 
 typedef void* (*Longtail_Alloc_Func)(size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
-void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free);
+LONGTAIL_EXPORT void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free);
 
-void* Longtail_Alloc(size_t s);
-void Longtail_Free(void* p);
+LONGTAIL_EXPORT void* Longtail_Alloc(size_t s);
+LONGTAIL_EXPORT void Longtail_Free(void* p);
 
-int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
-char* Longtail_Strdup(const char* path);
+LONGTAIL_EXPORT int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
+LONGTAIL_EXPORT char* Longtail_Strdup(const char* path);
 
-int Longtail_GetFilesRecursively(
+LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
-int Longtail_CreateVersionIndex(
+LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
@@ -185,7 +189,7 @@ int Longtail_CreateVersionIndex(
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
-int Longtail_CreateVersionIndexFromBlocks(
+LONGTAIL_EXPORT int Longtail_CreateVersionIndexFromBlocks(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
@@ -198,40 +202,40 @@ int Longtail_CreateVersionIndexFromBlocks(
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
-int Longtail_WriteVersionIndexToBuffer(
+LONGTAIL_EXPORT int Longtail_WriteVersionIndexToBuffer(
     const struct Longtail_VersionIndex* version_index,
     void** out_buffer,
     size_t* out_size);
 
-int Longtail_ReadVersionIndexFromBuffer(
+LONGTAIL_EXPORT int Longtail_ReadVersionIndexFromBuffer(
     const void* buffer,
     size_t size,
     struct Longtail_VersionIndex** out_version_index);
 
-int Longtail_WriteVersionIndex(
+LONGTAIL_EXPORT int Longtail_WriteVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_VersionIndex* version_index,
     const char* path);
 
-int Longtail_ReadVersionIndex(
+LONGTAIL_EXPORT int Longtail_ReadVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_VersionIndex** out_version_index);
 
-size_t Longtail_GetContentIndexDataSize(
+LONGTAIL_EXPORT size_t Longtail_GetContentIndexDataSize(
     uint64_t block_count,
     uint64_t chunk_count);
 
-size_t Longtail_GetContentIndexSize(
+LONGTAIL_EXPORT size_t Longtail_GetContentIndexSize(
     uint64_t block_count,
     uint64_t chunk_count);
 
-int Longtail_InitContentIndexFromData(
+LONGTAIL_EXPORT int Longtail_InitContentIndexFromData(
     struct Longtail_ContentIndex* content_index,
     void* data,
     uint64_t data_size);
 
-int Longtail_InitContentIndex(
+LONGTAIL_EXPORT int Longtail_InitContentIndex(
     struct Longtail_ContentIndex* content_index,
     void* data,
     uint64_t data_size,
@@ -239,13 +243,13 @@ int Longtail_InitContentIndex(
     uint64_t block_count,
     uint64_t chunk_count);
 
-int Longtail_CreateContentIndexFromBlocks(
+LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
     uint32_t hash_identifier,
     uint64_t block_count,
     struct Longtail_BlockIndex** block_indexes,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_CreateContentIndex(
+LONGTAIL_EXPORT int Longtail_CreateContentIndex(
     struct Longtail_HashAPI* hash_api,
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
@@ -255,27 +259,27 @@ int Longtail_CreateContentIndex(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_WriteContentIndexToBuffer(
+LONGTAIL_EXPORT int Longtail_WriteContentIndexToBuffer(
     const struct Longtail_ContentIndex* content_index,
     void** out_buffer,
     size_t* out_size);
 
-int Longtail_ReadContentIndexFromBuffer(
+LONGTAIL_EXPORT int Longtail_ReadContentIndexFromBuffer(
     const void* buffer,
     size_t size,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_WriteContentIndex(
+LONGTAIL_EXPORT int Longtail_WriteContentIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_ContentIndex* content_index,
     const char* path);
 
-int Longtail_ReadContentIndex(
+LONGTAIL_EXPORT int Longtail_ReadContentIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_WriteContent(
+LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_JobAPI* job_api,
@@ -285,7 +289,7 @@ int Longtail_WriteContent(
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
-int Longtail_CreateMissingContent(
+LONGTAIL_EXPORT int Longtail_CreateMissingContent(
     struct Longtail_HashAPI* hash_api,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version,
@@ -293,17 +297,17 @@ int Longtail_CreateMissingContent(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_RetargetContent(
+LONGTAIL_EXPORT int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_MergeContentIndex(
+LONGTAIL_EXPORT int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* local_content_index,
     struct Longtail_ContentIndex* remote_content_index,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_WriteVersion(
+LONGTAIL_EXPORT int Longtail_WriteVersion(
     struct Longtail_BlockStoreAPI* block_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_JobAPI* job_api,
@@ -313,12 +317,12 @@ int Longtail_WriteVersion(
     const char* version_path,
     int retain_permissions);
 
-int Longtail_CreateVersionDiff(
+LONGTAIL_EXPORT int Longtail_CreateVersionDiff(
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
     struct Longtail_VersionDiff** out_version_diff);
 
-int Longtail_ChangeVersion(
+LONGTAIL_EXPORT int Longtail_ChangeVersion(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_HashAPI* hash_api,
@@ -331,16 +335,16 @@ int Longtail_ChangeVersion(
     const char* version_path,
     int retain_permissions);
 
-size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
-size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count);
-struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count);
+LONGTAIL_EXPORT size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
+LONGTAIL_EXPORT size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count);
+LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count);
 
-int Longtail_InitBlockIndexFromData(
+LONGTAIL_EXPORT int Longtail_InitBlockIndexFromData(
     struct Longtail_BlockIndex* block_index,
     void* data,
     uint64_t data_size);
 
-int Longtail_CreateBlockIndex(
+LONGTAIL_EXPORT int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
     uint32_t tag,
     uint32_t chunk_count,
@@ -349,33 +353,33 @@ int Longtail_CreateBlockIndex(
     const uint32_t* chunk_sizes,
     struct Longtail_BlockIndex** out_block_index);
 
-int Longtail_WriteBlockIndexToBuffer(
+LONGTAIL_EXPORT int Longtail_WriteBlockIndexToBuffer(
     const struct Longtail_BlockIndex* block_index,
     void** out_buffer,
     size_t* out_size);
 
-int Longtail_ReadBlockIndexFromBuffer(
+LONGTAIL_EXPORT int Longtail_ReadBlockIndexFromBuffer(
     const void* buffer,
     size_t size,
     struct Longtail_BlockIndex** out_block_index);
 
-int Longtail_WriteBlockIndex(
+LONGTAIL_EXPORT int Longtail_WriteBlockIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_BlockIndex* block_index,
     const char* path);
 
-int Longtail_ReadBlockIndex(
+LONGTAIL_EXPORT int Longtail_ReadBlockIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_BlockIndex** out_block_index);
 
-size_t Longtail_GetStoredBlockSize(size_t block_data_size);
-int Longtail_InitStoredBlockFromData(
+LONGTAIL_EXPORT size_t Longtail_GetStoredBlockSize(size_t block_data_size);
+LONGTAIL_EXPORT int Longtail_InitStoredBlockFromData(
     struct Longtail_StoredBlock* stored_block,
     void* block_data,
     size_t block_data_size);
 
-int Longtail_CreateStoredBlock(
+LONGTAIL_EXPORT int Longtail_CreateStoredBlock(
     TLongtail_Hash block_hash,
     uint32_t chunk_count,
     uint32_t tag,
@@ -383,6 +387,14 @@ int Longtail_CreateStoredBlock(
     uint32_t* chunk_sizes,
     uint32_t block_data_size,
     struct Longtail_StoredBlock** out_stored_block);
+
+LONGTAIL_EXPORT int Longtail_ValidateContent(
+    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_VersionIndex* version_index);
+
+LONGTAIL_EXPORT int Longtail_ValidateVersion(
+    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_VersionIndex* version_index);
 
 struct Longtail_BlockIndex
 {
@@ -471,14 +483,6 @@ struct Longtail_VersionDiff
     uint32_t* m_SourcePermissionsModifiedAssetIndexes;
     uint32_t* m_TargetPermissionsModifiedAssetIndexes;
 };
-
-int Longtail_ValidateContent(
-    const struct Longtail_ContentIndex* content_index,
-    const struct Longtail_VersionIndex* version_index);
-
-int Longtail_ValidateVersion(
-    const struct Longtail_ContentIndex* content_index,
-    const struct Longtail_VersionIndex* version_index);
 
 ///////////// Test functions
 

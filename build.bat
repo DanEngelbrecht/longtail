@@ -133,9 +133,21 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     if !LIB_BUILD_ERROR! neq 0 exit /b !LIB_BUILD_ERROR!
 )
 
+if "!TARGET_TYPE!" == "EXECUABLE" (
+    set OUTPUT_TARGET=%OUTPUT%.exe
+    set EXTRA_CC_OPTIONS
+    set EXTRA_LINK_OPTIONS
+)
+
+if "!TARGET_TYPE!" == "SHAREDLIB" (
+    set OUTPUT_TARGET=%OUTPUT%.dll
+    set EXTRA_CC_OPTIONS=/D_USRDLL /D_WINDLL
+    set EXTRA_LINK_OPTIONS=/DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library
+)
+
 cd !BASE_DIR!\build
-echo Building %OUTPUT%
-cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fd:%OUTPUT%.pdb /link /out:%OUTPUT%.exe /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
+echo Building %OUTPUT_TARGET%
+cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
 set BUILD_ERROR=%ERRORLEVEL%
 cd !BASE_DIR!
 
