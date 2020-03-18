@@ -1114,11 +1114,8 @@ TEST(Longtail, Longtail_CacheBlockStore)
     struct TestAsyncComplete getCB2;
     ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block, &getCB2.m_API));
     ASSERT_EQ(0, getCB2.m_Err);
-
-    struct TestAsyncComplete getCB3;
-    ASSERT_EQ(0, cache_block_store_api->GetStoredBlock(cache_block_store_api, 0xdeadbeef, &get_block, &getCB3.m_API));
-    ASSERT_EQ(0, getCB3.m_Err);
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
+
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
     ASSERT_EQ(0xf001fa5, get_block->m_BlockIndex->m_ChunkHashes[0]);
@@ -1217,9 +1214,6 @@ TEST(Longtail, Longtail_CompressBlockStore)
     TestAsyncComplete getCB1;
     ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block, &getCB1.m_API));
     ASSERT_EQ(0, getCB1.m_Err);
-    TestAsyncComplete getCB2;
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 0xdeadbeef, &get_block, &getCB2.m_API));
-    ASSERT_EQ(0, getCB2.m_Err);
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
     ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
@@ -3440,6 +3434,8 @@ int TestAsyncBlockStore::GetIndex(struct Longtail_BlockStoreAPI* block_store_api
         buffer,
         size,
         out_content_index);
+    Longtail_Free(buffer);
+    buffer = 0;
     return err;
 }
 
