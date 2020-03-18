@@ -17,7 +17,7 @@ cd ..
 cmd shared_lib
 ..\build.bat
 ..\build.bat release
-dist.bat
+.\dist.bat
 cd ..
 
 
