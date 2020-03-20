@@ -1,4 +1,6 @@
+#if defined(_WIN32)
 #define LONGTAIL_EXPORT __declspec(dllexport)
+#endif
 
 #include "../src/longtail.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
@@ -19,11 +21,11 @@
 #include <Windows.h>
 
 BOOL WINAPI DllMain(
-  HINSTANCE hinstDLL,
-  DWORD     fdwReason,
-  LPVOID    lpvReserved)
+    HINSTANCE hinstDLL,
+    DWORD     fdwReason,
+    LPVOID    lpvReserved)
 {
-	return TRUE;
+    return TRUE;
 }
 
 #endif

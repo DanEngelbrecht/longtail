@@ -1,6 +1,6 @@
 #include "longtail.h"
 
-#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE)
+#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE) && !defined(__USE_GNU)
 #define __USE_GNU
 #endif
 
@@ -46,6 +46,133 @@ uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_
         #define QSORT(base, count, size, func, context) qsort_r(base, count, size, func, context)
     #endif
 #endif
+
+struct Longtail_HashAPI* MakeHashAPI(
+    struct Longtail_HashAPI* api,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_Hash_GetIdentifierFunc get_identifier_func,
+    Longtail_Hash_BeginContextFunc begin_context_func,
+    Longtail_Hash_HashFunc hash_func,
+    Longtail_Hash_EndContextFunc end_context_func,
+    Longtail_Hash_HashBufferFunc hash_buffer_func)
+{
+    api->m_API.Dispose = dispose_func;
+    api->GetIdentifier = get_identifier_func;
+    api->BeginContext = begin_context_func;
+    api->Hash = hash_func;
+    api->EndContext = end_context_func;
+    api->HashBuffer = hash_buffer_func;
+    return api;
+}
+
+struct Longtail_StorageAPI* MakeStorageAPI(
+    struct Longtail_StorageAPI* api,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_Storage_OpenReadFileFunc open_read_file_func,
+    Longtail_Storage_GetSizeFunc get_size_func,
+    Longtail_Storage_ReadFunc read_func,
+    Longtail_Storage_OpenWriteFileFunc open_write_file_func,
+    Longtail_Storage_WriteFunc write_func,
+    Longtail_Storage_SetSizeFunc set_size_func,
+    Longtail_Storage_SetPermissionsFunc set_permissions_func,
+    Longtail_Storage_CloseFileFunc close_file_func,
+    Longtail_Storage_CreateDirFunc create_dir_func,
+    Longtail_Storage_RenameFileFunc rename_file_func,
+    Longtail_Storage_ConcatPathFunc concat_path_func,
+    Longtail_Storage_IsDirFunc is_dir_func,
+    Longtail_Storage_IsFileFunc is_file_func,
+    Longtail_Storage_RemoveDirFunc remove_dir_func,
+    Longtail_Storage_RemoveFileFunc remove_file_func,
+    Longtail_Storage_StartFindFunc start_find_func,
+    Longtail_Storage_FindNextFunc find_next_func,
+    Longtail_Storage_CloseFindFunc close_find_func,
+    Longtail_Storage_GetFileNameFunc get_file_name_func,
+    Longtail_Storage_GetDirectoryNameFunc get_directory_name_func,
+    Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func)
+{
+    api->m_API.Dispose = dispose_func;
+    api->OpenReadFile = open_read_file_func;
+    api->GetSize = get_size_func;
+    api->Read = read_func;
+    api->OpenWriteFile = open_write_file_func;
+    api->Write = write_func;
+    api->SetSize = set_size_func;
+    api->SetPermissions = set_permissions_func;
+    api->CloseFile = close_file_func;
+    api->CreateDir = create_dir_func;
+    api->RenameFile = rename_file_func;
+    api->ConcatPath = concat_path_func;
+    api->IsDir = is_dir_func;
+    api->IsFile = is_file_func;
+    api->RemoveDir = remove_dir_func;
+    api->RemoveFile = remove_file_func;
+    api->StartFind = start_find_func;
+    api->FindNext = find_next_func;
+    api->CloseFind = close_find_func;
+    api->GetFileName = get_file_name_func;
+    api->GetDirectoryName = get_directory_name_func;
+    api->GetEntryProperties = get_entry_properties_func;
+    return api;
+}
+
+
+struct Longtail_ProgressAPI* MakeProgressAPI(
+    struct Longtail_ProgressAPI* api,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_Progress_OnProgressFunc on_progress_func)
+{
+    api->m_API.Dispose = dispose_func;
+    api->OnProgress = on_progress_func;
+    return api;
+}
+
+struct Longtail_JobAPI* MakeJobAPI(
+    struct Longtail_JobAPI* api,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_Job_GetWorkerCountFunc get_worker_count_func,
+    Longtail_Job_ReserveJobsFunc reserve_jobs_func,
+    Longtail_Job_CreateJobsFunc create_jobs_func,
+    Longtail_Job_AddDependeciesFunc add_dependecies_func,
+    Longtail_Job_ReadyJobsFunc ready_jobs_func,
+    Longtail_Job_WaitForAllJobsFunc wait_for_all_jobs_func,
+    Longtail_Job_ResumeJobFunc resume_job_func)
+{
+    api->m_API.Dispose = dispose_func;
+    api->GetWorkerCount = get_worker_count_func;
+    api->ReserveJobs = reserve_jobs_func;
+    api->CreateJobs = create_jobs_func;
+    api->AddDependecies = add_dependecies_func;
+    api->ReadyJobs = ready_jobs_func;
+    api->WaitForAllJobs = wait_for_all_jobs_func;
+    api->ResumeJob = resume_job_func;
+    return api;
+}
+
+struct Longtail_AsyncCompleteAPI* MakeAsyncCompleteAPI(
+    struct Longtail_AsyncCompleteAPI* api,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncComplete_OnCompleteFunc on_complete_func)
+{
+    api->m_API.Dispose = dispose_func;
+    api->OnComplete = on_complete_func;
+    return api;
+}
+
+struct Longtail_BlockStoreAPI* MakeBlockStoreAPI(
+    struct Longtail_BlockStoreAPI* api,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
+    Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
+    Longtail_BlockStore_GetIndexFunc get_index_func,
+    Longtail_BlockStore_GetStoredBlockPathFunc get_stored_block_path_func)
+{
+    api->m_API.Dispose = dispose_func;
+    api->PutStoredBlock = put_stored_block_func;
+    api->GetStoredBlock = get_stored_block_func;
+    api->GetIndex = get_index_func;
+    api->GetStoredBlockPath = get_stored_block_path_func;
+    return api;
+}
 
 Longtail_Assert Longtail_Assert_private = 0;
 
