@@ -53,8 +53,10 @@ struct Longtail_HashAPI
     Longtail_Hash_HashBufferFunc HashBuffer;
 };
 
-LONGTAIL_EXPORT struct Longtail_HashAPI* MakeHashAPI(
-    struct Longtail_HashAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetHashAPISize();
+
+LONGTAIL_EXPORT struct Longtail_HashAPI* Longtail_MakeHashAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Hash_GetIdentifierFunc get_identifier_func,
     Longtail_Hash_BeginContextFunc begin_context_func,
@@ -135,8 +137,10 @@ struct Longtail_StorageAPI
     Longtail_Storage_GetEntryPropertiesFunc GetEntryProperties;
 };
 
-LONGTAIL_EXPORT struct Longtail_StorageAPI* MakeStorageAPI(
-    struct Longtail_StorageAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize();
+
+LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Storage_OpenReadFileFunc open_read_file_func,
     Longtail_Storage_GetSizeFunc get_size_func,
@@ -192,8 +196,10 @@ struct Longtail_ProgressAPI
     Longtail_Progress_OnProgressFunc OnProgress;
 };
 
-LONGTAIL_EXPORT struct Longtail_ProgressAPI* MakeProgressAPI(
-    struct Longtail_ProgressAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetProgressAPISize();
+
+LONGTAIL_EXPORT struct Longtail_ProgressAPI* Longtail_MakeProgressAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Progress_OnProgressFunc on_progress_func);
 
@@ -224,8 +230,10 @@ struct Longtail_JobAPI
     Longtail_Job_ResumeJobFunc ResumeJob;
 };
 
-struct Longtail_JobAPI* MakeJobAPI(
-    struct Longtail_JobAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetJobAPISize();
+
+struct Longtail_JobAPI* Longtail_MakeJobAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Job_GetWorkerCountFunc get_worker_count_func,
     Longtail_Job_ReserveJobsFunc reserve_jobs_func,
@@ -253,8 +261,10 @@ struct Longtail_AsyncCompleteAPI
     Longtail_AsyncComplete_OnCompleteFunc OnComplete;
 };
 
-LONGTAIL_EXPORT struct Longtail_AsyncCompleteAPI* MakeAsyncCompleteAPI(
-    struct Longtail_AsyncCompleteAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetASyncCompleteAPISize();
+
+LONGTAIL_EXPORT struct Longtail_AsyncCompleteAPI* Longtail_MakeAsyncCompleteAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_AsyncComplete_OnCompleteFunc on_complete_func);
 
@@ -277,8 +287,10 @@ struct Longtail_BlockStoreAPI
 };
 
 
-LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* MakeBlockStoreAPI(
-    struct Longtail_BlockStoreAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetBlockStoreAPISize();
+
+LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,

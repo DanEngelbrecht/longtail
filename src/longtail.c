@@ -47,8 +47,13 @@ uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_
     #endif
 #endif
 
-struct Longtail_HashAPI* MakeHashAPI(
-    struct Longtail_HashAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetHashAPISize()
+{
+    return sizeof(struct Longtail_HashAPI);
+}
+
+struct Longtail_HashAPI* Longtail_MakeHashAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Hash_GetIdentifierFunc get_identifier_func,
     Longtail_Hash_BeginContextFunc begin_context_func,
@@ -56,6 +61,8 @@ struct Longtail_HashAPI* MakeHashAPI(
     Longtail_Hash_EndContextFunc end_context_func,
     Longtail_Hash_HashBufferFunc hash_buffer_func)
 {
+    LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
+    struct Longtail_HashAPI* api = (struct Longtail_HashAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->GetIdentifier = get_identifier_func;
     api->BeginContext = begin_context_func;
@@ -65,8 +72,13 @@ struct Longtail_HashAPI* MakeHashAPI(
     return api;
 }
 
-struct Longtail_StorageAPI* MakeStorageAPI(
-    struct Longtail_StorageAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize()
+{
+    return sizeof(struct Longtail_StorageAPI);
+}
+
+struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Storage_OpenReadFileFunc open_read_file_func,
     Longtail_Storage_GetSizeFunc get_size_func,
@@ -90,6 +102,8 @@ struct Longtail_StorageAPI* MakeStorageAPI(
     Longtail_Storage_GetDirectoryNameFunc get_directory_name_func,
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func)
 {
+    LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
+    struct Longtail_StorageAPI* api = (struct Longtail_StorageAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->OpenReadFile = open_read_file_func;
     api->GetSize = get_size_func;
@@ -116,18 +130,30 @@ struct Longtail_StorageAPI* MakeStorageAPI(
 }
 
 
-struct Longtail_ProgressAPI* MakeProgressAPI(
-    struct Longtail_ProgressAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetProgressAPISize()
+{
+    return sizeof(struct Longtail_ProgressAPI);
+}
+
+struct Longtail_ProgressAPI* Longtail_MakeProgressAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Progress_OnProgressFunc on_progress_func)
 {
+    LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
+    struct Longtail_ProgressAPI* api = (struct Longtail_ProgressAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->OnProgress = on_progress_func;
     return api;
 }
 
-struct Longtail_JobAPI* MakeJobAPI(
-    struct Longtail_JobAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetJobAPISize()
+{
+    return sizeof(struct Longtail_JobAPI);
+}
+
+struct Longtail_JobAPI* Longtail_MakeJobAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_Job_GetWorkerCountFunc get_worker_count_func,
     Longtail_Job_ReserveJobsFunc reserve_jobs_func,
@@ -137,6 +163,8 @@ struct Longtail_JobAPI* MakeJobAPI(
     Longtail_Job_WaitForAllJobsFunc wait_for_all_jobs_func,
     Longtail_Job_ResumeJobFunc resume_job_func)
 {
+    LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
+    struct Longtail_JobAPI* api = (struct Longtail_JobAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->GetWorkerCount = get_worker_count_func;
     api->ReserveJobs = reserve_jobs_func;
@@ -148,24 +176,38 @@ struct Longtail_JobAPI* MakeJobAPI(
     return api;
 }
 
-struct Longtail_AsyncCompleteAPI* MakeAsyncCompleteAPI(
-    struct Longtail_AsyncCompleteAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncCompleteAPISize()
+{
+    return sizeof(struct Longtail_AsyncCompleteAPI);
+}
+
+struct Longtail_AsyncCompleteAPI* Longtail_MakeAsyncCompleteAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_AsyncComplete_OnCompleteFunc on_complete_func)
 {
+    LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
+    struct Longtail_AsyncCompleteAPI* api = (struct Longtail_AsyncCompleteAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->OnComplete = on_complete_func;
     return api;
 }
 
-struct Longtail_BlockStoreAPI* MakeBlockStoreAPI(
-    struct Longtail_BlockStoreAPI* api,
+LONGTAIL_EXPORT uint64_t Longtail_GetBlockStoreAPISize()
+{
+    return sizeof(struct Longtail_BlockStoreAPI);
+}
+
+struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
+    void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetIndexFunc get_index_func,
     Longtail_BlockStore_GetStoredBlockPathFunc get_stored_block_path_func)
 {
+    LONGTAIL_FATAL_ASSERT(mem != 0, return 0)
+    struct Longtail_BlockStoreAPI* api = (struct Longtail_BlockStoreAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->PutStoredBlock = put_stored_block_func;
     api->GetStoredBlock = get_stored_block_func;
@@ -229,7 +271,7 @@ void Longtail_SetLog(Longtail_Log log_func, void* context)
 
 void Longtail_SetLogLevel(int level)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_SetLogLevel(%d) ", level)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_SetLogLevel(%d)", level)
     Longtail_LogLevel_private = level;
 }
 
