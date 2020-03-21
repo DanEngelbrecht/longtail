@@ -1846,6 +1846,32 @@ int Longtail_CreateVersionIndex(
     return 0;
 }
 
+int Longtail_CreateVersionIndexUtil(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_ProgressAPI* progress_api,
+    const char* root_path,
+    struct Longtail_FileInfos* file_infos,
+    const uint32_t* asset_tags,
+    uint32_t max_chunk_size,
+    struct Longtail_VersionIndex** out_version_index)
+{
+    return Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        progress_api,
+        root_path,
+        &file_infos->m_Paths,
+        file_infos->m_FileSizes,
+        file_infos->m_Permissions,
+        asset_tags,
+        max_chunk_size,
+        out_version_index);
+}
+
+
 int Longtail_WriteVersionIndexToBuffer(
     const struct Longtail_VersionIndex* version_index,
     void** out_buffer,
@@ -2731,6 +2757,25 @@ int Longtail_CreateContentIndex(
     block_indexes = 0;
     return err;
 }
+
+int Longtail_CreateContentIndexUtil(
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_VersionIndex* version_index,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    return Longtail_CreateContentIndex(
+        hash_api,
+        *version_index->m_ChunkCount,
+        version_index->m_ChunkHashes,
+        version_index->m_ChunkSizes,
+        version_index->m_ChunkTags,
+        max_block_size,
+        max_chunks_per_block,
+        out_content_index);
+}
+
 
 int Longtail_WriteContentIndexToBuffer(
     const struct Longtail_ContentIndex* content_index,

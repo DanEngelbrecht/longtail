@@ -362,15 +362,13 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
-LONGTAIL_EXPORT int Longtail_CreateVersionIndexFromBlocks(
+LONGTAIL_EXPORT int Longtail_CreateVersionIndexUtil(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
-    const struct Longtail_Paths* paths,
-    const uint64_t* asset_sizes,
-    const uint32_t* asset_permissions,
+    struct Longtail_FileInfos* file_infos,
     const uint32_t* asset_tags,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
@@ -428,6 +426,13 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndex(
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     const uint32_t* chunk_tags,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
+    struct Longtail_ContentIndex** out_content_index);
+
+LONGTAIL_EXPORT int Longtail_CreateContentIndexUtil(
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_VersionIndex* version_index,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
@@ -600,6 +605,11 @@ struct Longtail_FileInfos
     uint64_t* m_FileSizes;
     uint32_t* m_Permissions;
 };
+
+LONGTAIL_EXPORT inline uint32_t Longtail_FileInfos_GetPathCount(struct Longtail_FileInfos* file_infos) { return *file_infos->m_Paths.m_PathCount; }
+LONGTAIL_EXPORT inline const char* Longtail_FileInfos_GetPath(struct Longtail_FileInfos* file_infos, uint32_t index) { return &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[index]]; }
+LONGTAIL_EXPORT inline uint64_t Longtail_FileInfos_GetSize(struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_FileSizes[index]; }
+LONGTAIL_EXPORT inline uint32_t Longtail_FileInfos_GetPermissions(struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_Permissions[index]; }
 
 extern uint32_t Longtail_CurrentContentIndexVersion;
 
