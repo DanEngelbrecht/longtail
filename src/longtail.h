@@ -18,8 +18,6 @@ struct Longtail_FileInfos;
 struct Longtail_VersionIndex;
 struct Longtail_StoredBlock;
 struct Longtail_ContentIndex;
-struct PathLookup;
-struct ChunkHashToAssetPart;
 struct Longtail_VersionDiff;
 
 ////////////// Longtail_API
@@ -261,7 +259,7 @@ struct Longtail_AsyncCompleteAPI
     Longtail_AsyncComplete_OnCompleteFunc OnComplete;
 };
 
-LONGTAIL_EXPORT uint64_t Longtail_GetASyncCompleteAPISize();
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncCompleteAPISize();
 
 LONGTAIL_EXPORT struct Longtail_AsyncCompleteAPI* Longtail_MakeAsyncCompleteAPI(
     void* mem,

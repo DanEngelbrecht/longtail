@@ -10,6 +10,7 @@
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressblockstore/longtail_compressblockstore.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
+#include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/lizard/longtail_lizard.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/memstorage/longtail_memstorage.h"
