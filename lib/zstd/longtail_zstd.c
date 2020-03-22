@@ -10,9 +10,9 @@ const uint32_t LONGTAIL_ZSTD_MIN_COMPRESSION_LEVEL      = 0;
 const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_LEVEL  = ZSTD_CLEVEL_DEFAULT;
 const uint32_t LONGTAIL_ZSTD_MAX_COMPRESSION_LEVEL      = 19;
 
-Longtail_CompressionAPI_HSettings LONGTAIL_ZSTD_MIN_COMPRESSION        =(Longtail_CompressionAPI_HSettings)&LONGTAIL_ZSTD_MIN_COMPRESSION_LEVEL;
-Longtail_CompressionAPI_HSettings LONGTAIL_ZSTD_DEFAULT_COMPRESSION    =(Longtail_CompressionAPI_HSettings)&LONGTAIL_ZSTD_DEFAULT_COMPRESSION_LEVEL;
-Longtail_CompressionAPI_HSettings LONGTAIL_ZSTD_MAX_COMPRESSION        =(Longtail_CompressionAPI_HSettings)&LONGTAIL_ZSTD_MAX_COMPRESSION_LEVEL;
+Longtail_CompressionAPI_HSettings Longtail_GetZStdMinCompression() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_ZSTD_MIN_COMPRESSION_LEVEL; }
+Longtail_CompressionAPI_HSettings Longtail_GetZStdDefaultCompression() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_ZSTD_DEFAULT_COMPRESSION_LEVEL; }
+Longtail_CompressionAPI_HSettings Longtail_GetZStdMaxCompression() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_ZSTD_MAX_COMPRESSION_LEVEL; }
 
 struct ZStdCompressionAPI
 {

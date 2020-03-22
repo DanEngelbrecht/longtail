@@ -11,7 +11,7 @@
 
 static int LZ4CompressionAPI_DefaultCompressionSetting   = 1;
 
-Longtail_CompressionAPI_HSettings LONGTAIL_LZ4_DEFAULT_COMPRESSION  = (Longtail_CompressionAPI_HSettings)&LZ4CompressionAPI_DefaultCompressionSetting;
+Longtail_CompressionAPI_HSettings Longtail_GetLZ4DefaultQuality() { return (Longtail_CompressionAPI_HSettings)&LZ4CompressionAPI_DefaultCompressionSetting; }
 
 struct LZ4CompressionAPI
 {

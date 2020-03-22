@@ -29,7 +29,7 @@ struct Longtail_API
     Longtail_DisposeFunc Dispose;
 };
 
-LONGTAIL_EXPORT inline void Longtail_DisposeAPI(struct Longtail_API* api);
+LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
 ////////////// Longtail_HashAPI

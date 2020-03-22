@@ -20,12 +20,12 @@ static struct BrotliSettings LONGTAIL_BROTLI_TEXT_MIN_QUALITY_SETTINGS        = 
 static struct BrotliSettings LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_SETTINGS    = {BROTLI_MODE_TEXT,    BROTLI_DEFAULT_WINDOW,  BROTLI_DEFAULT_QUALITY};
 static struct BrotliSettings LONGTAIL_BROTLI_TEXT_MAX_QUALITY_SETTINGS        = {BROTLI_MODE_TEXT,    BROTLI_MAX_WINDOW_BITS, BROTLI_MAX_QUALITY};
 
-Longtail_CompressionAPI_HSettings LONGTAIL_BROTLI_GENERIC_MIN_QUALITY       = (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_SETTINGS;
-Longtail_CompressionAPI_HSettings LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY   = (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_SETTINGS;
-Longtail_CompressionAPI_HSettings LONGTAIL_BROTLI_GENERIC_MAX_QUALITY       = (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_SETTINGS;
-Longtail_CompressionAPI_HSettings LONGTAIL_BROTLI_TEXT_MIN_QUALITY          = (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_TEXT_MIN_QUALITY_SETTINGS;
-Longtail_CompressionAPI_HSettings LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY      = (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_SETTINGS;
-Longtail_CompressionAPI_HSettings LONGTAIL_BROTLI_TEXT_MAX_QUALITY          = (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_TEXT_MAX_QUALITY_SETTINGS;
+Longtail_CompressionAPI_HSettings Longtail_GetBrotliGenericMinQuality() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_SETTINGS; }
+Longtail_CompressionAPI_HSettings Longtail_GetBrotliGenericDefaultQuality() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_SETTINGS; }
+Longtail_CompressionAPI_HSettings Longtail_GetBrotliGenericMaxQuality() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_SETTINGS; }
+Longtail_CompressionAPI_HSettings Longtail_GetBrotliTextMinQuality() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_TEXT_MIN_QUALITY_SETTINGS; }
+Longtail_CompressionAPI_HSettings Longtail_GetBrotliTextDefaultQuality() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_SETTINGS; }
+Longtail_CompressionAPI_HSettings Longtail_GetBrotliTextMaxQuality() { return (Longtail_CompressionAPI_HSettings)&LONGTAIL_BROTLI_TEXT_MAX_QUALITY_SETTINGS; }
 
 struct BrotliCompressionAPI
 {

@@ -109,15 +109,15 @@ int ParseLogLevel(const char* log_level_raw) {
 
 struct Longtail_HashAPI* CreateHashAPIFromIdentifier(uint32_t hash_type)
 {
-    if (hash_type == LONGTAIL_BLAKE2_HASH_TYPE)
+    if (hash_type == Longtail_GetBlake2HashType())
     {
         return Longtail_CreateBlake2HashAPI();
     }
-    if (hash_type == LONGTAIL_BLAKE3_HASH_TYPE)
+    if (hash_type == Longtail_GetBlake3HashType())
     {
         return Longtail_CreateBlake3HashAPI();
     }
-    if (hash_type == LONGTAIL_MEOW_HASH_TYPE)
+    if (hash_type == Longtail_GetMeowHashType())
     {
         return Longtail_CreateMeowHashAPI();
     }
@@ -227,19 +227,19 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         zstd_compression,
         zstd_compression};
     Longtail_CompressionAPI_HSettings compression_settings[13] = {
-        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MIN_QUALITY,
-        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MAX_QUALITY,
-        LONGTAIL_LIZARD_MIN_COMPRESSION,
-        LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
-        LONGTAIL_LIZARD_MAX_COMPRESSION,
-        LONGTAIL_LZ4_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MIN_COMPRESSION,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MAX_COMPRESSION};
+        Longtail_GetBrotliGenericMinQuality(),
+        Longtail_GetBrotliGenericDefaultQuality(),
+        Longtail_GetBrotliGenericMaxQuality(),
+        Longtail_GetBrotliTextMinQuality(),
+        Longtail_GetBrotliTextDefaultQuality(),
+        Longtail_GetBrotliTextMaxQuality(),
+        Longtail_GetLizardMinQuality(),
+        Longtail_GetLizardDefaultQuality(),
+        Longtail_GetLizardMaxQuality(),
+        Longtail_GetLZ4DefaultQuality(),
+        Longtail_GetZStdMinCompression(),
+        Longtail_GetZStdDefaultCompression(),
+        Longtail_GetZStdMaxCompression()};
 
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
@@ -310,15 +310,15 @@ uint32_t ParseHashingType(const char* hashing_type)
 {
     if (0 == hashing_type || (strcmp("blake3", hashing_type) == 0))
     {
-        return LONGTAIL_BLAKE3_HASH_TYPE;
+        return Longtail_GetBlake3HashType();
     }
     if (strcmp("blake2", hashing_type) == 0)
     {
-        return LONGTAIL_BLAKE2_HASH_TYPE;
+        return Longtail_GetBlake2HashType();
     }
     if (strcmp("meow", hashing_type) == 0)
     {
-        return LONGTAIL_MEOW_HASH_TYPE;
+        return Longtail_GetMeowHashType();
     }
     return 0xffffffff;
 }
@@ -615,7 +615,7 @@ int DownSync(
         err = store_block_store_api->GetIndex(
             store_block_store_api,
             job_api,
-            LONGTAIL_BLAKE3_HASH_TYPE,  // We should not really care, since if block store is empty we can't recreate any content
+            Longtail_GetBlake3HashType(),  // We should not really care, since if block store is empty we can't recreate any content
             &get_index_progress.m_API,
             &remote_content_index);
     }

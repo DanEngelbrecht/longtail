@@ -143,7 +143,7 @@ TEST(Longtail, Longtail_Lizard)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLizardCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_LIZARD_DEFAULT_COMPRESSION;
+    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetLizardDefaultQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -187,7 +187,7 @@ TEST(Longtail, Longtail_LZ4)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLZ4CompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_LZ4_DEFAULT_COMPRESSION;
+    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetLZ4DefaultQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -231,7 +231,7 @@ TEST(Longtail, Longtail_Brotli)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_BROTLI_TEXT_MAX_QUALITY;
+    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetBrotliTextMaxQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -275,7 +275,7 @@ TEST(Longtail, Longtail_ZStd)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateZStdCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = LONGTAIL_ZSTD_MAX_COMPRESSION;
+    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetZStdMaxCompression();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -893,19 +893,19 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         zstd_compression,
         zstd_compression};
     Longtail_CompressionAPI_HSettings compression_settings[13] = {
-        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MIN_QUALITY,
-        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MAX_QUALITY,
-        LONGTAIL_LIZARD_MIN_COMPRESSION,
-        LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
-        LONGTAIL_LIZARD_MAX_COMPRESSION,
-        LONGTAIL_LZ4_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MIN_COMPRESSION,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MAX_COMPRESSION};
+        Longtail_GetBrotliGenericMinQuality(),
+        Longtail_GetBrotliGenericDefaultQuality(),
+        Longtail_GetBrotliGenericMaxQuality(),
+        Longtail_GetBrotliTextMinQuality(),
+        Longtail_GetBrotliTextDefaultQuality(),
+        Longtail_GetBrotliTextMaxQuality(),
+        Longtail_GetLizardMinQuality(),
+        Longtail_GetLizardDefaultQuality(),
+        Longtail_GetLizardMaxQuality(),
+        Longtail_GetLZ4DefaultQuality(),
+        Longtail_GetZStdMinCompression(),
+        Longtail_GetZStdDefaultCompression(),
+        Longtail_GetZStdMaxCompression()};
 
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
