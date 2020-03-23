@@ -1254,7 +1254,7 @@ static int ChunkAssets(
         }
         size_t chunk_tags_size = sizeof(uint32_t) * *chunk_count;
         *chunk_tags = (uint32_t*)Longtail_Alloc(chunk_tags_size);
-        if (!*chunk_hashes)
+        if (!*chunk_tags)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%s) Longtail_Alloc(%" PRIu64 ") failed with %d", root_path, chunk_tags_size, ENOMEM)
             Longtail_Free(*chunk_hashes);
@@ -1273,8 +1273,6 @@ static int ChunkAssets(
             job_chunk_counts = 0;
             return ENOMEM;
         }
-
-        LONGTAIL_FATAL_ASSERT(*chunk_tags, return ENOMEM)
 
         uint32_t chunk_offset = 0;
         for (uint32_t i = 0; i < jobs_started; ++i)
@@ -1867,7 +1865,7 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || asset_tags != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || max_chunk_size > 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || out_version_index > 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_version_index, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_version_index != 0, return EINVAL)
 
     return Longtail_CreateVersionIndexRaw(
         storage_api,
@@ -2559,7 +2557,6 @@ int Longtail_CreateContentIndexFromBlocks(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_identifier, block_count, block_indexes, out_content_index, content_index_size, ENOMEM)
         return ENOMEM;
     }
-    LONGTAIL_FATAL_ASSERT(content_index, return ENOMEM)
     int err = Longtail_InitContentIndex(
         content_index,
         &content_index[1],
@@ -3010,9 +3007,9 @@ static int BlockWriterJobOnComplete(struct Longtail_AsyncCompleteAPI* async_comp
 {
     LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
     struct WriteBlockJob* job = (struct WriteBlockJob*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete, return EINVAL);
-    LONGTAIL_FATAL_ASSERT(job->m_StoredBlock, return EINVAL);
-    LONGTAIL_FATAL_ASSERT(job->m_JobID, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_StoredBlock != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_JobID != 0, return EINVAL);
     uint32_t job_id = job->m_JobID;
     job->m_StoredBlock->Dispose(job->m_StoredBlock);
     job->m_StoredBlock = 0;
@@ -3233,7 +3230,7 @@ int Longtail_WriteContent(
     }
 
     struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)Longtail_Alloc((size_t)(sizeof(struct WriteBlockJob) * block_count));
-    LONGTAIL_FATAL_ASSERT(write_block_jobs, return ENOMEM)
+    LONGTAIL_FATAL_ASSERT(write_block_jobs != 0, return ENOMEM)
     uint32_t block_start_chunk_index = 0;
     uint32_t job_count = 0;
     for (uint64_t block_index = 0; block_index < block_count; ++block_index)
@@ -3273,9 +3270,9 @@ int Longtail_WriteContent(
 
         Longtail_JobAPI_Jobs jobs;
         err = job_api->CreateJobs(job_api, 1, func, ctx, &jobs);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
         err = job_api->ReadyJobs(job_api, 1, jobs);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         block_start_chunk_index += chunk_count;
     }
@@ -3288,7 +3285,7 @@ int Longtail_WriteContent(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %s) job_api->WaitForAllJobs(%p, %p) failed with %d", source_storage_api, block_store_api, job_api, progress_api, version_content_index, version_index, assets_folder, job_api, progress_api, err)
         return err;
     }
-    LONGTAIL_FATAL_ASSERT(!err, return err)
+    LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
     err = 0;
     while (job_count--)
@@ -3384,7 +3381,7 @@ int BlockReaderJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_ap
 {
     LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
     struct BlockReaderJob* job = (struct BlockReaderJob*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return EINVAL);
     job->m_Err = err;
     job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
     return 0;
@@ -3553,19 +3550,19 @@ static int CreatePartialAssetWriteJob(
     {
         Longtail_JobAPI_Jobs block_readion_jobs;
         err = job_api->CreateJobs(job_api, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_readion_jobs);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
         Longtail_JobAPI_JobFunc sync_write_funcs[1] = { WriteReady };
         void* sync_write_ctx[1] = { 0 };
         Longtail_JobAPI_Jobs write_sync_job;
         err = job_api->CreateJobs(job_api, 1, sync_write_funcs, sync_write_ctx, &write_sync_job);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         err = job_api->AddDependecies(job_api, 1, write_job, 1, write_sync_job);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
         err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockReaderJobCount, block_readion_jobs);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
         err = job_api->ReadyJobs(job_api, job->m_BlockReaderJobCount, block_readion_jobs);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         *out_jobs = write_sync_job;
         return 0;
@@ -3750,7 +3747,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             if (sync_write_job)
             {
                 int err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
-                LONGTAIL_FATAL_ASSERT(!err, job->m_Err = EINVAL; return 0)
+                LONGTAIL_FATAL_ASSERT(err == 0, job->m_Err = EINVAL; return 0)
             }
             job->m_Err = EINVAL;
             return 0;
@@ -3777,7 +3774,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             if (sync_write_job)
             {
                 err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
-                LONGTAIL_FATAL_ASSERT(!err, job->m_Err = err; return 0)
+                LONGTAIL_FATAL_ASSERT(err == 0, job->m_Err = err; return 0)
             }
             job->m_Err = err;
             return 0;
@@ -4207,7 +4204,7 @@ static int WriteAssets(
     }
 
     struct WriteAssetsFromBlockJob* block_jobs = (struct WriteAssetsFromBlockJob*)Longtail_Alloc((size_t)(sizeof(struct WriteAssetsFromBlockJob) * awl->m_BlockJobCount));
-    LONGTAIL_FATAL_ASSERT(block_jobs, return ENOMEM)
+    LONGTAIL_FATAL_ASSERT(block_jobs != 0, return ENOMEM)
     uint32_t j = 0;
     uint32_t block_job_count = 0;
     while (j < awl->m_BlockJobCount)
@@ -4230,7 +4227,7 @@ static int WriteAssets(
         void* block_read_ctxs[1] = {block_job};
         Longtail_JobAPI_Jobs block_readion_job;
         err = job_api->CreateJobs(job_api, 1, block_read_funcs, block_read_ctxs, &block_readion_job);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err != 0, return err)
 
         job->m_VersionStorageAPI = version_storage_api;
         job->m_ContentIndex = content_index;
@@ -4265,11 +4262,11 @@ static int WriteAssets(
 
         Longtail_JobAPI_Jobs block_write_job;
         err = job_api->CreateJobs(job_api, 1, func, ctx, &block_write_job);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err != 0, return err)
         err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_readion_job);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err != 0, return err)
         err = job_api->ReadyJobs(job_api, 1, block_readion_job);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err != 0, return err)
     }
 /*
 block_readorCount = blocks_remaning > 8 ? 8 : blocks_remaning
@@ -4343,7 +4340,7 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
             return err;
         }
         err = job_api->ReadyJobs(job_api, 1, write_sync_job);
-        LONGTAIL_FATAL_ASSERT(!err, return err)
+        LONGTAIL_FATAL_ASSERT(err != 0, return err)
     }
 
     err = job_api->WaitForAllJobs(job_api, progress_api);
@@ -4780,9 +4777,9 @@ int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
-    LONGTAIL_FATAL_ASSERT(reference_content_index, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(content_index, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_content_index, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(reference_content_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(content_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT((*reference_content_index->m_HashAPI) == (*content_index->m_HashAPI), return EINVAL)
 
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_RetargetContent(%p, %p, %p)", reference_content_index, content_index, out_content_index)
@@ -5670,8 +5667,8 @@ int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index)
 {
-    LONGTAIL_FATAL_ASSERT(content_index !=0, EINVAL)
-    LONGTAIL_FATAL_ASSERT(version_index !=0, EINVAL)
+    LONGTAIL_FATAL_ASSERT(content_index != 0, EINVAL)
+    LONGTAIL_FATAL_ASSERT(version_index != 0, EINVAL)
 
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ValidateVersion(%p, %p)", content_index, version_index)
 
