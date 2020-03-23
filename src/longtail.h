@@ -349,7 +349,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
-LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
+LONGTAIL_EXPORT int Longtail_CreateVersionIndexRaw(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
@@ -362,7 +362,7 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
-LONGTAIL_EXPORT int Longtail_CreateVersionIndexUtil(
+LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
@@ -422,17 +422,17 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
 
 LONGTAIL_EXPORT int Longtail_CreateContentIndex(
     struct Longtail_HashAPI* hash_api,
-    uint64_t chunk_count,
-    const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_sizes,
-    const uint32_t* chunk_tags,
+    struct Longtail_VersionIndex* version_index,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
-LONGTAIL_EXPORT int Longtail_CreateContentIndexUtil(
+LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
     struct Longtail_HashAPI* hash_api,
-    struct Longtail_VersionIndex* version_index,
+    uint64_t chunk_count,
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* chunk_sizes,
+    const uint32_t* chunk_tags,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);

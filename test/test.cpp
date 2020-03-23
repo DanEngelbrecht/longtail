@@ -568,13 +568,8 @@ TEST(Longtail, Longtail_ContentIndex)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     ASSERT_NE((Longtail_HashAPI*)0, hash_api);
-    Longtail_HashAPI_HContext c;
-    int err = hash_api->BeginContext(hash_api, &c);
-    ASSERT_EQ(0, err);
-    ASSERT_NE((Longtail_HashAPI_HContext)0, c);
-    hash_api->EndContext(hash_api, c);
     Longtail_ContentIndex* content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
+    ASSERT_EQ(0, Longtail_CreateContentIndexRaw(
         hash_api,
         asset_count,
         asset_content_hashes,
@@ -639,7 +634,7 @@ TEST(Longtail, Longtail_RetargetContentIndex)
     ASSERT_NE((Longtail_HashAPI_HContext)0, c);
     hash_api->EndContext(hash_api, c);
     Longtail_ContentIndex* content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
+    ASSERT_EQ(0, Longtail_CreateContentIndexRaw(
         hash_api,
         asset_count,
         asset_content_hashes,
@@ -669,7 +664,7 @@ TEST(Longtail, Longtail_RetargetContentIndex)
     ASSERT_EQ(43591u, content_index->m_ChunkBlockOffsets[4]);
 
     Longtail_ContentIndex* other_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
+    ASSERT_EQ(0, Longtail_CreateContentIndexRaw(
         hash_api,
         asset_count - 1,
         &asset_content_hashes[1],
@@ -737,9 +732,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
         job_api,
         0,
         "source/version1",
-        &version1_paths->m_Paths,
-        version1_paths->m_FileSizes,
-        version1_paths->m_Permissions,
+        version1_paths,
         compression_types,
         16384,
         &vindex));
@@ -772,9 +765,7 @@ TEST(Longtail, ContentIndexSerialization)
         job_api,
         0,
         "source/version1",
-        &version1_paths->m_Paths,
-        version1_paths->m_FileSizes,
-        version1_paths->m_Permissions,
+        version1_paths,
         compression_types,
         16384,
         &vindex));
@@ -787,10 +778,7 @@ TEST(Longtail, ContentIndexSerialization)
     Longtail_ContentIndex* cindex;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
         hash_api,
-        *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes,
-        vindex->m_ChunkSizes,
-        vindex->m_ChunkTags,
+        vindex,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &cindex));
@@ -1313,9 +1301,7 @@ TEST(Longtail, Longtail_WriteContent)
         job_api,
         0,
         "local",
-        &version1_paths->m_Paths,
-        version1_paths->m_FileSizes,
-        version1_paths->m_Permissions,
+        version1_paths,
         compression_types,
         16,
         &vindex));
@@ -1330,10 +1316,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_ContentIndex* cindex;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
         hash_api,
-        *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes,
-        vindex->m_ChunkSizes,
-        vindex->m_ChunkTags,
+        vindex,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &cindex));
@@ -1409,8 +1392,7 @@ TEST(Longtail, TestVeryLargeFile)
         job_api,
         0,
         assets_path,
-        &paths->m_Paths,
-        paths->m_FileSizes,
+        paths,
         32758u,
         &version_index));
 
@@ -1455,7 +1437,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     Longtail_ContentIndex* content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
+    ASSERT_EQ(0, Longtail_CreateContentIndexRaw(
         hash_api,
         asset_count - 4,
         asset_content_hashes,
@@ -1569,9 +1551,7 @@ TEST(Longtail, VersionIndexDirectories)
         job_api,
         0,
         "",
-        &local_paths->m_Paths,
-        local_paths->m_FileSizes,
-        local_paths->m_Permissions,
+        local_paths,
         compression_types,
         16384,
         &local_version_index));
@@ -1596,9 +1576,6 @@ TEST(Longtail, Longtail_MergeContentIndex)
         0,
         0,
         0,
-        0,
-        16,
-        8,
         &cindex1));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex1);
     Longtail_ContentIndex* cindex2;
@@ -1607,9 +1584,6 @@ TEST(Longtail, Longtail_MergeContentIndex)
         0,
         0,
         0,
-        0,
-        16,
-        8,
         &cindex2));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex2);
     Longtail_ContentIndex* cindex3;
@@ -1620,7 +1594,7 @@ TEST(Longtail, Longtail_MergeContentIndex)
     uint32_t chunk_sizes_4[] = {10, 20, 10};
     uint32_t chunk_compression_types_4[] = {0, 0, 0};
     Longtail_ContentIndex* cindex4;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
+    ASSERT_EQ(0, Longtail_CreateContentIndexRaw(
         hash_api,
         3,
         chunk_hashes_4,
@@ -1636,7 +1610,7 @@ TEST(Longtail, Longtail_MergeContentIndex)
     uint32_t chunk_compression_types_5[] = {0, 0, 0};
 
     Longtail_ContentIndex* cindex5;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
+    ASSERT_EQ(0, Longtail_CreateContentIndexRaw(
         hash_api,
         3,
         chunk_hashes_5,
@@ -1899,9 +1873,7 @@ TEST(Longtail, Longtail_VersionDiff)
         job_api,
         0,
         "old",
-        &old_version_paths->m_Paths,
-        old_version_paths->m_FileSizes,
-        old_version_paths->m_Permissions,
+        old_version_paths,
         old_compression_types,
         16,
         &old_vindex));
@@ -1923,9 +1895,7 @@ TEST(Longtail, Longtail_VersionDiff)
         job_api,
         0,
         "new",
-        &new_version_paths->m_Paths,
-        new_version_paths->m_FileSizes,
-        new_version_paths->m_Permissions,
+        new_version_paths,
         new_compression_types,
         16,
         &new_vindex));
@@ -1941,10 +1911,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
             hash_api,
-            *new_vindex->m_ChunkCount,
-            new_vindex->m_ChunkHashes,
-            new_vindex->m_ChunkSizes,
-            new_vindex->m_ChunkTags,
+            new_vindex,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK,
             &content_index));
@@ -2064,9 +2031,7 @@ TEST(Longtail, FullScale)
         job_api,
         0,
         "",
-        &local_paths->m_Paths,
-        local_paths->m_FileSizes,
-        local_paths->m_Permissions,
+        local_paths,
         local_compression_types,
         16384,
         &local_version_index));
@@ -2087,9 +2052,7 @@ TEST(Longtail, FullScale)
         job_api,
         0,
         "",
-        &remote_paths->m_Paths,
-        remote_paths->m_FileSizes,
-        remote_paths->m_Permissions,
+        remote_paths,
         remote_compression_types,
         16384,
         &remote_version_index));
@@ -2104,10 +2067,7 @@ TEST(Longtail, FullScale)
     Longtail_ContentIndex* local_content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
             hash_api,
-            * local_version_index->m_ChunkCount,
-            local_version_index->m_ChunkHashes,
-            local_version_index->m_ChunkSizes,
-            local_version_index->m_ChunkTags,
+            local_version_index,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK,
             &local_content_index));
@@ -2129,10 +2089,7 @@ TEST(Longtail, FullScale)
     Longtail_ContentIndex* remote_content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
             hash_api,
-            * remote_version_index->m_ChunkCount,
-            remote_version_index->m_ChunkHashes,
-            remote_version_index->m_ChunkSizes,
-            remote_version_index->m_ChunkTags,
+            remote_version_index,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK,
             &remote_content_index));
@@ -2340,9 +2297,7 @@ TEST(Longtail, Longtail_WriteVersion)
         job_api,
         0,
         "local",
-        &version1_paths->m_Paths,
-        version1_paths->m_FileSizes,
-        version1_paths->m_Permissions,
+        version1_paths,
         version1_compression_types,
         50,
         &vindex));
@@ -2357,10 +2312,7 @@ TEST(Longtail, Longtail_WriteVersion)
     Longtail_ContentIndex* cindex;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
         hash_api,
-        *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes,
-        vindex->m_ChunkSizes,
-        vindex->m_ChunkTags,
+        vindex,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &cindex));
@@ -2473,9 +2425,6 @@ static void Bench()
     ASSERT_EQ(0, Longtail_CreateContentIndex(
             hash_api,
             0,
-            0,
-            0,
-            0,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK,
             &full_content_index));
@@ -2499,9 +2448,7 @@ static void Bench()
             job_api,
             0,
             version_source_folder,
-            &version_source_paths->m_Paths,
-            version_source_paths->m_FileSizes,
-            version_source_paths->m_Permissions,
+            version_source_paths,
             version_compression_types,
             16384,
             &version_index));
@@ -2704,9 +2651,7 @@ static void LifelikeTest()
         job_api,
         0,
         local_path_1,
-        &local_path_1_paths->m_Paths,
-        local_path_1_paths->m_FileSizes,
-        local_path_1_paths->m_Permissions,
+        local_path_1_paths,
         local_compression_types,
         16384,
         &version1));
@@ -2723,10 +2668,7 @@ static void LifelikeTest()
     Longtail_ContentIndex* local_content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
         hash_api,
-        *version1->m_ChunkCount,
-        version1->m_ChunkHashes,
-        version1->m_ChunkSizes,
-        version1->m_ChunkTags,
+        version1,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &local_content_index));
@@ -2778,9 +2720,7 @@ static void LifelikeTest()
         job_api,
         0,
         local_path_2,
-        &local_path_2_paths->m_Paths,
-        local_path_2_paths->m_FileSizes,
-        local_path_2_paths->m_Permissions,
+        local_path_2_paths,
         local_2_compression_types,
         16384,
         &version2));
@@ -2844,12 +2784,7 @@ static void LifelikeTest()
 //    Longtail_ContentIndex* remote_content_index;
 //    ASSERT_EQ(0, Longtail_CreateContentIndex(
 //        local_path_2,
-//        *version2->m_AssetCount,
-//        version2->m_ContentHashes,
-//        version2->m_PathHashes,
-//        version2->m_AssetSize,
-//        version2->m_NameOffsets,
-//        version2->m_NameData,
+//        version2,
 //        GetContentTag,
 //        &remote_content_index));
 
@@ -3203,9 +3138,6 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
             0,
             0,
             0,
-            0,
-            8192,
-            128,
             &block_store->m_ContentIndex);
     if (err)
     {
@@ -3580,9 +3512,7 @@ TEST(Longtail, AsyncBlockStore)
         job_api,
         0,
         "local",
-        &version1_paths->m_Paths,
-        version1_paths->m_FileSizes,
-        version1_paths->m_Permissions,
+        version1_paths,
         version1_compression_types,
         50,
         &vindex));
@@ -3597,10 +3527,7 @@ TEST(Longtail, AsyncBlockStore)
     Longtail_ContentIndex* cindex;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
         hash_api,
-        *vindex->m_ChunkCount,
-        vindex->m_ChunkHashes,
-        vindex->m_ChunkSizes,
-        vindex->m_ChunkTags,
+        vindex,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &cindex));

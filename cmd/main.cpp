@@ -438,9 +438,7 @@ int UpSync(
                 job_api,
                 &create_version_progress.m_API,
                 source_path,
-                &file_infos->m_Paths,
-                file_infos->m_FileSizes,
-                file_infos->m_Permissions,
+                file_infos,
                 tags,
                 target_chunk_size,
                 &source_version_index);
@@ -463,10 +461,7 @@ int UpSync(
     struct Longtail_ContentIndex* version_content_index = 0;
     int err = Longtail_CreateContentIndex(
         hash_api,
-        *source_version_index->m_ChunkCount,
-        source_version_index->m_ChunkHashes,
-        source_version_index->m_ChunkSizes,
-        source_version_index->m_ChunkTags,
+        source_version_index,
         target_block_size,
         max_chunks_per_block,
         &version_content_index);
@@ -682,9 +677,7 @@ int DownSync(
                 job_api,
                 &create_version_progress.m_API,
                 target_path,
-                &file_infos->m_Paths,
-                file_infos->m_FileSizes,
-                file_infos->m_Permissions,
+                file_infos,
                 tags,
                 target_chunk_size,
                 &target_version_index);
