@@ -583,6 +583,11 @@ struct Longtail_BlockIndex
     uint32_t* m_ChunkSizes; // []
 };
 
+LONGTAIL_EXPORT inline uint32_t Longtail_BlockIndex_GetChunkCount(const struct Longtail_BlockIndex* block_index) { return *block_index->m_ChunkCount; }
+LONGTAIL_EXPORT inline const uint32_t* Longtail_BlockIndex_GetChunkTag(const struct Longtail_BlockIndex* block_index) { return block_index->m_Tag; }
+LONGTAIL_EXPORT inline const TLongtail_Hash* Longtail_BlockIndex_GetChunkHashes(const struct Longtail_BlockIndex* block_index) { return block_index->m_ChunkHashes; }
+LONGTAIL_EXPORT inline const uint32_t* Longtail_BlockIndex_GetChunkSizes(const struct Longtail_BlockIndex* block_index) { return block_index->m_ChunkSizes; }
+
 struct Longtail_StoredBlock
 {
     int (*Dispose)(struct Longtail_StoredBlock* stored_block);
@@ -590,6 +595,10 @@ struct Longtail_StoredBlock
     void* m_BlockData;
     uint32_t m_BlockChunksDataSize;
 };
+
+LONGTAIL_EXPORT inline struct Longtail_BlockIndex* Longtail_StoredBlock_GetBlockIndex(struct Longtail_StoredBlock* stored_block) { return stored_block->m_BlockIndex; }
+LONGTAIL_EXPORT inline void* Longtail_BlockIndex_BlockData(struct Longtail_StoredBlock* stored_block) { return stored_block->m_BlockData; }
+LONGTAIL_EXPORT inline uint32_t Longtail_BlockIndex_GetBlockChunksDataSize(struct Longtail_StoredBlock* stored_block) { return stored_block->m_BlockChunksDataSize; }
 
 struct Longtail_Paths
 {
@@ -599,6 +608,9 @@ struct Longtail_Paths
     char* m_Data;
 };
 
+LONGTAIL_EXPORT inline uint32_t Longtail_Paths_GetCount(const struct Longtail_Paths* paths) { return *paths->m_PathCount; }
+LONGTAIL_EXPORT inline const char* Longtail_Paths_GetPath(const struct Longtail_Paths* paths, uint32_t index) { return &paths->m_Data[paths->m_Offsets[index]]; }
+
 struct Longtail_FileInfos
 {
     struct Longtail_Paths m_Paths;
@@ -606,10 +618,10 @@ struct Longtail_FileInfos
     uint32_t* m_Permissions;
 };
 
-LONGTAIL_EXPORT inline uint32_t Longtail_FileInfos_GetPathCount(struct Longtail_FileInfos* file_infos) { return *file_infos->m_Paths.m_PathCount; }
-LONGTAIL_EXPORT inline const char* Longtail_FileInfos_GetPath(struct Longtail_FileInfos* file_infos, uint32_t index) { return &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[index]]; }
-LONGTAIL_EXPORT inline uint64_t Longtail_FileInfos_GetSize(struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_FileSizes[index]; }
-LONGTAIL_EXPORT inline uint32_t Longtail_FileInfos_GetPermissions(struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_Permissions[index]; }
+LONGTAIL_EXPORT inline uint32_t Longtail_FileInfos_GetCount(const struct Longtail_FileInfos* file_infos) { return *file_infos->m_Paths.m_PathCount; }
+LONGTAIL_EXPORT inline const struct Longtail_Paths* Longtail_FileInfos_GetPaths(const struct Longtail_FileInfos* file_infos) { return &file_infos->m_Paths; }
+LONGTAIL_EXPORT inline uint64_t Longtail_FileInfos_GetSize(const struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_FileSizes[index]; }
+LONGTAIL_EXPORT inline const uint32_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_Permissions; }
 
 extern uint32_t Longtail_CurrentContentIndexVersion;
 
@@ -626,6 +638,11 @@ struct Longtail_ContentIndex
     uint32_t* m_ChunkBlockOffsets;      // []
     uint32_t* m_ChunkLengths;           // []
 };
+
+LONGTAIL_EXPORT inline uint32_t Longtail_ContentIndex_GetVersion(const struct Longtail_ContentIndex* content_index) { return *content_index->m_Version; }
+LONGTAIL_EXPORT inline uint32_t Longtail_ContentIndex_GetHashAPI(const struct Longtail_ContentIndex* content_index) { return *content_index->m_HashAPI; }
+LONGTAIL_EXPORT inline uint64_t Longtail_ContentIndex_GetBlockCount(const struct Longtail_ContentIndex* content_index) { return *content_index->m_BlockCount; }
+LONGTAIL_EXPORT inline uint64_t Longtail_ContentIndex_GetChunkCount(const struct Longtail_ContentIndex* content_index) { return *content_index->m_ChunkCount; }
 
 struct Longtail_VersionIndex
 {
@@ -652,6 +669,11 @@ struct Longtail_VersionIndex
     uint32_t* m_Permissions;            // []
     char* m_NameData;
 };
+
+LONGTAIL_EXPORT inline uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* content_index) { return *content_index->m_Version; }
+LONGTAIL_EXPORT inline uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* content_index) { return *content_index->m_HashAPI; }
+LONGTAIL_EXPORT inline uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* content_index) { return *content_index->m_AssetCount; }
+LONGTAIL_EXPORT inline uint32_t Longtail_VersionIndex_GetChunkCount(const struct Longtail_VersionIndex* content_index) { return *content_index->m_ChunkCount; }
 
 struct Longtail_VersionDiff
 {
