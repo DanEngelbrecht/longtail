@@ -226,7 +226,7 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         zstd_compression,
         zstd_compression,
         zstd_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[13] = {
+    uint32_t compression_settings[13] = {
         Longtail_GetBrotliGenericMinQuality(),
         Longtail_GetBrotliGenericDefaultQuality(),
         Longtail_GetBrotliGenericMaxQuality(),
@@ -246,7 +246,7 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         13,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
-        (const Longtail_CompressionAPI_HSettings*)compression_settings);
+        compression_settings);
     if (registry == 0)
     {
         SAFE_DISPOSE_API(lizard_compression);

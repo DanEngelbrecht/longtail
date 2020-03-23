@@ -143,7 +143,7 @@ TEST(Longtail, Longtail_Lizard)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLizardCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetLizardDefaultQuality();
+    uint32_t compression_settings = Longtail_GetLizardDefaultQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -187,7 +187,7 @@ TEST(Longtail, Longtail_LZ4)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLZ4CompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetLZ4DefaultQuality();
+    uint32_t compression_settings = Longtail_GetLZ4DefaultQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -231,7 +231,7 @@ TEST(Longtail, Longtail_Brotli)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetBrotliTextMaxQuality();
+    uint32_t compression_settings = Longtail_GetBrotliTextMaxQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -275,7 +275,7 @@ TEST(Longtail, Longtail_ZStd)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateZStdCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetZStdMaxQuality();
+    uint32_t compression_settings = Longtail_GetZStdMaxQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -686,28 +686,16 @@ TEST(Longtail, Longtail_RetargetContentIndex)
     SAFE_DISPOSE_API(hash_api);
 }
 
-const uint32_t LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0');
-const uint32_t LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'a');
-const uint32_t LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'b');
-const uint32_t LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'c');
-
-const uint32_t LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
-
-const uint32_t LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2');
-
-const uint32_t LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
-
 static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
-    const uint32_t compression_types[5] = {0, LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE, LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE, LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE, LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
+    const uint32_t compression_types[5] = {
+        0,
+        Longtail_GetBrotliGenericDefaultQuality(),
+        Longtail_GetLizardDefaultQuality(),
+        Longtail_GetLZ4DefaultQuality(),
+        Longtail_GetZStdDefaultQuality()};
     for (uint32_t i = 0; i < count; ++i)
     {
         result[i] = compression_types[i % 5];
@@ -850,22 +838,20 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
     }
 
     uint32_t compression_types[13] = {
-        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE,
-        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
-        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE,
+        Longtail_GetBrotliGenericMinQuality(),
+        Longtail_GetBrotliGenericDefaultQuality(),
+        Longtail_GetBrotliGenericMaxQuality(),
+        Longtail_GetBrotliTextMinQuality(),
+        Longtail_GetBrotliTextDefaultQuality(),
+        Longtail_GetBrotliTextMaxQuality(),
+        Longtail_GetLizardMinQuality(),
+        Longtail_GetLizardDefaultQuality(),
+        Longtail_GetLizardMaxQuality(),
+        Longtail_GetLZ4DefaultQuality(),
+        Longtail_GetZStdMinQuality(),
+        Longtail_GetZStdDefaultQuality(),
+        Longtail_GetZStdMaxQuality()};
 
-        LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE,
-        LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE,
-
-        LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE,
-
-        LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE};
     struct Longtail_CompressionAPI* compression_apis[13] = {
         brotli_compression,
         brotli_compression,
@@ -880,7 +866,7 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         zstd_compression,
         zstd_compression,
         zstd_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[13] = {
+    uint32_t compression_settings[13] = {
         Longtail_GetBrotliGenericMinQuality(),
         Longtail_GetBrotliGenericDefaultQuality(),
         Longtail_GetBrotliGenericMaxQuality(),
@@ -900,7 +886,7 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         13,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
-        (const Longtail_CompressionAPI_HSettings*)compression_settings);
+        (const uint32_t*)compression_settings);
     if (registry == 0)
     {
         SAFE_DISPOSE_API(lizard_compression);
@@ -1178,7 +1164,7 @@ TEST(Longtail, Longtail_CompressBlockStore)
         put_block2->Dispose = 0;
         put_block2->m_BlockIndex = Longtail_InitBlockIndex(&put_block2[1], 2);
         *put_block2->m_BlockIndex->m_BlockHash = 0xbeaddeef;
-        *put_block2->m_BlockIndex->m_Tag = LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE;
+        *put_block2->m_BlockIndex->m_Tag = Longtail_GetLZ4DefaultQuality();
         put_block2->m_BlockIndex->m_ChunkHashes[0] = 0xfff1fa5;
         put_block2->m_BlockIndex->m_ChunkHashes[1] = 0xf001fa5;
         put_block2->m_BlockIndex->m_ChunkSizes[0] = 1147;
@@ -1226,7 +1212,7 @@ TEST(Longtail, Longtail_CompressBlockStore)
     ASSERT_EQ(0, getCB3.m_Err);
     ASSERT_NE((Longtail_StoredBlock*)0, get_block);
     ASSERT_EQ(0xbeaddeef, *get_block->m_BlockIndex->m_BlockHash);
-    ASSERT_EQ(LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE, *get_block->m_BlockIndex->m_Tag);
+    ASSERT_EQ(Longtail_GetLZ4DefaultQuality(), *get_block->m_BlockIndex->m_Tag);
     ASSERT_EQ(4711u + 1147u, get_block->m_BlockChunksDataSize);
     ASSERT_EQ(0xfff1fa5, get_block->m_BlockIndex->m_ChunkHashes[0]);
     ASSERT_EQ(0xf001fa5, get_block->m_BlockIndex->m_ChunkHashes[1]);

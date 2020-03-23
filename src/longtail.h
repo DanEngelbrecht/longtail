@@ -323,16 +323,33 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #    define LONGTAIL_FATAL_ASSERT(x, bail) \
         if (!(x)) \
         { \
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Assert failed `%s`\n", __FILE__, __LINE__, #x); \
             if (Longtail_Assert_private) \
             { \
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Assert failed `%s`\n", __FILE__, __LINE__, #x); \
                 Longtail_Assert_private(#x, __FILE__, __LINE__); \
             } \
             bail; \
         }
+#   define LONGTAIL_VALIDATE_INPUT(x, bail) \
+    if (!(x)) \
+    { \
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation failed for `%s`\n", __FILE__, __LINE__, #x); \
+        if (Longtail_Assert_private) \
+        { \
+            Longtail_Assert_private(#x, __FILE__, __LINE__); \
+        } \
+        bail; \
+    }
 #else // defined(LONGTAIL_ASSERTS)
-#    define LONGTAIL_FATAL_ASSERT(x, y)
+#   define LONGTAIL_FATAL_ASSERT(x, y)
+#   define LONGTAIL_VALIDATE_INPUT(x, bail) \
+    if (!(x)) \
+    { \
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation failed for `%s`\n", __FILE__, __LINE__, #x); \
+        bail; \
+    }
 #endif // defined(LONGTAIL_ASSERTS)
+
 
 typedef void* (*Longtail_Alloc_Func)(size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
@@ -643,6 +660,7 @@ LONGTAIL_EXPORT inline uint32_t Longtail_ContentIndex_GetVersion(const struct Lo
 LONGTAIL_EXPORT inline uint32_t Longtail_ContentIndex_GetHashAPI(const struct Longtail_ContentIndex* content_index) { return *content_index->m_HashAPI; }
 LONGTAIL_EXPORT inline uint64_t Longtail_ContentIndex_GetBlockCount(const struct Longtail_ContentIndex* content_index) { return *content_index->m_BlockCount; }
 LONGTAIL_EXPORT inline uint64_t Longtail_ContentIndex_GetChunkCount(const struct Longtail_ContentIndex* content_index) { return *content_index->m_ChunkCount; }
+LONGTAIL_EXPORT inline TLongtail_Hash* Longtail_ContentIndex_BlockHashes(const struct Longtail_ContentIndex* content_index) { return content_index->m_BlockHashes; }
 
 struct Longtail_VersionIndex
 {

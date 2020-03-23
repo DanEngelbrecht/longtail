@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 LONGTAIL_EXPORT extern struct Longtail_CompressionAPI* Longtail_CreateLZ4CompressionAPI();
-LONGTAIL_EXPORT extern Longtail_CompressionAPI_HSettings Longtail_GetLZ4DefaultQuality();
+LONGTAIL_EXPORT extern uint32_t Longtail_GetLZ4DefaultQuality();
 
 #ifdef __cplusplus
 }
