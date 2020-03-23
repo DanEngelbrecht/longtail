@@ -133,7 +133,7 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     if !LIB_BUILD_ERROR! neq 0 exit /b !LIB_BUILD_ERROR!
 )
 
-if "!TARGET_TYPE!" == "EXECUABLE" (
+if "!TARGET_TYPE!" == "EXECUTABLE" (
     set OUTPUT_TARGET=!OUTPUT!.exe
     set EXTRA_CC_OPTIONS
     set EXTRA_LINK_OPTIONS

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export TARGET=test
-export TARGET_TYPE=EXECUABLE
+export TARGET_TYPE=EXECUTABLE
 
 LIB_SRC="$BASE_DIR/lib/filestorage/*.c"
 LIB_THIRDPARTY_SRC="$BASE_DIR/src/ext/*.c"
