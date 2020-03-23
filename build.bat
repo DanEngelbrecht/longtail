@@ -47,7 +47,7 @@ goto arg_end
 set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626
 
 if "!RELEASE_MODE!" == "release" (
-    set OPT=/O2 /Oi /Oy /GS- /Gs-
+    set OPT=/O2 /Oi /Oy /GS- /Gs- /MT
 
     call build_options.bat
     set OUTPUT=!TARGET!
@@ -56,7 +56,7 @@ if "!RELEASE_MODE!" == "release" (
     set CXXFLAGS=!BASE_CXXFLAGS! !CXXFLAGS!
 
 ) else (
-    set OPT=
+    set OPT=/MTd
 
     call build_options.bat
     set OUTPUT=!TARGET!_debug
@@ -135,8 +135,8 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
 
 if "!TARGET_TYPE!" == "EXECUTABLE" (
     set OUTPUT_TARGET=!OUTPUT!.exe
-    set EXTRA_CC_OPTIONS
-    set EXTRA_LINK_OPTIONS
+    set EXTRA_CC_OPTIONS=
+    set EXTRA_LINK_OPTIONS=
 )
 
 if "!TARGET_TYPE!" == "SHAREDLIB" (
