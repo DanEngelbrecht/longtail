@@ -4227,7 +4227,7 @@ static int WriteAssets(
         void* block_read_ctxs[1] = {block_job};
         Longtail_JobAPI_Jobs block_readion_job;
         err = job_api->CreateJobs(job_api, 1, block_read_funcs, block_read_ctxs, &block_readion_job);
-        LONGTAIL_FATAL_ASSERT(err != 0, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         job->m_VersionStorageAPI = version_storage_api;
         job->m_ContentIndex = content_index;
@@ -4262,11 +4262,11 @@ static int WriteAssets(
 
         Longtail_JobAPI_Jobs block_write_job;
         err = job_api->CreateJobs(job_api, 1, func, ctx, &block_write_job);
-        LONGTAIL_FATAL_ASSERT(err != 0, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
         err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_readion_job);
-        LONGTAIL_FATAL_ASSERT(err != 0, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
         err = job_api->ReadyJobs(job_api, 1, block_readion_job);
-        LONGTAIL_FATAL_ASSERT(err != 0, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
     }
 /*
 block_readorCount = blocks_remaning > 8 ? 8 : blocks_remaning
@@ -4340,7 +4340,7 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
             return err;
         }
         err = job_api->ReadyJobs(job_api, 1, write_sync_job);
-        LONGTAIL_FATAL_ASSERT(err != 0, return err)
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
     }
 
     err = job_api->WaitForAllJobs(job_api, progress_api);

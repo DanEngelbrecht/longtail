@@ -11,9 +11,9 @@ extern "C" {
 #endif
 
 LONGTAIL_EXPORT extern struct Longtail_CompressionAPI* Longtail_CreateZStdCompressionAPI();
-LONGTAIL_EXPORT extern Longtail_CompressionAPI_HSettings Longtail_GetZStdMinCompression();
-LONGTAIL_EXPORT extern Longtail_CompressionAPI_HSettings Longtail_GetZStdDefaultCompression();
-LONGTAIL_EXPORT extern Longtail_CompressionAPI_HSettings Longtail_GetZStdMaxCompression();
+LONGTAIL_EXPORT extern Longtail_CompressionAPI_HSettings Longtail_GetZStdMinQuality();
+LONGTAIL_EXPORT extern Longtail_CompressionAPI_HSettings Longtail_GetZStdDefaultQuality();
+LONGTAIL_EXPORT extern Longtail_CompressionAPI_HSettings Longtail_GetZStdMaxQuality();
 
 #ifdef __cplusplus
 }

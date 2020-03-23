@@ -237,9 +237,9 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         Longtail_GetLizardDefaultQuality(),
         Longtail_GetLizardMaxQuality(),
         Longtail_GetLZ4DefaultQuality(),
-        Longtail_GetZStdMinCompression(),
-        Longtail_GetZStdDefaultCompression(),
-        Longtail_GetZStdMaxCompression()};
+        Longtail_GetZStdMinQuality(),
+        Longtail_GetZStdDefaultQuality(),
+        Longtail_GetZStdMaxQuality()};
 
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(

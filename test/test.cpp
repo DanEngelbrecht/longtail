@@ -275,7 +275,7 @@ TEST(Longtail, Longtail_ZStd)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateZStdCompressionAPI();
     ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetZStdMaxCompression();
+    Longtail_CompressionAPI_HSettings compression_settings = Longtail_GetZStdMaxQuality();
 
     const char* raw_data =
         "A very long file that should be able to be recreated"
@@ -891,9 +891,9 @@ Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
         Longtail_GetLizardDefaultQuality(),
         Longtail_GetLizardMaxQuality(),
         Longtail_GetLZ4DefaultQuality(),
-        Longtail_GetZStdMinCompression(),
-        Longtail_GetZStdDefaultCompression(),
-        Longtail_GetZStdMaxCompression()};
+        Longtail_GetZStdMinQuality(),
+        Longtail_GetZStdDefaultQuality(),
+        Longtail_GetZStdMaxQuality()};
 
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
