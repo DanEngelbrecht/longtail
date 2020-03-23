@@ -1857,9 +1857,9 @@ int Longtail_CreateVersionIndex(
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
 {
-    LONGTAIL_FATAL_ASSERT(storage_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(hash_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(hash_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || file_infos, return EINVAL)
     LONGTAIL_FATAL_ASSERT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || asset_tags != 0, return EINVAL)

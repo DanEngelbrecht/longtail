@@ -600,8 +600,8 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
     const char* content_path)
 {
-    LONGTAIL_FATAL_ASSERT(storage_api, return 0)
-    LONGTAIL_FATAL_ASSERT(content_path, return 0)
+    LONGTAIL_FATAL_ASSERT(storage_api != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(content_path != 0, return 0)
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreAPI));
     if (!api)
     {
