@@ -7,6 +7,7 @@
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressblockstore/longtail_compressblockstore.h"
+#include "../lib/compressionregistry/longtail_full_compression_registry.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/lizard/longtail_lizard.h"
@@ -805,99 +806,6 @@ TEST(Longtail, ContentIndexSerialization)
     SAFE_DISPOSE_API(local_storage);
 }
 
-Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
-{
-    struct Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
-    if (lizard_compression == 0)
-    {
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
-    if (lz4_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
-    if (brotli_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        Longtail_DisposeAPI(&lz4_compression->m_API);
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
-    if (zstd_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        Longtail_DisposeAPI(&lz4_compression->m_API);
-        Longtail_DisposeAPI(&brotli_compression->m_API);
-        return 0;
-    }
-
-    uint32_t compression_types[13] = {
-        Longtail_GetBrotliGenericMinQuality(),
-        Longtail_GetBrotliGenericDefaultQuality(),
-        Longtail_GetBrotliGenericMaxQuality(),
-        Longtail_GetBrotliTextMinQuality(),
-        Longtail_GetBrotliTextDefaultQuality(),
-        Longtail_GetBrotliTextMaxQuality(),
-        Longtail_GetLizardMinQuality(),
-        Longtail_GetLizardDefaultQuality(),
-        Longtail_GetLizardMaxQuality(),
-        Longtail_GetLZ4DefaultQuality(),
-        Longtail_GetZStdMinQuality(),
-        Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality()};
-
-    struct Longtail_CompressionAPI* compression_apis[13] = {
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        lizard_compression,
-        lizard_compression,
-        lizard_compression,
-        lz4_compression,
-        zstd_compression,
-        zstd_compression,
-        zstd_compression};
-    uint32_t compression_settings[13] = {
-        Longtail_GetBrotliGenericMinQuality(),
-        Longtail_GetBrotliGenericDefaultQuality(),
-        Longtail_GetBrotliGenericMaxQuality(),
-        Longtail_GetBrotliTextMinQuality(),
-        Longtail_GetBrotliTextDefaultQuality(),
-        Longtail_GetBrotliTextMaxQuality(),
-        Longtail_GetLizardMinQuality(),
-        Longtail_GetLizardDefaultQuality(),
-        Longtail_GetLizardMaxQuality(),
-        Longtail_GetLZ4DefaultQuality(),
-        Longtail_GetZStdMinQuality(),
-        Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality()};
-
-
-    struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        13,
-        (const uint32_t*)compression_types,
-        (const struct Longtail_CompressionAPI **)compression_apis,
-        (const uint32_t*)compression_settings);
-    if (registry == 0)
-    {
-        SAFE_DISPOSE_API(lizard_compression);
-        SAFE_DISPOSE_API(lz4_compression);
-        SAFE_DISPOSE_API(brotli_compression);
-        SAFE_DISPOSE_API(zstd_compression);
-        return 0;
-    }
-    return registry;
-}
-
 TEST(Longtail, Longtail_CreateStoredBlock)
 {
     TLongtail_Hash block_hash = 0x77aa661199bb0011;
@@ -970,7 +878,7 @@ struct TestAsyncComplete
 TEST(Longtail, Longtail_FSBlockStore)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks");
@@ -1040,7 +948,7 @@ TEST(Longtail, Longtail_CacheBlockStore)
 {
     Longtail_StorageAPI* local_storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_StorageAPI* remote_storage_api = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage_api, "chunks");
@@ -1115,7 +1023,7 @@ TEST(Longtail, Longtail_CompressBlockStore)
 {
     Longtail_StorageAPI* local_storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_StorageAPI* remote_storage_api = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage_api, "chunks");
@@ -1242,7 +1150,7 @@ TEST(Longtail, Longtail_WriteContent)
 {
     Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
     Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(target_storage, "chunks");
@@ -1633,7 +1541,7 @@ TEST(Longtail, Longtail_MergeContentIndex)
 TEST(Longtail, Longtail_VersionDiff)
 {
     Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage, "chunks");
@@ -1993,7 +1901,7 @@ TEST(Longtail, FullScale)
 {
     if ((1)) return;
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage, "");
@@ -2170,7 +2078,7 @@ TEST(Longtail, FullScale)
 TEST(Longtail, Longtail_WriteVersion)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks");
@@ -2401,7 +2309,7 @@ static void Bench()
     const char* TARGET_VERSION_PREFIX = HOME "\\remote\\";
 
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
 
@@ -2617,7 +2525,7 @@ static void LifelikeTest()
 
     printf("Indexing `%s`...\n", local_path_1);
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* fs_local_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, local_content_path);
@@ -3378,7 +3286,7 @@ TEST(Longtail, AsyncBlockStore)
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_BlockStoreAPI* cache_block_store = Longtail_CreateFSBlockStoreAPI(storage_api, "cache");
 
-    Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);

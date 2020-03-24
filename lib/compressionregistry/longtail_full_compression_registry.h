@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
+LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry();
 
 #ifdef __cplusplus
 }

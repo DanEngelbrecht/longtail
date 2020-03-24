@@ -22,6 +22,8 @@ struct Longtail_VersionDiff;
 
 ////////////// Longtail_API
 
+struct Longtail_API;
+
 typedef void (*Longtail_DisposeFunc)(struct Longtail_API* api);
 
 struct Longtail_API
@@ -33,6 +35,8 @@ LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
 ////////////// Longtail_HashAPI
+
+struct Longtail_HashAPI;
 
 typedef struct Longtail_HashAPI_Context* Longtail_HashAPI_HContext;
 typedef uint32_t (*Longtail_Hash_GetIdentifierFunc)(struct Longtail_HashAPI* hash_api);
@@ -86,6 +90,8 @@ enum {
     Longtail_StorageAPI_UserWriteAccess     = 0200,
     Longtail_StorageAPI_UserReadAccess      = 0400
 };
+
+struct Longtail_StorageAPI;
 
 typedef int (*Longtail_Storage_OpenReadFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 typedef int (*Longtail_Storage_GetSizeFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
@@ -186,6 +192,8 @@ LONGTAIL_EXPORT inline int Longtail_Storage_GetEntryProperties(struct Longtail_S
 
 ////////////// Longtail_ProgressAPI
 
+struct Longtail_ProgressAPI;
+
 typedef void (*Longtail_Progress_OnProgressFunc)(struct Longtail_ProgressAPI* progressAPI, uint32_t total_count, uint32_t done_count);
 
 struct Longtail_ProgressAPI
@@ -205,6 +213,7 @@ LONGTAIL_EXPORT inline void Longtail_Progress_OnProgress(struct Longtail_Progres
 
 ////////////// Longtail_JobAPI
 
+struct Longtail_JobAPI;
 typedef void* Longtail_JobAPI_Jobs;
 typedef int (*Longtail_JobAPI_JobFunc)(void* context, uint32_t job_id);
 
@@ -251,6 +260,8 @@ LONGTAIL_EXPORT inline int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_ap
 
 ////////////// Longtail_AsyncCompleteAPI
 
+struct Longtail_AsyncCompleteAPI;
+
 typedef int (*Longtail_AsyncComplete_OnCompleteFunc)(struct Longtail_AsyncCompleteAPI* async_complete_api, int err);
 
 struct Longtail_AsyncCompleteAPI
@@ -269,6 +280,8 @@ LONGTAIL_EXPORT struct Longtail_AsyncCompleteAPI* Longtail_MakeAsyncCompleteAPI(
 LONGTAIL_EXPORT inline int Longtail_AsyncComplete_OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err) { return async_complete_api->OnComplete(async_complete_api, err); }
 
 ////////////// Longtail_BlockStoreAPI
+
+struct Longtail_BlockStoreAPI;
 
 typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
