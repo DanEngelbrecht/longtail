@@ -596,6 +596,26 @@ LONGTAIL_EXPORT int Longtail_CreateStoredBlock(
     uint32_t block_data_size,
     struct Longtail_StoredBlock** out_stored_block);
 
+LONGTAIL_EXPORT int Longtail_WriteStoredBlockToBuffer(
+    const struct Longtail_StoredBlock* stored_block,
+    void** out_buffer,
+    size_t* out_size);
+
+LONGTAIL_EXPORT int Longtail_ReadStoredBlockFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_StoredBlock** out_stored_block);
+
+LONGTAIL_EXPORT int Longtail_WriteStoredBlock(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_StoredBlock* stored_block,
+    const char* path);
+
+LONGTAIL_EXPORT int Longtail_ReadStoredBlock(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    struct Longtail_StoredBlock** out_stored_block);
+
 LONGTAIL_EXPORT int Longtail_ValidateContent(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);

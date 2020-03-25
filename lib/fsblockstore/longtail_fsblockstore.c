@@ -260,11 +260,10 @@ static int FSBlockStore_PutStoredBlock(
         return async_complete_api->OnComplete(async_complete_api, err);
     }
 
-    Longtail_StorageAPI_HOpenFile block_file_handle;
-    err = fsblockstore_api->m_StorageAPI->OpenWriteFile(fsblockstore_api->m_StorageAPI, tmp_block_path, 0, &block_file_handle);
+    err = Longtail_WriteStoredBlock(fsblockstore_api->m_StorageAPI, stored_block, tmp_block_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to open block for write file `%s`, %d", tmp_block_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write block to file `%s`, %d", tmp_block_path, err)
         Longtail_LockSpinLock(fsblockstore_api->m_Lock);
         hmdel(fsblockstore_api->m_BlockState, block_hash);
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
@@ -275,44 +274,6 @@ static int FSBlockStore_PutStoredBlock(
         return async_complete_api->OnComplete(async_complete_api, err);
     }
 
-    uint32_t write_offset = 0;
-    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
-    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
-    err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, block_index_data_size, &stored_block->m_BlockIndex[1]);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write block index to file `%s`, %d", tmp_block_path, err)
-        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
-        block_file_handle = 0;
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    write_offset += block_index_data_size;
-
-    err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, stored_block->m_BlockChunksDataSize, stored_block->m_BlockData);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write chunk data to file `%s`, %d", tmp_block_path, err)
-        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
-        block_file_handle = 0;
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    write_offset = stored_block->m_BlockChunksDataSize;
-
-    fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
     err = fsblockstore_api->m_StorageAPI->RenameFile(fsblockstore_api->m_StorageAPI, tmp_block_path, block_path);
     if (err)
     {
@@ -326,6 +287,7 @@ static int FSBlockStore_PutStoredBlock(
         block_path = 0;
         return async_complete_api->OnComplete(async_complete_api, err);
     }
+
     Longtail_Free((char*)tmp_block_path);
     tmp_block_path = 0;
     Longtail_Free((char*)block_path);
@@ -415,57 +377,17 @@ static int FSBlockStore_GetStoredBlock(
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
     }
     char* block_path = GetBlockPath(fsblockstore_api, block_hash);
-    Longtail_StorageAPI_HOpenFile f;
-    int err = fsblockstore_api->m_StorageAPI->OpenReadFile(fsblockstore_api->m_StorageAPI, block_path, &f);
+
+    struct Longtail_StoredBlock* stored_block;
+    int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
     if (err)
     {
-        // This can fail if someone is currently writing the block but is not finished! Should be really rare since it is just a rename?
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to open block `%s`, %d", block_path, err)
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    uint64_t stored_block_data_size;
-    err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, f, &stored_block_data_size);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to get size of block `%s`, %d", block_path, err)
-        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock: Failed to read block `%s`, %d", block_path, err)
         Longtail_Free((char*)block_path);
         block_path = 0;
         return async_complete_api->OnComplete(async_complete_api, err);
     }
 
-    size_t block_mem_size = Longtail_GetStoredBlockSize(stored_block_data_size);
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
-    LONGTAIL_FATAL_ASSERT(stored_block, return ENOMEM)
-    void* block_data = &((uint8_t*)stored_block)[block_mem_size - stored_block_data_size];
-    err = fsblockstore_api->m_StorageAPI->Read(fsblockstore_api->m_StorageAPI, f, 0, stored_block_data_size, block_data);
-    fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
-    f = 0;
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to read from block `%s`, %d", block_path, err)
-        Longtail_Free(stored_block);
-        stored_block = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    err = Longtail_InitStoredBlockFromData(
-        stored_block,
-        block_data,
-        stored_block_data_size);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format from block `%s`, %d", block_path, err)
-        Longtail_Free(stored_block);
-        stored_block = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    stored_block->Dispose = FSStoredBlock_Dispose;
     Longtail_Free(block_path);
     block_path = 0;
 

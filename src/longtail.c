@@ -2396,6 +2396,161 @@ int Longtail_CreateStoredBlock(
     return 0;
 }
 
+static int ReadStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadStoredBlock_Dispose(%p)", stored_block)
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    Longtail_Free(stored_block);
+    return 0;
+}
+
+int Longtail_WriteStoredBlockToBuffer(
+    const struct Longtail_StoredBlock* stored_block,
+    void** out_buffer,
+    size_t* out_size)
+{
+    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
+    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
+
+    size_t size = block_index_data_size + stored_block->m_BlockChunksDataSize;
+
+    void* mem = (uint8_t*)Longtail_Alloc(size);
+    if (!mem)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteStoredBlockToBuffer(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            stored_block, out_buffer, out_size,
+            size,
+            ENOMEM)
+        return ENOMEM;
+    }
+    uint8_t* write_ptr = (uint8_t*)mem;
+
+    memcpy(write_ptr, &stored_block->m_BlockIndex[1], block_index_data_size);
+    write_ptr += block_index_data_size;
+    memcpy(write_ptr, stored_block->m_BlockData, stored_block->m_BlockChunksDataSize);
+
+    *out_size = size;
+    *out_buffer = mem;
+    return 0;
+}
+
+int Longtail_ReadStoredBlockFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_StoredBlock** out_stored_block)
+{
+    size_t block_mem_size = Longtail_GetStoredBlockSize(size);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
+    if (!stored_block)
+    {
+        // TODO: Log
+        return ENOMEM;
+    }
+    void* block_data = &((uint8_t*)stored_block)[block_mem_size - size];
+    memcpy(block_data, buffer, size);
+    int err = Longtail_InitStoredBlockFromData(
+        stored_block,
+        block_data,
+        size);
+    if (err)
+    {
+        Longtail_Free(stored_block);
+        return err;
+    }
+    stored_block->Dispose = ReadStoredBlock_Dispose;
+    *out_stored_block = stored_block;
+    return 0;
+}
+
+int Longtail_WriteStoredBlock(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_StoredBlock* stored_block,
+    const char* path)
+{
+    Longtail_StorageAPI_HOpenFile block_file_handle;
+    int err = storage_api->OpenWriteFile(storage_api, path, 0, &block_file_handle);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_WriteStoredBlock: Failed to open block for write file `%s`, %d", path, err)
+        return err;
+    }
+    uint32_t write_offset = 0;
+    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
+    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
+    err = storage_api->Write(storage_api, block_file_handle, write_offset, block_index_data_size, &stored_block->m_BlockIndex[1]);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_WriteStoredBlock: Failed to write block index to file `%s`, %d", path, err)
+        storage_api->CloseFile(storage_api, block_file_handle);
+        return err;
+    }
+    write_offset += block_index_data_size;
+
+    err = storage_api->Write(storage_api, block_file_handle, write_offset, stored_block->m_BlockChunksDataSize, stored_block->m_BlockData);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_WriteStoredBlock: Failed to write block index to file `%s`, %d", path, err)
+        storage_api->CloseFile(storage_api, block_file_handle);
+        return err;
+    }
+    storage_api->CloseFile(storage_api, block_file_handle);
+    return 0;
+}
+
+int Longtail_ReadStoredBlock(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    struct Longtail_StoredBlock** out_stored_block)
+{
+    Longtail_StorageAPI_HOpenFile f;
+    int err = storage_api->OpenReadFile(storage_api, path, &f);
+    if (err)
+    {
+        // TODO: Log
+        return err;
+    }
+    uint64_t stored_block_data_size;
+    err = storage_api->GetSize(storage_api, f, &stored_block_data_size);
+    if (err)
+    {
+        // TODO: Log
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    size_t block_mem_size = Longtail_GetStoredBlockSize(stored_block_data_size);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
+    if (!stored_block)
+    {
+        // TODO: Log
+        storage_api->CloseFile(storage_api, f);
+        return ENOMEM;
+    }
+    void* block_data = &((uint8_t*)stored_block)[block_mem_size - stored_block_data_size];
+    err = storage_api->Read(storage_api, f, 0, stored_block_data_size, block_data);
+    if (err)
+    {
+        // TODO: Log
+        Longtail_Free(stored_block);
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    storage_api->CloseFile(storage_api, f);
+    err = Longtail_InitStoredBlockFromData(
+        stored_block,
+        block_data,
+        stored_block_data_size);
+    if (err)
+    {
+        Longtail_Free(stored_block);
+        return err;
+    }
+    stored_block->Dispose = ReadStoredBlock_Dispose;
+    *out_stored_block = stored_block;
+    return 0;
+}
+
+
+
 size_t Longtail_GetContentIndexDataSize(uint64_t block_count, uint64_t chunk_count)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetContentIndexDataSize(%" PRIu64 ", %" PRIu64 ")", block_count, chunk_count)
