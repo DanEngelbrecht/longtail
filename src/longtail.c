@@ -2409,6 +2409,10 @@ int Longtail_WriteStoredBlockToBuffer(
     void** out_buffer,
     size_t* out_size)
 {
+    LONGTAIL_VALIDATE_INPUT(stored_block != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_buffer != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_size != 0, return EINVAL)
+
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
     uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
 
@@ -2439,6 +2443,9 @@ int Longtail_ReadStoredBlockFromBuffer(
     size_t size,
     struct Longtail_StoredBlock** out_stored_block)
 {
+    LONGTAIL_VALIDATE_INPUT(buffer != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stored_block != 0, return EINVAL)
+
     size_t block_mem_size = Longtail_GetStoredBlockSize(size);
     struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
     if (!stored_block)
@@ -2467,6 +2474,10 @@ int Longtail_WriteStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     const char* path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(stored_block != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL)
+
     Longtail_StorageAPI_HOpenFile block_file_handle;
     int err = storage_api->OpenWriteFile(storage_api, path, 0, &block_file_handle);
     if (err)
@@ -2502,6 +2513,10 @@ int Longtail_ReadStoredBlock(
     const char* path,
     struct Longtail_StoredBlock** out_stored_block)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stored_block != 0, return EINVAL)
+
     Longtail_StorageAPI_HOpenFile f;
     int err = storage_api->OpenReadFile(storage_api, path, &f);
     if (err)
