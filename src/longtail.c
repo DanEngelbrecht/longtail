@@ -4237,7 +4237,15 @@ static int BuildAssetWriteList(
         uint32_t chunk_index = asset_chunk_indexes[asset_chunk_offset];
         TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
         intptr_t find_i = hmgeti(cl->m_ChunkHashToBlockIndex, chunk_hash);
-        LONGTAIL_FATAL_ASSERT(find_i != -1, Longtail_Free(awl); return ENOENT)
+        if (find_i == -1)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %p, %p, %p, %p, %p, %p, %p) Failed to find chunk 0x%" PRIx64 " in content index for asset %s",
+                asset_count, optional_asset_indexes, name_offsets, name_data, chunk_hashes, asset_chunk_counts, asset_chunk_index_starts, asset_chunk_indexes, cl, out_asset_write_list,
+                chunk_hash, path,
+                ENOENT)
+            Longtail_Free(awl);
+            return ENOENT;
+        }
 
         uint64_t content_block_index = cl->m_ChunkHashToBlockIndex[find_i].value;
         int is_block_job = 1;
