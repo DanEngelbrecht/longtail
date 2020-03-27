@@ -267,6 +267,42 @@ char* GetDefaultContentPath()
     return (char*)default_content_path;
 }
 
+struct AsyncGetIndexComplete
+{
+    struct Longtail_AsyncGetIndexAPI m_API;
+    HLongtail_Sema m_NotifySema;
+    AsyncGetIndexComplete()
+        : m_Err(EINVAL)
+    {
+        m_API.m_API.Dispose = 0;
+        m_API.OnComplete = OnComplete;
+        m_ContentIndex = 0;
+        Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
+    }
+    ~AsyncGetIndexComplete()
+    {
+        Longtail_DeleteSema(m_NotifySema);
+        Longtail_Free(m_NotifySema);
+    }
+
+    static int OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, Longtail_ContentIndex* content_index, int err)
+    {
+        struct AsyncGetIndexComplete* cb = (struct AsyncGetIndexComplete*)async_complete_api;
+        cb->m_Err = err;
+        cb->m_ContentIndex = content_index;
+        Longtail_PostSema(cb->m_NotifySema, 1);
+        return 0;
+    }
+
+    void Wait()
+    {
+        Longtail_WaitSema(m_NotifySema);
+    }
+
+    int m_Err;
+    Longtail_ContentIndex* m_ContentIndex;
+};
+
 int UpSync(
     const char* storage_uri_raw,
     const char* source_path,
@@ -371,12 +407,18 @@ int UpSync(
     struct Longtail_ContentIndex* block_store_content_index;
     {
         Progress block_store_get_content_index("Get content index");
+        AsyncGetIndexComplete get_index_complete;
         err = store_block_store_api->GetIndex(
             store_block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
             &block_store_get_content_index.m_API,
-            &block_store_content_index);
+            &get_index_complete.m_API);
+        if (!err)
+        {
+            get_index_complete.Wait();
+            err = get_index_complete.m_Err;
+        }
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
@@ -391,6 +433,7 @@ int UpSync(
             Longtail_Free((char*)storage_path);
             return err;
         }
+        block_store_content_index = get_index_complete.m_ContentIndex;
     }
     {
         Progress write_content_progress("Writing blocks");
@@ -496,12 +539,19 @@ int DownSync(
     struct Longtail_ContentIndex* remote_content_index;
     {
         Progress get_index_progress("Get content index");
+        AsyncGetIndexComplete get_index_complete;
         err = store_block_store_api->GetIndex(
             store_block_store_api,
             job_api,
             Longtail_GetBlake3HashType(),  // We should not really care, since if block store is empty we can't recreate any content
             &get_index_progress.m_API,
-            &remote_content_index);
+            &get_index_complete.m_API);
+        if (!err)
+        {
+            get_index_complete.Wait();
+            err = get_index_complete.m_Err;
+        }
+        remote_content_index = get_index_complete.m_ContentIndex;
     }
     if (err)
     {

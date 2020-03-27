@@ -176,18 +176,52 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
     return api;
 }
 
-LONGTAIL_EXPORT uint64_t Longtail_GetAsyncCompleteAPISize()
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncPutStoredBlockAPISize()
 {
-    return sizeof(struct Longtail_AsyncCompleteAPI);
+    return sizeof(struct Longtail_AsyncPutStoredBlockAPI);
 }
 
-struct Longtail_AsyncCompleteAPI* Longtail_MakeAsyncCompleteAPI(
+struct Longtail_AsyncPutStoredBlockAPI* Longtail_MakeAsyncPutStoredBlockAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
-    Longtail_AsyncComplete_OnCompleteFunc on_complete_func)
+    Longtail_AsyncPutStoredBlock_OnCompleteFunc on_complete_func)
 {
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
-    struct Longtail_AsyncCompleteAPI* api = (struct Longtail_AsyncCompleteAPI*)mem;
+    struct Longtail_AsyncPutStoredBlockAPI* api = (struct Longtail_AsyncPutStoredBlockAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->OnComplete = on_complete_func;
+    return api;
+}
+
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetStoredBlockAPISize()
+{
+    return sizeof(struct Longtail_AsyncGetStoredBlockAPI);
+}
+
+struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetStoredBlockAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncGetStoredBlock_OnCompleteFunc on_complete_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_AsyncGetStoredBlockAPI* api = (struct Longtail_AsyncGetStoredBlockAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->OnComplete = on_complete_func;
+    return api;
+}
+
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetIndexAPISize()
+{
+    return sizeof(struct Longtail_AsyncGetIndexAPI);
+}
+
+struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncGetIndex_OnCompleteFunc on_complete_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_AsyncGetIndexAPI* api = (struct Longtail_AsyncGetIndexAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->OnComplete = on_complete_func;
     return api;
@@ -203,8 +237,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
-    Longtail_BlockStore_GetIndexFunc get_index_func,
-    Longtail_BlockStore_GetStoredBlockPathFunc get_stored_block_path_func)
+    Longtail_BlockStore_GetIndexFunc get_index_func)
 {
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
     struct Longtail_BlockStoreAPI* api = (struct Longtail_BlockStoreAPI*)mem;
@@ -212,7 +245,6 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     api->PutStoredBlock = put_stored_block_func;
     api->GetStoredBlock = get_stored_block_func;
     api->GetIndex = get_index_func;
-    api->GetStoredBlockPath = get_stored_block_path_func;
     return api;
 }
 
@@ -3158,7 +3190,7 @@ static int CreateAssetPartLookup(
 
 struct WriteBlockJob
 {
-    struct Longtail_AsyncCompleteAPI m_AsyncCompleteAPI;
+    struct Longtail_AsyncPutStoredBlockAPI m_AsyncCompleteAPI;
     struct Longtail_StorageAPI* m_SourceStorageAPI;
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
@@ -3173,7 +3205,7 @@ struct WriteBlockJob
     int m_Err;
 };
 
-static int BlockWriterJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+static int BlockWriterJobOnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
     LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
     struct WriteBlockJob* job = (struct WriteBlockJob*)async_complete_api;
@@ -3538,7 +3570,7 @@ static int CreateContentLookup(
 
 struct BlockReaderJob
 {
-    struct Longtail_AsyncCompleteAPI m_AsyncCompleteAPI;
+    struct Longtail_AsyncGetStoredBlockAPI m_AsyncCompleteAPI;
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
     uint32_t m_JobID;
@@ -3547,12 +3579,13 @@ struct BlockReaderJob
     int m_Err;
 };
 
-int BlockReaderJobOnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+int BlockReaderJobOnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
     LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
     struct BlockReaderJob* job = (struct BlockReaderJob*)async_complete_api;
     LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return EINVAL);
     job->m_Err = err;
+    job->m_StoredBlock = stored_block;
     job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
     return 0;
 }
@@ -3571,12 +3604,13 @@ static int BlockReader(void* context, uint32_t job_id)
     }
 
     job->m_JobID = job_id;
+    job->m_StoredBlock = 0;
     job->m_AsyncCompleteAPI.OnComplete = BlockReaderJobOnComplete;
     
-    int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockHash, &job->m_StoredBlock, &job->m_AsyncCompleteAPI);
+    int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockHash, &job->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData(%p, %u) job->m_BlockStoreAPI->GetStoredBlock(%p, 0x%" PRIx64 ", %p, %p) failed with %d", context, job_id, job->m_BlockStoreAPI, job->m_BlockHash, &job->m_StoredBlock, &job->m_AsyncCompleteAPI)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ReadBlockData(%p, %u) job->m_BlockStoreAPI->GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d", context, job_id, job->m_BlockStoreAPI, job->m_BlockHash, &job->m_AsyncCompleteAPI)
         return err;
     }
     return EBUSY;
