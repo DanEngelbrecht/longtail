@@ -231,10 +231,6 @@ static int OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* asy
     struct OnGetBackingStoreAsync_API* async_block_store = (struct OnGetBackingStoreAsync_API*)async_complete_api;
     if (err)
     {
-        if (err != ENOENT)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "CompressionBlockStore_GetStoredBlock: Failed to get block from backing store, %d", err)
-        }
         err = async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, err);
         Longtail_Free(async_block_store);
         return err;
@@ -402,6 +398,7 @@ static int Default_GetCompressionType(struct Longtail_CompressionRegistryAPI* co
             return 0;
         }
     }
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Default_GetCompressionType(%p, %u, %p, %p) failed with %d", compression_registry, compression_type, out_compression_api, out_settings, ENOENT)
     return ENOENT;
 }
 

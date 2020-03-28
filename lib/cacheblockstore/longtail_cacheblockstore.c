@@ -111,7 +111,6 @@ struct OnGetStoredBlockPutLocalComplete_API
 {
     struct Longtail_AsyncPutStoredBlockAPI m_API;
     struct Longtail_StoredBlock* m_StoredBlock;
-    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api;
 };
 
 int OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
@@ -123,7 +122,7 @@ int OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlockAPI* asy
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockPutLocalComplete: Failed store block in local block store, %d", err)
     }
-    api->async_complete_api->OnComplete(api->async_complete_api, api->m_StoredBlock, 0);
+    Longtail_Free(api->m_StoredBlock);
     Longtail_Free(api);
     return 0;
 }
@@ -135,9 +134,44 @@ struct OnGetStoredBlockGetRemoteComplete_API
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api;
 };
 
+static int StoreBlockCopyToLocalCache(struct Longtail_BlockStoreAPI* local_block_store, struct Longtail_StoredBlock* stored_block)
+{
+    size_t copy_size;
+    void* copy_data;
+    int err = Longtail_WriteStoredBlockToBuffer(stored_block, &copy_data, &copy_size);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache: Longtail_WriteStoredBlockToBuffer() failed with %d", err)
+        return err;
+    }
+    struct Longtail_StoredBlock* copy_stored_block;
+    err = Longtail_ReadStoredBlockFromBuffer(copy_data, copy_size, &copy_stored_block);
+    Longtail_Free(copy_data);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache: Longtail_ReadStoredBlockFromBuffer() failed with %d", err)
+        return err;
+    }
+
+    struct OnGetStoredBlockPutLocalComplete_API* put_local = (struct OnGetStoredBlockPutLocalComplete_API*)Longtail_Alloc(sizeof(struct OnGetStoredBlockPutLocalComplete_API));
+    put_local->m_API.m_API.Dispose = 0;
+    put_local->m_API.OnComplete = OnGetStoredBlockPutLocalComplete;
+    put_local->m_StoredBlock = copy_stored_block;
+
+    err = local_block_store->PutStoredBlock(local_block_store, copy_stored_block, &put_local->m_API);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache: local_block_store->PutStoredBlock() failed with %d", err)
+        Longtail_Free(copy_stored_block);
+        Longtail_Free(put_local);
+        return err;
+    }
+    return 0;
+}
+
 int OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetStoredBlockGetRemoteComplete(%p, %d)", async_complete_api, err)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetStoredBlockGetRemoteComplete(%p, %p, %d)", async_complete_api, stored_block, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct OnGetStoredBlockGetRemoteComplete_API* api = (struct OnGetStoredBlockGetRemoteComplete_API*)async_complete_api;
     if (err)
@@ -147,28 +181,20 @@ int OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBlockAPI* as
         Longtail_Free(api);
         return 0;
     }
-    struct OnGetStoredBlockPutLocalComplete_API* put_local = (struct OnGetStoredBlockPutLocalComplete_API*)Longtail_Alloc(sizeof(struct OnGetStoredBlockPutLocalComplete_API));
-    put_local->m_API.m_API.Dispose = 0;
-    put_local->m_API.OnComplete = OnGetStoredBlockPutLocalComplete;
-    put_local->m_StoredBlock = stored_block;
-    put_local->async_complete_api = api->async_complete_api;
-    err = api->cacheblockstore_api->m_LocalBlockStoreAPI->PutStoredBlock(api->cacheblockstore_api->m_LocalBlockStoreAPI, stored_block, &put_local->m_API);
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+
+    err = StoreBlockCopyToLocalCache(api->cacheblockstore_api->m_LocalBlockStoreAPI, stored_block);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete: Failed store block in local block store, %d", err)
-        Longtail_Free(put_local);
-        if (stored_block)
-        {
-            stored_block->Dispose(stored_block);
-        }
-        Longtail_Free(api);
-        return 0;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete: Failed to store block in local cache, %d", err)
     }
+
     err = api->async_complete_api->OnComplete(api->async_complete_api, stored_block, 0);
-    Longtail_Free(api);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "OnGetStoredBlockGetRemoteComplete: Failed to call completion callback, %d", err)
         stored_block->Dispose(stored_block);
+        Longtail_Free(api);
         return err;
     }
     return 0;
@@ -184,9 +210,10 @@ struct OnGetStoredBlockGetLocalComplete_API
 
 int OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetStoredBlockGetLocalComplete(%p, %d)", async_complete_api, err)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetStoredBlockGetLocalComplete(%p, %p, %d)", async_complete_api, stored_block, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     struct OnGetStoredBlockGetLocalComplete_API* api = (struct OnGetStoredBlockGetLocalComplete_API*)async_complete_api;
+    LONGTAIL_FATAL_ASSERT(api->async_complete_api, return EINVAL)
     if (err == ENOENT || err == EACCES)
     {
         struct OnGetStoredBlockGetRemoteComplete_API* on_get_stored_block_get_remote_complete = (struct OnGetStoredBlockGetRemoteComplete_API*)Longtail_Alloc(sizeof(struct OnGetStoredBlockGetRemoteComplete_API));
@@ -210,10 +237,14 @@ int OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlockAPI* asy
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "OnGetStoredBlockGetLocalComplete: Failed to get block from local block store, %d", err)
+        err = api->async_complete_api->OnComplete(api->async_complete_api, 0, err);
+        Longtail_Free(api);
+        return err;
     }
-    api->async_complete_api->OnComplete(api->async_complete_api, stored_block, err);
+    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    err = api->async_complete_api->OnComplete(api->async_complete_api, stored_block, err);
     Longtail_Free(api);
-    return 0;
+    return err;
 }
 
 static int CacheBlockStore_GetStoredBlock(
