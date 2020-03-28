@@ -134,7 +134,7 @@ struct OnGetStoredBlockGetRemoteComplete_API
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api;
 };
 
-static int StoreBlockCopyToLocalCache(struct Longtail_BlockStoreAPI* local_block_store, struct Longtail_StoredBlock* stored_block)
+int CopyBlock(struct Longtail_StoredBlock* stored_block, struct Longtail_StoredBlock** out_stored_block_copy)
 {
     size_t copy_size;
     void* copy_data;
@@ -152,13 +152,18 @@ static int StoreBlockCopyToLocalCache(struct Longtail_BlockStoreAPI* local_block
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache: Longtail_ReadStoredBlockFromBuffer() failed with %d", err)
         return err;
     }
+    *out_stored_block_copy = copy_stored_block;
+    return 0;
+}
 
+static int StoreBlockCopyToLocalCache(struct Longtail_BlockStoreAPI* local_block_store, struct Longtail_StoredBlock* copy_stored_block)
+{
     struct OnGetStoredBlockPutLocalComplete_API* put_local = (struct OnGetStoredBlockPutLocalComplete_API*)Longtail_Alloc(sizeof(struct OnGetStoredBlockPutLocalComplete_API));
     put_local->m_API.m_API.Dispose = 0;
     put_local->m_API.OnComplete = OnGetStoredBlockPutLocalComplete;
     put_local->m_StoredBlock = copy_stored_block;
 
-    err = local_block_store->PutStoredBlock(local_block_store, copy_stored_block, &put_local->m_API);
+    int err = local_block_store->PutStoredBlock(local_block_store, copy_stored_block, &put_local->m_API);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache: local_block_store->PutStoredBlock() failed with %d", err)
@@ -183,20 +188,32 @@ int OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBlockAPI* as
     }
     LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
 
-    err = StoreBlockCopyToLocalCache(api->cacheblockstore_api->m_LocalBlockStoreAPI, stored_block);
-    if (err)
+    struct Longtail_StoredBlock* stored_block_copy = 0;
+    int copy_err = CopyBlock(stored_block, &stored_block_copy);
+    if (copy_err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete: Failed to store block in local cache, %d", err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete: Failed to copy stored block, %d", copy_err)
     }
 
     err = api->async_complete_api->OnComplete(api->async_complete_api, stored_block, 0);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "OnGetStoredBlockGetRemoteComplete: Failed to call completion callback, %d", err)
+        stored_block->Dispose(stored_block_copy);
         stored_block->Dispose(stored_block);
         Longtail_Free(api);
         return err;
     }
+
+    if (!copy_err){
+        copy_err = StoreBlockCopyToLocalCache(api->cacheblockstore_api->m_LocalBlockStoreAPI, stored_block_copy);
+        if (copy_err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete: Failed to store block in local cache, %d", copy_err)
+            stored_block->Dispose(stored_block_copy);
+        }
+    }
+    Longtail_Free(api);
     return 0;
 }
 
