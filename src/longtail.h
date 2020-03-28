@@ -428,7 +428,7 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndexRaw(
     const uint64_t* asset_sizes,
     const uint32_t* asset_permissions,
     const uint32_t* asset_tags,
-    uint32_t max_chunk_size,
+    uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
 LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
@@ -439,7 +439,7 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     const char* root_path,
     struct Longtail_FileInfos* file_infos,
     const uint32_t* asset_tags,
-    uint32_t max_chunk_size,
+    uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
 LONGTAIL_EXPORT int Longtail_WriteVersionIndexToBuffer(

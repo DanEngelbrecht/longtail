@@ -727,13 +727,13 @@ int main(int argc, char** argv)
     kgflags_string("log-level", "warn", "Log level (debug, info, warn, error)", false, &log_level_raw);
 
     int32_t target_chunk_size = 8;
-    kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
+    kgflags_int("target-chunk-size", 24576, "Target chunk size", false, &target_chunk_size);
 
     int32_t target_block_size = 0;
-    kgflags_int("target-block-size", 32768 * 12, "Target block size", false, &target_block_size);
+    kgflags_int("target-block-size", 524288, "Target block size", false, &target_block_size);
 
     int32_t max_chunks_per_block = 0;
-    kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
+    kgflags_int("max-chunks-per-block", 2048, "Max chunks per block", false, &max_chunks_per_block);
 
     const char* storage_uri_raw = 0;
     kgflags_string("storage-uri", 0, "URI for chunks and content index for store", true, &storage_uri_raw);
