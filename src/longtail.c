@@ -2614,6 +2614,8 @@ size_t Longtail_GetContentIndexDataSize(uint64_t block_count, uint64_t chunk_cou
     size_t block_index_data_size = (size_t)(
         sizeof(uint32_t) +                          // m_Version
         sizeof(uint32_t) +                          // m_HashAPI
+        sizeof(uint32_t) +                          // m_MaxBlockSize
+        sizeof(uint32_t) +                          // m_MaxChunksPerBlock
         sizeof(uint64_t) +                          // m_BlockCount
         sizeof(uint64_t) +                          // m_ChunkCount
         (sizeof(TLongtail_Hash) * block_count) +    // m_BlockHashes[]
@@ -2655,6 +2657,10 @@ int Longtail_InitContentIndexFromData(
 
     content_index->m_HashAPI = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
+    content_index->m_MaxBlockSize = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+    content_index->m_MaxChunksPerBlock = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
     content_index->m_BlockCount = (uint64_t*)(void*)p;
     p += sizeof(uint64_t);
     content_index->m_ChunkCount = (uint64_t*)(void*)p;
@@ -2688,6 +2694,8 @@ int Longtail_InitContentIndex(
     void* data,
     uint64_t data_size,
     uint32_t hash_api,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
     uint64_t block_count,
     uint64_t chunk_count)
 {
@@ -2702,6 +2710,12 @@ int Longtail_InitContentIndex(
     content_index->m_HashAPI = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
+    content_index->m_MaxBlockSize = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    content_index->m_MaxChunksPerBlock = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
     content_index->m_BlockCount = (uint64_t*)(void*)p;
     p += sizeof(uint64_t);
 
@@ -2710,6 +2724,8 @@ int Longtail_InitContentIndex(
 
     *content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_0_0_1;
     *content_index->m_HashAPI = hash_api;
+    *content_index->m_MaxBlockSize = max_block_size;
+    *content_index->m_MaxChunksPerBlock = max_chunks_per_block;
     *content_index->m_BlockCount = block_count;
     *content_index->m_ChunkCount = chunk_count;
     return Longtail_InitContentIndexFromData(content_index, &content_index[1], data_size);
@@ -2749,6 +2765,8 @@ static uint64_t GetUniqueHashes(
 
 int Longtail_CreateContentIndexFromBlocks(
     uint32_t hash_identifier,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
     uint64_t block_count,
     struct Longtail_BlockIndex** block_indexes,
     struct Longtail_ContentIndex** out_content_index)
@@ -2774,6 +2792,8 @@ int Longtail_CreateContentIndexFromBlocks(
         &content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
         hash_identifier,
+        max_block_size,
+        max_chunks_per_block,
         block_count,
         chunk_count);
     if (err)
@@ -2842,6 +2862,8 @@ int Longtail_CreateContentIndexRaw(
             &content_index[1],
             content_index_size - sizeof(struct Longtail_ContentIndex),
             hash_api->GetIdentifier(hash_api),
+            max_block_size,
+            max_chunks_per_block,
             0,
             0);
         if (err)
@@ -2956,6 +2978,8 @@ int Longtail_CreateContentIndexRaw(
 
     int err = Longtail_CreateContentIndexFromBlocks(
         hash_api->GetIdentifier(hash_api),
+        max_block_size,
+        max_chunks_per_block,
         block_count,
         block_indexes,
         out_content_index);
@@ -5087,13 +5111,15 @@ int Longtail_RetargetContent(
         &resulting_content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
         *reference_content_index->m_HashAPI,
+        *reference_content_index->m_MaxBlockSize,
+        *reference_content_index->m_MaxChunksPerBlock,
         requested_block_count,
         chunk_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %p, %" PRIu64 ", %" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %u, %u, %" PRIu64 ", %" PRIu64 ") failed with %d",
             reference_content_index, content_index, out_content_index,
-            resulting_content_index, &resulting_content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *reference_content_index->m_HashAPI, requested_block_count, chunk_count,
+            resulting_content_index, &resulting_content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *reference_content_index->m_HashAPI, *reference_content_index->m_MaxBlockSize, *reference_content_index->m_MaxChunksPerBlock, requested_block_count, chunk_count,
             err)
 
         Longtail_Free(resulting_content_index);
@@ -5169,6 +5195,8 @@ int Longtail_MergeContentIndex(
         &content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
         *local_content_index->m_HashAPI,
+        *local_content_index->m_MaxChunksPerBlock,
+        *local_content_index->m_MaxChunksPerBlock,
         block_count,
         chunk_count);
     if (err)

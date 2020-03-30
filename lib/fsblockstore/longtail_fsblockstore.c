@@ -119,6 +119,8 @@ static int ReadContent(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_JobAPI* job_api,
     uint32_t content_index_hash_identifier,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
     struct Longtail_ProgressAPI* progress_api,
     const char* content_path,
     struct Longtail_ContentIndex** out_content_index)
@@ -206,6 +208,8 @@ static int ReadContent(
 
     err = Longtail_CreateContentIndexFromBlocks(
         content_index_hash_identifier,
+        max_block_size,
+        max_chunks_per_block,
         block_count,
         block_indexes,
         out_content_index);
@@ -308,6 +312,8 @@ static int FSBlockStore_PutStoredBlock(
         struct Longtail_ContentIndex* added_content_index;
         int err = Longtail_CreateContentIndexFromBlocks(
             *fsblockstore_api->m_ContentIndex->m_HashAPI,
+            *fsblockstore_api->m_ContentIndex->m_MaxBlockSize,
+            *fsblockstore_api->m_ContentIndex->m_MaxChunksPerBlock,
             1,
             &stored_block->m_BlockIndex,
             &added_content_index);
@@ -411,6 +417,8 @@ static int FSBlockStore_GetIndex(
             fsblockstore_api->m_StorageAPI,
             job_api,
             default_hash_api_identifier,
+            524288,
+            1024,
             progress_api,
             fsblockstore_api->m_ContentPath,
             &fsblockstore_api->m_ContentIndex);
