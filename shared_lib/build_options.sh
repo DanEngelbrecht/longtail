@@ -18,7 +18,7 @@ MEMSTORAGE_SRC="$BASE_DIR/lib/memstorage/*.c"
 
 MEOWHASH_SRC="$BASE_DIR/lib/meowhash/*.c"
 
-FULL_COMPRESSION_REGISTRY_SRC="$BASE_DIR/lib/compressionregistry/longtail_full_compression_registry/*.c"
+FULL_COMPRESSION_REGISTRY_SRC="$BASE_DIR/lib/compressionregistry/*.c"
 
 BIKESHED_SRC="$BASE_DIR/lib/bikeshed/*.c"
 
