@@ -1611,7 +1611,7 @@ int Longtail_CreateVersionIndexRaw(
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || asset_permissions != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || asset_tags != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || target_chunk_size > 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || out_version_index > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || out_version_index != 0, return EINVAL)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionIndexRaw(%p, %p, %p, %p, %s, %p, %p, %p, %p, %u, %p)", storage_api, hash_api, job_api, progress_api, root_path, paths, asset_sizes, asset_permissions, asset_tags, target_chunk_size, out_version_index)
 
     uint32_t path_count = *paths->m_PathCount;
