@@ -1897,7 +1897,7 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || file_infos, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || asset_tags != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || target_chunk_size > 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || out_version_index > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || out_version_index !=0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_version_index != 0, return EINVAL)
 
     return Longtail_CreateVersionIndexRaw(
