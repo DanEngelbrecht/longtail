@@ -480,11 +480,15 @@ LONGTAIL_EXPORT int Longtail_InitContentIndex(
     void* data,
     uint64_t data_size,
     uint32_t hash_api,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
     uint64_t block_count,
     uint64_t chunk_count);
 
 LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
     uint32_t hash_identifier,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
     uint64_t block_count,
     struct Longtail_BlockIndex** block_indexes,
     struct Longtail_ContentIndex** out_content_index);
@@ -719,6 +723,8 @@ struct Longtail_ContentIndex
 {
     uint32_t* m_Version;
     uint32_t* m_HashAPI;
+    uint32_t* m_MaxBlockSize;
+    uint32_t* m_MaxChunksPerBlock;
     uint64_t* m_BlockCount;
     uint64_t* m_ChunkCount;
 
@@ -739,6 +745,7 @@ struct Longtail_VersionIndex
 {
     uint32_t* m_Version;
     uint32_t* m_HashAPI;
+    uint32_t* m_TargetChunkSize;
     uint32_t* m_AssetCount;
     uint32_t* m_ChunkCount;
     uint32_t* m_AssetChunkIndexCount;
@@ -816,6 +823,7 @@ int Longtail_BuildVersionIndex(
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_tags,
     uint32_t hash_api_identifier,
+    uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
 struct Longtail_Chunker;
