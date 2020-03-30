@@ -62,11 +62,11 @@ if [ "$TARGET_MODE" = "lib" ]; then
     mkdir -p $BASE_DIR/build/lib-$RELEASE_MODE
     rm -rf $BASE_DIR/build/lib-$RELEASE_MODE/*.o
     cd $BASE_DIR/build/lib-$RELEASE_MODE
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC
+    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
     echo $BASE_DIR/build/$TARGET
     ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
     cd $BASE_DIR
 else
     echo Building $OUTPUT
-    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $TEST_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi

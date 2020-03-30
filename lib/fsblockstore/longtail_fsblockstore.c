@@ -221,11 +221,11 @@ static int ReadContent(
 static int FSBlockStore_PutStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StoredBlock* stored_block,
-    struct Longtail_AsyncCompleteAPI* async_complete_api)
+    struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(async_complete_api != 0, return EINVAL)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_PutStoredBlock(%p, %p, %p", block_store_api, stored_block, async_complete_api)
 
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
@@ -260,11 +260,10 @@ static int FSBlockStore_PutStoredBlock(
         return async_complete_api->OnComplete(async_complete_api, err);
     }
 
-    Longtail_StorageAPI_HOpenFile block_file_handle;
-    err = fsblockstore_api->m_StorageAPI->OpenWriteFile(fsblockstore_api->m_StorageAPI, tmp_block_path, 0, &block_file_handle);
+    err = Longtail_WriteStoredBlock(fsblockstore_api->m_StorageAPI, stored_block, tmp_block_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to open block for write file `%s`, %d", tmp_block_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write block to file `%s`, %d", tmp_block_path, err)
         Longtail_LockSpinLock(fsblockstore_api->m_Lock);
         hmdel(fsblockstore_api->m_BlockState, block_hash);
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
@@ -275,44 +274,6 @@ static int FSBlockStore_PutStoredBlock(
         return async_complete_api->OnComplete(async_complete_api, err);
     }
 
-    uint32_t write_offset = 0;
-    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
-    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
-    err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, block_index_data_size, &stored_block->m_BlockIndex[1]);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write block index to file `%s`, %d", tmp_block_path, err)
-        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
-        block_file_handle = 0;
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    write_offset += block_index_data_size;
-
-    err = fsblockstore_api->m_StorageAPI->Write(fsblockstore_api->m_StorageAPI, block_file_handle, write_offset, stored_block->m_BlockChunksDataSize, stored_block->m_BlockData);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock: Failed to write chunk data to file `%s`, %d", tmp_block_path, err)
-        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
-        block_file_handle = 0;
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    write_offset = stored_block->m_BlockChunksDataSize;
-
-    fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, block_file_handle);
     err = fsblockstore_api->m_StorageAPI->RenameFile(fsblockstore_api->m_StorageAPI, tmp_block_path, block_path);
     if (err)
     {
@@ -326,6 +287,7 @@ static int FSBlockStore_PutStoredBlock(
         block_path = 0;
         return async_complete_api->OnComplete(async_complete_api, err);
     }
+
     Longtail_Free((char*)tmp_block_path);
     tmp_block_path = 0;
     Longtail_Free((char*)block_path);
@@ -381,13 +343,11 @@ static int FSBlockStore_PutStoredBlock(
 static int FSBlockStore_GetStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t block_hash,
-    struct Longtail_StoredBlock** out_stored_block,
-    struct Longtail_AsyncCompleteAPI* async_complete_api)
+    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p, %p", block_store_api, block_hash, out_stored_block, async_complete_api)
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_stored_block, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p", block_store_api, block_hash, async_complete_api)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
 
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
@@ -399,7 +359,7 @@ static int FSBlockStore_GetStoredBlock(
         {
             Longtail_Free((void*)block_path);
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-            return async_complete_api->OnComplete(async_complete_api, ENOENT);
+            return async_complete_api->OnComplete(async_complete_api, 0, ENOENT);
         }
         Longtail_Free((void*)block_path);
         hmput(fsblockstore_api->m_BlockState, block_hash, 1);
@@ -415,62 +375,21 @@ static int FSBlockStore_GetStoredBlock(
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
     }
     char* block_path = GetBlockPath(fsblockstore_api, block_hash);
-    Longtail_StorageAPI_HOpenFile f;
-    int err = fsblockstore_api->m_StorageAPI->OpenReadFile(fsblockstore_api->m_StorageAPI, block_path, &f);
+
+    struct Longtail_StoredBlock* stored_block;
+    int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
     if (err)
     {
-        // This can fail if someone is currently writing the block but is not finished! Should be really rare since it is just a rename?
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to open block `%s`, %d", block_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock: Failed to read block `%s`, %d", block_path, err)
         Longtail_Free((char*)block_path);
         block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    uint64_t stored_block_data_size;
-    err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, f, &stored_block_data_size);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to get size of block `%s`, %d", block_path, err)
-        fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
+        return async_complete_api->OnComplete(async_complete_api, 0, err);
     }
 
-    size_t block_mem_size = Longtail_GetStoredBlockSize(stored_block_data_size);
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
-    LONGTAIL_FATAL_ASSERT(stored_block, return ENOMEM)
-    void* block_data = &((uint8_t*)stored_block)[block_mem_size - stored_block_data_size];
-    err = fsblockstore_api->m_StorageAPI->Read(fsblockstore_api->m_StorageAPI, f, 0, stored_block_data_size, block_data);
-    fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, f);
-    f = 0;
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Failed to read from block `%s`, %d", block_path, err)
-        Longtail_Free(stored_block);
-        stored_block = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    err = Longtail_InitStoredBlockFromData(
-        stored_block,
-        block_data,
-        stored_block_data_size);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock: Invalid format from block `%s`, %d", block_path, err)
-        Longtail_Free(stored_block);
-        stored_block = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    stored_block->Dispose = FSStoredBlock_Dispose;
     Longtail_Free(block_path);
     block_path = 0;
 
-    *out_stored_block = stored_block;
-    return async_complete_api->OnComplete(async_complete_api, 0);
+    return async_complete_api->OnComplete(async_complete_api, stored_block, 0);
 }
 
 static int FSBlockStore_GetIndex(
@@ -478,12 +397,12 @@ static int FSBlockStore_GetIndex(
     struct Longtail_JobAPI* job_api,
     uint32_t default_hash_api_identifier,
     struct Longtail_ProgressAPI* progress_api,
-    struct Longtail_ContentIndex** out_content_index)
+    struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_content_index, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %p, %u, %p, %p", block_store_api, job_api, default_hash_api_identifier, progress_api, out_content_index)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %p, %u, %p, %p", block_store_api, job_api, default_hash_api_identifier, progress_api, async_complete_api)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (!fsblockstore_api->m_ContentIndex)
@@ -525,21 +444,22 @@ static int FSBlockStore_GetIndex(
         Longtail_Free(tmp_content_buffer);
         return err;
     }
-    err = Longtail_ReadContentIndexFromBuffer(tmp_content_buffer, content_index_size, out_content_index);
+    struct Longtail_ContentIndex* content_index;
+    err = Longtail_ReadContentIndexFromBuffer(tmp_content_buffer, content_index_size, &content_index);
     Longtail_Free(tmp_content_buffer);
-    return err;
-}
-
-static int FSBlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
-{
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_path, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetStoredBlockPath(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, out_path)
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    *out_path = GetBlockPath(fsblockstore_api, block_hash);
+    if (err)
+    {
+        return async_complete_api->OnComplete(async_complete_api, 0, err);
+        return err;
+    }
+    err = async_complete_api->OnComplete(async_complete_api, content_index, 0);
+    if (err)
+    {
+        Longtail_Free(content_index);
+        return err;
+    }
     return 0;
 }
-
 
 static void FSBlockStore_Dispose(struct Longtail_API* api)
 {
@@ -572,7 +492,6 @@ static int FSBlockStore_Init(
     api->m_BlockStoreAPI.PutStoredBlock = FSBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = FSBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = FSBlockStore_GetIndex;
-    api->m_BlockStoreAPI.GetStoredBlockPath = FSBlockStore_GetStoredBlockPath;
     api->m_StorageAPI = storage_api;
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndex = 0;
@@ -600,8 +519,8 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
     const char* content_path)
 {
-    LONGTAIL_FATAL_ASSERT(storage_api, return 0)
-    LONGTAIL_FATAL_ASSERT(content_path, return 0)
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(content_path != 0, return 0)
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreAPI));
     if (!api)
     {

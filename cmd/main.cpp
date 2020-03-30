@@ -8,6 +8,7 @@
 #include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
+#include "../lib/compressionregistry/longtail_full_compression_registry.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
@@ -109,37 +110,20 @@ int ParseLogLevel(const char* log_level_raw) {
 
 struct Longtail_HashAPI* CreateHashAPIFromIdentifier(uint32_t hash_type)
 {
-    if (hash_type == LONGTAIL_BLAKE2_HASH_TYPE)
+    if (hash_type == Longtail_GetBlake2HashType())
     {
         return Longtail_CreateBlake2HashAPI();
     }
-    if (hash_type == LONGTAIL_BLAKE3_HASH_TYPE)
+    if (hash_type == Longtail_GetBlake3HashType())
     {
         return Longtail_CreateBlake3HashAPI();
     }
-    if (hash_type == LONGTAIL_MEOW_HASH_TYPE)
+    if (hash_type == Longtail_GetMeowHashType())
     {
         return Longtail_CreateMeowHashAPI();
     }
     return 0;
 }
-
-const uint32_t LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0');
-const uint32_t LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'a');
-const uint32_t LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'b');
-const uint32_t LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        = (((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'c');
-
-const uint32_t LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE     = (((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
-
-const uint32_t LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2');
-
-const uint32_t LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1');
-const uint32_t LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2');
-const uint32_t LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE = (((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3');
 
 static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
 {
@@ -158,104 +142,9 @@ static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileI
             result[i] = 0;
             continue;
         }
-        result[i] = LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE;
+        result[i] = Longtail_GetLZ4DefaultQuality();
     }
     return result;
-}
-
-Longtail_CompressionRegistryAPI* CreateDefaultCompressionRegistry()
-{
-    struct Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
-    if (lizard_compression == 0)
-    {
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
-    if (lz4_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
-    if (brotli_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        Longtail_DisposeAPI(&lz4_compression->m_API);
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
-    if (zstd_compression == 0)
-    {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        Longtail_DisposeAPI(&lz4_compression->m_API);
-        Longtail_DisposeAPI(&brotli_compression->m_API);
-        return 0;
-    }
-
-    uint32_t compression_types[13] = {
-        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE,
-        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
-        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE,
-        LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE,
-
-        LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE,
-        LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE,
-
-        LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE,
-
-        LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE,
-        LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[13] = {
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        lizard_compression,
-        lizard_compression,
-        lizard_compression,
-        lz4_compression,
-        zstd_compression,
-        zstd_compression,
-        zstd_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[13] = {
-        LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MIN_QUALITY,
-        LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY,
-        LONGTAIL_BROTLI_TEXT_MAX_QUALITY,
-        LONGTAIL_LIZARD_MIN_COMPRESSION,
-        LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
-        LONGTAIL_LIZARD_MAX_COMPRESSION,
-        LONGTAIL_LZ4_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MIN_COMPRESSION,
-        LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
-        LONGTAIL_ZSTD_MAX_COMPRESSION};
-
-
-    struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        13,
-        (const uint32_t*)compression_types,
-        (const struct Longtail_CompressionAPI **)compression_apis,
-        (const Longtail_CompressionAPI_HSettings*)compression_settings);
-    if (registry == 0)
-    {
-        SAFE_DISPOSE_API(lizard_compression);
-        SAFE_DISPOSE_API(lz4_compression);
-        SAFE_DISPOSE_API(brotli_compression);
-        SAFE_DISPOSE_API(zstd_compression);
-        return 0;
-    }
-    return registry;
 }
 
 uint32_t ParseCompressionType(const char* compression_algorithm) {
@@ -265,43 +154,43 @@ uint32_t ParseCompressionType(const char* compression_algorithm) {
     }
 	if (strcmp("brotli", compression_algorithm) == 0)
     {
-        return LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE;
+        return Longtail_GetBrotliGenericDefaultQuality();
     }
 	if (strcmp("brotli_min", compression_algorithm) == 0)
     {
-        return LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE;
+        return Longtail_GetBrotliGenericMinQuality();
     }
 	if (strcmp("brotli_max", compression_algorithm) == 0)
     {
-		return LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE;
+		return Longtail_GetBrotliGenericMaxQuality();
     }
 	if (strcmp("brotli_text", compression_algorithm) == 0)
     {
-		return LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE;
+		return Longtail_GetBrotliTextDefaultQuality();
     }
 	if (strcmp("brotli_text_min", compression_algorithm) == 0)
     {
-		return LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE;
+		return Longtail_GetBrotliTextMinQuality();
     }
 	if (strcmp("brotli_text_max", compression_algorithm) == 0)
     {
-		return LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE;
+		return Longtail_GetBrotliTextMaxQuality();
     }
 	if (strcmp("lz4", compression_algorithm) == 0)
     {
-		return LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE;
+		return Longtail_GetLZ4DefaultQuality();
     }
 	if (strcmp("zstd", compression_algorithm) == 0)
     {
-		return LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE;
+		return Longtail_GetZStdDefaultQuality();
     }
 	if (strcmp("zstd_min", compression_algorithm) == 0)
     {
-		return LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE;
+		return Longtail_GetZStdMinQuality();
     }
 	if (strcmp("zstd_max", compression_algorithm) == 0)
     {
-		return LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE;
+		return Longtail_GetZStdMaxQuality();
     }
 	return 0xffffffff;
 }
@@ -310,15 +199,15 @@ uint32_t ParseHashingType(const char* hashing_type)
 {
     if (0 == hashing_type || (strcmp("blake3", hashing_type) == 0))
     {
-        return LONGTAIL_BLAKE3_HASH_TYPE;
+        return Longtail_GetBlake3HashType();
     }
     if (strcmp("blake2", hashing_type) == 0)
     {
-        return LONGTAIL_BLAKE2_HASH_TYPE;
+        return Longtail_GetBlake2HashType();
     }
     if (strcmp("meow", hashing_type) == 0)
     {
-        return LONGTAIL_MEOW_HASH_TYPE;
+        return Longtail_GetMeowHashType();
     }
     return 0xffffffff;
 }
@@ -378,6 +267,42 @@ char* GetDefaultContentPath()
     return (char*)default_content_path;
 }
 
+struct AsyncGetIndexComplete
+{
+    struct Longtail_AsyncGetIndexAPI m_API;
+    HLongtail_Sema m_NotifySema;
+    AsyncGetIndexComplete()
+        : m_Err(EINVAL)
+    {
+        m_API.m_API.Dispose = 0;
+        m_API.OnComplete = OnComplete;
+        m_ContentIndex = 0;
+        Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
+    }
+    ~AsyncGetIndexComplete()
+    {
+        Longtail_DeleteSema(m_NotifySema);
+        Longtail_Free(m_NotifySema);
+    }
+
+    static int OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, Longtail_ContentIndex* content_index, int err)
+    {
+        struct AsyncGetIndexComplete* cb = (struct AsyncGetIndexComplete*)async_complete_api;
+        cb->m_Err = err;
+        cb->m_ContentIndex = content_index;
+        Longtail_PostSema(cb->m_NotifySema, 1);
+        return 0;
+    }
+
+    void Wait()
+    {
+        Longtail_WaitSema(m_NotifySema);
+    }
+
+    int m_Err;
+    Longtail_ContentIndex* m_ContentIndex;
+};
+
 int UpSync(
     const char* storage_uri_raw,
     const char* source_path,
@@ -392,7 +317,7 @@ int UpSync(
     const char* storage_path = NormalizePath(storage_uri_raw);
     struct Longtail_HashAPI* hash_api = CreateHashAPIFromIdentifier(hashing_type);
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
-    struct Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
@@ -438,9 +363,7 @@ int UpSync(
                 job_api,
                 &create_version_progress.m_API,
                 source_path,
-                &file_infos->m_Paths,
-                file_infos->m_FileSizes,
-                file_infos->m_Permissions,
+                file_infos,
                 tags,
                 target_chunk_size,
                 &source_version_index);
@@ -463,10 +386,7 @@ int UpSync(
     struct Longtail_ContentIndex* version_content_index = 0;
     int err = Longtail_CreateContentIndex(
         hash_api,
-        *source_version_index->m_ChunkCount,
-        source_version_index->m_ChunkHashes,
-        source_version_index->m_ChunkSizes,
-        source_version_index->m_ChunkTags,
+        source_version_index,
         target_block_size,
         max_chunks_per_block,
         &version_content_index);
@@ -487,12 +407,18 @@ int UpSync(
     struct Longtail_ContentIndex* block_store_content_index;
     {
         Progress block_store_get_content_index("Get content index");
+        AsyncGetIndexComplete get_index_complete;
         err = store_block_store_api->GetIndex(
             store_block_store_api,
             job_api,
             hash_api->GetIdentifier(hash_api),
             &block_store_get_content_index.m_API,
-            &block_store_content_index);
+            &get_index_complete.m_API);
+        if (!err)
+        {
+            get_index_complete.Wait();
+            err = get_index_complete.m_Err;
+        }
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
@@ -507,6 +433,7 @@ int UpSync(
             Longtail_Free((char*)storage_path);
             return err;
         }
+        block_store_content_index = get_index_complete.m_ContentIndex;
     }
     {
         Progress write_content_progress("Writing blocks");
@@ -583,7 +510,7 @@ int DownSync(
 {
     const char* storage_path = NormalizePath(storage_uri_raw);
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
-    struct Longtail_CompressionRegistryAPI* compression_registry = CreateDefaultCompressionRegistry();
+    struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
     struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, content_path);
@@ -612,12 +539,19 @@ int DownSync(
     struct Longtail_ContentIndex* remote_content_index;
     {
         Progress get_index_progress("Get content index");
+        AsyncGetIndexComplete get_index_complete;
         err = store_block_store_api->GetIndex(
             store_block_store_api,
             job_api,
-            LONGTAIL_BLAKE3_HASH_TYPE,  // We should not really care, since if block store is empty we can't recreate any content
+            Longtail_GetBlake3HashType(),  // We should not really care, since if block store is empty we can't recreate any content
             &get_index_progress.m_API,
-            &remote_content_index);
+            &get_index_complete.m_API);
+        if (!err)
+        {
+            get_index_complete.Wait();
+            err = get_index_complete.m_Err;
+        }
+        remote_content_index = get_index_complete.m_ContentIndex;
     }
     if (err)
     {
@@ -682,9 +616,7 @@ int DownSync(
                 job_api,
                 &create_version_progress.m_API,
                 target_path,
-                &file_infos->m_Paths,
-                file_infos->m_FileSizes,
-                file_infos->m_Permissions,
+                file_infos,
                 tags,
                 target_chunk_size,
                 &target_version_index);
@@ -795,13 +727,13 @@ int main(int argc, char** argv)
     kgflags_string("log-level", "warn", "Log level (debug, info, warn, error)", false, &log_level_raw);
 
     int32_t target_chunk_size = 8;
-    kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
+    kgflags_int("target-chunk-size", 24576, "Target chunk size", false, &target_chunk_size);
 
     int32_t target_block_size = 0;
-    kgflags_int("target-block-size", 32768 * 12, "Target block size", false, &target_block_size);
+    kgflags_int("target-block-size", 524288, "Target block size", false, &target_block_size);
 
     int32_t max_chunks_per_block = 0;
-    kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
+    kgflags_int("max-chunks-per-block", 2048, "Max chunks per block", false, &max_chunks_per_block);
 
     const char* storage_uri_raw = 0;
     kgflags_string("storage-uri", 0, "URI for chunks and content index for store", true, &storage_uri_raw);

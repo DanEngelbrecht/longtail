@@ -47,7 +47,7 @@ goto arg_end
 set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626
 
 if "!RELEASE_MODE!" == "release" (
-    set OPT=/O2 /Oi /Oy
+    set OPT=/O2 /Oi /Oy /GS- /Gs- /MT
 
     call build_options.bat
     set OUTPUT=!TARGET!
@@ -56,7 +56,7 @@ if "!RELEASE_MODE!" == "release" (
     set CXXFLAGS=!BASE_CXXFLAGS! !CXXFLAGS!
 
 ) else (
-    set OPT=
+    set OPT=/MTd
 
     call build_options.bat
     set OUTPUT=!TARGET!_debug
@@ -133,9 +133,21 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     if !LIB_BUILD_ERROR! neq 0 exit /b !LIB_BUILD_ERROR!
 )
 
+if "!TARGET_TYPE!" == "EXECUTABLE" (
+    set OUTPUT_TARGET=!OUTPUT!.exe
+    set EXTRA_CC_OPTIONS=
+    set EXTRA_LINK_OPTIONS=
+)
+
+if "!TARGET_TYPE!" == "SHAREDLIB" (
+    set OUTPUT_TARGET=!OUTPUT!.dll
+    set EXTRA_CC_OPTIONS=/D_USRDLL /D_WINDLL
+    set EXTRA_LINK_OPTIONS=/DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library
+)
+
 cd !BASE_DIR!\build
-echo Building %OUTPUT%
-cl.exe %CXXFLAGS% %OPT% %SRC% %TEST_SRC% /Fd:%OUTPUT%.pdb /link /out:%OUTPUT%.exe /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
+echo Building %OUTPUT_TARGET%
+cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
 set BUILD_ERROR=%ERRORLEVEL%
 cd !BASE_DIR!
 

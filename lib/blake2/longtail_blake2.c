@@ -5,6 +5,7 @@
 #include <errno.h>
 
 const uint32_t LONGTAIL_BLAKE2_HASH_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'l') << 16) + (((uint32_t)'k') << 8) + ((uint32_t)'2');
+const uint32_t Longtail_GetBlake2HashType() {return LONGTAIL_BLAKE2_HASH_TYPE; }
 
 struct Blake2HashAPI
 {
@@ -13,14 +14,14 @@ struct Blake2HashAPI
 
 static uint32_t Blake2Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
 {
-    LONGTAIL_FATAL_ASSERT(hash_api, return 0)
+    LONGTAIL_VALIDATE_INPUT(hash_api, return 0)
     return LONGTAIL_BLAKE2_HASH_TYPE;
 }
 
 static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
-    LONGTAIL_FATAL_ASSERT(hash_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_context, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(hash_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_context, return EINVAL)
     blake2s_state* state = (blake2s_state*)Longtail_Alloc(sizeof(blake2s_state));
     if (!state)
     {
@@ -39,17 +40,17 @@ static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_H
 
 static void Blake2Hash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, const void* data)
 {
-    LONGTAIL_FATAL_ASSERT(hash_api, return)
-    LONGTAIL_FATAL_ASSERT(context, return)
-    LONGTAIL_FATAL_ASSERT(data, return)
+    LONGTAIL_VALIDATE_INPUT(hash_api, return)
+    LONGTAIL_VALIDATE_INPUT(context, return)
+    LONGTAIL_VALIDATE_INPUT(data, return)
     blake2s_state* state = (blake2s_state*)context;
     blake2s_update(state, data, length);
 }
 
 static uint64_t Blake2Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context)
 {
-    LONGTAIL_FATAL_ASSERT(hash_api, return 0)
-    LONGTAIL_FATAL_ASSERT(context, return 0)
+    LONGTAIL_VALIDATE_INPUT(hash_api, return 0)
+    LONGTAIL_VALIDATE_INPUT(context, return 0)
     blake2s_state* state = (blake2s_state*)context;
     uint64_t hash;
     int err = blake2s_final(state, &hash, sizeof(uint64_t));
@@ -63,9 +64,9 @@ static uint64_t Blake2Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtai
 
 static int Blake2Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash)
 {
-    LONGTAIL_FATAL_ASSERT(hash_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(data, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_hash, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(hash_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(data, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_hash, return EINVAL)
     return blake2s(out_hash, sizeof(uint64_t), data, length, 0, 0);
 }
 

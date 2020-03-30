@@ -5,6 +5,7 @@
 #include "ext/meow_hash_x64_aesni.h"
 
 const uint32_t LONGTAIL_MEOW_HASH_TYPE = (((uint32_t)'m') << 24) + (((uint32_t)'e') << 16) + (((uint32_t)'o') << 8) + ((uint32_t)'w');
+const uint32_t Longtail_GetMeowHashType() { return LONGTAIL_MEOW_HASH_TYPE; }
 
 struct MeowHashAPI
 {

@@ -11,9 +11,28 @@ static int LizardCompressionAPI_MinCompressionSetting       = LIZARD_MIN_CLEVEL;
 static int LizardCompressionAPI_DefaultCompressionSetting   = 44;
 static int LizardCompressionAPI_MaxCompressionSetting       = LIZARD_MAX_CLEVEL;
 
-Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MIN_COMPRESSION      = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_MinCompressionSetting;
-Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_DEFAULT_COMPRESSION  = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_DefaultCompressionSetting;
-Longtail_CompressionAPI_HSettings LONGTAIL_LIZARD_MAX_COMPRESSION      = (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_MaxCompressionSetting;
+#define LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE     ((((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
+#define LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE ((((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
+#define LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE     ((((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
+
+uint32_t Longtail_GetLizardMinQuality() { return LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE; }
+uint32_t Longtail_GetLizardDefaultQuality() { return LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE; }
+uint32_t Longtail_GetLizardMaxQuality() { return LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE; }
+
+static int SettingsIDToCompressionSetting(uint32_t settings_id)
+{
+    switch(settings_id)
+    {
+        case LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE:
+            return LizardCompressionAPI_MinCompressionSetting;
+        case LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE:
+            return LizardCompressionAPI_DefaultCompressionSetting;
+        case LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE:
+            return LizardCompressionAPI_MaxCompressionSetting;
+       default:
+           return 0;
+    }
+}
 
 struct LizardCompressionAPI
 {
@@ -25,14 +44,14 @@ void LizardCompressionAPI_Dispose(struct Longtail_API* compression_api)
     Longtail_Free(compression_api);
 }
 
-static size_t LizardCompressionAPI_GetMaxCompressedSize(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, size_t size)
+static size_t LizardCompressionAPI_GetMaxCompressedSize(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, size_t size)
 {
     return (size_t)Lizard_compressBound((int)size);
 }
 
-int LizardCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size)
+int LizardCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size)
 {
-    int compression_setting = *(int*)settings;
+    int compression_setting = SettingsIDToCompressionSetting(settings_id);
     int compressed_size = Lizard_compress(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
     if (compressed_size == 0)
     {

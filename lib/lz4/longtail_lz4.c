@@ -11,7 +11,15 @@
 
 static int LZ4CompressionAPI_DefaultCompressionSetting   = 1;
 
-Longtail_CompressionAPI_HSettings LONGTAIL_LZ4_DEFAULT_COMPRESSION  = (Longtail_CompressionAPI_HSettings)&LZ4CompressionAPI_DefaultCompressionSetting;
+#define LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE ((((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2'))
+
+uint32_t Longtail_GetLZ4DefaultQuality() { return LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE; }
+
+static int SettingsIDToCompressionSetting(uint32_t settings_id)
+{
+    LONGTAIL_FATAL_ASSERT(settings_id == LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE, return -1)
+    return LZ4CompressionAPI_DefaultCompressionSetting;
+}
 
 struct LZ4CompressionAPI
 {
@@ -23,14 +31,14 @@ void LZ4CompressionAPI_Dispose(struct Longtail_API* compression_api)
     Longtail_Free(compression_api);
 }
 
-static size_t LZ4CompressionAPI_GetMaxCompressedSize(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, size_t size)
+static size_t LZ4CompressionAPI_GetMaxCompressedSize(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, size_t size)
 {
     return (size_t)LZ4_COMPRESSBOUND((unsigned)size);
 }
 
-int LZ4CompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size)
+int LZ4CompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size)
 {
-    int compression_setting = *(int*)settings;
+    int compression_setting = SettingsIDToCompressionSetting(settings_id);
     int compressed_size = LZ4_compress_fast(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
     if (compressed_size == 0)
     {
