@@ -521,6 +521,8 @@ TEST(Longtail, Longtail_VersionIndex)
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
+    static const uint32_t TARGET_CHUNK_SIZE = 32768u;
+
     Longtail_VersionIndex* version_index;
     ASSERT_EQ(0, Longtail_BuildVersionIndex(
         version_index_mem,
@@ -539,6 +541,7 @@ TEST(Longtail, Longtail_VersionIndex)
         asset_content_hashes,
         asset_compression_types,
         0u,
+        TARGET_CHUNK_SIZE,
         &version_index)); // Dummy hash API
 
     void* store_buffer = 0;
@@ -1438,6 +1441,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
     const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
 
+    static const uint32_t TARGET_CHUNK_SIZE = 32768u;
     static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
     Longtail_ContentIndex* content_index;
@@ -1481,8 +1485,9 @@ TEST(Longtail, Longtail_CreateMissingContent)
         chunk_sizes,
         asset_content_hashes,
         asset_compression_types,
-        0u,
-        &version_index));    // Dummy hash API
+        0u,    // Dummy hash API
+        TARGET_CHUNK_SIZE,
+        &version_index));
     Longtail_Free(paths);
 
     Longtail_ContentIndex* missing_content_index;

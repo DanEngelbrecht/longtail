@@ -739,6 +739,7 @@ struct Longtail_VersionIndex
 {
     uint32_t* m_Version;
     uint32_t* m_HashAPI;
+    uint32_t* m_TargetChunkSize;
     uint32_t* m_AssetCount;
     uint32_t* m_ChunkCount;
     uint32_t* m_AssetChunkIndexCount;
@@ -816,6 +817,7 @@ int Longtail_BuildVersionIndex(
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_tags,
     uint32_t hash_api_identifier,
+    uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
 struct Longtail_Chunker;
