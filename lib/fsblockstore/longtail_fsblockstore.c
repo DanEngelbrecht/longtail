@@ -3,6 +3,7 @@
 #include "../../src/longtail.h"
 #include "../../src/ext/stb_ds.h"
 #include "../longtail_platform.h"
+#include "../bikeshed/longtail_bikeshed.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -121,7 +122,6 @@ static int ReadContent(
     uint32_t content_index_hash_identifier,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
-    struct Longtail_ProgressAPI* progress_api,
     const char* content_path,
     struct Longtail_ContentIndex** out_content_index)
 {
@@ -130,8 +130,8 @@ static int ReadContent(
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %u, %p, %s, %p",
-        storage_api, job_api, content_index_hash_identifier, progress_api, content_path, out_content_index)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p",
+        storage_api, job_api, content_index_hash_identifier, content_path, out_content_index)
 
     struct Longtail_FileInfos* file_infos;
     int err = Longtail_GetFilesRecursively(
@@ -182,7 +182,7 @@ static int ReadContent(
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 
-    err = job_api->WaitForAllJobs(job_api, progress_api);
+    err = job_api->WaitForAllJobs(job_api, 0);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(sizeof(struct Longtail_BlockIndex*) * (*file_infos->m_Paths.m_PathCount));
@@ -400,16 +400,14 @@ static int FSBlockStore_GetStoredBlock(
 
 static int FSBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_JobAPI* job_api,
     uint32_t default_hash_api_identifier,
-    struct Longtail_ProgressAPI* progress_api,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %p, %u, %p, %p", block_store_api, job_api, default_hash_api_identifier, progress_api, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %u, %p", block_store_api, default_hash_api_identifier, async_complete_api)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (!fsblockstore_api->m_ContentIndex)
     {
@@ -419,12 +417,12 @@ static int FSBlockStore_GetIndex(
             default_hash_api_identifier,
             524288,
             1024,
-            progress_api,
             fsblockstore_api->m_ContentPath,
             &fsblockstore_api->m_ContentIndex);
         if (err)
         {
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+            Longtail_DisposeAPI(&job_api->m_API);
             return err;
         }
 
@@ -443,6 +441,8 @@ static int FSBlockStore_GetIndex(
         }
         Longtail_Free((void*)content_index_path);
     }
+    Longtail_DisposeAPI(&job_api->m_API);
+    job_api = 0;
     size_t content_index_size;
     void* tmp_content_buffer;
     int err = Longtail_WriteContentIndexToBuffer(fsblockstore_api->m_ContentIndex, &tmp_content_buffer, &content_index_size);

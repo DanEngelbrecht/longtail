@@ -406,13 +406,10 @@ int UpSync(
 
     struct Longtail_ContentIndex* block_store_content_index;
     {
-        Progress block_store_get_content_index("Get content index");
         AsyncGetIndexComplete get_index_complete;
         err = store_block_store_api->GetIndex(
             store_block_store_api,
-            job_api,
             hash_api->GetIdentifier(hash_api),
-            &block_store_get_content_index.m_API,
             &get_index_complete.m_API);
         if (!err)
         {
@@ -538,13 +535,10 @@ int DownSync(
 
     struct Longtail_ContentIndex* remote_content_index;
     {
-        Progress get_index_progress("Get content index");
         AsyncGetIndexComplete get_index_complete;
         err = store_block_store_api->GetIndex(
             store_block_store_api,
-            job_api,
             Longtail_GetBlake3HashType(),  // We should not really care, since if block store is empty we can't recreate any content
-            &get_index_progress.m_API,
             &get_index_complete.m_API);
         if (!err)
         {
