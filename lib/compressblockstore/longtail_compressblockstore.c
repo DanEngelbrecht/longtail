@@ -288,21 +288,16 @@ static int CompressBlockStore_GetStoredBlock(
 
 static int CompressBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_JobAPI* job_api,
     uint32_t default_hash_api_identifier,
-    struct Longtail_ProgressAPI* progress_api,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetIndex(%p, %p, %u, %p, %p)", block_store_api, job_api, default_hash_api_identifier, progress_api, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
     return block_store->m_BackingBlockStore->GetIndex(
         block_store->m_BackingBlockStore,
-        job_api,
         default_hash_api_identifier,
-        progress_api,
         async_complete_api);
 }
 
