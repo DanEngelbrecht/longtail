@@ -89,13 +89,13 @@ struct Progress
 };
 
 int ParseLogLevel(const char* log_level_raw) {
-    if (0 == strcmp(log_level_raw, "info"))
-    {
-        return LONGTAIL_LOG_LEVEL_INFO;
-    }
     if (0 == strcmp(log_level_raw, "debug"))
     {
         return LONGTAIL_LOG_LEVEL_DEBUG;
+    }
+    if (0 == strcmp(log_level_raw, "info"))
+    {
+        return LONGTAIL_LOG_LEVEL_INFO;
     }
     if (0 == strcmp(log_level_raw, "warn"))
     {

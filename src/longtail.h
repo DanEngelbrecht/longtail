@@ -357,8 +357,8 @@ typedef void (*Longtail_Log)(void* context, int level, const char* str);
 LONGTAIL_EXPORT void Longtail_SetLog(Longtail_Log log_func, void* context);
 LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 
-#define LONGTAIL_LOG_LEVEL_INFO     0
-#define LONGTAIL_LOG_LEVEL_DEBUG    1
+#define LONGTAIL_LOG_LEVEL_DEBUG    0
+#define LONGTAIL_LOG_LEVEL_INFO     1
 #define LONGTAIL_LOG_LEVEL_WARNING  2
 #define LONGTAIL_LOG_LEVEL_ERROR    3
 #define LONGTAIL_LOG_LEVEL_OFF      4
