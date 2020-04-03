@@ -7,9 +7,85 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 jobs:
-  build:
+  build-linux:
 
     runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ../build.sh
+        ../build.sh release
+        popd
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./build/longtail_debug dist/
+        cp ./build/longtail dist/
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-linux-x64
+        path: dist
+
+  build-macos:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ../build.sh
+        ../build.sh release
+        popd
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./build/longtail_debug dist/
+        cp ./build/longtail dist/
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-macos-x64
+        path: dist
+
+  build-win32:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build cmd
+      run: |
+        cd ./cmd
+        ../build.bat
+        ../build.bat release
+        cd ..
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.bat
+        ../build.bat release
+        cd ..
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./build/longtail_debug.exe dist/
+        cp ./build/longtail.exe dist/
+        cp ./build/longtail_debug.dll dist/
+        cp ./build/longtail.dll dist/
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-win32-x64
+        path: dist
+
+  create-release:
+
+    runs-on: ubuntu-latest
+
+    needs: [build-linux, build-macos, build-win32]
 
     steps:
     - name: Checkout code
@@ -33,11 +109,11 @@ jobs:
       with:
         name: dist-linux-x64
         path: dist/dist-linux-x64
-    - name: Download Windows artifacts
+    - name: Download Win32 artifacts
       uses: actions/download-artifact@v1
       with:
-        name: dist-win-x64
-        path: dist/dist-win-x64
+        name: dist-win32-x64
+        path: dist/dist-win32-x64
     - name: Download macos artifacts
       uses: actions/download-artifact@v1
       with:
@@ -47,10 +123,10 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./dist/linux-x64.zip ./dist/dist-linux-x64
-    - name: Zip Windows artifacts
+    - name: Zip Win32 artifacts
       uses: montudor/action-zip@v0.1.0
       with:
-        args: zip -qq -r ./dist/win-x64.zip ./dist/dist-win-x64
+        args: zip -qq -r ./dist/win32-x64.zip ./dist/dist-win32-x64
     - name: Zip MacOS artifacts
       uses: montudor/action-zip@v0.1.0
       with:
@@ -60,7 +136,7 @@ jobs:
       with:
         args: |
           dist/linux-x64.zip
-          dist/win-x64.zip
+          dist/win32-x64.zip
           dist/macos-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
