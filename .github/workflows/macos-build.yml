@@ -32,13 +32,13 @@ jobs:
     - name: build artifacts
       run: mkdir dist-zip
       uses: montudor/action-zip@v0.1.0
-        with:
-          args: zip -qq -r ./dist-zip/longtail_debug-macos-x64.zip ./build/longtail_debug
+      with:
+        args: zip -qq -r ./dist-zip/longtail_debug-macos-x64.zip ./build/longtail_debug
       uses: montudor/action-zip@v0.1.0
-        with:
-          args: zip -qq -r ./dist-zip/longtail-macos-x64.zip ./build/longtail
+      with:
+        args: zip -qq -r ./dist-zip/longtail-macos-x64.zip ./build/longtail
     - name: upload artifacts
       uses: actions/upload-artifact@master
-        with:
-          name: dist
-          path: dist-zip
+      with:
+        name: dist
+        path: dist-zip
