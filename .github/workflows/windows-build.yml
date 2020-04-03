@@ -44,5 +44,5 @@ jobs:
         cp ./build/longtail.dll dist/
     - uses: actions/upload-artifact@master
       with:
-        name: dist
-        path: dist/win-x64
+        name: dist-win-x64
+        path: dist
