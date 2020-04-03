@@ -183,7 +183,16 @@ int CopyBlock(struct Longtail_StoredBlock* stored_block, struct Longtail_StoredB
 
 static int StoreBlockCopyToLocalCache(struct Longtail_BlockStoreAPI* local_block_store, struct Longtail_StoredBlock* copy_stored_block)
 {
-    struct OnGetStoredBlockPutLocalComplete_API* put_local = (struct OnGetStoredBlockPutLocalComplete_API*)Longtail_Alloc(sizeof(struct OnGetStoredBlockPutLocalComplete_API));
+    size_t put_local_size = sizeof(struct OnGetStoredBlockPutLocalComplete_API);
+    struct OnGetStoredBlockPutLocalComplete_API* put_local = (struct OnGetStoredBlockPutLocalComplete_API*)Longtail_Alloc(put_local_size);
+    if (!put_local)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "StoreBlockCopyToLocalCache(%p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            local_block_store, copy_stored_block,
+            put_local_size,
+            ENOMEM)
+        return ENOMEM;
+    }
     put_local->m_API.m_API.Dispose = 0;
     put_local->m_API.OnComplete = OnGetStoredBlockPutLocalComplete;
     put_local->m_StoredBlock = copy_stored_block;
@@ -191,7 +200,10 @@ static int StoreBlockCopyToLocalCache(struct Longtail_BlockStoreAPI* local_block
     int err = local_block_store->PutStoredBlock(local_block_store, copy_stored_block, &put_local->m_API);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache: local_block_store->PutStoredBlock() failed with %d", err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "StoreBlockCopyToLocalCache(%p, %p) local_block_store->PutStoredBlock(%p, %p, %p) failed with %d",
+            local_block_store, copy_stored_block,
+            local_block_store, copy_stored_block, &put_local->m_API,
+            err)
         Longtail_Free(copy_stored_block);
         Longtail_Free(put_local);
         return err;

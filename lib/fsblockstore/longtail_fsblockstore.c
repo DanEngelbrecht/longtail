@@ -130,7 +130,7 @@ static int ReadContent(
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p",
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p)",
         storage_api, job_api, content_index_hash_identifier, content_path, out_content_index)
 
     struct Longtail_FileInfos* file_infos;
@@ -140,7 +140,10 @@ static int ReadContent(
         &file_infos);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore::ReadContent: Failed to scan folder `%s`, %d", content_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) Longtail_GetFilesRecursively(%p, %s, %p) failed with %d",
+            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+            storage_api, content_path, &file_infos,
+            err)
         return err;
     }
 
@@ -150,16 +153,25 @@ static int ReadContent(
     err = job_api->ReserveJobs(job_api, *file_infos->m_Paths.m_PathCount);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent: Failed to reserve jobs for `%s`, %d", content_path, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) job_api->ReserveJobs(%p, %u) failed with %d",
+            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+            job_api, *file_infos->m_Paths.m_PathCount,
+            err)
         Longtail_Free(file_infos);
         file_infos = 0;
         return err;
     }
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent: Scanning %u files from `%s`", *file_infos->m_Paths.m_PathCount, content_path)
-
-    struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc(sizeof(struct ScanBlockJob) * *file_infos->m_Paths.m_PathCount);
-    LONGTAIL_FATAL_ASSERT(scan_jobs, return ENOMEM)
+    size_t scan_jobs_size = sizeof(struct ScanBlockJob) * *file_infos->m_Paths.m_PathCount;
+    struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc(scan_jobs_size);
+    if (!scan_jobs)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+            scan_jobs_size,
+            ENOMEM)
+        return ENOMEM;
+    }
 
     for (uint32_t path_index = 0; path_index < *file_infos->m_Paths.m_PathCount; ++path_index)
     {
@@ -185,8 +197,18 @@ static int ReadContent(
     err = job_api->WaitForAllJobs(job_api, 0);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
-    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(sizeof(struct Longtail_BlockIndex*) * (*file_infos->m_Paths.m_PathCount));
-    LONGTAIL_FATAL_ASSERT(block_indexes != 0, return ENOMEM)
+    size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (*file_infos->m_Paths.m_PathCount);
+    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
+    if (!block_indexes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+            block_indexes_size,
+            ENOMEM)
+        Longtail_Free(scan_jobs);
+        Longtail_Free(file_infos);
+        return ENOMEM;
+    }
 
     uint64_t block_count = 0;
     uint64_t chunk_count = 0;
@@ -531,10 +553,14 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
 {
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(content_path != 0, return 0)
-    struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(sizeof(struct FSBlockStoreAPI));
+    size_t api_size = sizeof(struct FSBlockStoreAPI);
+    struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(api_size);
     if (!api)
     {
-        // TODO: Log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateFSBlockStoreAPI(%p, %s) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            storage_api, content_path,
+            api_size,
+            ENOMEM)
         return 0;
     }
     FSBlockStore_Init(
