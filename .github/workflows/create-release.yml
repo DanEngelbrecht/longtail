@@ -28,26 +28,30 @@ jobs:
           - Second Change
         draft: false
         prerelease: false
-    - name: Download artifacts
+    - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-linux-x64
         path: dist/dist-linux-x64
+    - name: Download Windows artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-win-x64
         path: dist/dist-win-x64
+    - name: Download macos artifacts
       uses: actions/download-artifact@v1
       with:
-        name: dist-macos-x64
+        name: dist-MacOS-x64
         path: dist/dist-macos-x64
-    - name: Zip artifacts
+    - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./dist/linux-x64.zip ./dist/dist-linux-x64
+    - name: Zip Windows artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./dist/win-x64.zip ./dist/dist-win-x64
+    - name: Zip MacOS artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./dist/macos-x64.zip ./dist/dist-macos-x64
