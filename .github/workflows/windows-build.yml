@@ -35,12 +35,13 @@ jobs:
         ../build/test_debug.exe
         ../build/test.exe
         cd ..
-    - run: |
+    - name: build dist
+      run: |
         mkdir dist
-        copy ./build/longtail_debug.exe dist/
-        copy ./build/longtail.exe dist/
-        copy ./build/longtail_debug.dll dist/
-        copy ./build/longtail.dll dist/
+        cp ./build/longtail_debug.exe dist/
+        cp ./build/longtail.exe dist/
+        cp ./build/longtail_debug.dll dist/
+        cp ./build/longtail.dll dist/
     - uses: actions/upload-artifact@master
       with:
         name: dist

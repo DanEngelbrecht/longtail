@@ -29,10 +29,11 @@ jobs:
         ../build/test_debug
         ../build/test
         popd
-    - run: |
+    - name: build dist
+      run: |
         mkdir dist
-        copy ./build/longtail_debug dist/
-        copy ./build/longtail dist/
+        cp ./build/longtail_debug dist/
+        cp ./build/longtail dist/
     - uses: actions/upload-artifact@master
       with:
         name: dist
