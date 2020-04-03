@@ -35,19 +35,22 @@ jobs:
         ../build/test_debug.exe
         ../build/test.exe
         cd ..
-    - uses: montudor/action-zip@v0.1.0
+    - name: build artifacts
+      - run: mkdir dist-zip
+      - uses: montudor/action-zip@v0.1.0
         with:
           args: zip -qq -r ./dist-zip/longtail_debug-win-x64.zip ./build/longtail_debug.exe
-    - uses: montudor/action-zip@v0.1.0
+      - uses: montudor/action-zip@v0.1.0
         with:
           args: zip -qq -r ./dist-zip/longtail-win-x64.zip ./build/longtail.exe
-    - uses: montudor/action-zip@v0.1.0
+      - uses: montudor/action-zip@v0.1.0
         with:
           args: zip -qq -r ./dist-zip/longtail_dll_debug-win-x64.zip ./build/longtail_debug.dll
-    - uses: montudor/action-zip@v0.1.0
+      - uses: montudor/action-zip@v0.1.0
         with:
           args: zip -qq -r ./dist-zip/longtail_dll-win-x64.zip ./build/longtail.dll
-    - uses: actions/upload-artifact@master
+    - name: upload artifacts
+      - uses: actions/upload-artifact@master
         with:
           name: dist
           path: dist-zip

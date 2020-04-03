@@ -29,13 +29,16 @@ jobs:
         ../build/test_debug
         ../build/test
         popd
-    - uses: montudor/action-zip@v0.1.0
+    - name: build artifacts
+      - run: mkdir dist-zip
+      - uses: montudor/action-zip@v0.1.0
         with:
           args: zip -qq -r ./dist-zip/longtail_debug-macos-x64.zip ./build/longtail_debug
-    - uses: montudor/action-zip@v0.1.0
+      - uses: montudor/action-zip@v0.1.0
         with:
           args: zip -qq -r ./dist-zip/longtail-macos-x64.zip ./build/longtail
-    - uses: actions/upload-artifact@master
+    - name: upload artifacts
+      - uses: actions/upload-artifact@master
         with:
           name: dist
           path: dist-zip
