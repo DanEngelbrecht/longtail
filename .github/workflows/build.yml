@@ -16,20 +16,20 @@ jobs:
     - name: build test
       run: |
         pushd ./test 
-        ./build.sh
-        ./build.sh release
+        ../build.sh
+        ../build.sh release
         popd
     - name: build cmd
       run: |
         pushd ./cmd
-        ./build.sh
-        ./build.sh release
+        ../build.sh
+        ../build.sh release
         popd
     - name: build shared_lib
       run: |
         pushd ./shared_lib
-        ./build.sh
-        ./build.sh release
+        ../build.sh
+        ../build.sh release
         popd
     - name: run tests
       run: |
