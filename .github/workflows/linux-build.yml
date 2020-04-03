@@ -25,12 +25,6 @@ jobs:
         ../build.sh
         ../build.sh release
         popd
-    - name: build shared_lib
-      run: |
-        pushd ./shared_lib
-        ../build.sh
-        ../build.sh release
-        popd
     - name: run tests
       run: |
         pushd ./test

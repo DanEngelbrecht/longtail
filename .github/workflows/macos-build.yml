@@ -1,0 +1,33 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build test
+      run: |
+        pushd ./test 
+        ../build.sh
+        ../build.sh release
+        popd
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ../build.sh
+        ../build.sh release
+        popd
+    - name: run tests
+      run: |
+        pushd ./test
+        ../build/test_debug
+        ../build/test
+        popd
