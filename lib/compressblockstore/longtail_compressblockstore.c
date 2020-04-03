@@ -119,10 +119,10 @@ static int CompressBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL);
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
     struct Longtail_StoredBlock* compressed_stored_block;
@@ -265,9 +265,10 @@ static int CompressBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
+
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
     struct OnGetBackingStoreAsync_API* on_fetch_backing_store_async_api = (struct OnGetBackingStoreAsync_API*)Longtail_Alloc(sizeof(struct OnGetBackingStoreAsync_API));
 
@@ -291,9 +292,10 @@ static int CompressBlockStore_GetIndex(
     uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
     return block_store->m_BackingBlockStore->GetIndex(
         block_store->m_BackingBlockStore,
@@ -303,8 +305,9 @@ static int CompressBlockStore_GetIndex(
 
 static void CompressBlockStore_Dispose(struct Longtail_API* api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_Dispose(%p)", api)
     LONGTAIL_FATAL_ASSERT(api, return)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p)", api)
+
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)api;
     Longtail_Free(block_store);
 }
@@ -314,10 +317,11 @@ static int CompressBlockStore_Init(
     struct Longtail_BlockStoreAPI* backing_block_store,
 	struct Longtail_CompressionRegistryAPI* compression_registry)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_Dispose(%p, %p, %p)", api, backing_block_store, compression_registry)
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
     LONGTAIL_FATAL_ASSERT(compression_registry, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p, %p, %p)", api, backing_block_store, compression_registry)
+
     api->m_BlockStoreAPI.m_API.Dispose = CompressBlockStore_Dispose;
     api->m_BlockStoreAPI.PutStoredBlock = CompressBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = CompressBlockStore_GetStoredBlock;
@@ -331,9 +335,10 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
     struct Longtail_BlockStoreAPI* backing_block_store,
 	struct Longtail_CompressionRegistryAPI* compression_registry)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateCompressBlockStoreAPI(%p, %p)", backing_block_store, compression_registry)
     LONGTAIL_VALIDATE_INPUT(backing_block_store, return 0)
     LONGTAIL_VALIDATE_INPUT(compression_registry, return 0)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateCompressBlockStoreAPI(%p, %p)", backing_block_store, compression_registry)
+
     struct CompressBlockStoreAPI* api = (struct CompressBlockStoreAPI*)Longtail_Alloc(sizeof(struct CompressBlockStoreAPI));
     if (!api)
     {
