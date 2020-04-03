@@ -29,15 +29,6 @@ jobs:
         ../build/test_debug
         ../build/test
         popd
-    - name: build dist
-      run: |
-        mkdir dist
-        cp ./build/longtail_debug dist/
-        cp ./build/longtail dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-linux-x64
-        path: dist
 
   macos:
 
@@ -63,16 +54,6 @@ jobs:
         ../build/test_debug
         ../build/test
         popd
-    - name: build dist
-      run: |
-        mkdir dist
-        cp ./build/longtail_debug dist/
-        cp ./build/longtail dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-macos-x64
-        path: dist
-
 
   win32:
 
@@ -104,14 +85,3 @@ jobs:
         ../build/test_debug.exe
         ../build/test.exe
         cd ..
-    - name: build dist
-      run: |
-        mkdir dist
-        cp ./build/longtail_debug.exe dist/
-        cp ./build/longtail.exe dist/
-        cp ./build/longtail_debug.dll dist/
-        cp ./build/longtail.dll dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-win-x64
-        path: dist
