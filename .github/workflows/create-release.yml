@@ -108,35 +108,35 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: dist-linux-x64
-        path: dist/dist-linux-x64
+        path: dist-linux-x64
     - name: Download Win32 artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-win32-x64
-        path: dist/dist-win32-x64
+        path: dist-win32-x64
     - name: Download macos artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-MacOS-x64
-        path: dist/dist-macos-x64
+        path: dist-macos-x64
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
       with:
-        args: zip -qq -r ./dist/linux-x64.zip ./dist/dist-linux-x64
+        args: zip -qq -r ./linux-x64.zip ./dist-linux-x64
     - name: Zip Win32 artifacts
       uses: montudor/action-zip@v0.1.0
       with:
-        args: zip -qq -r ./dist/win32-x64.zip ./dist/dist-win32-x64
+        args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
     - name: Zip MacOS artifacts
       uses: montudor/action-zip@v0.1.0
       with:
-        args: zip -qq -r ./dist/macos-x64.zip ./dist/dist-macos-x64
+        args: zip -qq -r ./macos-x64.zip ./dist-macos-x64
     - name: Upload to GitHub release
       uses: Roang-zero1/github-upload-release-artifacts-action@master
       with:
         args: |
-          dist/linux-x64.zip
-          dist/win32-x64.zip
-          dist/macos-x64.zip
+          linux-x64.zip
+          win32-x64.zip
+          macos-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
