@@ -58,9 +58,9 @@ jobs:
     - name: Upload to GitHub release
       uses: Roang-zero1/github-upload-release-artifacts-action@master
       with:
-        args:
-        - ./dist/linux-x64.zip
-        - ./dist/win-x64.zip
-        - ./dist/macos-x64.zip
+        args: |
+          dist/linux-x64.zip
+          dist/win-x64.zip
+          dist/macos-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
