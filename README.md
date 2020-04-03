@@ -1,6 +1,6 @@
-|Branch      | Linux | Windows | MacOS |
-|------------|-------|---------|-------|
-|master      | [![Build Status](https://github.com/DanEngelbrecht/longtail/workflows/Linux/badge.svg?branch=master)](https://github.com/DanEngelbrecht/longtail/workflows/Linux/badge.svg?branch=master) | [![Build Status](https://github.com/DanEngelbrecht/longtail/workflows/Windows/badge.svg?branch=master)](https://github.com/DanEngelbrecht/longtail/workflows/Windows/badge.svg?branch=master) | [![Build Status](https://github.com/DanEngelbrecht/longtail/workflows/MacOS/badge.svg?branch=master)](https://github.com/DanEngelbrecht/longtail/workflows/MacOS/badge.svg?branch=master) |
+|Branch      | Linux / Windows / MacOS |
+|------------|-------|
+|master      | [![Build Status](https://github.com/DanEngelbrecht/longtail/workflows/Build%20Master/badge.svg)](https://github.com/DanEngelbrecht/longtail/workflows/Build%20Master/badge.svg) |
 
 # longtail
 Experimental incremental asset delivery format - closely related to the casync project by Lennart Poettering (https://github.com/systemd/casync). When I started tinkering with this I did not know of that project but has since learned from it but choosen different approaches to a few things. If casync does what you need there is no point in diving into this besides curiousity. If there are aspects of casync that does not work for you (you need in-place updating of folders, or you need all the performance using threading) then it might be interesting.
