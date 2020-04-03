@@ -43,13 +43,13 @@ jobs:
         path: dist/dist-macos-x64
     - name: Zip artifacts
       uses: montudor/action-zip@v0.1.0
-        with:
+      with:
         args: zip -qq -r ./dist/linux-x64.zip ./dist/dist-linux-x64
       uses: montudor/action-zip@v0.1.0
-        with:
+      with:
         args: zip -qq -r ./dist/win-x64.zip ./dist/dist-win-x64
       uses: montudor/action-zip@v0.1.0
-        with:
+      with:
         args: zip -qq -r ./dist/macos-x64.zip ./dist/dist-macos-x64
     - name: Upload to GitHub release
       uses: Roang-zero1/github-upload-release-artifacts-action@master
