@@ -1,9 +1,7 @@
-name: MacOS
+name: MacOS-Master
 
 on:
   push:
-    branches: [ master ]
-  pull_request:
     branches: [ master ]
 
 jobs:
@@ -31,3 +29,13 @@ jobs:
         ../build/test_debug
         ../build/test
         popd
+    - uses: montudor/action-zip@v0.1.0
+        with:
+          args: zip -qq -r ./dist-zip/longtail_debug-macos-x64.zip ./build/longtail_debug
+    - uses: montudor/action-zip@v0.1.0
+        with:
+          args: zip -qq -r ./dist-zip/longtail-macos-x64.zip ./build/longtail
+    - uses: actions/upload-artifact@master
+        with:
+          name: dist
+          path: dist-zip
