@@ -2879,7 +2879,8 @@ int Longtail_CreateContentIndexFromBlocks(
         struct Longtail_BlockIndex* block_index = block_indexes[b];
         content_index->m_BlockHashes[b] = *block_index->m_BlockHash;
         uint32_t chunk_offset = 0;
-        for (uint32_t a = 0; a < *block_index->m_ChunkCount; ++a)
+        uint32_t block_chunk_count = *block_index->m_ChunkCount;
+        for (uint32_t a = 0; a < block_chunk_count; ++a)
         {
             content_index->m_ChunkHashes[asset_index] = block_index->m_ChunkHashes[a];
             content_index->m_ChunkBlockIndexes[asset_index] = b;
@@ -2961,7 +2962,7 @@ int Longtail_CreateContentIndexRaw(
     struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
     if (!block_indexes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, unique_chunk_count, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, block_indexes_size, ENOMEM)
         return ENOMEM;
     }
 
@@ -3261,7 +3262,8 @@ static int CreateAssetPartLookup(
     LONGTAIL_FATAL_ASSERT(out_assert_part_lookup != 0, return EINVAL)
 
     struct ChunkHashToAssetPart* asset_part_lookup = 0;
-    for (uint64_t asset_index = 0; asset_index < *version_index->m_AssetCount; ++asset_index)
+    uint64_t asset_count = *version_index->m_AssetCount;
+    for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
         const char* path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
         uint64_t asset_chunk_count = version_index->m_AssetChunkCounts[asset_index];
@@ -5099,12 +5101,13 @@ int Longtail_RetargetContent(
     LONGTAIL_VALIDATE_INPUT(out_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((*reference_content_index->m_HashAPI) == (*content_index->m_HashAPI), return EINVAL)
 
-    struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
-    for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
+    struct HashToIndexItem* chunk_to_reference_block_index_lookup = 0;
+    uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
+    for (uint64_t i = 0; i < reference_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
         uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
-        hmput(chunk_to_remote_block_index_lookup, chunk_hash, block_index);
+        hmput(chunk_to_reference_block_index_lookup, chunk_hash, block_index);
     }
 
     size_t requested_block_hashes_size = sizeof(TLongtail_Hash) * *reference_content_index->m_BlockCount;
@@ -5115,43 +5118,45 @@ int Longtail_RetargetContent(
             reference_content_index, content_index, out_content_index,
             requested_block_hashes_size,
             ENOMEM)
-        hmfree(chunk_to_remote_block_index_lookup);
+        hmfree(chunk_to_reference_block_index_lookup);
         return ENOMEM;
     }
 
     uint64_t requested_block_count = 0;
     struct HashToIndexItem* requested_blocks_lookup = 0;
-    for (uint32_t i = 0; i < *content_index->m_ChunkCount; ++i)
+    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
+    for (uint32_t i = 0; i < content_index_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
-        intptr_t remote_block_index_ptr = hmgeti(chunk_to_remote_block_index_lookup, chunk_hash);
-        if (remote_block_index_ptr == -1)
+        intptr_t reference_block_index_ptr = hmgeti(chunk_to_reference_block_index_lookup, chunk_hash);
+        if (reference_block_index_ptr == -1)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) reference content does not contain the chunk 0x%" PRIx64 "", reference_content_index, content_index, out_content_index, chunk_hash)
             hmfree(requested_blocks_lookup);
             requested_blocks_lookup = 0;
             Longtail_Free(requested_block_hashes);
             requested_block_hashes = 0;
-            hmfree(chunk_to_remote_block_index_lookup);
-            chunk_to_remote_block_index_lookup = 0;
+            hmfree(chunk_to_reference_block_index_lookup);
+            chunk_to_reference_block_index_lookup = 0;
             return EINVAL;
         }
-        uint64_t remote_block_index = chunk_to_remote_block_index_lookup[remote_block_index_ptr].value;
-        TLongtail_Hash remote_block_hash = reference_content_index->m_BlockHashes[remote_block_index];
+        uint64_t reference_block_index = chunk_to_reference_block_index_lookup[reference_block_index_ptr].value;
+        TLongtail_Hash reference_block_hash = reference_content_index->m_BlockHashes[reference_block_index];
 
-        intptr_t request_block_index_ptr = hmgeti(requested_blocks_lookup, remote_block_hash);
+        intptr_t request_block_index_ptr = hmgeti(requested_blocks_lookup, reference_block_hash);
         if (-1 == request_block_index_ptr)
         {
-            requested_block_hashes[requested_block_count] = remote_block_hash;
-            hmput(requested_blocks_lookup, remote_block_hash, requested_block_count);
+            requested_block_hashes[requested_block_count] = reference_block_hash;
+            hmput(requested_blocks_lookup, reference_block_hash, requested_block_count);
             ++requested_block_count;
         }
     }
-    hmfree(chunk_to_remote_block_index_lookup);
-    chunk_to_remote_block_index_lookup = 0;
+    hmfree(chunk_to_reference_block_index_lookup);
+    chunk_to_reference_block_index_lookup = 0;
 
     uint64_t chunk_count = 0;
-    for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
+    uint64_t reference_content_chunk_count = *reference_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
     {
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
         if (-1 == hmgeti(requested_blocks_lookup, block_hash))
@@ -5169,8 +5174,8 @@ int Longtail_RetargetContent(
             reference_content_index, content_index, out_content_index,
             content_index_size,
             ENOMEM)
-        hmfree(chunk_to_remote_block_index_lookup);
-        chunk_to_remote_block_index_lookup = 0;
+        hmfree(chunk_to_reference_block_index_lookup);
+        chunk_to_reference_block_index_lookup = 0;
         Longtail_Free(requested_block_hashes);
         requested_block_hashes = 0;
         return ENOMEM;
@@ -5203,7 +5208,7 @@ int Longtail_RetargetContent(
     memmove(resulting_content_index->m_BlockHashes, requested_block_hashes, sizeof(TLongtail_Hash) * requested_block_count);
 
     uint64_t chunk_index = 0;
-    for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
+    for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
     {
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
         intptr_t block_index_ptr = hmgeti(requested_blocks_lookup, block_hash);
@@ -5230,76 +5235,190 @@ int Longtail_RetargetContent(
     return 0;
 }
 
-// TODO: This could be more efficient - we should only include blocks from remote_content_index that contains chunks not in local_content_index
 int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* local_content_index,
-    struct Longtail_ContentIndex* remote_content_index,
+    struct Longtail_ContentIndex* new_content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex(%p, %p, %p)", local_content_index, remote_content_index, out_content_index)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex(%p, %p, %p)", local_content_index, new_content_index, out_content_index)
     LONGTAIL_VALIDATE_INPUT(local_content_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(remote_content_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((*local_content_index->m_HashAPI) == (*remote_content_index->m_HashAPI), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(new_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT((*local_content_index->m_HashAPI) == (*new_content_index->m_HashAPI), return EINVAL)
 
-    uint64_t local_block_count = *local_content_index->m_BlockCount;
-    uint64_t remote_block_count = *remote_content_index->m_BlockCount;
-    uint64_t local_chunk_count = *local_content_index->m_ChunkCount;
-    uint64_t remote_chunk_count = *remote_content_index->m_ChunkCount;
-    uint64_t block_count = local_block_count + remote_block_count;
-    uint64_t chunk_count = local_chunk_count + remote_chunk_count;
-    size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
-    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
-    if (!content_index)
+    uint64_t max_block_count = *local_content_index->m_BlockCount + *new_content_index->m_BlockCount;
+    uint64_t max_chunk_count = *local_content_index->m_ChunkCount + *new_content_index->m_ChunkCount;
+
+    size_t compact_block_hashes_size = sizeof(TLongtail_Hash) * max_block_count;
+    TLongtail_Hash* compact_block_hashes = (TLongtail_Hash*)Longtail_Alloc(compact_block_hashes_size);
+    if (!compact_block_hashes)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
-            local_content_index, remote_content_index, out_content_index,
-            content_index_size,
+            local_content_index, new_content_index, out_content_index,
+            compact_block_hashes_size,
             ENOMEM)
         return ENOMEM;
     }
+    uint64_t compact_block_count = 0;
 
+    size_t compact_chunk_hashes_size = sizeof(TLongtail_Hash) * max_chunk_count;
+    TLongtail_Hash* compact_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(compact_chunk_hashes_size);
+    if (!compact_block_hashes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            compact_chunk_hashes,
+            ENOMEM)
+        Longtail_Free(compact_block_hashes);
+        return ENOMEM;
+    }
+    uint64_t compact_chunk_count = 0;
+
+    size_t compact_chunk_offsets_size = sizeof(uint32_t) * max_chunk_count;
+    uint32_t* compact_chunk_offsets = (uint32_t*)Longtail_Alloc(compact_chunk_offsets_size);
+    if (!compact_chunk_offsets)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            compact_chunk_offsets_size,
+            ENOMEM)
+        Longtail_Free(compact_chunk_hashes);
+        Longtail_Free(compact_block_hashes);
+        return ENOMEM;
+    }
+    size_t compact_chunk_sizes_size = sizeof(uint32_t) * max_chunk_count;
+    uint32_t* compact_chunk_sizes = (uint32_t*)Longtail_Alloc(compact_chunk_sizes_size);
+    if (!compact_chunk_sizes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            compact_chunk_sizes_size,
+            ENOMEM)
+        Longtail_Free(compact_chunk_offsets);
+        Longtail_Free(compact_chunk_hashes);
+        Longtail_Free(compact_block_hashes);
+        return ENOMEM;
+    }
+
+    struct HashToIndexItem* chunk_hash_to_block_index = 0;
+    struct HashToIndexItem* block_hash_to_block_index = 0;
+    uint64_t new_content_chunk_count = *new_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < new_content_chunk_count; ++c)
+    {
+        TLongtail_Hash chunk_hash = new_content_index->m_ChunkHashes[c];
+        intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
+        if (find_block_ptr != -1)
+        {
+            continue;
+        }
+        uint64_t block_index = new_content_index->m_ChunkBlockIndexes[c];
+        TLongtail_Hash block_hash = new_content_index->m_BlockHashes[block_index];
+        uint32_t block_offset = new_content_index->m_ChunkBlockOffsets[c];
+        uint32_t chunk_size = new_content_index->m_ChunkLengths[c];
+
+        compact_chunk_offsets[compact_chunk_count] = block_offset;
+        compact_chunk_sizes[compact_chunk_count] = chunk_size;
+        compact_chunk_hashes[compact_chunk_count++] = chunk_hash;
+
+        intptr_t find_block_index_ptr = hmgeti(block_hash_to_block_index, block_hash);
+        if (find_block_index_ptr == -1)
+        {
+            hmput(block_hash_to_block_index, block_hash, compact_block_count);
+            hmput(chunk_hash_to_block_index, chunk_hash, compact_block_count);
+            compact_block_hashes[compact_block_count++] = block_hash;
+            continue;
+        }
+        hmput(chunk_hash_to_block_index, chunk_hash, block_hash_to_block_index[find_block_index_ptr].value);
+    }
+
+    uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < local_content_chunk_count; ++c)
+    {
+        TLongtail_Hash chunk_hash = local_content_index->m_ChunkHashes[c];
+        intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
+        if (find_block_ptr != -1)
+        {
+            continue;
+        }
+        uint64_t block_index = local_content_index->m_ChunkBlockIndexes[c];
+        TLongtail_Hash block_hash = local_content_index->m_BlockHashes[block_index];
+        uint32_t block_offset = local_content_index->m_ChunkBlockOffsets[c];
+        uint32_t chunk_size = local_content_index->m_ChunkLengths[c];
+
+        compact_chunk_offsets[compact_chunk_count] = block_offset;
+        compact_chunk_sizes[compact_chunk_count] = chunk_size;
+        compact_chunk_hashes[compact_chunk_count++] = chunk_hash;
+
+        intptr_t find_block_index_ptr = hmgeti(block_hash_to_block_index, block_hash);
+        if (find_block_index_ptr == -1)
+        {
+            hmput(block_hash_to_block_index, block_hash, compact_block_count);
+            hmput(chunk_hash_to_block_index, chunk_hash, compact_block_count);
+            compact_block_hashes[compact_block_count++] = block_hash;
+            continue;
+        }
+        hmput(chunk_hash_to_block_index, chunk_hash, block_hash_to_block_index[find_block_index_ptr].value);
+    }
+
+    size_t content_index_size = Longtail_GetContentIndexSize(compact_block_count, compact_chunk_count);
+    struct Longtail_ContentIndex* compact_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
+    if (!compact_content_index)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            content_index_size,
+            ENOMEM)
+        hmfree(block_hash_to_block_index);
+        Longtail_Free(compact_chunk_sizes);
+        Longtail_Free(compact_chunk_offsets);
+        hmfree(chunk_hash_to_block_index);
+        Longtail_Free(compact_chunk_hashes);
+        Longtail_Free(compact_block_hashes);
+        return ENOMEM;
+    }
     int err = Longtail_InitContentIndex(
-        content_index,
-        &content_index[1],
+        compact_content_index,
+        &compact_content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
-        *local_content_index->m_HashAPI,
-        *local_content_index->m_MaxChunksPerBlock,
-        *local_content_index->m_MaxChunksPerBlock,
-        block_count,
-        chunk_count);
+        *new_content_index->m_HashAPI,
+        *new_content_index->m_MaxBlockSize,
+        *new_content_index->m_MaxChunksPerBlock,
+        compact_block_count,
+        compact_chunk_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %p, %" PRIu64 ", %" PRIu64 ") failed with %d",
-            local_content_index, remote_content_index, out_content_index,
-            content_index, &content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *local_content_index->m_HashAPI, block_count, chunk_count,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %u, %u, %" PRIu64 ", %" PRIu64 " ) failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            compact_content_index, &compact_content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *new_content_index->m_HashAPI, *new_content_index->m_MaxBlockSize, *new_content_index->m_MaxChunksPerBlock, compact_block_count, compact_chunk_count,
             err)
-        Longtail_Free(content_index);
+        Longtail_Free(compact_content_index);
+        hmfree(block_hash_to_block_index);
+        Longtail_Free(compact_chunk_sizes);
+        Longtail_Free(compact_chunk_offsets);
+        hmfree(chunk_hash_to_block_index);
+        Longtail_Free(compact_chunk_hashes);
+        Longtail_Free(compact_block_hashes);
         return err;
     }
 
-    for (uint64_t b = 0; b < local_block_count; ++b)
+    memcpy(compact_content_index->m_BlockHashes, compact_block_hashes, sizeof(TLongtail_Hash) * compact_block_count);
+    memcpy(compact_content_index->m_ChunkHashes, compact_chunk_hashes, sizeof(TLongtail_Hash) * compact_chunk_count);
+    for (uint64_t c = 0; c < compact_chunk_count; ++c)
     {
-        content_index->m_BlockHashes[b] = local_content_index->m_BlockHashes[b];
+        TLongtail_Hash chunk_hash = compact_chunk_hashes[c];
+        uint64_t block_index = hmget(chunk_hash_to_block_index, chunk_hash);
+        uint32_t chunk_offset = compact_chunk_offsets[c];
+        uint32_t chunk_size = compact_chunk_sizes[c];
+        compact_content_index->m_ChunkBlockIndexes[c] = block_index;
+        compact_content_index->m_ChunkBlockOffsets[c] = chunk_offset;
+        compact_content_index->m_ChunkLengths[c] = chunk_size;
     }
-    for (uint64_t b = 0; b < remote_block_count; ++b)
-    {
-        content_index->m_BlockHashes[local_block_count + b] = remote_content_index->m_BlockHashes[b];
-    }
-    for (uint64_t a = 0; a < local_chunk_count; ++a)
-    {
-        content_index->m_ChunkHashes[a] = local_content_index->m_ChunkHashes[a];
-        content_index->m_ChunkBlockIndexes[a] = local_content_index->m_ChunkBlockIndexes[a];
-        content_index->m_ChunkBlockOffsets[a] = local_content_index->m_ChunkBlockOffsets[a];
-        content_index->m_ChunkLengths[a] = local_content_index->m_ChunkLengths[a];
-    }
-    for (uint64_t a = 0; a < remote_chunk_count; ++a)
-    {
-        content_index->m_ChunkHashes[local_chunk_count + a] = remote_content_index->m_ChunkHashes[a];
-        content_index->m_ChunkBlockIndexes[local_chunk_count + a] = local_block_count + remote_content_index->m_ChunkBlockIndexes[a];
-        content_index->m_ChunkBlockOffsets[local_chunk_count + a] = remote_content_index->m_ChunkBlockOffsets[a];
-        content_index->m_ChunkLengths[local_chunk_count + a] = remote_content_index->m_ChunkLengths[a];
-    }
-    *out_content_index = content_index;
+    *out_content_index = compact_content_index;
+    hmfree(block_hash_to_block_index);
+    Longtail_Free(compact_chunk_sizes);
+    Longtail_Free(compact_chunk_offsets);
+    hmfree(chunk_hash_to_block_index);
+    Longtail_Free(compact_chunk_hashes);
+    Longtail_Free(compact_block_hashes);
     return 0;
 }
 
@@ -5312,17 +5431,6 @@ static int CompareHashes(const void* a_ptr, const void* b_ptr)
     TLongtail_Hash b = *(const TLongtail_Hash*)b_ptr;
     return (a > b) ? 1 : (a < b) ? -1 : 0;
 }
-/*
-static int CompareIndexs(const void* a_ptr, const void* b_ptr)
-{
-    LONGTAIL_FATAL_ASSERT(a_ptr != 0, return 0)
-    LONGTAIL_FATAL_ASSERT(b_ptr != 0, return 0)
-
-    int64_t a = *(uint32_t*)a_ptr;
-    int64_t b = *(uint32_t*)b_ptr;
-    return (int)a - b;
-}
-*/
 
 static SORTFUNC(SortPathShortToLong)
 {
@@ -5716,7 +5824,8 @@ int Longtail_ChangeVersion(
         return err;
     }
 
-    for (uint32_t i = 0; i < *target_version->m_ChunkCount; ++i)
+    uint32_t target_version_chunk_count = *target_version->m_ChunkCount;
+    for (uint32_t i = 0; i < target_version_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = target_version->m_ChunkHashes[i];
         intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
@@ -5883,7 +5992,8 @@ int Longtail_ChangeVersion(
 
     if (retain_permissions)
     {
-        for (uint32_t i = 0; i < *version_diff->m_ModifiedPermissionsCount; ++i)
+        uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
+        for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
         {
             uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
             const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
@@ -5932,7 +6042,8 @@ int Longtail_ValidateContent(
         return err;
     }
 
-    for (uint32_t asset_index = 0; asset_index < *version_index->m_AssetCount; ++asset_index)
+    uint32_t version_index_asset_count = *version_index->m_AssetCount;
+    for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
         uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
@@ -5999,7 +6110,8 @@ int Longtail_ValidateVersion(
 
     struct HashToIndexItem* version_chunk_lookup = 0;
 
-    for (uint32_t asset_index = 0; asset_index < *version_index->m_AssetCount; ++asset_index)
+    uint32_t version_index_asset_count = *version_index->m_AssetCount;
+    for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
         uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
@@ -6024,7 +6136,8 @@ int Longtail_ValidateVersion(
         }
     }
 
-    for (uint64_t chunk_index = 0; chunk_index < *content_index->m_ChunkCount; ++chunk_index)
+    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
+    for (uint64_t chunk_index = 0; chunk_index < content_index_chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
         uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
