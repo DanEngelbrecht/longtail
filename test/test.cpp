@@ -1627,14 +1627,14 @@ TEST(Longtail, Longtail_MergeContentIndex)
     Longtail_ContentIndex* cindex6;
     ASSERT_EQ(0, Longtail_MergeContentIndex(cindex4, cindex5, &cindex6));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex6);
-    ASSERT_EQ(4u, *cindex6->m_BlockCount);
-    ASSERT_EQ(6u, *cindex6->m_ChunkCount);
+    ASSERT_EQ(3u, *cindex6->m_BlockCount);
+    ASSERT_EQ(4u, *cindex6->m_ChunkCount);
 
     Longtail_ContentIndex* cindex7;
     ASSERT_EQ(0, Longtail_MergeContentIndex(cindex6, cindex1, &cindex7));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex7);
-    ASSERT_EQ(4u, *cindex7->m_BlockCount);
-    ASSERT_EQ(6u, *cindex7->m_ChunkCount);
+    ASSERT_EQ(3u, *cindex7->m_BlockCount);
+    ASSERT_EQ(4u, *cindex7->m_ChunkCount);
 
     Longtail_Free(cindex7);
     Longtail_Free(cindex6);
