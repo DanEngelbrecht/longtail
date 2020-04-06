@@ -2879,7 +2879,8 @@ int Longtail_CreateContentIndexFromBlocks(
         struct Longtail_BlockIndex* block_index = block_indexes[b];
         content_index->m_BlockHashes[b] = *block_index->m_BlockHash;
         uint32_t chunk_offset = 0;
-        for (uint32_t a = 0; a < *block_index->m_ChunkCount; ++a)
+        uint32_t block_chunk_count = *block_index->m_ChunkCount;
+        for (uint32_t a = 0; a < block_chunk_count; ++a)
         {
             content_index->m_ChunkHashes[asset_index] = block_index->m_ChunkHashes[a];
             content_index->m_ChunkBlockIndexes[asset_index] = b;
@@ -3261,7 +3262,8 @@ static int CreateAssetPartLookup(
     LONGTAIL_FATAL_ASSERT(out_assert_part_lookup != 0, return EINVAL)
 
     struct ChunkHashToAssetPart* asset_part_lookup = 0;
-    for (uint64_t asset_index = 0; asset_index < *version_index->m_AssetCount; ++asset_index)
+    uint64_t asset_count = *version_index->m_AssetCount;
+    for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
         const char* path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
         uint64_t asset_chunk_count = version_index->m_AssetChunkCounts[asset_index];
@@ -5100,7 +5102,8 @@ int Longtail_RetargetContent(
     LONGTAIL_VALIDATE_INPUT((*reference_content_index->m_HashAPI) == (*content_index->m_HashAPI), return EINVAL)
 
     struct HashToIndexItem* chunk_to_reference_block_index_lookup = 0;
-    for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
+    uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
+    for (uint64_t i = 0; i < reference_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
         uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
@@ -5121,7 +5124,8 @@ int Longtail_RetargetContent(
 
     uint64_t requested_block_count = 0;
     struct HashToIndexItem* requested_blocks_lookup = 0;
-    for (uint32_t i = 0; i < *content_index->m_ChunkCount; ++i)
+    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
+    for (uint32_t i = 0; i < content_index_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
         intptr_t reference_block_index_ptr = hmgeti(chunk_to_reference_block_index_lookup, chunk_hash);
@@ -5151,7 +5155,8 @@ int Longtail_RetargetContent(
     chunk_to_reference_block_index_lookup = 0;
 
     uint64_t chunk_count = 0;
-    for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
+    uint64_t reference_content_chunk_count = *reference_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
     {
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
         if (-1 == hmgeti(requested_blocks_lookup, block_hash))
@@ -5203,7 +5208,7 @@ int Longtail_RetargetContent(
     memmove(resulting_content_index->m_BlockHashes, requested_block_hashes, sizeof(TLongtail_Hash) * requested_block_count);
 
     uint64_t chunk_index = 0;
-    for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
+    for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
     {
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
         intptr_t block_index_ptr = hmgeti(requested_blocks_lookup, block_hash);
@@ -5296,7 +5301,8 @@ int Longtail_MergeContentIndex(
 
     struct HashToIndexItem* chunk_hash_to_block_index = 0;
     struct HashToIndexItem* block_hash_to_block_index = 0;
-    for (uint64_t c = 0; c < *new_content_index->m_ChunkCount; ++c)
+    uint64_t new_content_chunk_count = *new_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < new_content_chunk_count; ++c)
     {
         TLongtail_Hash chunk_hash = new_content_index->m_ChunkHashes[c];
         intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
@@ -5324,7 +5330,8 @@ int Longtail_MergeContentIndex(
         hmput(chunk_hash_to_block_index, chunk_hash, block_hash_to_block_index[find_block_index_ptr].value);
     }
 
-    for (uint64_t c = 0; c < *local_content_index->m_ChunkCount; ++c)
+    uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < local_content_chunk_count; ++c)
     {
         TLongtail_Hash chunk_hash = local_content_index->m_ChunkHashes[c];
         intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
@@ -5817,7 +5824,8 @@ int Longtail_ChangeVersion(
         return err;
     }
 
-    for (uint32_t i = 0; i < *target_version->m_ChunkCount; ++i)
+    uint32_t target_version_chunk_count = *target_version->m_ChunkCount;
+    for (uint32_t i = 0; i < target_version_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = target_version->m_ChunkHashes[i];
         intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
@@ -5984,7 +5992,8 @@ int Longtail_ChangeVersion(
 
     if (retain_permissions)
     {
-        for (uint32_t i = 0; i < *version_diff->m_ModifiedPermissionsCount; ++i)
+        uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
+        for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
         {
             uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
             const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
@@ -6033,7 +6042,8 @@ int Longtail_ValidateContent(
         return err;
     }
 
-    for (uint32_t asset_index = 0; asset_index < *version_index->m_AssetCount; ++asset_index)
+    uint32_t version_index_asset_count = *version_index->m_AssetCount;
+    for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
         uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
@@ -6100,7 +6110,8 @@ int Longtail_ValidateVersion(
 
     struct HashToIndexItem* version_chunk_lookup = 0;
 
-    for (uint32_t asset_index = 0; asset_index < *version_index->m_AssetCount; ++asset_index)
+    uint32_t version_index_asset_count = *version_index->m_AssetCount;
+    for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
         uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
@@ -6125,7 +6136,8 @@ int Longtail_ValidateVersion(
         }
     }
 
-    for (uint64_t chunk_index = 0; chunk_index < *content_index->m_ChunkCount; ++chunk_index)
+    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
+    for (uint64_t chunk_index = 0; chunk_index < content_index_chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
         uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
