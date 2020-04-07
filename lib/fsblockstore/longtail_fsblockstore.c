@@ -150,6 +150,7 @@ static int ReadContent(
     struct Longtail_FileInfos* file_infos;
     int err = Longtail_GetFilesRecursively(
         storage_api,
+        0,
         content_path,
         &file_infos);
     if (err)

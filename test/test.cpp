@@ -713,7 +713,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "data/non-existent", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "data/non-existent", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -746,7 +746,7 @@ TEST(Longtail, ContentIndexSerialization)
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/five_items", 5));
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "source/version1", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "source/version1", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -1350,7 +1350,7 @@ TEST(Longtail, Longtail_WriteContent)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(source_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -1448,7 +1448,7 @@ TEST(Longtail, TestVeryLargeFile)
     const char* assets_path = "C:\\Temp\\longtail\\local\\WinClient\\CL6332_WindowsClient\\WindowsClient\\PioneerGame\\Content\\Paks";
 
     Longtail_FileInfos* paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, assets_path, &paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, assets_path, &paths));
     Longtail_VersionIndex* version_index;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
@@ -1605,7 +1605,7 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(1, MakePath(local_storage, "deep/folders/with/nothing/in/menoexists.nop"));
 
     Longtail_FileInfos* local_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "", &local_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "", &local_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -1928,7 +1928,7 @@ TEST(Longtail, Longtail_VersionDiff)
     }
 
     Longtail_FileInfos* old_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, "old", &old_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "old", &old_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, old_version_paths);
     uint32_t* old_compression_types = GetCompressionTypes(storage, old_version_paths);
     ASSERT_NE((uint32_t*)0, old_compression_types);
@@ -1950,7 +1950,7 @@ TEST(Longtail, Longtail_VersionDiff)
     old_version_paths = 0;
 
     Longtail_FileInfos* new_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, "new", &new_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "new", &new_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, new_version_paths);
     uint32_t* new_compression_types = GetCompressionTypes(storage, new_version_paths);
     ASSERT_NE((uint32_t*)0, new_compression_types);
@@ -2038,7 +2038,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     // Verify that our old folder now matches the new folder data
     Longtail_FileInfos* updated_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, "old", &updated_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "old", &updated_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, updated_version_paths);
     const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10u;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
@@ -2090,7 +2090,7 @@ TEST(Longtail, FullScale)
     CreateFakeContent(remote_storage, 0, 10);
 
     Longtail_FileInfos* local_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "", &local_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "", &local_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
     uint32_t* local_compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
@@ -2112,7 +2112,7 @@ TEST(Longtail, FullScale)
     local_compression_types = 0;
 
     Longtail_FileInfos* remote_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(remote_storage, "", &remote_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(remote_storage, 0, "", &remote_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
     uint32_t* remote_compression_types = GetCompressionTypes(local_storage, remote_paths);
     ASSERT_NE((uint32_t*)0, remote_compression_types);
@@ -2365,7 +2365,7 @@ TEST(Longtail, Longtail_WriteVersion)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
@@ -2518,7 +2518,7 @@ static void Bench()
         sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
         printf("Indexing `%s`\n", version_source_folder);
         Longtail_FileInfos* version_source_paths;
-        ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, version_source_folder, &version_source_paths));
+        ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, version_source_folder, &version_source_paths));
         ASSERT_NE((Longtail_FileInfos*)0, version_source_paths);
         uint32_t* version_compression_types = GetCompressionTypes(storage_api, version_source_paths);
         ASSERT_NE((uint32_t*)0, version_compression_types);
@@ -2723,7 +2723,7 @@ static void LifelikeTest()
     Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_remote_block_store_api, compression_registry);
 
     Longtail_FileInfos* local_path_1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, local_path_1, &local_path_1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, local_path_1, &local_path_1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_path_1_paths);
     uint32_t* local_compression_types = GetCompressionTypes(storage_api, local_path_1_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
@@ -2794,7 +2794,7 @@ static void LifelikeTest()
 
     printf("Indexing `%s`...\n", local_path_2);
     Longtail_FileInfos* local_path_2_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, local_path_2, &local_path_2_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, local_path_2, &local_path_2_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_path_2_paths);
     uint32_t* local_2_compression_types = GetCompressionTypes(storage_api, local_path_2_paths);
     ASSERT_NE((uint32_t*)0, local_2_compression_types);
@@ -3128,7 +3128,7 @@ TEST(Longtail, FileSystemStorage)
     const char* root_path = "testdata/sample_folder";
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, root_path, &file_infos));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, root_path, &file_infos));
     ASSERT_EQ(18u, *file_infos->m_Paths.m_PathCount);
     Longtail_Free(file_infos);
 
@@ -3596,7 +3596,7 @@ TEST(Longtail, AsyncBlockStore)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);

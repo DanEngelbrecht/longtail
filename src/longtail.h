@@ -34,6 +34,25 @@ struct Longtail_API
 LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
+////////////// Longtail_PathFilterAPI
+
+typedef int (*Longtail_PathFilter_IncludeFunc)(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
+
+struct Longtail_PathFilterAPI
+{
+    struct Longtail_API m_API;
+    Longtail_PathFilter_IncludeFunc m_IncludeFunc;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetPathFilterAPISize();
+
+LONGTAIL_EXPORT struct Longtail_PathFilterAPI* Longtail_MakePathFilterAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_PathFilter_IncludeFunc include_filter_func);
+
+LONGTAIL_EXPORT int Longtail_PathFilter_Include(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
+
 ////////////// Longtail_HashAPI
 
 struct Longtail_HashAPI;
@@ -435,6 +454,7 @@ LONGTAIL_EXPORT char* Longtail_Strdup(const char* path);
 
 LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
+    struct Longtail_PathFilterAPI* path_filter_api,
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
