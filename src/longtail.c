@@ -47,7 +47,30 @@ uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_
     #endif
 #endif
 
-LONGTAIL_EXPORT uint64_t Longtail_GetHashAPISize()
+
+uint64_t Longtail_GetPathFilterAPISize()
+{
+    return sizeof(struct Longtail_PathFilterAPI);
+}
+
+struct Longtail_PathFilterAPI* Longtail_MakePathFilterAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_PathFilter_IncludeFunc include_filter_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_PathFilterAPI* api = (struct Longtail_PathFilterAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->Include = include_filter_func;
+    return api;
+}
+
+int Longtail_PathFilter_Include(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
+{
+    return path_filter_api->Include(path_filter_api, root_path, asset_folder, asset_name, is_dir, size, permissions);
+}
+
+uint64_t Longtail_GetHashAPISize()
 {
     return sizeof(struct Longtail_HashAPI);
 }
@@ -79,7 +102,7 @@ uint64_t Longtail_Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_Ha
 int Longtail_Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash) { return hash_api->HashBuffer(hash_api, length, data, out_hash); }
 
 
-LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize()
+uint64_t Longtail_GetStorageAPISize()
 {
     return sizeof(struct Longtail_StorageAPI);
 }
@@ -158,7 +181,7 @@ const char* Longtail_Storage_GetFileName(struct Longtail_StorageAPI* storage_api
 const char* Longtail_Storage_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { return storage_api->GetDirectoryName(storage_api, iterator); }
 int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions) { return storage_api->GetEntryProperties(storage_api, iterator, out_size, out_permissions); }
 
-LONGTAIL_EXPORT uint64_t Longtail_GetProgressAPISize()
+uint64_t Longtail_GetProgressAPISize()
 {
     return sizeof(struct Longtail_ProgressAPI);
 }
@@ -177,7 +200,7 @@ struct Longtail_ProgressAPI* Longtail_MakeProgressAPI(
 
 void Longtail_Progress_OnProgress(struct Longtail_ProgressAPI* progressAPI, uint32_t total_count, uint32_t done_count) { progressAPI->OnProgress(progressAPI, total_count, done_count); }
 
-LONGTAIL_EXPORT uint64_t Longtail_GetJobAPISize()
+uint64_t Longtail_GetJobAPISize()
 {
     return sizeof(struct Longtail_JobAPI);
 }
@@ -214,7 +237,7 @@ int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, 
 int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI) { return job_api->WaitForAllJobs(job_api, progressAPI); }
 int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id) { return job_api->ResumeJob(job_api, job_id); }
 
-LONGTAIL_EXPORT uint64_t Longtail_GetAsyncPutStoredBlockAPISize()
+uint64_t Longtail_GetAsyncPutStoredBlockAPISize()
 {
     return sizeof(struct Longtail_AsyncPutStoredBlockAPI);
 }
@@ -233,7 +256,7 @@ struct Longtail_AsyncPutStoredBlockAPI* Longtail_MakeAsyncPutStoredBlockAPI(
 
 int Longtail_AsyncPutStoredBlock_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err) { return async_complete_api->OnComplete(async_complete_api, err); }
 
-LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetStoredBlockAPISize()
+uint64_t Longtail_GetAsyncGetStoredBlockAPISize()
 {
     return sizeof(struct Longtail_AsyncGetStoredBlockAPI);
 }
@@ -252,7 +275,7 @@ struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetStoredBlockAPI(
 
 int Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err) { return async_complete_api->OnComplete(async_complete_api, stored_block, err); }
 
-LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetIndexAPISize()
+uint64_t Longtail_GetAsyncGetIndexAPISize()
 {
     return sizeof(struct Longtail_AsyncGetIndexAPI);
 }
@@ -271,7 +294,7 @@ struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
 
 int Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err) { return async_complete_api->OnComplete(async_complete_api, content_index, err); }
 
-LONGTAIL_EXPORT uint64_t Longtail_GetBlockStoreAPISize()
+uint64_t Longtail_GetBlockStoreAPISize()
 {
     return sizeof(struct Longtail_BlockStoreAPI);
 }
@@ -487,7 +510,12 @@ struct HashToIndexItem
 
 typedef int (*ProcessEntry)(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size, uint16_t permissions);
 
-static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root_folder, ProcessEntry entry_processor, void* context)
+static int RecurseTree(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_PathFilterAPI* optional_path_filter_api,
+    const char* root_folder,
+    ProcessEntry entry_processor,
+    void* context)
 {
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(root_folder != 0, return EINVAL)
@@ -543,23 +571,26 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) storage_api->GetEntryProperties(%p, %s, %p, %p) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, (void*)storage_api, dir_name, (void*)&size, (void*)&permissions, err)
                     break;
                 }
-                err = entry_processor(context, asset_folder, dir_name, 1, size, permissions);
-                if (err)
+                if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, dir_name, 1, size, permissions))
                 {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 1, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, dir_name, size, permissions, err)
-                    break;
-                }
-                if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
-                {
-                    if (folder_index > 0)
+                    err = entry_processor(context, asset_folder, dir_name, 1, size, permissions);
+                    if (err)
                     {
-                        uint32_t unprocessed_count = (uint32_t)(arrlen(folder_paths) - folder_index);
-                        memmove(folder_paths, &folder_paths[folder_index], sizeof(const char*) * unprocessed_count);
-                        arrsetlen(folder_paths, unprocessed_count);
-                        folder_index = 0;
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 1, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, dir_name, size, permissions, err)
+                        break;
                     }
+                    if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
+                    {
+                        if (folder_index > 0)
+                        {
+                            uint32_t unprocessed_count = (uint32_t)(arrlen(folder_paths) - folder_index);
+                            memmove(folder_paths, &folder_paths[folder_index], sizeof(const char*) * unprocessed_count);
+                            arrsetlen(folder_paths, unprocessed_count);
+                            folder_index = 0;
+                        }
+                    }
+                    arrput(folder_paths, storage_api->ConcatPath(storage_api, asset_folder, dir_name));
                 }
-                arrput(folder_paths, storage_api->ConcatPath(storage_api, asset_folder, dir_name));
             }
             else
             {
@@ -575,11 +606,14 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) storage_api->GetEntryProperties(%p, %s, %p, %p) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, (void*)storage_api, file_name, (void*)&size, (void*)&permissions, err)
                         break;
                     }
-                    err = entry_processor(context, asset_folder, file_name, 0, size, permissions);
-                    if (err)
+                    if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, file_name, 0, size, permissions))
                     {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 0, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, file_name, size, permissions, err)
-                        break;
+                        err = entry_processor(context, asset_folder, file_name, 0, size, permissions);
+                        if (err)
+                        {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 0, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, file_name, size, permissions, err)
+                            break;
+                        }
                     }
                 }
             }
@@ -766,7 +800,11 @@ static int AddFile(void* context, const char* root_path, const char* file_name, 
     return 0;
 }
 
-int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const char* root_path, struct Longtail_FileInfos** out_file_infos)
+int Longtail_GetFilesRecursively(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_PathFilterAPI* optional_path_filter_api,
+    const char* root_path,
+    struct Longtail_FileInfos** out_file_infos)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_GetFilesRecursively(%p, %s, %p)", storage_api, root_path, out_file_infos)
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL)
@@ -787,7 +825,7 @@ int Longtail_GetFilesRecursively(struct Longtail_StorageAPI* storage_api, const 
     arrsetcap(context.m_FileSizes, 4096);
     arrsetcap(context.m_Permissions, 4096);
 
-    int err = RecurseTree(storage_api, root_path, AddFile, &context);
+    int err = RecurseTree(storage_api, optional_path_filter_api, root_path, AddFile, &context);
     if(err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilesRecursively(%p, %s, %p) RecurseTree(%p, %s, %p, %p) failed with %d", storage_api, root_path, out_file_infos, (void*)storage_api, root_path, (void*)AddFile, (void*)&context, err)

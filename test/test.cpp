@@ -713,7 +713,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "data/non-existent", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "data/non-existent", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -746,7 +746,7 @@ TEST(Longtail, ContentIndexSerialization)
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/two_items", 2));
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/five_items", 5));
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "source/version1", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "source/version1", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -1312,6 +1312,153 @@ TEST(Longtail, Longtail_CompressBlockStore)
     SAFE_DISPOSE_API(local_storage_api);
 }
 
+TEST(Longtail, Longtail_TestGetFilesRecursively)
+{
+    Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
+
+    const uint32_t ASSET_COUNT = 10u;
+
+    const char* TEST_FILENAMES[ASSET_COUNT] = {
+        "ContentChangedSameLength.txt",
+        "WillBeRenamed.txt",
+        "ContentSameButShorter.txt",
+        "folder/ContentSameButLonger.txt",
+        "OldRenamedFolder/MovedToNewFolder.txt",
+        "JustDifferent.txt",
+        "EmptyFileInFolder/.init.py",
+        "a/file/in/folder/LongWithChangedStart.dll",
+        "a/file/in/other/folder/LongChangedAtEnd.exe",
+        "permissions_changed.txt"
+    };
+
+    const char* TEST_STRINGS[ASSET_COUNT] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "This is the documentation we are all craving to understand the complexities of life",
+        "More than chunk less than block",
+        "",
+        "A very long file that should be able to be recreated"
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+            "And in the end it is not the same, it is different, just because why not",
+        "A very long file that should be able to be recreated"
+            "Another big file but this does not contain the data as the one above, however it does start out the same as the other file,right?"
+            "Yet we also repeat this line, this is the first time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the second time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the third time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fourth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fifth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the sixth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the eigth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the ninth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the tenth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the elevth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the twelth time you see this, but it will also show up again and again with only small changes"
+            "I realize I'm not very good at writing out the numbering with the 'th stuff at the end. Not much reason to use that before."
+            "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
+            "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
+            "That will look like garbage, will that really be a good idea?"
+            "This is the end tough...",
+        "Content stays the same but permissions change"
+    };
+
+    const size_t TEST_SIZES[ASSET_COUNT] = {
+        strlen(TEST_STRINGS[0]) + 1,
+        strlen(TEST_STRINGS[1]) + 1,
+        strlen(TEST_STRINGS[2]) + 1,
+        strlen(TEST_STRINGS[3]) + 1,
+        strlen(TEST_STRINGS[4]) + 1,
+        strlen(TEST_STRINGS[5]) + 1,
+        strlen(TEST_STRINGS[6]) + 1,
+        strlen(TEST_STRINGS[7]) + 1,
+        strlen(TEST_STRINGS[8]) + 1,
+        strlen(TEST_STRINGS[9]) + 1
+    };
+
+    const uint16_t TEST_PERMISSIONS[ASSET_COUNT] = {
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0755,
+        0646
+    };
+
+    for (uint32_t i = 0; i < ASSET_COUNT; ++i)
+    {
+        const char* file_name = TEST_FILENAMES[i];
+        ASSERT_NE(0, CreateParentPath(storage, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        if (TEST_SIZES[i])
+        {
+            ASSERT_EQ(0, storage->Write(storage, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+        }
+        storage->CloseFile(storage, w);
+        w = 0;
+        storage->SetPermissions(storage, file_name, TEST_PERMISSIONS[i]);
+    }
+
+    Longtail_FileInfos* all_file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "", &all_file_infos));
+    ASSERT_NE((Longtail_FileInfos*)0, all_file_infos);
+    ASSERT_EQ(19u, *all_file_infos->m_Paths.m_PathCount);
+    Longtail_Free(all_file_infos);
+
+    struct TestFileFilter
+    {
+        struct Longtail_PathFilterAPI m_API;
+
+        static int IncludeFunc(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
+        {
+            if(!is_dir)
+            {
+                return 1;
+            }
+            if (strcmp(asset_folder, "a/file") != 0)
+            {
+                return 1;
+            }
+            if (strcmp(asset_name, "in") != 0)
+            {
+                return 1;
+            }
+            return 0;
+        }
+    } test_filter;
+
+    test_filter.m_API.m_API.Dispose = 0;
+    test_filter.m_API.Include = TestFileFilter::IncludeFunc;
+
+    Longtail_FileInfos* filtered_file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, &test_filter.m_API, "", &filtered_file_infos));
+    ASSERT_NE((Longtail_FileInfos*)0, filtered_file_infos);
+    ASSERT_EQ(13u, *filtered_file_infos->m_Paths.m_PathCount);
+    Longtail_Free(filtered_file_infos);
+
+    SAFE_DISPOSE_API(storage);
+}
+
 TEST(Longtail, Longtail_WriteContent)
 {
     Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
@@ -1350,7 +1497,7 @@ TEST(Longtail, Longtail_WriteContent)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetCompressionTypes(source_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -1448,7 +1595,7 @@ TEST(Longtail, TestVeryLargeFile)
     const char* assets_path = "C:\\Temp\\longtail\\local\\WinClient\\CL6332_WindowsClient\\WindowsClient\\PioneerGame\\Content\\Paks";
 
     Longtail_FileInfos* paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, assets_path, &paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, assets_path, &paths));
     Longtail_VersionIndex* version_index;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
@@ -1605,7 +1752,7 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(1, MakePath(local_storage, "deep/folders/with/nothing/in/menoexists.nop"));
 
     Longtail_FileInfos* local_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "", &local_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "", &local_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
     uint32_t* compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -1928,7 +2075,7 @@ TEST(Longtail, Longtail_VersionDiff)
     }
 
     Longtail_FileInfos* old_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, "old", &old_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "old", &old_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, old_version_paths);
     uint32_t* old_compression_types = GetCompressionTypes(storage, old_version_paths);
     ASSERT_NE((uint32_t*)0, old_compression_types);
@@ -1950,7 +2097,7 @@ TEST(Longtail, Longtail_VersionDiff)
     old_version_paths = 0;
 
     Longtail_FileInfos* new_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, "new", &new_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "new", &new_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, new_version_paths);
     uint32_t* new_compression_types = GetCompressionTypes(storage, new_version_paths);
     ASSERT_NE((uint32_t*)0, new_compression_types);
@@ -2038,7 +2185,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     // Verify that our old folder now matches the new folder data
     Longtail_FileInfos* updated_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, "old", &updated_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "old", &updated_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, updated_version_paths);
     const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10u;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
@@ -2090,7 +2237,7 @@ TEST(Longtail, FullScale)
     CreateFakeContent(remote_storage, 0, 10);
 
     Longtail_FileInfos* local_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, "", &local_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "", &local_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
     uint32_t* local_compression_types = GetCompressionTypes(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
@@ -2112,7 +2259,7 @@ TEST(Longtail, FullScale)
     local_compression_types = 0;
 
     Longtail_FileInfos* remote_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(remote_storage, "", &remote_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(remote_storage, 0, "", &remote_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
     uint32_t* remote_compression_types = GetCompressionTypes(local_storage, remote_paths);
     ASSERT_NE((uint32_t*)0, remote_compression_types);
@@ -2365,7 +2512,7 @@ TEST(Longtail, Longtail_WriteVersion)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
@@ -2518,7 +2665,7 @@ static void Bench()
         sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
         printf("Indexing `%s`\n", version_source_folder);
         Longtail_FileInfos* version_source_paths;
-        ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, version_source_folder, &version_source_paths));
+        ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, version_source_folder, &version_source_paths));
         ASSERT_NE((Longtail_FileInfos*)0, version_source_paths);
         uint32_t* version_compression_types = GetCompressionTypes(storage_api, version_source_paths);
         ASSERT_NE((uint32_t*)0, version_compression_types);
@@ -2723,7 +2870,7 @@ static void LifelikeTest()
     Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_remote_block_store_api, compression_registry);
 
     Longtail_FileInfos* local_path_1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, local_path_1, &local_path_1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, local_path_1, &local_path_1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_path_1_paths);
     uint32_t* local_compression_types = GetCompressionTypes(storage_api, local_path_1_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
@@ -2794,7 +2941,7 @@ static void LifelikeTest()
 
     printf("Indexing `%s`...\n", local_path_2);
     Longtail_FileInfos* local_path_2_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, local_path_2, &local_path_2_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, local_path_2, &local_path_2_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_path_2_paths);
     uint32_t* local_2_compression_types = GetCompressionTypes(storage_api, local_path_2_paths);
     ASSERT_NE((uint32_t*)0, local_2_compression_types);
@@ -3128,7 +3275,7 @@ TEST(Longtail, FileSystemStorage)
     const char* root_path = "testdata/sample_folder";
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, root_path, &file_infos));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, root_path, &file_infos));
     ASSERT_EQ(18u, *file_infos->m_Paths.m_PathCount);
     Longtail_Free(file_infos);
 
@@ -3596,7 +3743,7 @@ TEST(Longtail, AsyncBlockStore)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
