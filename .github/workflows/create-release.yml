@@ -100,8 +100,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - First Change
-          - Second Change
+          - Added GetStats() to BlockStore API
         draft: false
         prerelease: false
     - name: Download Linux artifacts
