@@ -493,6 +493,16 @@ static int FSBlockStore_GetIndex(
     return 0;
 }
 
+static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "FSBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
+    memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    return 0;
+}
+
 static void FSBlockStore_Dispose(struct Longtail_API* api)
 {
     LONGTAIL_FATAL_ASSERT(api, return)
@@ -524,6 +534,7 @@ static int FSBlockStore_Init(
     api->m_BlockStoreAPI.PutStoredBlock = FSBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = FSBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = FSBlockStore_GetIndex;
+    api->m_BlockStoreAPI.GetStats = FSBlockStore_GetStats;
     api->m_StorageAPI = storage_api;
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndex = 0;

@@ -281,7 +281,8 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
-    Longtail_BlockStore_GetIndexFunc get_index_func)
+    Longtail_BlockStore_GetIndexFunc get_index_func,
+    Longtail_BlockStore_GetStatsFunc get_stats_func)
 {
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
     struct Longtail_BlockStoreAPI* api = (struct Longtail_BlockStoreAPI*)mem;
@@ -289,12 +290,14 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     api->PutStoredBlock = put_stored_block_func;
     api->GetStoredBlock = get_stored_block_func;
     api->GetIndex = get_index_func;
+    api->GetStats = get_stats_func;
     return api;
 }
 
 int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api) { return block_store_api->PutStoredBlock(block_store_api, stored_block, async_complete_api); }
 int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api) { return block_store_api->GetStoredBlock(block_store_api, block_hash, async_complete_api); }
 int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api) { return block_store_api->GetIndex(block_store_api, default_hash_api_identifier, async_complete_api); }
+int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats) { return block_store_api->GetStats(block_store_api, out_stats); }
 
 Longtail_Assert Longtail_Assert_private = 0;
 

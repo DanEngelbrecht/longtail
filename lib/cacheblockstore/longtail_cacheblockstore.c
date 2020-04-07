@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <string.h>
 
 struct CacheBlockStoreAPI
 {
@@ -74,9 +75,9 @@ static int CacheBlockStore_PutStoredBlock(
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CacheBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
 
@@ -330,8 +331,8 @@ static int CacheBlockStore_GetStoredBlock(
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CacheBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
     size_t on_get_stored_block_get_local_complete_api_size = sizeof(struct OnGetStoredBlockGetLocalComplete_API);
@@ -365,11 +366,21 @@ static int CacheBlockStore_GetIndex(
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CacheBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
-    LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
     return cacheblockstore_api->m_RemoteBlockStoreAPI->GetIndex(cacheblockstore_api->m_RemoteBlockStoreAPI, default_hash_api_identifier, async_complete_api);
+}
+
+static int CacheBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CacheBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
+    memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    return 0;
 }
 
 static void CacheBlockStore_Dispose(struct Longtail_API* api)
@@ -395,6 +406,7 @@ static int CacheBlockStore_Init(
     api->m_BlockStoreAPI.PutStoredBlock = CacheBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = CacheBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = CacheBlockStore_GetIndex;
+    api->m_BlockStoreAPI.GetStats = CacheBlockStore_GetStats;
     api->m_LocalBlockStoreAPI = local_block_store;
     api->m_RemoteBlockStoreAPI = remote_block_store;
     return 0;

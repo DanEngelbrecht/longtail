@@ -358,6 +358,16 @@ static int CompressBlockStore_GetIndex(
         async_complete_api);
 }
 
+static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    struct CompressBlockStoreAPI* compressblockstore_api = (struct CompressBlockStoreAPI*)block_store_api;
+    memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    return 0;
+}
+
 static void CompressBlockStore_Dispose(struct Longtail_API* api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_Dispose(%p)", api)
@@ -381,6 +391,7 @@ static int CompressBlockStore_Init(
     api->m_BlockStoreAPI.PutStoredBlock = CompressBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = CompressBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = CompressBlockStore_GetIndex;
+    api->m_BlockStoreAPI.GetStats = CompressBlockStore_GetStats;
     api->m_BackingBlockStore = backing_block_store;
     api->m_CompressionRegistryAPI = compression_registry;
     return 0;
