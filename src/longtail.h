@@ -41,7 +41,7 @@ typedef int (*Longtail_PathFilter_IncludeFunc)(struct Longtail_PathFilterAPI* pa
 struct Longtail_PathFilterAPI
 {
     struct Longtail_API m_API;
-    Longtail_PathFilter_IncludeFunc m_IncludeFunc;
+    Longtail_PathFilter_IncludeFunc Include;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetPathFilterAPISize();

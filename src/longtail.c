@@ -548,7 +548,7 @@ static int RecurseTree(
                     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) storage_api->GetEntryProperties(%p, %s, %p, %p) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, (void*)storage_api, dir_name, (void*)&size, (void*)&permissions, err)
                     break;
                 }
-                if (!optional_path_filter_api || optional_path_filter_api->m_IncludeFunc(optional_path_filter_api, root_folder, asset_folder, dir_name, 1, size, permissions))
+                if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, dir_name, 1, size, permissions))
                 {
                     err = entry_processor(context, asset_folder, dir_name, 1, size, permissions);
                     if (err)
@@ -583,7 +583,7 @@ static int RecurseTree(
                         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) storage_api->GetEntryProperties(%p, %s, %p, %p) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, (void*)storage_api, file_name, (void*)&size, (void*)&permissions, err)
                         break;
                     }
-                    if (!optional_path_filter_api || optional_path_filter_api->m_IncludeFunc(optional_path_filter_api, root_folder, asset_folder, file_name, 0, size, permissions))
+                    if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, file_name, 0, size, permissions))
                     {
                         err = entry_processor(context, asset_folder, file_name, 0, size, permissions);
                         if (err)
