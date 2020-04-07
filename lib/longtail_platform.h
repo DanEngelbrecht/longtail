@@ -15,6 +15,9 @@ void        Longtail_Sleep(uint64_t timeout_us);
 typedef int32_t volatile TLongtail_Atomic32;
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount);
 
+typedef int64_t volatile TLongtail_Atomic64;
+int64_t Longtail_AtomicAdd64(TLongtail_Atomic64* value, int64_t amount);
+
 typedef struct Longtail_Thread* HLongtail_Thread;
 
 typedef int (*Longtail_ThreadFunc)(void* context_data);

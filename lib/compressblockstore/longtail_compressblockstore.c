@@ -12,6 +12,21 @@ struct CompressBlockStoreAPI
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_BlockStoreAPI* m_BackingBlockStore;
     struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
+    struct Longtail_BlockStore_Stats m_Stats;
+
+    TLongtail_Atomic64 m_IndexGetCount;
+    TLongtail_Atomic64 m_BlocksGetCount;
+    TLongtail_Atomic64 m_BlocksPutCount;
+    TLongtail_Atomic64 m_ChunksGetCount;
+    TLongtail_Atomic64 m_ChunksPutCount;
+    TLongtail_Atomic64 m_BytesGetCount;
+    TLongtail_Atomic64 m_BytesPutCount;
+    TLongtail_Atomic64 m_IndexGetRetryCount;
+    TLongtail_Atomic64 m_BlockGetRetryCount;
+    TLongtail_Atomic64 m_BlockPutRetryCount;
+    TLongtail_Atomic64 m_IndexGetFailCount;
+    TLongtail_Atomic64 m_BlockGetFailCount;
+    TLongtail_Atomic64 m_BlockPutFailCount;
 };
 
 static int CompressedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
@@ -135,7 +150,13 @@ static int CompressBlockStore_PutStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL);
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
+
+    Longtail_AtomicAdd64(&block_store->m_BlocksPutCount, 1);
+    Longtail_AtomicAdd64(&block_store->m_ChunksPutCount, *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&block_store->m_BytesPutCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
+
     struct Longtail_StoredBlock* compressed_stored_block;
+
     int err = CompressBlock(block_store->m_CompressionRegistryAPI, stored_block, &compressed_stored_block);
     if (err)
     {
@@ -275,6 +296,10 @@ static int OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* asy
         return err;
     }
 
+    Longtail_AtomicAdd64(&async_block_store->m_BlockStore->m_BlocksGetCount, 1);
+    Longtail_AtomicAdd64(&async_block_store->m_BlockStore->m_ChunksGetCount, *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&async_block_store->m_BlockStore->m_BytesGetCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
+
     uint32_t compressionType = *stored_block->m_BlockIndex->m_Tag;
     if (compressionType == 0)
     {
@@ -352,10 +377,34 @@ static int CompressBlockStore_GetIndex(
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&block_store->m_IndexGetCount, 1);
     return block_store->m_BackingBlockStore->GetIndex(
         block_store->m_BackingBlockStore,
         default_hash_api_identifier,
         async_complete_api);
+}
+
+static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    struct CompressBlockStoreAPI* compressblockstore_api = (struct CompressBlockStoreAPI*)block_store_api;
+    memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    out_stats->m_IndexGetCount = compressblockstore_api->m_IndexGetCount;
+    out_stats->m_BlocksGetCount = compressblockstore_api->m_BlocksGetCount;
+    out_stats->m_BlocksPutCount = compressblockstore_api->m_BlocksPutCount;
+    out_stats->m_ChunksGetCount = compressblockstore_api->m_ChunksGetCount;
+    out_stats->m_ChunksPutCount = compressblockstore_api->m_ChunksPutCount;
+    out_stats->m_BytesGetCount = compressblockstore_api->m_BytesGetCount;
+    out_stats->m_BytesPutCount = compressblockstore_api->m_BytesPutCount;
+    out_stats->m_IndexGetRetryCount = compressblockstore_api->m_IndexGetRetryCount;
+    out_stats->m_BlockGetRetryCount = compressblockstore_api->m_BlockGetRetryCount;
+    out_stats->m_BlockPutRetryCount = compressblockstore_api->m_BlockPutRetryCount;
+    out_stats->m_IndexGetFailCount = compressblockstore_api->m_IndexGetFailCount;
+    out_stats->m_BlockGetFailCount = compressblockstore_api->m_BlockGetFailCount;
+    out_stats->m_BlockPutFailCount = compressblockstore_api->m_BlockPutFailCount;
+    return 0;
 }
 
 static void CompressBlockStore_Dispose(struct Longtail_API* api)
@@ -370,7 +419,7 @@ static void CompressBlockStore_Dispose(struct Longtail_API* api)
 static int CompressBlockStore_Init(
     struct CompressBlockStoreAPI* api,
     struct Longtail_BlockStoreAPI* backing_block_store,
-	struct Longtail_CompressionRegistryAPI* compression_registry)
+    struct Longtail_CompressionRegistryAPI* compression_registry)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_Dispose(%p, %p, %p)", api, backing_block_store, compression_registry)
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
@@ -381,14 +430,30 @@ static int CompressBlockStore_Init(
     api->m_BlockStoreAPI.PutStoredBlock = CompressBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = CompressBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = CompressBlockStore_GetIndex;
+    api->m_BlockStoreAPI.GetStats = CompressBlockStore_GetStats;
     api->m_BackingBlockStore = backing_block_store;
     api->m_CompressionRegistryAPI = compression_registry;
+
+    api->m_IndexGetCount = 0;
+    api->m_BlocksGetCount = 0;
+    api->m_BlocksPutCount = 0;
+    api->m_ChunksGetCount = 0;
+    api->m_ChunksPutCount = 0;
+    api->m_BytesGetCount = 0;
+    api->m_BytesPutCount = 0;
+    api->m_IndexGetRetryCount = 0;
+    api->m_BlockGetRetryCount = 0;
+    api->m_BlockPutRetryCount = 0;
+    api->m_IndexGetFailCount = 0;
+    api->m_BlockGetFailCount = 0;
+    api->m_BlockPutFailCount = 0;
+
     return 0;
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
     struct Longtail_BlockStoreAPI* backing_block_store,
-	struct Longtail_CompressionRegistryAPI* compression_registry)
+    struct Longtail_CompressionRegistryAPI* compression_registry)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateCompressBlockStoreAPI(%p, %p)", backing_block_store, compression_registry)
     LONGTAIL_VALIDATE_INPUT(backing_block_store, return 0)

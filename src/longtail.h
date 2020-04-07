@@ -325,9 +325,27 @@ LONGTAIL_EXPORT int Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIn
 
 struct Longtail_BlockStoreAPI;
 
+struct Longtail_BlockStore_Stats
+{
+	uint64_t m_IndexGetCount;
+	uint64_t m_BlocksGetCount;
+	uint64_t m_BlocksPutCount;
+	uint64_t m_ChunksGetCount;
+	uint64_t m_ChunksPutCount;
+	uint64_t m_BytesGetCount;
+	uint64_t m_BytesPutCount;
+	uint64_t m_IndexGetRetryCount;
+    uint64_t m_BlockGetRetryCount;
+    uint64_t m_BlockPutRetryCount;
+	uint64_t m_IndexGetFailCount;
+    uint64_t m_BlockGetFailCount;
+    uint64_t m_BlockPutFailCount;
+};
+
 typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 
 struct Longtail_BlockStoreAPI
 {
@@ -335,6 +353,7 @@ struct Longtail_BlockStoreAPI
     Longtail_BlockStore_PutStoredBlockFunc PutStoredBlock;
     Longtail_BlockStore_GetStoredBlockFunc GetStoredBlock;
     Longtail_BlockStore_GetIndexFunc GetIndex;
+    Longtail_BlockStore_GetStatsFunc GetStats;
 };
 
 
@@ -345,11 +364,13 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
-    Longtail_BlockStore_GetIndexFunc get_index_func);
+    Longtail_BlockStore_GetIndexFunc get_index_func,
+    Longtail_BlockStore_GetStatsFunc get_stats_func);
 
 LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);

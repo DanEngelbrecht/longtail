@@ -1030,6 +1030,17 @@ TEST(Longtail, Longtail_FSBlockStore)
     Longtail_Free(put_block.m_BlockData);
     get_block->Dispose(get_block);
 
+    Longtail_BlockStore_Stats stats;
+    block_store_api->GetStats(block_store_api, &stats);
+
+    ASSERT_EQ(1, stats.m_IndexGetCount);
+    ASSERT_EQ(1, stats.m_BlocksGetCount);
+    ASSERT_EQ(1, stats.m_BlocksPutCount);
+    ASSERT_EQ(2, stats.m_ChunksGetCount);
+    ASSERT_EQ(2, stats.m_ChunksPutCount);
+    ASSERT_EQ(5898, stats.m_BytesGetCount);
+    ASSERT_EQ(5898, stats.m_BytesPutCount);
+
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -1105,6 +1116,37 @@ TEST(Longtail, Longtail_CacheBlockStore)
     ASSERT_EQ(0, memcmp(put_block.m_BlockData, get_block->m_BlockData, put_block.m_BlockChunksDataSize));
     Longtail_Free(put_block.m_BlockData);
     get_block->Dispose(get_block);
+
+    Longtail_BlockStore_Stats cache_stats;
+    cache_block_store_api->GetStats(cache_block_store_api, &cache_stats);
+    Longtail_BlockStore_Stats remote_stats;
+    remote_block_store_api->GetStats(remote_block_store_api, &remote_stats);
+    Longtail_BlockStore_Stats local_stats;
+    local_block_store_api->GetStats(local_block_store_api, &local_stats);
+
+    ASSERT_EQ(1, cache_stats.m_IndexGetCount);
+    ASSERT_EQ(1, cache_stats.m_BlocksGetCount);
+    ASSERT_EQ(0, cache_stats.m_BlocksPutCount);
+    ASSERT_EQ(2, cache_stats.m_ChunksGetCount);
+    ASSERT_EQ(0, cache_stats.m_ChunksPutCount);
+    ASSERT_EQ(5898, cache_stats.m_BytesGetCount);
+    ASSERT_EQ(0, cache_stats.m_BytesPutCount);
+
+    ASSERT_EQ(1, remote_stats.m_IndexGetCount);
+    ASSERT_EQ(1, remote_stats.m_BlocksGetCount);
+    ASSERT_EQ(1, remote_stats.m_BlocksPutCount);
+    ASSERT_EQ(2, remote_stats.m_ChunksGetCount);
+    ASSERT_EQ(2, remote_stats.m_ChunksPutCount);
+    ASSERT_EQ(5898, remote_stats.m_BytesGetCount);
+    ASSERT_EQ(5898, remote_stats.m_BytesPutCount);
+
+    ASSERT_EQ(0, local_stats.m_IndexGetCount);
+    ASSERT_EQ(0, local_stats.m_BlocksGetCount);
+    ASSERT_EQ(1, local_stats.m_BlocksPutCount);
+    ASSERT_EQ(0, local_stats.m_ChunksGetCount);
+    ASSERT_EQ(2, local_stats.m_ChunksPutCount);
+    ASSERT_EQ(0, local_stats.m_BytesGetCount);
+    ASSERT_EQ(5898, local_stats.m_BytesPutCount);
 
     SAFE_DISPOSE_API(cache_block_store_api);
     SAFE_DISPOSE_API(remote_block_store_api);
@@ -1240,6 +1282,27 @@ TEST(Longtail, Longtail_CompressBlockStore)
         ASSERT_EQ(77, ((uint8_t*)get_block->m_BlockData)[1147 + i]);
     }
     get_block->Dispose(get_block);
+
+    Longtail_BlockStore_Stats compress_stats;
+    compress_block_store_api->GetStats(compress_block_store_api, &compress_stats);
+    Longtail_BlockStore_Stats local_stats;
+    local_block_store_api->GetStats(local_block_store_api, &local_stats);
+
+    ASSERT_EQ(1, compress_stats.m_IndexGetCount);
+    ASSERT_EQ(2, compress_stats.m_BlocksGetCount);
+    ASSERT_EQ(2, compress_stats.m_BlocksPutCount);
+    ASSERT_EQ(4, compress_stats.m_ChunksGetCount);
+    ASSERT_EQ(4, compress_stats.m_ChunksPutCount);
+    ASSERT_EQ(5984, compress_stats.m_BytesGetCount);
+    ASSERT_EQ(11796, compress_stats.m_BytesPutCount);
+
+    ASSERT_EQ(1, local_stats.m_IndexGetCount);
+    ASSERT_EQ(2, local_stats.m_BlocksGetCount);
+    ASSERT_EQ(2, local_stats.m_BlocksPutCount);
+    ASSERT_EQ(4, local_stats.m_ChunksGetCount);
+    ASSERT_EQ(4, local_stats.m_ChunksPutCount);
+    ASSERT_EQ(5984, local_stats.m_BytesGetCount);
+    ASSERT_EQ(5984, local_stats.m_BytesPutCount);
 
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(local_block_store_api);
@@ -3125,6 +3188,7 @@ public:
     static int PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
     static int GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+    static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 private:
     struct Longtail_StorageAPI m_StorageAPI;
     struct Longtail_HashAPI* m_HashAPI;
@@ -3149,6 +3213,7 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
     block_store->m_API.PutStoredBlock = TestAsyncBlockStore::PutStoredBlock;
     block_store->m_API.GetStoredBlock = TestAsyncBlockStore::GetStoredBlock;
     block_store->m_API.GetIndex = TestAsyncBlockStore::GetIndex;
+    block_store->m_API.GetStats = TestAsyncBlockStore::GetStats;
     block_store->m_HashAPI = hash_api;
     block_store->m_ExitFlag = 0;
     block_store->m_PutRequestOffset = 0;
@@ -3409,6 +3474,13 @@ int TestAsyncBlockStore::GetIndex(
     return 0;
 
 }
+
+int TestAsyncBlockStore::GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    return 0;
+}
+
 
 TEST(Longtail, AsyncBlockStore)
 {

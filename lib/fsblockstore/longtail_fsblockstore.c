@@ -25,6 +25,20 @@ struct FSBlockStoreAPI
 
     struct Longtail_ContentIndex* m_ContentIndex;
     struct BlockHashToBlockState* m_BlockState;
+
+    TLongtail_Atomic64 m_IndexGetCount;
+    TLongtail_Atomic64 m_BlocksGetCount;
+    TLongtail_Atomic64 m_BlocksPutCount;
+    TLongtail_Atomic64 m_ChunksGetCount;
+    TLongtail_Atomic64 m_ChunksPutCount;
+    TLongtail_Atomic64 m_BytesGetCount;
+    TLongtail_Atomic64 m_BytesPutCount;
+    TLongtail_Atomic64 m_IndexGetRetryCount;
+    TLongtail_Atomic64 m_BlockGetRetryCount;
+    TLongtail_Atomic64 m_BlockPutRetryCount;
+    TLongtail_Atomic64 m_IndexGetFailCount;
+    TLongtail_Atomic64 m_BlockGetFailCount;
+    TLongtail_Atomic64 m_BlockPutFailCount;
 };
 
 struct FSStoredBlock
@@ -255,6 +269,9 @@ static int FSBlockStore_PutStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api != 0, return EINVAL)
 
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&fsblockstore_api->m_BlocksPutCount, 1);
+    Longtail_AtomicAdd64(&fsblockstore_api->m_ChunksPutCount, *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&fsblockstore_api->m_BytesPutCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     uint64_t block_hash = *stored_block->m_BlockIndex->m_BlockHash;
 
@@ -414,6 +431,9 @@ static int FSBlockStore_GetStoredBlock(
         block_path = 0;
         return async_complete_api->OnComplete(async_complete_api, 0, err);
     }
+    Longtail_AtomicAdd64(&fsblockstore_api->m_BlocksGetCount, 1);
+    Longtail_AtomicAdd64(&fsblockstore_api->m_ChunksGetCount, *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&fsblockstore_api->m_BytesGetCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     Longtail_Free(block_path);
     block_path = 0;
@@ -484,12 +504,36 @@ static int FSBlockStore_GetIndex(
         return async_complete_api->OnComplete(async_complete_api, 0, err);
         return err;
     }
+    Longtail_AtomicAdd64(&fsblockstore_api->m_IndexGetCount, 1);
     err = async_complete_api->OnComplete(async_complete_api, content_index, 0);
     if (err)
     {
         Longtail_Free(content_index);
         return err;
     }
+    return 0;
+}
+
+static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "FSBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
+    memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    out_stats->m_IndexGetCount = fsblockstore_api->m_IndexGetCount;
+    out_stats->m_BlocksGetCount = fsblockstore_api->m_BlocksGetCount;
+    out_stats->m_BlocksPutCount = fsblockstore_api->m_BlocksPutCount;
+    out_stats->m_ChunksGetCount = fsblockstore_api->m_ChunksGetCount;
+    out_stats->m_ChunksPutCount = fsblockstore_api->m_ChunksPutCount;
+    out_stats->m_BytesGetCount = fsblockstore_api->m_BytesGetCount;
+    out_stats->m_BytesPutCount = fsblockstore_api->m_BytesPutCount;
+    out_stats->m_IndexGetRetryCount = fsblockstore_api->m_IndexGetRetryCount;
+    out_stats->m_BlockGetRetryCount = fsblockstore_api->m_BlockGetRetryCount;
+    out_stats->m_BlockPutRetryCount = fsblockstore_api->m_BlockPutRetryCount;
+    out_stats->m_IndexGetFailCount = fsblockstore_api->m_IndexGetFailCount;
+    out_stats->m_BlockGetFailCount = fsblockstore_api->m_BlockGetFailCount;
+    out_stats->m_BlockPutFailCount = fsblockstore_api->m_BlockPutFailCount;
     return 0;
 }
 
@@ -524,10 +568,26 @@ static int FSBlockStore_Init(
     api->m_BlockStoreAPI.PutStoredBlock = FSBlockStore_PutStoredBlock;
     api->m_BlockStoreAPI.GetStoredBlock = FSBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = FSBlockStore_GetIndex;
+    api->m_BlockStoreAPI.GetStats = FSBlockStore_GetStats;
     api->m_StorageAPI = storage_api;
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndex = 0;
     api->m_BlockState = 0;
+
+    api->m_IndexGetCount = 0;
+    api->m_BlocksGetCount = 0;
+    api->m_BlocksPutCount = 0;
+    api->m_ChunksGetCount = 0;
+    api->m_ChunksPutCount = 0;
+    api->m_BytesGetCount = 0;
+    api->m_BytesPutCount = 0;
+    api->m_IndexGetRetryCount = 0;
+    api->m_BlockGetRetryCount = 0;
+    api->m_BlockPutRetryCount = 0;
+    api->m_IndexGetFailCount = 0;
+    api->m_BlockGetFailCount = 0;
+    api->m_BlockPutFailCount = 0;
+
     const char* content_index_path = Longtail_ConcatPath(api->m_ContentPath, "store.lci");
     if (Longtail_IsFile(content_index_path))
     {

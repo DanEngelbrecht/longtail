@@ -121,7 +121,16 @@ void Longtail_Sleep(uint64_t timeout_us)
 
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount)
 {
-    return InterlockedAdd((LONG volatile*)value, amount);
+    return (int32_t)InterlockedAdd((LONG volatile*)value, (LONG)amount);
+}
+
+#if !defined(__GNUC__)
+    #define _InterlockedAdd64 _InlineInterlockedAdd64
+#endif
+
+int64_t Longtail_AtomicAdd64(TLongtail_Atomic64* value, int64_t amount)
+{
+    return (int64_t)_InterlockedAdd64((LONG64 volatile*)value, (LONG64)amount);
 }
 
 struct Longtail_Thread
@@ -694,6 +703,11 @@ void Longtail_Sleep(uint64_t timeout_us)
 }
 
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount)
+{
+    return __sync_fetch_and_add(value, amount) + amount;
+}
+
+int64_t Longtail_AtomicAdd64(TLongtail_Atomic64* value, int64_t amount)
 {
     return __sync_fetch_and_add(value, amount) + amount;
 }
