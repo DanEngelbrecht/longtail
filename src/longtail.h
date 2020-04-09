@@ -36,6 +36,8 @@ LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
 
 ////////////// Longtail_PathFilterAPI
 
+struct Longtail_PathFilterAPI;
+
 typedef int (*Longtail_PathFilter_IncludeFunc)(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
 
 struct Longtail_PathFilterAPI
