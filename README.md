@@ -62,8 +62,8 @@ Currently there are:
 
 ### CompressionAPI
 * Brotli - by Google https://github.com/google/brotli
-* Lizard - by Przemyslaw Skibinski https://github.com/inikep/lizard
 * Zstandard - by Facebook https://github.com/facebook/zstd
+* LZ4 - by Cyan4973 https://github.com/lz4/lz4
 
 ### JobAPI
 * Bikeshed - by Dan Engelbrecht https://github.com/DanEngelbrecht/bikeshed

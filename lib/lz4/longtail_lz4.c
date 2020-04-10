@@ -2,11 +2,6 @@
 
 #include "ext/lz4.h"
 
-//#define FSE_STATIC_LINKING_ONLY
-//#include "ext/lizard_common.h"
-//#include "ext/lizard_decompress.h"
-//#include "ext/lizard_compress.h"
-
 #include <errno.h>
 
 static int LZ4CompressionAPI_DefaultCompressionSetting   = 1;

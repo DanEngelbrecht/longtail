@@ -13,7 +13,6 @@
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/brotli/longtail_brotli.h"
-#include "../lib/lizard/longtail_lizard.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/zstd/longtail_zstd.h"
 #include "../lib/longtail_platform.h"
