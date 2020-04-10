@@ -38,9 +38,6 @@ cp %ROOT_DIR%\lib\filestorage\longtail_filestorage.h %TARGET_DIR%\lib\filestorag
 IF not exist %TARGET_DIR%\lib\fsblockstore (mkdir %TARGET_DIR%\lib\fsblockstore)
 cp %ROOT_DIR%\lib\fsblockstore\longtail_fsblockstore.h %TARGET_DIR%\lib\fsblockstore
 
-IF not exist %TARGET_DIR%\lib\lizard (mkdir %TARGET_DIR%\lib\lizard)
-cp %ROOT_DIR%\lib\lizard\longtail_lizard.h %TARGET_DIR%\lib\lizard
-
 IF not exist %TARGET_DIR%\lib\lz4 (mkdir %TARGET_DIR%\lib\lz4)
 cp %ROOT_DIR%\lib\lz4\longtail_lz4.h %TARGET_DIR%\lib\lz4
 
