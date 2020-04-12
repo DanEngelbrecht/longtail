@@ -1,5 +1,5 @@
 #if defined(_CRTDBG_MAP_ALLOC)
-#include <cstdlib>
+#include <stdlib.h>
 #include <crtdbg.h>
 #endif
 
@@ -32,7 +32,7 @@ static void AssertFailure(const char* expression, const char* file, int line)
 
 static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-static void LogStdErr(void* , int level, const char* log)
+static void LogStdErr(void* context, int level, const char* log)
 {
     fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
 }
@@ -40,52 +40,55 @@ static void LogStdErr(void* , int level, const char* log)
 struct Progress
 {
     struct Longtail_ProgressAPI m_API;
-    Progress(const char* task)
-        : m_Task(task)
-        , m_OldPercent(0)
-        , m_JobsDone(0)
-    {
-        m_API.m_API.Dispose = 0;
-        m_API.OnProgress = ProgressFunc;
-    }
-    ~Progress()
-    {
-        if (m_JobsDone != 0)
-        {
-            fprintf(stderr, " Done\n");
-        }
-    }
     const char* m_Task;
     uint32_t m_OldPercent;
     uint32_t m_JobsDone;
-    static void ProgressFunc(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
+};
+
+static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
+{
+    struct Progress* p = (struct Progress*)progress_api;
+    if (jobs_done < total)
     {
-        Progress* p = (Progress*)progress_api;
-        if (jobs_done < total)
+        if (p->m_JobsDone == 0)
         {
-            if (p->m_JobsDone == 0)
-            {
-                fprintf(stderr, "%s: ", p->m_Task);
-            }
-            uint32_t percent_done = (100 * jobs_done) / total;
-            if (percent_done - p->m_OldPercent >= 5)
-            {
-                fprintf(stderr, "%u%% ", percent_done);
-                p->m_OldPercent = percent_done;
-            }
-            p->m_JobsDone = jobs_done;
-            return;
+            fprintf(stderr, "%s: ", p->m_Task);
         }
-        if (p->m_OldPercent != 0)
+        uint32_t percent_done = (100 * jobs_done) / total;
+        if (percent_done - p->m_OldPercent >= 5)
         {
-            if (p->m_OldPercent != 100)
-            {
-                fprintf(stderr, "100%%");
-            }
+            fprintf(stderr, "%u%% ", percent_done);
+            p->m_OldPercent = percent_done;
         }
         p->m_JobsDone = jobs_done;
+        return;
     }
-};
+    if (p->m_OldPercent != 0)
+    {
+        if (p->m_OldPercent != 100)
+        {
+            fprintf(stderr, "100%%");
+        }
+    }
+    p->m_JobsDone = jobs_done;
+}
+
+static void Progress_Init(struct Progress* this, const char* task)
+{
+    this->m_Task = task;
+    this->m_OldPercent = 0;
+    this->m_JobsDone = 0;
+    this->m_API.m_API.Dispose = 0;
+    this->m_API.OnProgress = Progress_OnProgress;
+}
+
+static void Progress_Dispose(struct Progress* this)
+{
+    if (this->m_JobsDone != 0)
+    {
+        fprintf(stderr, " Done\n");
+    }
+}
 
 int ParseLogLevel(const char* log_level_raw) {
     if (0 == strcmp(log_level_raw, "debug"))
@@ -124,7 +127,7 @@ struct Longtail_HashAPI* CreateHashAPIFromIdentifier(uint32_t hash_type)
     return 0;
 }
 
-static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
+static uint32_t* GetCompressionTypes(struct Longtail_StorageAPI* api, const struct Longtail_FileInfos* file_infos)
 {
     uint32_t count = *file_infos->m_Paths.m_PathCount;
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
@@ -270,37 +273,38 @@ struct AsyncGetIndexComplete
 {
     struct Longtail_AsyncGetIndexAPI m_API;
     HLongtail_Sema m_NotifySema;
-    AsyncGetIndexComplete()
-        : m_Err(EINVAL)
-    {
-        m_API.m_API.Dispose = 0;
-        m_API.OnComplete = OnComplete;
-        m_ContentIndex = 0;
-        Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
-    }
-    ~AsyncGetIndexComplete()
-    {
-        Longtail_DeleteSema(m_NotifySema);
-        Longtail_Free(m_NotifySema);
-    }
-
-    static int OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, Longtail_ContentIndex* content_index, int err)
-    {
-        struct AsyncGetIndexComplete* cb = (struct AsyncGetIndexComplete*)async_complete_api;
-        cb->m_Err = err;
-        cb->m_ContentIndex = content_index;
-        Longtail_PostSema(cb->m_NotifySema, 1);
-        return 0;
-    }
-
-    void Wait()
-    {
-        Longtail_WaitSema(m_NotifySema);
-    }
-
     int m_Err;
-    Longtail_ContentIndex* m_ContentIndex;
+    struct Longtail_ContentIndex* m_ContentIndex;
 };
+
+static int AsyncGetIndexComplete_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
+{
+    struct AsyncGetIndexComplete* cb = (struct AsyncGetIndexComplete*)async_complete_api;
+    cb->m_Err = err;
+    cb->m_ContentIndex = content_index;
+    Longtail_PostSema(cb->m_NotifySema, 1);
+    return 0;
+}
+
+static void AsyncGetIndexComplete_Init(struct AsyncGetIndexComplete* this)
+{
+    this->m_Err = EINVAL;
+    this->m_API.m_API.Dispose = 0;
+    this->m_API.OnComplete = AsyncGetIndexComplete_OnComplete;
+    this->m_ContentIndex = 0;
+    Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &this->m_NotifySema);
+}
+
+static void AsyncGetIndexComplete_Dispose(struct AsyncGetIndexComplete* this)
+{
+    Longtail_DeleteSema(this->m_NotifySema);
+    Longtail_Free(this->m_NotifySema);
+}
+
+static void AsyncGetIndexComplete_Wait(struct AsyncGetIndexComplete* this)
+{
+    Longtail_WaitSema(this->m_NotifySema);
+}
 
 int UpSync(
     const char* storage_uri_raw,
@@ -321,7 +325,7 @@ int UpSync(
     struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
 
-    Longtail_VersionIndex* source_version_index = 0;
+    struct Longtail_VersionIndex* source_version_index = 0;
     if (optional_source_index_path)
     {
         int err = Longtail_ReadVersionIndex(storage_api, optional_source_index_path, &source_version_index);
@@ -356,7 +360,8 @@ int UpSync(
             tags[i] = compression_type;
         }
         {
-            Progress create_version_progress("Indexing version");
+            struct Progress create_version_progress;
+            Progress_Init(&create_version_progress, "Indexing version");
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
@@ -367,6 +372,7 @@ int UpSync(
                 tags,
                 target_chunk_size,
                 &source_version_index);
+            Progress_Dispose(&create_version_progress);
         }
         Longtail_Free(tags);
         Longtail_Free(file_infos);
@@ -406,19 +412,21 @@ int UpSync(
 
     struct Longtail_ContentIndex* block_store_content_index;
     {
-        AsyncGetIndexComplete get_index_complete;
+        struct AsyncGetIndexComplete get_index_complete;
+        AsyncGetIndexComplete_Init(&get_index_complete);
         err = store_block_store_api->GetIndex(
             store_block_store_api,
             hash_api->GetIdentifier(hash_api),
             &get_index_complete.m_API);
         if (!err)
         {
-            get_index_complete.Wait();
+            AsyncGetIndexComplete_Wait(&get_index_complete);
             err = get_index_complete.m_Err;
         }
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
+            AsyncGetIndexComplete_Dispose(&get_index_complete);
             Longtail_Free(version_content_index);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(store_block_store_api);
@@ -431,9 +439,11 @@ int UpSync(
             return err;
         }
         block_store_content_index = get_index_complete.m_ContentIndex;
+        AsyncGetIndexComplete_Dispose(&get_index_complete);
     }
     {
-        Progress write_content_progress("Writing blocks");
+        struct Progress write_content_progress;
+        Progress_Init(&write_content_progress, "Writing blocks");
         err = Longtail_WriteContent(
             storage_api,
             store_block_store_api,
@@ -443,6 +453,7 @@ int UpSync(
             version_content_index,
             source_version_index,
             source_path);
+        Progress_Dispose(&write_content_progress);
     }
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
@@ -515,7 +526,7 @@ int DownSync(
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
 
     const char* source_index_path = Longtail_ConcatPath(storage_path, source_path);
-    Longtail_VersionIndex* source_version_index = 0;
+    struct Longtail_VersionIndex* source_version_index = 0;
     int err = Longtail_ReadVersionIndex(storage_api, source_index_path, &source_version_index);
     if (err)
     {
@@ -535,17 +546,19 @@ int DownSync(
 
     struct Longtail_ContentIndex* remote_content_index;
     {
-        AsyncGetIndexComplete get_index_complete;
+        struct AsyncGetIndexComplete get_index_complete;
+        AsyncGetIndexComplete_Init(&get_index_complete);
         err = store_block_store_api->GetIndex(
             store_block_store_api,
             Longtail_GetBlake3HashType(),  // We should not really care, since if block store is empty we can't recreate any content
             &get_index_complete.m_API);
         if (!err)
         {
-            get_index_complete.Wait();
+            AsyncGetIndexComplete_Wait(&get_index_complete);
             err = get_index_complete.m_Err;
         }
         remote_content_index = get_index_complete.m_ContentIndex;
+        AsyncGetIndexComplete_Dispose(&get_index_complete);
     }
     if (err)
     {
@@ -565,7 +578,7 @@ int DownSync(
     uint32_t hashing_type = *source_version_index->m_HashAPI;
     struct Longtail_HashAPI* hash_api = CreateHashAPIFromIdentifier(hashing_type);
 
-    Longtail_VersionIndex* target_version_index = 0;
+    struct Longtail_VersionIndex* target_version_index = 0;
     if (optional_target_index_path)
     {
         int err = Longtail_ReadVersionIndex(storage_api, optional_target_index_path, &target_version_index);
@@ -604,7 +617,8 @@ int DownSync(
             tags[i] = 0;
         }
         {
-            Progress create_version_progress("Indexing version");
+            struct Progress create_version_progress;
+            Progress_Init(&create_version_progress, "Indexing version");
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
@@ -615,6 +629,7 @@ int DownSync(
                 tags,
                 target_chunk_size,
                 &target_version_index);
+            Progress_Dispose(&create_version_progress);
         }
         Longtail_Free(tags);
         Longtail_Free(file_infos);
@@ -660,7 +675,8 @@ int DownSync(
     }
 
     {
-        Progress change_version_progress("Updating version");
+        struct Progress change_version_progress;
+        Progress_Init(&change_version_progress, "Updating version");
         err = Longtail_ChangeVersion(
             store_block_store_api,
             storage_api,
@@ -673,6 +689,7 @@ int DownSync(
             version_diff,
             target_path,
             retain_permissions ? 1 : 0);
+        Progress_Dispose(&change_version_progress);
     }
     if (err)
     {
