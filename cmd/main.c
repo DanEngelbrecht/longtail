@@ -73,18 +73,18 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
     p->m_JobsDone = jobs_done;
 }
 
-static void Progress_Init(struct Progress* this, const char* task)
+static void Progress_Init(struct Progress* me, const char* task)
 {
-    this->m_Task = task;
-    this->m_OldPercent = 0;
-    this->m_JobsDone = 0;
-    this->m_API.m_API.Dispose = 0;
-    this->m_API.OnProgress = Progress_OnProgress;
+    me->m_Task = task;
+    me->m_OldPercent = 0;
+    me->m_JobsDone = 0;
+    me->m_API.m_API.Dispose = 0;
+    me->m_API.OnProgress = Progress_OnProgress;
 }
 
-static void Progress_Dispose(struct Progress* this)
+static void Progress_Dispose(struct Progress* me)
 {
-    if (this->m_JobsDone != 0)
+    if (me->m_JobsDone != 0)
     {
         fprintf(stderr, " Done\n");
     }
@@ -286,24 +286,24 @@ static int AsyncGetIndexComplete_OnComplete(struct Longtail_AsyncGetIndexAPI* as
     return 0;
 }
 
-static void AsyncGetIndexComplete_Init(struct AsyncGetIndexComplete* this)
+static void AsyncGetIndexComplete_Init(struct AsyncGetIndexComplete* me)
 {
-    this->m_Err = EINVAL;
-    this->m_API.m_API.Dispose = 0;
-    this->m_API.OnComplete = AsyncGetIndexComplete_OnComplete;
-    this->m_ContentIndex = 0;
-    Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &this->m_NotifySema);
+    me->m_Err = EINVAL;
+    me->m_API.m_API.Dispose = 0;
+    me->m_API.OnComplete = AsyncGetIndexComplete_OnComplete;
+    me->m_ContentIndex = 0;
+    Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &me->m_NotifySema);
 }
 
-static void AsyncGetIndexComplete_Dispose(struct AsyncGetIndexComplete* this)
+static void AsyncGetIndexComplete_Dispose(struct AsyncGetIndexComplete* me)
 {
-    Longtail_DeleteSema(this->m_NotifySema);
-    Longtail_Free(this->m_NotifySema);
+    Longtail_DeleteSema(me->m_NotifySema);
+    Longtail_Free(me->m_NotifySema);
 }
 
-static void AsyncGetIndexComplete_Wait(struct AsyncGetIndexComplete* this)
+static void AsyncGetIndexComplete_Wait(struct AsyncGetIndexComplete* me)
 {
-    Longtail_WaitSema(this->m_NotifySema);
+    Longtail_WaitSema(me->m_NotifySema);
 }
 
 int UpSync(
