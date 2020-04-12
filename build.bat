@@ -44,10 +44,10 @@ goto arg_end
 
 :arg_end
 
-set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626
+set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626 /GR-
 
 if "!RELEASE_MODE!" == "release" (
-    set OPT=/O2 /Oi /Oy /GS- /Gs- /MT
+    set OPT=/O2 /Oi /Oy /GS- /Gs- /MT /GL /GS- /GF
 
     call build_options.bat
     set OUTPUT=!TARGET!
@@ -147,7 +147,7 @@ if "!TARGET_TYPE!" == "SHAREDLIB" (
 
 cd !BASE_DIR!\build
 echo Building %OUTPUT_TARGET%
-cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
+cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
 set BUILD_ERROR=%ERRORLEVEL%
 cd !BASE_DIR!
 
