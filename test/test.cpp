@@ -3287,6 +3287,7 @@ public:
     static int InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api);
     static void Dispose(struct Longtail_API* api);
     static int PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+    static int PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
     static int GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
@@ -3312,6 +3313,7 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
 {
     block_store->m_API.m_API.Dispose = TestAsyncBlockStore::Dispose;
     block_store->m_API.PutStoredBlock = TestAsyncBlockStore::PutStoredBlock;
+    block_store->m_API.PreflightGet = TestAsyncBlockStore::PreflightGet;
     block_store->m_API.GetStoredBlock = TestAsyncBlockStore::GetStoredBlock;
     block_store->m_API.GetIndex = TestAsyncBlockStore::GetIndex;
     block_store->m_API.GetStats = TestAsyncBlockStore::GetStats;
@@ -3516,6 +3518,12 @@ int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_sto
     Longtail_PostSema(block_store->m_RequestSema, 1);
     return 0;
 }
+
+int TestAsyncBlockStore::PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+{
+    return 0;
+}
+
 
 int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {

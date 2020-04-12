@@ -386,6 +386,11 @@ static int FSBlockStore_PutStoredBlock(
     return async_complete_api->OnComplete(async_complete_api, 0);
 }
 
+static int FSBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+{
+    return 0;
+}
+
 static int FSBlockStore_GetStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t block_hash,
@@ -567,6 +572,7 @@ static int FSBlockStore_Init(
     LONGTAIL_FATAL_ASSERT(content_path, return EINVAL)
     api->m_BlockStoreAPI.m_API.Dispose = FSBlockStore_Dispose;
     api->m_BlockStoreAPI.PutStoredBlock = FSBlockStore_PutStoredBlock;
+    api->m_BlockStoreAPI.PreflightGet = FSBlockStore_PreflightGet;
     api->m_BlockStoreAPI.GetStoredBlock = FSBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = FSBlockStore_GetIndex;
     api->m_BlockStoreAPI.GetStats = FSBlockStore_GetStats;
