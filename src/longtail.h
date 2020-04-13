@@ -727,9 +727,11 @@ LONGTAIL_EXPORT const uint32_t* Longtail_BlockIndex_GetChunkTag(const struct Lon
 LONGTAIL_EXPORT const TLongtail_Hash* Longtail_BlockIndex_GetChunkHashes(const struct Longtail_BlockIndex* block_index);
 LONGTAIL_EXPORT const uint32_t* Longtail_BlockIndex_GetChunkSizes(const struct Longtail_BlockIndex* block_index);
 
+typedef int (*Longtail_StoredBlock_DisposeFunc)(struct Longtail_StoredBlock* stored_block);
+
 struct Longtail_StoredBlock
 {
-    int (*Dispose)(struct Longtail_StoredBlock* stored_block);
+    Longtail_StoredBlock_DisposeFunc Dispose;
     struct Longtail_BlockIndex* m_BlockIndex;
     void* m_BlockData;
     uint32_t m_BlockChunksDataSize;
