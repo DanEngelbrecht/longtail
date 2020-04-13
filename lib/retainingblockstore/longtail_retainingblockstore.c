@@ -27,28 +27,30 @@ struct RetainingBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_BlockStoreAPI* m_BackingBlockStore;
-    uint64_t m_MaxBlockRetainCount;
+    HLongtail_SpinLock m_Lock;
     uint64_t m_RetainedBlockCount;
     struct BlockHashToRetainedIndex* m_BlockHashToRetainedIndex;
     TLongtail_Hash* m_BlockHashes;
-    uint32_t* m_BlockRetainCounts;
+    TLongtail_Atomic32* m_BlockRetainCounts;
     struct RetainedStoredBlock** m_RetainedStoredBlocks;
 };
 
 int RetainedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
     struct RetainedStoredBlock* b = (struct RetainedStoredBlock*)stored_block;
+    struct RetainingBlockStoreAPI* retainingblockstore_api = b->m_RetainingBlockStoreAPI;
     TLongtail_Hash block_hash = *b->m_StoredBlock.m_BlockIndex->m_BlockHash;
     intptr_t tmp;
-    uint64_t block_index = hmget_ts(b->m_RetainingBlockStoreAPI->m_BlockHashToRetainedIndex, block_hash, tmp);
-    uint32_t* retain_count_ptr = &b->m_RetainingBlockStoreAPI->m_BlockRetainCounts[block_index];
-    if (--(*retain_count_ptr))
+    uint64_t block_index = hmget_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
+    TLongtail_Atomic32* retain_count_ptr = &retainingblockstore_api->m_BlockRetainCounts[block_index];
+    if (Longtail_AtomicAdd32(retain_count_ptr, -1) > 0)
     {
         return 0;
     }
     struct Longtail_StoredBlock* original_stored_block = b->m_OriginalStoredBlock;
     Longtail_Free(b);
     original_stored_block->Dispose(original_stored_block);
+    retainingblockstore_api->m_RetainedStoredBlocks[block_index] = 0;
     return 0;
 }
 
@@ -58,7 +60,10 @@ struct RetainedStoredBlock* RetainedStoredBlock_CreateBlock(struct RetainingBloc
     struct RetainedStoredBlock* retained_stored_block = (struct RetainedStoredBlock*)Longtail_Alloc(retained_stored_block_size);
     if (!retained_stored_block)
     {
-        // TODO: Log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainedStoredBlock_CreateBlock(%p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            retaining_block_store_api, original_stored_block,
+            retained_stored_block_size,
+            ENOMEM)
         return 0;
     }
     retained_stored_block->m_StoredBlock.Dispose = RetainedStoredBlock_Dispose;
@@ -114,9 +119,41 @@ static int RetainingBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block
         }
     }
 
-    retainingblockstore_api->m_BlockHashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * retain_block_count);
-    retainingblockstore_api->m_BlockRetainCounts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * retain_block_count);
-    retainingblockstore_api->m_RetainedStoredBlocks = (struct RetainedStoredBlock**)Longtail_Alloc(sizeof(struct RetainedStoredBlock*) * retain_block_count);
+    size_t block_hashes_size = sizeof(TLongtail_Hash) * retain_block_count;
+    retainingblockstore_api->m_BlockHashes = (TLongtail_Hash*)Longtail_Alloc(block_hashes_size);
+    if (!retainingblockstore_api->m_BlockHashes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            block_store_api, block_count, block_hashes, block_ref_counts,
+            block_hashes_size,
+            ENOMEM)
+        return ENOMEM;
+    }
+
+    size_t block_retain_counts_size = sizeof(TLongtail_Atomic32) * retain_block_count;
+    retainingblockstore_api->m_BlockRetainCounts = (TLongtail_Atomic32*)Longtail_Alloc(block_retain_counts_size);
+    if (!retainingblockstore_api->m_BlockRetainCounts)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            block_store_api, block_count, block_hashes, block_ref_counts,
+            block_retain_counts_size,
+            ENOMEM)
+        Longtail_Free(retainingblockstore_api->m_BlockHashes);
+        return ENOMEM;
+    }
+
+    size_t retained_stored_blocks_size = sizeof(struct RetainedStoredBlock*) * retain_block_count;
+    retainingblockstore_api->m_RetainedStoredBlocks = (struct RetainedStoredBlock**)Longtail_Alloc(retained_stored_blocks_size);
+    if (!retainingblockstore_api->m_RetainedStoredBlocks)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            block_store_api, block_count, block_hashes, block_ref_counts,
+            retained_stored_blocks_size,
+            ENOMEM)
+        Longtail_Free((void*)retainingblockstore_api->m_BlockRetainCounts);
+        Longtail_Free(retainingblockstore_api->m_BlockHashes);
+        return ENOMEM;
+    }
 
     for (uint64_t b = 0; b < block_count; ++b)
     {
@@ -134,6 +171,74 @@ static int RetainingBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block
     return 0;
 }
 
+struct RetainingBlockStore_AsyncGetStoredBlockAPI
+{
+    struct Longtail_AsyncGetStoredBlockAPI m_AsyncGetStoredBlockAPI;
+    struct RetainingBlockStoreAPI* m_RetainingblockstoreAPI;
+    struct Longtail_AsyncGetStoredBlockAPI* m_BaseAsyncGetStoredBlockAPI;
+};
+
+static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
+{
+    struct RetainingBlockStore_AsyncGetStoredBlockAPI* api = (struct RetainingBlockStore_AsyncGetStoredBlockAPI*)async_complete_api;
+    if (err)
+    {
+        return api->m_BaseAsyncGetStoredBlockAPI->OnComplete(api->m_BaseAsyncGetStoredBlockAPI, stored_block, err);
+    }
+
+    struct RetainingBlockStoreAPI* retainingblockstore_api = api->m_RetainingblockstoreAPI;
+
+    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
+    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
+    intptr_t tmp;
+    intptr_t block_index = hmgeti_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
+    if (block_index == -1)
+    {
+        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
+        return api->m_BaseAsyncGetStoredBlockAPI->OnComplete(api->m_BaseAsyncGetStoredBlockAPI, stored_block, err);
+    }
+
+    struct RetainedStoredBlock* retained_stored_block = retainingblockstore_api->m_RetainedStoredBlocks[block_index];
+    Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
+
+    if (retained_stored_block)
+    {
+        err = api->m_BaseAsyncGetStoredBlockAPI->OnComplete(api->m_BaseAsyncGetStoredBlockAPI, &retained_stored_block->m_StoredBlock, 0);
+        if (err)
+        {
+            Longtail_Free(retained_stored_block);
+            return err;
+        }
+    }
+    retained_stored_block = RetainedStoredBlock_CreateBlock(api->m_RetainingblockstoreAPI, stored_block);
+    if (!retained_stored_block)
+    {
+        err = api->m_BaseAsyncGetStoredBlockAPI->OnComplete(api->m_BaseAsyncGetStoredBlockAPI, stored_block, 0);
+        return err;
+    }
+
+    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
+    if (retainingblockstore_api->m_RetainedStoredBlocks[block_index])
+    {
+        Longtail_Free(retained_stored_block);
+        retained_stored_block = retainingblockstore_api->m_RetainedStoredBlocks[block_index];
+    }
+    else
+    {
+        retainingblockstore_api->m_RetainedStoredBlocks[block_index] = retained_stored_block;
+    }
+    Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
+    err = api->m_BaseAsyncGetStoredBlockAPI->OnComplete(api->m_BaseAsyncGetStoredBlockAPI, &retained_stored_block->m_StoredBlock, 0);
+    if (err)
+    {
+        Longtail_Free(retained_stored_block);
+        return err;
+    }
+    return 0;
+}
+
+
+
 static int RetainingBlockStore_GetStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t block_hash,
@@ -144,6 +249,7 @@ static int RetainingBlockStore_GetStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     struct RetainingBlockStoreAPI* retainingblockstore_api = (struct RetainingBlockStoreAPI*)block_store_api;
 
+    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
     intptr_t tmp;
     intptr_t block_index = hmgeti_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     if (block_index != -1)
@@ -151,19 +257,45 @@ static int RetainingBlockStore_GetStoredBlock(
         struct RetainedStoredBlock* stored_block = retainingblockstore_api->m_RetainedStoredBlocks[block_index];
         if (stored_block)
         {
+            Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
             int err = async_complete_api->OnComplete(async_complete_api, &stored_block->m_StoredBlock, 0);
             return err;
         }
-        if (retainingblockstore_api->m_BlockRetainCounts[block_index] > 1)
+        int32_t block_retain_count = retainingblockstore_api->m_BlockRetainCounts[block_index];
+        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
+        if (block_retain_count > 1)
         {
-            // TODO: Here we should have our own on-complete so we can retain the block
-//            struct RetainedStoredBlock* retained_stored_block = RetainedStoredBlock_CreateBlock(retainingblockstore_api, 0);
-//            if (retained_stored_block)
-//            {
-//                retainingblockstore_api->m_RetainedStoredBlocks[block_index] = retained_stored_block;
-//                return &retained_stored_block->m_StoredBlock;
-//            }
+            size_t retaining_lock_store_async_get_stored_block_API_size = sizeof(struct RetainingBlockStore_AsyncGetStoredBlockAPI);
+            struct RetainingBlockStore_AsyncGetStoredBlockAPI* retaining_lock_store_async_get_stored_block_API = (struct RetainingBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(retaining_lock_store_async_get_stored_block_API_size);
+            if (!retaining_lock_store_async_get_stored_block_API)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+                    block_store_api, block_hash, async_complete_api,
+                    retaining_lock_store_async_get_stored_block_API_size,
+                    ENOMEM)
+                return ENOMEM;
+            }
+            retaining_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.m_API.Dispose = 0;
+            retaining_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.OnComplete = RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete;
+            retaining_lock_store_async_get_stored_block_API->m_RetainingblockstoreAPI = retainingblockstore_api;
+            retaining_lock_store_async_get_stored_block_API->m_BaseAsyncGetStoredBlockAPI = async_complete_api;
+
+            int err = retainingblockstore_api->m_BackingBlockStore->GetStoredBlock(
+                retainingblockstore_api->m_BackingBlockStore,
+                block_hash,
+                &retaining_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI);
+            if (err)
+            {
+                // TODO: Log
+                Longtail_Free(retaining_lock_store_async_get_stored_block_API);
+                return err;
+            }
+            return 0;
         }
+    }
+    else
+    {
+        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
     }
 
     return retainingblockstore_api->m_BackingBlockStore->GetStoredBlock(
@@ -216,20 +348,20 @@ static void RetainingBlockStore_Dispose(struct Longtail_API* api)
     }
     hmfree(retainingblockstore_api->m_BlockHashToRetainedIndex);
     Longtail_Free(retainingblockstore_api->m_BlockHashes);
-    Longtail_Free(retainingblockstore_api->m_BlockRetainCounts);
+    Longtail_Free((void*)retainingblockstore_api->m_BlockRetainCounts);
     Longtail_Free(retainingblockstore_api->m_RetainedStoredBlocks);
+    Longtail_DeleteSpinLock(retainingblockstore_api->m_Lock);
+    Longtail_Free(retainingblockstore_api->m_Lock);
     Longtail_Free(retainingblockstore_api);
 }
 
 static int RetainingBlockStore_Init(
     struct RetainingBlockStoreAPI* api,
-    struct Longtail_BlockStoreAPI* backing_block_store,
-    uint64_t max_block_retain_count)
+    struct Longtail_BlockStoreAPI* backing_block_store)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "RetainingBlockStore_Dispose(%p, %p, %" PRIu64 ")", api, backing_block_store, max_block_retain_count)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "RetainingBlockStore_Dispose(%p, %p, %" PRIu64 ")", api, backing_block_store)
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(max_block_retain_count > 0, return EINVAL)
 
     api->m_BlockStoreAPI.m_API.Dispose = RetainingBlockStore_Dispose;
     api->m_BlockStoreAPI.PutStoredBlock = RetainingBlockStore_PutStoredBlock;
@@ -238,7 +370,11 @@ static int RetainingBlockStore_Init(
     api->m_BlockStoreAPI.GetIndex = RetainingBlockStore_GetIndex;
     api->m_BlockStoreAPI.GetStats = RetainingBlockStore_GetStats;
     api->m_BackingBlockStore = backing_block_store;
-    api->m_MaxBlockRetainCount = max_block_retain_count;
+    int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
+    if (err)
+    {
+        return err;
+    }
     api->m_RetainedBlockCount = 0;
     api->m_BlockHashToRetainedIndex = 0;
     api->m_BlockHashes = 0;
@@ -248,25 +384,28 @@ static int RetainingBlockStore_Init(
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateRetainingBlockStoreAPI(
-	struct Longtail_BlockStoreAPI* backing_block_store,
-	uint64_t max_block_retain_count)
+	struct Longtail_BlockStoreAPI* backing_block_store)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateRetainingBlockStoreAPI(%p, %" PRIu64 ")", backing_block_store, max_block_retain_count)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateRetainingBlockStoreAPI(%p)", backing_block_store)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return 0)
 
     size_t api_size = sizeof(struct RetainingBlockStoreAPI);
     struct RetainingBlockStoreAPI* api = (struct RetainingBlockStoreAPI*)Longtail_Alloc(api_size);
     if (!api)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateRetainingBlockStoreAPI(%p, %" PRIu64 ") Longtail_Alloc(%" PRIu64 ") failed with, %d",
-            backing_block_store, max_block_retain_count,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateRetainingBlockStoreAPI(%p) Longtail_Alloc(%" PRIu64 ") failed with, %d",
+            backing_block_store,
             api_size,
             ENOMEM)
         return 0;
     }
-    RetainingBlockStore_Init(
+    int err = RetainingBlockStore_Init(
         api,
-        backing_block_store,
-        max_block_retain_count);
+        backing_block_store);
+    if (err)
+    {
+        Longtail_Free(api);
+        return 0;
+    }
     return &api->m_BlockStoreAPI;
 }
