@@ -4611,6 +4611,8 @@ static int WriteAssets(
         Longtail_Free(block_ref_hashes);
         return err;
     }
+    Longtail_Free(block_ref_counts);
+    Longtail_Free(block_ref_hashes);
 
     err = job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2u) + asset_job_count);
     if (err)
