@@ -52,7 +52,7 @@ int RetainedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
     return 0;
 }
 
-struct Longtail_StoredBlock* RetainedStoredBlock_CreateBlock(struct RetainingBlockStoreAPI* retaining_block_store_api, struct Longtail_StoredBlock* original_stored_block)
+struct RetainedStoredBlock* RetainedStoredBlock_CreateBlock(struct RetainingBlockStoreAPI* retaining_block_store_api, struct Longtail_StoredBlock* original_stored_block)
 {
     size_t retained_stored_block_size = sizeof(struct RetainedStoredBlock);
     struct RetainedStoredBlock* retained_stored_block = (struct RetainedStoredBlock*)Longtail_Alloc(retained_stored_block_size);
@@ -67,7 +67,7 @@ struct Longtail_StoredBlock* RetainedStoredBlock_CreateBlock(struct RetainingBlo
     retained_stored_block->m_StoredBlock.m_BlockChunksDataSize = original_stored_block->m_BlockChunksDataSize;
     retained_stored_block->m_OriginalStoredBlock = original_stored_block;
     retained_stored_block->m_RetainingBlockStoreAPI = retaining_block_store_api;
-    return &retained_stored_block->m_StoredBlock;
+    return retained_stored_block;
 }
 
 static int RetainingBlockStore_PutStoredBlock(
@@ -157,6 +157,12 @@ static int RetainingBlockStore_GetStoredBlock(
         if (retainingblockstore_api->m_BlockRetainCounts[block_index] > 1)
         {
             // TODO: Here we should have our own on-complete so we can retain the block
+//            struct RetainedStoredBlock* retained_stored_block = RetainedStoredBlock_CreateBlock(retainingblockstore_api, 0);
+//            if (retained_stored_block)
+//            {
+//                retainingblockstore_api->m_RetainedStoredBlocks[block_index] = retained_stored_block;
+//                return &retained_stored_block->m_StoredBlock;
+//            }
         }
     }
 
