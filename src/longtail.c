@@ -303,6 +303,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
+    Longtail_BlockStore_PreflightGetFunc preflight_get_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetIndexFunc get_index_func,
     Longtail_BlockStore_GetStatsFunc get_stats_func)
@@ -311,6 +312,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     struct Longtail_BlockStoreAPI* api = (struct Longtail_BlockStoreAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->PutStoredBlock = put_stored_block_func;
+    api->PreflightGet = preflight_get_func;
     api->GetStoredBlock = get_stored_block_func;
     api->GetIndex = get_index_func;
     api->GetStats = get_stats_func;
@@ -318,6 +320,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
 }
 
 int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api) { return block_store_api->PutStoredBlock(block_store_api, stored_block, async_complete_api); }
+int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts) { return block_store_api->PreflightGet(block_store_api, block_count, block_hashes, block_ref_counts); }
 int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api) { return block_store_api->GetStoredBlock(block_store_api, block_hash, async_complete_api); }
 int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api) { return block_store_api->GetIndex(block_store_api, default_hash_api_identifier, async_complete_api); }
 int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats) { return block_store_api->GetStats(block_store_api, out_stats); }
@@ -3899,8 +3902,8 @@ static int CreatePartialAssetWriteJob(
 
     if (job->m_BlockReaderJobCount > 0)
     {
-        Longtail_JobAPI_Jobs block_readion_jobs;
-        err = job_api->CreateJobs(job_api, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_readion_jobs);
+        Longtail_JobAPI_Jobs block_read_jobs;
+        err = job_api->CreateJobs(job_api, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_read_jobs);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
         Longtail_JobAPI_JobFunc sync_write_funcs[1] = { WriteReady };
         void* sync_write_ctx[1] = { 0 };
@@ -3910,9 +3913,9 @@ static int CreatePartialAssetWriteJob(
 
         err = job_api->AddDependecies(job_api, 1, write_job, 1, write_sync_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockReaderJobCount, block_readion_jobs);
+        err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockReaderJobCount, block_read_jobs);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->ReadyJobs(job_api, job->m_BlockReaderJobCount, block_readion_jobs);
+        err = job_api->ReadyJobs(job_api, job->m_BlockReaderJobCount, block_read_jobs);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         *out_jobs = write_sync_job;
@@ -3953,6 +3956,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             if (stored_block[d] && stored_block[d]->Dispose)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
         }
         return 0;
@@ -3969,6 +3973,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
         for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
             stored_block[d]->Dispose(stored_block[d]);
+            stored_block[d] = 0;
         }
         job->m_Err = ENOENT;
         return 0;
@@ -3985,6 +3990,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_Err = err;
             return 0;
@@ -4017,6 +4023,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_Err = err;
             return 0;
@@ -4052,6 +4059,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_Err = err;
             return 0;
@@ -4092,6 +4100,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
@@ -4121,6 +4130,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             if (sync_write_job)
             {
@@ -4138,6 +4148,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
     for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
     {
         stored_block[d]->Dispose(stored_block[d]);
+        stored_block[d] = 0;
     }
 
     if (sync_write_job)
@@ -4314,6 +4325,7 @@ struct BlockJobCompareContext
 {
     const struct AssetWriteList* m_AssetWriteList;
     const uint32_t* asset_chunk_index_starts;
+    const uint32_t* asset_chunk_indexes;
     const TLongtail_Hash* chunk_hashes;
     struct ContentLookup* cl;
 };
@@ -4329,19 +4341,21 @@ static SORTFUNC(BlockJobCompare)
 
     uint32_t a = *(const uint32_t*)a_ptr;
     uint32_t b = *(const uint32_t*)b_ptr;
-    TLongtail_Hash a_first_chunk_hash = c->chunk_hashes[c->asset_chunk_index_starts[a]];
-    TLongtail_Hash b_first_chunk_hash = c->chunk_hashes[c->asset_chunk_index_starts[b]];
-    if (a_first_chunk_hash == b_first_chunk_hash)
-    {
-        return 0;
-    }
+
+    uint32_t asset_chunk_offset_a = c->asset_chunk_index_starts[a];
+    uint32_t asset_chunk_offset_b = c->asset_chunk_index_starts[b];
+    uint32_t chunk_index_a = c->asset_chunk_indexes[asset_chunk_offset_a];
+    uint32_t chunk_index_b = c->asset_chunk_indexes[asset_chunk_offset_b];
+
+    TLongtail_Hash a_first_chunk_hash = c->chunk_hashes[chunk_index_a];
+    TLongtail_Hash b_first_chunk_hash = c->chunk_hashes[chunk_index_b];
+//    if (a_first_chunk_hash == b_first_chunk_hash)
+//    {
+//        return 0;
+//    }
     uint64_t a_block_index = hmget(chunk_hash_to_block_index, a_first_chunk_hash);
     uint64_t b_block_index = hmget(chunk_hash_to_block_index, b_first_chunk_hash);
-    if (a_block_index == b_block_index)
-    {
-        return 0;
-    }
-    else if (a_block_index < b_block_index)
+    if (a_block_index < b_block_index)
     {
         return -1;
     }
@@ -4468,10 +4482,12 @@ static int BuildAssetWriteList(
     struct BlockJobCompareContext block_job_compare_context = {
             awl,    // m_AssetWriteList
             asset_chunk_index_starts,
+            asset_chunk_indexes,
             chunk_hashes,   // chunk_hashes
             cl  // cl
         };
     QSORT(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
+
     *out_asset_write_list = awl;
     return 0;
 }
@@ -4497,6 +4513,54 @@ static int WriteAssets(
     LONGTAIL_FATAL_ASSERT(content_lookup != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(awl != 0, return EINVAL)
 
+    size_t block_ref_indexes_size = sizeof(TLongtail_Hash) * (*content_index->m_BlockCount);
+    TLongtail_Hash* block_ref_hashes = (TLongtail_Hash*)Longtail_Alloc(block_ref_indexes_size);
+    if (!block_ref_hashes)
+    {
+        // TODO: Log!
+        return ENOMEM;
+    }
+    size_t block_ref_counts_size = sizeof(uint32_t) * (*content_index->m_BlockCount);
+    uint32_t* block_ref_counts = (uint32_t*)Longtail_Alloc(block_ref_counts_size);
+    if (!block_ref_counts)
+    {
+        // TODO: Log!
+        Longtail_Free(block_ref_hashes);
+        return ENOMEM;
+    }
+
+    struct HashToIndexItem* block_ref_count_map = 0;
+    uint64_t block_ref_count = 0;
+    {
+        uint32_t j = 0;
+        while (j < awl->m_BlockJobCount)
+        {
+            uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
+            TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
+            uint64_t block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, first_chunk_hash);
+            TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+            intptr_t find_ptr = hmgeti(block_ref_count_map, block_hash);
+            LONGTAIL_FATAL_ASSERT(find_ptr == -1, return EINVAL)
+            hmput(block_ref_count_map, block_hash, block_ref_count);
+            block_ref_hashes[block_ref_count] = block_hash;
+            block_ref_counts[block_ref_count] = 1;
+            ++block_ref_count;
+
+            ++j;
+            while (j < awl->m_BlockJobCount)
+            {
+                uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
+                TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
+                uint64_t next_block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, first_chunk_hash);
+                if (next_block_index != block_index)
+                {
+                    break;
+                }
+                ++j;
+            }
+        }
+    }
+
     const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
     const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
@@ -4505,7 +4569,6 @@ static int WriteAssets(
     {
         uint32_t asset_index = awl->m_AssetIndexJobs[a];
         uint32_t chunk_index_start = version_index->m_AssetChunkIndexStarts[asset_index];
-        uint32_t chunk_start_index_offset = chunk_index_start;
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
         if (chunk_count == 0)
         {
@@ -4514,7 +4577,7 @@ static int WriteAssets(
         }
 
         uint32_t chunk_index_end = chunk_index_start + chunk_count;
-        uint32_t chunk_index_offset = chunk_start_index_offset;
+        uint32_t chunk_index_offset = chunk_index_start;
 
         while(chunk_index_offset != chunk_index_end)
         {
@@ -4524,8 +4587,7 @@ static int WriteAssets(
             {
                 uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
                 TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-                intptr_t tmp;
-                uint64_t block_index = hmget_ts(content_lookup->m_ChunkHashToBlockIndex, chunk_hash, tmp);
+                uint64_t block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, chunk_hash);
                 TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
                 int has_block = 0;
                 for (uint32_t d = 0; d < block_read_job_count; ++d)
@@ -4539,6 +4601,19 @@ static int WriteAssets(
                 if (!has_block)
                 {
                     block_hashes[block_read_job_count++] = block_hash;
+                    intptr_t find_ptr = hmgeti(block_ref_count_map, block_hash);
+                    if (find_ptr != -1)
+                    {
+                        uint64_t block_ref_index = block_ref_count_map[find_ptr].value;
+                        ++block_ref_counts[block_ref_index];
+                    }
+                    else
+                    {
+                        hmput(block_ref_count_map, block_hash, block_ref_count);
+                        block_ref_hashes[block_ref_count] = block_hash;
+                        block_ref_counts[block_ref_count] = 1;
+                        ++block_ref_count;
+                    }
                 }
                 ++chunk_index_offset;
             }
@@ -4547,23 +4622,33 @@ static int WriteAssets(
             asset_job_count += block_read_job_count;
         }
     }
+    hmfree(block_ref_count_map);
+    block_ref_count_map = 0;
 
-    int err = job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2u) + asset_job_count);
+    // Now we know which blocks will be needed and how many times they will be requested!
+    int err = block_store_api->PreflightGet(block_store_api, block_ref_count, block_ref_hashes, block_ref_counts);
+    if (err)
+    {
+        // TODO: Log!
+        Longtail_Free(block_ref_counts);
+        Longtail_Free(block_ref_hashes);
+        return err;
+    }
+    Longtail_Free(block_ref_counts);
+    Longtail_Free(block_ref_hashes);
+
+    err = job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2u) + asset_job_count);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %s, %p, %p, %d) job_api->ReserveJobs(%p, %u) failed with %d",
             block_store_api, version_storage_api, job_api, progress_api, content_index, version_index, version_path, content_lookup, awl, retain_permssions,
             job_api, (awl->m_BlockJobCount * 2u) + asset_job_count,
             err)
-        Longtail_Free(awl);
-        awl = 0;
-        DeleteContentLookup(content_lookup);
-        content_lookup = 0;
         return err;
     }
 
     struct WriteAssetsFromBlockJob* block_jobs = (struct WriteAssetsFromBlockJob*)Longtail_Alloc((size_t)(sizeof(struct WriteAssetsFromBlockJob) * awl->m_BlockJobCount));
-    LONGTAIL_FATAL_ASSERT(block_jobs != 0, return ENOMEM)
+    LONGTAIL_FATAL_ASSERT(block_jobs != 0, return ENOMEM)   // TODO: Don't use ASSERT here!
     uint32_t j = 0;
     uint32_t block_job_count = 0;
     while (j < awl->m_BlockJobCount)
@@ -4584,8 +4669,8 @@ static int WriteAssets(
         block_job->m_StoredBlock = 0;
         Longtail_JobAPI_JobFunc block_read_funcs[1] = { BlockReader };
         void* block_read_ctxs[1] = {block_job};
-        Longtail_JobAPI_Jobs block_readion_job;
-        err = job_api->CreateJobs(job_api, 1, block_read_funcs, block_read_ctxs, &block_readion_job);
+        Longtail_JobAPI_Jobs block_read_job;
+        err = job_api->CreateJobs(job_api, 1, block_read_funcs, block_read_ctxs, &block_read_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         job->m_VersionStorageAPI = version_storage_api;
@@ -4622,9 +4707,9 @@ static int WriteAssets(
         Longtail_JobAPI_Jobs block_write_job;
         err = job_api->CreateJobs(job_api, 1, func, ctx, &block_write_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_readion_job);
+        err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_read_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->ReadyJobs(job_api, 1, block_readion_job);
+        err = job_api->ReadyJobs(job_api, 1, block_read_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
     }
 /*
@@ -4666,7 +4751,6 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
             asset_jobs_size,
             ENOMEM)
         Longtail_Free(block_jobs);
-        block_jobs = 0;
         return ENOMEM;
     }
     for (uint32_t a = 0; a < awl->m_AssetJobCount; ++a)
@@ -4744,9 +4828,7 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
     }
 
     Longtail_Free(asset_jobs);
-    asset_jobs = 0;
     Longtail_Free(block_jobs);
-    block_jobs = 0;
 
     return err;
 }
@@ -5460,6 +5542,78 @@ int Longtail_MergeContentIndex(
     hmfree(chunk_hash_to_block_index);
     Longtail_Free(compact_chunk_hashes);
     Longtail_Free(compact_block_hashes);
+    return 0;
+}
+
+int Longtail_AddContentIndex(
+    struct Longtail_ContentIndex* local_content_index,
+    struct Longtail_ContentIndex* new_content_index,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_AddContentIndex(%p, %p, %p)", local_content_index, new_content_index, out_content_index)
+    LONGTAIL_VALIDATE_INPUT(local_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(new_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT((*local_content_index->m_HashAPI) == (*new_content_index->m_HashAPI), return EINVAL)
+
+    uint64_t local_block_count = *local_content_index->m_BlockCount;
+    uint64_t remote_block_count = *new_content_index->m_BlockCount;
+    uint64_t local_chunk_count = *local_content_index->m_ChunkCount;
+    uint64_t remote_chunk_count = *new_content_index->m_ChunkCount;
+    uint64_t block_count = local_block_count + remote_block_count;
+    uint64_t chunk_count = local_chunk_count + remote_chunk_count;
+    size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
+    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
+    if (!content_index)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_AddContentIndex(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            content_index_size,
+            ENOMEM)
+        return ENOMEM;
+    }
+
+    int err = Longtail_InitContentIndex(
+        content_index,
+        &content_index[1],
+        content_index_size - sizeof(struct Longtail_ContentIndex),
+        *local_content_index->m_HashAPI,
+        *local_content_index->m_MaxChunksPerBlock,
+        *local_content_index->m_MaxChunksPerBlock,
+        block_count,
+        chunk_count);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_AddContentIndex(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %p, %" PRIu64 ", %" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            content_index, &content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *local_content_index->m_HashAPI, block_count, chunk_count,
+            err)
+        Longtail_Free(content_index);
+        return err;
+    }
+
+    for (uint64_t b = 0; b < local_block_count; ++b)
+    {
+        content_index->m_BlockHashes[b] = local_content_index->m_BlockHashes[b];
+    }
+    for (uint64_t b = 0; b < remote_block_count; ++b)
+    {
+        content_index->m_BlockHashes[local_block_count + b] = new_content_index->m_BlockHashes[b];
+    }
+    for (uint64_t a = 0; a < local_chunk_count; ++a)
+    {
+        content_index->m_ChunkHashes[a] = local_content_index->m_ChunkHashes[a];
+        content_index->m_ChunkBlockIndexes[a] = local_content_index->m_ChunkBlockIndexes[a];
+        content_index->m_ChunkBlockOffsets[a] = local_content_index->m_ChunkBlockOffsets[a];
+        content_index->m_ChunkLengths[a] = local_content_index->m_ChunkLengths[a];
+    }
+    for (uint64_t a = 0; a < remote_chunk_count; ++a)
+    {
+        content_index->m_ChunkHashes[local_chunk_count + a] = new_content_index->m_ChunkHashes[a];
+        content_index->m_ChunkBlockIndexes[local_chunk_count + a] = local_block_count + new_content_index->m_ChunkBlockIndexes[a];
+        content_index->m_ChunkBlockOffsets[local_chunk_count + a] = new_content_index->m_ChunkBlockOffsets[a];
+        content_index->m_ChunkLengths[local_chunk_count + a] = new_content_index->m_ChunkLengths[a];
+    }
+    *out_content_index = content_index;
     return 0;
 }
 

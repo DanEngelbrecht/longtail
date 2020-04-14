@@ -364,6 +364,7 @@ struct Longtail_BlockStore_Stats
 };
 
 typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
@@ -372,6 +373,7 @@ struct Longtail_BlockStoreAPI
 {
     struct Longtail_API m_API;
     Longtail_BlockStore_PutStoredBlockFunc PutStoredBlock;
+    Longtail_BlockStore_PreflightGetFunc PreflightGet;
     Longtail_BlockStore_GetStoredBlockFunc GetStoredBlock;
     Longtail_BlockStore_GetIndexFunc GetIndex;
     Longtail_BlockStore_GetStatsFunc GetStats;
@@ -384,11 +386,13 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
+    Longtail_BlockStore_PreflightGetFunc preflight_get_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetIndexFunc get_index_func,
     Longtail_BlockStore_GetStatsFunc get_stats_func);
 
 LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
@@ -600,6 +604,11 @@ LONGTAIL_EXPORT int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* remote_content_index,
     struct Longtail_ContentIndex** out_content_index);
 
+LONGTAIL_EXPORT int Longtail_AddContentIndex(
+    struct Longtail_ContentIndex* local_content_index,
+    struct Longtail_ContentIndex* remote_content_index,
+    struct Longtail_ContentIndex** out_content_index);
+
 LONGTAIL_EXPORT int Longtail_WriteVersion(
     struct Longtail_BlockStoreAPI* block_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
@@ -723,9 +732,11 @@ LONGTAIL_EXPORT const uint32_t* Longtail_BlockIndex_GetChunkTag(const struct Lon
 LONGTAIL_EXPORT const TLongtail_Hash* Longtail_BlockIndex_GetChunkHashes(const struct Longtail_BlockIndex* block_index);
 LONGTAIL_EXPORT const uint32_t* Longtail_BlockIndex_GetChunkSizes(const struct Longtail_BlockIndex* block_index);
 
+typedef int (*Longtail_StoredBlock_DisposeFunc)(struct Longtail_StoredBlock* stored_block);
+
 struct Longtail_StoredBlock
 {
-    int (*Dispose)(struct Longtail_StoredBlock* stored_block);
+    Longtail_StoredBlock_DisposeFunc Dispose;
     struct Longtail_BlockIndex* m_BlockIndex;
     void* m_BlockData;
     uint32_t m_BlockChunksDataSize;

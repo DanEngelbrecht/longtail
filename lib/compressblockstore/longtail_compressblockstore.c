@@ -196,6 +196,11 @@ static int CompressBlockStore_PutStoredBlock(
     return err;
 }
 
+static int CompressBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+{
+    return 0;
+}
+
 static int DecompressBlock(
     struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_StoredBlock* compressed_stored_block,
@@ -428,6 +433,7 @@ static int CompressBlockStore_Init(
 
     api->m_BlockStoreAPI.m_API.Dispose = CompressBlockStore_Dispose;
     api->m_BlockStoreAPI.PutStoredBlock = CompressBlockStore_PutStoredBlock;
+    api->m_BlockStoreAPI.PreflightGet = CompressBlockStore_PreflightGet;
     api->m_BlockStoreAPI.GetStoredBlock = CompressBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = CompressBlockStore_GetIndex;
     api->m_BlockStoreAPI.GetStats = CompressBlockStore_GetStats;

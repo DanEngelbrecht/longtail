@@ -151,6 +151,11 @@ static int CacheBlockStore_PutStoredBlock(
     return 0;
 }
 
+static int CacheBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+{
+    return 0;
+}
+
 struct OnGetStoredBlockPutLocalComplete_API
 {
     struct Longtail_AsyncPutStoredBlockAPI m_API;
@@ -443,6 +448,7 @@ static int CacheBlockStore_Init(
 
     api->m_BlockStoreAPI.m_API.Dispose = CacheBlockStore_Dispose;
     api->m_BlockStoreAPI.PutStoredBlock = CacheBlockStore_PutStoredBlock;
+    api->m_BlockStoreAPI.PreflightGet = CacheBlockStore_PreflightGet;
     api->m_BlockStoreAPI.GetStoredBlock = CacheBlockStore_GetStoredBlock;
     api->m_BlockStoreAPI.GetIndex = CacheBlockStore_GetIndex;
     api->m_BlockStoreAPI.GetStats = CacheBlockStore_GetStats;
