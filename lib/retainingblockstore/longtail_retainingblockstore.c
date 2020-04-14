@@ -42,16 +42,13 @@ int RetainedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
     TLongtail_Hash block_hash = *b->m_StoredBlock.m_BlockIndex->m_BlockHash;
     intptr_t tmp;
     uint64_t block_index = hmget_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
-    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
     TLongtail_Atomic32* retain_count_ptr = &retainingblockstore_api->m_BlockRetainCounts[block_index];
     if (Longtail_AtomicAdd32(retain_count_ptr, -1) != 0)
     {
-        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
         return 0;
     }
     LONGTAIL_FATAL_ASSERT(retainingblockstore_api->m_RetainedStoredBlocks[block_index], return EINVAL)
     retainingblockstore_api->m_RetainedStoredBlocks[block_index] = 0;
-    Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
     struct Longtail_StoredBlock* original_stored_block = b->m_OriginalStoredBlock;
     Longtail_Free(b);
     original_stored_block->Dispose(original_stored_block);
@@ -203,20 +200,19 @@ static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail
     }
 
     TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
-    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
     intptr_t tmp;
     intptr_t block_index_ptr = hmgeti_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     if (block_index_ptr == -1)
     {
-        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
         return base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, err);
     }
     uint64_t block_index = retainingblockstore_api->m_BlockHashToRetainedIndex[block_index_ptr].value;
 
+    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
     struct RetainedStoredBlock* retained_stored_block = retainingblockstore_api->m_RetainedStoredBlocks[block_index];
+    Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
     if (retained_stored_block)
     {
-        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
         err = base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, &retained_stored_block->m_StoredBlock, 0);
         if (err)
         {
@@ -227,11 +223,11 @@ static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail
     retained_stored_block = RetainedStoredBlock_CreateBlock(retainingblockstore_api, stored_block);
     if (!retained_stored_block)
     {
-        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
         err = base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, 0);
         return err;
     }
 
+    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
     if (retainingblockstore_api->m_RetainedStoredBlocks[block_index])
     {
         Longtail_Free(retained_stored_block);
@@ -264,17 +260,15 @@ static int RetainingBlockStore_GetStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
     struct RetainingBlockStoreAPI* retainingblockstore_api = (struct RetainingBlockStoreAPI*)block_store_api;
 
-    Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
     intptr_t tmp;
     intptr_t block_index_ptr = hmgeti_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     if (block_index_ptr != -1)
     {
         uint64_t block_index = retainingblockstore_api->m_BlockHashToRetainedIndex[block_index_ptr].value;
         LONGTAIL_FATAL_ASSERT(block_index < retainingblockstore_api->m_RetainedBlockCount, return EINVAL);
-//        int32_t block_retain_count = Longtail_AtomicAdd32(&retainingblockstore_api->m_BlockRetainCounts[block_index], -1);
-        int32_t block_retain_count = retainingblockstore_api->m_BlockRetainCounts[block_index];
-        LONGTAIL_FATAL_ASSERT(block_retain_count > 0, return EINVAL);
+        LONGTAIL_FATAL_ASSERT(retainingblockstore_api->m_BlockRetainCounts[block_index] > 0, return EINVAL);
 
+        Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
         struct RetainedStoredBlock* stored_block = retainingblockstore_api->m_RetainedStoredBlocks[block_index];
         if (stored_block)
         {
@@ -282,6 +276,7 @@ static int RetainingBlockStore_GetStoredBlock(
             int err = async_complete_api->OnComplete(async_complete_api, &stored_block->m_StoredBlock, 0);
             return err;
         }
+        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
         size_t retaining_lock_store_async_get_stored_block_API_size = sizeof(struct RetainingBlockStore_AsyncGetStoredBlockAPI);
         struct RetainingBlockStore_AsyncGetStoredBlockAPI* retaining_lock_store_async_get_stored_block_API = (struct RetainingBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(retaining_lock_store_async_get_stored_block_API_size);
         if (!retaining_lock_store_async_get_stored_block_API)
@@ -290,7 +285,6 @@ static int RetainingBlockStore_GetStoredBlock(
                 block_store_api, block_hash, async_complete_api,
                 retaining_lock_store_async_get_stored_block_API_size,
                 ENOMEM)
-            Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
             return ENOMEM;
         }
         retaining_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.m_API.Dispose = 0;
@@ -298,7 +292,6 @@ static int RetainingBlockStore_GetStoredBlock(
         retaining_lock_store_async_get_stored_block_API->m_RetainingblockstoreAPI = retainingblockstore_api;
         retaining_lock_store_async_get_stored_block_API->m_BaseAsyncGetStoredBlockAPI = async_complete_api;
 
-        Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
         int err = retainingblockstore_api->m_BackingBlockStore->GetStoredBlock(
             retainingblockstore_api->m_BackingBlockStore,
             block_hash,
@@ -311,7 +304,6 @@ static int RetainingBlockStore_GetStoredBlock(
         }
         return 0;
     }
-    Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
     return retainingblockstore_api->m_BackingBlockStore->GetStoredBlock(
         retainingblockstore_api->m_BackingBlockStore,
         block_hash,
