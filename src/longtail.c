@@ -3902,8 +3902,8 @@ static int CreatePartialAssetWriteJob(
 
     if (job->m_BlockReaderJobCount > 0)
     {
-        Longtail_JobAPI_Jobs block_readion_jobs;
-        err = job_api->CreateJobs(job_api, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_readion_jobs);
+        Longtail_JobAPI_Jobs block_read_jobs;
+        err = job_api->CreateJobs(job_api, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_read_jobs);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
         Longtail_JobAPI_JobFunc sync_write_funcs[1] = { WriteReady };
         void* sync_write_ctx[1] = { 0 };
@@ -3913,9 +3913,9 @@ static int CreatePartialAssetWriteJob(
 
         err = job_api->AddDependecies(job_api, 1, write_job, 1, write_sync_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockReaderJobCount, block_readion_jobs);
+        err = job_api->AddDependecies(job_api, 1, write_job, job->m_BlockReaderJobCount, block_read_jobs);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->ReadyJobs(job_api, job->m_BlockReaderJobCount, block_readion_jobs);
+        err = job_api->ReadyJobs(job_api, job->m_BlockReaderJobCount, block_read_jobs);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         *out_jobs = write_sync_job;
@@ -3956,6 +3956,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             if (stored_block[d] && stored_block[d]->Dispose)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
         }
         return 0;
@@ -3972,6 +3973,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
         for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
             stored_block[d]->Dispose(stored_block[d]);
+            stored_block[d] = 0;
         }
         job->m_Err = ENOENT;
         return 0;
@@ -3988,6 +3990,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_Err = err;
             return 0;
@@ -4020,6 +4023,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_Err = err;
             return 0;
@@ -4055,6 +4059,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_Err = err;
             return 0;
@@ -4095,6 +4100,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
@@ -4124,6 +4130,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
             }
             if (sync_write_job)
             {
@@ -4141,6 +4148,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
     for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
     {
         stored_block[d]->Dispose(stored_block[d]);
+        stored_block[d] = 0;
     }
 
     if (sync_write_job)
@@ -4317,6 +4325,7 @@ struct BlockJobCompareContext
 {
     const struct AssetWriteList* m_AssetWriteList;
     const uint32_t* asset_chunk_index_starts;
+    const uint32_t* asset_chunk_indexes;
     const TLongtail_Hash* chunk_hashes;
     struct ContentLookup* cl;
 };
@@ -4332,19 +4341,21 @@ static SORTFUNC(BlockJobCompare)
 
     uint32_t a = *(const uint32_t*)a_ptr;
     uint32_t b = *(const uint32_t*)b_ptr;
-    TLongtail_Hash a_first_chunk_hash = c->chunk_hashes[c->asset_chunk_index_starts[a]];
-    TLongtail_Hash b_first_chunk_hash = c->chunk_hashes[c->asset_chunk_index_starts[b]];
-    if (a_first_chunk_hash == b_first_chunk_hash)
-    {
-        return 0;
-    }
+
+    uint32_t asset_chunk_offset_a = c->asset_chunk_index_starts[a];
+    uint32_t asset_chunk_offset_b = c->asset_chunk_index_starts[b];
+    uint32_t chunk_index_a = c->asset_chunk_indexes[asset_chunk_offset_a];
+    uint32_t chunk_index_b = c->asset_chunk_indexes[asset_chunk_offset_b];
+
+    TLongtail_Hash a_first_chunk_hash = c->chunk_hashes[chunk_index_a];
+    TLongtail_Hash b_first_chunk_hash = c->chunk_hashes[chunk_index_b];
+//    if (a_first_chunk_hash == b_first_chunk_hash)
+//    {
+//        return 0;
+//    }
     uint64_t a_block_index = hmget(chunk_hash_to_block_index, a_first_chunk_hash);
     uint64_t b_block_index = hmget(chunk_hash_to_block_index, b_first_chunk_hash);
-    if (a_block_index == b_block_index)
-    {
-        return 0;
-    }
-    else if (a_block_index < b_block_index)
+    if (a_block_index < b_block_index)
     {
         return -1;
     }
@@ -4471,10 +4482,12 @@ static int BuildAssetWriteList(
     struct BlockJobCompareContext block_job_compare_context = {
             awl,    // m_AssetWriteList
             asset_chunk_index_starts,
+            asset_chunk_indexes,
             chunk_hashes,   // chunk_hashes
             cl  // cl
         };
     QSORT(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
+
     *out_asset_write_list = awl;
     return 0;
 }
@@ -4527,14 +4540,24 @@ static int WriteAssets(
             uint64_t block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, first_chunk_hash);
             TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
             intptr_t find_ptr = hmgeti(block_ref_count_map, block_hash);
-            if (find_ptr == -1)
-            {
-                hmput(block_ref_count_map, block_hash, block_ref_count);
-                block_ref_hashes[block_ref_count] = block_hash;
-                block_ref_counts[block_ref_count] = 1;
-                ++block_ref_count;
-            }
+            LONGTAIL_FATAL_ASSERT(find_ptr == -1, return EINVAL)
+            hmput(block_ref_count_map, block_hash, block_ref_count);
+            block_ref_hashes[block_ref_count] = block_hash;
+            block_ref_counts[block_ref_count] = 1;
+            ++block_ref_count;
+
             ++j;
+            while (j < awl->m_BlockJobCount)
+            {
+                uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
+                TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
+                uint64_t next_block_index = hmget(content_lookup->m_ChunkHashToBlockIndex, first_chunk_hash);
+                if (next_block_index != block_index)
+                {
+                    break;
+                }
+                ++j;
+            }
         }
     }
 
@@ -4646,8 +4669,8 @@ static int WriteAssets(
         block_job->m_StoredBlock = 0;
         Longtail_JobAPI_JobFunc block_read_funcs[1] = { BlockReader };
         void* block_read_ctxs[1] = {block_job};
-        Longtail_JobAPI_Jobs block_readion_job;
-        err = job_api->CreateJobs(job_api, 1, block_read_funcs, block_read_ctxs, &block_readion_job);
+        Longtail_JobAPI_Jobs block_read_job;
+        err = job_api->CreateJobs(job_api, 1, block_read_funcs, block_read_ctxs, &block_read_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
 
         job->m_VersionStorageAPI = version_storage_api;
@@ -4684,9 +4707,9 @@ static int WriteAssets(
         Longtail_JobAPI_Jobs block_write_job;
         err = job_api->CreateJobs(job_api, 1, func, ctx, &block_write_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_readion_job);
+        err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_read_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->ReadyJobs(job_api, 1, block_readion_job);
+        err = job_api->ReadyJobs(job_api, 1, block_read_job);
         LONGTAIL_FATAL_ASSERT(err == 0, return err)
     }
 /*
@@ -5519,6 +5542,78 @@ int Longtail_MergeContentIndex(
     hmfree(chunk_hash_to_block_index);
     Longtail_Free(compact_chunk_hashes);
     Longtail_Free(compact_block_hashes);
+    return 0;
+}
+
+int Longtail_AddContentIndex(
+    struct Longtail_ContentIndex* local_content_index,
+    struct Longtail_ContentIndex* new_content_index,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_AddContentIndex(%p, %p, %p)", local_content_index, new_content_index, out_content_index)
+    LONGTAIL_VALIDATE_INPUT(local_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(new_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT((*local_content_index->m_HashAPI) == (*new_content_index->m_HashAPI), return EINVAL)
+
+    uint64_t local_block_count = *local_content_index->m_BlockCount;
+    uint64_t remote_block_count = *new_content_index->m_BlockCount;
+    uint64_t local_chunk_count = *local_content_index->m_ChunkCount;
+    uint64_t remote_chunk_count = *new_content_index->m_ChunkCount;
+    uint64_t block_count = local_block_count + remote_block_count;
+    uint64_t chunk_count = local_chunk_count + remote_chunk_count;
+    size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
+    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
+    if (!content_index)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_AddContentIndex(%p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            content_index_size,
+            ENOMEM)
+        return ENOMEM;
+    }
+
+    int err = Longtail_InitContentIndex(
+        content_index,
+        &content_index[1],
+        content_index_size - sizeof(struct Longtail_ContentIndex),
+        *local_content_index->m_HashAPI,
+        *local_content_index->m_MaxChunksPerBlock,
+        *local_content_index->m_MaxChunksPerBlock,
+        block_count,
+        chunk_count);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_AddContentIndex(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %p, %" PRIu64 ", %" PRIu64 ") failed with %d",
+            local_content_index, new_content_index, out_content_index,
+            content_index, &content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *local_content_index->m_HashAPI, block_count, chunk_count,
+            err)
+        Longtail_Free(content_index);
+        return err;
+    }
+
+    for (uint64_t b = 0; b < local_block_count; ++b)
+    {
+        content_index->m_BlockHashes[b] = local_content_index->m_BlockHashes[b];
+    }
+    for (uint64_t b = 0; b < remote_block_count; ++b)
+    {
+        content_index->m_BlockHashes[local_block_count + b] = new_content_index->m_BlockHashes[b];
+    }
+    for (uint64_t a = 0; a < local_chunk_count; ++a)
+    {
+        content_index->m_ChunkHashes[a] = local_content_index->m_ChunkHashes[a];
+        content_index->m_ChunkBlockIndexes[a] = local_content_index->m_ChunkBlockIndexes[a];
+        content_index->m_ChunkBlockOffsets[a] = local_content_index->m_ChunkBlockOffsets[a];
+        content_index->m_ChunkLengths[a] = local_content_index->m_ChunkLengths[a];
+    }
+    for (uint64_t a = 0; a < remote_chunk_count; ++a)
+    {
+        content_index->m_ChunkHashes[local_chunk_count + a] = new_content_index->m_ChunkHashes[a];
+        content_index->m_ChunkBlockIndexes[local_chunk_count + a] = local_block_count + new_content_index->m_ChunkBlockIndexes[a];
+        content_index->m_ChunkBlockOffsets[local_chunk_count + a] = new_content_index->m_ChunkBlockOffsets[a];
+        content_index->m_ChunkLengths[local_chunk_count + a] = new_content_index->m_ChunkLengths[a];
+    }
+    *out_content_index = content_index;
     return 0;
 }
 

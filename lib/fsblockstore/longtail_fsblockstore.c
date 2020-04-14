@@ -338,7 +338,7 @@ static int FSBlockStore_PutStoredBlock(
     block_path = 0;
 
     // We added a block, the stored file on disk is no longer valid, remove it
-    const char* content_index_path = Longtail_ConcatPath(fsblockstore_api->m_ContentPath, "store.lci");
+    const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
 
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (Longtail_IsFile(content_index_path))
@@ -364,7 +364,7 @@ static int FSBlockStore_PutStoredBlock(
         else
         {
             struct Longtail_ContentIndex* new_content_index;
-            err = Longtail_MergeContentIndex(
+            err = Longtail_AddContentIndex(
                 fsblockstore_api->m_ContentIndex,
                 added_content_index,
                 &new_content_index);
@@ -483,7 +483,7 @@ static int FSBlockStore_GetIndex(
             hmput(fsblockstore_api->m_BlockState, block_hash, 1);
         }
 
-        const char* content_index_path = Longtail_ConcatPath(fsblockstore_api->m_ContentPath, "store.lci");
+        const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
         err = Longtail_WriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentIndex, content_index_path);
         if (err)
         {
@@ -549,7 +549,7 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
     if (fsblockstore_api->m_ContentIndex)
     {
-        const char* content_index_path = Longtail_ConcatPath(fsblockstore_api->m_ContentPath, "store.lci");
+        const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
         Longtail_WriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentIndex, content_index_path);
         Longtail_Free((void*)content_index_path);
     }
@@ -595,7 +595,7 @@ static int FSBlockStore_Init(
     api->m_BlockGetFailCount = 0;
     api->m_BlockPutFailCount = 0;
 
-    const char* content_index_path = Longtail_ConcatPath(api->m_ContentPath, "store.lci");
+    const char* content_index_path = storage_api->ConcatPath(storage_api, content_path, "store.lci");
     if (Longtail_IsFile(content_index_path))
     {
         int err = Longtail_ReadContentIndex(api->m_StorageAPI, content_index_path, &api->m_ContentIndex);

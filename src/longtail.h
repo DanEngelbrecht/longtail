@@ -604,6 +604,11 @@ LONGTAIL_EXPORT int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* remote_content_index,
     struct Longtail_ContentIndex** out_content_index);
 
+LONGTAIL_EXPORT int Longtail_AddContentIndex(
+    struct Longtail_ContentIndex* local_content_index,
+    struct Longtail_ContentIndex* remote_content_index,
+    struct Longtail_ContentIndex** out_content_index);
+
 LONGTAIL_EXPORT int Longtail_WriteVersion(
     struct Longtail_BlockStoreAPI* block_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
