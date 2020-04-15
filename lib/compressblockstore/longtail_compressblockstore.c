@@ -14,6 +14,8 @@ struct CompressBlockStoreAPI
     struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
     struct Longtail_BlockStore_Stats m_Stats;
 
+    TLongtail_Atomic32 m_PendingRequestCount;
+
     TLongtail_Atomic64 m_IndexGetCount;
     TLongtail_Atomic64 m_BlocksGetCount;
     TLongtail_Atomic64 m_BlocksPutCount;
@@ -123,6 +125,7 @@ struct OnPutBackingStoreAsync_API
     struct Longtail_AsyncPutStoredBlockAPI m_API;
     struct Longtail_StoredBlock* m_CompressedBlock;
     struct Longtail_AsyncPutStoredBlockAPI* m_AsyncCompleteAPI;
+    struct CompressBlockStoreAPI* m_CompressBlockStoreAPI;
 };
 
 static void OnPutBackingStoreComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
@@ -130,12 +133,14 @@ static void OnPutBackingStoreComplete(struct Longtail_AsyncPutStoredBlockAPI* as
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnPuttBackingStoreComplete(%p, %d)", async_complete_api, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return)
     struct OnPutBackingStoreAsync_API* async_block_store = (struct OnPutBackingStoreAsync_API*)async_complete_api;
+    struct CompressBlockStoreAPI* compressblockstore_api = async_block_store->m_CompressBlockStoreAPI;
     if (async_block_store->m_CompressedBlock)
     {
         async_block_store->m_CompressedBlock->Dispose(async_block_store->m_CompressedBlock);
     }
     async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, err);
     Longtail_Free(async_block_store);
+    Longtail_AtomicAdd32(&compressblockstore_api->m_PendingRequestCount, -1);
 }
 
 static int CompressBlockStore_PutStoredBlock(
@@ -182,6 +187,8 @@ static int CompressBlockStore_PutStoredBlock(
     on_put_backing_store_async_api->m_API.m_API.Dispose = 0;
     on_put_backing_store_async_api->m_CompressedBlock = compressed_stored_block;
     on_put_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
+    on_put_backing_store_async_api->m_CompressBlockStoreAPI = block_store;
+    Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, 1);
     err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, &on_put_backing_store_async_api->m_API);
     if (err)
     {
@@ -191,6 +198,7 @@ static int CompressBlockStore_PutStoredBlock(
             err)
         Longtail_Free(on_put_backing_store_async_api);
         compressed_stored_block->Dispose(compressed_stored_block);
+        Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1);
     }
     return err;
 }
@@ -296,6 +304,7 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetBackingStoreComplete(%p, %p, %d)", async_complete_api, stored_block, err)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return)
     struct OnGetBackingStoreAsync_API* async_block_store = (struct OnGetBackingStoreAsync_API*)async_complete_api;
+    struct CompressBlockStoreAPI* blockstore = async_block_store->m_BlockStore;
     if (err)
     {
         if (err != ENOENT)
@@ -306,6 +315,7 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
         }
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, err);
         Longtail_Free(async_block_store);
+        Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
         return;
     }
 
@@ -318,6 +328,7 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
     {
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, 0);
         Longtail_Free(async_block_store);
+        Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
         return;
     }
 
@@ -334,10 +345,12 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
         stored_block->Dispose(stored_block);
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0, err);
         Longtail_Free(async_block_store);
+        Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
         return;
     }
     async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, 0);
     Longtail_Free(async_block_store);
+    Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
 }
 
 static int CompressBlockStore_GetStoredBlock(
@@ -366,6 +379,7 @@ static int CompressBlockStore_GetStoredBlock(
     on_fetch_backing_store_async_api->m_BlockStore = block_store;
     on_fetch_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
 
+    Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, 1);
     int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, &on_fetch_backing_store_async_api->m_API);
     if (err)
     {
@@ -377,6 +391,7 @@ static int CompressBlockStore_GetStoredBlock(
                 err)
         }
         Longtail_Free(on_fetch_backing_store_async_api);
+        Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1);
         return err;
     }
     return 0;
@@ -428,6 +443,10 @@ static void CompressBlockStore_Dispose(struct Longtail_API* api)
     LONGTAIL_VALIDATE_INPUT(api, return)
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)api;
+    while (block_store->m_PendingRequestCount > 0)
+    {
+        Longtail_Sleep(1000);
+    }
     Longtail_Free(block_store);
 }
 
@@ -449,6 +468,7 @@ static int CompressBlockStore_Init(
     api->m_BlockStoreAPI.GetStats = CompressBlockStore_GetStats;
     api->m_BackingBlockStore = backing_block_store;
     api->m_CompressionRegistryAPI = compression_registry;
+    api->m_PendingRequestCount = 0;
 
     api->m_IndexGetCount = 0;
     api->m_BlocksGetCount = 0;

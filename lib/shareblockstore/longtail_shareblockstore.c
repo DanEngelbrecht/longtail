@@ -36,6 +36,7 @@ struct ShareBlockStoreAPI
     struct BlockHashToSharedStoredBlock* m_BlockHashToSharedStoredBlock;
     struct BlockHashToCompleteCallbacks* m_BlockHashToCompleteCallbacks;
     HLongtail_SpinLock m_Lock;
+    TLongtail_Atomic32 m_PendingRequestCount;
 };
 
 int SharedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
@@ -121,7 +122,7 @@ static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
 struct ShareBlockStore_AsyncGetStoredBlockAPI
 {
     struct Longtail_AsyncGetStoredBlockAPI m_AsyncGetStoredBlockAPI;
-    struct ShareBlockStoreAPI* m_ShareblockstoreAPI;
+    struct ShareBlockStoreAPI* m_ShareBlockStoreAPI;
     TLongtail_Hash m_BlockHash;
 };
 
@@ -129,10 +130,10 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
 {
     LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct ShareBlockStore_AsyncGetStoredBlockAPI* async_api = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(async_api->m_ShareblockstoreAPI != 0, return)
+    LONGTAIL_FATAL_ASSERT(async_api->m_ShareBlockStoreAPI != 0, return)
     TLongtail_Hash block_hash = async_api->m_BlockHash;
 
-    struct ShareBlockStoreAPI* api = async_api->m_ShareblockstoreAPI;
+    struct ShareBlockStoreAPI* api = async_api->m_ShareBlockStoreAPI;
     Longtail_Free(async_api);
 
     if (err)
@@ -150,6 +151,7 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
+        Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
         return;
     }
 
@@ -169,6 +171,8 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
             list[i]->OnComplete(list[i], 0, ENOMEM);
         }
         arrfree(list);
+        stored_block->Dispose(stored_block);
+        Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
         return;
     }
 
@@ -185,6 +189,7 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
         list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
     }
     arrfree(list);
+    Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
 }
 
 static int ShareBlockStore_GetStoredBlock(
@@ -238,9 +243,10 @@ static int ShareBlockStore_GetStoredBlock(
 
     share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.m_API.Dispose = 0;
     share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.OnComplete = ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete;
-    share_lock_store_async_get_stored_block_API->m_ShareblockstoreAPI = api;
+    share_lock_store_async_get_stored_block_API->m_ShareBlockStoreAPI = api;
     share_lock_store_async_get_stored_block_API->m_BlockHash = block_hash;
 
+    Longtail_AtomicAdd32(&api->m_PendingRequestCount, 1);
     int err = api->m_BackingBlockStore->GetStoredBlock(
         api->m_BackingBlockStore,
         block_hash,
@@ -261,7 +267,6 @@ static int ShareBlockStore_GetStoredBlock(
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        Longtail_Free(share_lock_store_async_get_stored_block_API);
         return 0;
     }
     return 0;
@@ -300,6 +305,10 @@ static void ShareBlockStore_Dispose(struct Longtail_API* base_api)
     LONGTAIL_FATAL_ASSERT(base_api, return)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)base_api;
+    while (api->m_PendingRequestCount > 0)
+    {
+        Longtail_Sleep(1000);
+    }
     hmfree(api->m_BlockHashToCompleteCallbacks);
     hmfree(api->m_BlockHashToSharedStoredBlock);
     Longtail_DeleteSpinLock(api->m_Lock);
@@ -324,6 +333,7 @@ static int ShareBlockStore_Init(
     api->m_BackingBlockStore = backing_block_store;
     api->m_BlockHashToSharedStoredBlock = 0;
     api->m_BlockHashToCompleteCallbacks = 0;
+    api->m_PendingRequestCount = 0;
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
