@@ -13,6 +13,7 @@
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/retainingblockstore/longtail_retainingblockstore.h"
+#include "../lib/shareblockstore/longtail_shareblockstore.h"
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/zstd/longtail_zstd.h"
@@ -525,7 +526,8 @@ int DownSync(
     struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, content_path);
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(store_block_localstore_api, store_block_remotestore_api);
     struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
-    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
+    struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);//retaining_block_store_api);
 
     const char* source_index_path = Longtail_ConcatPath(storage_path, source_path);
     struct Longtail_VersionIndex* source_version_index = 0;
@@ -535,6 +537,7 @@ int DownSync(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_index_path, err);
         Longtail_Free((void*)source_index_path);
         SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -568,6 +571,7 @@ int DownSync(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get content index from `%s`, %d", storage_path, err);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -605,6 +609,7 @@ int DownSync(
             Longtail_Free(remote_content_index);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(retaining_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
@@ -644,6 +649,7 @@ int DownSync(
             Longtail_Free(remote_content_index);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(retaining_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
@@ -669,6 +675,7 @@ int DownSync(
         Longtail_Free(remote_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -706,6 +713,7 @@ int DownSync(
         Longtail_Free(remote_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -723,6 +731,7 @@ int DownSync(
     Longtail_Free(remote_content_index);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(store_block_store_api);
+    SAFE_DISPOSE_API(retaining_block_store_api);
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(store_block_cachestore_api);
     SAFE_DISPOSE_API(store_block_localstore_api);

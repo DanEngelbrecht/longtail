@@ -545,6 +545,7 @@ static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api,
 
 static void FSBlockStore_Dispose(struct Longtail_API* api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "FSBlockStore_Dispose(%p)", api)
     LONGTAIL_FATAL_ASSERT(api, return)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
     if (fsblockstore_api->m_ContentIndex)
