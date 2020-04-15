@@ -308,6 +308,10 @@ static void ShareBlockStore_Dispose(struct Longtail_API* base_api)
     while (api->m_PendingRequestCount > 0)
     {
         Longtail_Sleep(1000);
+        if (api->m_PendingRequestCount > 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p) waiting for %d pending requests", api, (int32_t)api->m_PendingRequestCount);
+        }
     }
     hmfree(api->m_BlockHashToCompleteCallbacks);
     hmfree(api->m_BlockHashToSharedStoredBlock);

@@ -446,6 +446,10 @@ static void CompressBlockStore_Dispose(struct Longtail_API* api)
     while (block_store->m_PendingRequestCount > 0)
     {
         Longtail_Sleep(1000);
+        if (block_store->m_PendingRequestCount > 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p) waiting for %d pending requests", block_store, (int32_t)block_store->m_PendingRequestCount);
+        }
     }
     Longtail_Free(block_store);
 }

@@ -466,6 +466,10 @@ static void CacheBlockStore_Dispose(struct Longtail_API* api)
     while (cacheblockstore_api->m_PendingRequestCount > 0)
     {
         Longtail_Sleep(1000);
+        if (cacheblockstore_api->m_PendingRequestCount > 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_Dispose(%p) waiting for %d pending requests", api, (int32_t)cacheblockstore_api->m_PendingRequestCount);
+        }
     }
     Longtail_Free(cacheblockstore_api);
 }
