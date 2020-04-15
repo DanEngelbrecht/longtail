@@ -100,6 +100,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
+          - Added shareblockstore that ref-counts active blocks to avoid redundant block get
+          - Longtail_CreateFSBlockStoreAPI now checks error on init
         draft: false
         prerelease: false
     - name: Download Linux artifacts
