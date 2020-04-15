@@ -545,6 +545,7 @@ static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api,
 
 static void FSBlockStore_Dispose(struct Longtail_API* api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "FSBlockStore_Dispose(%p)", api)
     LONGTAIL_FATAL_ASSERT(api, return)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
     if (fsblockstore_api->m_ContentIndex)
@@ -611,7 +612,7 @@ static int FSBlockStore_Init(
     }
     Longtail_Free((void*)content_index_path);
     int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
-    return 0;
+    return err;
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
@@ -630,9 +631,14 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
             ENOMEM)
         return 0;
     }
-    FSBlockStore_Init(
+    int err = FSBlockStore_Init(
         api,
         storage_api,
         content_path);
+    if (err)
+    {
+        Longtail_Free(api);
+        return 0;
+    }
     return &api->m_BlockStoreAPI;
 }

@@ -16,6 +16,7 @@
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/retainingblockstore/longtail_retainingblockstore.h"
+#include "../lib/shareblockstore/longtail_shareblockstore.h"
 #include "../lib/zstd/longtail_zstd.h"
 
 #include "../lib/longtail_platform.h"
@@ -3810,6 +3811,203 @@ TEST(Longtail, Longtail_WriteVersionRetainBlocks)
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks");
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateRetainingBlockStoreAPI(fs_block_store_api);
+
+    const uint32_t asset_count = 8u;
+
+    const char* TEST_FILENAMES[] = {
+        "TheLongFile.txt",
+        "ShortString.txt",
+        "AnotherSample.txt",
+        "folder/ShortString.txt",
+        "WATCHIOUT.txt",
+        "empty/.init.py",
+        "TheVeryLongFile.txt",
+        "AnotherVeryLongFile.txt"
+    };
+
+    const char* TEST_STRINGS[] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "More than chunk less than block",
+        "",
+        "A very long string that should go over multiple blocks so we can test our super funky multi-threading version"
+            "restore function that spawns a bunch of decompress jobs and makes the writes to disc sequentially using dependecies"
+            "so we write in good order but still use all our cores in a reasonable fashion. So this should be a long long string"
+            "longer than seems reasonable, and here is a lot of rambling in this string. Because it is late and I just need to fill"
+            "the string but make sure it actually comes back fine"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "this is the end...",
+        "Another very long string that should go over multiple blocks so we can test our super funky multi-threading version"
+            "restore function that spawns a bunch of decompress jobs and makes the writes to disc sequentially using dependecies"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "so we write in good order but still use all our cores in a reasonable fashion. So this should be a long long string"
+            "longer than seems reasonable, and here is a lot of rambling in this string. Because it is late and I just need to fill"
+            "the string but make sure it actually comes back fine"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "repeat, repeat, repeate, endless repeat, and some more repeat. You need more? Yes, repeat!"
+            "this is the end..."
+    };
+
+    const size_t TEST_SIZES[] = {
+        strlen(TEST_STRINGS[0]) + 1,
+        strlen(TEST_STRINGS[1]) + 1,
+        strlen(TEST_STRINGS[2]) + 1,
+        strlen(TEST_STRINGS[3]) + 1,
+        strlen(TEST_STRINGS[4]) + 1,
+        0,
+        strlen(TEST_STRINGS[6]) + 1,
+        strlen(TEST_STRINGS[7]) + 1
+    };
+
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        char* file_name = storage_api->ConcatPath(storage_api, "local", TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(storage_api, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
+        Longtail_Free(file_name);
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        if (TEST_SIZES[i])
+        {
+            ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+        }
+        storage_api->CloseFile(storage_api, w);
+        w = 0;
+    }
+
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
+    ASSERT_NE((uint32_t*)0, version1_compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        0,
+        "local",
+        version1_paths,
+        version1_compression_types,
+        50,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+    Longtail_Free(version1_compression_types);
+    version1_compression_types = 0;
+    Longtail_Free(version1_paths);
+    version1_paths = 0;
+
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+    Longtail_ContentIndex* cindex;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        vindex,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &cindex));
+    ASSERT_NE((Longtail_ContentIndex*)0, cindex);
+
+    TestAsyncGetIndexComplete block_store_content_index_cb;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, hash_api->GetIdentifier(hash_api), &block_store_content_index_cb.m_API));
+    block_store_content_index_cb.Wait();
+    struct Longtail_ContentIndex* block_store_content_index = block_store_content_index_cb.m_ContentIndex;
+    ASSERT_EQ(0, Longtail_WriteContent(
+        storage_api,
+        block_store_api,
+        job_api,
+        0,
+        block_store_content_index,
+        cindex,
+        vindex,
+        "local"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+
+    ASSERT_EQ(0, Longtail_WriteVersion(
+        block_store_api,
+        storage_api,
+        job_api,
+        0,
+        cindex,
+        vindex,
+        "remote",
+        1));
+
+    for (uint32_t i = 0; i < asset_count; ++i)
+    {
+        char* file_name = storage_api->ConcatPath(storage_api, "remote", TEST_FILENAMES[i]);
+        Longtail_StorageAPI_HOpenFile r;
+        ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, file_name, &r));
+        Longtail_Free(file_name);
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, r);
+        uint64_t size;
+        ASSERT_EQ(0, storage_api->GetSize(storage_api, r, &size));
+        ASSERT_EQ(TEST_SIZES[i], size);
+        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
+        if (size)
+        {
+            ASSERT_EQ(0, storage_api->Read(storage_api, r, 0, size, test_data));
+            ASSERT_STREQ(TEST_STRINGS[i], test_data);
+        }
+        storage_api->CloseFile(storage_api, r);
+        r = 0;
+        Longtail_Free(test_data);
+        test_data = 0;
+    }
+
+    Longtail_Free(vindex);
+    vindex = 0;
+    Longtail_Free(cindex);
+    cindex = 0;
+    SAFE_DISPOSE_API(fs_block_store_api);
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
+}
+
+TEST(Longtail, Longtail_WriteVersionShareBlocks)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks");
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateShareBlockStoreAPI(fs_block_store_api);
 
     const uint32_t asset_count = 8u;
 
