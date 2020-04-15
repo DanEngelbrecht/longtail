@@ -122,18 +122,19 @@ struct ShareBlockStore_AsyncGetStoredBlockAPI
 {
     struct Longtail_AsyncGetStoredBlockAPI m_AsyncGetStoredBlockAPI;
     struct ShareBlockStoreAPI* m_ShareblockstoreAPI;
+    TLongtail_Hash m_BlockHash;
 };
 
-static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
+static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct ShareBlockStore_AsyncGetStoredBlockAPI* async_api = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(async_api->m_ShareblockstoreAPI != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_api->m_ShareblockstoreAPI != 0, return)
+    TLongtail_Hash block_hash = async_api->m_BlockHash;
 
     struct ShareBlockStoreAPI* api = async_api->m_ShareblockstoreAPI;
     Longtail_Free(async_api);
 
-    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
     if (err)
     {
         struct Longtail_AsyncGetStoredBlockAPI** list;
@@ -149,7 +150,7 @@ static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asy
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        return err;
+        return;
     }
 
     struct SharedStoredBlock* shared_stored_block = SharedStoredBlock_CreateBlock(api, stored_block);
@@ -165,10 +166,10 @@ static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asy
         size_t wait_count = arrlen(list);
         for (size_t i = 0; i < wait_count; ++i)
         {
-            list[i]->OnComplete(list[i], 0, err);
+            list[i]->OnComplete(list[i], 0, ENOMEM);
         }
         arrfree(list);
-        return err;
+        return;
     }
 
     struct Longtail_AsyncGetStoredBlockAPI** list;
@@ -181,14 +182,9 @@ static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asy
     size_t wait_count = arrlen(list);
     for (size_t i = 0; i < wait_count; ++i)
     {
-        int callback_err = list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
-        if (callback_err)
-        {
-            shared_stored_block->m_StoredBlock.Dispose(&shared_stored_block->m_StoredBlock);
-        }
+        list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
     }
     arrfree(list);
-    return 0;
 }
 
 static int ShareBlockStore_GetStoredBlock(
@@ -210,12 +206,8 @@ static int ShareBlockStore_GetStoredBlock(
         struct SharedStoredBlock* shared_stored_block = api->m_BlockHashToSharedStoredBlock[find_block_ptr].value;
         Longtail_AtomicAdd32(&shared_stored_block->m_RefCount, 1);
         Longtail_UnlockSpinLock(api->m_Lock);
-        int err = async_complete_api->OnComplete(async_complete_api, &shared_stored_block->m_StoredBlock, 0);
-        if (err)
-        {
-            shared_stored_block->m_StoredBlock.Dispose(&shared_stored_block->m_StoredBlock);
-        }
-        return err;
+        async_complete_api->OnComplete(async_complete_api, &shared_stored_block->m_StoredBlock, 0);
+        return 0;
     }
 
     intptr_t find_wait_list_ptr = hmgeti(api->m_BlockHashToCompleteCallbacks, block_hash);
@@ -247,6 +239,7 @@ static int ShareBlockStore_GetStoredBlock(
     share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.m_API.Dispose = 0;
     share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.OnComplete = ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete;
     share_lock_store_async_get_stored_block_API->m_ShareblockstoreAPI = api;
+    share_lock_store_async_get_stored_block_API->m_BlockHash = block_hash;
 
     int err = api->m_BackingBlockStore->GetStoredBlock(
         api->m_BackingBlockStore,
@@ -263,13 +256,13 @@ static int ShareBlockStore_GetStoredBlock(
 
         // Anybody else who was successfully put up on wait list will get the error forwarded in their OnComplete
         size_t wait_count = arrlen(list);
-        for (size_t i = 1; i < wait_count; ++i)
+        for (size_t i = 0; i < wait_count; ++i)
         {
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
         Longtail_Free(share_lock_store_async_get_stored_block_API);
-        return err;
+        return 0;
     }
     return 0;
 }

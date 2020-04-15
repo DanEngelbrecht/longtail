@@ -279,13 +279,12 @@ struct AsyncGetIndexComplete
     struct Longtail_ContentIndex* m_ContentIndex;
 };
 
-static int AsyncGetIndexComplete_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
+static void AsyncGetIndexComplete_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
 {
     struct AsyncGetIndexComplete* cb = (struct AsyncGetIndexComplete*)async_complete_api;
     cb->m_Err = err;
     cb->m_ContentIndex = content_index;
     Longtail_PostSema(cb->m_NotifySema, 1);
-    return 0;
 }
 
 static void AsyncGetIndexComplete_Init(struct AsyncGetIndexComplete* me)

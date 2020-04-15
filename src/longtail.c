@@ -254,7 +254,7 @@ struct Longtail_AsyncPutStoredBlockAPI* Longtail_MakeAsyncPutStoredBlockAPI(
     return api;
 }
 
-int Longtail_AsyncPutStoredBlock_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err) { return async_complete_api->OnComplete(async_complete_api, err); }
+void Longtail_AsyncPutStoredBlock_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err) { async_complete_api->OnComplete(async_complete_api, err); }
 
 uint64_t Longtail_GetAsyncGetStoredBlockAPISize()
 {
@@ -273,7 +273,7 @@ struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetStoredBlockAPI(
     return api;
 }
 
-int Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err) { return async_complete_api->OnComplete(async_complete_api, stored_block, err); }
+void Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err) { async_complete_api->OnComplete(async_complete_api, stored_block, err); }
 
 uint64_t Longtail_GetAsyncGetIndexAPISize()
 {
@@ -292,7 +292,7 @@ struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
     return api;
 }
 
-int Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err) { return async_complete_api->OnComplete(async_complete_api, content_index, err); }
+void Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err) { async_complete_api->OnComplete(async_complete_api, content_index, err); }
 
 uint64_t Longtail_GetBlockStoreAPISize()
 {
@@ -3355,20 +3355,19 @@ struct WriteBlockJob
     int m_Err;
 };
 
-static int BlockWriterJobOnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
+static void BlockWriterJobOnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct WriteBlockJob* job = (struct WriteBlockJob*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return EINVAL);
-    LONGTAIL_FATAL_ASSERT(job->m_StoredBlock != 0, return EINVAL);
-    LONGTAIL_FATAL_ASSERT(job->m_JobID != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return);
+    LONGTAIL_FATAL_ASSERT(job->m_StoredBlock != 0, return);
+    LONGTAIL_FATAL_ASSERT(job->m_JobID != 0, return);
     uint32_t job_id = job->m_JobID;
     job->m_StoredBlock->Dispose(job->m_StoredBlock);
     job->m_StoredBlock = 0;
     job->m_JobID = 0;
     job->m_Err = err;
     job->m_JobAPI->ResumeJob(job->m_JobAPI, job_id);
-    return 0;
 }
 
 static int DisposePutBlock(struct Longtail_StoredBlock* stored_block)
@@ -3729,15 +3728,14 @@ struct BlockReaderJob
     int m_Err;
 };
 
-int BlockReaderJobOnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
+void BlockReaderJobOnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct BlockReaderJob* job = (struct BlockReaderJob*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return);
     job->m_Err = err;
     job->m_StoredBlock = stored_block;
     job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
-    return 0;
 }
 
 static int BlockReader(void* context, uint32_t job_id)

@@ -182,13 +182,13 @@ struct RetainingBlockStore_AsyncGetStoredBlockAPI
     struct Longtail_AsyncGetStoredBlockAPI* m_BaseAsyncGetStoredBlockAPI;
 };
 
-static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
+static void RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct RetainingBlockStore_AsyncGetStoredBlockAPI* api = (struct RetainingBlockStore_AsyncGetStoredBlockAPI*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(api->m_RetainingblockstoreAPI != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(api->m_BaseAsyncGetStoredBlockAPI != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(api->m_BaseAsyncGetStoredBlockAPI->OnComplete, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(api->m_RetainingblockstoreAPI != 0, return)
+    LONGTAIL_FATAL_ASSERT(api->m_BaseAsyncGetStoredBlockAPI != 0, return)
+    LONGTAIL_FATAL_ASSERT(api->m_BaseAsyncGetStoredBlockAPI->OnComplete, return)
 
     struct RetainingBlockStoreAPI* retainingblockstore_api = api->m_RetainingblockstoreAPI;
     struct Longtail_AsyncGetStoredBlockAPI* base_async_get_stored_block_api = api->m_BaseAsyncGetStoredBlockAPI;
@@ -196,7 +196,8 @@ static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail
 
     if (err)
     {
-        return base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, err);
+        base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, err);
+        return;
     }
 
     TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
@@ -204,7 +205,8 @@ static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail
     intptr_t block_index_ptr = hmgeti_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     if (block_index_ptr == -1)
     {
-        return base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, err);
+        base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, err);
+        return;
     }
     uint64_t block_index = retainingblockstore_api->m_BlockHashToRetainedIndex[block_index_ptr].value;
 
@@ -213,18 +215,14 @@ static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail
     Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
     if (retained_stored_block)
     {
-        err = base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, &retained_stored_block->m_StoredBlock, 0);
-        if (err)
-        {
-            retained_stored_block->m_StoredBlock.Dispose(&retained_stored_block->m_StoredBlock);
-        }
-        return err;
+        base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, &retained_stored_block->m_StoredBlock, 0);
+        return;
     }
     retained_stored_block = RetainedStoredBlock_CreateBlock(retainingblockstore_api, stored_block);
     if (!retained_stored_block)
     {
-        err = base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, 0);
-        return err;
+        base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, stored_block, 0);
+        return;
     }
 
     Longtail_LockSpinLock(retainingblockstore_api->m_Lock);
@@ -238,13 +236,7 @@ static int RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail
         retainingblockstore_api->m_RetainedStoredBlocks[block_index] = retained_stored_block;
     }
     Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
-    err = base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, &retained_stored_block->m_StoredBlock, 0);
-    if (err)
-    {
-        retained_stored_block->m_StoredBlock.Dispose(&retained_stored_block->m_StoredBlock);
-        return err;
-    }
-    return 0;
+    base_async_get_stored_block_api->OnComplete(base_async_get_stored_block_api, &retained_stored_block->m_StoredBlock, 0);
 }
 
 
@@ -273,8 +265,8 @@ static int RetainingBlockStore_GetStoredBlock(
         if (stored_block)
         {
             Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
-            int err = async_complete_api->OnComplete(async_complete_api, &stored_block->m_StoredBlock, 0);
-            return err;
+            async_complete_api->OnComplete(async_complete_api, &stored_block->m_StoredBlock, 0);
+            return 0;
         }
         Longtail_UnlockSpinLock(retainingblockstore_api->m_Lock);
         size_t retaining_lock_store_async_get_stored_block_API_size = sizeof(struct RetainingBlockStore_AsyncGetStoredBlockAPI);
