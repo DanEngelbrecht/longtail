@@ -149,14 +149,17 @@ static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task
 
 static uint32_t Bikeshed_GetWorkerCount(struct Longtail_JobAPI* job_api)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_GetWorkerCount(%p)", job_api)
+    LONGTAIL_VALIDATE_INPUT(job_api, return 0)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     return bikeshed_job_api->m_WorkerCount;
 }
 
 static int Bikeshed_ReserveJobs(struct Longtail_JobAPI* job_api, uint32_t job_count)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_ReserveJobs(%p, %u)", job_api, job_count)
+    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(job_count > 0, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     if (bikeshed_job_api->m_PendingJobCount)
     {
@@ -195,10 +198,11 @@ static int Bikeshed_ReserveJobs(struct Longtail_JobAPI* job_api, uint32_t job_co
 
 static int Bikeshed_CreateJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return 0)
-    LONGTAIL_FATAL_ASSERT(job_funcs, return 0)
-    LONGTAIL_FATAL_ASSERT(job_contexts, return 0)
-    LONGTAIL_FATAL_ASSERT(out_jobs, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_CreateJobs(%p, %u, %p, %p, %p)", job_api, job_count, job_funcs, job_contexts, out_jobs)
+    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(job_funcs, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(job_contexts, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_jobs, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t new_job_count = Longtail_AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, (int32_t)job_count);
     LONGTAIL_FATAL_ASSERT(new_job_count > 0, return EINVAL);
@@ -247,10 +251,11 @@ static int Bikeshed_CreateJobs(struct Longtail_JobAPI* job_api, uint32_t job_cou
 
 static int Bikeshed_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(dependency_jobs, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(job_count > 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(dependency_job_count > 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_AddDependecies(%p, %u, %p, %u, %p)", job_api, job_count, jobs, dependency_job_count, dependency_jobs)
+    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(dependency_jobs, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(job_count > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(dependency_job_count > 0, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     while (!Bikeshed_AddDependencies(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs, dependency_job_count, (Bikeshed_TaskID*)dependency_jobs))
     {
@@ -261,9 +266,10 @@ static int Bikeshed_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job
 
 static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(job_count, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(jobs, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_AddDependecies(%p, %u, %p)", job_api, job_count, jobs)
+    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(job_count > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(jobs, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs);
     return 0;
@@ -271,7 +277,8 @@ static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_coun
 
 static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_WaitForAllJobs(%p, %p)", job_api, progressAPI)
+    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t old_pending_count = 0;
     while (bikeshed_job_api->m_PendingJobCount > 0)
@@ -306,7 +313,8 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, struct Longt
 
 static int Bikeshed_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_ResumeJob(%p, %u)", job_api, job_id)
+    LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, 1, &job_id);
     return 0;
@@ -314,7 +322,8 @@ static int Bikeshed_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id)
 
 static void Bikeshed_Dispose(struct Longtail_API* job_api)
 {
-    LONGTAIL_FATAL_ASSERT(job_api, return)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_Dispose(%p)", job_api)
+    LONGTAIL_VALIDATE_INPUT(job_api, return)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     Longtail_AtomicAdd32(&bikeshed_job_api->m_Stop, 1);
     ReadyCallback_Ready(&bikeshed_job_api->m_ReadyCallback.cb, 0, bikeshed_job_api->m_WorkerCount);
@@ -397,6 +406,7 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
 
 struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateBikeshedJobAPI(%u)", worker_count)
     struct BikeshedJobAPI* job_api = (struct BikeshedJobAPI*)Longtail_Alloc(sizeof(struct BikeshedJobAPI));
     Bikeshed_Init(job_api, worker_count);
     return &job_api->m_BikeshedAPI;

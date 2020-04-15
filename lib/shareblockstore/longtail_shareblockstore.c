@@ -90,7 +90,7 @@ static int ShareBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
@@ -109,7 +109,7 @@ static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(block_hashes, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(block_ref_counts, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     return api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
@@ -196,7 +196,7 @@ static int ShareBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -279,7 +279,7 @@ static int ShareBlockStore_GetIndex(
     uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -293,7 +293,7 @@ static int ShareBlockStore_GetIndex(
 
 static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
@@ -303,7 +303,7 @@ static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_a
 
 static void ShareBlockStore_Dispose(struct Longtail_API* base_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_Dispose(%p)", base_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p)", base_api)
     LONGTAIL_FATAL_ASSERT(base_api, return)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)base_api;
@@ -318,7 +318,7 @@ static int ShareBlockStore_Init(
     struct ShareBlockStoreAPI* api,
     struct Longtail_BlockStoreAPI* backing_block_store)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_Dispose(%p, %p, %" PRIu64 ")", api, backing_block_store)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p, %p, %" PRIu64 ")", api, backing_block_store)
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
 
