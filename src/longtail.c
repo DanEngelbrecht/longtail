@@ -565,7 +565,7 @@ static int RecurseTree(
             const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator);
             if (dir_name)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) storage_api->GetDirectoryName(%p, %s) found directory `%s` in `%s`", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, fs_iterator, dir_name, asset_folder)
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) storage_api->GetDirectoryName(%p, %p) found directory `%s` in `%s`", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, fs_iterator, dir_name, asset_folder)
                 uint64_t size;
                 uint16_t permissions;
                 err = storage_api->GetEntryProperties(storage_api, fs_iterator, &size, &permissions);
@@ -600,7 +600,7 @@ static int RecurseTree(
                 const char* file_name = storage_api->GetFileName(storage_api, fs_iterator);
                 if (file_name)
                 {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) storage_api->GetFileName(%p, %s) found file `%s` in `%s`", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, fs_iterator, file_name, asset_folder)
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) storage_api->GetFileName(%p, %p) found file `%s` in `%s`", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, fs_iterator, file_name, asset_folder)
                     uint64_t size;
                     uint16_t permissions;
                     err = storage_api->GetEntryProperties(storage_api, fs_iterator, &size, &permissions);
