@@ -830,12 +830,11 @@ struct TestAsyncPutBlockComplete
         Longtail_Free(m_NotifySema);
     }
 
-    static int OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
+    static void OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
     {
         struct TestAsyncPutBlockComplete* cb = (struct TestAsyncPutBlockComplete*)async_complete_api;
         cb->m_Err = err;
         Longtail_PostSema(cb->m_NotifySema, 1);
-        return 0;
     }
 
     void Wait()
@@ -865,13 +864,12 @@ struct TestAsyncGetBlockComplete
         Longtail_Free(m_NotifySema);
     }
 
-    static int OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, Longtail_StoredBlock* stored_block, int err)
+    static void OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, Longtail_StoredBlock* stored_block, int err)
     {
         struct TestAsyncGetBlockComplete* cb = (struct TestAsyncGetBlockComplete*)async_complete_api;
         cb->m_Err = err;
         cb->m_StoredBlock = stored_block;
         Longtail_PostSema(cb->m_NotifySema, 1);
-        return 0;
     }
 
     void Wait()
@@ -901,13 +899,12 @@ struct TestAsyncGetIndexComplete
         Longtail_Free(m_NotifySema);
     }
 
-    static int OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, Longtail_ContentIndex* content_index, int err)
+    static void OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, Longtail_ContentIndex* content_index, int err)
     {
         struct TestAsyncGetIndexComplete* cb = (struct TestAsyncGetIndexComplete*)async_complete_api;
         cb->m_Err = err;
         cb->m_ContentIndex = content_index;
         Longtail_PostSema(cb->m_NotifySema, 1);
-        return 0;
     }
 
     void Wait()
@@ -941,10 +938,8 @@ TEST(Longtail, Longtail_FSBlockStore)
     put_block.m_BlockData = 0;
 
     TestAsyncGetBlockComplete getCB;
-    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 4711, &getCB.m_API));
-    getCB.Wait();
+    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, &getCB.m_API));
     struct Longtail_StoredBlock* get_block = getCB.m_StoredBlock;
-    ASSERT_EQ(ENOENT, getCB.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
     void* block_index_mem = Longtail_Alloc(block_index_size);
@@ -1132,10 +1127,8 @@ TEST(Longtail, Longtail_CompressBlockStore)
     Longtail_Free(store_index);
 
     struct TestAsyncGetBlockComplete getCB0;
-    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, &getCB0.m_API));
-    getCB0.Wait();
+    ASSERT_EQ(ENOENT, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, &getCB0.m_API));
     struct Longtail_StoredBlock* get_block = getCB0.m_StoredBlock;
-    ASSERT_EQ(ENOENT, getCB0.m_Err);
 
     Longtail_StoredBlock* put_block;
 
@@ -3482,11 +3475,7 @@ int TestAsyncBlockStore::Worker(void* context_data)
             {
                 struct Longtail_StoredBlock* stored_block = 0;
                 int err = WorkerGetRequest(serialized_block_data, &stored_block);
-                err = async_complete_api->OnComplete(async_complete_api, stored_block, err);
-                if (err)
-                {
-                    Longtail_Free(stored_block);
-                }
+                async_complete_api->OnComplete(async_complete_api, stored_block, err);
                 continue;
             }
             else
@@ -3574,14 +3563,9 @@ int TestAsyncBlockStore::GetIndex(
     buffer = 0;
     if (err)
     {
-        return async_complete_api->OnComplete(async_complete_api, 0, err);
-    }
-    err = async_complete_api->OnComplete(async_complete_api, content_index, err);
-    if (err)
-    {
-        Longtail_Free(content_index);
         return err;
     }
+    async_complete_api->OnComplete(async_complete_api, content_index, 0);
     return 0;
 
 }

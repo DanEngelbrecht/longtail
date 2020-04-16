@@ -283,7 +283,7 @@ LONGTAIL_EXPORT int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint
 
 struct Longtail_AsyncPutStoredBlockAPI;
 
-typedef int (*Longtail_AsyncPutStoredBlock_OnCompleteFunc)(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
+typedef void (*Longtail_AsyncPutStoredBlock_OnCompleteFunc)(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
 
 struct Longtail_AsyncPutStoredBlockAPI
 {
@@ -298,13 +298,13 @@ LONGTAIL_EXPORT struct Longtail_AsyncPutStoredBlockAPI* Longtail_MakeAsyncPutSto
     Longtail_DisposeFunc dispose_func,
     Longtail_AsyncPutStoredBlock_OnCompleteFunc on_complete_func);
 
-LONGTAIL_EXPORT int Longtail_AsyncPutStoredBlock_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
+LONGTAIL_EXPORT void Longtail_AsyncPutStoredBlock_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
 
 ////////////// Longtail_AsyncGetStoredBlockAPI
 
 struct Longtail_AsyncGetStoredBlockAPI;
 
-typedef int (*Longtail_AsyncGetStoredBlock_OnCompleteFunc)(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
+typedef void (*Longtail_AsyncGetStoredBlock_OnCompleteFunc)(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
 
 struct Longtail_AsyncGetStoredBlockAPI
 {
@@ -319,13 +319,13 @@ LONGTAIL_EXPORT struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetSto
     Longtail_DisposeFunc dispose_func,
     Longtail_AsyncGetStoredBlock_OnCompleteFunc on_complete_func);
 
-LONGTAIL_EXPORT int Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
+LONGTAIL_EXPORT void Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
 
 ////////////// Longtail_AsyncGetIndexAPI
 
 struct Longtail_AsyncGetIndexAPI;
 
-typedef int (*Longtail_AsyncGetIndex_OnCompleteFunc)(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+typedef void (*Longtail_AsyncGetIndex_OnCompleteFunc)(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
 
 struct Longtail_AsyncGetIndexAPI
 {
@@ -340,7 +340,7 @@ LONGTAIL_EXPORT struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
     Longtail_DisposeFunc dispose_func,
     Longtail_AsyncGetIndex_OnCompleteFunc on_complete_func);
 
-LONGTAIL_EXPORT int Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+LONGTAIL_EXPORT void Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
 
 ////////////// Longtail_BlockStoreAPI
 

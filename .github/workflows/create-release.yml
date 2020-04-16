@@ -102,6 +102,10 @@ jobs:
           Changes in this Release
           - Added shareblockstore that ref-counts active blocks to avoid redundant block get
           - Longtail_CreateFSBlockStoreAPI now checks error on init
+          - OnComplete callbacks can no longer return errors and always take ownership of passed data
+          - Improved/fixed logging
+          - Fixed block store close (waits for all requests to complete) to fix hang/incomplete store indexes
+          - Block stores now pass through PreFlight to any underlying block stores
         draft: false
         prerelease: false
     - name: Download Linux artifacts

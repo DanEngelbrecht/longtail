@@ -14,6 +14,8 @@ struct CompressBlockStoreAPI
     struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
     struct Longtail_BlockStore_Stats m_Stats;
 
+    TLongtail_Atomic32 m_PendingRequestCount;
+
     TLongtail_Atomic64 m_IndexGetCount;
     TLongtail_Atomic64 m_BlocksGetCount;
     TLongtail_Atomic64 m_BlocksPutCount;
@@ -123,20 +125,22 @@ struct OnPutBackingStoreAsync_API
     struct Longtail_AsyncPutStoredBlockAPI m_API;
     struct Longtail_StoredBlock* m_CompressedBlock;
     struct Longtail_AsyncPutStoredBlockAPI* m_AsyncCompleteAPI;
+    struct CompressBlockStoreAPI* m_CompressBlockStoreAPI;
 };
 
-static int OnPutBackingStoreComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
+static void OnPutBackingStoreComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnPuttBackingStoreComplete(%p, %d)", async_complete_api, err)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return)
     struct OnPutBackingStoreAsync_API* async_block_store = (struct OnPutBackingStoreAsync_API*)async_complete_api;
+    struct CompressBlockStoreAPI* compressblockstore_api = async_block_store->m_CompressBlockStoreAPI;
     if (async_block_store->m_CompressedBlock)
     {
         async_block_store->m_CompressedBlock->Dispose(async_block_store->m_CompressedBlock);
     }
     async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, err);
     Longtail_Free(async_block_store);
-    return 0;
+    Longtail_AtomicAdd32(&compressblockstore_api->m_PendingRequestCount, -1);
 }
 
 static int CompressBlockStore_PutStoredBlock(
@@ -144,7 +148,7 @@ static int CompressBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL);
@@ -183,6 +187,8 @@ static int CompressBlockStore_PutStoredBlock(
     on_put_backing_store_async_api->m_API.m_API.Dispose = 0;
     on_put_backing_store_async_api->m_CompressedBlock = compressed_stored_block;
     on_put_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
+    on_put_backing_store_async_api->m_CompressBlockStoreAPI = block_store;
+    Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, 1);
     err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, &on_put_backing_store_async_api->m_API);
     if (err)
     {
@@ -192,13 +198,23 @@ static int CompressBlockStore_PutStoredBlock(
             err)
         Longtail_Free(on_put_backing_store_async_api);
         compressed_stored_block->Dispose(compressed_stored_block);
+        Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1);
     }
     return err;
 }
 
 static int CompressBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
 {
-    return 0;
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(block_hashes, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(block_ref_counts, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
+    struct CompressBlockStoreAPI* api = (struct CompressBlockStoreAPI*)block_store_api;
+    return api->m_BackingBlockStore->PreflightGet(
+        api->m_BackingBlockStore,
+        block_count,
+        block_hashes,
+        block_ref_counts);
 }
 
 static int DecompressBlock(
@@ -283,11 +299,12 @@ struct OnGetBackingStoreAsync_API
     struct Longtail_AsyncGetStoredBlockAPI* m_AsyncCompleteAPI;
 };
 
-static int OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
+static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetBackingStoreComplete(%p, %p, %d)", async_complete_api, stored_block, err)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return)
     struct OnGetBackingStoreAsync_API* async_block_store = (struct OnGetBackingStoreAsync_API*)async_complete_api;
+    struct CompressBlockStoreAPI* blockstore = async_block_store->m_BlockStore;
     if (err)
     {
         if (err != ENOENT)
@@ -296,9 +313,10 @@ static int OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* asy
                 async_complete_api, stored_block, err,
                 err)
         }
-        err = async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, err);
+        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, err);
         Longtail_Free(async_block_store);
-        return err;
+        Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
+        return;
     }
 
     Longtail_AtomicAdd64(&async_block_store->m_BlockStore->m_BlocksGetCount, 1);
@@ -308,9 +326,10 @@ static int OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* asy
     uint32_t compressionType = *stored_block->m_BlockIndex->m_Tag;
     if (compressionType == 0)
     {
-        err = async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, 0);
+        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, 0);
         Longtail_Free(async_block_store);
-        return err;
+        Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
+        return;
     }
 
     err = DecompressBlock(
@@ -324,13 +343,14 @@ static int OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* asy
             async_block_store->m_BlockStore->m_CompressionRegistryAPI, stored_block, &stored_block,
             err)
         stored_block->Dispose(stored_block);
-        err = async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0, err);
+        async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0, err);
         Longtail_Free(async_block_store);
-        return err;
+        Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
+        return;
     }
-    err = async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, 0);
+    async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, 0);
     Longtail_Free(async_block_store);
-    return err;
+    Longtail_AtomicAdd32(&blockstore->m_PendingRequestCount, -1);
 }
 
 static int CompressBlockStore_GetStoredBlock(
@@ -338,7 +358,7 @@ static int CompressBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
@@ -359,14 +379,19 @@ static int CompressBlockStore_GetStoredBlock(
     on_fetch_backing_store_async_api->m_BlockStore = block_store;
     on_fetch_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
 
+    Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, 1);
     int err = block_store->m_BackingBlockStore->GetStoredBlock(block_store->m_BackingBlockStore, block_hash, &on_fetch_backing_store_async_api->m_API);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) block_store->m_BackingBlockStore->GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with, %d",
-            block_store_api, block_hash, async_complete_api,
-            block_store->m_BackingBlockStore, block_hash, &on_fetch_backing_store_async_api->m_API,
-            err)
+        if (err != ENOENT)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) block_store->m_BackingBlockStore->GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with, %d",
+                block_store_api, block_hash, async_complete_api,
+                block_store->m_BackingBlockStore, block_hash, &on_fetch_backing_store_async_api->m_API,
+                err)
+        }
         Longtail_Free(on_fetch_backing_store_async_api);
+        Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1);
         return err;
     }
     return 0;
@@ -377,7 +402,7 @@ static int CompressBlockStore_GetIndex(
     uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
@@ -391,7 +416,7 @@ static int CompressBlockStore_GetIndex(
 
 static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
     struct CompressBlockStoreAPI* compressblockstore_api = (struct CompressBlockStoreAPI*)block_store_api;
@@ -414,10 +439,18 @@ static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_stor
 
 static void CompressBlockStore_Dispose(struct Longtail_API* api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_Dispose(%p)", api)
-    LONGTAIL_FATAL_ASSERT(api, return)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p)", api)
+    LONGTAIL_VALIDATE_INPUT(api, return)
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)api;
+    while (block_store->m_PendingRequestCount > 0)
+    {
+        Longtail_Sleep(1000);
+        if (block_store->m_PendingRequestCount > 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p) waiting for %d pending requests", block_store, (int32_t)block_store->m_PendingRequestCount);
+        }
+    }
     Longtail_Free(block_store);
 }
 
@@ -426,7 +459,7 @@ static int CompressBlockStore_Init(
     struct Longtail_BlockStoreAPI* backing_block_store,
     struct Longtail_CompressionRegistryAPI* compression_registry)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "CompressBlockStore_Dispose(%p, %p, %p)", api, backing_block_store, compression_registry)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p, %p, %p)", api, backing_block_store, compression_registry)
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
     LONGTAIL_FATAL_ASSERT(compression_registry, return EINVAL)
@@ -439,6 +472,7 @@ static int CompressBlockStore_Init(
     api->m_BlockStoreAPI.GetStats = CompressBlockStore_GetStats;
     api->m_BackingBlockStore = backing_block_store;
     api->m_CompressionRegistryAPI = compression_registry;
+    api->m_PendingRequestCount = 0;
 
     api->m_IndexGetCount = 0;
     api->m_BlocksGetCount = 0;
@@ -475,10 +509,15 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
             ENOMEM)
         return 0;
     }
-    CompressBlockStore_Init(
+    int err = CompressBlockStore_Init(
         api,
         backing_block_store,
         compression_registry);
+    if (err)
+    {
+        Longtail_Free(api);
+        return 0;
+    }
     return &api->m_BlockStoreAPI;
 }
 
@@ -497,7 +536,8 @@ struct Default_CompressionRegistry
 
 static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
 {
-    LONGTAIL_FATAL_ASSERT(api, return);
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "DefaultCompressionRegistry_Dispose(%p)", api)
+    LONGTAIL_VALIDATE_INPUT(api, return);
     struct Longtail_CompressionAPI* last_api = 0;
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
     for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
@@ -538,6 +578,7 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
     const struct Longtail_CompressionAPI** compression_apis,
     const uint32_t* compression_settings)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateDefaultCompressionRegistry(%u, %p, %p, %p)", compression_type_count, compression_types, compression_apis, compression_settings)
     LONGTAIL_VALIDATE_INPUT(compression_types, return 0);
     LONGTAIL_VALIDATE_INPUT(compression_apis, return 0);
     LONGTAIL_VALIDATE_INPUT(compression_settings, return 0);

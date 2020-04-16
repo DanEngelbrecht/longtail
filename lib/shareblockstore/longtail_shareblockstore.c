@@ -36,6 +36,7 @@ struct ShareBlockStoreAPI
     struct BlockHashToSharedStoredBlock* m_BlockHashToSharedStoredBlock;
     struct BlockHashToCompleteCallbacks* m_BlockHashToCompleteCallbacks;
     HLongtail_SpinLock m_Lock;
+    TLongtail_Atomic32 m_PendingRequestCount;
 };
 
 int SharedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
@@ -90,7 +91,7 @@ static int ShareBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
@@ -109,7 +110,7 @@ static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(block_hashes, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(block_ref_counts, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     return api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
@@ -121,19 +122,20 @@ static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
 struct ShareBlockStore_AsyncGetStoredBlockAPI
 {
     struct Longtail_AsyncGetStoredBlockAPI m_AsyncGetStoredBlockAPI;
-    struct ShareBlockStoreAPI* m_ShareblockstoreAPI;
+    struct ShareBlockStoreAPI* m_ShareBlockStoreAPI;
+    TLongtail_Hash m_BlockHash;
 };
 
-static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
+static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct ShareBlockStore_AsyncGetStoredBlockAPI* async_api = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(async_api->m_ShareblockstoreAPI != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_api->m_ShareBlockStoreAPI != 0, return)
+    TLongtail_Hash block_hash = async_api->m_BlockHash;
 
-    struct ShareBlockStoreAPI* api = async_api->m_ShareblockstoreAPI;
+    struct ShareBlockStoreAPI* api = async_api->m_ShareBlockStoreAPI;
     Longtail_Free(async_api);
 
-    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
     if (err)
     {
         struct Longtail_AsyncGetStoredBlockAPI** list;
@@ -149,7 +151,8 @@ static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asy
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        return err;
+        Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
+        return;
     }
 
     struct SharedStoredBlock* shared_stored_block = SharedStoredBlock_CreateBlock(api, stored_block);
@@ -165,10 +168,12 @@ static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asy
         size_t wait_count = arrlen(list);
         for (size_t i = 0; i < wait_count; ++i)
         {
-            list[i]->OnComplete(list[i], 0, err);
+            list[i]->OnComplete(list[i], 0, ENOMEM);
         }
         arrfree(list);
-        return err;
+        stored_block->Dispose(stored_block);
+        Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
+        return;
     }
 
     struct Longtail_AsyncGetStoredBlockAPI** list;
@@ -181,14 +186,10 @@ static int ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asy
     size_t wait_count = arrlen(list);
     for (size_t i = 0; i < wait_count; ++i)
     {
-        int callback_err = list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
-        if (callback_err)
-        {
-            shared_stored_block->m_StoredBlock.Dispose(&shared_stored_block->m_StoredBlock);
-        }
+        list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
     }
     arrfree(list);
-    return 0;
+    Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
 }
 
 static int ShareBlockStore_GetStoredBlock(
@@ -196,7 +197,7 @@ static int ShareBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -210,12 +211,8 @@ static int ShareBlockStore_GetStoredBlock(
         struct SharedStoredBlock* shared_stored_block = api->m_BlockHashToSharedStoredBlock[find_block_ptr].value;
         Longtail_AtomicAdd32(&shared_stored_block->m_RefCount, 1);
         Longtail_UnlockSpinLock(api->m_Lock);
-        int err = async_complete_api->OnComplete(async_complete_api, &shared_stored_block->m_StoredBlock, 0);
-        if (err)
-        {
-            shared_stored_block->m_StoredBlock.Dispose(&shared_stored_block->m_StoredBlock);
-        }
-        return err;
+        async_complete_api->OnComplete(async_complete_api, &shared_stored_block->m_StoredBlock, 0);
+        return 0;
     }
 
     intptr_t find_wait_list_ptr = hmgeti(api->m_BlockHashToCompleteCallbacks, block_hash);
@@ -246,8 +243,10 @@ static int ShareBlockStore_GetStoredBlock(
 
     share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.m_API.Dispose = 0;
     share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI.OnComplete = ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete;
-    share_lock_store_async_get_stored_block_API->m_ShareblockstoreAPI = api;
+    share_lock_store_async_get_stored_block_API->m_ShareBlockStoreAPI = api;
+    share_lock_store_async_get_stored_block_API->m_BlockHash = block_hash;
 
+    Longtail_AtomicAdd32(&api->m_PendingRequestCount, 1);
     int err = api->m_BackingBlockStore->GetStoredBlock(
         api->m_BackingBlockStore,
         block_hash,
@@ -263,13 +262,12 @@ static int ShareBlockStore_GetStoredBlock(
 
         // Anybody else who was successfully put up on wait list will get the error forwarded in their OnComplete
         size_t wait_count = arrlen(list);
-        for (size_t i = 1; i < wait_count; ++i)
+        for (size_t i = 0; i < wait_count; ++i)
         {
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        Longtail_Free(share_lock_store_async_get_stored_block_API);
-        return err;
+        return 0;
     }
     return 0;
 }
@@ -279,7 +277,7 @@ static int ShareBlockStore_GetIndex(
     uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -293,7 +291,7 @@ static int ShareBlockStore_GetIndex(
 
 static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
@@ -303,10 +301,18 @@ static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_a
 
 static void ShareBlockStore_Dispose(struct Longtail_API* base_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_Dispose(%p)", base_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p)", base_api)
     LONGTAIL_FATAL_ASSERT(base_api, return)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)base_api;
+    while (api->m_PendingRequestCount > 0)
+    {
+        Longtail_Sleep(1000);
+        if (api->m_PendingRequestCount > 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p) waiting for %d pending requests", api, (int32_t)api->m_PendingRequestCount);
+        }
+    }
     hmfree(api->m_BlockHashToCompleteCallbacks);
     hmfree(api->m_BlockHashToSharedStoredBlock);
     Longtail_DeleteSpinLock(api->m_Lock);
@@ -318,7 +324,7 @@ static int ShareBlockStore_Init(
     struct ShareBlockStoreAPI* api,
     struct Longtail_BlockStoreAPI* backing_block_store)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "ShareBlockStore_Dispose(%p, %p, %" PRIu64 ")", api, backing_block_store)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p, %p, %" PRIu64 ")", api, backing_block_store)
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
 
@@ -331,6 +337,7 @@ static int ShareBlockStore_Init(
     api->m_BackingBlockStore = backing_block_store;
     api->m_BlockHashToSharedStoredBlock = 0;
     api->m_BlockHashToCompleteCallbacks = 0;
+    api->m_PendingRequestCount = 0;
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
