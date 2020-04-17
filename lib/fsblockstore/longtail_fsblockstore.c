@@ -133,7 +133,6 @@ static int ScanBlock(void* context, uint32_t job_id)
 static int ReadContent(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_JobAPI* job_api,
-    uint32_t content_index_hash_identifier,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     const char* content_path,
@@ -144,8 +143,8 @@ static int ReadContent(
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_content_index != 0, return EINVAL)
 
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p)",
-        storage_api, job_api, content_index_hash_identifier, content_path, out_content_index)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %s, %p)",
+        storage_api, job_api, content_path, out_content_index)
 
     struct Longtail_FileInfos* file_infos;
     int err = Longtail_GetFilesRecursively(
@@ -155,8 +154,8 @@ static int ReadContent(
         &file_infos);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) Longtail_GetFilesRecursively(%p, %s, %p) failed with %d",
-            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore::ReadContent(%p, %p, %s, %p) Longtail_GetFilesRecursively(%p, %s, %p) failed with %d",
+            storage_api, job_api, content_path, out_content_index,
             storage_api, content_path, &file_infos,
             err)
         return err;
@@ -169,7 +168,6 @@ static int ReadContent(
     if (path_count == 0)
     {
         err = Longtail_CreateContentIndexFromBlocks(
-            content_index_hash_identifier,
             max_block_size,
             max_chunks_per_block,
             0,
@@ -181,8 +179,8 @@ static int ReadContent(
     err = job_api->ReserveJobs(job_api, path_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) job_api->ReserveJobs(%p, %u) failed with %d",
-            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) job_api->ReserveJobs(%p, %u) failed with %d",
+            storage_api, job_api, content_path, out_content_index,
             job_api, *file_infos->m_Paths.m_PathCount,
             err)
         Longtail_Free(file_infos);
@@ -194,8 +192,8 @@ static int ReadContent(
     struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc(scan_jobs_size);
     if (!scan_jobs)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
-            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            storage_api, job_api, content_path, out_content_index,
             scan_jobs_size,
             ENOMEM)
         return ENOMEM;
@@ -229,8 +227,8 @@ static int ReadContent(
     struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
     if (!block_indexes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %u, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
-            storage_api, job_api, content_index_hash_identifier, content_path, out_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            storage_api, job_api, content_path, out_content_index,
             block_indexes_size,
             ENOMEM)
         Longtail_Free(scan_jobs);
@@ -257,7 +255,6 @@ static int ReadContent(
     file_infos = 0;
 
     err = Longtail_CreateContentIndexFromBlocks(
-        content_index_hash_identifier,
         max_block_size,
         max_chunks_per_block,
         block_count,
@@ -366,7 +363,6 @@ static int FSBlockStore_PutStoredBlock(
     {
         struct Longtail_ContentIndex* added_content_index;
         int err = Longtail_CreateContentIndexFromBlocks(
-            *fsblockstore_api->m_ContentIndex->m_HashAPI,
             *fsblockstore_api->m_ContentIndex->m_MaxBlockSize,
             *fsblockstore_api->m_ContentIndex->m_MaxChunksPerBlock,
             1,
@@ -470,10 +466,9 @@ static int FSBlockStore_GetStoredBlock(
 
 static int FSBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %u, %p", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %u, %p", block_store_api, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
@@ -485,7 +480,6 @@ static int FSBlockStore_GetIndex(
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
             job_api,
-            default_hash_api_identifier,
             524288,
             1024,
             fsblockstore_api->m_ContentPath,

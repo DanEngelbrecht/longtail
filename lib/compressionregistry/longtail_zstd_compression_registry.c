@@ -1,10 +1,10 @@
 #include "longtail_zstd_compression_registry.h"
 
-#include "../compressblockstore/longtail_compressblockstore.h"
+#include "longtail_compression_registry.h"
 
 #include "../zstd/longtail_zstd.h"
 
-LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_CreateZStdCompressionRegistry()
+struct Longtail_CompressionRegistryAPI* Longtail_CreateZStdCompressionRegistry()
 {
     struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
     if (zstd_compression == 0)

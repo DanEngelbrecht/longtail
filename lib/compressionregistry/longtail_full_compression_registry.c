@@ -1,12 +1,12 @@
 #include "longtail_full_compression_registry.h"
 
-#include "../compressblockstore/longtail_compressblockstore.h"
+#include "longtail_compression_registry.h"
 
 #include "../brotli/longtail_brotli.h"
 #include "../lz4/longtail_lz4.h"
 #include "../zstd/longtail_zstd.h"
 
-LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
+struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
 {
     struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
     if (lz4_compression == 0)
@@ -17,15 +17,15 @@ LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompr
     struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
     if (brotli_compression == 0)
     {
-        Longtail_DisposeAPI(&lz4_compression->m_API);
+        SAFE_DISPOSE_API(lz4_compression);
         return 0;
     }
 
     struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
     if (zstd_compression == 0)
     {
-        Longtail_DisposeAPI(&lz4_compression->m_API);
-        Longtail_DisposeAPI(&brotli_compression->m_API);
+        SAFE_DISPOSE_API(lz4_compression);
+        SAFE_DISPOSE_API(brotli_compression);
         return 0;
     }
 

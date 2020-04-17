@@ -304,10 +304,9 @@ static int RetainingBlockStore_GetStoredBlock(
 
 static int RetainingBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RetainingBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RetainingBlockStore_GetIndex(%p, %u, %p)", block_store_api, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -315,7 +314,6 @@ static int RetainingBlockStore_GetIndex(
     struct RetainingBlockStoreAPI* retainingblockstore_api = (struct RetainingBlockStoreAPI*)block_store_api;
     return retainingblockstore_api->m_BackingBlockStore->GetIndex(
         retainingblockstore_api->m_BackingBlockStore,
-        default_hash_api_identifier,
         async_complete_api);
 }
 

@@ -93,6 +93,75 @@ LONGTAIL_EXPORT void Longtail_Hash_Hash(struct Longtail_HashAPI* hash_api, Longt
 LONGTAIL_EXPORT uint64_t Longtail_Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context);
 LONGTAIL_EXPORT int Longtail_Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash);
 
+////////////// Longtail_HashRegistryAPI
+
+struct Longtail_HashRegistryAPI;
+
+typedef int (*Longtail_HashRegistry_GetHashAPIFunc)(struct Longtail_HashRegistryAPI* hash_registry, uint32_t hash_type, struct Longtail_HashAPI** out_hash_api);
+
+struct Longtail_HashRegistryAPI
+{
+    struct Longtail_API m_API;
+    Longtail_HashRegistry_GetHashAPIFunc GetHashAPI;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetHashRegistrySize();
+
+LONGTAIL_EXPORT struct Longtail_HashRegistryAPI* Longtail_MakeHashRegistryAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_HashRegistry_GetHashAPIFunc get_hash_api_func);
+
+LONGTAIL_EXPORT int Longtail_GetHashRegistry_GetHashAPI(struct Longtail_HashRegistryAPI* hash_registry, uint32_t hash_type, struct Longtail_HashAPI** out_compression_api);
+
+
+////////////// Longtail_CompressionAPI
+
+struct Longtail_CompressionAPI;
+
+typedef size_t (*Longtail_CompressionAPI_GetMaxCompressedSizeFunc)(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, size_t size);
+typedef int (*Longtail_CompressionAPI_CompressFunc)(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size);
+typedef int (*Longtail_CompressionAPI_DecompressFunc)(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size);
+
+struct Longtail_CompressionAPI
+{
+    struct Longtail_API m_API;
+    Longtail_CompressionAPI_GetMaxCompressedSizeFunc GetMaxCompressedSize;
+    Longtail_CompressionAPI_CompressFunc Compress;
+    Longtail_CompressionAPI_DecompressFunc Decompress;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetCompressionAPISize();
+
+LONGTAIL_EXPORT struct Longtail_CompressionAPI* Longtail_MakeCompressionAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_CompressionAPI_GetMaxCompressedSizeFunc get_max_compressed_size_func,
+    Longtail_CompressionAPI_CompressFunc compress_func,
+    Longtail_CompressionAPI_DecompressFunc decompress_func);
+
+
+////////////// Longtail_CompressionRegistryAPI
+
+struct Longtail_CompressionRegistryAPI;
+
+typedef int (*Longtail_CompressionRegistry_GetCompressionAPIFunc)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, uint32_t* out_settings_id);
+
+struct Longtail_CompressionRegistryAPI
+{
+    struct Longtail_API m_API;
+    Longtail_CompressionRegistry_GetCompressionAPIFunc GetCompressionAPI;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetCompressionRegistryAPISize();
+
+LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_MakeCompressionRegistryAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_CompressionRegistry_GetCompressionAPIFunc get_compression_api_func);
+
+LONGTAIL_EXPORT int Longtail_GetCompressionRegistry_GetCompressionAPI(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, uint32_t* out_settings_id);
+
 ////////////// Longtail_StorageAPI
 
 typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
@@ -366,7 +435,7 @@ struct Longtail_BlockStore_Stats
 typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 
 struct Longtail_BlockStoreAPI
@@ -394,7 +463,7 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
 LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-LONGTAIL_EXPORT int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+LONGTAIL_EXPORT int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
@@ -532,7 +601,6 @@ LONGTAIL_EXPORT int Longtail_InitContentIndex(
     uint64_t chunk_count);
 
 LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
-    uint32_t hash_identifier,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     uint64_t block_count,
@@ -683,6 +751,7 @@ LONGTAIL_EXPORT int Longtail_InitStoredBlockFromData(
 
 LONGTAIL_EXPORT int Longtail_CreateStoredBlock(
     TLongtail_Hash block_hash,
+    uint32_t hash_identifier,
     uint32_t chunk_count,
     uint32_t tag,
     TLongtail_Hash* chunk_hashes,
@@ -721,6 +790,7 @@ LONGTAIL_EXPORT int Longtail_ValidateVersion(
 struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
+    uint32_t* m_HashIdentifier;
     uint32_t* m_ChunkCount;
     uint32_t* m_Tag;
     TLongtail_Hash* m_ChunkHashes; //[]
@@ -775,7 +845,7 @@ extern uint32_t Longtail_CurrentContentIndexVersion;
 struct Longtail_ContentIndex
 {
     uint32_t* m_Version;
-    uint32_t* m_HashAPI;
+    uint32_t* m_HashIdentifier;
     uint32_t* m_MaxBlockSize;
     uint32_t* m_MaxChunksPerBlock;
     uint64_t* m_BlockCount;
@@ -797,7 +867,7 @@ LONGTAIL_EXPORT TLongtail_Hash* Longtail_ContentIndex_BlockHashes(const struct L
 struct Longtail_VersionIndex
 {
     uint32_t* m_Version;
-    uint32_t* m_HashAPI;
+    uint32_t* m_HashIdentifier;
     uint32_t* m_TargetChunkSize;
     uint32_t* m_AssetCount;
     uint32_t* m_ChunkCount;

@@ -274,10 +274,9 @@ static int ShareBlockStore_GetStoredBlock(
 
 static int ShareBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetIndex(%p, %u, %p)", block_store_api, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -285,7 +284,6 @@ static int ShareBlockStore_GetIndex(
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     return api->m_BackingBlockStore->GetIndex(
         api->m_BackingBlockStore,
-        default_hash_api_identifier,
         async_complete_api);
 }
 
