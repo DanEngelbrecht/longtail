@@ -369,7 +369,7 @@ TEST(Longtail, Longtail_ReadWriteBlockIndexInBuffer)
     Longtail_Free(buffer);
 
     ASSERT_NE(0u, *block_index_copy->m_BlockHash);
-    ASSERT_EQ(hash_api->GetIdentifier(hash_api), *block_index->m_HashIdentifier);
+    ASSERT_EQ(hash_api->GetIdentifier(hash_api), *block_index_copy->m_HashIdentifier);
     ASSERT_EQ(2u, *block_index_copy->m_ChunkCount);
     ASSERT_EQ(chunk_hashes[0], block_index_copy->m_ChunkHashes[0]);
     ASSERT_EQ(chunk_hashes[1], block_index_copy->m_ChunkHashes[1]);
