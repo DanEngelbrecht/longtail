@@ -116,6 +116,9 @@ LONGTAIL_EXPORT int Longtail_GetHashRegistry_GetHashAPI(struct Longtail_HashRegi
 
 
 ////////////// Longtail_CompressionAPI
+
+struct Longtail_CompressionAPI;
+
 typedef size_t (*Longtail_CompressionAPI_GetMaxCompressedSizeFunc)(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, size_t size);
 typedef int (*Longtail_CompressionAPI_CompressFunc)(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size);
 typedef int (*Longtail_CompressionAPI_DecompressFunc)(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size);
