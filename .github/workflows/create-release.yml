@@ -100,10 +100,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Added hash registry
-          - Promoted compression registry to a known api in longtail.h
-          - *BREAKING CHANGE* Stored blocks now contain hash algorithm identifier - any blocks created are incompatible with this version
-          - Block store GetIndex now longer requires a defaultHashIdentifier
+          - Better log on function input validation failure
         draft: false
         prerelease: false
     - name: Download Linux artifacts
