@@ -356,19 +356,21 @@ int UpSync(
             hashing_type = *source_version_index->m_HashIdentifier;
         }
     }
-    else if (*source_version_index->m_HashIdentifier != 0)
+    else
     {
-        hashing_type = *source_version_index->m_HashIdentifier;
-        if (source_version_index != 0)
+        hashing_type = *block_store_content_index->m_HashIdentifier;
+    }
+
+    if (source_version_index != 0)
+    {
+        if (*source_version_index->m_HashIdentifier != hashing_type)
         {
-            if (*source_version_index->m_HashIdentifier != hashing_type)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Dropping source version index as the hash type (%u) does not match store hash type (%u)", *source_version_index->m_HashIdentifier, *source_version_index->m_HashIdentifier);
-                Longtail_Free(source_version_index);
-                source_version_index = 0;
-            }
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Dropping source version index as the hash type (%u) does not match store hash type (%u)", *source_version_index->m_HashIdentifier, *source_version_index->m_HashIdentifier);
+            Longtail_Free(source_version_index);
+            source_version_index = 0;
         }
     }
+
     struct Longtail_HashAPI* hash_api;
     int err = hash_registry->GetHashAPI(hash_registry, hashing_type, &hash_api);
     if (err)
@@ -607,6 +609,15 @@ int DownSync(
         SAFE_DISPOSE_API(job_api);
         Longtail_Free((void*)storage_path);
         return err;
+    }
+
+    if (*remote_content_index->m_HashIdentifier != 0)
+    {
+        if (*remote_content_index->m_HashIdentifier != *source_version_index->m_HashIdentifier)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store content index and version index uses different hashing algorithms, %u vs %u", *remote_content_index->m_HashIdentifier, *source_version_index->m_HashIdentifier);
+            return EBADF;
+        }
     }
 
     uint32_t hashing_type = *source_version_index->m_HashIdentifier;
