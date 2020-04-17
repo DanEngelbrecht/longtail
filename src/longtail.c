@@ -5308,7 +5308,9 @@ int Longtail_RetargetContent(
     LONGTAIL_VALIDATE_INPUT(reference_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_content_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((*reference_content_index->m_HashIdentifier) == (*content_index->m_HashIdentifier), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(((*reference_content_index->m_BlockCount) == 0 || (*content_index->m_BlockCount) == 0) || ((*reference_content_index->m_HashIdentifier) == (*content_index->m_HashIdentifier)), return EINVAL)
+
+    uint32_t hash_identifier = (*reference_content_index->m_BlockCount) != 0 ? (*reference_content_index->m_HashIdentifier) : (*content_index->m_HashIdentifier);
 
     struct HashToIndexItem* chunk_to_reference_block_index_lookup = 0;
     uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
@@ -5393,7 +5395,7 @@ int Longtail_RetargetContent(
         resulting_content_index,
         &resulting_content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
-        *reference_content_index->m_HashIdentifier,
+        hash_identifier,
         *reference_content_index->m_MaxBlockSize,
         *reference_content_index->m_MaxChunksPerBlock,
         requested_block_count,
@@ -5402,7 +5404,7 @@ int Longtail_RetargetContent(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %u, %u, %" PRIu64 ", %" PRIu64 ") failed with %d",
             reference_content_index, content_index, out_content_index,
-            resulting_content_index, &resulting_content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *reference_content_index->m_HashIdentifier, *reference_content_index->m_MaxBlockSize, *reference_content_index->m_MaxChunksPerBlock, requested_block_count, chunk_count,
+            resulting_content_index, &resulting_content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), hash_identifier, *reference_content_index->m_MaxBlockSize, *reference_content_index->m_MaxChunksPerBlock, requested_block_count, chunk_count,
             err)
 
         Longtail_Free(resulting_content_index);
@@ -5452,7 +5454,9 @@ int Longtail_MergeContentIndex(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex(%p, %p, %p)", local_content_index, new_content_index, out_content_index)
     LONGTAIL_VALIDATE_INPUT(local_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(new_content_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((*local_content_index->m_HashIdentifier) == (*new_content_index->m_HashIdentifier), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(((*local_content_index->m_BlockCount) == 0 || (*new_content_index->m_BlockCount) == 0) || ((*local_content_index->m_HashIdentifier) == (*new_content_index->m_HashIdentifier)), return EINVAL)
+
+    uint32_t hash_identifier = (*local_content_index->m_BlockCount) != 0 ? (*local_content_index->m_HashIdentifier) : (*new_content_index->m_HashIdentifier);
 
     uint64_t max_block_count = *local_content_index->m_BlockCount + *new_content_index->m_BlockCount;
     uint64_t max_chunk_count = *local_content_index->m_ChunkCount + *new_content_index->m_ChunkCount;
@@ -5588,7 +5592,7 @@ int Longtail_MergeContentIndex(
         compact_content_index,
         &compact_content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
-        *new_content_index->m_HashIdentifier,
+        hash_identifier,
         *new_content_index->m_MaxBlockSize,
         *new_content_index->m_MaxChunksPerBlock,
         compact_block_count,
@@ -5597,7 +5601,7 @@ int Longtail_MergeContentIndex(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %u, %u, %" PRIu64 ", %" PRIu64 " ) failed with %d",
             local_content_index, new_content_index, out_content_index,
-            compact_content_index, &compact_content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), *new_content_index->m_HashIdentifier, *new_content_index->m_MaxBlockSize, *new_content_index->m_MaxChunksPerBlock, compact_block_count, compact_chunk_count,
+            compact_content_index, &compact_content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), hash_identifier, *new_content_index->m_MaxBlockSize, *new_content_index->m_MaxChunksPerBlock, compact_block_count, compact_chunk_count,
             err)
         Longtail_Free(compact_content_index);
         hmfree(block_hash_to_block_index);
