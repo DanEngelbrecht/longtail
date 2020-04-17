@@ -39,7 +39,7 @@ int RetainedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
     struct RetainedStoredBlock* b = (struct RetainedStoredBlock*)stored_block;
     struct RetainingBlockStoreAPI* retainingblockstore_api = b->m_RetainingBlockStoreAPI;
-    TLongtail_Hash block_hash = *b->m_StoredBlock.m_BlockIndex->m_BlockHash1;
+    TLongtail_Hash block_hash = *b->m_StoredBlock.m_BlockIndex->m_BlockHash;
     intptr_t tmp;
     uint64_t block_index = hmget_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     TLongtail_Atomic32* retain_count_ptr = &retainingblockstore_api->m_BlockRetainCounts[block_index];
@@ -200,7 +200,7 @@ static void RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtai
         return;
     }
 
-    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash1;
+    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
     intptr_t tmp;
     intptr_t block_index_ptr = hmgeti_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     if (block_index_ptr == -1)

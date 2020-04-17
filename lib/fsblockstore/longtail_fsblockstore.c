@@ -284,7 +284,7 @@ static int FSBlockStore_PutStoredBlock(
     Longtail_AtomicAdd64(&fsblockstore_api->m_ChunksPutCount, *stored_block->m_BlockIndex->m_ChunkCount);
     Longtail_AtomicAdd64(&fsblockstore_api->m_BytesPutCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
-    uint64_t block_hash = *stored_block->m_BlockIndex->m_BlockHash1;
+    uint64_t block_hash = *stored_block->m_BlockIndex->m_BlockHash;
 
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     intptr_t block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);

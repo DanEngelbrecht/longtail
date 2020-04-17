@@ -48,7 +48,7 @@ int SharedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
         return 0;
     }
     struct ShareBlockStoreAPI* api = b->m_ShareBlockStoreAPI;
-    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash1;
+    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
     Longtail_LockSpinLock(api->m_Lock);
     if (b->m_RefCount != 0)
     {

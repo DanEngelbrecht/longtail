@@ -349,21 +349,21 @@ int UpSync(
         }
     }
 
-    if (*block_store_content_index->m_HashAPI == 0)
+    if (*block_store_content_index->m_HashIdentifier == 0)
     {
         if (source_version_index != 0)
         {
-            hashing_type = *source_version_index->m_HashAPI;
+            hashing_type = *source_version_index->m_HashIdentifier;
         }
     }
-    else if (*source_version_index->m_HashAPI != 0)
+    else if (*source_version_index->m_HashIdentifier != 0)
     {
-        hashing_type = *source_version_index->m_HashAPI;
+        hashing_type = *source_version_index->m_HashIdentifier;
         if (source_version_index != 0)
         {
-            if (*source_version_index->m_HashAPI != hashing_type)
+            if (*source_version_index->m_HashIdentifier != hashing_type)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Dropping source version index as the hash type (%u) does not match store hash type (%u)", *source_version_index->m_HashAPI, *source_version_index->m_HashAPI);
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Dropping source version index as the hash type (%u) does not match store hash type (%u)", *source_version_index->m_HashIdentifier, *source_version_index->m_HashIdentifier);
                 Longtail_Free(source_version_index);
                 source_version_index = 0;
             }
@@ -609,7 +609,7 @@ int DownSync(
         return err;
     }
 
-    uint32_t hashing_type = *source_version_index->m_HashAPI;
+    uint32_t hashing_type = *source_version_index->m_HashIdentifier;
     struct Longtail_HashAPI* hash_api;
     err = hash_registry->GetHashAPI(hash_registry, hashing_type, &hash_api);
     if (err)

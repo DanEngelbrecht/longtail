@@ -786,7 +786,7 @@ LONGTAIL_EXPORT int Longtail_ValidateVersion(
 
 struct Longtail_BlockIndex
 {
-    TLongtail_Hash* m_BlockHash1;
+    TLongtail_Hash* m_BlockHash;
     uint32_t* m_HashIdentifier;
     uint32_t* m_ChunkCount;
     uint32_t* m_Tag;
@@ -842,7 +842,7 @@ extern uint32_t Longtail_CurrentContentIndexVersion;
 struct Longtail_ContentIndex
 {
     uint32_t* m_Version;
-    uint32_t* m_HashAPI;
+    uint32_t* m_HashIdentifier;
     uint32_t* m_MaxBlockSize;
     uint32_t* m_MaxChunksPerBlock;
     uint64_t* m_BlockCount;
@@ -864,7 +864,7 @@ LONGTAIL_EXPORT TLongtail_Hash* Longtail_ContentIndex_BlockHashes(const struct L
 struct Longtail_VersionIndex
 {
     uint32_t* m_Version;
-    uint32_t* m_HashAPI;
+    uint32_t* m_HashIdentifier;
     uint32_t* m_TargetChunkSize;
     uint32_t* m_AssetCount;
     uint32_t* m_ChunkCount;
