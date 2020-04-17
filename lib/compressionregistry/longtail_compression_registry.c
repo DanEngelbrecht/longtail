@@ -48,7 +48,7 @@ static int Default_GetCompressionAPI(struct Longtail_CompressionRegistryAPI* com
             return 0;
         }
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Default_GetCompressionAPI(%p, %u, %p, %p) failed with %d", compression_registry, compression_type, out_compression_api, out_settings, ENOENT)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Default_GetCompressionAPI(%p, %u, %p, %p) failed with %d", compression_registry, compression_type, out_compression_api, out_settings, ENOENT)
     return ENOENT;
 }
 
