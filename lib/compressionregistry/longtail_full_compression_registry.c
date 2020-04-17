@@ -1,6 +1,6 @@
 #include "longtail_full_compression_registry.h"
 
-#include "../compressblockstore/longtail_compressblockstore.h"
+#include "longtail_compression_registry.h"
 
 #include "../brotli/longtail_brotli.h"
 #include "../lz4/longtail_lz4.h"

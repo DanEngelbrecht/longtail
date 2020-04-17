@@ -1,6 +1,6 @@
 #include "longtail_zstd_compression_registry.h"
 
-#include "../compressblockstore/longtail_compressblockstore.h"
+#include "longtail_compression_registry.h"
 
 #include "../zstd/longtail_zstd.h"
 

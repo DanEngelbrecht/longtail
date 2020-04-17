@@ -102,6 +102,75 @@ uint64_t Longtail_Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_Ha
 int Longtail_Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash) { return hash_api->HashBuffer(hash_api, length, data, out_hash); }
 
 
+uint64_t Longtail_GetHashRegistrySize()
+{
+    return sizeof(struct Longtail_HashRegistryAPI);
+}
+
+struct Longtail_HashRegistryAPI* Longtail_MakeHashRegistryAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_HashRegistry_GetHashAPIFunc get_hash_api_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_HashRegistryAPI* api = (struct Longtail_HashRegistryAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->GetHashAPI = get_hash_api_func;
+    return api;
+}
+
+int Longtail_GetHashRegistry_GetHashAPI(struct Longtail_HashRegistryAPI* hash_registry, uint32_t hash_type, struct Longtail_HashAPI** out_hash_api) { return hash_registry->GetHashAPI(hash_registry, hash_type, out_hash_api); }
+
+
+uint64_t Longtail_GetCompressionAPISize()
+{
+    return sizeof(struct Longtail_CompressionAPI);
+}
+
+struct Longtail_CompressionAPI* Longtail_MakeCompressionAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_CompressionAPI_GetMaxCompressedSizeFunc get_max_compressed_size_func,
+    Longtail_CompressionAPI_CompressFunc compress_func,
+    Longtail_CompressionAPI_DecompressFunc decompress_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_CompressionAPI* api = (struct Longtail_CompressionAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->GetMaxCompressedSize = get_max_compressed_size_func;
+    api->Compress = compress_func;
+    api->Decompress = decompress_func;
+    return api;
+}
+
+size_t Longtail_CompressionAPI_GetMaxCompressedSize(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, size_t size) { return compression_api->GetMaxCompressedSize(compression_api, settings_id, size); }
+int Longtail_CompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size) { return compression_api->Compress(compression_api, settings_id, uncompressed, compressed, uncompressed_size, max_compressed_size, out_compressed_size); }
+int Longtail_CompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size) { return compression_api->Decompress(compression_api, compressed, uncompressed, compressed_size, max_uncompressed_size, out_uncompressed_size); }
+
+
+
+uint64_t Longtail_GetCompressionRegistrySize()
+{
+    return sizeof(struct Longtail_CompressionRegistryAPI);
+}
+
+struct Longtail_CompressionRegistryAPI* Longtail_MakeCompressionRegistryAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_CompressionRegistry_GetCompressionAPIFunc get_compression_api_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_CompressionRegistryAPI* api = (struct Longtail_CompressionRegistryAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->GetCompressionAPI = get_compression_api_func;
+    return api;
+}
+
+int Longtail_GetCompressionRegistry_GetCompressionAPI(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, uint32_t* out_settings_id) { return compression_registry->GetCompressionAPI(compression_registry, compression_type, out_compression_api, out_settings_id); }
+
+
+
+
 uint64_t Longtail_GetStorageAPISize()
 {
     return sizeof(struct Longtail_StorageAPI);
