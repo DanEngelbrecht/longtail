@@ -304,18 +304,40 @@ int UpSync(
 {
     const char* storage_path = NormalizePath(storage_uri_raw);
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
-    struct Longtail_HashAPI* hash_api;
-    int err = hash_registry->GetHashAPI(hash_registry, hashing_type, &hash_api);
-    if (err)
-    {
-        SAFE_DISPOSE_API(hash_registry);
-        return err;
-    }
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    {
+        struct AsyncGetIndexComplete get_index_complete;
+        AsyncGetIndexComplete_Init(&get_index_complete);
+        int err = store_block_store_api->GetIndex(
+            store_block_store_api,
+            &get_index_complete.m_API);
+        if (!err)
+        {
+            AsyncGetIndexComplete_Wait(&get_index_complete);
+            err = get_index_complete.m_Err;
+        }
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
+            AsyncGetIndexComplete_Dispose(&get_index_complete);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(store_block_fsstore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(hash_registry);
+            SAFE_DISPOSE_API(job_api);
+            Longtail_Free((char*)storage_path);
+            return err;
+        }
+        block_store_content_index = get_index_complete.m_ContentIndex;
+        AsyncGetIndexComplete_Dispose(&get_index_complete);
+    }
 
     struct Longtail_VersionIndex* source_version_index = 0;
     if (optional_source_index_path)
@@ -326,6 +348,44 @@ int UpSync(
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_source_index_path, err);
         }
     }
+
+    if (*block_store_content_index->m_HashAPI == 0)
+    {
+        if (source_version_index != 0)
+        {
+            hashing_type = *source_version_index->m_HashAPI;
+        }
+    }
+    else if (*source_version_index->m_HashAPI != 0)
+    {
+        hashing_type = *source_version_index->m_HashAPI;
+        if (source_version_index != 0)
+        {
+            if (*source_version_index->m_HashAPI != hashing_type)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Dropping source version index as the hash type (%u) does not match store hash type (%u)", *source_version_index->m_HashAPI, *source_version_index->m_HashAPI);
+                Longtail_Free(source_version_index);
+                source_version_index = 0;
+            }
+        }
+    }
+    struct Longtail_HashAPI* hash_api;
+    int err = hash_registry->GetHashAPI(hash_registry, hashing_type, &hash_api);
+    if (err)
+    {
+        Longtail_Free(block_store_content_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((char*)storage_path);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+
     if (source_version_index == 0)
     {
         struct Longtail_FileInfos* file_infos;
@@ -337,6 +397,7 @@ int UpSync(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", source_path, err);
+            Longtail_Free(block_store_content_index);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
             SAFE_DISPOSE_API(storage_api);
@@ -371,6 +432,8 @@ int UpSync(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", source_path, err);
+            Longtail_Free(tags);
+            Longtail_Free(block_store_content_index);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
             SAFE_DISPOSE_API(storage_api);
@@ -392,6 +455,7 @@ int UpSync(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for `%s`, %d", source_path, err);
         Longtail_Free(source_version_index);
+        Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -402,37 +466,6 @@ int UpSync(
         return err;
     }
 
-    struct Longtail_ContentIndex* block_store_content_index;
-    {
-        struct AsyncGetIndexComplete get_index_complete;
-        AsyncGetIndexComplete_Init(&get_index_complete);
-        err = store_block_store_api->GetIndex(
-            store_block_store_api,
-            hashing_type,
-            &get_index_complete.m_API);
-        if (!err)
-        {
-            AsyncGetIndexComplete_Wait(&get_index_complete);
-            err = get_index_complete.m_Err;
-        }
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
-            AsyncGetIndexComplete_Dispose(&get_index_complete);
-            Longtail_Free(version_content_index);
-            Longtail_Free(source_version_index);
-            SAFE_DISPOSE_API(store_block_store_api);
-            SAFE_DISPOSE_API(store_block_fsstore_api);
-            SAFE_DISPOSE_API(storage_api);
-            SAFE_DISPOSE_API(compression_registry);
-            SAFE_DISPOSE_API(hash_registry);
-            SAFE_DISPOSE_API(job_api);
-            Longtail_Free((char*)storage_path);
-            return err;
-        }
-        block_store_content_index = get_index_complete.m_ContentIndex;
-        AsyncGetIndexComplete_Dispose(&get_index_complete);
-    }
     {
         struct Progress write_content_progress;
         Progress_Init(&write_content_progress, "Writing blocks");
@@ -455,6 +488,7 @@ int UpSync(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
+        Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -548,7 +582,6 @@ int DownSync(
         AsyncGetIndexComplete_Init(&get_index_complete);
         err = store_block_store_api->GetIndex(
             store_block_store_api,
-            Longtail_GetBlake3HashType(),  // We should not really care, since if block store is empty we can't recreate any content
             &get_index_complete.m_API);
         if (!err)
         {

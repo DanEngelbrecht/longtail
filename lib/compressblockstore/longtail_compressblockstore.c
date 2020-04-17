@@ -399,10 +399,9 @@ static int CompressBlockStore_GetStoredBlock(
 
 static int CompressBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetIndex(%p, %u, %p)", block_store_api, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
@@ -410,7 +409,6 @@ static int CompressBlockStore_GetIndex(
     Longtail_AtomicAdd64(&block_store->m_IndexGetCount, 1);
     return block_store->m_BackingBlockStore->GetIndex(
         block_store->m_BackingBlockStore,
-        default_hash_api_identifier,
         async_complete_api);
 }
 

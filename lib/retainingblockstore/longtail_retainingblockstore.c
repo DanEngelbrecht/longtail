@@ -39,7 +39,7 @@ int RetainedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
     struct RetainedStoredBlock* b = (struct RetainedStoredBlock*)stored_block;
     struct RetainingBlockStoreAPI* retainingblockstore_api = b->m_RetainingBlockStoreAPI;
-    TLongtail_Hash block_hash = *b->m_StoredBlock.m_BlockIndex->m_BlockHash;
+    TLongtail_Hash block_hash = *b->m_StoredBlock.m_BlockIndex->m_BlockHash1;
     intptr_t tmp;
     uint64_t block_index = hmget_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     TLongtail_Atomic32* retain_count_ptr = &retainingblockstore_api->m_BlockRetainCounts[block_index];
@@ -200,7 +200,7 @@ static void RetainingBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtai
         return;
     }
 
-    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
+    TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash1;
     intptr_t tmp;
     intptr_t block_index_ptr = hmgeti_ts(retainingblockstore_api->m_BlockHashToRetainedIndex, block_hash, tmp);
     if (block_index_ptr == -1)
@@ -304,10 +304,9 @@ static int RetainingBlockStore_GetStoredBlock(
 
 static int RetainingBlockStore_GetIndex(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t default_hash_api_identifier,
     struct Longtail_AsyncGetIndexAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RetainingBlockStore_GetIndex(%p, %u, %p)", block_store_api, default_hash_api_identifier, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RetainingBlockStore_GetIndex(%p, %u, %p)", block_store_api, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -315,7 +314,6 @@ static int RetainingBlockStore_GetIndex(
     struct RetainingBlockStoreAPI* retainingblockstore_api = (struct RetainingBlockStoreAPI*)block_store_api;
     return retainingblockstore_api->m_BackingBlockStore->GetIndex(
         retainingblockstore_api->m_BackingBlockStore,
-        default_hash_api_identifier,
         async_complete_api);
 }
 
