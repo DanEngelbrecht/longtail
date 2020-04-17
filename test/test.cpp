@@ -12,6 +12,8 @@
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
+#include "../lib/hashregistry/longtail_full_hash_registry.h"
+#include "../lib/hashregistry/longtail_blake3_hash_registry.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
@@ -4179,4 +4181,50 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
+}
+
+TEST(Longtail, TestFullHashRegistry)
+{
+    struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
+    ASSERT_NE((struct Longtail_HashRegistryAPI*)0, hash_registry);
+    struct Longtail_HashAPI* blake2_hash_api = 0;
+    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake2HashType(), &blake2_hash_api));
+    ASSERT_NE((struct Longtail_HashAPI*)0, blake2_hash_api);
+
+    struct Longtail_HashAPI* blake3_hash_api = 0;
+    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake3HashType(), &blake3_hash_api));
+    ASSERT_NE((struct Longtail_HashAPI*)0, blake3_hash_api);
+
+    struct Longtail_HashAPI* meow_hash_api = 0;
+    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetMeowHashType(), &meow_hash_api));
+    ASSERT_NE((struct Longtail_HashAPI*)0, meow_hash_api);
+
+    struct Longtail_HashAPI* error_hash_api = 0;
+    ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, 0xdeadbeefu, &error_hash_api));
+    ASSERT_EQ((struct Longtail_HashAPI*)0, error_hash_api);
+
+   SAFE_DISPOSE_API(hash_registry);
+}
+
+TEST(Longtail, TestBlake3HashRegistry)
+{
+    struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateBlake3HashRegistry();
+    ASSERT_NE((struct Longtail_HashRegistryAPI*)0, hash_registry);
+    struct Longtail_HashAPI* blake2_hash_api = 0;
+    ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake2HashType(), &blake2_hash_api));
+    ASSERT_EQ((struct Longtail_HashAPI*)0, blake2_hash_api);
+
+    struct Longtail_HashAPI* blake3_hash_api = 0;
+    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake3HashType(), &blake3_hash_api));
+    ASSERT_NE((struct Longtail_HashAPI*)0, blake3_hash_api);
+
+    struct Longtail_HashAPI* meow_hash_api = 0;
+    ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, Longtail_GetMeowHashType(), &meow_hash_api));
+    ASSERT_EQ((struct Longtail_HashAPI*)0, meow_hash_api);
+
+    struct Longtail_HashAPI* error_hash_api = 0;
+    ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, 0xdeadbeefu, &error_hash_api));
+    ASSERT_EQ((struct Longtail_HashAPI*)0, error_hash_api);
+
+   SAFE_DISPOSE_API(hash_registry);
 }

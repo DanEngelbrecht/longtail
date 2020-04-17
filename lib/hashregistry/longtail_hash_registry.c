@@ -45,7 +45,7 @@ static int Default_GetHashAPI(struct Longtail_HashRegistryAPI* hash_registry, ui
             return 0;
         }
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Default_GetHashAPI(%p, %u, %p) failed with %d", hash_registry, hash_type, out_hash_api, ENOENT)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Default_GetHashAPI(%p, %u, %p) failed with %d", hash_registry, hash_type, out_hash_api, ENOENT)
     return ENOENT;
 }
 
