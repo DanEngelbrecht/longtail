@@ -149,7 +149,7 @@ int Longtail_CompressionAPI_Decompress(struct Longtail_CompressionAPI* compressi
 
 
 
-uint64_t Longtail_GetCompressionRegistrySize()
+uint64_t Longtail_GetCompressionRegistryAPISize()
 {
     return sizeof(struct Longtail_CompressionRegistryAPI);
 }

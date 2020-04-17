@@ -66,8 +66,8 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
         sizeof(uint32_t) * compression_type_count +
         sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
         sizeof(uint32_t) * compression_type_count;
-    struct Default_CompressionRegistry* registry = (struct Default_CompressionRegistry*)Longtail_Alloc(registry_size);
-    if (!registry)
+    void* mem = Longtail_Alloc(registry_size);
+    if (!mem)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateDefaultCompressionRegistry(%u, %p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with, %d",
             compression_type_count, compression_types, compression_apis, compression_settings,
@@ -76,8 +76,10 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
         return 0;
     }
 
-    registry->m_CompressionRegistryAPI.m_API.Dispose = DefaultCompressionRegistry_Dispose;
-    registry->m_CompressionRegistryAPI.GetCompressionAPI = Default_GetCompressionAPI;
+    struct Default_CompressionRegistry* registry = (struct Default_CompressionRegistry*)Longtail_MakeCompressionRegistryAPI(
+        mem,
+        DefaultCompressionRegistry_Dispose,
+        Default_GetCompressionAPI);
 
     registry->m_Count = compression_type_count;
     char* p = (char*)&registry[1];

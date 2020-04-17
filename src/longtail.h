@@ -130,7 +130,7 @@ struct Longtail_CompressionAPI
 
 LONGTAIL_EXPORT uint64_t Longtail_GetCompressionAPISize();
 
-LONGTAIL_EXPORT struct Longtail_HashAPI* Longtail_MakeCompressionAPIAPI(
+LONGTAIL_EXPORT struct Longtail_CompressionAPI* Longtail_MakeCompressionAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
     Longtail_CompressionAPI_GetMaxCompressedSizeFunc get_max_compressed_size_func,
@@ -150,7 +150,7 @@ struct Longtail_CompressionRegistryAPI
     Longtail_CompressionRegistry_GetCompressionAPIFunc GetCompressionAPI;
 };
 
-LONGTAIL_EXPORT uint64_t Longtail_GetCompressionRegistrySize();
+LONGTAIL_EXPORT uint64_t Longtail_GetCompressionRegistryAPISize();
 
 LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_MakeCompressionRegistryAPI(
     void* mem,
