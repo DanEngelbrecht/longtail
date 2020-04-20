@@ -1606,7 +1606,6 @@ TEST(Longtail, Longtail_CreateMissingContent)
 //    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
-    const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 
     static const uint32_t TARGET_CHUNK_SIZE = 32768u;
     static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
@@ -1617,7 +1616,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
         asset_count - 4,
         asset_content_hashes,
         chunk_sizes,
-        asset_tags,
+        0,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &content_index));
@@ -1649,7 +1648,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
         file_infos->m_Count,
         chunk_sizes,
         asset_content_hashes,
-        asset_tags,
+        0,
         0u,    // Dummy hash API
         TARGET_CHUNK_SIZE,
         &version_index));
