@@ -164,7 +164,7 @@ static int ReadContent(
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
 
-    uint32_t path_count = *file_infos->m_Paths.m_PathCount;
+    uint32_t path_count = file_infos->m_Count;
     if (path_count == 0)
     {
         err = Longtail_CreateContentIndexFromBlocks(
@@ -181,7 +181,7 @@ static int ReadContent(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) job_api->ReserveJobs(%p, %u) failed with %d",
             storage_api, job_api, content_path, out_content_index,
-            job_api, *file_infos->m_Paths.m_PathCount,
+            job_api, path_count,
             err)
         Longtail_Free(file_infos);
         file_infos = 0;
@@ -202,7 +202,7 @@ static int ReadContent(
     for (uint32_t path_index = 0; path_index < path_count; ++path_index)
     {
         struct ScanBlockJob* job = &scan_jobs[path_index];
-        const char* block_path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[path_index]];
+        const char* block_path = &file_infos->m_PathData[file_infos->m_PathStartOffsets[path_index]];
         job->m_BlockIndex = 0;
 
         job->m_StorageAPI = storage_api;

@@ -473,15 +473,15 @@ TEST(Longtail, Longtail_VersionIndex)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const uint64_t asset_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
-    const uint32_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
+    const uint16_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
     const uint32_t chunk_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
     const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 
-    Longtail_Paths* paths;
-    ASSERT_EQ(0, Longtail_MakePaths(5, asset_paths, &paths));
-    size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
+    Longtail_FileInfos* file_infos;
+    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
+    size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
     static const uint32_t TARGET_CHUNK_SIZE = 32768u;
@@ -490,16 +490,14 @@ TEST(Longtail, Longtail_VersionIndex)
     ASSERT_EQ(0, Longtail_BuildVersionIndex(
         version_index_mem,
         version_index_size,
-        paths,
+        file_infos,
         asset_path_hashes,
         asset_content_hashes,
-        asset_sizes,
-        asset_permissions,
         asset_chunk_start_index,
         asset_chunk_counts,
-        *paths->m_PathCount,
+        file_infos->m_Count,
         asset_chunk_start_index,
-        *paths->m_PathCount,
+        file_infos->m_Count,
         chunk_sizes,
         asset_content_hashes,
         asset_tags,
@@ -517,7 +515,7 @@ TEST(Longtail, Longtail_VersionIndex)
     Longtail_Free(store_buffer);
 
     Longtail_Free(version_index);
-    Longtail_Free(paths);
+    Longtail_Free(file_infos);
 }
 
 TEST(Longtail, Longtail_ContentIndex)
@@ -653,9 +651,9 @@ TEST(Longtail, Longtail_RetargetContentIndex)
     SAFE_DISPOSE_API(hash_api);
 }
 
-static uint32_t* GetCompressionTypes(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
+static uint32_t* GetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
 {
-    uint32_t count = *file_infos->m_Paths.m_PathCount;
+    uint32_t count = file_infos->m_Count;
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
     const uint32_t compression_types[4] = {
         0,
@@ -677,7 +675,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "data/non-existent", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
-    uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -710,7 +708,7 @@ TEST(Longtail, ContentIndexSerialization)
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "source/version1", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
-    uint32_t* compression_types = GetCompressionTypes(local_storage, version1_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -1387,7 +1385,7 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     Longtail_FileInfos* all_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "", &all_file_infos));
     ASSERT_NE((Longtail_FileInfos*)0, all_file_infos);
-    ASSERT_EQ(19u, *all_file_infos->m_Paths.m_PathCount);
+    ASSERT_EQ(19u, all_file_infos->m_Count);
     Longtail_Free(all_file_infos);
 
     struct TestFileFilter
@@ -1418,7 +1416,7 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     Longtail_FileInfos* filtered_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, &test_filter.m_API, "", &filtered_file_infos));
     ASSERT_NE((Longtail_FileInfos*)0, filtered_file_infos);
-    ASSERT_EQ(13u, *filtered_file_infos->m_Paths.m_PathCount);
+    ASSERT_EQ(13u, filtered_file_infos->m_Count);
     Longtail_Free(filtered_file_infos);
 
     SAFE_DISPOSE_API(storage);
@@ -1464,7 +1462,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
-    uint32_t* compression_types = GetCompressionTypes(source_storage, version1_paths);
+    uint32_t* compression_types = GetAssetTags(source_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -1603,7 +1601,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint64_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint32_t chunk_sizes[5] = {43593, 43593, 43592, 43591, 43591};
-    const uint32_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
+    const uint16_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
 //    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
 //    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
@@ -1632,32 +1630,30 @@ TEST(Longtail, Longtail_CreateMissingContent)
         "first_"
     };
 
-    Longtail_Paths* paths;
-    ASSERT_EQ(0, Longtail_MakePaths(5, asset_paths, &paths));
-    size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, paths->m_DataSize);
+    Longtail_FileInfos* file_infos;
+    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
+    size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
 
     Longtail_VersionIndex* version_index;
     ASSERT_EQ(0, Longtail_BuildVersionIndex(
         version_index_mem,
         version_index_size,
-        paths,
+        file_infos,
         asset_path_hashes,
         asset_content_hashes,
-        asset_sizes,
-        asset_permissions,
         asset_chunk_start_index,
         asset_chunk_counts,
-        *paths->m_PathCount,
+        file_infos->m_Count,
         asset_chunk_start_index,
-        *paths->m_PathCount,
+        file_infos->m_Count,
         chunk_sizes,
         asset_content_hashes,
         asset_tags,
         0u,    // Dummy hash API
         TARGET_CHUNK_SIZE,
         &version_index));
-    Longtail_Free(paths);
+    Longtail_Free(file_infos);
 
     Longtail_ContentIndex* missing_content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -1719,7 +1715,7 @@ TEST(Longtail, VersionIndexDirectories)
     Longtail_FileInfos* local_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "", &local_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
-    uint32_t* compression_types = GetCompressionTypes(local_storage, local_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
 
     Longtail_VersionIndex* local_version_index;
@@ -2042,7 +2038,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_FileInfos* old_version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "old", &old_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, old_version_paths);
-    uint32_t* old_compression_types = GetCompressionTypes(storage, old_version_paths);
+    uint32_t* old_compression_types = GetAssetTags(storage, old_version_paths);
     ASSERT_NE((uint32_t*)0, old_compression_types);
     Longtail_VersionIndex* old_vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -2064,7 +2060,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_FileInfos* new_version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "new", &new_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, new_version_paths);
-    uint32_t* new_compression_types = GetCompressionTypes(storage, new_version_paths);
+    uint32_t* new_compression_types = GetAssetTags(storage, new_version_paths);
     ASSERT_NE((uint32_t*)0, new_compression_types);
     Longtail_VersionIndex* new_vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -2153,7 +2149,7 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, "old", &updated_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, updated_version_paths);
     const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10u;
-    ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, *updated_version_paths->m_Paths.m_PathCount);
+    ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, updated_version_paths->m_Count);
     Longtail_Free(updated_version_paths);
 
     for (uint32_t i = 0; i < NEW_ASSET_COUNT; ++i)
@@ -2204,7 +2200,7 @@ TEST(Longtail, FullScale)
     Longtail_FileInfos* local_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, "", &local_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
-    uint32_t* local_compression_types = GetCompressionTypes(local_storage, local_paths);
+    uint32_t* local_compression_types = GetAssetTags(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
 
     Longtail_VersionIndex* local_version_index;
@@ -2226,7 +2222,7 @@ TEST(Longtail, FullScale)
     Longtail_FileInfos* remote_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(remote_storage, 0, "", &remote_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
-    uint32_t* remote_compression_types = GetCompressionTypes(local_storage, remote_paths);
+    uint32_t* remote_compression_types = GetAssetTags(local_storage, remote_paths);
     ASSERT_NE((uint32_t*)0, remote_compression_types);
     Longtail_VersionIndex* remote_version_index;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -2479,7 +2475,7 @@ TEST(Longtail, Longtail_WriteVersion)
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
-    uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
+    uint32_t* version1_compression_types = GetAssetTags(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -2632,7 +2628,7 @@ static void Bench()
         Longtail_FileInfos* version_source_paths;
         ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, version_source_folder, &version_source_paths));
         ASSERT_NE((Longtail_FileInfos*)0, version_source_paths);
-        uint32_t* version_compression_types = GetCompressionTypes(storage_api, version_source_paths);
+        uint32_t* version_compression_types = GetAssetTags(storage_api, version_source_paths);
         ASSERT_NE((uint32_t*)0, version_compression_types);
         Longtail_VersionIndex* version_index;
         ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -2837,7 +2833,7 @@ static void LifelikeTest()
     Longtail_FileInfos* local_path_1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, local_path_1, &local_path_1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_path_1_paths);
-    uint32_t* local_compression_types = GetCompressionTypes(storage_api, local_path_1_paths);
+    uint32_t* local_compression_types = GetAssetTags(storage_api, local_path_1_paths);
     ASSERT_NE((uint32_t*)0, local_compression_types);
     Longtail_VersionIndex* version1;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -2908,7 +2904,7 @@ static void LifelikeTest()
     Longtail_FileInfos* local_path_2_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, local_path_2, &local_path_2_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_path_2_paths);
-    uint32_t* local_2_compression_types = GetCompressionTypes(storage_api, local_path_2_paths);
+    uint32_t* local_2_compression_types = GetAssetTags(storage_api, local_path_2_paths);
     ASSERT_NE((uint32_t*)0, local_2_compression_types);
     Longtail_VersionIndex* version2;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -3241,7 +3237,7 @@ TEST(Longtail, FileSystemStorage)
 
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, root_path, &file_infos));
-    ASSERT_EQ(18u, *file_infos->m_Paths.m_PathCount);
+    ASSERT_EQ(18u, file_infos->m_Count);
     Longtail_Free(file_infos);
 
     for (uint32_t a = 0; a < ASSET_COUNT; ++a)
@@ -3708,7 +3704,7 @@ TEST(Longtail, AsyncBlockStore)
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
-    uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
+    uint32_t* version1_compression_types = GetAssetTags(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -3909,7 +3905,7 @@ TEST(Longtail, Longtail_WriteVersionRetainBlocks)
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
-    uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
+    uint32_t* version1_compression_types = GetAssetTags(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -4106,7 +4102,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
-    uint32_t* version1_compression_types = GetCompressionTypes(storage_api, version1_paths);
+    uint32_t* version1_compression_types = GetAssetTags(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
