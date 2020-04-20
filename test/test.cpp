@@ -477,7 +477,7 @@ TEST(Longtail, Longtail_VersionIndex)
     const uint32_t chunk_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
-    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
+    const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 
     Longtail_Paths* paths;
     ASSERT_EQ(0, Longtail_MakePaths(5, asset_paths, &paths));
@@ -502,7 +502,7 @@ TEST(Longtail, Longtail_VersionIndex)
         *paths->m_PathCount,
         chunk_sizes,
         asset_content_hashes,
-        asset_compression_types,
+        asset_tags,
         0u,
         TARGET_CHUNK_SIZE,
         &version_index)); // Dummy hash API
@@ -527,7 +527,7 @@ TEST(Longtail, Longtail_ContentIndex)
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
 //    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint32_t asset_sizes[5] = { 43593u, 43593u, 43592u, 43591u, 43591u };
-    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
+    const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 //    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
 //    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
 
@@ -541,7 +541,7 @@ TEST(Longtail, Longtail_ContentIndex)
         asset_count,
         asset_content_hashes,
         asset_sizes,
-        asset_compression_types,
+        asset_tags,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &content_index));
@@ -587,7 +587,7 @@ TEST(Longtail, Longtail_RetargetContentIndex)
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
 //    const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint32_t asset_sizes[5] = { 43593u, 43593u, 43592u, 43591u, 43591u };
-    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
+    const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 //    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
 //    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
 
@@ -606,7 +606,7 @@ TEST(Longtail, Longtail_RetargetContentIndex)
         asset_count,
         asset_content_hashes,
         asset_sizes,
-        asset_compression_types,
+        asset_tags,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &content_index));
@@ -636,7 +636,7 @@ TEST(Longtail, Longtail_RetargetContentIndex)
         asset_count - 1,
         &asset_content_hashes[1],
         &asset_sizes[1],
-        &asset_compression_types[1],
+        &asset_tags[1],
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &other_content_index));
@@ -1608,7 +1608,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
 //    const char* asset_name_data = { "fifth_\0" "fourth\0" "third_\0" "second\0" "first_\0" };
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
     const uint32_t asset_chunk_start_index[5] = {0, 1, 2, 3, 4};
-    const uint32_t asset_compression_types[5] = {0, 0, 0, 0, 0};
+    const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 
     static const uint32_t TARGET_CHUNK_SIZE = 32768u;
     static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
@@ -1619,7 +1619,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
         asset_count - 4,
         asset_content_hashes,
         chunk_sizes,
-        asset_compression_types,
+        asset_tags,
         MAX_BLOCK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &content_index));
@@ -1653,7 +1653,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
         *paths->m_PathCount,
         chunk_sizes,
         asset_content_hashes,
-        asset_compression_types,
+        asset_tags,
         0u,    // Dummy hash API
         TARGET_CHUNK_SIZE,
         &version_index));

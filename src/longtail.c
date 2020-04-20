@@ -1209,7 +1209,7 @@ static int ChunkAssets(
     TLongtail_Hash* path_hashes,
     TLongtail_Hash* content_hashes,
     const uint64_t* content_sizes,
-    const uint32_t* content_tags,
+    const uint32_t* optional_asset_tags,
     uint32_t* asset_chunk_start_index,
     uint32_t* asset_chunk_counts,
     uint32_t** chunk_sizes,
@@ -1351,7 +1351,7 @@ static int ChunkAssets(
             job->m_AssetIndex = asset_index;
             job->m_StartRange = range_start;
             job->m_SizeRange = job_size;
-            job->m_ContentTag = content_tags[asset_index];
+            job->m_ContentTag = optional_asset_tags ? optional_asset_tags[asset_index] : 0;
             job->m_MaxChunkCount = asset_max_chunk_count;
             job->m_AssetChunkCount = &job_chunk_counts[jobs_started];
             job->m_ChunkHashes = &hashes[chunks_offset];
@@ -1772,7 +1772,7 @@ int Longtail_CreateVersionIndexRaw(
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_permissions,
-    const uint32_t* asset_tags,
+    const uint32_t* optional_asset_tags,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
 {
@@ -1785,7 +1785,7 @@ int Longtail_CreateVersionIndexRaw(
         paths,
         asset_sizes,
         asset_permissions,
-        asset_tags,
+        optional_asset_tags,
         target_chunk_size,
         out_version_index)
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL)
@@ -1794,7 +1794,6 @@ int Longtail_CreateVersionIndexRaw(
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || root_path != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || asset_sizes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || asset_permissions != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || asset_tags != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || target_chunk_size > 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((paths == 0 || *paths->m_PathCount == 0) || out_version_index != 0, return EINVAL)
 
@@ -1889,7 +1888,7 @@ int Longtail_CreateVersionIndexRaw(
         path_hashes,
         content_hashes,
         asset_sizes,
-        asset_tags,
+        optional_asset_tags,
         asset_chunk_start_index,
         asset_chunk_counts,
         &asset_chunk_sizes,
@@ -2072,7 +2071,7 @@ int Longtail_CreateVersionIndex(
     struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
     struct Longtail_FileInfos* file_infos,
-    const uint32_t* asset_tags,
+    const uint32_t* optional_asset_tags,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
 {
@@ -2081,7 +2080,6 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_VALIDATE_INPUT(job_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || root_path != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || file_infos, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || asset_tags != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || target_chunk_size > 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT((file_infos == 0 || *file_infos->m_Paths.m_PathCount == 0) || out_version_index !=0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_version_index != 0, return EINVAL)
@@ -2095,7 +2093,7 @@ int Longtail_CreateVersionIndex(
         file_infos ? &file_infos->m_Paths : 0,
         file_infos ? file_infos->m_FileSizes : 0,
         file_infos ? file_infos->m_Permissions : 0,
-        asset_tags,
+        optional_asset_tags,
         target_chunk_size,
         out_version_index);
 }
