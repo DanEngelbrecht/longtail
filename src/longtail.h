@@ -539,10 +539,8 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndexRaw(
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
-    const struct Longtail_Paths* paths,
-    const uint64_t* asset_sizes,
-    const uint32_t* asset_permissions,
-    const uint32_t* asset_tags,
+    const struct Longtail_FileInfos* file_infos,
+    const uint32_t* optional_asset_tags,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
@@ -553,7 +551,7 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
     struct Longtail_FileInfos* file_infos,
-    const uint32_t* asset_tags,
+    const uint32_t* optional_asset_tags,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
@@ -619,7 +617,7 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
-    const uint32_t* chunk_tags,
+    const uint32_t* optional_chunk_tags,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
@@ -817,28 +815,21 @@ LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_StoredBlock_GetBlockIndex(s
 LONGTAIL_EXPORT void* Longtail_BlockIndex_BlockData(struct Longtail_StoredBlock* stored_block);
 LONGTAIL_EXPORT uint32_t Longtail_BlockIndex_GetBlockChunksDataSize(struct Longtail_StoredBlock* stored_block);
 
-struct Longtail_Paths
-{
-    uint32_t m_DataSize;
-    uint32_t* m_PathCount;
-    uint32_t* m_Offsets;
-    char* m_Data;
-};
-
-LONGTAIL_EXPORT uint32_t Longtail_Paths_GetCount(const struct Longtail_Paths* paths);
-LONGTAIL_EXPORT const char* Longtail_Paths_GetPath(const struct Longtail_Paths* paths, uint32_t index);
-
 struct Longtail_FileInfos
 {
-    struct Longtail_Paths m_Paths;
-    uint64_t* m_FileSizes;
-    uint32_t* m_Permissions;
+    uint32_t m_Count;
+    uint32_t m_PathDataSize;
+    uint64_t* m_Sizes;
+    uint32_t* m_PathStartOffsets;
+    uint16_t* m_Permissions;
+    char* m_PathData;
 };
 
 LONGTAIL_EXPORT uint32_t Longtail_FileInfos_GetCount(const struct Longtail_FileInfos* file_infos);
+LONGTAIL_EXPORT const char* Longtail_FileInfos_GetPath(const struct Longtail_FileInfos* file_infos, uint32_t index);
 LONGTAIL_EXPORT const struct Longtail_Paths* Longtail_FileInfos_GetPaths(const struct Longtail_FileInfos* file_infos);
 LONGTAIL_EXPORT uint64_t Longtail_FileInfos_GetSize(const struct Longtail_FileInfos* file_infos, uint32_t index);
-LONGTAIL_EXPORT const uint32_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index);
+LONGTAIL_EXPORT const uint16_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index);
 
 extern uint32_t Longtail_CurrentContentIndexVersion;
 
@@ -887,7 +878,7 @@ struct Longtail_VersionIndex
 
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
-    uint32_t* m_Permissions;            // []
+    uint16_t* m_Permissions;            // []
     char* m_NameData;
 };
 
@@ -912,10 +903,12 @@ struct Longtail_VersionDiff
 
 ///////////// Test functions
 
-int Longtail_MakePaths(
+int Longtail_MakeFileInfos(
     uint32_t path_count,
     const char* const* path_names,
-    struct Longtail_Paths** out_paths);
+    const uint64_t* file_sizes,
+    const uint16_t* file_permissions,
+    struct Longtail_FileInfos** out_file_infos);
 
 size_t Longtail_GetVersionIndexDataSize(
     uint32_t asset_count,
@@ -932,11 +925,9 @@ size_t Longtail_GetVersionIndexSize(
 int Longtail_BuildVersionIndex(
     void* mem,
     size_t mem_size,
-    const struct Longtail_Paths* paths,
+    const struct Longtail_FileInfos* file_infos,
     const TLongtail_Hash* path_hashes,
     const TLongtail_Hash* content_hashes,
-    const uint64_t* content_sizes,
-    const uint32_t* asset_permissions,
     const uint32_t* asset_chunk_index_starts,
     const uint32_t* asset_chunk_counts,
     uint32_t asset_chunk_index_count,
@@ -944,7 +935,7 @@ int Longtail_BuildVersionIndex(
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_tags,
+    const uint32_t* optional_chunk_tags,
     uint32_t hash_api_identifier,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);

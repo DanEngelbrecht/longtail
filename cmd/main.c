@@ -115,11 +115,11 @@ int ParseLogLevel(const char* log_level_raw) {
 
 static uint32_t* GetCompressionTypes(struct Longtail_StorageAPI* api, const struct Longtail_FileInfos* file_infos)
 {
-    uint32_t count = *file_infos->m_Paths.m_PathCount;
+    uint32_t count = file_infos->m_Count;
     uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
     for (uint32_t i = 0; i < count; ++i)
     {
-        const char* path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[i]];
+        const char* path = Longtail_FileInfos_GetPath(file_infos, i);
         const char* extension_start = strrchr(path, '.');
         if ((extension_start == 0) ||
             (0 == strcmp(extension_start, ".zip")) ||
@@ -409,8 +409,8 @@ int UpSync(
             Longtail_Free((char*)storage_path);
             return err;
         }
-        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * (*file_infos->m_Paths.m_PathCount));
-        for (uint32_t i = 0; i < (*file_infos->m_Paths.m_PathCount); ++i)
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * file_infos->m_Count);
+        for (uint32_t i = 0; i < file_infos->m_Count; ++i)
         {
             tags[i] = compression_type;
         }
@@ -675,8 +675,8 @@ int DownSync(
             Longtail_Free((void*)storage_path);
             return err;
         }
-        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * (*file_infos->m_Paths.m_PathCount));
-        for (uint32_t i = 0; i < (*file_infos->m_Paths.m_PathCount); ++i)
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * file_infos->m_Count);
+        for (uint32_t i = 0; i < file_infos->m_Count; ++i)
         {
             tags[i] = 0;
         }
