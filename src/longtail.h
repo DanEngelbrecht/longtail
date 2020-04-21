@@ -534,24 +534,13 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
-LONGTAIL_EXPORT int Longtail_CreateVersionIndexRaw(
-    struct Longtail_StorageAPI* storage_api,
-    struct Longtail_HashAPI* hash_api,
-    struct Longtail_JobAPI* job_api,
-    struct Longtail_ProgressAPI* progress_api,
-    const char* root_path,
-    const struct Longtail_FileInfos* file_infos,
-    const uint32_t* optional_asset_tags,
-    uint32_t target_chunk_size,
-    struct Longtail_VersionIndex** out_version_index);
-
 LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     const char* root_path,
-    struct Longtail_FileInfos* file_infos,
+    const struct Longtail_FileInfos* file_infos,
     const uint32_t* optional_asset_tags,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
