@@ -140,6 +140,7 @@ struct Bikeshed_JobAPI_Group* CreateJobGroup(struct BikeshedJobAPI* job_api, uin
 {
     LONGTAIL_FATAL_ASSERT(job_api != 0, return 0)
     int err = EINVAL;
+    uint8_t* p = 0;
     size_t job_group_size = sizeof(struct Bikeshed_JobAPI_Group) +
         (sizeof(struct JobWrapper) * job_count) +
         (sizeof(Bikeshed_TaskID) * job_count);
@@ -149,7 +150,7 @@ struct Bikeshed_JobAPI_Group* CreateJobGroup(struct BikeshedJobAPI* job_api, uin
         err = ENOMEM;
         goto on_error;
     }
-    uint8_t* p = (uint8_t*)&job_group[1];
+    p = (uint8_t*)&job_group[1];
     job_group->m_ReservedJobs = (struct JobWrapper*)p;
     p += sizeof(struct JobWrapper) * job_count;
     job_group->m_ReservedTasksIDs = (Bikeshed_TaskID*)p;
@@ -240,6 +241,8 @@ static int Bikeshed_CreateJobs(
     struct Bikeshed_JobAPI_Group* bikeshed_job_group = (struct Bikeshed_JobAPI_Group*)job_group;
     BikeShed_TaskFunc* func = 0;
     void** ctx = 0;
+    Bikeshed_TaskID* task_ids = 0;
+    uint32_t job_range_start = 0;
 
     int32_t new_job_count = Longtail_AtomicAdd32(&bikeshed_job_group->m_SubmittedJobCount, (int32_t)job_count);
     LONGTAIL_FATAL_ASSERT(new_job_count > 0, return EINVAL);
@@ -248,7 +251,7 @@ static int Bikeshed_CreateJobs(
         err = ENOMEM;
         goto on_error;
     }
-    uint32_t job_range_start = (uint32_t)(new_job_count - job_count);
+    job_range_start = (uint32_t)(new_job_count - job_count);
 
     func = (BikeShed_TaskFunc*)Longtail_Alloc(sizeof(BikeShed_TaskFunc) * job_count);
     if (!func)
@@ -263,7 +266,7 @@ static int Bikeshed_CreateJobs(
         goto on_error;
     }
 
-    Bikeshed_TaskID* task_ids = &bikeshed_job_group->m_ReservedTasksIDs[job_range_start];
+    task_ids = &bikeshed_job_group->m_ReservedTasksIDs[job_range_start];
     for (uint32_t i = 0; i < job_count; ++i)
     {
         struct JobWrapper* job_wrapper = &bikeshed_job_group->m_ReservedJobs[job_range_start + i];
