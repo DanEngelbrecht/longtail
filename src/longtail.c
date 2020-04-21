@@ -300,10 +300,10 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
 
 uint32_t Longtail_Job_GetWorkerCount(struct Longtail_JobAPI* job_api) { return job_api->GetWorkerCount(job_api); }
 int Longtail_Job_ReserveJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Group* out_job_group) { return job_api->ReserveJobs(job_api, job_count, out_job_group); }
-int Longtail_Job_CreateJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group* job_group, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs) { return job_api->CreateJobs(job_api, job_group, job_count, job_funcs, job_contexts, out_jobs); }
+int Longtail_Job_CreateJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs) { return job_api->CreateJobs(job_api, job_group, job_count, job_funcs, job_contexts, out_jobs); }
 int Longtail_Job_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs) { return job_api->AddDependecies(job_api, job_count, jobs, dependency_job_count, dependency_jobs); }
 int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs) { return job_api->ReadyJobs(job_api, job_count, jobs); }
-int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group* job_group, struct Longtail_ProgressAPI* progressAPI) { return job_api->WaitForAllJobs(job_api, job_group, progressAPI); }
+int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI) { return job_api->WaitForAllJobs(job_api, job_group, progressAPI); }
 int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id) { return job_api->ResumeJob(job_api, job_id); }
 
 uint64_t Longtail_GetAsyncPutStoredBlockAPISize()
@@ -3889,7 +3889,7 @@ static int CreatePartialAssetWriteJob(
     struct ContentLookup* content_lookup,
     uint32_t asset_index,
     int retain_permissions,
-    Longtail_JobAPI_Group* job_group,
+    Longtail_JobAPI_Group job_group,
     struct WritePartialAssetFromBlocksJob* job,
     uint32_t asset_chunk_index_offset,
     Longtail_StorageAPI_HOpenFile asset_output_file,
