@@ -1674,7 +1674,7 @@ int Longtail_BuildVersionIndex(
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_tags,
+    const uint32_t* optional_chunk_tags,
     uint32_t hash_api_identifier,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
@@ -1692,7 +1692,7 @@ int Longtail_BuildVersionIndex(
         chunk_count,
         chunk_sizes,
         chunk_hashes,
-        chunk_tags,
+        optional_chunk_tags,
         hash_api_identifier,
         out_version_index);
     LONGTAIL_VALIDATE_INPUT(mem != 0, return EINVAL)
@@ -1706,7 +1706,6 @@ int Longtail_BuildVersionIndex(
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || asset_chunk_indexes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_sizes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_hashes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_tags != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_version_index != 0, return EINVAL)
 
     uint32_t asset_count = file_infos->m_Count;
@@ -1741,7 +1740,14 @@ int Longtail_BuildVersionIndex(
     memmove(version_index->m_AssetChunkIndexes, asset_chunk_indexes, sizeof(uint32_t) * asset_chunk_index_count);
     memmove(version_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
     memmove(version_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
-    memmove(version_index->m_ChunkTags, chunk_tags, sizeof(uint32_t) * chunk_count);
+    if (optional_chunk_tags)
+    {
+        memmove(version_index->m_ChunkTags, optional_chunk_tags, sizeof(uint32_t) * chunk_count);
+    }
+    else
+    {
+        memset(version_index->m_ChunkTags, 0, sizeof(uint32_t) * chunk_count);
+    }
     memmove(version_index->m_NameOffsets, file_infos->m_PathStartOffsets, sizeof(uint32_t) * asset_count);
     memmove(version_index->m_Permissions, file_infos->m_Permissions, sizeof(uint16_t) * asset_count);
     memmove(version_index->m_NameData, file_infos->m_PathData, file_infos->m_PathDataSize);
@@ -3010,16 +3016,16 @@ int Longtail_CreateContentIndexRaw(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
-    const uint32_t* chunk_tags,
+    const uint32_t* optional_chunk_tags,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p)", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p)",
+        hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index)
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || hash_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_hashes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_sizes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_tags != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || max_block_size != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || max_chunks_per_block != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_content_index != 0, return EINVAL)
@@ -3030,7 +3036,10 @@ int Longtail_CreateContentIndexRaw(
         struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
         if (!content_index)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, content_index_size, ENOMEM)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+                hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+                content_index_size,
+                ENOMEM)
             return ENOMEM;
         }
         int err = Longtail_InitContentIndex(
@@ -3045,7 +3054,7 @@ int Longtail_CreateContentIndexRaw(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_InitContentIndex(%p, %p, %" PRIu64 ", %u, %u, %u) failed with %d",
-                hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+                hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
                 content_index, &content_index[1], content_index_size - sizeof(struct Longtail_ContentIndex), hash_api ? hash_api->GetIdentifier(hash_api) : 0u, 0, 0,
                 err)
             Longtail_Free(content_index);
@@ -3058,7 +3067,10 @@ int Longtail_CreateContentIndexRaw(
     uint64_t* chunk_indexes = (uint64_t*)Longtail_Alloc(chunk_indexes_size);
     if (!chunk_indexes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, chunk_indexes_size, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+            chunk_indexes_size,
+            ENOMEM)
         return ENOMEM;
     }
     uint64_t unique_chunk_count = GetUniqueHashes(chunk_count, chunk_hashes, chunk_indexes);
@@ -3067,7 +3079,10 @@ int Longtail_CreateContentIndexRaw(
     struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
     if (!block_indexes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, block_indexes_size, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+            block_indexes_size,
+            ENOMEM)
         return ENOMEM;
     }
 
@@ -3075,7 +3090,10 @@ int Longtail_CreateContentIndexRaw(
     uint64_t* stored_chunk_indexes = (uint64_t*)Longtail_Alloc(stored_chunk_indexes_size);
     if (!stored_chunk_indexes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index, stored_chunk_indexes_size, ENOMEM)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+            stored_chunk_indexes_size,
+            ENOMEM)
         return ENOMEM;
     }
 
@@ -3091,7 +3109,7 @@ int Longtail_CreateContentIndexRaw(
         uint64_t chunk_index = chunk_indexes[i];
 
         uint32_t current_size = chunk_sizes[chunk_index];
-        current_tag = chunk_tags[chunk_index];
+        current_tag = optional_chunk_tags ? optional_chunk_tags[chunk_index] : 0;
 
         stored_chunk_indexes[chunk_count_in_block] = chunk_index;
         ++chunk_count_in_block;
@@ -3100,7 +3118,7 @@ int Longtail_CreateContentIndexRaw(
         {
             chunk_index = chunk_indexes[(i + 1)];
             uint32_t chunk_size = chunk_sizes[chunk_index];
-            uint32_t tag = chunk_tags[chunk_index];
+            uint32_t tag = optional_chunk_tags ? optional_chunk_tags[chunk_index] : 0;
 
             if (tag != current_tag)
             {
@@ -3137,7 +3155,7 @@ int Longtail_CreateContentIndexRaw(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_CreateBlockIndex(%p, %u, %u, %p, %p, %p, %p) failed with %d",
-                hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+                hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
                 hash_api, current_tag, chunk_count_in_block, stored_chunk_indexes, chunk_hashes, chunk_sizes, &block_indexes[block_count],
                 err)
             return err;
@@ -3161,7 +3179,7 @@ int Longtail_CreateContentIndexRaw(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexRaw(%p, %" PRIu64 ", %p, %p, %p, %u, %u, %p) Longtail_CreateContentIndexFromBlocks(%u, %u, %p, %p) failed with %d",
-            hash_api, chunk_count, chunk_hashes, chunk_sizes, chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
+            hash_api, chunk_count, chunk_hashes, chunk_sizes, optional_chunk_tags, max_block_size, max_chunks_per_block, out_content_index,
             hash_api ? hash_api->GetIdentifier(hash_api) : 0u, block_count, block_indexes, out_content_index,
             err)
         return err;

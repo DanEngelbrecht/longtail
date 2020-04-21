@@ -617,7 +617,7 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
-    const uint32_t* chunk_tags,
+    const uint32_t* optional_chunk_tags,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
@@ -935,7 +935,7 @@ int Longtail_BuildVersionIndex(
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_tags,
+    const uint32_t* optional_chunk_tags,
     uint32_t hash_api_identifier,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
