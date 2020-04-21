@@ -224,7 +224,7 @@ on_error:
 
 static int Bikeshed_CreateJobs(
     struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_Group* job_group,
+    Longtail_JobAPI_Group job_group,
     uint32_t job_count,
     Longtail_JobAPI_JobFunc job_funcs[],
     void* job_contexts[],
@@ -321,7 +321,7 @@ static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_coun
     return 0;
 }
 
-static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group* job_group, struct Longtail_ProgressAPI* progressAPI)
+static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_WaitForAllJobs(%p, %p)", job_api, progressAPI)
     LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
