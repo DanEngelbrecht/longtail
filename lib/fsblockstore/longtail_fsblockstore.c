@@ -176,7 +176,8 @@ static int ReadContent(
         Longtail_Free(file_infos);
         return err;
     }
-    err = job_api->ReserveJobs(job_api, path_count);
+    Longtail_JobAPI_Group job_group;
+    err = job_api->ReserveJobs(job_api, path_count, &job_group);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) job_api->ReserveJobs(%p, %u) failed with %d",
@@ -214,13 +215,13 @@ static int ReadContent(
         Longtail_JobAPI_JobFunc job_func[] = {ScanBlock};
         void* ctx[] = {job};
         Longtail_JobAPI_Jobs jobs;
-        err = job_api->CreateJobs(job_api, 1, job_func, ctx, &jobs);
+        err = job_api->CreateJobs(job_api, job_group, 1, job_func, ctx, &jobs);
         LONGTAIL_FATAL_ASSERT(!err, return err)
         err = job_api->ReadyJobs(job_api, 1, jobs);
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 
-    err = job_api->WaitForAllJobs(job_api, 0);
+    err = job_api->WaitForAllJobs(job_api, job_group, 0);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (path_count);
