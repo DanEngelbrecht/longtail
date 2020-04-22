@@ -2136,6 +2136,28 @@ TEST(Longtail, Longtail_VersionDiff)
         "old",
         1));
 
+    Longtail_Free(version_diff);
+    version_diff = 0;
+    // Make null-diff and see that we handle zero changes
+    ASSERT_EQ(0, Longtail_CreateVersionDiff(
+        new_vindex,
+        new_vindex,
+        &version_diff));
+    ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
+
+    ASSERT_EQ(0, Longtail_ChangeVersion(
+        block_store_api,
+        storage,
+        hash_api,
+        job_api,
+        0,
+        content_index,
+        old_vindex,
+        new_vindex,
+        version_diff,
+        "old",
+        1));
+
     Longtail_Free(content_index);
 
     Longtail_Free(version_diff);
