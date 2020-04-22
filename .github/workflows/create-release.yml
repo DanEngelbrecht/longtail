@@ -100,12 +100,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Better log on function input validation failure
-          - Added job groups to job api
-          - *API Breaking Change*: Removed `Longtail_Path` and integrated with `Longtail_FileInfos`
-          - *API Change*: `asset_tags` and `chunk_tags` are not optional and can be `null` resulting in all tags being zero
-          - *Format Change*: VersionIndex now stores permissions as uint16_t which breaks compatabilitiy. Version specifier has been bumped.
-          - *API Breaking Change*: Removed `CreateVersionIndexRaw` as it was a duplicate of `CreateVersionIndex`
+          - Fixed error when trying to apply a zero-change diff with Longtail_ChangeVersion
         draft: false
         prerelease: false
     - name: Download Linux artifacts
