@@ -125,6 +125,11 @@ static int ScanBlock(void* context, uint32_t job_id)
         full_block_path,
         &job->m_BlockIndex);
 
+    if (job->m_Err)
+    {
+        storage_api->RemoveFile(storage_api, full_block_path);
+    }
+
     Longtail_Free(full_block_path);
     full_block_path = 0;
     return 0;
