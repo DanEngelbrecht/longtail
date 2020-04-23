@@ -1773,7 +1773,7 @@ int Longtail_CreateVersionIndex(
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex(%p, %p, %s, %p, %p, %p, %p, %u, %p)",
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %p, %p, %u, %p)",
         storage_api,
         hash_api,
         job_api,
@@ -2426,6 +2426,14 @@ int Longtail_WriteBlockIndex(
     return 0;
 }
 
+struct Longtail_BlockIndexHeader
+{
+    TLongtail_Hash m_BlockHash;
+    uint32_t m_HashIdentifier;
+    uint32_t m_ChunkCount;
+    uint32_t m_Tag;
+};
+
 int Longtail_ReadBlockIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
@@ -2451,7 +2459,7 @@ int Longtail_ReadBlockIndex(
         storage_api->CloseFile(storage_api, f);
         return err;
     }
-    if (block_size < (sizeof(TLongtail_Hash) + sizeof(uint32_t)))
+    if (block_size < (sizeof(struct Longtail_BlockIndexHeader)))
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) truncated block, failed with %d", storage_api, path, out_block_index, err)
         storage_api->CloseFile(storage_api, f);
@@ -2464,28 +2472,38 @@ int Longtail_ReadBlockIndex(
         return err;
     }
     uint64_t read_offset = 0;
-    TLongtail_Hash block_hash;
-    err = storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash), &block_hash);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(TLongtail_Hash), &block_hash, err)
-        storage_api->CloseFile(storage_api, f);
-        return err;
-    }
-    read_offset += sizeof(TLongtail_Hash);
-    uint32_t chunk_count;
-    err = storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t), &chunk_count);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(uint32_t), &chunk_count, err)
-        storage_api->CloseFile(storage_api, f);
-        return err;
-    }
-    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
 
-    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
+    struct Longtail_BlockIndexHeader blockIndexHeader;
+    err = storage_api->Read(storage_api, f, read_offset, sizeof(struct Longtail_BlockIndexHeader), &blockIndexHeader);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(struct Longtail_BlockIndexHeader), &blockIndexHeader, err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    read_offset += sizeof(struct Longtail_BlockIndexHeader);
+
+    size_t block_index_size = Longtail_GetBlockIndexSize(blockIndexHeader.m_ChunkCount);
+    if (block_index_size >= block_size)
+    {
+        err = EBADF;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) block size is larger than file on disk, failed with %d",
+            storage_api, path, out_block_index,
+            block_index_size,
+            err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+
+    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(blockIndexHeader.m_ChunkCount);
     void* block_index_mem = Longtail_Alloc(block_index_size);
-    struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(block_index_mem, chunk_count);
+    if (!block_index_mem)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", storage_api, path, out_block_index, block_index_size, ENOMEM)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(block_index_mem, blockIndexHeader.m_ChunkCount);
     err = storage_api->Read(storage_api, f, 0, block_index_data_size, &block_index[1]);
     if (err)
     {
