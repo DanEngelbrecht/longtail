@@ -2485,6 +2485,12 @@ int Longtail_ReadBlockIndex(
 
     uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
     void* block_index_mem = Longtail_Alloc(block_index_size);
+    if (!block_index_mem)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", storage_api, path, out_block_index, block_index_size, ENOMEM)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
     struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(block_index_mem, chunk_count);
     err = storage_api->Read(storage_api, f, 0, block_index_data_size, &block_index[1]);
     if (err)
