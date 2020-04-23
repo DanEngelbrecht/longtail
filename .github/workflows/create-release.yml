@@ -100,7 +100,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Fixed error when trying to apply a zero-change diff with Longtail_ChangeVersion
+          - Fixed Longtail_ReadBlockIndex
+          - Fixed tracing
+          - FSBlockStore now tries to remove malformed block when scanning
         draft: false
         prerelease: false
     - name: Download Linux artifacts
