@@ -4369,6 +4369,7 @@ TEST(Longtail, TestFileScanCancelOperation)
     ASSERT_EQ(ECANCELED, Longtail_GetFilesRecursively(storage_api, 0, cancel_api, cancel_token, "testdata", &file_infos));
     ASSERT_EQ(0, cancel_api->DisposeToken(cancel_api, cancel_token));
     SAFE_DISPOSE_API(cancel_api);
+    SAFE_DISPOSE_API(storage_api);
 }
 
 TEST(Longtail, TestCreateVersionCancelOperation)
