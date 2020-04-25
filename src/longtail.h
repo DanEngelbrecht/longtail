@@ -47,10 +47,10 @@ typedef int (*Longtail_CancelAPI_DisposeTokenFunc)(struct Longtail_CancelAPI* ca
 struct Longtail_CancelAPI
 {
     struct Longtail_API m_API;
-    Longtail_CancelAPI_CreateTokenFunc m_CreateToken;
-    Longtail_CancelAPI_CancelFunc m_Cancel;
-    Longtail_CancelAPI_IsCancelledFunc m_IsCancelled;
-    Longtail_CancelAPI_DisposeTokenFunc m_DisposeToken;
+    Longtail_CancelAPI_CreateTokenFunc CreateToken;
+    Longtail_CancelAPI_CancelFunc Cancel;
+    Longtail_CancelAPI_IsCancelledFunc IsCancelled;
+    Longtail_CancelAPI_DisposeTokenFunc DisposeToken;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetCancelAPISize();

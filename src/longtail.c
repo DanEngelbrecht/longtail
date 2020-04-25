@@ -63,17 +63,17 @@ uint64_t Longtail_GetCancelAPISize()
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
     struct Longtail_CancelAPI* api = (struct Longtail_CancelAPI*)mem;
     api->m_API.Dispose = dispose_func;
-    api->m_CreateToken = create_token_func;
-    api->m_Cancel = cancel_func;
-    api->m_IsCancelled = is_cancelled;
-    api->m_DisposeToken = dispose_token_func;
+    api->CreateToken = create_token_func;
+    api->Cancel = cancel_func;
+    api->IsCancelled = is_cancelled;
+    api->DisposeToken = dispose_token_func;
     return api;
 }
 
-int Longtail_CancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token) { return cancel_api->m_CreateToken(cancel_api, out_token); }
-int Longtail_CancelAPI_Cancel(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token) { return cancel_api->m_Cancel(cancel_api, token); }
-int Longtail_CancelAPI_IsCancelled(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token) { return cancel_api->m_IsCancelled(cancel_api, token); }
-int Longtail_CancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token) { return cancel_api->m_DisposeToken(cancel_api, token); }
+int Longtail_CancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token) { return cancel_api->CreateToken(cancel_api, out_token); }
+int Longtail_CancelAPI_Cancel(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token) { return cancel_api->Cancel(cancel_api, token); }
+int Longtail_CancelAPI_IsCancelled(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token) { return cancel_api->IsCancelled(cancel_api, token); }
+int Longtail_CancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token) { return cancel_api->DisposeToken(cancel_api, token); }
 
 uint64_t Longtail_GetPathFilterAPISize()
 {
@@ -1022,6 +1022,8 @@ struct HashJob
 {
     struct Longtail_StorageAPI* m_StorageAPI;
     struct Longtail_HashAPI* m_HashAPI;
+    struct Longtail_CancelAPI* m_CancelAPI;
+    Longtail_CancelAPI_HCancelToken m_CancelToken;
     TLongtail_Hash* m_PathHash;
     uint64_t m_AssetIndex;
     uint32_t m_ContentTag;
@@ -1042,6 +1044,12 @@ static int DynamicChunking(void* context, uint32_t job_id)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
     struct HashJob* hash_job = (struct HashJob*)context;
+
+    if (hash_job->m_CancelAPI && hash_job->m_CancelToken && hash_job->m_CancelAPI->IsCancelled(hash_job->m_CancelAPI, hash_job->m_CancelToken))
+    {
+        hash_job->m_Err = ECANCELED;
+        return 0;
+    }
 
     hash_job->m_Err = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
     if (hash_job->m_Err)
@@ -1179,6 +1187,18 @@ static int DynamicChunking(void* context, uint32_t job_id)
         struct Longtail_ChunkRange r = Longtail_NextChunk(chunker);
         while (r.len)
         {
+            if (hash_job->m_CancelAPI && hash_job->m_CancelToken && hash_job->m_CancelAPI->IsCancelled(hash_job->m_CancelAPI, hash_job->m_CancelToken))
+            {
+                Longtail_Free(chunker);
+                chunker = 0;
+                hash_job->m_HashAPI->EndContext(hash_job->m_HashAPI, asset_hash_context);
+                storage_api->CloseFile(storage_api, file_handle);
+                file_handle = 0;
+                Longtail_Free(path);
+                path = 0;
+                hash_job->m_Err = ECANCELED;
+                return 0;
+            }
             err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, r.len, (void*)r.buf, &hash_job->m_ChunkHashes[chunk_count]);
             if (err != 0)
             {
@@ -1373,6 +1393,8 @@ static int ChunkAssets(
             struct HashJob* job = &hash_jobs[jobs_started];
             job->m_StorageAPI = storage_api;
             job->m_HashAPI = hash_api;
+            job->m_CancelAPI = optional_cancel_api;
+            job->m_CancelToken = optional_cancel_token;
             job->m_RootPath = root_path;
             job->m_Path = &file_infos->m_PathData[file_infos->m_PathStartOffsets[asset_index]];
             job->m_PathHash = &path_hashes[asset_index];
@@ -3827,6 +3849,8 @@ struct BlockReaderJob
     struct Longtail_AsyncGetStoredBlockAPI m_AsyncCompleteAPI;
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
+    struct Longtail_CancelAPI* m_CancelAPI;
+    Longtail_CancelAPI_HCancelToken m_CancelToken;
     uint32_t m_JobID;
     TLongtail_Hash m_BlockHash;
     struct Longtail_StoredBlock* m_StoredBlock;
@@ -3856,6 +3880,12 @@ static int BlockReader(void* context, uint32_t job_id)
         return 0;
     }
 
+    if (job->m_CancelAPI && job->m_CancelToken && job->m_CancelAPI->IsCancelled(job->m_CancelAPI, job->m_CancelToken))
+    {
+        job->m_Err = ECANCELED;
+        return 0;
+    }
+
     job->m_JobID = job_id;
     job->m_StoredBlock = 0;
     job->m_AsyncCompleteAPI.OnComplete = BlockReaderJobOnComplete;
@@ -3882,6 +3912,8 @@ struct WritePartialAssetFromBlocksJob
     struct Longtail_StorageAPI* m_VersionStorageAPI;
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
+    struct Longtail_CancelAPI* m_CancelAPI;
+    Longtail_CancelAPI_HCancelToken m_CancelToken;
     const struct Longtail_ContentIndex* m_ContentIndex;
     const struct Longtail_VersionIndex* m_VersionIndex;
     const char* m_VersionFolder;
@@ -3908,6 +3940,8 @@ static int CreatePartialAssetWriteJob(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_JobAPI* job_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_folder,
@@ -3934,6 +3968,8 @@ static int CreatePartialAssetWriteJob(
     job->m_VersionStorageAPI = version_storage_api;
     job->m_BlockStoreAPI = block_store_api;
     job->m_JobAPI = job_api;
+    job->m_CancelAPI = optional_cancel_api;
+    job->m_CancelToken = optional_cancel_token;
     job->m_ContentIndex = content_index;
     job->m_VersionIndex = version_index;
     job->m_VersionFolder = version_folder;
@@ -3982,6 +4018,8 @@ static int CreatePartialAssetWriteJob(
             block_job->m_AsyncCompleteAPI.m_API.Dispose = 0;
             block_job->m_AsyncCompleteAPI.OnComplete = 0;
             block_job->m_JobAPI = job_api;
+            block_job->m_CancelAPI = optional_cancel_api;
+            block_job->m_CancelToken = optional_cancel_token;
             block_job->m_JobID = 0;
             block_job->m_Err = EINVAL;
             block_job->m_StoredBlock = 0;
@@ -4054,6 +4092,12 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
         stored_block[d] = job->m_BlockReaderJobs[d].m_StoredBlock;
     }
 
+    if (job->m_Err == 0 && job->m_CancelAPI && job->m_CancelToken && job->m_CancelAPI->IsCancelled(job->m_CancelAPI, job->m_CancelToken))
+    {
+        job->m_Err = ECANCELED;
+        return 0;
+    }
+
     if (job->m_Err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u) Failed to block_read blocks, %d", context, job_id, job->m_Err)
@@ -4064,6 +4108,12 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
             }
+        }
+
+        if (job->m_AssetOutputFile)
+        {
+            job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+            job->m_AssetOutputFile = 0;
         }
         return 0;
     }
@@ -4084,6 +4134,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
         job->m_Err = ENOENT;
         return 0;
     }
+
     if (!job->m_AssetOutputFile)
     {
         char* full_asset_path = job->m_VersionStorageAPI->ConcatPath(job->m_VersionStorageAPI, job->m_VersionFolder, asset_path);
@@ -4145,6 +4196,8 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
             job->m_BlockStoreAPI,
             job->m_VersionStorageAPI,
             job->m_JobAPI,
+            job->m_CancelAPI,
+            job->m_CancelToken,
             job->m_ContentIndex,
             job->m_VersionIndex,
             job->m_VersionFolder,
@@ -4746,6 +4799,11 @@ static int WriteAssets(
     Longtail_Free(block_ref_counts);
     Longtail_Free(block_ref_hashes);
 
+    if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
+    {
+        return ECANCELED;
+    }
+
     Longtail_JobAPI_Group job_group = 0;
     err = job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2u) + asset_job_count, &job_group);
     if (err)
@@ -4774,6 +4832,8 @@ static int WriteAssets(
         block_job->m_AsyncCompleteAPI.OnComplete = 0;
         block_job->m_BlockHash = content_index->m_BlockHashes[block_index];
         block_job->m_JobAPI = job_api;
+        block_job->m_CancelAPI = optional_cancel_api;
+        block_job->m_CancelToken = optional_cancel_token;
         block_job->m_JobID = 0;
         block_job->m_Err = EINVAL;
         block_job->m_StoredBlock = 0;
@@ -4870,6 +4930,8 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
             block_store_api,
             version_storage_api,
             job_api,
+            optional_cancel_api,
+            optional_cancel_token,
             content_index,
             version_index,
             version_path,
@@ -6130,6 +6192,10 @@ int Longtail_ChangeVersion(
     uint32_t removed_count = *version_diff->m_SourceRemovedCount;
     while (successful_remove_count < removed_count)
     {
+        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
+        {
+            return ECANCELED;
+        }
         --retry_count;
         for (uint32_t r = 0; r < removed_count; ++r)
         {
@@ -6312,6 +6378,11 @@ int Longtail_ChangeVersion(
 
     if (retain_permissions)
     {
+        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
+        {
+            return ECANCELED;
+        }
+
         uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
         for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
         {

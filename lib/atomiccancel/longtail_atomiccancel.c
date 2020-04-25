@@ -70,10 +70,10 @@ static void AtomicCancelAPI_Init(struct AtomicCancelAPI* api)
 {
     LONGTAIL_FATAL_ASSERT(api, return)
     api->m_CancelAPI.m_API.Dispose = AtomicCancelAPI_Dispose;
-    api->m_CancelAPI.m_CreateToken = AtomicCancelAPI_CreateToken;
-    api->m_CancelAPI.m_Cancel = AtomicCancelAPI_Cancel;
-    api->m_CancelAPI.m_IsCancelled = AtomicCancelAPI_IsCancelled;
-    api->m_CancelAPI.m_DisposeToken = AtomicCancelAPI_DisposeToken;
+    api->m_CancelAPI.CreateToken = AtomicCancelAPI_CreateToken;
+    api->m_CancelAPI.Cancel = AtomicCancelAPI_Cancel;
+    api->m_CancelAPI.IsCancelled = AtomicCancelAPI_IsCancelled;
+    api->m_CancelAPI.DisposeToken = AtomicCancelAPI_DisposeToken;
 }
 
 struct Longtail_CancelAPI* Longtail_CreateAtomicCancelAPI()
