@@ -1045,7 +1045,7 @@ static int DynamicChunking(void* context, uint32_t job_id)
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
     struct HashJob* hash_job = (struct HashJob*)context;
 
-    if (hash_job->m_CancelAPI && hash_job->m_CancelToken && hash_job->m_CancelAPI->IsCancelled(hash_job->m_CancelAPI, hash_job->m_CancelToken))
+    if (hash_job->m_CancelAPI && hash_job->m_CancelToken && hash_job->m_CancelAPI->IsCancelled(hash_job->m_CancelAPI, hash_job->m_CancelToken) == ECANCELED)
     {
         hash_job->m_Err = ECANCELED;
         return 0;
@@ -1187,7 +1187,7 @@ static int DynamicChunking(void* context, uint32_t job_id)
         struct Longtail_ChunkRange r = Longtail_NextChunk(chunker);
         while (r.len)
         {
-            if (hash_job->m_CancelAPI && hash_job->m_CancelToken && hash_job->m_CancelAPI->IsCancelled(hash_job->m_CancelAPI, hash_job->m_CancelToken))
+            if (hash_job->m_CancelAPI && hash_job->m_CancelToken && hash_job->m_CancelAPI->IsCancelled(hash_job->m_CancelAPI, hash_job->m_CancelToken) == ECANCELED)
             {
                 Longtail_Free(chunker);
                 chunker = 0;
@@ -3880,7 +3880,7 @@ static int BlockReader(void* context, uint32_t job_id)
         return 0;
     }
 
-    if (job->m_CancelAPI && job->m_CancelToken && job->m_CancelAPI->IsCancelled(job->m_CancelAPI, job->m_CancelToken))
+    if (job->m_CancelAPI && job->m_CancelToken && job->m_CancelAPI->IsCancelled(job->m_CancelAPI, job->m_CancelToken) == ECANCELED)
     {
         job->m_Err = ECANCELED;
         return 0;
@@ -4092,7 +4092,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
         stored_block[d] = job->m_BlockReaderJobs[d].m_StoredBlock;
     }
 
-    if (job->m_Err == 0 && job->m_CancelAPI && job->m_CancelToken && job->m_CancelAPI->IsCancelled(job->m_CancelAPI, job->m_CancelToken))
+    if (job->m_Err == 0 && job->m_CancelAPI && job->m_CancelToken && job->m_CancelAPI->IsCancelled(job->m_CancelAPI, job->m_CancelToken) == ECANCELED)
     {
         job->m_Err = ECANCELED;
         return 0;
@@ -4799,7 +4799,7 @@ static int WriteAssets(
     Longtail_Free(block_ref_counts);
     Longtail_Free(block_ref_hashes);
 
-    if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
+    if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
     {
         return ECANCELED;
     }
@@ -6192,7 +6192,7 @@ int Longtail_ChangeVersion(
     uint32_t removed_count = *version_diff->m_SourceRemovedCount;
     while (successful_remove_count < removed_count)
     {
-        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
+        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
         {
             return ECANCELED;
         }
@@ -6378,7 +6378,7 @@ int Longtail_ChangeVersion(
 
     if (retain_permissions)
     {
-        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
+        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
         {
             return ECANCELED;
         }

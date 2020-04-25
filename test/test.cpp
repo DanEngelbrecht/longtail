@@ -7,6 +7,7 @@
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/brotli/longtail_brotli.h"
+#include "../lib/atomiccancel/longtail_atomiccancel.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressblockstore/longtail_compressblockstore.h"
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
@@ -4335,4 +4336,21 @@ TEST(Longtail, TestBlake3HashRegistry)
     ASSERT_EQ((struct Longtail_HashAPI*)0, error_hash_api);
 
    SAFE_DISPOSE_API(hash_registry);
+}
+
+TEST(Longtail, TestCancelAPI)
+{
+    struct Longtail_CancelAPI* cancel_api = Longtail_CreateAtomicCancelAPI();
+    ASSERT_NE((struct Longtail_CancelAPI*)0, cancel_api);
+    Longtail_CancelAPI_HCancelToken cancel_token;
+    ASSERT_EQ(0, cancel_api->CreateToken(cancel_api, &cancel_token));
+    ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
+    ASSERT_EQ(0, cancel_api->IsCancelled(cancel_api, cancel_token));
+    ASSERT_EQ(0, cancel_api->Cancel(cancel_api, cancel_token));
+    ASSERT_EQ(ECANCELED, cancel_api->IsCancelled(cancel_api, cancel_token));
+    ASSERT_EQ(0, cancel_api->Cancel(cancel_api, cancel_token));
+    ASSERT_EQ(0, cancel_api->Cancel(cancel_api, cancel_token));
+    ASSERT_EQ(ECANCELED, cancel_api->IsCancelled(cancel_api, cancel_token));
+    ASSERT_EQ(0, cancel_api->DisposeToken(cancel_api, cancel_token));
+    SAFE_DISPOSE_API(cancel_api);
 }
