@@ -100,9 +100,14 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Fixed Longtail_ReadBlockIndex
-          - Fixed tracing
-          - FSBlockStore now tries to remove malformed block when scanning
+          - New `Longtail_CancelAPI` for cancelling longrunning operations
+          - *BREAKING API* The following functions now take optional cancel api + token:
+            - `Longtail_GetFilesRecursively`
+            - `Longtail_CreateVersionIndex`
+            - `Longtail_WriteContent`
+            - `Longtail_WriteVersion`
+            - `Longtail_ChangeVersion`
+          - New Longtail_CancelAPI implementation `AtomicCancelAPI`
         draft: false
         prerelease: false
     - name: Download Linux artifacts
