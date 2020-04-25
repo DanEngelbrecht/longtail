@@ -4450,7 +4450,8 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     Longtail_Free(file_infos);
 
     ASSERT_EQ(0, cancel_api->DisposeToken(cancel_api, cancel_token));
+    SAFE_DISPOSE_API(cancel_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
-    SAFE_DISPOSE_API(cancel_api);
+    SAFE_DISPOSE_API(storage_api);
 }
