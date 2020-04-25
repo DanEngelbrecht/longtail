@@ -6202,9 +6202,11 @@ int Longtail_ChangeVersion(
     uint32_t removed_count = *version_diff->m_SourceRemovedCount;
     while (successful_remove_count < removed_count)
     {
-        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-        {
-            return ECANCELED;
+        if ((successful_remove_count & 0x7f) == 0x7f) {
+            if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+            {
+                return ECANCELED;
+            }
         }
         --retry_count;
         for (uint32_t r = 0; r < removed_count; ++r)
@@ -6388,14 +6390,15 @@ int Longtail_ChangeVersion(
 
     if (retain_permissions)
     {
-        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-        {
-            return ECANCELED;
-        }
-
         uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
         for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
         {
+            if ((i & 0x7f) == 0x7f) {
+                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+                {
+                    return ECANCELED;
+                }
+            }
             uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
             const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
             char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
