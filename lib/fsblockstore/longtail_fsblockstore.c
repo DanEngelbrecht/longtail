@@ -155,6 +155,8 @@ static int ReadContent(
     int err = Longtail_GetFilesRecursively(
         storage_api,
         0,
+        0,
+        0,
         content_path,
         &file_infos);
     if (err)

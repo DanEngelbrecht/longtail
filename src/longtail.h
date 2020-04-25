@@ -565,6 +565,8 @@ LONGTAIL_EXPORT char* Longtail_Strdup(const char* path);
 LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_PathFilterAPI* path_filter_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 

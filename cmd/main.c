@@ -394,6 +394,8 @@ int UpSync(
         int err = Longtail_GetFilesRecursively(
             storage_api,
             0,
+            0,
+            0,
             source_path,
             &file_infos);
         if (err)
@@ -658,6 +660,8 @@ int DownSync(
         struct Longtail_FileInfos* file_infos;
         int err = Longtail_GetFilesRecursively(
             storage_api,
+            0,
+            0,
             0,
             target_path,
             &file_infos);

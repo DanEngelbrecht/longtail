@@ -612,6 +612,8 @@ typedef int (*ProcessEntry)(void* context, const char* root_path, const char* fi
 static int RecurseTree(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_PathFilterAPI* optional_path_filter_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_folder,
     ProcessEntry entry_processor,
     void* context)
@@ -637,6 +639,12 @@ static int RecurseTree(
     int err = 0;
     while (folder_index < (uint32_t)arrlen(folder_paths))
     {
+        if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+        {
+            err = ECANCELED;
+            break;
+        }
+
         const char* asset_folder = folder_paths[folder_index++];
 
         Longtail_StorageAPI_HIterator fs_iterator = 0;
@@ -933,6 +941,8 @@ static int AddFile(void* context, const char* root_path, const char* file_name, 
 int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_PathFilterAPI* optional_path_filter_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos)
 {
@@ -956,7 +966,7 @@ int Longtail_GetFilesRecursively(
     struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), file_infos};
     file_infos = 0;
 
-    int err = RecurseTree(storage_api, optional_path_filter_api, root_path, AddFile, &context);
+    int err = RecurseTree(storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, AddFile, &context);
     if(err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilesRecursively(%p, %s, %p) RecurseTree(%p, %s, %p, %p) failed with %d",
