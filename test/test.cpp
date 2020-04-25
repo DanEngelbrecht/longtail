@@ -4447,6 +4447,8 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     ASSERT_EQ(ECANCELED, job_context.err);
     ASSERT_EQ((Longtail_VersionIndex*)0, vindex);
 
+    Longtail_Free(file_infos);
+
     ASSERT_EQ(0, cancel_api->DisposeToken(cancel_api, cancel_token));
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
