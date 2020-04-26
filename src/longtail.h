@@ -34,6 +34,40 @@ struct Longtail_API
 LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
+////////////// Longtail_CancelAPI
+
+struct Longtail_CancelAPI;
+
+typedef struct Longtail_CancelAPI_CancelToken* Longtail_CancelAPI_HCancelToken;
+
+typedef int (*Longtail_CancelAPI_CreateTokenFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token);
+typedef int (*Longtail_CancelAPI_CancelFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+typedef int (*Longtail_CancelAPI_IsCancelledFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+typedef int (*Longtail_CancelAPI_DisposeTokenFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+struct Longtail_CancelAPI
+{
+    struct Longtail_API m_API;
+    Longtail_CancelAPI_CreateTokenFunc CreateToken;
+    Longtail_CancelAPI_CancelFunc Cancel;
+    Longtail_CancelAPI_IsCancelledFunc IsCancelled;
+    Longtail_CancelAPI_DisposeTokenFunc DisposeToken;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetCancelAPISize();
+
+LONGTAIL_EXPORT struct Longtail_CancelAPI* Longtail_MakeCancelAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_CancelAPI_CreateTokenFunc create_token_func,
+    Longtail_CancelAPI_CancelFunc cancel_func,
+    Longtail_CancelAPI_IsCancelledFunc is_cancelled,
+    Longtail_CancelAPI_DisposeTokenFunc dispose_token_func);
+
+LONGTAIL_EXPORT int Longtail_CancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token);
+LONGTAIL_EXPORT int Longtail_CancelAPI_Cancel(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+LONGTAIL_EXPORT int Longtail_CancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+LONGTAIL_EXPORT int Longtail_CancelAPI_IsCancelled(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+
 ////////////// Longtail_PathFilterAPI
 
 struct Longtail_PathFilterAPI;
@@ -531,6 +565,8 @@ LONGTAIL_EXPORT char* Longtail_Strdup(const char* path);
 LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_PathFilterAPI* path_filter_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
@@ -539,6 +575,8 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
     const struct Longtail_FileInfos* file_infos,
     const uint32_t* optional_asset_tags,
@@ -637,6 +675,8 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     struct Longtail_ContentIndex* block_store_content_index,
     struct Longtail_ContentIndex* version_content_index,
     struct Longtail_VersionIndex* version_index,
@@ -670,6 +710,8 @@ LONGTAIL_EXPORT int Longtail_WriteVersion(
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_path,
@@ -686,6 +728,8 @@ LONGTAIL_EXPORT int Longtail_ChangeVersion(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,

@@ -394,6 +394,8 @@ int UpSync(
         int err = Longtail_GetFilesRecursively(
             storage_api,
             0,
+            0,
+            0,
             source_path,
             &file_infos);
         if (err)
@@ -422,6 +424,8 @@ int UpSync(
                 hash_api,
                 job_api,
                 &create_version_progress.m_API,
+                0,
+                0,
                 source_path,
                 file_infos,
                 tags,
@@ -476,6 +480,8 @@ int UpSync(
             store_block_store_api,
             job_api,
             &write_content_progress.m_API,
+            0,
+            0,
             block_store_content_index,
             version_content_index,
             source_version_index,
@@ -655,6 +661,8 @@ int DownSync(
         int err = Longtail_GetFilesRecursively(
             storage_api,
             0,
+            0,
+            0,
             target_path,
             &file_infos);
         if (err)
@@ -688,6 +696,8 @@ int DownSync(
                 hash_api,
                 job_api,
                 &create_version_progress.m_API,
+                0,
+                0,
                 target_path,
                 file_infos,
                 tags,
@@ -751,6 +761,8 @@ int DownSync(
             hash_api,
             job_api,
             &change_version_progress.m_API,
+            0,
+            0,
             remote_content_index,
             target_version_index,
             source_version_index,
