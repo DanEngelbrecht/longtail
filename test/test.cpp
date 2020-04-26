@@ -4389,8 +4389,6 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, cancel_api, cancel_token, "testdata", &file_infos));
 
-    uint32_t* compression_types = GetAssetTags(storage_api, file_infos);
-    ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex = 0;
 
     struct JobContext
@@ -4402,7 +4400,6 @@ TEST(Longtail, TestCreateVersionCancelOperation)
         Longtail_CancelAPI_HCancelToken cancel_token;
         const char* root_path;
         Longtail_FileInfos* file_infos;
-        uint32_t* compression_types;
         Longtail_VersionIndex** vindex;
         int err;
 
@@ -4418,7 +4415,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
                 job->cancel_token,
                 job->root_path,
                 job->file_infos,
-                job->compression_types,
+                0,
                 16384,
                 job->vindex);
             return 0;
@@ -4431,7 +4428,6 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     job_context.cancel_token = cancel_token;
     job_context.root_path = "testdata";
     job_context.file_infos = file_infos;
-    job_context.compression_types = compression_types;
     job_context.vindex = &vindex;
 
     Longtail_JobAPI_Group job_group;
