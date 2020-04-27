@@ -100,14 +100,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - New `Longtail_CancelAPI` for cancelling longrunning operations
-          - *BREAKING API* The following functions now take optional cancel api + token:
-            - `Longtail_GetFilesRecursively`
-            - `Longtail_CreateVersionIndex`
-            - `Longtail_WriteContent`
-            - `Longtail_WriteVersion`
-            - `Longtail_ChangeVersion`
-          - New Longtail_CancelAPI implementation `AtomicCancelAPI`
+          - Added `Longtail_StripContentIndex` - build a minimal content index for a version index from a full content index
         draft: false
         prerelease: false
     - name: Download Linux artifacts
