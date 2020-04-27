@@ -4453,7 +4453,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     SAFE_DISPOSE_API(storage_api);
 }
 
-TEST(Longtail, TestReduceContentIndex)
+TEST(Longtail, TestStripContentIndex)
 {
     const uint32_t ASSET_COUNT = 9u;
 
@@ -4588,28 +4588,28 @@ TEST(Longtail, TestReduceContentIndex)
     ASSERT_LT(*content_index_1->m_BlockCount, *full_content_index->m_BlockCount);
     ASSERT_LT(*content_index_2->m_BlockCount, *full_content_index->m_BlockCount);
 
-    struct Longtail_ContentIndex* reduced_content_index_1;
-    ASSERT_EQ(0, Longtail_ReduceContentIndex(
+    struct Longtail_ContentIndex* stripped_content_index_1;
+    ASSERT_EQ(0, Longtail_StripContentIndex(
         version_index_1,
         full_content_index,
-        &reduced_content_index_1));
+        &stripped_content_index_1));
 
-    struct Longtail_ContentIndex* reduced_content_index_2;
-    ASSERT_EQ(0, Longtail_ReduceContentIndex(
+    struct Longtail_ContentIndex* stripped_content_index_2;
+    ASSERT_EQ(0, Longtail_StripContentIndex(
         version_index_2,
         full_content_index,
-        &reduced_content_index_2));
+        &stripped_content_index_2));
 
-    ASSERT_EQ(*reduced_content_index_1->m_BlockCount, *content_index_1->m_BlockCount);
-    ASSERT_EQ(*reduced_content_index_2->m_BlockCount, *content_index_2->m_BlockCount);
-    ASSERT_EQ(0, Longtail_ValidateContent(reduced_content_index_1, version_index_1));
-    ASSERT_NE(0, Longtail_ValidateContent(reduced_content_index_1, version_index_2));
-    ASSERT_NE(0, Longtail_ValidateContent(reduced_content_index_2, version_index_1));
-    ASSERT_EQ(0, Longtail_ValidateContent(reduced_content_index_2, version_index_2));
+    ASSERT_EQ(*stripped_content_index_1->m_BlockCount, *content_index_1->m_BlockCount);
+    ASSERT_EQ(*stripped_content_index_2->m_BlockCount, *content_index_2->m_BlockCount);
+    ASSERT_EQ(0, Longtail_ValidateContent(stripped_content_index_1, version_index_1));
+    ASSERT_NE(0, Longtail_ValidateContent(stripped_content_index_1, version_index_2));
+    ASSERT_NE(0, Longtail_ValidateContent(stripped_content_index_2, version_index_1));
+    ASSERT_EQ(0, Longtail_ValidateContent(stripped_content_index_2, version_index_2));
 
-    Longtail_Free(reduced_content_index_2);
+    Longtail_Free(stripped_content_index_2);
 
-    Longtail_Free(reduced_content_index_1);
+    Longtail_Free(stripped_content_index_1);
 
     Longtail_Free(full_content_index);
 
