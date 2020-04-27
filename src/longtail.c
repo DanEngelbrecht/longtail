@@ -6574,6 +6574,162 @@ int Longtail_ValidateVersion(
     return 0;
 }
 
+struct BlockIndexToChunks
+{
+    uint64_t key;
+    uint64_t* value;
+};
+
+static int CompareIndexes(const void * elem1, const void * elem2)
+{
+    uint64_t f = *((uint64_t*)elem1);
+    uint64_t s = *((uint64_t*)elem2);
+    if (f > s) return  1;
+    if (f < s) return -1;
+    return 0;
+}
+
+int Longtail_ReduceContentIndex(
+    struct Longtail_VersionIndex* version_index,
+    struct Longtail_ContentIndex* full_content_index,
+    struct Longtail_ContentIndex** out_reduced_content_index)
+{
+    // TODO: log
+
+    // Map chunk hash to block index in full_content_index
+    uint64_t** block_chunks = 0;
+    uint64_t full_content_block_count = *full_content_index->m_BlockCount;
+    arrsetlen(block_chunks, full_content_block_count);
+    memset(block_chunks, 0, sizeof(uint64_t*) * full_content_block_count);
+    struct HashToIndexItem* full_content_chunk_hash_to_block_index = 0;
+    uint64_t full_content_chunk_count = *full_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < full_content_chunk_count; ++c)
+    {
+        TLongtail_Hash chunk_hash = full_content_index->m_ChunkHashes[c];
+        uint64_t block_index = full_content_index->m_ChunkBlockIndexes[c];
+        hmput(full_content_chunk_hash_to_block_index, chunk_hash, block_index);
+        arrput(block_chunks[block_index], c);
+    }
+
+    uint64_t* used_block_indexes = 0;
+    arrsetcap(used_block_indexes, full_content_block_count);
+    uint32_t version_chunk_count = *version_index->m_ChunkCount;
+    struct HashToIndexItem* block_hash_to_block_index = 0;
+    for (uint64_t c = 0; c < version_chunk_count; ++c)
+    {
+        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[c];
+        intptr_t block_index_ptr = hmgeti(full_content_chunk_hash_to_block_index, chunk_hash);
+        if (block_index_ptr == -1)
+        {
+            // TODO: Log + Free
+            arrfree(used_block_indexes);
+            hmfree(block_hash_to_block_index);
+            while(full_content_block_count--)
+            {
+                arrfree(block_chunks[full_content_block_count]);
+            }
+            arrfree(block_chunks);
+            hmfree(full_content_chunk_hash_to_block_index);
+            return EINVAL;
+        }
+        uint64_t block_index = full_content_chunk_hash_to_block_index[block_index_ptr].value;
+        intptr_t block_hash_ptr = hmgeti(block_hash_to_block_index, full_content_index->m_BlockHashes[block_index]);
+        if (block_hash_ptr == -1)
+        {
+            hmput(block_hash_to_block_index, full_content_index->m_BlockHashes[block_index], block_index);
+            arrput(used_block_indexes, block_index);
+        }
+    }
+    hmfree(block_hash_to_block_index);
+    block_hash_to_block_index = 0;
+    hmfree(full_content_chunk_hash_to_block_index);
+    full_content_chunk_hash_to_block_index = 0;
+
+    uint64_t used_block_count = (uint64_t)arrlen(used_block_indexes);
+    qsort(used_block_indexes, used_block_count, sizeof(uint64_t), CompareIndexes);
+
+    size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * used_block_count;
+    struct Longtail_BlockIndex** bindexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
+    if (!bindexes)
+    {
+        // TODO: log
+        while(full_content_block_count--)
+        {
+            arrfree(block_chunks[full_content_block_count]);
+        }
+        arrfree(block_chunks);
+        return ENOMEM;
+    }
+
+    for (uint64_t b = 0; b < used_block_count; ++b)
+    {
+        uint64_t block_index = used_block_indexes[b];
+        uint64_t* chunk_indexes = block_chunks[block_index];
+        uint32_t chunk_count = (uint32_t)(arrlen(chunk_indexes));
+        size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+        void* block_index_mem = Longtail_Alloc(block_index_size);
+        if (!block_index_mem)
+        {
+            // TODO: log
+            while(full_content_block_count--)
+            {
+                arrfree(block_chunks[full_content_block_count]);
+            }
+            arrfree(block_chunks);
+            while(b--)
+            {
+                Longtail_Free(bindexes[b]);
+            }
+            arrfree(used_block_indexes);
+            Longtail_Free(bindexes);
+            return ENOMEM;
+        }
+        struct Longtail_BlockIndex* bindex = Longtail_InitBlockIndex(block_index_mem, chunk_count);
+        LONGTAIL_FATAL_ASSERT(bindex != 0, return EINVAL)
+        *bindex->m_ChunkCount = chunk_count;
+        *bindex->m_HashIdentifier = *full_content_index->m_HashIdentifier;
+        for (uint64_t c = 0; c < chunk_count; ++c)
+        {
+            uint64_t chunk_index = chunk_indexes[c];
+            bindex->m_ChunkHashes[c] = full_content_index->m_ChunkHashes[chunk_index];
+            bindex->m_ChunkSizes[c] = full_content_index->m_ChunkLengths[chunk_index];
+
+        }
+        bindex->m_Tag = 0; // Not important since it is not stored in the content index
+        *bindex->m_BlockHash = full_content_index->m_BlockHashes[block_index];
+        bindexes[b] = bindex;
+    }
+    while(full_content_block_count--)
+    {
+        arrfree(block_chunks[full_content_block_count]);
+    }
+    arrfree(block_chunks);
+    arrfree(used_block_indexes);
+    used_block_indexes = 0;
+
+    struct Longtail_ContentIndex* reduced_content_index;
+    int err = Longtail_CreateContentIndexFromBlocks(
+        *full_content_index->m_MaxBlockSize,
+        *full_content_index->m_MaxChunksPerBlock,
+        used_block_count,
+        bindexes,
+        &reduced_content_index);
+    while(used_block_count--)
+    {
+        Longtail_Free(bindexes[used_block_count]);
+    }
+    Longtail_Free(bindexes);
+    if (err)
+    {
+        // TODO: log
+        return err;
+    }
+        
+    *out_reduced_content_index = reduced_content_index;
+
+    return 0;
+}
+
 uint32_t Longtail_BlockIndex_GetChunkCount(const struct Longtail_BlockIndex* block_index) { return *block_index->m_ChunkCount; }
 const uint32_t* Longtail_BlockIndex_GetChunkTag(const struct Longtail_BlockIndex* block_index) { return block_index->m_Tag; }
 const TLongtail_Hash* Longtail_BlockIndex_GetChunkHashes(const struct Longtail_BlockIndex* block_index) { return block_index->m_ChunkHashes; }

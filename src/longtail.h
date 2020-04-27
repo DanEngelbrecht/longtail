@@ -819,6 +819,10 @@ LONGTAIL_EXPORT int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
 
+int Longtail_ReduceContentIndex(
+    struct Longtail_VersionIndex* version_index,
+    struct Longtail_ContentIndex* full_content_index,
+    struct Longtail_ContentIndex** out_reduced_content_index);
 struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
