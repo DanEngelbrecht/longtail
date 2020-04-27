@@ -4452,3 +4452,173 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(storage_api);
 }
+
+TEST(Longtail, TestStripContentIndex)
+{
+    const uint32_t ASSET_COUNT = 9u;
+
+    const char* TEST_FILENAMES[] = {
+        "junk.txt"
+    };
+
+    const char* TEST_STRINGS[] = {
+        "A very long file that should be able to be recreated"
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+            "And in the end it is not the same, it is different, just because why not",
+        "A VERY LONG FILE THAT SHOULD BE ABLE TO BE RECREATED"
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 2 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 3 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 4 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 5 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 6 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 7 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 8 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 9 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 10 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 11 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 12 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 13 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 14 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 15 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 16 IN A LONG SEQUENCE OF STUFF."
+            "AND IN THE END IT IS NOT THE SAME, IT IS DIFFERENT, JUST BECAUSE WHY NOT"
+    };
+
+    const char* root_path_1 = "testdata1";
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    {
+        const char* file_name = storage_api->ConcatPath(storage_api, root_path_1, TEST_FILENAMES[0]);
+        ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, strlen(TEST_STRINGS[0]), TEST_STRINGS[0]));
+        storage_api->CloseFile(storage_api, w);
+        w = 0;
+        Longtail_Free((void*)file_name);
+    }
+
+    const char* root_path_2 = "testdata2";
+    {
+        const char* file_name = storage_api->ConcatPath(storage_api, root_path_2, TEST_FILENAMES[0]);
+        ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, strlen(TEST_STRINGS[1]), TEST_STRINGS[1]));
+        storage_api->CloseFile(storage_api, w);
+        w = 0;
+        Longtail_Free((void*)file_name);
+    }
+
+    struct Longtail_FileInfos* file_infos_1;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path_1, &file_infos_1));
+
+    struct Longtail_VersionIndex* version_index_1;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        root_path_1,
+        file_infos_1,
+        0,
+        128,
+        &version_index_1));
+    Longtail_Free(file_infos_1);
+
+    struct Longtail_FileInfos* file_infos_2;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path_1, &file_infos_2));
+
+    struct Longtail_VersionIndex* version_index_2;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        root_path_2,
+        file_infos_2,
+        0,
+        128,
+        &version_index_2));
+    Longtail_Free(file_infos_2);
+
+    struct Longtail_ContentIndex* content_index_1;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        version_index_1,
+        128,
+        128,
+        &content_index_1));
+
+    struct Longtail_ContentIndex* content_index_2;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        version_index_2,
+        128,
+        128,
+        &content_index_2));
+
+    struct Longtail_ContentIndex* full_content_index;
+    ASSERT_EQ(0, Longtail_MergeContentIndex(
+        content_index_1,
+        content_index_2,
+        &full_content_index));
+
+    ASSERT_LT(*content_index_1->m_BlockCount, *full_content_index->m_BlockCount);
+    ASSERT_LT(*content_index_2->m_BlockCount, *full_content_index->m_BlockCount);
+
+    struct Longtail_ContentIndex* stripped_content_index_1;
+    ASSERT_EQ(0, Longtail_StripContentIndex(
+        version_index_1,
+        full_content_index,
+        &stripped_content_index_1));
+
+    struct Longtail_ContentIndex* stripped_content_index_2;
+    ASSERT_EQ(0, Longtail_StripContentIndex(
+        version_index_2,
+        full_content_index,
+        &stripped_content_index_2));
+
+    ASSERT_EQ(*stripped_content_index_1->m_BlockCount, *content_index_1->m_BlockCount);
+    ASSERT_EQ(*stripped_content_index_2->m_BlockCount, *content_index_2->m_BlockCount);
+    ASSERT_EQ(0, Longtail_ValidateContent(stripped_content_index_1, version_index_1));
+    ASSERT_NE(0, Longtail_ValidateContent(stripped_content_index_1, version_index_2));
+    ASSERT_NE(0, Longtail_ValidateContent(stripped_content_index_2, version_index_1));
+    ASSERT_EQ(0, Longtail_ValidateContent(stripped_content_index_2, version_index_2));
+
+    Longtail_Free(stripped_content_index_2);
+
+    Longtail_Free(stripped_content_index_1);
+
+    Longtail_Free(full_content_index);
+
+    Longtail_Free(content_index_2);
+    Longtail_Free(content_index_1);
+
+    Longtail_Free(version_index_1);
+    Longtail_Free(version_index_2);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(storage_api);
+}
