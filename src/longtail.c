@@ -6594,9 +6594,13 @@ int Longtail_ReduceContentIndex(
     struct Longtail_ContentIndex* full_content_index,
     struct Longtail_ContentIndex** out_reduced_content_index)
 {
-    // TODO: log
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReduceContentIndex(%p, %p, %p)",
+        version_index, full_content_index, out_reduced_content_index)
+    LONGTAIL_VALIDATE_INPUT(version_index != 0, EINVAL)
+    LONGTAIL_VALIDATE_INPUT(full_content_index != 0, EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_reduced_content_index != 0, EINVAL)
 
-    // Map chunk hash to block index in full_content_index
+    // Map chunk hash to block index in full_content_index and build per-block chunk-index arrays
     uint64_t** block_chunks = 0;
     uint64_t full_content_block_count = *full_content_index->m_BlockCount;
     arrsetlen(block_chunks, full_content_block_count);
@@ -6611,6 +6615,7 @@ int Longtail_ReduceContentIndex(
         arrput(block_chunks[block_index], c);
     }
 
+    // Build list of required blocks required by version index
     uint64_t* used_block_indexes = 0;
     arrsetcap(used_block_indexes, full_content_block_count);
     uint32_t version_chunk_count = *version_index->m_ChunkCount;
@@ -6621,7 +6626,11 @@ int Longtail_ReduceContentIndex(
         intptr_t block_index_ptr = hmgeti(full_content_chunk_hash_to_block_index, chunk_hash);
         if (block_index_ptr == -1)
         {
-            // TODO: Log + Free
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) finding version chunk 0x%" PRIx64 " in content index failed with",
+                version_index, full_content_index, out_reduced_content_index,
+                chunk_hash,
+                ENOENT)
+
             arrfree(used_block_indexes);
             hmfree(block_hash_to_block_index);
             while(full_content_block_count--)
@@ -6630,7 +6639,7 @@ int Longtail_ReduceContentIndex(
             }
             arrfree(block_chunks);
             hmfree(full_content_chunk_hash_to_block_index);
-            return EINVAL;
+            return ENOENT;
         }
         uint64_t block_index = full_content_chunk_hash_to_block_index[block_index_ptr].value;
         intptr_t block_hash_ptr = hmgeti(block_hash_to_block_index, full_content_index->m_BlockHashes[block_index]);
@@ -6648,11 +6657,15 @@ int Longtail_ReduceContentIndex(
     uint64_t used_block_count = (uint64_t)arrlen(used_block_indexes);
     qsort(used_block_indexes, used_block_count, sizeof(uint64_t), CompareIndexes);
 
+    // Build list used of block indexes
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * used_block_count;
     struct Longtail_BlockIndex** bindexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
     if (!bindexes)
     {
-        // TODO: log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) Longtail_Alloc(" PRIu64 ") failed with %d",
+            version_index, full_content_index, out_reduced_content_index,
+            block_indexes_size,
+            ENOMEM)
         while(full_content_block_count--)
         {
             arrfree(block_chunks[full_content_block_count]);
@@ -6670,7 +6683,10 @@ int Longtail_ReduceContentIndex(
         void* block_index_mem = Longtail_Alloc(block_index_size);
         if (!block_index_mem)
         {
-            // TODO: log
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) Longtail_Alloc(" PRIu64 ") failed with %d",
+                version_index, full_content_index, out_reduced_content_index,
+                block_index_size,
+                ENOMEM)
             while(full_content_block_count--)
             {
                 arrfree(block_chunks[full_content_block_count]);
@@ -6721,10 +6737,13 @@ int Longtail_ReduceContentIndex(
     Longtail_Free(bindexes);
     if (err)
     {
-        // TODO: log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) Longtail_CreateContentIndexFromBlocks(%p, %p, " PRId64 ", %p, %p) failed with %d",
+            version_index, full_content_index, out_reduced_content_index,
+            *full_content_index->m_MaxBlockSize, *full_content_index->m_MaxChunksPerBlock, used_block_count, bindexes, &reduced_content_index,
+            err)
         return err;
     }
-        
+
     *out_reduced_content_index = reduced_content_index;
 
     return 0;
