@@ -6589,16 +6589,16 @@ static int CompareIndexes(const void * elem1, const void * elem2)
     return 0;
 }
 
-int Longtail_ReduceContentIndex(
+int Longtail_StripContentIndex(
     struct Longtail_VersionIndex* version_index,
     struct Longtail_ContentIndex* full_content_index,
-    struct Longtail_ContentIndex** out_reduced_content_index)
+    struct Longtail_ContentIndex** out_stripped_content_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ReduceContentIndex(%p, %p, %p)",
-        version_index, full_content_index, out_reduced_content_index)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_StripContentIndex(%p, %p, %p)",
+        version_index, full_content_index, out_stripped_content_index)
     LONGTAIL_VALIDATE_INPUT(version_index != 0, EINVAL)
     LONGTAIL_VALIDATE_INPUT(full_content_index != 0, EINVAL)
-    LONGTAIL_VALIDATE_INPUT(out_reduced_content_index != 0, EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_stripped_content_index != 0, EINVAL)
 
     // Map chunk hash to block index in full_content_index and build per-block chunk-index arrays
     uint64_t** block_chunks = 0;
@@ -6626,8 +6626,8 @@ int Longtail_ReduceContentIndex(
         intptr_t block_index_ptr = hmgeti(full_content_chunk_hash_to_block_index, chunk_hash);
         if (block_index_ptr == -1)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) finding version chunk 0x%" PRIx64 " in content index failed with",
-                version_index, full_content_index, out_reduced_content_index,
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_StripContentIndex(%p, %p, %p) finding version chunk 0x%" PRIx64 " in content index failed with",
+                version_index, full_content_index, out_stripped_content_index,
                 chunk_hash,
                 ENOENT)
 
@@ -6662,8 +6662,8 @@ int Longtail_ReduceContentIndex(
     struct Longtail_BlockIndex** bindexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
     if (!bindexes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) Longtail_Alloc(" PRIu64 ") failed with %d",
-            version_index, full_content_index, out_reduced_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_StripContentIndex(%p, %p, %p) Longtail_Alloc(" PRIu64 ") failed with %d",
+            version_index, full_content_index, out_stripped_content_index,
             block_indexes_size,
             ENOMEM)
         while(full_content_block_count--)
@@ -6683,8 +6683,8 @@ int Longtail_ReduceContentIndex(
         void* block_index_mem = Longtail_Alloc(block_index_size);
         if (!block_index_mem)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) Longtail_Alloc(" PRIu64 ") failed with %d",
-                version_index, full_content_index, out_reduced_content_index,
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_StripContentIndex(%p, %p, %p) Longtail_Alloc(" PRIu64 ") failed with %d",
+                version_index, full_content_index, out_stripped_content_index,
                 block_index_size,
                 ENOMEM)
             while(full_content_block_count--)
@@ -6723,13 +6723,13 @@ int Longtail_ReduceContentIndex(
     arrfree(used_block_indexes);
     used_block_indexes = 0;
 
-    struct Longtail_ContentIndex* reduced_content_index;
+    struct Longtail_ContentIndex* stripped_content_index;
     int err = Longtail_CreateContentIndexFromBlocks(
         *full_content_index->m_MaxBlockSize,
         *full_content_index->m_MaxChunksPerBlock,
         used_block_count,
         bindexes,
-        &reduced_content_index);
+        &stripped_content_index);
     while(used_block_count--)
     {
         Longtail_Free(bindexes[used_block_count]);
@@ -6737,14 +6737,14 @@ int Longtail_ReduceContentIndex(
     Longtail_Free(bindexes);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReduceContentIndex(%p, %p, %p) Longtail_CreateContentIndexFromBlocks(%p, %p, " PRId64 ", %p, %p) failed with %d",
-            version_index, full_content_index, out_reduced_content_index,
-            *full_content_index->m_MaxBlockSize, *full_content_index->m_MaxChunksPerBlock, used_block_count, bindexes, &reduced_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_StripContentIndex(%p, %p, %p) Longtail_CreateContentIndexFromBlocks(%p, %p, " PRId64 ", %p, %p) failed with %d",
+            version_index, full_content_index, out_stripped_content_index,
+            *full_content_index->m_MaxBlockSize, *full_content_index->m_MaxChunksPerBlock, used_block_count, bindexes, &stripped_content_index,
             err)
         return err;
     }
 
-    *out_reduced_content_index = reduced_content_index;
+    *out_stripped_content_index = stripped_content_index;
 
     return 0;
 }
