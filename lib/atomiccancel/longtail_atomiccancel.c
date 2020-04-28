@@ -17,6 +17,9 @@ static int AtomicCancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Lo
     TLongtail_Atomic32* atomic_counter = (TLongtail_Atomic32*)Longtail_Alloc(sizeof(sizeof(TLongtail_Atomic32)));
     if (!atomic_counter)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AtomicCancelAPI_CreateToken(%p, %p) failed with %d",
+            cancel_api, out_token,
+            ENOMEM)
         return ENOMEM;
     }
     *atomic_counter = 0;

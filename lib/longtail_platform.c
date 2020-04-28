@@ -486,7 +486,7 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
     return 0;
 }
 
-int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions)
+int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, int* out_is_dir)
 {
     DWORD high = fs_iterator->m_FindData.nFileSizeHigh;
     DWORD low = fs_iterator->m_FindData.nFileSizeLow;
@@ -495,6 +495,11 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
         permissions = permissions | Longtail_StorageAPI_UserExecuteAccess | Longtail_StorageAPI_GroupExecuteAccess | Longtail_StorageAPI_OtherExecuteAccess;
+        *out_is_dir = 1;
+    }
+    else
+    {
+        *out_is_dir = 0;
     }
     if ((fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_READONLY) == 0)
     {
@@ -1294,7 +1299,7 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
     return fs_iterator->m_DirEntry->d_name;
 }
 
-int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions)
+int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, int* out_is_dir)
 {
     size_t dir_len = strlen(fs_iterator->m_DirPath);
     size_t file_len = strlen(fs_iterator->m_DirEntry->d_name);
@@ -1309,6 +1314,14 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
     {
         *out_size = (uint64_t)stat_buf.st_size;
         *out_permissions = (uint16_t)stat_buf.st_mode;
+        if ((stat_buf.st_mode & S_IFDIR) == S_IFDIR)
+        {
+            *out_is_dir = 1;
+        }
+        else
+        {
+            *out_is_dir = 0;
+        }
     }
     else
     {

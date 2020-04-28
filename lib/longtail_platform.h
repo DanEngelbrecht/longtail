@@ -60,7 +60,7 @@ int         Longtail_FindNext(HLongtail_FSIterator fs_iterator);
 void        Longtail_CloseFind(HLongtail_FSIterator fs_iterator);
 const char* Longtail_GetFileName(HLongtail_FSIterator fs_iterator);
 const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator);
-int         Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions);
+int         Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, int* out_is_dir);
 
 typedef struct Longtail_OpenFile_private* HLongtail_OpenFile;
 

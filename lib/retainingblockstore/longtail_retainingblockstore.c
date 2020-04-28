@@ -61,9 +61,8 @@ struct RetainedStoredBlock* RetainedStoredBlock_CreateBlock(struct RetainingBloc
     struct RetainedStoredBlock* retained_stored_block = (struct RetainedStoredBlock*)Longtail_Alloc(retained_stored_block_size);
     if (!retained_stored_block)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainedStoredBlock_CreateBlock(%p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainedStoredBlock_CreateBlock(%p, %p) failed with %d",
             retaining_block_store_api, original_stored_block,
-            retained_stored_block_size,
             ENOMEM)
         return 0;
     }
@@ -125,9 +124,8 @@ static int RetainingBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block
     retainingblockstore_api->m_BlockHashes = (TLongtail_Hash*)Longtail_Alloc(block_hashes_size);
     if (!retainingblockstore_api->m_BlockHashes)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) failed with %d",
             block_store_api, block_count, block_hashes, block_ref_counts,
-            block_hashes_size,
             ENOMEM)
         return ENOMEM;
     }
@@ -136,9 +134,8 @@ static int RetainingBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block
     retainingblockstore_api->m_BlockRetainCounts = (TLongtail_Atomic32*)Longtail_Alloc(block_retain_counts_size);
     if (!retainingblockstore_api->m_BlockRetainCounts)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) failed with %d",
             block_store_api, block_count, block_hashes, block_ref_counts,
-            block_retain_counts_size,
             ENOMEM)
         Longtail_Free(retainingblockstore_api->m_BlockHashes);
         return ENOMEM;
@@ -148,9 +145,8 @@ static int RetainingBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block
     retainingblockstore_api->m_RetainedStoredBlocks = (struct RetainedStoredBlock**)Longtail_Alloc(retained_stored_blocks_size);
     if (!retainingblockstore_api->m_RetainedStoredBlocks)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_PreflightGet(%p, %" PRIu64 ", %p, %p) failed with %d",
             block_store_api, block_count, block_hashes, block_ref_counts,
-            retained_stored_blocks_size,
             ENOMEM)
         Longtail_Free((void*)retainingblockstore_api->m_BlockRetainCounts);
         Longtail_Free(retainingblockstore_api->m_BlockHashes);
@@ -273,9 +269,8 @@ static int RetainingBlockStore_GetStoredBlock(
         struct RetainingBlockStore_AsyncGetStoredBlockAPI* retaining_lock_store_async_get_stored_block_API = (struct RetainingBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(retaining_lock_store_async_get_stored_block_API_size);
         if (!retaining_lock_store_async_get_stored_block_API)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RetainingBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
                 block_store_api, block_hash, async_complete_api,
-                retaining_lock_store_async_get_stored_block_API_size,
                 ENOMEM)
             return ENOMEM;
         }
@@ -391,8 +386,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateRetainingBlockStoreAPI(
     struct RetainingBlockStoreAPI* api = (struct RetainingBlockStoreAPI*)Longtail_Alloc(api_size);
     if (!api)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateRetainingBlockStoreAPI(%p) Longtail_Alloc(%" PRIu64 ") failed with, %d",
-            backing_block_store,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateRetainingBlockStoreAPI(%p) failed with %d",
             api_size,
             ENOMEM)
         return 0;
