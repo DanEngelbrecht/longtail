@@ -224,8 +224,6 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_StartFindFunc start_find_func,
     Longtail_Storage_FindNextFunc find_next_func,
     Longtail_Storage_CloseFindFunc close_find_func,
-    Longtail_Storage_GetFileNameFunc get_file_name_func,
-    Longtail_Storage_GetDirectoryNameFunc get_directory_name_func,
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func)
 {
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
@@ -249,8 +247,6 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->StartFind = start_find_func;
     api->FindNext = find_next_func;
     api->CloseFind = close_find_func;
-    api->GetFileName = get_file_name_func;
-    api->GetDirectoryName = get_directory_name_func;
     api->GetEntryProperties = get_entry_properties_func;
     return api;
 }
@@ -273,9 +269,7 @@ int Longtail_Storage_RemoveFile(struct Longtail_StorageAPI* storage_api, const c
 int Longtail_Storage_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator) { return storage_api->StartFind(storage_api, path, out_iterator); }
 int Longtail_Storage_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { return storage_api->FindNext(storage_api, iterator); }
 void Longtail_Storage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { storage_api->CloseFind(storage_api, iterator); }
-const char* Longtail_Storage_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { return storage_api->GetFileName(storage_api, iterator); }
-const char* Longtail_Storage_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { return storage_api->GetDirectoryName(storage_api, iterator); }
-int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions) { return storage_api->GetEntryProperties(storage_api, iterator, out_size, out_permissions); }
+int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties) { return storage_api->GetEntryProperties(storage_api, iterator, out_properties); }
 
 uint64_t Longtail_GetProgressAPISize()
 {
@@ -607,7 +601,7 @@ struct HashToIndexItem
     uint64_t value;
 };
 
-typedef int (*ProcessEntry)(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size, uint16_t permissions);
+typedef int (*ProcessEntry)(void* context, const char* root_path, const struct Longtail_StorageAPI_EntryProperties* properties);
 
 static int RecurseTree(
     struct Longtail_StorageAPI* storage_api,
@@ -666,61 +660,41 @@ static int RecurseTree(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) storage_api->StartFind(%p, %s, %p)", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, asset_folder, &fs_iterator)
         while(err == 0)
         {
-            const char* dir_name = storage_api->GetDirectoryName(storage_api, fs_iterator);
-            if (dir_name)
+            struct Longtail_StorageAPI_EntryProperties properties;
+            err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
+            if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) storage_api->GetDirectoryName(%p, %p) found directory `%s` in `%s`", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, fs_iterator, dir_name, asset_folder)
-                uint64_t size;
-                uint16_t permissions;
-                err = storage_api->GetEntryProperties(storage_api, fs_iterator, &size, &permissions);
-                if (err)
-                {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) storage_api->GetEntryProperties(%p, %s, %p, %p) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, (void*)storage_api, dir_name, (void*)&size, (void*)&permissions, err)
-                    break;
-                }
-                if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, dir_name, 1, size, permissions))
-                {
-                    err = entry_processor(context, asset_folder, dir_name, 1, size, permissions);
-                    if (err)
-                    {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 1, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, dir_name, size, permissions, err)
-                        break;
-                    }
-                    if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
-                    {
-                        if (folder_index > 0)
-                        {
-                            uint32_t unprocessed_count = (uint32_t)(arrlen(folder_paths) - folder_index);
-                            memmove(folder_paths, &folder_paths[folder_index], sizeof(const char*) * unprocessed_count);
-                            arrsetlen(folder_paths, unprocessed_count);
-                            folder_index = 0;
-                        }
-                    }
-                    arrput(folder_paths, storage_api->ConcatPath(storage_api, asset_folder, dir_name));
-                }
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) storage_api->GetEntryProperties(%p, %p, %p) failed with %d",
+                    (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
+                    storage_api, fs_iterator, &properties,
+                    err)
             }
             else
             {
-                const char* file_name = storage_api->GetFileName(storage_api, fs_iterator);
-                if (file_name)
+                if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, properties.m_Name, properties.m_IsDir, properties.m_Size, properties.m_Permissions))
                 {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) storage_api->GetFileName(%p, %p) found file `%s` in `%s`", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, fs_iterator, file_name, asset_folder)
-                    uint64_t size;
-                    uint16_t permissions;
-                    err = storage_api->GetEntryProperties(storage_api, fs_iterator, &size, &permissions);
+                    err = entry_processor(context, asset_folder, &properties);
                     if (err)
                     {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) storage_api->GetEntryProperties(%p, %s, %p, %p) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, (void*)storage_api, file_name, (void*)&size, (void*)&permissions, err)
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) entry_processor(%p, %s, %p) failed with %d",
+                            (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
+                            context, asset_folder, &properties,
+                            err)
                         break;
                     }
-                    if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, file_name, 0, size, permissions))
+                    if (properties.m_IsDir)
                     {
-                        err = entry_processor(context, asset_folder, file_name, 0, size, permissions);
-                        if (err)
+                        if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
                         {
-                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %s, %p, %p) entry_processor(%p, %s, %s, 0, %" PRIu64 ", %u) failed with %d", (void*)storage_api, root_folder, (void*)entry_processor, context, context, asset_folder, file_name, size, permissions, err)
-                            break;
+                            if (folder_index > 0)
+                            {
+                                uint32_t unprocessed_count = (uint32_t)(arrlen(folder_paths) - folder_index);
+                                memmove(folder_paths, &folder_paths[folder_index], sizeof(const char*) * unprocessed_count);
+                                arrsetlen(folder_paths, unprocessed_count);
+                                folder_index = 0;
+                            }
                         }
+                        arrput(folder_paths, storage_api->ConcatPath(storage_api, asset_folder, properties.m_Name));
                     }
                 }
             }
@@ -887,25 +861,24 @@ struct AddFile_Context {
     struct Longtail_FileInfos* m_FileInfos;
 };
 
-static int AddFile(void* context, const char* root_path, const char* file_name, int is_dir, uint64_t size, uint16_t permissions)
+static int AddFile(void* context, const char* root_path, const struct Longtail_StorageAPI_EntryProperties* properties)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(root_path != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(file_name != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(properties != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(properties->m_Name != 0, return EINVAL)
     struct AddFile_Context* paths_context = (struct AddFile_Context*)context;
     struct Longtail_StorageAPI* storage_api = paths_context->m_StorageAPI;
 
-    char* full_path = storage_api->ConcatPath(storage_api, root_path, file_name);
-    if (is_dir)
+    char* full_path = storage_api->ConcatPath(storage_api, root_path, properties->m_Name);
+    if (properties->m_IsDir)
     {
         uint32_t path_length = (uint32_t)strlen(full_path);
         size_t full_dir_path_size = path_length + 1 + 1;
         char* full_dir_path = (char*)Longtail_Alloc(full_dir_path_size);
         if (!full_dir_path)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %" PRIu64 ", %u) Longtail_Alloc(%" PRIu64 ") failed with %d",
-                context, root_path, file_name, is_dir, size, permissions,
-                full_dir_path_size,
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %" PRIu64 ", %u) failed with %d",
+                context, root_path, properties->m_Name, properties->m_IsDir, properties->m_Size, properties->m_Permissions,
                 ENOMEM)
             return ENOMEM;
         }
@@ -922,12 +895,11 @@ static int AddFile(void* context, const char* root_path, const char* file_name, 
         ++s;
     }
 
-    int err = AppendPath(&paths_context->m_FileInfos, s, size, permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
+    int err = AppendPath(&paths_context->m_FileInfos, s, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %" PRIu64 ", %u) AppendPath(%p, %s, %" PRIu64 ", %u, %p, %p, %u, %u) failed with %d",
-            context, root_path, file_name, is_dir, size, permissions,
-            &paths_context->m_FileInfos, s, size, permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %" PRIu64 ", %u) failed with %d",
+            context, root_path, properties->m_Name, properties->m_IsDir, properties->m_Size, properties->m_Permissions,
             err)
         Longtail_Free(full_path);
         return err;

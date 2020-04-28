@@ -215,6 +215,14 @@ enum {
     Longtail_StorageAPI_UserReadAccess      = 0400
 };
 
+struct Longtail_StorageAPI_EntryProperties
+{
+    const char* m_Name;
+    uint64_t m_Size;
+    uint16_t m_Permissions;
+    int m_IsDir;
+};
+
 struct Longtail_StorageAPI;
 
 typedef int (*Longtail_Storage_OpenReadFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
@@ -235,9 +243,7 @@ typedef int (*Longtail_Storage_RemoveFileFunc)(struct Longtail_StorageAPI* stora
 typedef int (*Longtail_Storage_StartFindFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator);
 typedef int (*Longtail_Storage_FindNextFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 typedef void (*Longtail_Storage_CloseFindFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-typedef const char* (*Longtail_Storage_GetFileNameFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-typedef const char* (*Longtail_Storage_GetDirectoryNameFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions);
+typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
 
 struct Longtail_StorageAPI
 {
@@ -260,8 +266,6 @@ struct Longtail_StorageAPI
     Longtail_Storage_StartFindFunc StartFind;
     Longtail_Storage_FindNextFunc FindNext;
     Longtail_Storage_CloseFindFunc CloseFind;
-    Longtail_Storage_GetFileNameFunc GetFileName;
-    Longtail_Storage_GetDirectoryNameFunc GetDirectoryName;
     Longtail_Storage_GetEntryPropertiesFunc GetEntryProperties;
 };
 
@@ -288,8 +292,6 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_StartFindFunc start_find_func,
     Longtail_Storage_FindNextFunc find_next_func,
     Longtail_Storage_CloseFindFunc close_find_func,
-    Longtail_Storage_GetFileNameFunc get_file_name_func,
-    Longtail_Storage_GetDirectoryNameFunc get_directory_name_func,
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
@@ -310,9 +312,7 @@ LONGTAIL_EXPORT int Longtail_Storage_RemoveFile(struct Longtail_StorageAPI* stor
 LONGTAIL_EXPORT int Longtail_Storage_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator);
 LONGTAIL_EXPORT int Longtail_Storage_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 LONGTAIL_EXPORT void Longtail_Storage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-LONGTAIL_EXPORT const char* Longtail_Storage_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-LONGTAIL_EXPORT const char* Longtail_Storage_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions);
+LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
 
 ////////////// Longtail_ProgressAPI
 

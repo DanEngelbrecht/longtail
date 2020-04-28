@@ -545,23 +545,25 @@ static const char* InMemStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* 
     return instance->m_PathEntries[*i].m_FileName;
 }
 
-static int InMemStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions)
+static int InMemStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)
 {
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(iterator != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(out_size != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(out_permissions != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(out_properties != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t* i = (uint32_t*)iterator;
     if (instance->m_PathEntries[*i].m_Content == 0)
     {
-        *out_size = 0;
+        out_properties->m_Size = 0;
+        out_properties->m_IsDir = 1;
     }
     else
     {
-        *out_size = (uint64_t)arrlen(instance->m_PathEntries[*i].m_Content);
+        out_properties->m_Size = (uint64_t)arrlen(instance->m_PathEntries[*i].m_Content);
+        out_properties->m_IsDir = 0;
     }
-    *out_permissions = instance->m_PathEntries[*i].m_Permissions;
+    out_properties->m_Permissions = instance->m_PathEntries[*i].m_Permissions;
+    out_properties->m_Name = instance->m_PathEntries[*i].m_FileName;
     return 0;
 }
 
@@ -586,8 +588,6 @@ static int InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_InMemStorageAPI.StartFind = InMemStorageAPI_StartFind;
     storage_api->m_InMemStorageAPI.FindNext = InMemStorageAPI_FindNext;
     storage_api->m_InMemStorageAPI.CloseFind = InMemStorageAPI_CloseFind;
-    storage_api->m_InMemStorageAPI.GetFileName = InMemStorageAPI_GetFileName;
-    storage_api->m_InMemStorageAPI.GetDirectoryName = InMemStorageAPI_GetDirectoryName;
     storage_api->m_InMemStorageAPI.GetEntryProperties = InMemStorageAPI_GetEntryProperties;
 
     storage_api->m_PathHashToContent = 0;

@@ -2762,9 +2762,15 @@ static void Bench()
         {
             do
             {
-                const char* file_name = storage_api->GetFileName(storage_api, fs_iterator);
-                if (file_name)
+                struct Longtail_StorageAPI_EntryProperties properties;
+                err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
+                if (err)
                 {
+                    continue;
+                }
+                if (!properties.m_IsDir)
+                {
+                    const char* file_name = properties.m_Name;
                     char* target_path = storage_api->ConcatPath(storage_api, CONTENT_FOLDER, file_name);
 
                     Longtail_StorageAPI_HOpenFile v;
