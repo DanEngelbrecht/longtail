@@ -5993,7 +5993,7 @@ int Longtail_MergeContentIndex(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) failed with %d",
             local_content_index, new_content_index, out_content_index,
-            __sys_errlist)
+            err)
         Longtail_Free(compact_content_index);
         hmfree(block_hash_to_block_index);
         Longtail_Free(compact_chunk_sizes);
