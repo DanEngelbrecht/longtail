@@ -127,6 +127,12 @@ static void BrotliCompressionAPI_Init(struct BrotliCompressionAPI* compression_a
 struct Longtail_CompressionAPI* Longtail_CreateBrotliCompressionAPI()
 {
     struct BrotliCompressionAPI* compression_api = (struct BrotliCompressionAPI*)Longtail_Alloc(sizeof(struct BrotliCompressionAPI));
+    if (!compression_api)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBrotliCompressionAPI() failed with %d",
+            ENOMEM)
+        return 0;
+    }
     BrotliCompressionAPI_Init(compression_api);
     return &compression_api->m_BrotliCompressionAPI;
 }

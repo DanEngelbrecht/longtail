@@ -4,6 +4,7 @@
 #include "ext/common/zstd_errors.h"
 
 #include <errno.h>
+#include <inttypes.h>
 
 
 const int LONGTAIL_ZSTD_MIN_COMPRESSION_LEVEL      = 0;
@@ -54,6 +55,10 @@ int ZStdCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api,
     size_t size = ZSTD_compress( compressed, max_compressed_size, uncompressed, uncompressed_size, compression_setting);
     if (ZSTD_isError(size))
     {
+        int err = ZSTD_getErrorCode(size);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ZStdCompressionAPI_Compress(%p, %u, %p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+            compression_api, settings_id, uncompressed, compressed, uncompressed_size, max_compressed_size, out_compressed_size,
+            err);
         return EINVAL;
     }
     *out_compressed_size = size;
@@ -83,6 +88,12 @@ static void ZStdCompressionAPI_Init(struct ZStdCompressionAPI* compression_api)
 struct Longtail_CompressionAPI* Longtail_CreateZStdCompressionAPI()
 {
     struct ZStdCompressionAPI* compression_api = (struct ZStdCompressionAPI*)Longtail_Alloc(sizeof(struct ZStdCompressionAPI));
+    if (!compression_api)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateZStdCompressionAPI() failed with %d",
+            ENOMEM)
+        return 0;
+    }
     ZStdCompressionAPI_Init(compression_api);
     return &compression_api->m_ZStdCompressionAPI;
 }

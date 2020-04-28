@@ -63,9 +63,8 @@ struct Longtail_HashRegistryAPI* Longtail_CreateDefaultHashRegistry(
     void* mem = Longtail_Alloc(registry_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateDefaultHashRegistry(%u, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with, %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateDefaultHashRegistry(%u, %p, %p) failed with %d",
             hash_type_count, hash_types, hash_apis,
-            registry_size,
             ENOMEM)
         return 0;
     }

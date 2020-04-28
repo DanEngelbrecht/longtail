@@ -69,9 +69,8 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
     void* mem = Longtail_Alloc(registry_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateDefaultCompressionRegistry(%u, %p, %p, %p) Longtail_Alloc(%" PRIu64 ") failed with, %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateDefaultCompressionRegistry(%u, %p, %p, %p) failed with %d",
             compression_type_count, compression_types, compression_apis, compression_settings,
-            registry_size,
             ENOMEM)
         return 0;
     }

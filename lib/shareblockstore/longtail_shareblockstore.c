@@ -70,9 +70,8 @@ struct SharedStoredBlock* SharedStoredBlock_CreateBlock(struct ShareBlockStoreAP
     struct SharedStoredBlock* shared_stored_block = (struct SharedStoredBlock*)Longtail_Alloc(shared_stored_block_size);
     if (!shared_stored_block)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SharedStoredBlock_CreateBlock(%p, %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SharedStoredBlock_CreateBlock(%p, %p) failed with %d",
             sharing_block_store_api, original_stored_block,
-            shared_stored_block_size,
             ENOMEM)
         return 0;
     }
@@ -197,7 +196,8 @@ static int ShareBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)",
+        block_store_api, block_hash, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
@@ -234,9 +234,8 @@ static int ShareBlockStore_GetStoredBlock(
     struct ShareBlockStore_AsyncGetStoredBlockAPI* share_lock_store_async_get_stored_block_API = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(share_lock_store_async_get_stored_block_API_size);
     if (!share_lock_store_async_get_stored_block_API)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) Longtail_Alloc(%" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
             block_store_api, block_hash, async_complete_api,
-            share_lock_store_async_get_stored_block_API_size,
             ENOMEM)
         return ENOMEM;
     }
@@ -253,7 +252,10 @@ static int ShareBlockStore_GetStoredBlock(
         &share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI);
     if (err)
     {
-        // TODO: Log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
+            block_store_api, block_hash, async_complete_api,
+            err)
+
         struct Longtail_AsyncGetStoredBlockAPI** list;
         Longtail_LockSpinLock(api->m_Lock);
         list = hmget(api->m_BlockHashToCompleteCallbacks, block_hash);
@@ -267,7 +269,7 @@ static int ShareBlockStore_GetStoredBlock(
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        return 0;
+        return err;
     }
     return 0;
 }
@@ -282,9 +284,17 @@ static int ShareBlockStore_GetIndex(
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
-    return api->m_BackingBlockStore->GetIndex(
+    int err = api->m_BackingBlockStore->GetIndex(
         api->m_BackingBlockStore,
         async_complete_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetIndex(%p, %p) failed with %d",
+            block_store_api, async_complete_api,
+            err)
+        return err;
+    }
+    return 0;
 }
 
 static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
@@ -339,6 +349,9 @@ static int ShareBlockStore_Init(
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p, %p) failed with %d",
+            api, backing_block_store,
+            ENOMEM)
         return err;
     }
     return 0;
@@ -354,9 +367,8 @@ struct Longtail_BlockStoreAPI* Longtail_CreateShareBlockStoreAPI(
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)Longtail_Alloc(api_size);
     if (!api)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p) Longtail_Alloc(%" PRIu64 ") failed with, %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p) failed with %d",
             backing_block_store,
-            api_size,
             ENOMEM)
         return 0;
     }
@@ -365,6 +377,9 @@ struct Longtail_BlockStoreAPI* Longtail_CreateShareBlockStoreAPI(
         backing_block_store);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p) failed with %d",
+            backing_block_store,
+            err)
         Longtail_Free(api);
         return 0;
     }

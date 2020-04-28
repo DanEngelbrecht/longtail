@@ -25,12 +25,17 @@ static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_H
     blake2s_state* state = (blake2s_state*)Longtail_Alloc(sizeof(blake2s_state));
     if (!state)
     {
-        // TODO: Log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Blake2Hash_BeginContext(%p, %p) failed with %d",
+            hash_api, out_context,
+            ENOMEM)
         return ENOMEM;
     }
     int err = blake2s_init( state, sizeof(uint64_t));
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Blake2Hash_BeginContext(%p, %p) failed with %d",
+            hash_api, out_context,
+            err)
         Longtail_Free(state);
         return err;
     }
@@ -56,6 +61,9 @@ static uint64_t Blake2Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtai
     int err = blake2s_final(state, &hash, sizeof(uint64_t));
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Blake2Hash_EndContext(%p, %p) failed with %d",
+            hash_api, context,
+            err)
         return 0;
     }
 	Longtail_Free(state);
@@ -92,7 +100,8 @@ struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
     struct Blake2HashAPI* blake2_hash = (struct Blake2HashAPI*)Longtail_Alloc(sizeof(struct Blake2HashAPI));
     if (!blake2_hash)
     {
-        // TOOD: Log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlake2HashAPI() failed with %d",
+            ENOMEM)
         return 0;
     }
     Blake2Hash_Init(blake2_hash);

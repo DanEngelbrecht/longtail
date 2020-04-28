@@ -25,7 +25,9 @@ static int Blake3Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_H
     blake3_hasher* hasher = (blake3_hasher*)Longtail_Alloc(sizeof(blake3_hasher));
     if (!hasher)
     {
-        // TODO: Log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Blake3Hash_BeginContext(%p, %p) failed with %d",
+            hash_api, out_context,
+            ENOMEM)
         return ENOMEM;
     }
     blake3_hasher_init(hasher);
@@ -86,7 +88,8 @@ struct Longtail_HashAPI* Longtail_CreateBlake3HashAPI()
     struct Blake3HashAPI* blake3_hash = (struct Blake3HashAPI*)Longtail_Alloc(sizeof(struct Blake3HashAPI));
     if (!blake3_hash)
     {
-        // TODO: Log
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlake3HashAPI() failed with %d",
+            ENOMEM)
         return 0;
     }
     Blake3Hash_Init(blake3_hash);
