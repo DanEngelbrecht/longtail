@@ -109,6 +109,8 @@ jobs:
             - `Longtail_ChangeVersion`
           - New Longtail_CancelAPI implementation `AtomicCancelAPI`
           - Added `Longtail_StripContentIndex` - build a minimal content index for a version index from a full content index
+          - *BREAKING API* Replaced Longtail_Storage_GetFileName and Longtail_Storage_GetDirectoryName with Longtail_Storage_GetEntryProperties
+          - Improved logging
         draft: false
         prerelease: false
     - name: Download Linux artifacts
