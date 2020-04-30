@@ -47,6 +47,10 @@ if [ ! -e "$BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB" ]; then
     BUILD_THIRD_PARTY="build-third-party"
 fi
 
+if [ $TARGET_TYPE == "SHAREDLIB" ]; then
+    export OPT="$OPT -fPIC -fvisibility=hidden"
+fi
+
 mkdir -p $BASE_DIR/build/third-party-$RELEASE_MODE
 
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
@@ -58,15 +62,25 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     cd $BASE_DIR
 fi
 
-if [ "$TARGET_MODE" = "lib" ]; then
-    mkdir -p $BASE_DIR/build/lib-$RELEASE_MODE
-    rm -rf $BASE_DIR/build/lib-$RELEASE_MODE/*.o
-    cd $BASE_DIR/build/lib-$RELEASE_MODE
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
-    echo $BASE_DIR/build/$TARGET
-    ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
-    cd $BASE_DIR
-else
+if [ $TARGET_TYPE == "EXECUTABLE" ]; then
     echo Building $OUTPUT
     clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi
+
+if [ $TARGET_TYPE == "SHAREDLIB" ]; then
+    echo Building lib${OUTPUT}.so
+    clang++ -shared -o $BASE_DIR/build/lib${OUTPUT}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+fi
+
+#if [ "$TARGET_MODE" = "lib" ]; then
+#    mkdir -p $BASE_DIR/build/lib-$RELEASE_MODE
+#    rm -rf $BASE_DIR/build/lib-$RELEASE_MODE/*.o
+#    cd $BASE_DIR/build/lib-$RELEASE_MODE
+#    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+#    echo $BASE_DIR/build/$TARGET
+#    ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
+#    cd $BASE_DIR
+#else
+#    echo Building $OUTPUT
+#    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+#fi

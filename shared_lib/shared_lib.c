@@ -1,6 +1,9 @@
 #if defined(_WIN32)
 #define LONGTAIL_EXPORT __declspec(dllexport)
 #endif
+#if defined(__GNUC__)
+#define LONGTAIL_EXPORT __attribute__ ((visibility ("default")))
+#endif
 
 #include "../src/longtail.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
@@ -30,3 +33,17 @@ BOOL WINAPI DllMain(
 }
 
 #endif
+
+#if defined(__GNUC__)
+void __attribute__ ((constructor)) initLibrary(void) {
+ //
+ // Function that is called when the library is loaded
+ //
+}
+void __attribute__ ((destructor)) cleanUpLibrary(void) {
+ //
+ // Function that is called when the library is »closed«.
+ //
+}
+#endif
+
