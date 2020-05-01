@@ -358,7 +358,12 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
     {
         progressAPI->OnProgress(progressAPI, (uint32_t)bikeshed_job_group->m_SubmittedJobCount, (uint32_t)bikeshed_job_group->m_SubmittedJobCount);
     }
+    int is_cancelled = bikeshed_job_group->m_Cancelled;
     Longtail_Free(job_group);
+    if (is_cancelled)
+    {
+        return ECANCELED;
+    }
     return 0;
 }
 

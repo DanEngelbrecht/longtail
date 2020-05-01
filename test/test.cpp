@@ -4445,7 +4445,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     ASSERT_EQ(0, job_api->CreateJobs(job_api, job_group, 1, job_funcs, job_ctxs, &jobs));
     ASSERT_EQ(0, job_api->ReadyJobs(job_api, 1, jobs));
     ASSERT_EQ(0, cancel_api->Cancel(cancel_api, cancel_token));
-    ASSERT_EQ(0, job_api->WaitForAllJobs(job_api, job_group, 0, cancel_api, cancel_token));
+    ASSERT_EQ(ECANCELED, job_api->WaitForAllJobs(job_api, job_group, 0, cancel_api, cancel_token));
 
     ASSERT_EQ(ECANCELED, job_context.err);
     ASSERT_EQ((Longtail_VersionIndex*)0, vindex);

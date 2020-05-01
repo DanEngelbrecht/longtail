@@ -226,6 +226,15 @@ static int ReadContent(
     }
 
     err = job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
+    if (err)
+    {
+        LONGTAIL_LOG(err == ECANCELED ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) failed with %d",
+            storage_api, job_api, content_path, out_content_index,
+            err)
+        Longtail_Free(scan_jobs);
+        Longtail_Free(file_infos);
+        return err;
+    }
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (path_count);
