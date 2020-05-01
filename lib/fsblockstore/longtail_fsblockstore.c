@@ -104,7 +104,7 @@ int EndsWith(const char *str, const char *suffix)
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
-static int ScanBlock(void* context, uint32_t job_id)
+static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return 0)
 
@@ -225,7 +225,7 @@ static int ReadContent(
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_group, 0);
+    err = job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (path_count);
