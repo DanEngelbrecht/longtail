@@ -4377,6 +4377,22 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id)
     if (job->m_Err == 0 && job->m_CancelAPI && job->m_CancelToken && job->m_CancelAPI->IsCancelled(job->m_CancelAPI, job->m_CancelToken) == ECANCELED)
     {
         job->m_Err = ECANCELED;
+        for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WritePartialAssetFromBlocks(%p, %u) failed with %d",
+                context, job_id,
+                job->m_Err)
+            if (stored_block[d] && stored_block[d]->Dispose)
+            {
+                stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
+            }
+        }
+        if (job->m_AssetOutputFile)
+        {
+            job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+            job->m_AssetOutputFile = 0;
+        }
         return 0;
     }
 
