@@ -130,6 +130,7 @@ struct Bikeshed_JobAPI_Group
     struct JobWrapper* m_ReservedJobs;
     Bikeshed_TaskID* m_ReservedTasksIDs;
     uint32_t m_ReservedJobCount;
+    int32_t volatile m_Cancelled;
     int32_t volatile m_SubmittedJobCount;
     int32_t volatile m_PendingJobCount;
     int32_t volatile m_JobsCompleted;
@@ -157,6 +158,7 @@ struct Bikeshed_JobAPI_Group* CreateJobGroup(struct BikeshedJobAPI* job_api, uin
     p += sizeof(Bikeshed_TaskID) * job_count;
     job_group->m_API = job_api;
     job_group->m_ReservedJobCount = job_count;
+    job_group->m_Cancelled = 0;
     job_group->m_PendingJobCount = 0;
     job_group->m_SubmittedJobCount = 0;
     job_group->m_JobsCompleted = 0;
@@ -175,7 +177,8 @@ static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task
     LONGTAIL_FATAL_ASSERT(shed, return (enum Bikeshed_TaskResult)-1)
     LONGTAIL_FATAL_ASSERT(context, return (enum Bikeshed_TaskResult)-1)
     struct JobWrapper* wrapper = (struct JobWrapper*)context;
-    int res = wrapper->m_JobFunc(wrapper->m_Context, task_id);
+    int is_cancelled = (int)wrapper->m_JobGroup->m_Cancelled;
+    int res = wrapper->m_JobFunc(wrapper->m_Context, task_id, is_cancelled);
     if (res == EBUSY)
     {
         return BIKESHED_TASK_RESULT_BLOCKED;
@@ -324,7 +327,7 @@ static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_coun
     return 0;
 }
 
-static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI)
+static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Bikeshed_WaitForAllJobs(%p, %p)", job_api, progressAPI)
     LONGTAIL_VALIDATE_INPUT(job_api, return EINVAL)
@@ -336,6 +339,10 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
         if (progressAPI)
         {
             progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_group->m_ReservedJobCount, (uint32_t)bikeshed_job_group->m_JobsCompleted);
+        }
+        if (!bikeshed_job_group->m_Cancelled && optional_cancel_api && optional_cancel_token && (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED))
+        {
+            Longtail_AtomicAdd32(&bikeshed_job_group->m_Cancelled, 1);
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
         {
@@ -351,7 +358,12 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
     {
         progressAPI->OnProgress(progressAPI, (uint32_t)bikeshed_job_group->m_SubmittedJobCount, (uint32_t)bikeshed_job_group->m_SubmittedJobCount);
     }
+    int is_cancelled = bikeshed_job_group->m_Cancelled;
     Longtail_Free(job_group);
+    if (is_cancelled)
+    {
+        return ECANCELED;
+    }
     return 0;
 }
 
