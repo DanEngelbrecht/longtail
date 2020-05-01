@@ -100,17 +100,11 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - New `Longtail_CancelAPI` for cancelling longrunning operations
-          - *BREAKING API* The following functions now take optional cancel api + token:
-            - `Longtail_GetFilesRecursively`
-            - `Longtail_CreateVersionIndex`
-            - `Longtail_WriteContent`
-            - `Longtail_WriteVersion`
-            - `Longtail_ChangeVersion`
-          - New Longtail_CancelAPI implementation `AtomicCancelAPI`
-          - Added `Longtail_StripContentIndex` - build a minimal content index for a version index from a full content index
-          - *BREAKING API* Replaced Longtail_Storage_GetFileName and Longtail_Storage_GetDirectoryName with Longtail_Storage_GetEntryProperties
-          - Improved logging
+          - Bugfix: Close all open files when cancelling
+          - Bugfix: Check for cancel when writing content
+          - *BREAKING API*
+            - Longtail_Job_WaitForAllJobsFunc now takes additional `struct Longtail_CancelAPI* optional_cancel_api` and `Longtail_CancelAPI_HCancelToken optional_cancel_token` arguments
+            - Longtail_JobAPI_JobFunc now takes additional `int is_cancelled` argument
         draft: false
         prerelease: false
     - name: Download Linux artifacts
