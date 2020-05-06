@@ -662,6 +662,8 @@ static int RecurseTree(
         {
             Longtail_Free((void*)full_search_path);
             full_search_path = 0;
+            Longtail_Free((void*)relative_parent_path);
+            relative_parent_path = 0;
             err = 0;
             continue;
         }
@@ -673,6 +675,8 @@ static int RecurseTree(
                 err)
             Longtail_Free((void*)full_search_path);
             full_search_path = 0;
+            Longtail_Free((void*)relative_parent_path);
+            relative_parent_path = 0;
             break;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) ", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, full_search_path, &fs_iterator)
