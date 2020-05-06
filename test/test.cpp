@@ -1397,21 +1397,17 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     {
         struct Longtail_PathFilterAPI m_API;
 
-        static int IncludeFunc(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
+        static int IncludeFunc(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_path, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
         {
             if(!is_dir)
             {
                 return 1;
             }
-            if (strcmp(asset_folder, "a/file") != 0)
+            if (strcmp(asset_path, "a/file") == 0)
             {
-                return 1;
+                return 0;
             }
-            if (strcmp(asset_name, "in") != 0)
-            {
-                return 1;
-            }
-            return 0;
+            return 1;
         }
     } test_filter;
 
@@ -1421,7 +1417,7 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     Longtail_FileInfos* filtered_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, &test_filter.m_API, 0, 0, "", &filtered_file_infos));
     ASSERT_NE((Longtail_FileInfos*)0, filtered_file_infos);
-    ASSERT_EQ(13u, filtered_file_infos->m_Count);
+    ASSERT_EQ(12u, filtered_file_infos->m_Count);
     Longtail_Free(filtered_file_infos);
 
     SAFE_DISPOSE_API(storage);

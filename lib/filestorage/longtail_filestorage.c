@@ -278,7 +278,7 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
     int err = Longtail_StartFind((HLongtail_FSIterator)iterator, tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
             storage_api, path, out_iterator,
             err)
 		Longtail_Free(iterator);

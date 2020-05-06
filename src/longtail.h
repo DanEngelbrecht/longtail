@@ -72,7 +72,14 @@ LONGTAIL_EXPORT int Longtail_CancelAPI_IsCancelled(struct Longtail_CancelAPI* ca
 
 struct Longtail_PathFilterAPI;
 
-typedef int (*Longtail_PathFilter_IncludeFunc)(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
+typedef int (*Longtail_PathFilter_IncludeFunc)(
+    struct Longtail_PathFilterAPI* path_filter_api,
+    const char* root_path,
+    const char* asset_path,
+    const char* asset_name,
+    int is_dir,
+    uint64_t size,
+    uint16_t permissions);
 
 struct Longtail_PathFilterAPI
 {
@@ -87,7 +94,7 @@ LONGTAIL_EXPORT struct Longtail_PathFilterAPI* Longtail_MakePathFilterAPI(
     Longtail_DisposeFunc dispose_func,
     Longtail_PathFilter_IncludeFunc include_filter_func);
 
-LONGTAIL_EXPORT int Longtail_PathFilter_Include(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
+LONGTAIL_EXPORT int Longtail_PathFilter_Include(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_path, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
 
 ////////////// Longtail_HashAPI
 
