@@ -698,7 +698,14 @@ static int RecurseTree(
                 {
                     size_t current_relative_path_length = strlen(relative_parent_path);
                     size_t new_parent_path_length = current_relative_path_length + 1 + strlen(properties.m_Name);
-                    asset_path = Longtail_Alloc(new_parent_path_length + 1);
+                    asset_path = (char*)Longtail_Alloc(new_parent_path_length + 1);
+                    if (!asset_path)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) Longtail_Alloc() failed with %d",
+                            (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
+                            ENOMEM)
+                        break;
+                    }
                     strcpy(asset_path, relative_parent_path);
                     asset_path[current_relative_path_length] = '/';
                     strcpy(&asset_path[current_relative_path_length + 1], properties.m_Name);
