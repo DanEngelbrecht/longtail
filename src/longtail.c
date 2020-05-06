@@ -92,9 +92,9 @@ struct Longtail_PathFilterAPI* Longtail_MakePathFilterAPI(
     return api;
 }
 
-int Longtail_PathFilter_Include(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_folder, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
+int Longtail_PathFilter_Include(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_path, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
 {
-    return path_filter_api->Include(path_filter_api, root_path, asset_folder, asset_name, is_dir, size, permissions);
+    return path_filter_api->Include(path_filter_api, root_path, asset_path, asset_name, is_dir, size, permissions);
 }
 
 uint64_t Longtail_GetHashAPISize()
@@ -609,7 +609,7 @@ struct HashToIndexItem
     uint64_t value;
 };
 
-typedef int (*ProcessEntry)(void* context, const char* root_path, const struct Longtail_StorageAPI_EntryProperties* properties);
+typedef int (*ProcessEntry)(void* context, const char* root_path, const char* relative_path, const struct Longtail_StorageAPI_EntryProperties* properties);
 
 static int RecurseTree(
     struct Longtail_StorageAPI* storage_api,
@@ -636,13 +636,16 @@ static int RecurseTree(
     }
     uint32_t folder_index = 0;
 
-    char** folder_paths = 0;
-    arrsetcap(folder_paths, 256);
+    char** full_search_paths = 0;
+    arrsetcap(full_search_paths, 256);
+    char** relative_parent_paths = 0;
+    arrsetcap(relative_parent_paths, 256);
 
-    arrput(folder_paths, root_folder_copy);
+    arrput(full_search_paths, root_folder_copy);
+    arrput(relative_parent_paths, 0);
 
     int err = 0;
-    while (folder_index < (uint32_t)arrlen(folder_paths))
+    while (folder_index < (uint32_t)arrlen(full_search_paths))
     {
         if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
         {
@@ -650,14 +653,17 @@ static int RecurseTree(
             break;
         }
 
-        const char* asset_folder = folder_paths[folder_index++];
+        char* full_search_path = full_search_paths[folder_index];
+        char* relative_parent_path = relative_parent_paths[folder_index++];
 
         Longtail_StorageAPI_HIterator fs_iterator = 0;
-        err = storage_api->StartFind(storage_api, asset_folder, &fs_iterator);
+        err = storage_api->StartFind(storage_api, full_search_path, &fs_iterator);
         if (err == ENOENT)
         {
-            Longtail_Free((void*)asset_folder);
-            asset_folder = 0;
+            Longtail_Free((void*)full_search_path);
+            full_search_path = 0;
+            Longtail_Free((void*)relative_parent_path);
+            relative_parent_path = 0;
             err = 0;
             continue;
         }
@@ -665,13 +671,15 @@ static int RecurseTree(
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) storage_api->StartFind(%p, %s, %p) failed with %d",
                 (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
-                storage_api, asset_folder, &fs_iterator,
+                storage_api, full_search_path, &fs_iterator,
                 err)
-            Longtail_Free((void*)asset_folder);
-            asset_folder = 0;
+            Longtail_Free((void*)full_search_path);
+            full_search_path = 0;
+            Longtail_Free((void*)relative_parent_path);
+            relative_parent_path = 0;
             break;
         }
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) ", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, asset_folder, &fs_iterator)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) ", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, full_search_path, &fs_iterator)
         while(err == 0)
         {
             struct Longtail_StorageAPI_EntryProperties properties;
@@ -685,32 +693,70 @@ static int RecurseTree(
             }
             else
             {
-                if (!optional_path_filter_api || optional_path_filter_api->Include(optional_path_filter_api, root_folder, asset_folder, properties.m_Name, properties.m_IsDir, properties.m_Size, properties.m_Permissions))
+                char* asset_path = 0;
+                if (!relative_parent_path)
                 {
-                    err = entry_processor(context, asset_folder, &properties);
+                    asset_path = Longtail_Strdup(properties.m_Name);
+                }
+                else
+                {
+                    size_t current_relative_path_length = strlen(relative_parent_path);
+                    size_t new_parent_path_length = current_relative_path_length + 1 + strlen(properties.m_Name);
+                    asset_path = (char*)Longtail_Alloc(new_parent_path_length + 1);
+                    if (!asset_path)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) Longtail_Alloc() failed with %d",
+                            (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
+                            ENOMEM)
+                        break;
+                    }
+                    strcpy(asset_path, relative_parent_path);
+                    asset_path[current_relative_path_length] = '/';
+                    strcpy(&asset_path[current_relative_path_length + 1], properties.m_Name);
+                }
+
+                if (!optional_path_filter_api
+                    || optional_path_filter_api->Include(
+                        optional_path_filter_api,
+                        root_folder,
+                        asset_path,
+                        properties.m_Name,
+                        properties.m_IsDir,
+                        properties.m_Size,
+                        properties.m_Permissions)
+                    )
+                {
+                    err = entry_processor(context, full_search_path, asset_path, &properties);
                     if (err)
                     {
                         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) entry_processor(%p, %s, %p) failed with %d",
                             (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
-                            context, asset_folder, &properties,
+                            context, full_search_path, &properties,
                             err)
+                        Longtail_Free(asset_path);
+                        asset_path = 0;
                         break;
                     }
                     if (properties.m_IsDir)
                     {
-                        if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
+                        if ((size_t)arrlen(full_search_paths) == arrcap(full_search_paths))
                         {
                             if (folder_index > 0)
                             {
-                                uint32_t unprocessed_count = (uint32_t)(arrlen(folder_paths) - folder_index);
-                                memmove(folder_paths, &folder_paths[folder_index], sizeof(const char*) * unprocessed_count);
-                                arrsetlen(folder_paths, unprocessed_count);
+                                uint32_t unprocessed_count = (uint32_t)(arrlen(full_search_paths) - folder_index);
+                                memmove(full_search_paths, &full_search_paths[folder_index], sizeof(const char*) * unprocessed_count);
+                                arrsetlen(full_search_paths, unprocessed_count);
+                                memmove(relative_parent_paths, &relative_parent_paths[folder_index], sizeof(const char*) * unprocessed_count);
+                                arrsetlen(relative_parent_paths, unprocessed_count);
                                 folder_index = 0;
                             }
                         }
-                        arrput(folder_paths, storage_api->ConcatPath(storage_api, asset_folder, properties.m_Name));
+                        arrput(full_search_paths, storage_api->ConcatPath(storage_api, full_search_path, properties.m_Name));
+                        arrput(relative_parent_paths, asset_path);
+                        asset_path = 0;
                     }
                 }
+                Longtail_Free(asset_path);
             }
             err = storage_api->FindNext(storage_api, fs_iterator);
             if (err == ENOENT)
@@ -720,16 +766,18 @@ static int RecurseTree(
             }
         }
         storage_api->CloseFind(storage_api, fs_iterator);
-        Longtail_Free((void*)asset_folder);
-        asset_folder = 0;
+        Longtail_Free((void*)full_search_path);
+        full_search_path = 0;
+        Longtail_Free((void*)relative_parent_path);
+        relative_parent_path = 0;
     }
-    while (folder_index < (uint32_t)arrlen(folder_paths))
+    while (folder_index < (uint32_t)arrlen(full_search_paths))
     {
-        const char* asset_folder = folder_paths[folder_index++];
-        Longtail_Free((void*)asset_folder);
+        Longtail_Free(full_search_paths[folder_index]);
+        Longtail_Free(relative_parent_paths[folder_index++]);
     }
-    arrfree(folder_paths);
-    folder_paths = 0;
+    arrfree(relative_parent_paths);
+    arrfree(full_search_paths);
     return err;
 }
 
@@ -876,7 +924,7 @@ struct AddFile_Context {
     struct Longtail_FileInfos* m_FileInfos;
 };
 
-static int AddFile(void* context, const char* root_path, const struct Longtail_StorageAPI_EntryProperties* properties)
+static int AddFile(void* context, const char* root_path, const char* asset_path, const struct Longtail_StorageAPI_EntryProperties* properties)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(properties != 0, return EINVAL)
@@ -884,44 +932,33 @@ static int AddFile(void* context, const char* root_path, const struct Longtail_S
     struct AddFile_Context* paths_context = (struct AddFile_Context*)context;
     struct Longtail_StorageAPI* storage_api = paths_context->m_StorageAPI;
 
-    char* full_path = storage_api->ConcatPath(storage_api, root_path, properties->m_Name);
+    char* full_path = (char*)asset_path;
     if (properties->m_IsDir)
     {
-        uint32_t path_length = (uint32_t)strlen(full_path);
-        size_t full_dir_path_size = path_length + 1 + 1;
-        char* full_dir_path = (char*)Longtail_Alloc(full_dir_path_size);
-        if (!full_dir_path)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %" PRIu64 ", %u) failed with %d",
-                context, root_path, properties->m_Name, properties->m_IsDir, properties->m_Size, properties->m_Permissions,
-                ENOMEM)
-            return ENOMEM;
-        }
-        strcpy(full_dir_path, full_path);
-        strcpy(&full_dir_path[path_length], "/");
-        Longtail_Free(full_path);
-        full_path = full_dir_path;
+        size_t asset_path_length = strlen(asset_path);
+        full_path = (char*)Longtail_Alloc(asset_path_length + 1 + 1);
+        strcpy(full_path, asset_path);
+        full_path[asset_path_length] = '/';
+        full_path[asset_path_length + 1] = 0;
     }
 
-    const uint32_t root_path_length = paths_context->m_RootPathLength;
-    const char* s = &full_path[root_path_length];
-    if (*s == '/')
-    {
-        ++s;
-    }
-
-    int err = AppendPath(&paths_context->m_FileInfos, s, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
+    int err = AppendPath(&paths_context->m_FileInfos, full_path, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %d, %" PRIu64 ", %u) failed with %d",
-            context, root_path, properties->m_Name, properties->m_IsDir, properties->m_Size, properties->m_Permissions,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %s, %d, %" PRIu64 ", %u) failed with %d",
+            context, root_path, asset_path, properties->m_Name, properties->m_IsDir, properties->m_Size, properties->m_Permissions,
             err)
-        Longtail_Free(full_path);
+        if (full_path != asset_path)
+        {
+            Longtail_Free(full_path);
+        }
         return err;
     }
 
-    Longtail_Free(full_path);
-    full_path = 0;
+    if (full_path != asset_path)
+    {
+        Longtail_Free(full_path);
+    }
     return 0;
 }
 
