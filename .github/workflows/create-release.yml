@@ -100,10 +100,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *BREAKING API*
-            - Longtail_PathFilterAPI.Include
-              - root_path is path to given to `Longtail_GetFilesRecursively`
-              - asset_path is relative path to root_path in posix style (forward slash)
+          - Changed log level from ERROR to WARNING if trying to create a directory that already exists
         draft: false
         prerelease: false
     - name: Download Linux artifacts

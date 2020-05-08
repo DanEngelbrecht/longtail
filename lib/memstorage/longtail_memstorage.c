@@ -344,7 +344,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
         if (path_entry->m_Content == 0)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            return 0;
+            return EEXIST;
         }
         Longtail_UnlockSpinLock(instance->m_SpinLock);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_CreateDir(%p, %s) failed with %d",
