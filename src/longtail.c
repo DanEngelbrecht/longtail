@@ -465,7 +465,7 @@ void Longtail_Free(void* p)
 }
 
 #if !defined(LONGTAIL_LOG_LEVEL)
-    #define LONGTAIL_LOG_LEVEL   0
+    #define LONGTAIL_LOG_LEVEL   LONGTAIL_LOG_LEVEL_WARNING
 #endif
 
 static Longtail_Log Longtail_Log_private = 0;
