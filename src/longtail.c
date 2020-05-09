@@ -4498,6 +4498,42 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             return 0;
         }
 
+        uint16_t permissions;
+        err = job->m_VersionStorageAPI->GetPermissions(job->m_VersionStorageAPI, full_asset_path, &permissions);
+        if (err && (err != ENOENT))
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+                context, job_id, is_cancelled,
+                err)
+            Longtail_Free(full_asset_path);
+            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            {
+                stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
+            }
+            job->m_Err = err;
+            return 0;
+        }
+
+        if (err != ENOENT)
+        {
+            if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+            {
+                err = job->m_VersionStorageAPI->SetPermissions(job->m_VersionStorageAPI, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                if (err)
+                {
+                    Longtail_Free(full_asset_path);
+                    for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+                    {
+                        stored_block[d]->Dispose(stored_block[d]);
+                        stored_block[d] = 0;
+                    }
+                    job->m_Err = err;
+                    return 0;
+                }
+            }
+        }
+
         uint64_t asset_size = job->m_VersionIndex->m_AssetSizes[job->m_AssetIndex];
         err = job->m_VersionStorageAPI->OpenWriteFile(job->m_VersionStorageAPI, full_asset_path, asset_size, &job->m_AssetOutputFile);
         if (err)
@@ -4745,6 +4781,39 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             job->m_BlockReadJob.m_StoredBlock = 0;
             job->m_Err = err;
             return 0;
+        }
+
+        uint16_t permissions;
+        err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+        if (err && (err != ENOENT))
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
+                context, job_id, is_cancelled,
+                err)
+            Longtail_Free(full_asset_path);
+            job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+            job->m_BlockReadJob.m_StoredBlock = 0;
+            job->m_Err = err;
+            return 0;
+        }
+
+        if (err != ENOENT)
+        {
+            if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+            {
+                err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                if (err)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
+                        context, job_id, is_cancelled,
+                        err)
+                    Longtail_Free(full_asset_path);
+                    job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+                    job->m_BlockReadJob.m_StoredBlock = 0;
+                    job->m_Err = err;
+                    return 0;
+                }
+            }
         }
 
         Longtail_StorageAPI_HOpenFile asset_file;
@@ -6535,6 +6604,28 @@ int Longtail_ChangeVersion(
             if (IsDirPath(asset_path))
             {
                 full_asset_path[strlen(full_asset_path) - 1] = '\0';
+                uint16_t permissions = 0;
+                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                if (err)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                        block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                        err)
+                    Longtail_Free(full_asset_path);
+                    return err;
+                }
+                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                {
+                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                    if (err)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                            err)
+                        Longtail_Free(full_asset_path);
+                        return err;
+                    }
+                }
                 err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
                 if (err)
                 {
