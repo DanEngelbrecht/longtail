@@ -93,7 +93,7 @@ static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api,
         return 0;
     }
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
         storage_api, path, out_open_file,
         ENOENT)
     return ENOENT;

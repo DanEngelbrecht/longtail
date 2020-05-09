@@ -47,7 +47,7 @@ static int FSStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, co
     int err = Longtail_OpenReadFile(tmp_path, &r);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
             storage_api, path, out_open_file,
             err)
         return err;
