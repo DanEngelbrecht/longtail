@@ -18,7 +18,7 @@ static void ReadyCallback_Dispose(struct ReadyCallback* ready_callback)
 {
     LONGTAIL_FATAL_ASSERT(ready_callback, return)
     Longtail_DeleteSema(ready_callback->m_Semaphore);
-	Longtail_Free(ready_callback->m_Semaphore);
+    Longtail_Free(ready_callback->m_Semaphore);
 }
 
 static void ReadyCallback_Ready(struct Bikeshed_ReadyCallback* ready_callback, uint8_t channel, uint32_t ready_count)
@@ -97,7 +97,7 @@ static void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
 {
     LONGTAIL_FATAL_ASSERT(thread_worker, return)
     Longtail_DeleteThread(thread_worker->thread);
-	Longtail_Free(thread_worker->thread);
+    Longtail_Free(thread_worker->thread);
 }
 
 static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
@@ -290,8 +290,8 @@ static int Bikeshed_CreateJobs(
     *out_jobs = task_ids;
     err = 0;
 end:
-	Longtail_Free(ctx);
-	Longtail_Free(func);
+    Longtail_Free(ctx);
+    Longtail_Free(func);
     return err;
 on_error:
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Bikeshed_CreateJobs(%p, %p, %u, %p, %p, %p) failed with %d",
@@ -391,9 +391,9 @@ static void Bikeshed_Dispose(struct Longtail_API* job_api)
     {
         ThreadWorker_Dispose(&bikeshed_job_api->m_Workers[i]);
     }
-	Longtail_Free(bikeshed_job_api->m_Workers);
-	Longtail_Free(bikeshed_job_api->m_Shed);
-	ReadyCallback_Dispose(&bikeshed_job_api->m_ReadyCallback);
+    Longtail_Free(bikeshed_job_api->m_Workers);
+    Longtail_Free(bikeshed_job_api->m_Shed);
+    ReadyCallback_Dispose(&bikeshed_job_api->m_ReadyCallback);
     Longtail_Free(bikeshed_job_api);
 }
 
@@ -413,7 +413,7 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
     job_api->m_Workers = 0;
     job_api->m_Stop = 0;
 
-	int err = ReadyCallback_Init(&job_api->m_ReadyCallback);
+    int err = ReadyCallback_Init(&job_api->m_ReadyCallback);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Bikeshed_Init(%p, %u) failed with %d",

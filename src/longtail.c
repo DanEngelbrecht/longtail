@@ -213,6 +213,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_WriteFunc write_func,
     Longtail_Storage_SetSizeFunc set_size_func,
     Longtail_Storage_SetPermissionsFunc set_permissions_func,
+    Longtail_Storage_GetPermissionsFunc get_permissions_func,
     Longtail_Storage_CloseFileFunc close_file_func,
     Longtail_Storage_CreateDirFunc create_dir_func,
     Longtail_Storage_RenameFileFunc rename_file_func,
@@ -236,6 +237,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->Write = write_func;
     api->SetSize = set_size_func;
     api->SetPermissions = set_permissions_func;
+    api->GetPermissions = get_permissions_func;
     api->CloseFile = close_file_func;
     api->CreateDir = create_dir_func;
     api->RenameFile = rename_file_func;
@@ -258,6 +260,7 @@ int Longtail_Storage_OpenWriteFile(struct Longtail_StorageAPI* storage_api, cons
 int Longtail_Storage_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input) { return storage_api->Write(storage_api, f, offset, length, input); }
 int Longtail_Storage_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length) { return storage_api->SetSize(storage_api, f, length); }
 int Longtail_Storage_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions) { return storage_api->SetPermissions(storage_api, path, permissions); }
+int Longtail_Storage_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions) { return storage_api->GetPermissions(storage_api, path, out_permissions); }
 void Longtail_Storage_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f) { storage_api->CloseFile(storage_api, f); }
 int Longtail_Storage_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->CreateDir(storage_api, path); }
 int Longtail_Storage_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path) { return storage_api->RenameFile(storage_api, source_path, target_path); }
@@ -462,7 +465,7 @@ void Longtail_Free(void* p)
 }
 
 #if !defined(LONGTAIL_LOG_LEVEL)
-    #define LONGTAIL_LOG_LEVEL   0
+    #define LONGTAIL_LOG_LEVEL   LONGTAIL_LOG_LEVEL_WARNING
 #endif
 
 static Longtail_Log Longtail_Log_private = 0;
@@ -2305,7 +2308,7 @@ int Longtail_ReadVersionIndex(
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadVersionIndex(%p, %s, %p) failed with %d",
             storage_api, path, out_version_index,
             err)
         return err;
@@ -2632,7 +2635,7 @@ int Longtail_ReadBlockIndex(
     int err = storage_api->OpenReadFile(storage_api, path, &f);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) failed with %d",
             storage_api, path, out_block_index,
             err)
         return err;
@@ -2943,7 +2946,7 @@ int Longtail_ReadStoredBlock(
     int err = storage_api->OpenReadFile(storage_api, path, &f);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock(%p, %s, %p) failed with %d",
             storage_api, path, out_stored_block,
             err)
         return err;
@@ -3589,7 +3592,7 @@ int Longtail_ReadContentIndex(
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) failed with %d",
             storage_api, path, out_content_index,
             err)
         return err;
@@ -4495,6 +4498,42 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             return 0;
         }
 
+        uint16_t permissions;
+        err = job->m_VersionStorageAPI->GetPermissions(job->m_VersionStorageAPI, full_asset_path, &permissions);
+        if (err && (err != ENOENT))
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+                context, job_id, is_cancelled,
+                err)
+            Longtail_Free(full_asset_path);
+            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            {
+                stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
+            }
+            job->m_Err = err;
+            return 0;
+        }
+
+        if (err != ENOENT)
+        {
+            if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+            {
+                err = job->m_VersionStorageAPI->SetPermissions(job->m_VersionStorageAPI, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                if (err)
+                {
+                    Longtail_Free(full_asset_path);
+                    for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+                    {
+                        stored_block[d]->Dispose(stored_block[d]);
+                        stored_block[d] = 0;
+                    }
+                    job->m_Err = err;
+                    return 0;
+                }
+            }
+        }
+
         uint64_t asset_size = job->m_VersionIndex->m_AssetSizes[job->m_AssetIndex];
         err = job->m_VersionStorageAPI->OpenWriteFile(job->m_VersionStorageAPI, full_asset_path, asset_size, &job->m_AssetOutputFile);
         if (err)
@@ -4742,6 +4781,39 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             job->m_BlockReadJob.m_StoredBlock = 0;
             job->m_Err = err;
             return 0;
+        }
+
+        uint16_t permissions;
+        err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+        if (err && (err != ENOENT))
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
+                context, job_id, is_cancelled,
+                err)
+            Longtail_Free(full_asset_path);
+            job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+            job->m_BlockReadJob.m_StoredBlock = 0;
+            job->m_Err = err;
+            return 0;
+        }
+
+        if (err != ENOENT)
+        {
+            if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+            {
+                err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                if (err)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
+                        context, job_id, is_cancelled,
+                        err)
+                    Longtail_Free(full_asset_path);
+                    job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+                    job->m_BlockReadJob.m_StoredBlock = 0;
+                    job->m_Err = err;
+                    return 0;
+                }
+            }
         }
 
         Longtail_StorageAPI_HOpenFile asset_file;
@@ -6532,6 +6604,28 @@ int Longtail_ChangeVersion(
             if (IsDirPath(asset_path))
             {
                 full_asset_path[strlen(full_asset_path) - 1] = '\0';
+                uint16_t permissions = 0;
+                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                if (err)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                        block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                        err)
+                    Longtail_Free(full_asset_path);
+                    return err;
+                }
+                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                {
+                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                    if (err)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                            err)
+                        Longtail_Free(full_asset_path);
+                        return err;
+                    }
+                }
                 err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
                 if (err)
                 {

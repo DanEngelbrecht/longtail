@@ -93,7 +93,7 @@ static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api,
         return 0;
     }
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
         storage_api, path, out_open_file,
         ENOENT)
     return ENOENT;
@@ -300,11 +300,33 @@ static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_ap
         Longtail_UnlockSpinLock(instance->m_SpinLock);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_SetPermissions(%p, %s, %u) failed with %d",
             storage_api, path, permissions,
-            EINVAL)
-        return EINVAL;
+            ENOENT)
+        return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     path_entry->m_Permissions = permissions;
+    Longtail_UnlockSpinLock(instance->m_SpinLock);
+    return 0;
+}
+
+static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
+    Longtail_LockSpinLock(instance->m_SpinLock);
+    uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
+    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    if (it == -1)
+    {
+        Longtail_UnlockSpinLock(instance->m_SpinLock);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_GetPermissions(%p, %s, %u) failed with %d",
+            storage_api, path, out_permissions,
+            ENOENT)
+        return ENOENT;
+    }
+    struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
+    *out_permissions = path_entry->m_Permissions;
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     return 0;
 }
@@ -652,6 +674,7 @@ static int InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_InMemStorageAPI.Write = InMemStorageAPI_Write;
     storage_api->m_InMemStorageAPI.SetSize = InMemStorageAPI_SetSize;
     storage_api->m_InMemStorageAPI.SetPermissions = InMemStorageAPI_SetPermissions;
+    storage_api->m_InMemStorageAPI.GetPermissions = InMemStorageAPI_GetPermissions;
     storage_api->m_InMemStorageAPI.CloseFile = InMemStorageAPI_CloseFile;
     storage_api->m_InMemStorageAPI.CreateDir = InMemStorageAPI_CreateDir;
     storage_api->m_InMemStorageAPI.RenameFile = InMemStorageAPI_RenameFile;

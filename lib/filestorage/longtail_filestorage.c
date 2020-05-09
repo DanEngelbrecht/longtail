@@ -47,7 +47,7 @@ static int FSStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, co
     int err = Longtail_OpenReadFile(tmp_path, &r);
     if (err != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
             storage_api, path, out_open_file,
             err)
         return err;
@@ -150,6 +150,23 @@ static int FSStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_api, 
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_SetPermissions(%p, %p, %u) failed with %d",
             storage_api, path, permissions,
+            err)
+        return err;
+    }
+    return 0;
+}
+
+static int FSStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    TMP_STR(path)
+    Longtail_DenormalizePath(tmp_path);
+    int err = Longtail_GetFilePermissions(tmp_path, out_permissions);
+    if (err)
+    {
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_GetPermissions(%p, %p, %u) failed with %d",
+            storage_api, path, out_permissions,
             err)
         return err;
     }
@@ -281,7 +298,7 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
         LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
             storage_api, path, out_iterator,
             err)
-		Longtail_Free(iterator);
+        Longtail_Free(iterator);
         iterator = 0;
         return err;
     }
@@ -308,7 +325,7 @@ static void FSStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Long
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return );
     LONGTAIL_VALIDATE_INPUT(iterator != 0, return );
     Longtail_CloseFind((HLongtail_FSIterator)iterator);
-	Longtail_Free(iterator);
+    Longtail_Free(iterator);
 }
 
 static int FSStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)
@@ -339,6 +356,7 @@ static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
     storage_api->m_FSStorageAPI.Write = FSStorageAPI_Write;
     storage_api->m_FSStorageAPI.SetSize = FSStorageAPI_SetSize;
     storage_api->m_FSStorageAPI.SetPermissions = FSStorageAPI_SetPermissions;
+    storage_api->m_FSStorageAPI.GetPermissions = FSStorageAPI_GetPermissions;
     storage_api->m_FSStorageAPI.CloseFile = FSStorageAPI_CloseFile;
     storage_api->m_FSStorageAPI.CreateDir = FSStorageAPI_CreateDir;
     storage_api->m_FSStorageAPI.RenameFile = FSStorageAPI_RenameFile;

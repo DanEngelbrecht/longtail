@@ -239,6 +239,7 @@ typedef int (*Longtail_Storage_OpenWriteFileFunc)(struct Longtail_StorageAPI* st
 typedef int (*Longtail_Storage_WriteFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
 typedef int (*Longtail_Storage_SetSizeFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length);
 typedef int (*Longtail_Storage_SetPermissionsFunc)(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions);
+typedef int (*Longtail_Storage_GetPermissionsFunc)(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions);
 typedef void (*Longtail_Storage_CloseFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f);
 typedef int (*Longtail_Storage_CreateDirFunc)(struct Longtail_StorageAPI* storage_api, const char* path);
 typedef int (*Longtail_Storage_RenameFileFunc)(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path);
@@ -262,6 +263,7 @@ struct Longtail_StorageAPI
     Longtail_Storage_WriteFunc Write;
     Longtail_Storage_SetSizeFunc SetSize;
     Longtail_Storage_SetPermissionsFunc SetPermissions;
+    Longtail_Storage_GetPermissionsFunc GetPermissions;
     Longtail_Storage_CloseFileFunc CloseFile;
     Longtail_Storage_CreateDirFunc CreateDir;
     Longtail_Storage_RenameFileFunc RenameFile;
@@ -288,6 +290,7 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_WriteFunc write_func,
     Longtail_Storage_SetSizeFunc set_size_func,
     Longtail_Storage_SetPermissionsFunc set_permissions_func,
+    Longtail_Storage_GetPermissionsFunc get_permissions_func,
     Longtail_Storage_CloseFileFunc close_file_func,
     Longtail_Storage_CreateDirFunc create_dir_func,
     Longtail_Storage_RenameFileFunc rename_file_func,
@@ -308,6 +311,7 @@ LONGTAIL_EXPORT int Longtail_Storage_OpenWriteFile(struct Longtail_StorageAPI* s
 LONGTAIL_EXPORT int Longtail_Storage_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input);
 LONGTAIL_EXPORT int Longtail_Storage_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length);
 LONGTAIL_EXPORT int Longtail_Storage_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions);
+LONGTAIL_EXPORT int Longtail_Storage_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions);
 LONGTAIL_EXPORT void Longtail_Storage_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f);
 LONGTAIL_EXPORT int Longtail_Storage_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path);
 LONGTAIL_EXPORT int Longtail_Storage_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path);
@@ -459,17 +463,17 @@ struct Longtail_BlockStoreAPI;
 
 struct Longtail_BlockStore_Stats
 {
-	uint64_t m_IndexGetCount;
-	uint64_t m_BlocksGetCount;
-	uint64_t m_BlocksPutCount;
-	uint64_t m_ChunksGetCount;
-	uint64_t m_ChunksPutCount;
-	uint64_t m_BytesGetCount;
-	uint64_t m_BytesPutCount;
-	uint64_t m_IndexGetRetryCount;
+    uint64_t m_IndexGetCount;
+    uint64_t m_BlocksGetCount;
+    uint64_t m_BlocksPutCount;
+    uint64_t m_ChunksGetCount;
+    uint64_t m_ChunksPutCount;
+    uint64_t m_BytesGetCount;
+    uint64_t m_BytesPutCount;
+    uint64_t m_IndexGetRetryCount;
     uint64_t m_BlockGetRetryCount;
     uint64_t m_BlockPutRetryCount;
-	uint64_t m_IndexGetFailCount;
+    uint64_t m_IndexGetFailCount;
     uint64_t m_BlockGetFailCount;
     uint64_t m_BlockPutFailCount;
 };

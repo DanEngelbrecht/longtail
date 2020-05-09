@@ -66,7 +66,7 @@ static uint64_t Blake2Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtai
             err)
         return 0;
     }
-	Longtail_Free(state);
+    Longtail_Free(state);
     return hash;
 }
 

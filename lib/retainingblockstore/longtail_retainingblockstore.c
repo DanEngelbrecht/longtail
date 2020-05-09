@@ -377,7 +377,7 @@ static int RetainingBlockStore_Init(
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateRetainingBlockStoreAPI(
-	struct Longtail_BlockStoreAPI* backing_block_store)
+    struct Longtail_BlockStoreAPI* backing_block_store)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateRetainingBlockStoreAPI(%p)", backing_block_store)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return 0)

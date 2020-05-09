@@ -136,51 +136,51 @@ static uint32_t* GetCompressionTypes(struct Longtail_StorageAPI* api, const stru
 }
 
 uint32_t ParseCompressionType(const char* compression_algorithm) {
-	if ((compression_algorithm == 0) || (strcmp("none", compression_algorithm) == 0))
+    if ((compression_algorithm == 0) || (strcmp("none", compression_algorithm) == 0))
     {
-		return 0;
+        return 0;
     }
-	if (strcmp("brotli", compression_algorithm) == 0)
+    if (strcmp("brotli", compression_algorithm) == 0)
     {
         return Longtail_GetBrotliGenericDefaultQuality();
     }
-	if (strcmp("brotli_min", compression_algorithm) == 0)
+    if (strcmp("brotli_min", compression_algorithm) == 0)
     {
         return Longtail_GetBrotliGenericMinQuality();
     }
-	if (strcmp("brotli_max", compression_algorithm) == 0)
+    if (strcmp("brotli_max", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliGenericMaxQuality();
+        return Longtail_GetBrotliGenericMaxQuality();
     }
-	if (strcmp("brotli_text", compression_algorithm) == 0)
+    if (strcmp("brotli_text", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliTextDefaultQuality();
+        return Longtail_GetBrotliTextDefaultQuality();
     }
-	if (strcmp("brotli_text_min", compression_algorithm) == 0)
+    if (strcmp("brotli_text_min", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliTextMinQuality();
+        return Longtail_GetBrotliTextMinQuality();
     }
-	if (strcmp("brotli_text_max", compression_algorithm) == 0)
+    if (strcmp("brotli_text_max", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliTextMaxQuality();
+        return Longtail_GetBrotliTextMaxQuality();
     }
-	if (strcmp("lz4", compression_algorithm) == 0)
+    if (strcmp("lz4", compression_algorithm) == 0)
     {
-		return Longtail_GetLZ4DefaultQuality();
+        return Longtail_GetLZ4DefaultQuality();
     }
-	if (strcmp("zstd", compression_algorithm) == 0)
+    if (strcmp("zstd", compression_algorithm) == 0)
     {
-		return Longtail_GetZStdDefaultQuality();
+        return Longtail_GetZStdDefaultQuality();
     }
-	if (strcmp("zstd_min", compression_algorithm) == 0)
+    if (strcmp("zstd_min", compression_algorithm) == 0)
     {
-		return Longtail_GetZStdMinQuality();
+        return Longtail_GetZStdMinQuality();
     }
-	if (strcmp("zstd_max", compression_algorithm) == 0)
+    if (strcmp("zstd_max", compression_algorithm) == 0)
     {
-		return Longtail_GetZStdMaxQuality();
+        return Longtail_GetZStdMaxQuality();
     }
-	return 0xffffffff;
+    return 0xffffffff;
 }
 
 uint32_t ParseHashingType(const char* hashing_type)
@@ -307,7 +307,7 @@ int UpSync(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
+    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
 
     struct Longtail_ContentIndex* block_store_content_index;
@@ -555,8 +555,8 @@ int DownSync(
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path);
-    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, content_path);
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, content_path, target_block_size, max_chunks_per_block);
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(store_block_localstore_api, store_block_remotestore_api);
     struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);

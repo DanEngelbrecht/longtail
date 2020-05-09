@@ -24,7 +24,7 @@ if %errorlevel% neq 0 exit /b %errorlevel%
 rem Replace with gsutil copy from download_list.txt
 @for /f "delims=" %%f in (download_list.txt) do (
     @xcopy "%%f" "!CACHE_FOLDER!\"
-	if %errorlevel% neq 0 exit /b %errorlevel%
+    if %errorlevel% neq 0 exit /b %errorlevel%
 )
 
 !LONGTAIL! --update-version "!TARGET_FOLDER!" --content "!CACHE_FOLDER!" --target-version-index "!VERSION_NAME!.lvi"

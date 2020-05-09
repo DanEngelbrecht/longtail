@@ -25,6 +25,9 @@ struct FSBlockStoreAPI
 
     struct Longtail_ContentIndex* m_ContentIndex;
     struct BlockHashToBlockState* m_BlockState;
+    struct Longtail_BlockIndex** m_AddedBlockIndexes;
+    uint32_t m_DefaultMaxBlockSize;
+    uint32_t m_DefaultMaxChunksPerBlock;
 
     TLongtail_Atomic64 m_IndexGetCount;
     TLongtail_Atomic64 m_BlocksGetCount;
@@ -40,6 +43,37 @@ struct FSBlockStoreAPI
     TLongtail_Atomic64 m_BlockGetFailCount;
     TLongtail_Atomic64 m_BlockPutFailCount;
 };
+
+static int UpdateContentIndex(
+    struct Longtail_ContentIndex* current_content_index,
+    struct Longtail_BlockIndex** added_block_indexes,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    struct Longtail_ContentIndex* added_content_index;
+    int err = Longtail_CreateContentIndexFromBlocks(
+        *current_content_index->m_MaxBlockSize,
+        *current_content_index->m_MaxChunksPerBlock,
+        (uint64_t)(arrlen(added_block_indexes)),
+        added_block_indexes,
+        &added_content_index);
+    if (err)
+    {
+        return err;
+    }
+    struct Longtail_ContentIndex* new_content_index;
+    err = Longtail_AddContentIndex(
+        current_content_index,
+        added_content_index,
+        &new_content_index);
+    Longtail_Free(added_content_index);
+    if (err)
+    {
+        Longtail_Free(added_content_index);
+        return err;
+    }
+    *out_content_index = new_content_index;
+    return 0;
+}
 
 struct FSStoredBlock
 {
@@ -375,50 +409,31 @@ static int FSBlockStore_PutStoredBlock(
     Longtail_Free((char*)block_path);
     block_path = 0;
 
-    // We added a block, the stored file on disk is no longer valid, remove it
-    const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
+    void* block_index_buffer;
+    size_t block_index_buffer_size;
+    err = Longtail_WriteBlockIndexToBuffer(stored_block->m_BlockIndex, &block_index_buffer, &block_index_buffer_size);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
+            block_store_api, stored_block, async_complete_api,
+            err)
+        return err;
+    }
+    struct Longtail_BlockIndex* block_index_copy;
+    err = Longtail_ReadBlockIndexFromBuffer(block_index_buffer, block_index_buffer_size, &block_index_copy);
+    Longtail_Free(block_index_buffer);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
+            block_store_api, stored_block, async_complete_api,
+            err)
+        return err;
+    }
 
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-    if (Longtail_IsFile(content_index_path))
-    {
-        Longtail_RemoveFile(content_index_path);
-    }
-
     hmput(fsblockstore_api->m_BlockState, block_hash, 1);
-    if (fsblockstore_api->m_ContentIndex)
-    {
-        struct Longtail_ContentIndex* added_content_index;
-        int err = Longtail_CreateContentIndexFromBlocks(
-            *fsblockstore_api->m_ContentIndex->m_MaxBlockSize,
-            *fsblockstore_api->m_ContentIndex->m_MaxChunksPerBlock,
-            1,
-            &stored_block->m_BlockIndex,
-            &added_content_index);
-        if (err)
-        {
-            hmdel(fsblockstore_api->m_BlockState, block_hash);
-        }
-        else
-        {
-            struct Longtail_ContentIndex* new_content_index;
-            err = Longtail_AddContentIndex(
-                fsblockstore_api->m_ContentIndex,
-                added_content_index,
-                &new_content_index);
-            Longtail_Free(added_content_index);
-            if (err)
-            {
-                hmdel(fsblockstore_api->m_BlockState, block_hash);
-            }
-            else
-            {
-                Longtail_Free(fsblockstore_api->m_ContentIndex);
-                fsblockstore_api->m_ContentIndex = new_content_index;
-            }
-        }
-    }
+    arrput(fsblockstore_api->m_AddedBlockIndexes, block_index_copy);
     Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-    Longtail_Free((void*)content_index_path);
 
     async_complete_api->OnComplete(async_complete_api, 0);
     return 0;
@@ -511,8 +526,8 @@ static int FSBlockStore_GetIndex(
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
             job_api,
-            524288,
-            1024,
+            fsblockstore_api->m_DefaultMaxBlockSize,
+            fsblockstore_api->m_DefaultMaxChunksPerBlock,
             fsblockstore_api->m_ContentPath,
             &fsblockstore_api->m_ContentIndex);
         if (err)
@@ -541,6 +556,32 @@ static int FSBlockStore_GetIndex(
         Longtail_Free((void*)content_index_path);
     }
     Longtail_DisposeAPI(&job_api->m_API);
+
+    intptr_t new_block_count = arrlen(fsblockstore_api->m_AddedBlockIndexes);
+    if (new_block_count > 0)
+    {
+        struct Longtail_ContentIndex* new_content_index;
+        int err = UpdateContentIndex(
+            fsblockstore_api->m_ContentIndex,
+            fsblockstore_api->m_AddedBlockIndexes,
+            &new_content_index);
+        if (err)
+        {
+            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+            return err;
+        }
+
+        Longtail_Free(fsblockstore_api->m_ContentIndex);
+        fsblockstore_api->m_ContentIndex = new_content_index;
+
+        while(new_block_count-- > 0)
+        {
+            struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[new_block_count];
+            Longtail_Free(block_index);
+        }
+        arrfree(fsblockstore_api->m_AddedBlockIndexes);
+    }
+
     job_api = 0;
     size_t content_index_size;
     void* tmp_content_buffer;
@@ -597,9 +638,53 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_Dispose(%p)", api)
     LONGTAIL_FATAL_ASSERT(api, return)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
+    intptr_t new_block_count = arrlen(fsblockstore_api->m_AddedBlockIndexes);
+    if (new_block_count > 0)
+    {
+        if (fsblockstore_api->m_ContentIndex)
+        {
+            struct Longtail_ContentIndex* new_content_index;
+            int err = UpdateContentIndex(
+                fsblockstore_api->m_ContentIndex,
+                fsblockstore_api->m_AddedBlockIndexes,
+                &new_content_index);
+            if (!err)
+            {
+                Longtail_Free(fsblockstore_api->m_ContentIndex);
+                fsblockstore_api->m_ContentIndex = new_content_index;
+            }
+        }
+        else
+        {
+            Longtail_CreateContentIndexFromBlocks(
+                fsblockstore_api->m_DefaultMaxBlockSize,
+                fsblockstore_api->m_DefaultMaxChunksPerBlock,
+                (uint64_t)(arrlen(fsblockstore_api->m_AddedBlockIndexes)),
+                fsblockstore_api->m_AddedBlockIndexes,
+                &fsblockstore_api->m_ContentIndex);
+        }
+        while(new_block_count-- > 0)
+        {
+            struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[new_block_count];
+            Longtail_Free(block_index);
+        }
+        arrfree(fsblockstore_api->m_AddedBlockIndexes);
+    }
+
     if (fsblockstore_api->m_ContentIndex)
     {
         const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
+        struct Longtail_ContentIndex* existing_content_index;
+        if (0 == Longtail_ReadContentIndex(fsblockstore_api->m_StorageAPI, content_index_path, &existing_content_index))
+        {
+            struct Longtail_ContentIndex* merged_content_index;
+            if (0 == Longtail_MergeContentIndex(existing_content_index, fsblockstore_api->m_ContentIndex, &merged_content_index))
+            {
+                Longtail_Free(fsblockstore_api->m_ContentIndex);
+                fsblockstore_api->m_ContentIndex = merged_content_index;
+            }
+            Longtail_Free(existing_content_index);
+        }
         Longtail_WriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentIndex, content_index_path);
         Longtail_Free((void*)content_index_path);
     }
@@ -615,7 +700,9 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
 static int FSBlockStore_Init(
     struct FSBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
-    const char* content_path)
+    const char* content_path,
+    uint32_t default_max_block_size,
+    uint32_t default_max_chunks_per_block)
 {
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(storage_api, return EINVAL)
@@ -630,6 +717,9 @@ static int FSBlockStore_Init(
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndex = 0;
     api->m_BlockState = 0;
+    api->m_AddedBlockIndexes = 0;
+    api->m_DefaultMaxBlockSize = default_max_block_size;
+    api->m_DefaultMaxChunksPerBlock = default_max_chunks_per_block;
 
     api->m_IndexGetCount = 0;
     api->m_BlocksGetCount = 0;
@@ -666,11 +756,15 @@ static int FSBlockStore_Init(
 
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
-    const char* content_path)
+    const char* content_path,
+    uint32_t default_max_block_size,
+    uint32_t default_max_chunks_per_block)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateFSBlockStoreAPI(%p, %s)", storage_api, content_path)
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(content_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(default_max_block_size != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(default_max_chunks_per_block != 0, return 0)
     size_t api_size = sizeof(struct FSBlockStoreAPI);
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(api_size);
     if (!api)
@@ -683,7 +777,9 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     int err = FSBlockStore_Init(
         api,
         storage_api,
-        content_path);
+        content_path,
+        default_max_block_size,
+        default_max_chunks_per_block);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateFSBlockStoreAPI(%p, %s) failed with %d",

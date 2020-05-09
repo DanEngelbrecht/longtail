@@ -566,7 +566,7 @@ int Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length)
     return 0;
 }
 
-int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
+int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
 {
     DWORD attrs = GetFileAttributesA(path);
     if (attrs == INVALID_FILE_ATTRIBUTES)
@@ -594,6 +594,31 @@ int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
             }
         }
     }
+    return 0;
+}
+
+int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
+{
+    DWORD attrs = GetFileAttributesA(path);
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+    {
+        int e = Win32ErrorToErrno(GetLastError());
+        if (e == ENOENT){
+            return 0;
+        }
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
+        return e;
+    }
+    uint16_t permissions = Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_GroupReadAccess | Longtail_StorageAPI_OtherReadAccess;
+    if (attrs & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        permissions = permissions | Longtail_StorageAPI_UserExecuteAccess | Longtail_StorageAPI_GroupExecuteAccess | Longtail_StorageAPI_OtherExecuteAccess;
+    }
+    if ((attrs & FILE_ATTRIBUTE_READONLY) == 0)
+    {
+        permissions = permissions | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess;
+    }
+    *out_permissions = permissions;
     return 0;
 }
 
@@ -1377,9 +1402,20 @@ int Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length)
     return errno;
 }
 
-int Longtail_SetFilePermissions(const char* path, uint64_t permissions)
+int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
 {
     return chmod(path, permissions);
+}
+
+int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
+{
+    struct stat stat_buf;
+    int res = stat(path, &stat_buf);
+    if (res == 0)
+    {
+        *out_permissions = (uint16_t)stat_buf.st_mode;
+    }
+    return res;
 }
 
 int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output)

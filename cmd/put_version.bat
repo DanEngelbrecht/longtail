@@ -20,7 +20,7 @@ if not exist "!CACHE_FOLDER!" mkdir "!CACHE_FOLDER!"
 rem Replace with gsutil copy from upload_list.txt
 for /f "delims=" %%f in (upload_list.txt) do (
     xcopy "%%f" "!BUCKET!\store\"
-	if %errorlevel% neq 0 exit /b %errorlevel%
+    if %errorlevel% neq 0 exit /b %errorlevel%
 )
 
 rem gsutil cp !VERSION_NAME!.lvi !BUCKET!\!VERSION_NAME!.lvi
