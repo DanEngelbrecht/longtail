@@ -156,6 +156,23 @@ static int FSStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_api, 
     return 0;
 }
 
+static int FSStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    TMP_STR(path)
+    Longtail_DenormalizePath(tmp_path);
+    int err = Longtail_GetFilePermissions(tmp_path, out_permissions);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilePermissions(%p, %p, %u) failed with %d",
+            storage_api, path, out_permissions,
+            err)
+        return err;
+    }
+    return 0;
+}
+
 static void FSStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
 {
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return);
@@ -339,6 +356,7 @@ static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
     storage_api->m_FSStorageAPI.Write = FSStorageAPI_Write;
     storage_api->m_FSStorageAPI.SetSize = FSStorageAPI_SetSize;
     storage_api->m_FSStorageAPI.SetPermissions = FSStorageAPI_SetPermissions;
+    storage_api->m_FSStorageAPI.GetPermissions = FSStorageAPI_GetPermissions;
     storage_api->m_FSStorageAPI.CloseFile = FSStorageAPI_CloseFile;
     storage_api->m_FSStorageAPI.CreateDir = FSStorageAPI_CreateDir;
     storage_api->m_FSStorageAPI.RenameFile = FSStorageAPI_RenameFile;

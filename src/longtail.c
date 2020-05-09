@@ -213,6 +213,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_WriteFunc write_func,
     Longtail_Storage_SetSizeFunc set_size_func,
     Longtail_Storage_SetPermissionsFunc set_permissions_func,
+    Longtail_Storage_GetPermissionsFunc get_permissions_func,
     Longtail_Storage_CloseFileFunc close_file_func,
     Longtail_Storage_CreateDirFunc create_dir_func,
     Longtail_Storage_RenameFileFunc rename_file_func,
@@ -236,6 +237,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->Write = write_func;
     api->SetSize = set_size_func;
     api->SetPermissions = set_permissions_func;
+    api->GetPermissions = get_permissions_func;
     api->CloseFile = close_file_func;
     api->CreateDir = create_dir_func;
     api->RenameFile = rename_file_func;
@@ -258,6 +260,7 @@ int Longtail_Storage_OpenWriteFile(struct Longtail_StorageAPI* storage_api, cons
 int Longtail_Storage_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input) { return storage_api->Write(storage_api, f, offset, length, input); }
 int Longtail_Storage_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length) { return storage_api->SetSize(storage_api, f, length); }
 int Longtail_Storage_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions) { return storage_api->SetPermissions(storage_api, path, permissions); }
+int Longtail_Storage_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions) { return storage_api->GetPermissions(storage_api, path, out_permissions); }
 void Longtail_Storage_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f) { storage_api->CloseFile(storage_api, f); }
 int Longtail_Storage_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->CreateDir(storage_api, path); }
 int Longtail_Storage_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path) { return storage_api->RenameFile(storage_api, source_path, target_path); }
