@@ -26,6 +26,8 @@ struct FSBlockStoreAPI
     struct Longtail_ContentIndex* m_ContentIndex;
     struct BlockHashToBlockState* m_BlockState;
     struct Longtail_BlockIndex** m_AddedBlockIndexes;
+    uint32_t m_DefaultMaxBlockSize;
+    uint32_t m_DefaultMaxChunksPerBlock;
 
     TLongtail_Atomic64 m_IndexGetCount;
     TLongtail_Atomic64 m_BlocksGetCount;
@@ -524,8 +526,8 @@ static int FSBlockStore_GetIndex(
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
             job_api,
-            524288,
-            1024,
+            fsblockstore_api->m_DefaultMaxBlockSize,
+            fsblockstore_api->m_DefaultMaxChunksPerBlock,
             fsblockstore_api->m_ContentPath,
             &fsblockstore_api->m_ContentIndex);
         if (err)
@@ -655,8 +657,8 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
         else
         {
             Longtail_CreateContentIndexFromBlocks(
-                524288,
-                1024,
+                fsblockstore_api->m_DefaultMaxBlockSize,
+                fsblockstore_api->m_DefaultMaxChunksPerBlock,
                 (uint64_t)(arrlen(fsblockstore_api->m_AddedBlockIndexes)),
                 fsblockstore_api->m_AddedBlockIndexes,
                 &fsblockstore_api->m_ContentIndex);
@@ -698,7 +700,9 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
 static int FSBlockStore_Init(
     struct FSBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
-    const char* content_path)
+    const char* content_path,
+	uint32_t default_max_block_size,
+    uint32_t default_max_chunks_per_block)
 {
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(storage_api, return EINVAL)
@@ -714,6 +718,8 @@ static int FSBlockStore_Init(
     api->m_ContentIndex = 0;
     api->m_BlockState = 0;
     api->m_AddedBlockIndexes = 0;
+    api->m_DefaultMaxBlockSize = default_max_block_size;
+    api->m_DefaultMaxChunksPerBlock = default_max_chunks_per_block;
 
     api->m_IndexGetCount = 0;
     api->m_BlocksGetCount = 0;
@@ -750,11 +756,15 @@ static int FSBlockStore_Init(
 
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
-    const char* content_path)
+    const char* content_path,
+	uint32_t default_max_block_size,
+    uint32_t default_max_chunks_per_block)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateFSBlockStoreAPI(%p, %s)", storage_api, content_path)
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(content_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(default_max_block_size != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(default_max_chunks_per_block != 0, return 0)
     size_t api_size = sizeof(struct FSBlockStoreAPI);
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)Longtail_Alloc(api_size);
     if (!api)
@@ -767,7 +777,9 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     int err = FSBlockStore_Init(
         api,
         storage_api,
-        content_path);
+        content_path,
+        default_max_block_size,
+        default_max_chunks_per_block);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateFSBlockStoreAPI(%p, %s) failed with %d",
