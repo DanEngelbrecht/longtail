@@ -7,10 +7,10 @@
 
 struct Default_HashRegistry
 {
-	struct Longtail_HashRegistryAPI m_HashRegistryAPI;
-	uint32_t m_Count;
-	uint32_t* m_Types;
-	struct Longtail_HashAPI** m_APIs;
+    struct Longtail_HashRegistryAPI m_HashRegistryAPI;
+    uint32_t m_Count;
+    uint32_t* m_Types;
+    struct Longtail_HashAPI** m_APIs;
 };
 
 static void DefaultHashRegistry_Dispose(struct Longtail_API* api)

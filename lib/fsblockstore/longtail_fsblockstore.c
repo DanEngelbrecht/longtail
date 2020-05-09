@@ -701,7 +701,7 @@ static int FSBlockStore_Init(
     struct FSBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
-	uint32_t default_max_block_size,
+    uint32_t default_max_block_size,
     uint32_t default_max_chunks_per_block)
 {
     LONGTAIL_FATAL_ASSERT(api, return EINVAL)
@@ -757,7 +757,7 @@ static int FSBlockStore_Init(
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
-	uint32_t default_max_block_size,
+    uint32_t default_max_block_size,
     uint32_t default_max_chunks_per_block)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateFSBlockStoreAPI(%p, %s)", storage_api, content_path)

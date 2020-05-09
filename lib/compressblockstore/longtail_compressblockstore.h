@@ -15,8 +15,8 @@ typedef struct Longtail_CompressionAPI_CompressionContext* Longtail_CompressionA
 typedef struct Longtail_CompressionAPI_DecompressionContext* Longtail_CompressionAPI_HDecompressionContext;
 
 LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
-	struct Longtail_BlockStoreAPI* backing_block_store,
-	struct Longtail_CompressionRegistryAPI* compression_registry);
+    struct Longtail_BlockStoreAPI* backing_block_store,
+    struct Longtail_CompressionRegistryAPI* compression_registry);
 
 #ifdef __cplusplus
 }

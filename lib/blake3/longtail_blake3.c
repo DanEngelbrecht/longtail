@@ -50,7 +50,7 @@ static uint64_t Blake3Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtai
     blake3_hasher* hasher = (blake3_hasher*)context;
     uint64_t hash;
     blake3_hasher_finalize(hasher, (uint8_t*)&hash, sizeof(uint64_t));
-	Longtail_Free(hasher);
+    Longtail_Free(hasher);
     return hash;
 }
 

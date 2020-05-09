@@ -136,51 +136,51 @@ static uint32_t* GetCompressionTypes(struct Longtail_StorageAPI* api, const stru
 }
 
 uint32_t ParseCompressionType(const char* compression_algorithm) {
-	if ((compression_algorithm == 0) || (strcmp("none", compression_algorithm) == 0))
+    if ((compression_algorithm == 0) || (strcmp("none", compression_algorithm) == 0))
     {
-		return 0;
+        return 0;
     }
-	if (strcmp("brotli", compression_algorithm) == 0)
+    if (strcmp("brotli", compression_algorithm) == 0)
     {
         return Longtail_GetBrotliGenericDefaultQuality();
     }
-	if (strcmp("brotli_min", compression_algorithm) == 0)
+    if (strcmp("brotli_min", compression_algorithm) == 0)
     {
         return Longtail_GetBrotliGenericMinQuality();
     }
-	if (strcmp("brotli_max", compression_algorithm) == 0)
+    if (strcmp("brotli_max", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliGenericMaxQuality();
+        return Longtail_GetBrotliGenericMaxQuality();
     }
-	if (strcmp("brotli_text", compression_algorithm) == 0)
+    if (strcmp("brotli_text", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliTextDefaultQuality();
+        return Longtail_GetBrotliTextDefaultQuality();
     }
-	if (strcmp("brotli_text_min", compression_algorithm) == 0)
+    if (strcmp("brotli_text_min", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliTextMinQuality();
+        return Longtail_GetBrotliTextMinQuality();
     }
-	if (strcmp("brotli_text_max", compression_algorithm) == 0)
+    if (strcmp("brotli_text_max", compression_algorithm) == 0)
     {
-		return Longtail_GetBrotliTextMaxQuality();
+        return Longtail_GetBrotliTextMaxQuality();
     }
-	if (strcmp("lz4", compression_algorithm) == 0)
+    if (strcmp("lz4", compression_algorithm) == 0)
     {
-		return Longtail_GetLZ4DefaultQuality();
+        return Longtail_GetLZ4DefaultQuality();
     }
-	if (strcmp("zstd", compression_algorithm) == 0)
+    if (strcmp("zstd", compression_algorithm) == 0)
     {
-		return Longtail_GetZStdDefaultQuality();
+        return Longtail_GetZStdDefaultQuality();
     }
-	if (strcmp("zstd_min", compression_algorithm) == 0)
+    if (strcmp("zstd_min", compression_algorithm) == 0)
     {
-		return Longtail_GetZStdMinQuality();
+        return Longtail_GetZStdMinQuality();
     }
-	if (strcmp("zstd_max", compression_algorithm) == 0)
+    if (strcmp("zstd_max", compression_algorithm) == 0)
     {
-		return Longtail_GetZStdMaxQuality();
+        return Longtail_GetZStdMaxQuality();
     }
-	return 0xffffffff;
+    return 0xffffffff;
 }
 
 uint32_t ParseHashingType(const char* hashing_type)

@@ -463,17 +463,17 @@ struct Longtail_BlockStoreAPI;
 
 struct Longtail_BlockStore_Stats
 {
-	uint64_t m_IndexGetCount;
-	uint64_t m_BlocksGetCount;
-	uint64_t m_BlocksPutCount;
-	uint64_t m_ChunksGetCount;
-	uint64_t m_ChunksPutCount;
-	uint64_t m_BytesGetCount;
-	uint64_t m_BytesPutCount;
-	uint64_t m_IndexGetRetryCount;
+    uint64_t m_IndexGetCount;
+    uint64_t m_BlocksGetCount;
+    uint64_t m_BlocksPutCount;
+    uint64_t m_ChunksGetCount;
+    uint64_t m_ChunksPutCount;
+    uint64_t m_BytesGetCount;
+    uint64_t m_BytesPutCount;
+    uint64_t m_IndexGetRetryCount;
     uint64_t m_BlockGetRetryCount;
     uint64_t m_BlockPutRetryCount;
-	uint64_t m_IndexGetFailCount;
+    uint64_t m_IndexGetFailCount;
     uint64_t m_BlockGetFailCount;
     uint64_t m_BlockPutFailCount;
 };

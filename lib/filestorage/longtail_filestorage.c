@@ -298,7 +298,7 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
         LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
             storage_api, path, out_iterator,
             err)
-		Longtail_Free(iterator);
+        Longtail_Free(iterator);
         iterator = 0;
         return err;
     }
@@ -325,7 +325,7 @@ static void FSStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Long
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return );
     LONGTAIL_VALIDATE_INPUT(iterator != 0, return );
     Longtail_CloseFind((HLongtail_FSIterator)iterator);
-	Longtail_Free(iterator);
+    Longtail_Free(iterator);
 }
 
 static int FSStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)

@@ -35,7 +35,7 @@ static uint64_t MeowHash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_
 {
     meow_state* state = (meow_state*)context;
     uint64_t hash = (uint64_t)MeowU64From(MeowEnd(state, 0), 0);
-	Longtail_Free(state);
+    Longtail_Free(state);
     return hash;
 }
 
