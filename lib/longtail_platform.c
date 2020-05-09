@@ -1407,7 +1407,7 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
     return chmod(path, permissions);
 }
 
-int Longtail_GetFilePermissions(const char*, uint16_t* out_permissions)
+int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
 {
     struct stat stat_buf;
     int res = stat(path, &stat_buf);
