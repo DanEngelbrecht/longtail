@@ -100,7 +100,14 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Changed log level from ERROR to WARNING if trying to create a directory that already exists
+          - *API CHANGE* Storage_API - new function
+            - `int GetPermissions(const char* path, uint64_t* out_permissions)`
+          - *API CHANGE* fsblockstore - added parameters for default max_block_size and default max_chunks_per_block
+            - `struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(struct Longtail_StorageAPI* storage_api, const char* content_path, uint32_t default_max_block_size, uint32_t default_max_chunks_per_block)`
+          - When updating/writing content longtail now tries to enable write access to files it wants to update
+          - fsblockstore bulk-updates content index on demand instead of when adding each default_max_block_size
+          - fsblockstore no longer temporarily deletes on disk store.lci when adding new blocks
+          - Tweaked log level of some logging
         draft: false
         prerelease: false
     - name: Download Linux artifacts
