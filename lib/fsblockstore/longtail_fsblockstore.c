@@ -636,10 +636,10 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_Dispose(%p)", api)
     LONGTAIL_FATAL_ASSERT(api, return)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
-    if (fsblockstore_api->m_ContentIndex)
+    intptr_t new_block_count = arrlen(fsblockstore_api->m_AddedBlockIndexes);
+    if (new_block_count > 0)
     {
-        intptr_t new_block_count = arrlen(fsblockstore_api->m_AddedBlockIndexes);
-        if (new_block_count > 0)
+        if (fsblockstore_api->m_ContentIndex)
         {
             struct Longtail_ContentIndex* new_content_index;
             int err = UpdateContentIndex(
@@ -651,14 +651,26 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
                 Longtail_Free(fsblockstore_api->m_ContentIndex);
                 fsblockstore_api->m_ContentIndex = new_content_index;
             }
-            while(new_block_count-- > 0)
-            {
-                struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[new_block_count];
-                Longtail_Free(block_index);
-            }
-            arrfree(fsblockstore_api->m_AddedBlockIndexes);
         }
+        else
+        {
+            Longtail_CreateContentIndexFromBlocks(
+                524288,
+                1024,
+                (uint64_t)(arrlen(fsblockstore_api->m_AddedBlockIndexes)),
+                fsblockstore_api->m_AddedBlockIndexes,
+                &fsblockstore_api->m_ContentIndex);
+        }
+        while(new_block_count-- > 0)
+        {
+            struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[new_block_count];
+            Longtail_Free(block_index);
+        }
+        arrfree(fsblockstore_api->m_AddedBlockIndexes);
+    }
 
+    if (fsblockstore_api->m_ContentIndex)
+    {
         const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
         struct Longtail_ContentIndex* existing_content_index;
         if (0 == Longtail_ReadContentIndex(fsblockstore_api->m_StorageAPI, content_index_path, &existing_content_index))
