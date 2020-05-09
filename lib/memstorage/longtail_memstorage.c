@@ -320,7 +320,7 @@ static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_ap
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_GetPermissions(%p, %s, %u) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_GetPermissions(%p, %s, %u) failed with %d",
             storage_api, path, out_permissions,
             ENOENT)
         return ENOENT;
