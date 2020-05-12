@@ -4461,6 +4461,366 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     SAFE_DISPOSE_API(storage_api);
 }
 
+TEST(Longtail, TestChangeVersionCancelOperation)
+{
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+
+    Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0);
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
+
+    const uint32_t ASSET_COUNT = 20u;
+
+    const char* TEST_FILENAMES[ASSET_COUNT] = {
+        "ContentChangedSameLength.txt",
+        "WillBeRenamed.txt",
+        "ContentSameButShorter.txt",
+        "folder/ContentSameButLonger.txt",
+        "OldRenamedFolder/MovedToNewFolder.txt",
+        "JustDifferent.txt",
+        "EmptyFileInFolder/.init.py",
+        "a/file/in/folder/LongWithChangedStart.dll",
+        "a/file/in/other/folder/LongChangedAtEnd.exe",
+        "permissions_changed.txt",
+        "ContentChangedSameLength2.txt",
+        "WillBeRenamed2.txt",
+        "ContentSameButShorter2.txt",
+        "folder/ContentSameButLonger2.txt",
+        "OldRenamedFolder/MovedToNewFolder2.txt",
+        "JustDifferent2.txt",
+        "EmptyFileInFolder/.init2.py",
+        "a/file/in/folder/LongWithChangedStart2.dll",
+        "a/file/in/other/folder/LongChangedAtEnd2.exe",
+        "permissions_changed2.txt"
+    };
+
+    const char* TEST_STRINGS[ASSET_COUNT] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "This is the documentation we are all craving to understand the complexities of life",
+        "More than chunk less than block",
+        "",
+        "A very long file that should be able to be recreated"
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+            "And in the end it is not the same, it is different, just because why not",
+        "A very long file that should be able to be recreated"
+            "Another big file but this does not contain the data as the one above, however it does start out the same as the other file,right?"
+            "Yet we also repeat this line, this is the first time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the second time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the third time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fourth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the fifth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the sixth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the eigth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the ninth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the tenth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the elevth time you see this, but it will also show up again and again with only small changes"
+            "Yet we also repeat this line, this is the twelth time you see this, but it will also show up again and again with only small changes"
+            "I realize I'm not very good at writing out the numbering with the 'th stuff at the end. Not much reason to use that before."
+            "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
+            "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
+            "That will look like garbage, will that really be a good idea?"
+            "This is the end tough...",
+        "CONTENT STAYS THE SAME BUT PERMISSIONS CHANGE",
+        "THIS IS THE FIRST TEST STRING WHICH IS FAIRLY LONG AND SHOULD - RECONSTRUCTED PROPERLY, THAN YOU VERY MUCH",
+        "SHORT STRING",
+        "ANOTHER SAMPLE STRING THAT DOES NOT MATCH ANY OTHER STRING BUT -RECONSTRUCTED PROPERLY, THAN YOU VERY MUCH",
+        "SHORT STRING",
+        "THIS IS THE DOCUMENTATION WE ARE ALL CRAVING TO UNDERSTAND THE COMPLEXITIES OF LIFE",
+        "MORE THAN CHUNK LESS THAN BLOCK",
+        "",
+        "A VERY LONG FILE THAT SHOULD BE ABLE TO BE RECREATED"
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 2 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 3 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 4 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 5 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 6 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 7 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 8 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 9 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 10 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 11 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 12 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 13 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 14 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 15 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 16 IN A LONG SEQUENCE OF STUFF."
+            "AND IN THE END IT IS NOT THE SAME, IT IS DIFFERENT, JUST BECAUSE WHY NOT",
+        "A VERY LONG FILE THAT SHOULD BE ABLE TO BE RECREATED"
+            "ANOTHER BIG FILE BUT THIS DOES NOT CONTAIN THE DATA AS THE ONE ABOVE, HOWEVER IT DOES START OUT THE SAME AS THE OTHER FILE,RIGHT?"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE FIRST TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE SECOND TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE THIRD TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE FOURTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE FIFTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE SIXTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE EIGTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE NINTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE TENTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE ELEVTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE TWELTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "I REALIZE I'M NOT VERY GOOD AT WRITING OUT THE NUMBERING WITH THE 'TH STUFF AT THE END. NOT MUCH REASON TO USE THAT BEFORE."
+            "0123456789876543213241247632464358091345+2438568736283249873298NTYVNTRNDWOIY78N43CTYERMDR498XRNHSE78TNLS43TC49MJRX3HCNTHV4T"
+            "LIURHE NGVH43OECGCLRI8FHSO7R8AB3GWC409NU3P9T757NVV74OE8NFYIECFFÖMOCSRHF ,JSYVBLSE4TMOXW3UMRC9SEN8TYN8ÖOERUCDLC4IGTCOV8EVRNOCS8LHRF"
+            "THAT WILL LOOK LIKE GARBAGE, WILL THAT REALLY BE A GOOD IDEA?"
+            "THIS IS THE END TOUGH...",
+        "CONTENT STAYS THE SAME BUT PERMISSIONS CHANGE"
+    };
+
+    const size_t TEST_SIZES[ASSET_COUNT] = {
+        strlen(TEST_STRINGS[0]) + 1,
+        strlen(TEST_STRINGS[1]) + 1,
+        strlen(TEST_STRINGS[2]) + 1,
+        strlen(TEST_STRINGS[3]) + 1,
+        strlen(TEST_STRINGS[4]) + 1,
+        strlen(TEST_STRINGS[5]) + 1,
+        strlen(TEST_STRINGS[6]) + 1,
+        strlen(TEST_STRINGS[7]) + 1,
+        strlen(TEST_STRINGS[8]) + 1,
+        strlen(TEST_STRINGS[9]) + 1,
+        strlen(TEST_STRINGS[10]) + 1,
+        strlen(TEST_STRINGS[11]) + 1,
+        strlen(TEST_STRINGS[12]) + 1,
+        strlen(TEST_STRINGS[13]) + 1,
+        strlen(TEST_STRINGS[14]) + 1,
+        strlen(TEST_STRINGS[15]) + 1,
+        strlen(TEST_STRINGS[16]) + 1,
+        strlen(TEST_STRINGS[17]) + 1,
+        strlen(TEST_STRINGS[18]) + 1,
+        strlen(TEST_STRINGS[19]) + 1
+    };
+
+    const uint16_t TEST_PERMISSIONS[ASSET_COUNT] = {
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0755,
+        0646,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0644,
+        0755,
+        0646
+    };
+
+    for (uint32_t i = 0; i < ASSET_COUNT; ++i)
+    {
+        char* file_name = storage->ConcatPath(storage, "source", TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(storage, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        if (TEST_SIZES[i])
+        {
+            ASSERT_EQ(0, storage->Write(storage, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+        }
+        storage->CloseFile(storage, w);
+        w = 0;
+        storage->SetPermissions(storage, file_name, TEST_PERMISSIONS[i]);
+        Longtail_Free(file_name);
+    }
+
+    Longtail_FileInfos* version_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version_paths);
+    uint32_t* compression_types = GetAssetTags(storage, version_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "source",
+        version_paths,
+        compression_types,
+        16,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+    Longtail_Free(compression_types);
+    compression_types = 0;
+    Longtail_Free(version_paths);
+    version_paths = 0;
+
+    Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+            hash_api,
+            vindex,
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK,
+            &content_index));
+
+    Longtail_FileInfos* current_version_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "current", &current_version_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, current_version_paths);
+    uint32_t* current_compression_types = GetAssetTags(storage, current_version_paths);
+    ASSERT_NE((uint32_t*)0, current_compression_types);
+    Longtail_VersionIndex* current_vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "current",
+        current_version_paths,
+        current_compression_types,
+        16,
+        &current_vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, current_vindex);
+    Longtail_Free(current_compression_types);
+    current_compression_types = 0;
+    Longtail_Free(current_version_paths);
+    current_version_paths = 0;
+
+    TestAsyncGetIndexComplete get_index_cb;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb.m_API));
+    get_index_cb.Wait();
+    struct Longtail_ContentIndex* block_store_content_index = get_index_cb.m_ContentIndex;
+    ASSERT_EQ(0, Longtail_WriteContent(
+        storage,
+        block_store_api,
+        job_api,
+        0,
+        0,
+        0,
+        block_store_content_index,
+        content_index,
+        vindex,
+        "source"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+    Longtail_Free(content_index);
+    content_index = 0;
+
+    Longtail_VersionDiff* version_diff;
+    ASSERT_EQ(0, Longtail_CreateVersionDiff(
+        current_vindex,
+        vindex,
+        &version_diff));
+    ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
+
+    TestAsyncGetIndexComplete get_index_cb2;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb2.m_API));
+    get_index_cb2.Wait();
+    content_index = get_index_cb2.m_ContentIndex;
+
+    struct Longtail_CancelAPI* cancel_api = Longtail_CreateAtomicCancelAPI();
+    ASSERT_NE((struct Longtail_CancelAPI*)0, cancel_api);
+    Longtail_CancelAPI_HCancelToken cancel_token;
+    ASSERT_EQ(0, cancel_api->CreateToken(cancel_api, &cancel_token));
+    ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
+
+    struct BlockStoreProxy
+    {
+        struct Longtail_BlockStoreAPI m_API;
+        struct Longtail_BlockStoreAPI* m_Base;
+        TLongtail_Atomic32 m_FailCounter;
+        static void Dispose(struct Longtail_API* api) { }
+        static int PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
+        {
+            struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
+            return api->m_Base->PutStoredBlock(api->m_Base, stored_block, async_complete_api);
+        }
+        static int PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+        {
+            struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
+            return api->m_Base->PreflightGet(api->m_Base, block_count, block_hashes, block_ref_counts);
+        }
+        static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
+        {
+            struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
+            if (Longtail_AtomicAdd32(&api->m_FailCounter, -1) <= 0)
+            {
+                return ECANCELED;
+            }
+            return api->m_Base->GetStoredBlock(api->m_Base, block_hash, async_complete_api);
+        }
+        static int GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api)
+        {
+            struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
+            return api->m_Base->GetIndex(api->m_Base, async_complete_api);
+        }
+        static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+        {
+            struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
+            return api->m_Base->GetStats(api->m_Base, out_stats);
+        }
+    } blockStoreProxy;
+    blockStoreProxy.m_Base = block_store_api;
+    blockStoreProxy.m_FailCounter = 2;
+    struct Longtail_BlockStoreAPI* block_store_proxy = Longtail_MakeBlockStoreAPI(
+        &blockStoreProxy,
+        BlockStoreProxy::Dispose,
+        BlockStoreProxy::PutStoredBlock,
+        BlockStoreProxy::PreflightGet,
+        BlockStoreProxy::GetStoredBlock,
+        BlockStoreProxy::GetIndex,
+        BlockStoreProxy::GetStats);
+
+    ASSERT_EQ(ECANCELED, Longtail_ChangeVersion(
+        block_store_proxy,
+        storage,
+        hash_api,
+        job_api,
+        0,
+        cancel_api,
+        cancel_token,
+        content_index,
+        current_vindex,
+        vindex,
+        version_diff,
+        "old",
+        1));
+    cancel_api->DisposeToken(cancel_api, cancel_token);
+
+    SAFE_DISPOSE_API(block_store_proxy);
+    SAFE_DISPOSE_API(cancel_api);
+    Longtail_Free(content_index);
+    Longtail_Free(version_diff);
+    Longtail_Free(current_vindex);
+    Longtail_Free(vindex);
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage);
+}
+
 TEST(Longtail, TestStripContentIndex)
 {
     const uint32_t ASSET_COUNT = 9u;
