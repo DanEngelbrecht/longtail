@@ -4199,10 +4199,11 @@ static int BlockReader(void* context, uint32_t job_id, int is_cancelled)
     int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockHash, &job->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockReader(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG(err == ECANCELED ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "BlockReader(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             err)
-        return err;
+        job->m_Err = err;
+        return 0;
     }
     return EBUSY;
 }
@@ -6785,7 +6786,7 @@ int Longtail_ChangeVersion(
 
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+            LONGTAIL_LOG(err == ECANCELED ?  LONGTAIL_LOG_LEVEL_WARNING: LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
                 block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
                 err)
             DeleteContentLookup(content_lookup);
