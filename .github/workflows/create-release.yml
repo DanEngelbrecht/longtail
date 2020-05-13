@@ -100,7 +100,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Fix: Assert/hang on returning error from BlockStoreAPI::GetStoredBlock()
+          - Fix: Removed spam warning when trying to create a directory that already exists
+          - Fix: Content indexes now have correct max-block-size when using Longtail_AddContentIndex()
         draft: false
         prerelease: false
     - name: Download Linux artifacts
