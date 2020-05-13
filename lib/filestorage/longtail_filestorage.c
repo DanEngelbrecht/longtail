@@ -188,7 +188,7 @@ static int FSStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const
     int err = Longtail_CreateDirectory(tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(err == EEXIST ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_CreateDir(%p, %s) failed with %d",
+        LONGTAIL_LOG(err == EEXIST ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_CreateDir(%p, %s) failed with %d",
             storage_api, path,
             err)
         return err;
