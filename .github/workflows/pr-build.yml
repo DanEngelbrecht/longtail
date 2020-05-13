@@ -38,6 +38,10 @@ jobs:
     - name: build dist
       run: |
         ./dist.sh
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-linux-x64
+        path: dist
 
   macos:
 
@@ -72,6 +76,10 @@ jobs:
     - name: build dist
       run: |
         ./dist.sh
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-macos-x64
+        path: dist
 
   win32:
 
@@ -106,3 +114,7 @@ jobs:
     - name: build dist
       run: |
         ./dist.bat
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-win32-x64
+        path: dist
