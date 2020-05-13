@@ -540,16 +540,16 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     int err = storage_api->CreateDir(storage_api, path);
-    if ((!err) || (err == EEXIST))
+    if (err)
     {
-        return 0;
+        if ((err == EEXIST) || storage_api->IsDir(storage_api, path))
+        {
+            return 0;
+        }
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir(%p, %s) failed with %d", (void*)storage_api, path, err)
+        return err;
     }
-    if (storage_api->IsDir(storage_api, path))
-    {
-        return 0;
-    }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir(%p, %s) failed with %d", (void*)storage_api, path, err)
-    return err;
+    return 0;
 }
 
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
@@ -6169,7 +6169,7 @@ int Longtail_AddContentIndex(
         &content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
         hash_identifier,
-        *local_content_index->m_MaxChunksPerBlock,
+        *local_content_index->m_MaxBlockSize,
         *local_content_index->m_MaxChunksPerBlock,
         block_count,
         chunk_count);
