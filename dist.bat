@@ -5,26 +5,26 @@ cp build/longtail_debug.exe dist
 cp build/longtail.exe dist
 cp build/longtail_debug.dll dist
 cp build/longtail.dll dist
-mkdir dist/include
-mkdir dist/include/src
-mkdir dist/include/lib
-mkdir dist/include/lib/atomiccancel
-mkdir dist/include/lib/bikeshed
-mkdir dist/include/lib/blake2
-mkdir dist/include/lib/blake3
-mkdir dist/include/lib/brotli
-mkdir dist/include/lib/cacheblockstore
-mkdir dist/include/lib/compressblockstore
-mkdir dist/include/lib/compressionregistry
-mkdir dist/include/lib/filestorage
-mkdir dist/include/lib/fsblockstore
-mkdir dist/include/lib/hashregistry
-mkdir dist/include/lib/lz4
-mkdir dist/include/lib/memstorage
-mkdir dist/include/lib/meowhash
-mkdir dist/include/lib/retainingblockstore
-mkdir dist/include/lib/shareblockstore
-mkdir dist/include/lib/zstd
+mkdir dist\include
+mkdir dist\include\src
+mkdir dist\include\lib
+mkdir dist\include\lib\atomiccancel
+mkdir dist\include\lib\bikeshed
+mkdir dist\include\lib\blake2
+mkdir dist\include\lib\blake3
+mkdir dist\include\lib\brotli
+mkdir dist\include\lib\cacheblockstore
+mkdir dist\include\lib\compressblockstore
+mkdir dist\include\lib\compressionregistry
+mkdir dist\include\lib\filestorage
+mkdir dist\include\lib\fsblockstore
+mkdir dist\include\lib\hashregistry
+mkdir dist\include\lib\lz4
+mkdir dist\include\lib\memstorage
+mkdir dist\include\lib\meowhash
+mkdir dist\include\lib\retainingblockstore
+mkdir dist\include\lib\shareblockstore
+mkdir dist\include\lib\zstd
 cp src/*.h dist/include/src
 cp lib/*.h dist/include/lib
 cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
