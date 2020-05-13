@@ -1,7 +1,5 @@
 #!/bin/bash
 
-@echo off
-
 mkdir dist
 cp build/longtail_debug dist
 cp build/longtail dist
