@@ -3,7 +3,14 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#if !defined(LONGTAIL_EXPORT)
+#if defined(LONGTAIL_EXPORT_SYMBOLS)
+    #if defined(_WIN32)
+        #define LONGTAIL_EXPORT __declspec(dllexport)
+    #endif
+    #if defined(__GNUC__) || defined(__clang__)
+        #define LONGTAIL_EXPORT __attribute__ ((visibility ("default")))
+    #endif
+#else
     #define LONGTAIL_EXPORT
 #endif
 

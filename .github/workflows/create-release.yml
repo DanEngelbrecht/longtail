@@ -19,11 +19,19 @@ jobs:
         ../build.sh
         ../build.sh release
         popd
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: build dist
       run: |
         mkdir dist
         cp ./build/longtail_debug dist/
         cp ./build/longtail dist/
+        cp ./build/liblongtail_debug.so dist/
+        cp ./build/liblongtail.so dist/
     - uses: actions/upload-artifact@master
       with:
         name: dist-linux-x64
@@ -41,11 +49,19 @@ jobs:
         ../build.sh
         ../build.sh release
         popd
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: build dist
       run: |
         mkdir dist
         cp ./build/longtail_debug dist/
         cp ./build/longtail dist/
+        cp ./build/liblongtail_debug.so dist/
+        cp ./build/liblongtail.so dist/
     - uses: actions/upload-artifact@master
       with:
         name: dist-macos-x64

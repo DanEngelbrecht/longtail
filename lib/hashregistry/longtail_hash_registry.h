@@ -1,12 +1,7 @@
 
 #pragma once
 
-#include <stdint.h>
 #include "../../src/longtail.h"
-
-#if !defined(LONGTAIL_EXPORT)
-    #define LONGTAIL_EXPORT
-#endif
 
 #ifdef __cplusplus
 extern "C" {

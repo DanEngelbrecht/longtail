@@ -23,6 +23,12 @@ jobs:
         ../build.sh
         ../build.sh release
         popd
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: run tests
       run: |
         pushd ./test
@@ -48,6 +54,12 @@ jobs:
         ../build.sh
         ../build.sh release
         popd
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: run tests
       run: |
         pushd ./test

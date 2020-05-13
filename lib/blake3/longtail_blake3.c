@@ -1,6 +1,5 @@
 #include "longtail_blake3.h"
 
-#include "../../src/longtail.h"
 #include "ext/blake3.h"
 #include <errno.h>
 

@@ -1,6 +1,5 @@
 #include "longtail_retainingblockstore.h"
 
-#include "../../src/longtail.h"
 #include "../../src/ext/stb_ds.h"
 #include "../longtail_platform.h"
 
