@@ -26,7 +26,6 @@ mkdir dist\include\lib\retainingblockstore
 mkdir dist\include\lib\shareblockstore
 mkdir dist\include\lib\zstd
 cp src/*.h dist/include/src
-cp lib/*.h dist/include/lib
 cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
 cp lib/bikeshed/*.h dist/include/lib/bikeshed
 cp lib/blake2/*.h dist/include/lib/blake2
