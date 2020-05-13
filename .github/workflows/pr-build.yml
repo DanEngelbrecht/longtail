@@ -62,7 +62,6 @@ jobs:
         mkdir dist/include/lib/retainingblockstore
         mkdir dist/include/lib/sharedblockstore
         mkdir dist/include/lib/zstd
-        mkdir dist/include
         cp src/*.h dist/include/src
         cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
         cp lib/bikeshed/*.h dist/include/lib/bikeshed
@@ -139,7 +138,6 @@ jobs:
         mkdir dist/include/lib/retainingblockstore
         mkdir dist/include/lib/sharedblockstore
         mkdir dist/include/lib/zstd
-        mkdir dist/include
         cp src/*.h dist/include/src
         cp lib/*.h dist/include/lib
         cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
@@ -217,7 +215,6 @@ jobs:
         mkdir dist/include/lib/retainingblockstore
         mkdir dist/include/lib/sharedblockstore
         mkdir dist/include/lib/zstd
-        mkdir dist/include
         cp src/*.h dist/include/src
         cp lib/*.h dist/include/lib
         cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
