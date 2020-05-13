@@ -35,6 +35,13 @@ jobs:
         ../build/test_debug
         ../build/test
         popd
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./build/longtail_debug dist/
+        cp ./build/longtail dist/
+        cp ./build/liblongtail_debug.so dist/
+        cp ./build/liblongtail.so dist/
 
   macos:
 
@@ -66,6 +73,13 @@ jobs:
         ../build/test_debug
         ../build/test
         popd
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./build/longtail_debug dist/
+        cp ./build/longtail dist/
+        cp ./build/liblongtail_debug.so dist/
+        cp ./build/liblongtail.so dist/
 
   win32:
 
@@ -97,3 +111,10 @@ jobs:
         ../build/test_debug.exe
         ../build/test.exe
         cd ..
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./build/longtail_debug.exe dist/
+        cp ./build/longtail.exe dist/
+        cp ./build/longtail_debug.dll dist/
+        cp ./build/longtail.dll dist/
