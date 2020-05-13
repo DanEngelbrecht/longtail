@@ -42,7 +42,7 @@ jobs:
         mkdir dist/include/lib/brotli
         mkdir dist/include/lib/cacheblockstore
         mkdir dist/include/lib/compressblockstore
-        mkdir dist/include/lib/compressiontregistry
+        mkdir dist/include/lib/compressionregistry
         mkdir dist/include/lib/filestorage
         mkdir dist/include/lib/fsblockstore
         mkdir dist/include/lib/hashregistry
@@ -60,7 +60,7 @@ jobs:
         cp lib/brotli/*.h dist/include/lib/brotli
         cp lib/cacheblockstore/*.h dist/include/lib/cacheblockstore
         cp lib/compressblockstore/*.h dist/include/lib/compressblockstore
-        cp lib/compressiontregistr/*.h dist/include/lib/compressiontregistry
+        cp lib/compressionregistry/*.h dist/include/lib/compressionregistry
         cp lib/filestorage/*.h dist/include/lib/filestorage
         cp lib/fsblockstore/*.h dist/include/lib/fsblockstore
         cp lib/hashregistry/*.h dist/include/lib/hashregistry
@@ -110,7 +110,7 @@ jobs:
         mkdir dist/include/lib/brotli
         mkdir dist/include/lib/cacheblockstore
         mkdir dist/include/lib/compressblockstore
-        mkdir dist/include/lib/compressiontregistry
+        mkdir dist/include/lib/compressionregistry
         mkdir dist/include/lib/filestorage
         mkdir dist/include/lib/fsblockstore
         mkdir dist/include/lib/hashregistry
@@ -129,7 +129,7 @@ jobs:
         cp lib/brotli/*.h dist/include/lib/brotli
         cp lib/cacheblockstore/*.h dist/include/lib/cacheblockstore
         cp lib/compressblockstore/*.h dist/include/lib/compressblockstore
-        cp lib/compressiontregistr/*.h dist/include/lib/compressiontregistry
+        cp lib/compressionregistry/*.h dist/include/lib/compressionregistry
         cp lib/filestorage/*.h dist/include/lib/filestorage
         cp lib/fsblockstore/*.h dist/include/lib/fsblockstore
         cp lib/hashregistry/*.h dist/include/lib/hashregistry
@@ -179,7 +179,7 @@ jobs:
         mkdir dist/include/lib/brotli
         mkdir dist/include/lib/cacheblockstore
         mkdir dist/include/lib/compressblockstore
-        mkdir dist/include/lib/compressiontregistry
+        mkdir dist/include/lib/compressionregistrycompressionregistry
         mkdir dist/include/lib/filestorage
         mkdir dist/include/lib/fsblockstore
         mkdir dist/include/lib/hashregistry
@@ -198,7 +198,7 @@ jobs:
         cp lib/brotli/*.h dist/include/lib/brotli
         cp lib/cacheblockstore/*.h dist/include/lib/cacheblockstore
         cp lib/compressblockstore/*.h dist/include/lib/compressblockstore
-        cp lib/compressiontregistr/*.h dist/include/lib/compressiontregistry
+        cp lib/compressionregistry/*.h dist/include/lib/compressionregistry
         cp lib/filestorage/*.h dist/include/lib/filestorage
         cp lib/fsblockstore/*.h dist/include/lib/fsblockstore
         cp lib/hashregistry/*.h dist/include/lib/hashregistry
