@@ -1,23 +1,4 @@
 #if defined(_WIN32)
-#define LONGTAIL_EXPORT __declspec(dllexport)
-#endif
-
-#include "../src/longtail.h"
-#include "../lib/bikeshed/longtail_bikeshed.h"
-#include "../lib/blake2/longtail_blake2.h"
-#include "../lib/blake3/longtail_blake3.h"
-#include "../lib/brotli/longtail_brotli.h"
-#include "../lib/cacheblockstore/longtail_cacheblockstore.h"
-#include "../lib/compressblockstore/longtail_compressblockstore.h"
-#include "../lib/fsblockstore/longtail_fsblockstore.h"
-#include "../lib/filestorage/longtail_filestorage.h"
-#include "../lib/lz4/longtail_lz4.h"
-#include "../lib/memstorage/longtail_memstorage.h"
-#include "../lib/meowhash/longtail_meowhash.h"
-#include "../lib/zstd/longtail_zstd.h"
-#include "../lib/compressionregistry/longtail_full_compression_registry.h"
-
-#if defined(_WIN32)
 
 #include <Windows.h>
 
@@ -30,3 +11,17 @@ BOOL WINAPI DllMain(
 }
 
 #endif
+
+#if defined(__GNUC__) || defined(__clang__)
+void __attribute__ ((constructor)) initLibrary(void) {
+ //
+ // Function that is called when the library is loaded
+ //
+}
+void __attribute__ ((destructor)) cleanUpLibrary(void) {
+ //
+ // Function that is called when the library is »closed«.
+ //
+}
+#endif
+

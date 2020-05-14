@@ -7,7 +7,7 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 jobs:
-  build-linux:
+  linux:
 
     runs-on: ubuntu-latest
 
@@ -19,17 +19,21 @@ jobs:
         ../build.sh
         ../build.sh release
         popd
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: build dist
       run: |
-        mkdir dist
-        cp ./build/longtail_debug dist/
-        cp ./build/longtail dist/
+        ./dist.sh
     - uses: actions/upload-artifact@master
       with:
         name: dist-linux-x64
         path: dist
 
-  build-macos:
+  macos:
 
     runs-on: macos-latest
 
@@ -41,11 +45,15 @@ jobs:
         ../build.sh
         ../build.sh release
         popd
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: build dist
       run: |
-        mkdir dist
-        cp ./build/longtail_debug dist/
-        cp ./build/longtail dist/
+        ./dist.sh
     - uses: actions/upload-artifact@master
       with:
         name: dist-macos-x64
@@ -71,11 +79,7 @@ jobs:
         cd ..
     - name: build dist
       run: |
-        mkdir dist
-        cp ./build/longtail_debug.exe dist/
-        cp ./build/longtail.exe dist/
-        cp ./build/longtail_debug.dll dist/
-        cp ./build/longtail.dll dist/
+        ./dist.bat
     - uses: actions/upload-artifact@master
       with:
         name: dist-win32-x64
@@ -101,6 +105,8 @@ jobs:
         body: |
           Changes in this Release
           - Fix: Removed spam warning when scanning empty directories
+          - New: Includes .so for debug and release version on Linux and MacOS
+          - New: dist archives now includes all header files that contains exports
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -1,7 +1,5 @@
 #include "longtail_meowhash.h"
 
-#include "../../src/longtail.h"
-
 #include "ext/meow_hash_x64_aesni.h"
 
 const uint32_t LONGTAIL_MEOW_HASH_TYPE = (((uint32_t)'m') << 24) + (((uint32_t)'e') << 16) + (((uint32_t)'o') << 8) + ((uint32_t)'w');

@@ -1,6 +1,5 @@
 #include "longtail_filestorage.h"
 
-#include "../../src/longtail.h"
 #include "../longtail_platform.h"
 #include <inttypes.h>
 #include <errno.h>

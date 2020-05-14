@@ -1,6 +1,5 @@
 #include "longtail_atomiccancel.h"
 
-#include "../../src/longtail.h"
 #include "../longtail_platform.h"
 #include <errno.h>
 

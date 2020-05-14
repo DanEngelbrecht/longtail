@@ -1,6 +1,5 @@
 #include "longtail_compressblockstore.h"
 
-#include "../../src/longtail.h"
 #include "../longtail_platform.h"
 
 #include <errno.h>

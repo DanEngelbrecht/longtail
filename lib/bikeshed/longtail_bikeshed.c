@@ -1,6 +1,5 @@
 #include "longtail_bikeshed.h"
 
-#include "../../src/longtail.h"
 #include "../longtail_platform.h"
 
 #define BIKESHED_IMPLEMENTATION

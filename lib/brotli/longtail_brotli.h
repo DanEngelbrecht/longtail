@@ -1,10 +1,7 @@
 #pragma once
 
+#include "../../src/longtail.h"
 #include "../compressblockstore/longtail_compressblockstore.h"
-
-#if !defined(LONGTAIL_EXPORT)
-    #define LONGTAIL_EXPORT
-#endif
 
 #ifdef __cplusplus
 extern "C" {

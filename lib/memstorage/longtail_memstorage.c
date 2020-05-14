@@ -1,6 +1,5 @@
 #include "longtail_memstorage.h"
 
-#include "../../src/longtail.h"
 #include "../longtail_platform.h"
 #include "../../src/ext/stb_ds.h"
 

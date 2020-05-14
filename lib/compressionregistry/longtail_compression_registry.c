@@ -1,6 +1,5 @@
 #include "longtail_compression_registry.h"
 
-#include "../../src/longtail.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>
