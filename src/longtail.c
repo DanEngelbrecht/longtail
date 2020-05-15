@@ -387,6 +387,25 @@ struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
 
 void Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err) { async_complete_api->OnComplete(async_complete_api, content_index, err); }
 
+uint64_t Longtail_GetAsyncRetargetContentAPISize()
+{
+    return sizeof(struct Longtail_AsyncRetargetContentAPI);
+}
+
+struct Longtail_AsyncRetargetContentAPI* Longtail_MakeAsyncRetargetContentAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncRetargetContent_OnCompleteFunc on_complete_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_AsyncRetargetContentAPI* api = (struct Longtail_AsyncRetargetContentAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->OnComplete = on_complete_func;
+    return api;
+}
+
+void Longtail_AsyncRetargetContent_OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err) { async_complete_api->OnComplete(async_complete_api, content_index, err); }
+
 uint64_t Longtail_GetBlockStoreAPISize()
 {
     return sizeof(struct Longtail_BlockStoreAPI);
@@ -399,6 +418,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_PreflightGetFunc preflight_get_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetIndexFunc get_index_func,
+    Longtail_BlockStore_RetargetContentFunc retarget_content_func,
     Longtail_BlockStore_GetStatsFunc get_stats_func)
 {
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
@@ -408,6 +428,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     api->PreflightGet = preflight_get_func;
     api->GetStoredBlock = get_stored_block_func;
     api->GetIndex = get_index_func;
+    api->RetargetContent = retarget_content_func;
     api->GetStats = get_stats_func;
     return api;
 }
@@ -416,6 +437,7 @@ int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
 int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts) { return block_store_api->PreflightGet(block_store_api, block_count, block_hashes, block_ref_counts); }
 int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api) { return block_store_api->GetStoredBlock(block_store_api, block_hash, async_complete_api); }
 int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api) { return block_store_api->GetIndex(block_store_api, async_complete_api); }
+int Longtail_BlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api) { return block_store_api->RetargetContent(block_store_api, content_index, async_complete_api); }
 int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats) { return block_store_api->GetStats(block_store_api, out_stats); }
 
 Longtail_Assert Longtail_Assert_private = 0;
@@ -5805,6 +5827,144 @@ int Longtail_CreateMissingContent(
     return err;
 }
 
+LONGTAIL_EXPORT int Longtail_GetMissingContent(
+    struct Longtail_HashAPI* hash_api,
+    const struct Longtail_ContentIndex* reference_content_index,
+    const struct Longtail_ContentIndex* content_index,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_GetMissingContent(%p, %p, %p, %p)",
+        hash_api, reference_content_index, content_index, out_content_index)
+    LONGTAIL_VALIDATE_INPUT(hash_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(reference_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(((*reference_content_index->m_BlockCount) == 0 || (*content_index->m_BlockCount) == 0) || ((*reference_content_index->m_HashIdentifier) == hash_api->GetIdentifier(hash_api)), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(((*reference_content_index->m_BlockCount) == 0 || (*content_index->m_BlockCount) == 0) || ((*reference_content_index->m_HashIdentifier) == hash_api->GetIdentifier(hash_api)), return EINVAL)
+
+    // Go through all chunks in content_index, if there is a chunk that is not in reference_content_index
+    // add that block to out_content_index
+
+    struct HashToIndexItem* chunk_to_reference_block_index_lookup = 0;
+    for (uint64_t c = 0; c < *reference_content_index->m_ChunkCount; ++c)
+    {
+        TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[c];
+        uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[c];
+        hmput(chunk_to_reference_block_index_lookup, chunk_hash, block_index);
+    }
+
+    size_t missing_blocks_indexes_size = sizeof(uint64_t) * (*content_index->m_BlockCount);
+    uint64_t* missing_blocks_indexes = (uint64_t*)Longtail_Alloc(missing_blocks_indexes_size);
+    if (!missing_blocks_indexes)
+    {
+        hmfree(chunk_to_reference_block_index_lookup);
+        return ENOMEM;
+    }
+    struct HashToIndexItem* block_hash_to_missing_index = 0;
+    uint64_t missing_block_count = 0;
+    uint64_t missing_chunk_count = 0;
+
+    for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
+    {
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[c];
+        if (hmgeti(chunk_to_reference_block_index_lookup, chunk_hash) != -1)
+        {
+            continue;
+        }
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        intptr_t missing_block_index_ptr = hmgeti(block_hash_to_missing_index, block_hash);
+        if (missing_block_index_ptr != -1)
+        {
+            continue;
+        }
+
+        hmput(block_hash_to_missing_index, block_hash, missing_block_count);
+        missing_blocks_indexes[missing_block_count++] = block_index;
+    }
+
+    size_t missing_chunk_indexes_size = sizeof(uint64_t) * (*content_index->m_ChunkCount);
+    uint64_t* missing_chunk_indexes = (uint64_t*)Longtail_Alloc(missing_chunk_indexes_size);
+    if (!missing_chunk_indexes)
+    {
+        Longtail_Free(missing_blocks_indexes);
+        hmfree(block_hash_to_missing_index);
+        hmfree(chunk_to_reference_block_index_lookup);
+        return ENOMEM;
+    }
+
+    for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
+    {
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[c];
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        if (hmgeti(block_hash_to_missing_index, block_hash) == -1)
+        {
+            continue;
+        }
+        missing_chunk_indexes[missing_chunk_count++] = c;
+    }
+
+    size_t content_index_size = Longtail_GetContentIndexSize(missing_block_count, missing_chunk_count);
+    struct Longtail_ContentIndex* resulting_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
+    if (!resulting_content_index)
+    {
+        Longtail_Free(missing_chunk_indexes);
+        Longtail_Free(missing_blocks_indexes);
+        hmfree(block_hash_to_missing_index);
+        hmfree(chunk_to_reference_block_index_lookup);
+        return ENOMEM;
+    }
+
+    int err = Longtail_InitContentIndex(
+        resulting_content_index,
+        &resulting_content_index[1],
+        content_index_size - sizeof(struct Longtail_ContentIndex),
+        hash_api->GetIdentifier(hash_api),
+        *reference_content_index->m_MaxBlockSize,
+        *reference_content_index->m_MaxChunksPerBlock,
+        missing_block_count,
+        missing_chunk_count);
+    if (err)
+    {
+        Longtail_Free(resulting_content_index);
+        Longtail_Free(missing_chunk_indexes);
+        Longtail_Free(missing_blocks_indexes);
+        hmfree(block_hash_to_missing_index);
+        hmfree(chunk_to_reference_block_index_lookup);
+        return err;
+    }
+
+    for (uint64_t b = 0; b < missing_block_count; ++b)
+    {
+        uint64_t block_index = missing_blocks_indexes[b];
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        resulting_content_index->m_BlockHashes[b] = block_hash;
+    }
+
+    for (uint64_t c = 0; c < missing_chunk_count; ++c)
+    {
+        uint64_t chunk_index = missing_chunk_indexes[c];
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[chunk_index];
+        uint32_t chunk_block_offset = content_index->m_ChunkBlockOffsets[chunk_index];
+        uint32_t chunk_length = content_index->m_ChunkLengths[chunk_index];
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        uint64_t missing_block_index = hmget(block_hash_to_missing_index, block_hash);
+        resulting_content_index->m_ChunkHashes[c] = chunk_hash;
+        resulting_content_index->m_ChunkBlockIndexes[c] = missing_block_index;
+        resulting_content_index->m_ChunkBlockOffsets[c] = chunk_block_offset;
+        resulting_content_index->m_ChunkLengths[c] = chunk_length;
+    }
+
+    Longtail_Free(missing_chunk_indexes);
+    Longtail_Free(missing_blocks_indexes);
+    hmfree(block_hash_to_missing_index);
+    hmfree(chunk_to_reference_block_index_lookup);
+    *out_content_index = resulting_content_index;
+    return 0;
+}
+
 int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
     const struct Longtail_ContentIndex* content_index,
@@ -5848,16 +6008,8 @@ int Longtail_RetargetContent(
         intptr_t reference_block_index_ptr = hmgeti(chunk_to_reference_block_index_lookup, chunk_hash);
         if (reference_block_index_ptr == -1)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-                reference_content_index, content_index, out_content_index,
-                EINVAL)
-            hmfree(requested_blocks_lookup);
-            requested_blocks_lookup = 0;
-            Longtail_Free(requested_block_hashes);
-            requested_block_hashes = 0;
-            hmfree(chunk_to_reference_block_index_lookup);
-            chunk_to_reference_block_index_lookup = 0;
-            return EINVAL;
+            // If the chunk is not in the reference content index, just drop it
+            continue;
         }
         uint64_t reference_block_index = chunk_to_reference_block_index_lookup[reference_block_index_ptr].value;
         TLongtail_Hash reference_block_hash = reference_content_index->m_BlockHashes[reference_block_index];
