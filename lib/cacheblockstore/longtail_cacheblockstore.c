@@ -592,7 +592,7 @@ struct RetargetContext
 
 static void RetargetContent_GetIndexesCompleteAPI_OnComplete(void* context)
 {
-    struct RetargetContext* retarget_context = context;
+    struct RetargetContext* retarget_context = (struct RetargetContext*)context;
     int err = retarget_context->m_LocalErr ? retarget_context->m_LocalErr : retarget_context->m_RemoteErr;
     if (err)
     {
