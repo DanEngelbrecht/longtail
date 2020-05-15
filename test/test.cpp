@@ -5051,7 +5051,7 @@ static struct Longtail_ContentIndex* SyncRetargetContent(Longtail_BlockStoreAPI*
 static struct Longtail_ContentIndex* SyncGetContentIndex(Longtail_BlockStoreAPI* block_store)
 {
     TestAsyncGetIndexComplete get_local_index_complete;
-    if (0, block_store->GetIndex(block_store, &get_local_index_complete.m_API))
+    if (block_store->GetIndex(block_store, &get_local_index_complete.m_API))
     {
         return 0;
     }
@@ -5230,6 +5230,7 @@ TEST(Longtail, BlockStoreRetargetContent)
         version_index_1,
         root_path_1));
 
+    Longtail_Free(retarget_cache_content_index);
     retarget_cache_content_index = SyncRetargetContent(cached_block_store_api, version_1_content_index);
     ASSERT_EQ(*version_1_content_index->m_BlockCount, *retarget_cache_content_index->m_BlockCount);
     ASSERT_EQ(*version_1_content_index->m_ChunkCount, *retarget_cache_content_index->m_ChunkCount);
@@ -5394,6 +5395,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     Longtail_Free(version_index_3);
     Longtail_Free(update_content_index_3);
 
+    Longtail_Free(version_2_update_content_index);
     Longtail_Free(version_1_update_content_index);
     Longtail_Free(version_diff);
     Longtail_Free(version_index_2);
