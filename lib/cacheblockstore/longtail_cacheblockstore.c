@@ -463,7 +463,7 @@ struct GetIndexContext
 
 static void GetIndex_GetIndexesCompleteAPI_OnComplete(void* context)
 {
-    struct GetIndexContext* retarget_context = (struct GetIndexContext* retarget_context)context;
+    struct GetIndexContext* retarget_context = (struct GetIndexContext*)context;
     int err = retarget_context->m_LocalErr ? retarget_context->m_LocalErr : retarget_context->m_RemoteErr;
     if (err)
     {
