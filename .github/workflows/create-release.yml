@@ -104,9 +104,13 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Fix: Removed spam warning when scanning empty directories
-          - New: Includes .so for debug and release version on Linux and MacOS
-          - New: dist archives now includes all header files that contains exports
+          - *API CHANGED*: `Longtail_BlockStoreAPI` now expects a `RetargetContent` function
+          - *API ADDED*: `Longtail_GetMissingContent`
+          - Now possible to write/change version without downloading full index from BlockStore
+          - `Longtail_CacheBlockStore` now returns merged content index from local and remote index
+          - Cleaned up blockstore constructors
+          - longtail cmd tool now does downsync without fetching full index from blockstore
+          - `LongtailBlockStore::PreflightGet`: Cache block store filters out blocks it knows before passing to remote store
         draft: false
         prerelease: false
     - name: Download Linux artifacts

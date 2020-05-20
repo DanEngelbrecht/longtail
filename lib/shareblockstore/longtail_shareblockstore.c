@@ -296,6 +296,32 @@ static int ShareBlockStore_GetIndex(
     return 0;
 }
 
+static int ShareBlockStore_RetargetContent(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_ContentIndex* content_index,
+    struct Longtail_AsyncRetargetContentAPI* async_complete_api)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_RetargetContent(%p, %p, %p)",
+        block_store_api, content_index, async_complete_api)
+    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(content_index, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
+
+    struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    int err = api->m_BackingBlockStore->RetargetContent(
+        api->m_BackingBlockStore,
+        content_index,
+        async_complete_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_RetargetContent(%p, %p, %p) failed with %d",
+            block_store_api, content_index, async_complete_api,
+            err)
+        return err;
+    }
+    return 0;
+}
+
 static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
@@ -328,19 +354,31 @@ static void ShareBlockStore_Dispose(struct Longtail_API* base_api)
 }
 
 static int ShareBlockStore_Init(
-    struct ShareBlockStoreAPI* api,
-    struct Longtail_BlockStoreAPI* backing_block_store)
+    void* mem,
+    struct Longtail_BlockStoreAPI* backing_block_store,
+    struct Longtail_BlockStoreAPI** out_block_store_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p, %p, %" PRIu64 ")", api, backing_block_store)
-    LONGTAIL_FATAL_ASSERT(api, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p, %p, %p)",
+        mem, backing_block_store, out_block_store_api)
+    LONGTAIL_FATAL_ASSERT(mem, return EINVAL)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(out_block_store_api, return EINVAL)
 
-    api->m_BlockStoreAPI.m_API.Dispose = ShareBlockStore_Dispose;
-    api->m_BlockStoreAPI.PutStoredBlock = ShareBlockStore_PutStoredBlock;
-    api->m_BlockStoreAPI.PreflightGet = ShareBlockStore_PreflightGet;
-    api->m_BlockStoreAPI.GetStoredBlock = ShareBlockStore_GetStoredBlock;
-    api->m_BlockStoreAPI.GetIndex = ShareBlockStore_GetIndex;
-    api->m_BlockStoreAPI.GetStats = ShareBlockStore_GetStats;
+    struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
+        mem,
+        ShareBlockStore_Dispose,
+        ShareBlockStore_PutStoredBlock,
+        ShareBlockStore_PreflightGet,
+        ShareBlockStore_GetStoredBlock,
+        ShareBlockStore_GetIndex,
+        ShareBlockStore_RetargetContent,
+        ShareBlockStore_GetStats);
+    if (!block_store_api)
+    {
+        return EINVAL;
+    }
+
+    struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     api->m_BackingBlockStore = backing_block_store;
     api->m_BlockHashToSharedStoredBlock = 0;
     api->m_BlockHashToCompleteCallbacks = 0;
@@ -353,6 +391,7 @@ static int ShareBlockStore_Init(
             ENOMEM)
         return err;
     }
+    *out_block_store_api = block_store_api;
     return 0;
 }
 
@@ -363,24 +402,26 @@ struct Longtail_BlockStoreAPI* Longtail_CreateShareBlockStoreAPI(
     LONGTAIL_FATAL_ASSERT(backing_block_store, return 0)
 
     size_t api_size = sizeof(struct ShareBlockStoreAPI);
-    struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)Longtail_Alloc(api_size);
-    if (!api)
+    void* mem = Longtail_Alloc(api_size);
+    if (!mem)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p) failed with %d",
             backing_block_store,
             ENOMEM)
         return 0;
     }
+    struct Longtail_BlockStoreAPI* block_store_api;
     int err = ShareBlockStore_Init(
-        api,
-        backing_block_store);
+        mem,
+        backing_block_store,
+        &block_store_api);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p) failed with %d",
             backing_block_store,
             err)
-        Longtail_Free(api);
+        Longtail_Free(mem);
         return 0;
     }
-    return &api->m_BlockStoreAPI;
+    return block_store_api;
 }

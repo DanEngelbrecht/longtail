@@ -464,6 +464,27 @@ LONGTAIL_EXPORT struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
 
 LONGTAIL_EXPORT void Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
 
+////////////// Longtail_AsyncRetargetContentAPI
+
+struct Longtail_AsyncRetargetContentAPI;
+
+typedef void (*Longtail_AsyncRetargetContent_OnCompleteFunc)(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+
+struct Longtail_AsyncRetargetContentAPI
+{
+    struct Longtail_API m_API;
+    Longtail_AsyncRetargetContent_OnCompleteFunc OnComplete;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncRetargetContentAPISize();
+
+LONGTAIL_EXPORT struct Longtail_AsyncRetargetContentAPI* Longtail_MakeAsyncRetargetContentAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncRetargetContent_OnCompleteFunc on_complete_func);
+
+LONGTAIL_EXPORT void Longtail_AsyncRetargetContent_OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+
 ////////////// Longtail_BlockStoreAPI
 
 struct Longtail_BlockStoreAPI;
@@ -489,6 +510,7 @@ typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStore
 typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_RetargetContentFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 
 struct Longtail_BlockStoreAPI
@@ -498,6 +520,7 @@ struct Longtail_BlockStoreAPI
     Longtail_BlockStore_PreflightGetFunc PreflightGet;
     Longtail_BlockStore_GetStoredBlockFunc GetStoredBlock;
     Longtail_BlockStore_GetIndexFunc GetIndex;
+    Longtail_BlockStore_RetargetContentFunc RetargetContent;
     Longtail_BlockStore_GetStatsFunc GetStats;
 };
 
@@ -511,12 +534,14 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_PreflightGetFunc preflight_get_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetIndexFunc get_index_func,
+    Longtail_BlockStore_RetargetContentFunc retarget_content_func,
     Longtail_BlockStore_GetStatsFunc get_stats_func);
 
 LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+LONGTAIL_EXPORT int Longtail_BlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
@@ -708,6 +733,12 @@ LONGTAIL_EXPORT int Longtail_CreateMissingContent(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
+LONGTAIL_EXPORT int Longtail_GetMissingContent(
+    struct Longtail_HashAPI* hash_api,
+    const struct Longtail_ContentIndex* reference_content_index,
+    const struct Longtail_ContentIndex* content_index,
+    struct Longtail_ContentIndex** out_content_index);
+
 LONGTAIL_EXPORT int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
     const struct Longtail_ContentIndex* content_index,
@@ -715,12 +746,12 @@ LONGTAIL_EXPORT int Longtail_RetargetContent(
 
 LONGTAIL_EXPORT int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* local_content_index,
-    struct Longtail_ContentIndex* remote_content_index,
+    struct Longtail_ContentIndex* new_content_index,
     struct Longtail_ContentIndex** out_content_index);
 
 LONGTAIL_EXPORT int Longtail_AddContentIndex(
     struct Longtail_ContentIndex* local_content_index,
-    struct Longtail_ContentIndex* remote_content_index,
+    struct Longtail_ContentIndex* new_content_index,
     struct Longtail_ContentIndex** out_content_index);
 
 LONGTAIL_EXPORT int Longtail_WriteVersion(
