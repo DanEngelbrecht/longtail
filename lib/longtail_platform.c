@@ -1034,8 +1034,7 @@ int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
     mach_timespec_t wait_time;
     wait_time.tv_sec = timeout_us / 1000000u;
     wait_time.tv_nsec = (timeout_us * 1000) - (wait_time.tv_sec * 1000000u);
-    uint64_t dealine = semaphore_deadline(wait_time.tv_sec, wait_time.tv_nsec);
-    kern_return_t ret = semaphore_timedwait(semaphore->m_Semaphore, dealine);
+    kern_return_t ret = semaphore_timedwait(semaphore->m_Semaphore, wait_time);
     return (int)ret;
 }
 
