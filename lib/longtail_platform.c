@@ -985,7 +985,17 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 
 int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
-    kern_return_t ret = semaphore_wait(semaphore->m_Semaphore);
+    if (timeout_us == LONGTAIL_TIMEOUT_INFINITE)
+    {
+        kern_return_t ret = semaphore_wait(semaphore->m_Semaphore);
+        return (int)ret;
+    }
+
+    mach_timespec_t wait_time;
+    wait_time.tv_sec = timeout_us / 1000000u;
+    wait_time.tv_nsec = (timeout_us * 1000) - (wait_time.tv_sec * 1000000u);
+    uint64_t dealine = semaphore_deadline(wait_time.tv_sec, wait_time.tv_nsec);
+    kern_return_t ret = semaphore_timedwait(semaphore->m_Semaphore, dealine);
     return (int)ret;
 }
 
@@ -1065,11 +1075,37 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 
 int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
-    if (0 == sem_wait(&semaphore->m_Semaphore))
+    if (timeout_us == LONGTAIL_TIMEOUT_INFINITE)
     {
-        return 0;
+        if (0 == sem_wait(&semaphore->m_Semaphore))
+        {
+            return 0;
+        }
+        return errno;
     }
-    return errno;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
+        return errno;
+    ts.tv_nsec += timeout_us * 1000;
+    if (ts.tv_nsec > 1000000000u)
+    {
+        ++ts.tv_sec;
+        ts.tv_nsec -= 1000000000u;
+    }
+    while (1)
+    {
+        int s = sem_timedwait(&semaphore->m_Semaphore, &ts);
+        if (s == 0)
+        {
+            return 0;
+        }
+        int res = errno;
+        if (res == EINTR)
+        {
+            continue;
+        }
+        return res;
+    }
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
