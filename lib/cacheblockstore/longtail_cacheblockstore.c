@@ -222,8 +222,8 @@ void PreflightGetLocalStoreIndexOnComplete(struct Longtail_AsyncGetIndexAPI* asy
 
     Longtail_Free(api->m_PreflightBlockRefCounts);
     Longtail_Free(api->m_PreflightBlockHashes);
-    Longtail_Free(api);
     Longtail_Free(content_index);
+    Longtail_Free(api);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "PreflightGetLocalStoreIndexOnComplete(%p, %p) failed with %d",

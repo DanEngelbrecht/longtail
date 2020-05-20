@@ -342,6 +342,57 @@ static struct Longtail_ContentIndex* SyncRetargetContent(struct Longtail_BlockSt
     return content_index;
 }
 
+struct AsyncRetargetContentComplete
+{
+    struct Longtail_AsyncRetargetContentAPI m_API;
+    HLongtail_Sema m_NotifySema;
+    int m_Err;
+    struct Longtail_ContentIndex* m_ContentIndex;
+};
+
+static void AsyncRetargetContentComplete_OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
+{
+    struct AsyncRetargetContentComplete* cb = (struct AsyncRetargetContentComplete*)async_complete_api;
+    cb->m_Err = err;
+    cb->m_ContentIndex = content_index;
+    Longtail_PostSema(cb->m_NotifySema, 1);
+}
+
+void AsyncRetargetContentComplete_Wait(struct AsyncRetargetContentComplete* api)
+{
+    Longtail_WaitSema(api->m_NotifySema);
+}
+
+static void AsyncRetargetContentComplete_Init(struct AsyncRetargetContentComplete* api)
+{
+    api->m_Err = EINVAL;
+    api->m_API.m_API.Dispose = 0;
+    api->m_API.OnComplete = AsyncRetargetContentComplete_OnComplete;
+    api->m_ContentIndex = 0;
+    Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &api->m_NotifySema);
+}
+static void AsyncRetargetContentComplete_Dispose(struct AsyncRetargetContentComplete* api)
+{
+    Longtail_DeleteSema(api->m_NotifySema);
+    Longtail_Free(api->m_NotifySema);
+}
+
+
+
+static struct Longtail_ContentIndex* SyncRetargetContent(struct Longtail_BlockStoreAPI* block_store, struct Longtail_ContentIndex* version_content_index)
+{
+    struct AsyncRetargetContentComplete retarget_content_index_complete;
+    AsyncRetargetContentComplete_Init(&retarget_content_index_complete);
+    if (block_store->RetargetContent(block_store, version_content_index, &retarget_content_index_complete.m_API))
+    {
+        return 0;
+    }
+    AsyncRetargetContentComplete_Wait(&retarget_content_index_complete);
+    struct Longtail_ContentIndex* content_index =  retarget_content_index_complete.m_ContentIndex;
+    AsyncRetargetContentComplete_Dispose(&retarget_content_index_complete);
+    return content_index;
+}
+
 int UpSync(
     const char* storage_uri_raw,
     const char* source_path,
