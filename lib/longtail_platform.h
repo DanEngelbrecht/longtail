@@ -23,7 +23,7 @@ typedef struct Longtail_Thread* HLongtail_Thread;
 typedef int (*Longtail_ThreadFunc)(void* context_data);
 
 size_t  Longtail_GetThreadSize();
-int     Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread);
+int     Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, int priority, HLongtail_Thread* out_thread);
 int     Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us);
 void    Longtail_DeleteThread(HLongtail_Thread thread);
 
@@ -31,7 +31,7 @@ typedef struct Longtail_Sema* HLongtail_Sema;
 size_t  Longtail_GetSemaSize();
 int     Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema);
 int     Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count);
-int     Longtail_WaitSema(HLongtail_Sema semaphore);
+int     Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us);
 void    Longtail_DeleteSema(HLongtail_Sema semaphore);
 
 typedef struct Longtail_SpinLock* HLongtail_SpinLock;

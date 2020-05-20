@@ -152,7 +152,7 @@ size_t Longtail_GetThreadSize()
     return sizeof(struct Longtail_Thread);
 }
 
-int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread)
+int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, int priority, HLongtail_Thread* out_thread)
 {
     struct Longtail_Thread* thread = (struct Longtail_Thread*)mem;
     thread->m_ThreadFunc = thread_func;
@@ -167,6 +167,23 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     if (thread->m_Handle == INVALID_HANDLE_VALUE)
     {
         return Win32ErrorToErrno(GetLastError());
+    }
+    switch (priority)
+    {
+        case 0:
+            break;
+        case 1:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_ABOVE_NORMAL);
+            break;
+        case 2:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_HIGHEST);
+            break;
+        case -1:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_BELOW_NORMAL);
+            break;
+        case -2:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_LOWEST);
+            break;
     }
     *out_thread = thread;
     return 0;
@@ -235,9 +252,10 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
     return EINVAL;
 }
 
-int Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
-    DWORD res = WaitForSingleObject(semaphore->m_Handle, INFINITE);
+    DWORD timeout_ms = timeout_us == LONGTAIL_TIMEOUT_INFINITE ? INFINITE : (DWORD)(timeout_us / 1000);
+    DWORD res = WaitForSingleObject(semaphore->m_Handle, timeout_ms);
     switch (res)
     {
         case WAIT_OBJECT_0:
@@ -768,7 +786,7 @@ size_t Longtail_GetThreadSize()
     return sizeof(struct Longtail_Thread);
 }
 
-int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread)
+int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, int priority, HLongtail_Thread* out_thread)
 {
     struct Longtail_Thread* thread      = (struct Longtail_Thread*)mem;
     thread->m_ThreadFunc                = thread_func;
@@ -780,12 +798,53 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     int exit_lock_err = EINVAL;
     int exit_cont_err = EINVAL;
     int thread_err = EINVAL;
+    int sched_attr_err = EINVAL;
+    int prio_min = 0;
+    int prio_max = 0;
+    struct sched_param sched_options;
 
     pthread_attr_t attr;
     attr_err = pthread_attr_init(&attr);
     if (attr_err != 0) {
         err = attr_err;
         goto error;
+    }
+
+    if (priority != 0)
+    {
+        prio_min = sched_get_priority_min(SCHED_RR);
+        prio_max = sched_get_priority_max(SCHED_RR);
+        sched_attr_err = pthread_attr_setschedpolicy(&attr, SCHED_RR);
+        if (sched_attr_err)
+        {
+            err = sched_attr_err;
+            goto error;
+        }
+
+        switch (priority)
+        {
+            case 1:
+                sched_options.sched_priority = (prio_max - prio_min) / 2 + (prio_max - prio_min) / 4;
+                break;
+            case 2:
+                sched_options.sched_priority = prio_max;
+                break;
+            case -1:
+                sched_options.sched_priority = (prio_max - prio_min) / 2 - (prio_max - prio_min) / 4;
+                break;
+            case -2:
+                sched_options.sched_priority = prio_min;
+                break;
+           default:
+               return EINVAL;
+        }
+
+        sched_attr_err = pthread_attr_setschedparam(&attr, &sched_options);
+        if (sched_attr_err)
+        {
+            err = sched_attr_err;
+            goto error;
+        }
     }
 
     exit_lock_err = pthread_mutex_init(&thread->m_ExitLock, 0);
@@ -816,6 +875,7 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     }
     pthread_attr_destroy(&attr);
     *out_thread = thread;
+
     return 0;
 
 error:
@@ -963,9 +1023,18 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
     return 0;
 }
 
-int Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
-    kern_return_t ret = semaphore_wait(semaphore->m_Semaphore);
+    if (timeout_us == LONGTAIL_TIMEOUT_INFINITE)
+    {
+        kern_return_t ret = semaphore_wait(semaphore->m_Semaphore);
+        return (int)ret;
+    }
+
+    mach_timespec_t wait_time;
+    wait_time.tv_sec = timeout_us / 1000000u;
+    wait_time.tv_nsec = (timeout_us * 1000) - (wait_time.tv_sec * 1000000u);
+    kern_return_t ret = semaphore_timedwait(semaphore->m_Semaphore, wait_time);
     return (int)ret;
 }
 
@@ -1043,13 +1112,39 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
     return 0;
 }
 
-int Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
-    if (0 == sem_wait(&semaphore->m_Semaphore))
+    if (timeout_us == LONGTAIL_TIMEOUT_INFINITE)
     {
-        return 0;
+        if (0 == sem_wait(&semaphore->m_Semaphore))
+        {
+            return 0;
+        }
+        return errno;
     }
-    return errno;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
+        return errno;
+    ts.tv_nsec += timeout_us * 1000;
+    if (ts.tv_nsec > 1000000000u)
+    {
+        ++ts.tv_sec;
+        ts.tv_nsec -= 1000000000u;
+    }
+    while (1)
+    {
+        int s = sem_timedwait(&semaphore->m_Semaphore, &ts);
+        if (s == 0)
+        {
+            return 0;
+        }
+        int res = errno;
+        if (res == EINTR)
+        {
+            continue;
+        }
+        return res;
+    }
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)

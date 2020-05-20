@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 mkdir dist
 cp build/longtail_debug dist

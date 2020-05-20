@@ -105,12 +105,14 @@ jobs:
         body: |
           Changes in this Release
           - *API CHANGED*: `Longtail_BlockStoreAPI` now expects a `RetargetContent` function
-          - *API ADDED*: `Longtail_GetMissingContent`
+          - *API CHANGED*: `Longtail_CreateBikeshedJobAPI` now takes second parameter with priority of worker tasks
+            - *API ADDED*: `Longtail_GetMissingContent`
           - Now possible to write/change version without downloading full index from BlockStore
           - `Longtail_CacheBlockStore` now returns merged content index from local and remote index
           - Cleaned up blockstore constructors
           - longtail cmd tool now does downsync without fetching full index from blockstore
           - `LongtailBlockStore::PreflightGet`: Cache block store filters out blocks it knows before passing to remote store
+          - Added semaphore wait with timout to avoid calls to Longtail_Sleep()
         draft: false
         prerelease: false
     - name: Download Linux artifacts

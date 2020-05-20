@@ -288,7 +288,7 @@ static void AsyncGetIndexComplete_Dispose(struct AsyncGetIndexComplete* me)
 
 static void AsyncGetIndexComplete_Wait(struct AsyncGetIndexComplete* me)
 {
-    Longtail_WaitSema(me->m_NotifySema);
+    Longtail_WaitSema(me->m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
 }
 
 struct AsyncRetargetContentComplete
@@ -309,7 +309,7 @@ static void AsyncRetargetContentComplete_OnComplete(struct Longtail_AsyncRetarge
 
 void AsyncRetargetContentComplete_Wait(struct AsyncRetargetContentComplete* api)
 {
-    Longtail_WaitSema(api->m_NotifySema);
+    Longtail_WaitSema(api->m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
 }
 
 static void AsyncRetargetContentComplete_Init(struct AsyncRetargetContentComplete* api)
@@ -325,8 +325,6 @@ static void AsyncRetargetContentComplete_Dispose(struct AsyncRetargetContentComp
     Longtail_DeleteSema(api->m_NotifySema);
     Longtail_Free(api->m_NotifySema);
 }
-
-
 
 static struct Longtail_ContentIndex* SyncRetargetContent(struct Longtail_BlockStoreAPI* block_store, struct Longtail_ContentIndex* version_content_index)
 {
@@ -355,7 +353,7 @@ int UpSync(
 {
     const char* storage_path = NormalizePath(storage_uri_raw);
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
-    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
@@ -602,7 +600,7 @@ int DownSync(
     uint32_t max_chunks_per_block)
 {
     const char* storage_path = NormalizePath(storage_uri_raw);
-    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();

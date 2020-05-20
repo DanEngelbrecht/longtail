@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export THIRDPARTY_DIR=${BASE_DIR}/third-party/
@@ -24,7 +25,7 @@ if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
     export ASAN=""
-    export ARCH="-m64 -maes -mssse3"
+    export ARCH="-m64 -maes -mssse3 -msse4.1"
 
     . ./build_options.sh
     export OUTPUT=$TARGET
@@ -34,7 +35,7 @@ else
     export OPT="-g"
     export ASAN="-fsanitize=address -fno-omit-frame-pointer"
     BASE_CXXFLAGS="$BASE_CXXFLAGS" # -Wall -Weverything"
-    export ARCH="-m64 -maes -mssse3"
+    export ARCH="-m64 -maes -mssse3 -msse4.1"
 
     . ./build_options.sh
     export OUTPUT=${TARGET}_debug
