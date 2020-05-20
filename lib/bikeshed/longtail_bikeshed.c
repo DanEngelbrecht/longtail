@@ -30,7 +30,7 @@ static void ReadyCallback_Ready(struct Bikeshed_ReadyCallback* ready_callback, u
 static void ReadyCallback_Wait(struct ReadyCallback* ready_callback)
 {
     LONGTAIL_FATAL_ASSERT(ready_callback, return)
-    Longtail_WaitSema(ready_callback->m_Semaphore);
+    Longtail_WaitSema(ready_callback->m_Semaphore, LONGTAIL_TIMEOUT_INFINITE);
 }
 
 static int ReadyCallback_Init(struct ReadyCallback* ready_callback)
@@ -68,13 +68,13 @@ static int32_t ThreadWorker_Execute(void* context)
     {
         if (!Bikeshed_ExecuteOne(thread_worker->shed, 0))
         {
-            Longtail_WaitSema(thread_worker->semaphore);
+            Longtail_WaitSema(thread_worker->semaphore, LONGTAIL_TIMEOUT_INFINITE);
         }
     }
     return 0;
 }
 
-static int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_shed, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
+static int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_shed, int worker_priority, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
 {
     LONGTAIL_FATAL_ASSERT(thread_worker, return EINVAL)
     LONGTAIL_FATAL_ASSERT(in_shed, return EINVAL)
@@ -83,7 +83,7 @@ static int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshe
     thread_worker->shed               = in_shed;
     thread_worker->stop               = in_stop;
     thread_worker->semaphore          = in_semaphore;
-    return Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, thread_worker, &thread_worker->thread);
+    return Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, thread_worker, worker_priority, &thread_worker->thread);
 }
 
 static int ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
@@ -120,6 +120,7 @@ struct BikeshedJobAPI
     Bikeshed m_Shed;
     uint32_t m_WorkerCount;
     struct ThreadWorker* m_Workers;
+    int m_WorkerPriority;
     int32_t volatile m_Stop;
 };
 
@@ -351,7 +352,7 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
         {
             old_pending_count = bikeshed_job_group->m_PendingJobCount;
         }
-        Longtail_Sleep(1000);
+        Longtail_WaitSema(bikeshed_job_api->m_ReadyCallback.m_Semaphore, 1000);
     }
     if (progressAPI)
     {
@@ -396,7 +397,7 @@ static void Bikeshed_Dispose(struct Longtail_API* job_api)
     Longtail_Free(bikeshed_job_api);
 }
 
-static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
+static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count, int worker_priority)
 {
     LONGTAIL_FATAL_ASSERT(job_api, return EINVAL)
     job_api->m_BikeshedAPI.m_API.Dispose = Bikeshed_Dispose;
@@ -410,6 +411,7 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
     job_api->m_Shed = 0;
     job_api->m_WorkerCount = worker_count;
     job_api->m_Workers = 0;
+    job_api->m_WorkerPriority = worker_priority;
     job_api->m_Stop = 0;
 
     int err = ReadyCallback_Init(&job_api->m_ReadyCallback);
@@ -443,7 +445,7 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
     for (uint32_t i = 0; i < job_api->m_WorkerCount; ++i)
     {
         ThreadWorker_Init(&job_api->m_Workers[i]);
-        err = ThreadWorker_CreateThread(&job_api->m_Workers[i], job_api->m_Shed, job_api->m_ReadyCallback.m_Semaphore, &job_api->m_Stop);
+        err = ThreadWorker_CreateThread(&job_api->m_Workers[i], job_api->m_Shed, job_api->m_WorkerPriority, job_api->m_ReadyCallback.m_Semaphore, &job_api->m_Stop);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Bikeshed_Init(%p, %u) failed with %d",
@@ -462,11 +464,12 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
     return 0;
 }
 
-struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count)
+struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count, int worker_priority)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateBikeshedJobAPI(%u)", worker_count)
+    LONGTAIL_VALIDATE_INPUT(worker_priority >= -1 && worker_priority <= 1, return 0)
     struct BikeshedJobAPI* job_api = (struct BikeshedJobAPI*)Longtail_Alloc(sizeof(struct BikeshedJobAPI));
-    int err = Bikeshed_Init(job_api, worker_count);
+    int err = Bikeshed_Init(job_api, worker_count, worker_priority);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBikeshedJobAPI(%u) failed with %d",

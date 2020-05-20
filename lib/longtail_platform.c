@@ -152,7 +152,7 @@ size_t Longtail_GetThreadSize()
     return sizeof(struct Longtail_Thread);
 }
 
-int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread)
+int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, int priority, HLongtail_Thread* out_thread)
 {
     struct Longtail_Thread* thread = (struct Longtail_Thread*)mem;
     thread->m_ThreadFunc = thread_func;
@@ -167,6 +167,23 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     if (thread->m_Handle == INVALID_HANDLE_VALUE)
     {
         return Win32ErrorToErrno(GetLastError());
+    }
+    switch (priority)
+    {
+        case 0:
+            break;
+        case 1:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_ABOVE_NORMAL);
+            break;
+        case 2:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_HIGHEST);
+            break;
+        case -1:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_BELOW_NORMAL);
+            break;
+        case -2:
+            SetThreadPriority(thread->m_Handle, THREAD_PRIORITY_LOWEST);
+            break;
     }
     *out_thread = thread;
     return 0;
@@ -235,9 +252,10 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
     return EINVAL;
 }
 
-int Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
-    DWORD res = WaitForSingleObject(semaphore->m_Handle, INFINITE);
+    DWORD timeout_ms = timeout_us == LONGTAIL_TIMEOUT_INFINITE ? INFINITE : (DWORD)(timeout_us / 1000);
+    DWORD res = WaitForSingleObject(semaphore->m_Handle, timeout_ms);
     switch (res)
     {
         case WAIT_OBJECT_0:
@@ -768,7 +786,7 @@ size_t Longtail_GetThreadSize()
     return sizeof(struct Longtail_Thread);
 }
 
-int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, HLongtail_Thread* out_thread)
+int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, int priority, HLongtail_Thread* out_thread)
 {
     struct Longtail_Thread* thread      = (struct Longtail_Thread*)mem;
     thread->m_ThreadFunc                = thread_func;
@@ -816,6 +834,8 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     }
     pthread_attr_destroy(&attr);
     *out_thread = thread;
+
+    // TODO: Set thread priority
     return 0;
 
 error:
@@ -963,7 +983,7 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
     return 0;
 }
 
-int Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
     kern_return_t ret = semaphore_wait(semaphore->m_Semaphore);
     return (int)ret;
@@ -1043,7 +1063,7 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
     return 0;
 }
 
-int Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore, uint64_t timeout_us)
 {
     if (0 == sem_wait(&semaphore->m_Semaphore))
     {

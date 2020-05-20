@@ -288,7 +288,7 @@ static void AsyncGetIndexComplete_Dispose(struct AsyncGetIndexComplete* me)
 
 static void AsyncGetIndexComplete_Wait(struct AsyncGetIndexComplete* me)
 {
-    Longtail_WaitSema(me->m_NotifySema);
+    Longtail_WaitSema(me->m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
 }
 
 struct AsyncRetargetContentComplete
@@ -309,7 +309,7 @@ static void AsyncRetargetContentComplete_OnComplete(struct Longtail_AsyncRetarge
 
 void AsyncRetargetContentComplete_Wait(struct AsyncRetargetContentComplete* api)
 {
-    Longtail_WaitSema(api->m_NotifySema);
+    Longtail_WaitSema(api->m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
 }
 
 static void AsyncRetargetContentComplete_Init(struct AsyncRetargetContentComplete* api)

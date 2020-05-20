@@ -512,7 +512,7 @@ static int FSBlockStore_GetIndexSync(
     struct FSBlockStoreAPI* fsblockstore_api,
     struct Longtail_ContentIndex** out_content_index)
 {
-    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount());
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), -1);
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (!fsblockstore_api->m_ContentIndex)
     {
