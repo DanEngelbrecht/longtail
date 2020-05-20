@@ -59,7 +59,7 @@ jobs:
         name: dist-macos-x64
         path: dist
 
-  build-win32:
+  win32:
 
     runs-on: windows-latest
 
@@ -89,7 +89,7 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    needs: [build-linux, build-macos, build-win32]
+    needs: [linux, macos, win32]
 
     steps:
     - name: Checkout code
@@ -106,7 +106,7 @@ jobs:
           Changes in this Release
           - *API CHANGED*: `Longtail_BlockStoreAPI` now expects a `RetargetContent` function
           - *API CHANGED*: `Longtail_CreateBikeshedJobAPI` now takes second parameter with priority of worker tasks
-            - *API ADDED*: `Longtail_GetMissingContent`
+          - *API ADDED*: `Longtail_GetMissingContent`
           - Now possible to write/change version without downloading full index from BlockStore
           - `Longtail_CacheBlockStore` now returns merged content index from local and remote index
           - Cleaned up blockstore constructors
