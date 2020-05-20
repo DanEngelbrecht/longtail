@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 mkdir dist
 cp build/longtail_debug dist
