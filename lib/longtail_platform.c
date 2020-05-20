@@ -798,12 +798,53 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     int exit_lock_err = EINVAL;
     int exit_cont_err = EINVAL;
     int thread_err = EINVAL;
+    int sched_attr_err = EINVAL;
+    int prio_min = 0;
+    int prio_max = 0;
+    struct sched_param sched_options;
 
     pthread_attr_t attr;
     attr_err = pthread_attr_init(&attr);
     if (attr_err != 0) {
         err = attr_err;
         goto error;
+    }
+
+    if (priority != 0)
+    {
+        prio_min = sched_get_priority_min(SCHED_RR);
+        prio_max = sched_get_priority_max(SCHED_RR);
+        sched_attr_err = pthread_attr_setschedpolicy(&attr, SCHED_RR);
+        if (sched_attr_err)
+        {
+            err = sched_attr_err;
+            goto error;
+        }
+
+        switch (priority)
+        {
+            case 1:
+                sched_options.sched_priority = (prio_max - prio_min) / 2 + (prio_max - prio_min) / 4;
+                break;
+            case 2:
+                sched_options.sched_priority = prio_max;
+                break;
+            case -1:
+                sched_options.sched_priority = (prio_max - prio_min) / 2 - (prio_max - prio_min) / 4;
+                break;
+            case -2:
+                sched_options.sched_priority = prio_min;
+                break;
+           default:
+               return EINVAL;
+        }
+
+        sched_attr_err = pthread_attr_setschedparam(&attr, &sched_options);
+        if (sched_attr_err)
+        {
+            err = sched_attr_err;
+            goto error;
+        }
     }
 
     exit_lock_err = pthread_mutex_init(&thread->m_ExitLock, 0);
@@ -835,7 +876,6 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     pthread_attr_destroy(&attr);
     *out_thread = thread;
 
-    // TODO: Set thread priority
     return 0;
 
 error:
