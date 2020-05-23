@@ -17,7 +17,7 @@ else
 fi
 
 export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
-export BASE_CXXFLAGS="$BASE_CXXFLAGS -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2"
+export BASE_CXXFLAGS="$BASE_CXXFLAGS -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2" #We would like to enable these but that require per-file options for avx2/avx512 compiler flags
 
 # -pedantic
 # -Wno-atomic-implicit-seq-cst
