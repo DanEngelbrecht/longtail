@@ -1,6 +1,6 @@
 #include "blake3_impl.h"
 
-#if defined(__ARM_NEON__)
+#if defined(__ARM_NEON__) || defined(__ARM_NEON)
 
 #include <arm_neon.h>
 
