@@ -4443,6 +4443,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     job_context.root_path = "testdata";
     job_context.file_infos = file_infos;
     job_context.vindex = &vindex;
+    job_context.sema = sema;
 
     Longtail_JobAPI_Group job_group;
     ASSERT_EQ(0, job_api->ReserveJobs(job_api, 1, &job_group));
