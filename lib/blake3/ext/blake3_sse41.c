@@ -1,5 +1,7 @@
 #include "blake3_impl.h"
 
+#if !defined(BLAKE3_NO_SSE41)
+
 #include <immintrin.h>
 
 #define DEGREE 4
@@ -428,6 +430,9 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
   out[13] = loadu(&inputs[1][block_offset + 3 * sizeof(__m128i)]);
   out[14] = loadu(&inputs[2][block_offset + 3 * sizeof(__m128i)]);
   out[15] = loadu(&inputs[3][block_offset + 3 * sizeof(__m128i)]);
+  for (size_t i = 0; i < 4; ++i) {
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
+  }
   transpose_vecs(&out[0]);
   transpose_vecs(&out[4]);
   transpose_vecs(&out[8]);
@@ -435,14 +440,16 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
 }
 
 INLINE void load_counters(uint64_t counter, bool increment_counter,
-                          __m128i *out_low, __m128i *out_high) {
-  uint64_t mask = (increment_counter ? ~0 : 0);
-  *out_low = set4(
-      counter_low(counter + (mask & 0)), counter_low(counter + (mask & 1)),
-      counter_low(counter + (mask & 2)), counter_low(counter + (mask & 3)));
-  *out_high = set4(
-      counter_high(counter + (mask & 0)), counter_high(counter + (mask & 1)),
-      counter_high(counter + (mask & 2)), counter_high(counter + (mask & 3)));
+                          __m128i *out_lo, __m128i *out_hi) {
+  const __m128i mask = _mm_set1_epi32(-(int32_t)increment_counter);
+  const __m128i add0 = _mm_set_epi32(3, 2, 1, 0);
+  const __m128i add1 = _mm_and_si128(mask, add0);
+  __m128i l = _mm_add_epi32(_mm_set1_epi32((int)counter), add1);
+  __m128i carry = _mm_cmpgt_epi32(_mm_xor_si128(add1, _mm_set1_epi32(0x80000000)), 
+                                  _mm_xor_si128(   l, _mm_set1_epi32(0x80000000)));
+  __m128i h = _mm_sub_epi32(_mm_set1_epi32(counter >> 32), carry);
+  *out_lo = l;
+  *out_hi = h;
 }
 
 void blake3_hash4_sse41(const uint8_t *const *inputs, size_t blocks,
@@ -552,3 +559,5 @@ void blake3_hash_many_sse41(const uint8_t *const *inputs, size_t num_inputs,
     out = &out[BLAKE3_OUT_LEN];
   }
 }
+
+#endif

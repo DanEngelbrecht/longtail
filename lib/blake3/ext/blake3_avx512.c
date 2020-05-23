@@ -1,6 +1,6 @@
 #include "blake3_impl.h"
 
-#if 0
+#if !defined(BLAKE3_NO_AVX512)
 
 #include <immintrin.h>
 
@@ -469,6 +469,9 @@ INLINE void transpose_msg_vecs4(const uint8_t *const *inputs,
   out[13] = loadu_128(&inputs[1][block_offset + 3 * sizeof(__m128i)]);
   out[14] = loadu_128(&inputs[2][block_offset + 3 * sizeof(__m128i)]);
   out[15] = loadu_128(&inputs[3][block_offset + 3 * sizeof(__m128i)]);
+  for (size_t i = 0; i < 4; ++i) {
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
+  }
   transpose_vecs_128(&out[0]);
   transpose_vecs_128(&out[4]);
   transpose_vecs_128(&out[8]);
@@ -722,6 +725,9 @@ INLINE void transpose_msg_vecs8(const uint8_t *const *inputs,
   out[13] = loadu_256(&inputs[5][block_offset + 1 * sizeof(__m256i)]);
   out[14] = loadu_256(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
   out[15] = loadu_256(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
+  for (size_t i = 0; i < 8; ++i) {
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
+  }
   transpose_vecs_256(&out[0]);
   transpose_vecs_256(&out[8]);
 }
@@ -1032,25 +1038,22 @@ INLINE void transpose_msg_vecs16(const uint8_t *const *inputs,
   out[13] = loadu_512(&inputs[13][block_offset]);
   out[14] = loadu_512(&inputs[14][block_offset]);
   out[15] = loadu_512(&inputs[15][block_offset]);
+  for (size_t i = 0; i < 16; ++i) {
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
+  }
   transpose_vecs_512(out);
 }
 
 INLINE void load_counters16(uint64_t counter, bool increment_counter,
                             __m512i *out_lo, __m512i *out_hi) {
-  uint64_t mask = (increment_counter ? ~0 : 0);
-  __m512i mask_vec = _mm512_set1_epi64(mask);
-  __m512i deltas_a = _mm512_setr_epi64(0, 1, 2, 3, 4, 5, 6, 7);
-  deltas_a = _mm512_and_si512(mask_vec, deltas_a);
-  __m512i deltas_b = _mm512_setr_epi64(8, 9, 10, 11, 12, 13, 14, 15);
-  deltas_b = _mm512_and_si512(mask_vec, deltas_b);
-  __m512i a = _mm512_add_epi64(_mm512_set1_epi64((int64_t)counter), deltas_a);
-  __m512i b = _mm512_add_epi64(_mm512_set1_epi64((int64_t)counter), deltas_b);
-  __m512i lo_indexes = _mm512_setr_epi32(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20,
-                                         22, 24, 26, 28, 30);
-  __m512i hi_indexes = _mm512_setr_epi32(1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21,
-                                         23, 25, 27, 29, 31);
-  *out_lo = _mm512_permutex2var_epi32(a, lo_indexes, b);
-  *out_hi = _mm512_permutex2var_epi32(a, hi_indexes, b);
+  const __m512i mask = _mm512_set1_epi32(-(int32_t)increment_counter);
+  const __m512i add0 = _mm512_set_epi32(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
+  const __m512i add1 = _mm512_and_si512(mask, add0);
+  __m512i l = _mm512_add_epi32(_mm512_set1_epi32((int)counter), add1);
+  __mmask16 carry = _mm512_cmp_epu32_mask(l, add1, _MM_CMPINT_LT);
+  __m512i h = _mm512_mask_add_epi32(_mm512_set1_epi32(counter >> 32), carry, _mm512_set1_epi32(counter >> 32), _mm512_set1_epi32(1));
+  *out_lo = l;
+  *out_hi = h;
 }
 
 void blake3_hash16_avx512(const uint8_t *const *inputs, size_t blocks,
@@ -1111,22 +1114,22 @@ void blake3_hash16_avx512(const uint8_t *const *inputs, size_t blocks,
       set1_512(0), set1_512(0), set1_512(0), set1_512(0),
   };
   transpose_vecs_512(padded);
-  storeu_256(_mm512_castsi512_si256(padded[0]), &out[0 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[1]), &out[1 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[2]), &out[2 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[3]), &out[3 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[4]), &out[4 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[5]), &out[5 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[6]), &out[6 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[7]), &out[7 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[8]), &out[8 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[9]), &out[9 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[10]), &out[10 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[11]), &out[11 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[12]), &out[12 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[13]), &out[13 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[14]), &out[14 * sizeof(__m256i)]);
-  storeu_256(_mm512_castsi512_si256(padded[15]), &out[15 * sizeof(__m256i)]);
+  _mm256_mask_storeu_epi32(&out[0 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[0]));
+  _mm256_mask_storeu_epi32(&out[1 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[1]));
+  _mm256_mask_storeu_epi32(&out[2 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[2]));
+  _mm256_mask_storeu_epi32(&out[3 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[3]));
+  _mm256_mask_storeu_epi32(&out[4 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[4]));
+  _mm256_mask_storeu_epi32(&out[5 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[5]));
+  _mm256_mask_storeu_epi32(&out[6 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[6]));
+  _mm256_mask_storeu_epi32(&out[7 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[7]));
+  _mm256_mask_storeu_epi32(&out[8 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[8]));
+  _mm256_mask_storeu_epi32(&out[9 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[9]));
+  _mm256_mask_storeu_epi32(&out[10 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[10]));
+  _mm256_mask_storeu_epi32(&out[11 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[11]));
+  _mm256_mask_storeu_epi32(&out[12 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[12]));
+  _mm256_mask_storeu_epi32(&out[13 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[13]));
+  _mm256_mask_storeu_epi32(&out[14 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[14]));
+  _mm256_mask_storeu_epi32(&out[15 * sizeof(__m256i)], (__mmask8)-1, _mm512_castsi512_si256(padded[15]));
 }
 
 /*
