@@ -25,7 +25,7 @@ if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
     export ASAN=""
-    export ARCH="-m64 -maes -mssse3 -msse4.1"
+    export ARCH="-m64 -maes -mssse3 -msse4.2 -mavx2 -mavx512vl -mavx512f"
 
     . ./build_options.sh
     export OUTPUT=$TARGET
@@ -35,7 +35,7 @@ else
     export OPT="-g"
     export ASAN="-fsanitize=address -fno-omit-frame-pointer"
     BASE_CXXFLAGS="$BASE_CXXFLAGS" # -Wall -Weverything"
-    export ARCH="-m64 -maes -mssse3 -msse4.1"
+    export ARCH="-m64 -maes -mssse3 -msse4.2 -mavx2 -mavx512vl -mavx512f"
 
     . ./build_options.sh
     export OUTPUT=${TARGET}_debug
