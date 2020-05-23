@@ -17,7 +17,6 @@ else
 fi
 
 export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
-export BASE_CXXFLAGS="$BASE_CXXFLAGS -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2" #We would like to enable these but that require per-file options for avx2/avx512 compiler flags
 
 # -pedantic
 # -Wno-atomic-implicit-seq-cst
@@ -27,7 +26,7 @@ if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
     export ASAN=""
-    export ARCH="-m64 -maes -mssse3 -msse4.2"
+    export ARCH="-m64 -maes -mssse3 -msse4.1"
 
     . ./build_options.sh
     export OUTPUT=$TARGET
@@ -37,7 +36,7 @@ else
     export OPT="-g"
     export ASAN="-fsanitize=address -fno-omit-frame-pointer"
     BASE_CXXFLAGS="$BASE_CXXFLAGS" # -Wall -Weverything"
-    export ARCH="-m64 -maes -mssse3 -msse4.2"
+    export ARCH="-m64 -maes -mssse3 -msse4.1"
 
     . ./build_options.sh
     export OUTPUT=${TARGET}_debug
@@ -65,6 +64,15 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     cd $BASE_DIR/build/third-party-$RELEASE_MODE
     rm -rf $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
     clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
+    if [ ! -z "$THIRDPARTY_SRC_SSE42" ]; then
+        clang++ -c $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
+    fi
+    if [ ! -z "$THIRDPARTY_SRC_AVX2" ]; then
+        clang++ -c $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
+    fi
+    if [ ! -z "$THIRDPARTY_SRC_AVX512" ]; then
+        clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
+    fi
     ar rc $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
     cd $BASE_DIR
 fi
