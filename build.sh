@@ -64,13 +64,13 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     cd $BASE_DIR/build/third-party-$RELEASE_MODE
     rm -rf $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
     clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
-    if [ ! -z "$THIRDPARTY_SRC_SSE42" ]; then
+    if [ -n "$THIRDPARTY_SRC_SSE42" ]; then
         clang++ -c $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
     fi
-    if [ ! -z "$THIRDPARTY_SRC_AVX2" ]; then
+    if [ -n "$THIRDPARTY_SRC_AVX2" ]; then
         clang++ -c $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
     fi
-    if [ ! -z "$THIRDPARTY_SRC_AVX512" ]; then
+    if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
         clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
     fi
     ar rc $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
