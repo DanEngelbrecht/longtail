@@ -89,7 +89,7 @@ static
     uint32_t regs[4] = {0};
     uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
     (void)edx;
-    enum cpu_feature features = (enum cpu_feature)0;
+    uint32_t features = 0;
     cpuid(regs, 0);
     const int max_id = *eax;
     cpuid(regs, 1);
@@ -122,8 +122,8 @@ static
         }
       }
     }
-    g_cpu_features = features;
-    return features;
+    g_cpu_features = (enum cpu_feature)features;
+    return (enum cpu_feature)features;
 #else
     /* How to detect NEON? */
     return 0;
