@@ -2,6 +2,8 @@
 
 #include <immintrin.h>
 
+#if 0
+
 #define DEGREE 8
 
 INLINE __m256i loadu(const uint8_t src[32]) {
@@ -323,3 +325,5 @@ void blake3_hash_many_avx2(const uint8_t *const *inputs, size_t num_inputs,
                             out);
 #endif
 }
+
+#endif // 0
