@@ -4,11 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define BLAKE3_NO_AVX512
-#define BLAKE3_NO_AVX2
-//#define BLAKE3_NO_SSE41
-//#define BLAKE3_USE_NEON
-
 #ifdef __cplusplus
 extern "C" {
 #endif
