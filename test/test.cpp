@@ -4385,7 +4385,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
-    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(16, 0);
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(2, 0);
     ASSERT_NE((struct Longtail_JobAPI*)0, job_api);
 
     struct Longtail_CancelAPI* cancel_api = Longtail_CreateAtomicCancelAPI();
@@ -4399,6 +4399,9 @@ TEST(Longtail, TestCreateVersionCancelOperation)
 
     Longtail_VersionIndex* vindex = 0;
 
+    HLongtail_Sema sema;
+    ASSERT_EQ(0, Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()),0 ,&sema));
+
     struct JobContext
     {
         Longtail_StorageAPI* storage_api;
@@ -4410,10 +4413,13 @@ TEST(Longtail, TestCreateVersionCancelOperation)
         Longtail_FileInfos* file_infos;
         Longtail_VersionIndex** vindex;
         int err;
+        HLongtail_Sema sema;
 
         static int JobFunc(void* context, uint32_t job_id, int is_cancelled)
         {
             struct JobContext* job = (struct JobContext*)context;
+            Longtail_WaitSema(job->sema, LONGTAIL_TIMEOUT_INFINITE);
+
             job->err = Longtail_CreateVersionIndex(
                 job->storage_api,
                 job->hash_api,
@@ -4447,10 +4453,14 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     ASSERT_EQ(0, job_api->CreateJobs(job_api, job_group, 1, job_funcs, job_ctxs, &jobs));
     ASSERT_EQ(0, job_api->ReadyJobs(job_api, 1, jobs));
     ASSERT_EQ(0, cancel_api->Cancel(cancel_api, cancel_token));
+    ASSERT_EQ(0, Longtail_PostSema(sema, 1));
     ASSERT_EQ(ECANCELED, job_api->WaitForAllJobs(job_api, job_group, 0, cancel_api, cancel_token));
 
     ASSERT_EQ(ECANCELED, job_context.err);
     ASSERT_EQ((Longtail_VersionIndex*)0, vindex);
+
+    Longtail_DeleteSema(sema);
+    Longtail_Free(sema);
 
     Longtail_Free(file_infos);
 
