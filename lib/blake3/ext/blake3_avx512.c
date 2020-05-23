@@ -1,6 +1,6 @@
 #include "blake3_impl.h"
 
-#if 0
+#if !defined(BLAKE3_NO_AVX512)
 
 #include <immintrin.h>
 

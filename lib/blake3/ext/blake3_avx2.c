@@ -2,7 +2,7 @@
 
 #include <immintrin.h>
 
-#if 0
+#if !defined(BLAKE3_NO_AVX2)
 
 #define DEGREE 8
 
