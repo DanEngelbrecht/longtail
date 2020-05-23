@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define BLAKE3_NO_AVX512
+
 #ifdef __cplusplus
 extern "C" {
 #endif
