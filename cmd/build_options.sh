@@ -34,7 +34,7 @@ BLAKE2_SRC="$BASE_DIR/lib/blake2/*.c"
 BLAKE2_THIRDPARTY_SRC="$BASE_DIR/lib/blake2/ext/*.c"
 
 BLAKE3_SRC="$BASE_DIR/lib/blake3/*.c"
-BLAKE3_THIRDPARTY_SRC="$BASE_DIR/lib/blake3/ext/blake3_dispatch.c $BASE_DIR/lib/blake3/ext/blake3_portable.c $BASE_DIR/lib/blake3/ext/blake3_sse41.c"
+BLAKE3_THIRDPARTY_SRC="$BASE_DIR/lib/blake3/ext/blake3.c $BASE_DIR/lib/blake3/ext/blake3_dispatch.c $BASE_DIR/lib/blake3/ext/blake3_portable.c $BASE_DIR/lib/blake3/ext/blake3_sse41.c"
 BLAKE3_THIRDPARTY_AVX2="$BASE_DIR/lib/blake3/ext/blake3_avx2.c"
 BLAKE3_THIRDPARTY_AVX512="$BASE_DIR/lib/blake3/ext/blake3_avx512.c"
 
