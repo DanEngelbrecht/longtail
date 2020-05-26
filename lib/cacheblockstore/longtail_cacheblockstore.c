@@ -356,7 +356,6 @@ static int StoreBlockCopyToLocalCache(struct CacheBlockStoreAPI* cacheblockstore
             local_block_store, copy_stored_block,
             local_block_store, copy_stored_block, &put_local->m_API,
             err)
-        Longtail_Free(copy_stored_block);
         Longtail_Free(put_local);
         Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1);
         return err;
