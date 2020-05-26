@@ -5424,3 +5424,251 @@ TEST(Longtail, BlockStoreRetargetContent)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(storage_api);
 }
+
+struct FailableStorageAPI
+{
+    struct Longtail_StorageAPI m_API;
+    struct Longtail_StorageAPI* m_BackingAPI;
+    int m_PassCount;
+    int m_WriteError;
+
+    static void Dispose(struct Longtail_API* api) { Longtail_Free(api); }
+    static int OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->OpenReadFile(api->m_BackingAPI, path, out_open_file);}
+    static int GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetSize(api->m_BackingAPI, f, out_size);}
+    static int Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->Read(api->m_BackingAPI, f, offset, length, output);}
+    static int OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->OpenWriteFile(api->m_BackingAPI, path, initial_size, out_open_file);}
+    static int Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return ((api->m_PassCount-- <= 0) && offset > 0 && api->m_WriteError != 0) ? api->m_WriteError : api->m_BackingAPI->Write(api->m_BackingAPI, f, offset, length, input);}
+    static int SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->SetSize(api->m_BackingAPI, f, length);}
+    static int SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->SetPermissions(api->m_BackingAPI, path, permissions);}
+    static int GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetPermissions(api->m_BackingAPI, path, out_permissions);}
+    static void CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->CloseFile(api->m_BackingAPI, f);}
+    static int CreateDir(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->CreateDir(api->m_BackingAPI, path);}
+    static int RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->RenameFile(api->m_BackingAPI, source_path, target_path);}
+    static char* ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->ConcatPath(api->m_BackingAPI, root_path, sub_path);}
+    static int IsDir(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->IsDir(api->m_BackingAPI, path);}
+    static int IsFile(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->IsFile(api->m_BackingAPI, path);}
+    static int RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->RemoveDir(api->m_BackingAPI, path);}
+    static int RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->RemoveFile(api->m_BackingAPI, path);}
+    static int StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->StartFind(api->m_BackingAPI, path, out_iterator);}
+    static int FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->FindNext(api->m_BackingAPI, iterator);}
+    static void CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->CloseFind(api->m_BackingAPI, iterator);}
+    static int GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetEntryProperties(api->m_BackingAPI, iterator, out_properties);}
+};
+
+struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
+{
+    void* mem = Longtail_Alloc(sizeof(struct FailableStorageAPI));
+    struct Longtail_StorageAPI* api = Longtail_MakeStorageAPI(
+        mem,
+        FailableStorageAPI::Dispose,
+        FailableStorageAPI::OpenReadFile,
+        FailableStorageAPI::GetSize,
+        FailableStorageAPI::Read,
+        FailableStorageAPI::OpenWriteFile,
+        FailableStorageAPI::Write,
+        FailableStorageAPI::SetSize,
+        FailableStorageAPI::SetPermissions,
+        FailableStorageAPI::GetPermissions,
+        FailableStorageAPI::CloseFile,
+        FailableStorageAPI::CreateDir,
+        FailableStorageAPI::RenameFile,
+        FailableStorageAPI::ConcatPath,
+        FailableStorageAPI::IsDir,
+        FailableStorageAPI::IsFile,
+        FailableStorageAPI::RemoveDir,
+        FailableStorageAPI::RemoveFile,
+        FailableStorageAPI::StartFind,
+        FailableStorageAPI::FindNext,
+        FailableStorageAPI::CloseFind,
+        FailableStorageAPI::GetEntryProperties);
+    struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
+    failable_storage_api->m_BackingAPI = backing_api;
+    failable_storage_api->m_PassCount = 0x7fffffff;
+    failable_storage_api->m_WriteError = 0;
+    return failable_storage_api;
+}
+
+TEST(Longtail, TestChangeVersionDiskFull)
+{
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 1u;
+
+    Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
+    struct FailableStorageAPI* failable_storage_api = CreateFailableStorageAPI(mem_storage);
+    Longtail_StorageAPI* storage = &failable_storage_api->m_API;
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
+
+    const uint32_t ASSET_COUNT = 1u;
+
+    const char* TEST_FILENAMES[ASSET_COUNT] = {
+        "ContentChangedSameLength.txt"
+    };
+
+    const char* TEST_STRINGS[ASSET_COUNT] = {
+        "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"
+    };
+
+    const size_t TEST_SIZES[ASSET_COUNT] = {
+        strlen(TEST_STRINGS[0]) + 1
+    };
+
+    const uint16_t TEST_PERMISSIONS[ASSET_COUNT] = {
+        0644
+    };
+
+    for (uint32_t i = 0; i < ASSET_COUNT; ++i)
+    {
+        char* file_name = storage->ConcatPath(storage, "source", TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(storage, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        if (TEST_SIZES[i])
+        {
+            ASSERT_EQ(0, storage->Write(storage, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+        }
+        storage->CloseFile(storage, w);
+        w = 0;
+        storage->SetPermissions(storage, file_name, TEST_PERMISSIONS[i]);
+        Longtail_Free(file_name);
+    }
+
+    Longtail_FileInfos* version_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version_paths);
+    uint32_t* compression_types = GetAssetTags(storage, version_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "source",
+        version_paths,
+        compression_types,
+        48,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+    Longtail_Free(compression_types);
+    compression_types = 0;
+    Longtail_Free(version_paths);
+    version_paths = 0;
+
+    Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+            hash_api,
+            vindex,
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK,
+            &content_index));
+
+    TestAsyncGetIndexComplete get_index_cb;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb.m_API));
+    get_index_cb.Wait();
+    struct Longtail_ContentIndex* block_store_content_index = get_index_cb.m_ContentIndex;
+    ASSERT_EQ(0, Longtail_WriteContent(
+        storage,
+        block_store_api,
+        job_api,
+        0,
+        0,
+        0,
+        block_store_content_index,
+        content_index,
+        vindex,
+        "source"));
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+    Longtail_Free(content_index);
+    content_index = 0;
+
+
+
+
+
+    Longtail_FileInfos* current_version_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "current", &current_version_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, current_version_paths);
+    uint32_t* current_compression_types = GetAssetTags(storage, current_version_paths);
+    ASSERT_NE((uint32_t*)0, current_compression_types);
+    Longtail_VersionIndex* current_vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "current",
+        current_version_paths,
+        current_compression_types,
+        16,
+        &current_vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, current_vindex);
+    Longtail_Free(current_compression_types);
+    current_compression_types = 0;
+    Longtail_Free(current_version_paths);
+    current_version_paths = 0;
+
+    Longtail_VersionDiff* version_diff;
+    ASSERT_EQ(0, Longtail_CreateVersionDiff(
+        current_vindex,
+        vindex,
+        &version_diff));
+    ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
+
+    TestAsyncGetIndexComplete get_index_cb2;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb2.m_API));
+    get_index_cb2.Wait();
+    content_index = get_index_cb2.m_ContentIndex;
+
+    failable_storage_api->m_PassCount = 3;
+    failable_storage_api->m_WriteError = ENOSPC;
+    ASSERT_EQ(ENOSPC, Longtail_ChangeVersion(
+        block_store_api,
+        storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        content_index,
+        current_vindex,
+        vindex,
+        version_diff,
+        "old",
+        1));
+
+    Longtail_Free(content_index);
+    Longtail_Free(version_diff);
+    Longtail_Free(current_vindex);
+    Longtail_Free(vindex);
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API((&failable_storage_api->m_API));
+    SAFE_DISPOSE_API(mem_storage);
+}
