@@ -4402,7 +4402,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     struct WritePartialAssetFromBlocksJob* job = (struct WritePartialAssetFromBlocksJob*)context;
 
     // Need to fetch all the data we need from the context since we will reuse it
-    job->m_Err = 0;
+    int block_reader_errors = 0;
     uint32_t block_block_reador_job_count = job->m_BlockReaderJobCount;
     TLongtail_Hash block_hashes[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     struct Longtail_StoredBlock* stored_block[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
@@ -4410,7 +4410,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     {
         if (job->m_BlockReaderJobs[d].m_Err)
         {
-            job->m_Err = job->m_BlockReaderJobs[d].m_Err;
+            block_reader_errors = block_reader_errors == 0 ? job->m_BlockReaderJobs[d].m_Err : block_reader_errors;
             block_hashes[d] = 0;
             stored_block[d] = 0;
             continue;
@@ -4441,11 +4441,11 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         return 0;
     }
 
-    if (job->m_Err)
+    if (block_reader_errors)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG(block_reader_errors == ECANCELED ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
-            job->m_Err)
+            block_reader_errors)
         for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
             if (stored_block[d] && stored_block[d]->Dispose)
@@ -4460,6 +4460,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
         }
+        job->m_Err = block_reader_errors;
         return 0;
     }
 
@@ -4470,15 +4471,14 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
     if (!job->m_AssetOutputFile && job->m_AssetChunkIndexOffset)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
-            context, job_id, is_cancelled,
-            ENOENT)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WritePartialAssetFromBlocks(%p, %u, %d) failed due to previous error",
+            context, job_id, is_cancelled)
         for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
         {
             stored_block[d]->Dispose(stored_block[d]);
             stored_block[d] = 0;
         }
-        job->m_Err = ENOENT;
+//        job->m_Err = job->m_Err == EINVAL ? ENOTRECOVERABLE : job->m_Err;
         return 0;
     }
 
@@ -4678,12 +4678,12 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
             }
+            job->m_Err = err;
             if (sync_write_job)
             {
-                err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
-                LONGTAIL_FATAL_ASSERT(err == 0, job->m_Err = err; return 0)
+                int sync_err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+                LONGTAIL_FATAL_ASSERT(sync_err == 0, return 0)
             }
-            job->m_Err = err;
             return 0;
         }
         write_offset += chunk_size;
@@ -5440,7 +5440,14 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
             LONGTAIL_LOG((job->m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
                 block_store_api, version_storage_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, version_path, content_lookup, awl, retain_permssions,
                 job->m_Err)
-            err = err ? err : job->m_Err;
+            if (err == 0)
+            {
+                err = job->m_Err;
+            }
+            else if (err = ENOTRECOVERABLE && job->m_Err != ENOTRECOVERABLE)
+            {
+                err = job->m_Err;
+            }
         }
     }
 
