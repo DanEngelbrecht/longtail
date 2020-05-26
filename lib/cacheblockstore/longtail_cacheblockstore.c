@@ -403,7 +403,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete(%p, %p, %d) StoreBlockCopyToLocalCache(%p, %p) failed with %d",
                 async_complete_api, stored_block, err,
                 cacheblockstore_api->m_LocalBlockStoreAPI, stored_block_copy,
-                err)
+                copy_err)
             stored_block_copy->Dispose(stored_block_copy);
         }
     }
