@@ -5494,13 +5494,18 @@ TEST(Longtail, TestChangeVersionDiskFull)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 1u;
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
-    struct FailableStorageAPI* failable_storage_api = CreateFailableStorageAPI(mem_storage);
-    Longtail_StorageAPI* storage = &failable_storage_api->m_API;
+    struct FailableStorageAPI* failable_local_storage_api = CreateFailableStorageAPI(mem_storage);
+    struct FailableStorageAPI* failable_remote_storage_api = CreateFailableStorageAPI(mem_storage);
+    Longtail_StorageAPI* local_storage = &failable_local_storage_api->m_API;
+    Longtail_StorageAPI* remote_storage = &failable_remote_storage_api->m_API;
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
-    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
+    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(local_storage, "cache", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK);
+    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(remote_storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK);
+    Longtail_BlockStoreAPI* remote_compressed_block_store_api = Longtail_CreateCompressBlockStoreAPI(remote_block_store_api, compression_registry);
+    Longtail_BlockStoreAPI* cached_store_api = Longtail_CreateCacheBlockStoreAPI(local_block_store_api, remote_block_store_api);
+    Longtail_BlockStoreAPI* cached_compress_store_api = Longtail_CreateCompressBlockStoreAPI(cached_store_api, compression_registry);
 
     const uint32_t ASSET_COUNT = 1u;
 
@@ -5536,29 +5541,29 @@ TEST(Longtail, TestChangeVersionDiskFull)
 
     for (uint32_t i = 0; i < ASSET_COUNT; ++i)
     {
-        char* file_name = storage->ConcatPath(storage, "source", TEST_FILENAMES[i]);
-        ASSERT_NE(0, CreateParentPath(storage, file_name));
+        char* file_name = local_storage->ConcatPath(local_storage, "source", TEST_FILENAMES[i]);
+        ASSERT_NE(0, CreateParentPath(local_storage, file_name));
         Longtail_StorageAPI_HOpenFile w;
-        ASSERT_EQ(0, storage->OpenWriteFile(storage, file_name, 0, &w));
+        ASSERT_EQ(0, local_storage->OpenWriteFile(local_storage, file_name, 0, &w));
         ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
         if (TEST_SIZES[i])
         {
-            ASSERT_EQ(0, storage->Write(storage, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
+            ASSERT_EQ(0, local_storage->Write(local_storage, w, 0, TEST_SIZES[i], TEST_STRINGS[i]));
         }
-        storage->CloseFile(storage, w);
+        local_storage->CloseFile(local_storage, w);
         w = 0;
-        storage->SetPermissions(storage, file_name, TEST_PERMISSIONS[i]);
+        local_storage->SetPermissions(local_storage, file_name, TEST_PERMISSIONS[i]);
         Longtail_Free(file_name);
     }
 
     Longtail_FileInfos* version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
-    uint32_t* compression_types = GetAssetTags(storage, version_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage,
+        local_storage,
         hash_api,
         job_api,
         0,
@@ -5584,12 +5589,12 @@ TEST(Longtail, TestChangeVersionDiskFull)
             &content_index));
 
     TestAsyncGetIndexComplete get_index_cb;
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb.m_API));
+    ASSERT_EQ(0, remote_compressed_block_store_api->GetIndex(remote_compressed_block_store_api, &get_index_cb.m_API));
     get_index_cb.Wait();
     struct Longtail_ContentIndex* block_store_content_index = get_index_cb.m_ContentIndex;
     ASSERT_EQ(0, Longtail_WriteContent(
-        storage,
-        block_store_api,
+        local_storage,
+        remote_compressed_block_store_api,
         job_api,
         0,
         0,
@@ -5603,18 +5608,14 @@ TEST(Longtail, TestChangeVersionDiskFull)
     Longtail_Free(content_index);
     content_index = 0;
 
-
-
-
-
     Longtail_FileInfos* current_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "current", &current_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "current", &current_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, current_version_paths);
-    uint32_t* current_compression_types = GetAssetTags(storage, current_version_paths);
+    uint32_t* current_compression_types = GetAssetTags(local_storage, current_version_paths);
     ASSERT_NE((uint32_t*)0, current_compression_types);
     Longtail_VersionIndex* current_vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage,
+        local_storage,
         hash_api,
         job_api,
         0,
@@ -5639,15 +5640,15 @@ TEST(Longtail, TestChangeVersionDiskFull)
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
     TestAsyncGetIndexComplete get_index_cb2;
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb2.m_API));
+    ASSERT_EQ(0, remote_compressed_block_store_api->GetIndex(remote_compressed_block_store_api, &get_index_cb2.m_API));
     get_index_cb2.Wait();
     content_index = get_index_cb2.m_ContentIndex;
 
-    failable_storage_api->m_PassCount = 3;
-    failable_storage_api->m_WriteError = ENOSPC;
+    failable_local_storage_api->m_PassCount = 3;
+    failable_local_storage_api->m_WriteError = ENOSPC;
     ASSERT_EQ(ENOSPC, Longtail_ChangeVersion(
-        block_store_api,
-        storage,
+        cached_compress_store_api,
+        local_storage,
         hash_api,
         job_api,
         0,
@@ -5664,11 +5665,16 @@ TEST(Longtail, TestChangeVersionDiskFull)
     Longtail_Free(version_diff);
     Longtail_Free(current_vindex);
     Longtail_Free(vindex);
-    SAFE_DISPOSE_API(block_store_api);
-    SAFE_DISPOSE_API(fs_block_store_api);
+
+    SAFE_DISPOSE_API(cached_compress_store_api);
+    SAFE_DISPOSE_API(cached_store_api);
+    SAFE_DISPOSE_API(remote_compressed_block_store_api);
+    SAFE_DISPOSE_API(remote_block_store_api);
+    SAFE_DISPOSE_API(local_block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
-    SAFE_DISPOSE_API((&failable_storage_api->m_API));
+    SAFE_DISPOSE_API(&failable_remote_storage_api->m_API);
+    SAFE_DISPOSE_API(&failable_local_storage_api->m_API);
     SAFE_DISPOSE_API(mem_storage);
 }
