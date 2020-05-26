@@ -1077,7 +1077,7 @@ static int StorageChunkFeederFunc(void* context, struct Longtail_Chunker* chunke
 
 #define MIN_CHUNKER_SIZE(target_chunk_size) (((target_chunk_size / 8) < ChunkerWindowSize) ? ChunkerWindowSize : (target_chunk_size / 8))
 #define AVG_CHUNKER_SIZE(target_chunk_size) (((target_chunk_size / 2) < ChunkerWindowSize) ? ChunkerWindowSize : (target_chunk_size / 2))
-#define MAX_CHUNKER_SIZE(target_chunk_size) (target_chunk_size * 2)
+#define MAX_CHUNKER_SIZE(target_chunk_size) (((target_chunk_size * 2) < ChunkerWindowSize) ? ChunkerWindowSize : (target_chunk_size * 2))
 
 
 struct HashJob
@@ -1154,7 +1154,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
     {
         content_hash = 0;
     }
-    else if (hash_size <= ChunkerWindowSize || hash_job->m_TargetChunkSize <= ChunkerWindowSize)
+    else if (hash_size <= ChunkerWindowSize)
     {
         char* buffer = (char*)Longtail_Alloc((size_t)hash_size);
         if (!buffer)
