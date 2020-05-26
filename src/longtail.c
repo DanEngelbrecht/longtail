@@ -4403,10 +4403,10 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
     // Need to fetch all the data we need from the context since we will reuse it
     int block_reader_errors = 0;
-    uint32_t block_block_reador_job_count = job->m_BlockReaderJobCount;
+    uint32_t block_reader_job_count = job->m_BlockReaderJobCount;
     TLongtail_Hash block_hashes[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     struct Longtail_StoredBlock* stored_block[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
-    for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+    for (uint32_t d = 0; d < block_reader_job_count; ++d)
     {
         if (job->m_BlockReaderJobs[d].m_Err)
         {
@@ -4422,7 +4422,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     if (is_cancelled)
     {
         job->m_Err = ECANCELED;
-        for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+        for (uint32_t d = 0; d < block_reader_job_count; ++d)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
                 context, job_id, is_cancelled,
@@ -4446,7 +4446,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         LONGTAIL_LOG(block_reader_errors == ECANCELED ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             block_reader_errors)
-        for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+        for (uint32_t d = 0; d < block_reader_job_count; ++d)
         {
             if (stored_block[d] && stored_block[d]->Dispose)
             {
@@ -4473,7 +4473,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WritePartialAssetFromBlocks(%p, %u, %d) failed due to previous error",
             context, job_id, is_cancelled)
-        for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+        for (uint32_t d = 0; d < block_reader_job_count; ++d)
         {
             stored_block[d]->Dispose(stored_block[d]);
             stored_block[d] = 0;
@@ -4493,7 +4493,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
-            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            for (uint32_t d = 0; d < block_reader_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
@@ -4503,7 +4503,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         }
         if (IsDirPath(full_asset_path))
         {
-            LONGTAIL_FATAL_ASSERT(block_block_reador_job_count == 0, job->m_Err = EINVAL; return 0)
+            LONGTAIL_FATAL_ASSERT(block_reader_job_count == 0, job->m_Err = EINVAL; return 0)
             err = SafeCreateDir(job->m_VersionStorageAPI, full_asset_path);
             if (err)
             {
@@ -4529,7 +4529,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 context, job_id, is_cancelled,
                 err)
             Longtail_Free(full_asset_path);
-            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            for (uint32_t d = 0; d < block_reader_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
@@ -4546,7 +4546,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 if (err)
                 {
                     Longtail_Free(full_asset_path);
-                    for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+                    for (uint32_t d = 0; d < block_reader_job_count; ++d)
                     {
                         stored_block[d]->Dispose(stored_block[d]);
                         stored_block[d] = 0;
@@ -4566,7 +4566,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
-            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            for (uint32_t d = 0; d < block_reader_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
@@ -4602,7 +4602,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
                 context, job_id, is_cancelled,
                 err)
-            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            for (uint32_t d = 0; d < block_reader_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
@@ -4635,15 +4635,15 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         uint32_t block_readed_block_index = 0;
         while (block_hashes[block_readed_block_index] != block_hash)
         {
-            if (block_readed_block_index == block_block_reador_job_count)
+            if (block_readed_block_index == block_reader_job_count)
             {
                 break;
             }
             ++block_readed_block_index;
         }
-        if(block_readed_block_index == block_block_reador_job_count)
+        if(block_readed_block_index == block_reader_job_count)
         {
-            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            for (uint32_t d = 0; d < block_reader_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
@@ -4673,7 +4673,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
             job->m_AssetOutputFile = 0;
 
-            for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+            for (uint32_t d = 0; d < block_reader_job_count; ++d)
             {
                 stored_block[d]->Dispose(stored_block[d]);
                 stored_block[d] = 0;
@@ -4691,7 +4691,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         ++chunk_index_offset;
     }
 
-    for (uint32_t d = 0; d < block_block_reador_job_count; ++d)
+    for (uint32_t d = 0; d < block_reader_job_count; ++d)
     {
         stored_block[d]->Dispose(stored_block[d]);
         stored_block[d] = 0;
