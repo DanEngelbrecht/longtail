@@ -356,7 +356,6 @@ static int StoreBlockCopyToLocalCache(struct CacheBlockStoreAPI* cacheblockstore
             local_block_store, copy_stored_block,
             local_block_store, copy_stored_block, &put_local->m_API,
             err)
-        Longtail_Free(copy_stored_block);
         Longtail_Free(put_local);
         Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1);
         return err;
@@ -403,7 +402,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete(%p, %p, %d) StoreBlockCopyToLocalCache(%p, %p) failed with %d",
                 async_complete_api, stored_block, err,
                 cacheblockstore_api->m_LocalBlockStoreAPI, stored_block_copy,
-                err)
+                copy_err)
             stored_block_copy->Dispose(stored_block_copy);
         }
     }

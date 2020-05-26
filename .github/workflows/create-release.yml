@@ -104,7 +104,10 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - Enabled AVX2 and AVX512 in Blake3
+          - *FIXED* Double-free on cache block store when write error happen
+          - *FIXED* Fixed logic when target chunk size is smaller than 65 bytes
+          - *FIXED* Fixed error logging in cache block stire
+          - *FIXED* Fixed error handling in WritePartialAssetsFromBlocks
         draft: false
         prerelease: false
     - name: Download Linux artifacts
