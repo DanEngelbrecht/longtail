@@ -6,7 +6,7 @@ else
 	export PLATFORM=linux
 fi
 
-export TARGET=longtail_${PLATFORM}x64
+export TARGET=longtail_${PLATFORM}_x64
 export TARGET_TYPE=SHAREDLIB
 
 LIB_SRC="$BASE_DIR/lib/filestorage/*.c"

@@ -10,8 +10,8 @@ fi
 mkdir dist
 cp build/longtail_debug dist
 cp build/longtail dist
-cp build/liblongtail_${PLATFORM}x64_debug.so dist
-cp build/liblongtail_${PLATFORM}x64.so dist
+cp build/liblongtail_${PLATFORM}_x64_debug.so dist
+cp build/liblongtail_${PLATFORM}_x64.so dist
 mkdir dist/include
 mkdir dist/include/src
 mkdir dist/include/lib

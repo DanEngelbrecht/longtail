@@ -3,14 +3,14 @@
 mkdir dist
 cp build/longtail_debug.exe dist
 cp build/longtail.exe dist
-cp build/longtail_winx64_debug.dll dist
-cp build/longtail_winx64_debug.pdb dist
-cp build/longtail_winx64_debug.lib dist
-cp build/longtail_winx64_debug.exp dist
-cp build/longtail_winx64.dll dist
-cp build/longtail_winx64.pdb dist
-cp build/longtail_winx64.lib dist
-cp build/longtail_winx64.exp dist
+cp build/longtail_win32_x64_debug.dll dist
+cp build/longtail_win32_x64_debug.pdb dist
+cp build/longtail_win32_x64_debug.lib dist
+cp build/longtail_win32_x64_debug.exp dist
+cp build/longtail_win32_x64.dll dist
+cp build/longtail_win32_x64.pdb dist
+cp build/longtail_win32_x64.lib dist
+cp build/longtail_win32_x64.exp dist
 mkdir dist\include
 mkdir dist\include\src
 mkdir dist\include\lib
