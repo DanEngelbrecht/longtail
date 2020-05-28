@@ -1,11 +1,17 @@
 #!/bin/bash
 set -e
 
+if [ "$(uname)" == "Darwin" ]; then
+    export PLATFORM=macos
+else
+	export PLATFORM=linux
+fi
+
 mkdir dist
 cp build/longtail_debug dist
 cp build/longtail dist
-cp build/liblongtail_debug.so dist
-cp build/liblongtail.so dist
+cp build/liblongtail_${PLATFORM}x64_debug.so dist
+cp build/liblongtail_${PLATFORM}x64.so dist
 mkdir dist/include
 mkdir dist/include/src
 mkdir dist/include/lib
