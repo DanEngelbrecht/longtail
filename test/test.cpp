@@ -668,6 +668,17 @@ static uint32_t* GetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* f
     return result;
 }
 
+static uint32_t* SetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos, uint32_t compression_type)
+{
+    uint32_t count = file_infos->m_Count;
+    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        result[i] = compression_type;
+    }
+    return result;
+}
+
 TEST(Longtail, CreateEmptyVersionIndex)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
@@ -3367,6 +3378,11 @@ struct TestGetBlockRequest
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api;
 };
 
+struct TestGetIndexRequest
+{
+    struct Longtail_AsyncGetIndexAPI* async_complete_api;
+};
+
 struct TestStoredBlockLookup
 {
     TLongtail_Hash key;
@@ -3386,17 +3402,18 @@ public:
     static int GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 private:
-    struct Longtail_StorageAPI m_StorageAPI;
     struct Longtail_HashAPI* m_HashAPI;
     TLongtail_Atomic32 m_ExitFlag;
     HLongtail_SpinLock m_IOLock;
     HLongtail_Sema m_RequestSema;
-    HLongtail_Thread m_IOThread;
+    HLongtail_Thread m_IOThread[8];
 
     intptr_t m_PutRequestOffset;
     struct TestPutBlockRequest* m_PutRequests;
     intptr_t m_GetRequestOffset;
     struct TestGetBlockRequest* m_GetRequests;
+    intptr_t m_GetIndexRequestOffset;
+    struct TestGetIndexRequest* m_GetIndexRequests;
     struct Longtail_ContentIndex* m_ContentIndex;
     struct TestStoredBlockLookup* m_StoredBlockLookup;
 
@@ -3417,6 +3434,8 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
     block_store->m_PutRequests = 0;
     block_store->m_GetRequestOffset = 0;
     block_store->m_GetRequests = 0;
+    block_store->m_GetIndexRequestOffset = 0;
+    block_store->m_GetIndexRequests = 0;
     block_store->m_StoredBlockLookup = 0;
     int err = Longtail_CreateContentIndex(
             block_store->m_HashAPI,
@@ -3442,14 +3461,23 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
         Longtail_Free(block_store->m_ContentIndex);
         return err;
     }
-    err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, -1, &block_store->m_IOThread);
-    if (err)
+    for (uint32_t t = 0; t < 8; ++t)
     {
-        Longtail_DeleteSema(block_store->m_RequestSema);
-        Longtail_Free(block_store->m_RequestSema);
-        Longtail_DeleteSpinLock(block_store->m_IOLock);
-        Longtail_Free(block_store->m_IOLock);
-        return err;
+        err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, -1, &block_store->m_IOThread[t]);
+        if (err)
+        {
+            while (t--)
+            {
+                Longtail_JoinThread(block_store->m_IOThread[t], LONGTAIL_TIMEOUT_INFINITE);
+                Longtail_DeleteThread(block_store->m_IOThread[t]);
+                Longtail_Free(block_store->m_IOThread[t]);
+            }
+            Longtail_DeleteSema(block_store->m_RequestSema);
+            Longtail_Free(block_store->m_RequestSema);
+            Longtail_DeleteSpinLock(block_store->m_IOLock);
+            Longtail_Free(block_store->m_IOLock);
+            return err;
+        }
     }
     return 0;
 }
@@ -3458,10 +3486,13 @@ void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
 {
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)api;
     Longtail_AtomicAdd32(&block_store->m_ExitFlag, 1);
-    Longtail_PostSema(block_store->m_RequestSema, 1);
-    Longtail_JoinThread(block_store->m_IOThread, LONGTAIL_TIMEOUT_INFINITE);
-    Longtail_DeleteThread(block_store->m_IOThread);
-    Longtail_Free(block_store->m_IOThread);
+    Longtail_PostSema(block_store->m_RequestSema, 8);
+    for (uint32_t t = 0; t < 8; ++t)
+    {
+        Longtail_JoinThread(block_store->m_IOThread[t], LONGTAIL_TIMEOUT_INFINITE);
+        Longtail_DeleteThread(block_store->m_IOThread[t]);
+        Longtail_Free(block_store->m_IOThread[t]);
+    }
     Longtail_DeleteSema(block_store->m_RequestSema);
     Longtail_Free(block_store->m_RequestSema);
     Longtail_DeleteSpinLock(block_store->m_IOLock);
@@ -3492,6 +3523,7 @@ static int TestStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
 static int WorkerPutRequest(struct Longtail_StoredBlock* stored_block, uint8_t** out_serialized_block_data)
 {
+//    Longtail_Sleep(5000);
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
     uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
     size_t total_block_size = block_index_data_size + stored_block->m_BlockChunksDataSize;
@@ -3505,6 +3537,7 @@ static int WorkerPutRequest(struct Longtail_StoredBlock* stored_block, uint8_t**
 
 static int WorkerGetRequest(uint8_t* serialized_block_data, struct Longtail_StoredBlock** out_stored_block)
 {
+//    Longtail_Sleep(5000);
     size_t serialized_block_data_size = size_t(arrlen(serialized_block_data));
     size_t block_mem_size = Longtail_GetStoredBlockSize(serialized_block_data_size);
     struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
@@ -3550,7 +3583,25 @@ int TestAsyncBlockStore::Worker(void* context_data)
 
             Longtail_LockSpinLock(block_store->m_IOLock);
             hmput(block_store->m_StoredBlockLookup, *stored_block->m_BlockIndex->m_BlockHash, serialized_block_data);
-            // TODO: Should update content index!
+
+            static const uint32_t MAX_BLOCK_SIZE = 32u;
+            static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+
+            struct Longtail_ContentIndex* block_content_index;
+            Longtail_CreateContentIndexFromBlocks(MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 1, &stored_block->m_BlockIndex, &block_content_index);
+            if (block_store->m_ContentIndex == 0)
+            {
+                block_store->m_ContentIndex = block_content_index;
+            }
+            else
+            {
+                struct Longtail_ContentIndex* merged_content_index;
+                Longtail_MergeContentIndex(block_store->m_ContentIndex, block_content_index, &merged_content_index);
+                Longtail_Free(block_content_index);
+                Longtail_Free(block_store->m_ContentIndex);
+                block_store->m_ContentIndex = merged_content_index;
+            }
+
             Longtail_UnlockSpinLock(block_store->m_IOLock);
 
             async_complete_api->OnComplete(async_complete_api, err);
@@ -3583,6 +3634,43 @@ int TestAsyncBlockStore::Worker(void* context_data)
                 continue;
             }
         }
+        ptrdiff_t get_index_request_count = arrlen(block_store->m_GetIndexRequests);
+        if (get_index_request_count > block_store->m_GetIndexRequestOffset)
+        {
+            ptrdiff_t get_index_request_index = block_store->m_GetIndexRequestOffset++;
+            struct TestGetIndexRequest* get_index_request = &block_store->m_GetIndexRequests[get_index_request_index];
+            struct Longtail_AsyncGetIndexAPI* async_complete_api = get_index_request->async_complete_api;
+
+            void* buffer;
+            size_t size;
+            int err = Longtail_WriteContentIndexToBuffer(
+                block_store->m_ContentIndex,
+                &buffer,
+                &size);
+
+            Longtail_UnlockSpinLock(block_store->m_IOLock);
+
+            if (err)
+            {
+                async_complete_api->OnComplete(async_complete_api, 0, err);
+                continue;
+            }
+            struct Longtail_ContentIndex* content_index;
+            err = Longtail_ReadContentIndexFromBuffer(
+                buffer,
+                size,
+                &content_index);
+            Longtail_Free(buffer);
+            buffer = 0;
+            if (err)
+            {
+                async_complete_api->OnComplete(async_complete_api, 0, err);
+                continue;
+            }
+            async_complete_api->OnComplete(async_complete_api, content_index, 0);
+            continue;
+        }
+        Longtail_UnlockSpinLock(block_store->m_IOLock);
 
         if (block_store->m_ExitFlag != 0)
         {
@@ -3639,33 +3727,14 @@ int TestAsyncBlockStore::GetIndex(
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
 
-    void* buffer;
-    size_t size;
+    struct TestGetIndexRequest get_index_request;
+    get_index_request.async_complete_api = async_complete_api;
+
     Longtail_LockSpinLock(block_store->m_IOLock);
-    int err = Longtail_WriteContentIndexToBuffer(
-        block_store->m_ContentIndex,
-        &buffer,
-        &size);
+    arrput(block_store->m_GetIndexRequests, get_index_request);
     Longtail_UnlockSpinLock(block_store->m_IOLock);
-    if (err)
-    {
-        return err;
-    }
-
-    struct Longtail_ContentIndex* content_index;
-    err = Longtail_ReadContentIndexFromBuffer(
-        buffer,
-        size,
-        &content_index);
-    Longtail_Free(buffer);
-    buffer = 0;
-    if (err)
-    {
-        return err;
-    }
-    async_complete_api->OnComplete(async_complete_api, content_index, 0);
+    Longtail_PostSema(block_store->m_RequestSema, 1);
     return 0;
-
 }
 
 int TestAsyncBlockStore::GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
@@ -4480,11 +4549,18 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
-    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
-    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(32, -1);
 
-    const uint32_t ASSET_COUNT = 20u;
+    TestAsyncBlockStore async_block_store;
+    ASSERT_EQ(0, TestAsyncBlockStore::InitBlockStore(&async_block_store, hash_api));
+    struct Longtail_BlockStoreAPI* remote_block_store = &async_block_store.m_API;
+
+    Longtail_BlockStoreAPI* local_block_store = Longtail_CreateFSBlockStoreAPI(storage, "cache", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK);
+    Longtail_BlockStoreAPI* cache_block_store_api = Longtail_CreateCacheBlockStoreAPI(local_block_store, remote_block_store);
+    Longtail_BlockStoreAPI* compressed_remote_block_store = Longtail_CreateCompressBlockStoreAPI(remote_block_store, compression_registry);
+    Longtail_BlockStoreAPI* compressed_cached_block_store = Longtail_CreateCompressBlockStoreAPI(cache_block_store_api, compression_registry);
+
+    const uint32_t ASSET_COUNT = 22u;
 
     const char* TEST_FILENAMES[ASSET_COUNT] = {
         "ContentChangedSameLength.txt",
@@ -4506,7 +4582,9 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         "EmptyFileInFolder/.init2.py",
         "a/file/in/folder/LongWithChangedStart2.dll",
         "a/file/in/other/folder/LongChangedAtEnd2.exe",
-        "permissions_changed2.txt"
+        "permissions_changed2.txt",
+        "junk1.txt",
+        "junk2.txt",
     };
 
     const char* TEST_STRINGS[ASSET_COUNT] = {
@@ -4518,16 +4596,37 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         "More than chunk less than block",
         "",
         "A very long file that should be able to be recreated"
+            "GYAUgqhfDCUguEcwuMAO7iWmFKAVbAPEDRJ17SSAXLECOGPNELECBC4GYS57kx3d0zxbikiglqjo86ztgjhq6m05ndt5qd2ge1v0cyw2wqliyryvbmvhg10nxm31jacxvjia7lgwk8n9"
+            "tljvc3yz0bhobdg8bzfhvbyi6jvnljkq8rh7tcxhtvj7hffzuncn4si8dl7oyc8n0ufnlqQN3UJJYZXOB3KJVBIPSSWLTWUDZ9QKNIUQFZTFRXPXMBWWT9JJVK4SNDSSF1QPC4FC4FCQ"
+            "XGGMT3YUA3LFV2ETFCYXZWOPGLTEGS93Q2SPLEEEQ21MYLAM3Q8TEOHFVJHUAGPNODK1RCKFF8YIRA2AQRGMDCZjhx2zue15i2mt0r8efhssf4qkws2hwm9j8rwj0b6kzcd81rfm4e4l"
+            "6u0h2yl3kd9pashzik8lmxnazpwxivilgchxmyrlcx97cctaangmynkt6fw9w7cxxivxpaywuexykyadc0gxQMIZZEAKVY7DBDQXAAQKAIVDLDDFPXSOMSWGRWF3JHN5ELZYCJMWRSUC"
+            "EKHHHQWV7SFH9WDDLBGQDNDZZIT7MQ7LMY6Q64XROC88XFIONUZ71GOTKPFUVAHUWRM9EAX4WXIPQPULEIMKZTWP1NXJCNNKSNWV9HXQSG8JHWDEGEIY9W8QXENZKALAWD4SVL3YVGBZ"
+            "U1FBM4VSNGCJ11Pizxkibievkspzqaapv2reppc5d4me3cmpakjx4oe9javm93mftqxqj1pnnt4sayg13hkjhqc8snhdr2304opkgdgc1iwrtqlephvqdrbpnnafe1sjj5im6rracd8l"
+            "sbu7diwmvghgwcn6xj8urfi5ihkgfsbmpkpnBHAMUUSWLZYXOFR7UO68OOZ9IFTUY86CXV98LKFZULBWWFULJ8IXZ2ZEA7qsbzayncw2skxqty5g0m2kqynv8dpjrl5h5m1mxxjfgeu6"
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+            "GYAUgqhfDCUguEcwuMAO7iWmFKAVbAPEDRJ17SSAXLECOGPNELECBC4GYS57kx3d0zxbikiglqjo86ztgjhq6m05ndt5qd2ge1v0cyw2wqliyryvbmvhg10nxm31jacxvjia7lgwk8n9"
+            "tljvc3yz0bhobdg8bzfhvbyi6jvnljkq8rh7tcxhtvj7hffzuncn4si8dl7oyc8n0ufnlqQN3UJJYZXOB3KJVBIPSSWLTWUDZ9QKNIUQFZTFRXPXMBWWT9JJVK4SNDSSF1QPC4FC4FCQ"
+            "XGGMT3YUA3LFV2ETFCYXZWOPGLTEGS93Q2SPLEEEQ21MYLAM3Q8TEOHFVJHUAGPNODK1RCKFF8YIRA2AQRGMDCZjhx2zue15i2mt0r8efhssf4qkws2hwm9j8rwj0b6kzcd81rfm4e4l"
+            "6u0h2yl3kd9pashzik8lmxnazpwxivilgchxmyrlcx97cctaangmynkt6fw9w7cxxivxpaywuexykyadc0gxqmizzeakvy7dbdqxaaqkaivdlddfpxsomswgrwf3jhn5elzycjmwrsuc"
+            "ekhhhqwv7sfh9wddlbgqdndzzit7mq7lmy6q64xroc88xfionuz71gotkpfuvahuwrm9eax4wxipqpuleimkztwp1nxjcnnksnwv9hxqsg8jhwdegeiy9w8qxenzkalawd4svl3yvgbz"
+            "u1fbm4vsngcj11pizxkibievkspzqaapv2reppc5d4me3cmpakjx4oe9javm93mftqxqj1pnnt4sayg13hkjhqc8snhdr2304opkgdgc1iwrtqlephvqdrbpnnafe1sjj5im6rracd8l"
+            "sbu7diwmvghgwcn6xj8urfi5ihkgfsbmpkpnbhamuuswlzyxofr7uo68ooz9iftuy86cxv98lkfzulbwwfulj8ixz2zea7qsbzayncw2skxqty5g0m2kqynv8dpjrl5h5m1mxxjfgeu6"
+            "lots of repeating stuff, some good, some bad but still it is repeating. this is the number 5 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but still it is repeating. this is the number 6 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but still it is repeating. this is the number 7 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+            "GYAUgqhfDCUguEcwuMAO7iWmFKAVbAPEDRJ17SSAXLECOGPNELECBC4GYS57kx3d0zxbikiglqjo86ztgjhq6m05ndt5qd2ge1v0cyw2wqliyryvbmvhg10nxm31jacxvjia7lgwk8n9"
+            "tljvc3yz0bhobdg8bzfhvbyi6jvnljkq8rh7tcxhtvj7hffzuncn4si8dl7oyc8n0ufnlqQN3UJJYZXOB3KJVBIPSSWLTWUDZ9QKNIUQFZTFRXPXMBWWT9JJVK4SNDSSF1QPC4FC4FCQ"
+            "XGGMT3YUA3LFV2ETFCYXZWOPGLTEGS93Q2SPLEEEQ21MYLAM3Q8TEOHFVJHUAGPNODK1RCKFF8YIRA2AQRGMDCZjhx2zue15i2mt0r8efhssf4qkws2hwm9j8rwj0b6kzcd81rfm4e4l"
+            "6u0h2yl3kd9pashzik8lmxnazpwxivilgchxmyrlcx97cctaangmynkt6fw9w7cxxivxpaywuexykyadc0gxQMIZZEAKVY7DBDQXAAQKAIVDLDDFPXSOMSWGRWF3JHN5ELZYCJMWRSUC"
+            "EKHHHQWV7SFH9WDDLBGQDNDZZIT7MQ7LMY6Q64XROC88XFIONUZ71GOTKPFUVAHUWRM9EAX4WXIPQPULEIMKZTWP1NXJCNNKSNWV9HXQSG8JHWDEGEIY9W8QXENZKALAWD4SVL3YVGBZ"
+            "U1FBM4VSNGCJ11Pizxkibievkspzqaapv2reppc5d4me3cmpakjx4oe9javm93mftqxqj1pnnt4sayg13hkjhqc8snhdr2304opkgdgc1iwrtqlephvqdrbpnnafe1sjj5im6rracd8l"
+            "sbu7diwmvghgwcn6xj8urfi5ihkgfsbmpkpnBHAMUUSWLZYXOFR7UO68OOZ9IFTUY86CXV98LKFZULBWWFULJ8IXZ2ZEA7qsbzayncw2skxqty5g0m2kqynv8dpjrl5h5m1mxxjfgeu6"
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
             "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
@@ -4541,10 +4640,15 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             "Yet we also repeat this line, this is the third time you see this, but it will also show up again and again with only small changes"
             "Yet we also repeat this line, this is the fourth time you see this, but it will also show up again and again with only small changes"
             "Yet we also repeat this line, this is the fifth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the sixth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the eigth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the ninth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the tenth time you see this, but it will also show up again and again with only small changes"
+            "6aFOWGAnDmt05mJntcBzV3bNWU85fbP8kQu5HkH0MzD4SgYAJEB2QCwxF6udPKDIssZbOuvTkKPQQtU1RpCHqzhJYfuQ2iHuq9bcx7jVEekkf2nZpm8Vmczsg6CPBxkEhCdrYT546e86"
+            "GYAUgqhfDCUguEcwuMAO7iWmFKAVbAPEDRJ17SSAXLECOGPNELECBC4GYS57kx3d0zxbikiglqjo86ztgjhq6m05ndt5qd2ge1v0cyw2wqliyryvbmvhg10nxm31jacxvjia7lgwk8n9"
+            "tljvc3yz0bhobdg8bzfhvbyi6jvnljkq8rh7tcxhtvj7hffzuncn4si8dl7oyc8n0ufnlqQN3UJJYZXOB3KJVBIPSSWLTWUDZ9QKNIUQFZTFRXPXMBWWT9JJVK4SNDSSF1QPC4FC4FCQ"
+            "XGGMT3YUA3LFV2ETFCYXZWOPGLTEGS93Q2SPLEEEQ21MYLAM3Q8TEOHFVJHUAGPNODK1RCKFF8YIRA2AQRGMDCZJHX2ZUE15I2MT0R8EFHSSF4QKWS2HWM9J8RWJ0B6KZCD81RFM4E4L"
+            "6U0H2YL3KD9PASHZIK8LMXNAZPWXIVILGCHXMYRLCX97CCTAANGMYNKT6FW9W7CXXIVXPAYWUEXYKYADC0GXQMIZZEAKVY7DBDQXAAQKAIVDLDDFPXSOMSWGRWF3JHN5ELZYCJMWRSUC"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE SIXTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE EIGTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE NINTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "YET WE ALSO REPEAT THIS LINE, THIS IS THE TENTH TIME YOU see this, but it will also show up again and again with only small changes"
             "Yet we also repeat this line, this is the elevth time you see this, but it will also show up again and again with only small changes"
             "Yet we also repeat this line, this is the twelth time you see this, but it will also show up again and again with only small changes"
             "I realize I'm not very good at writing out the numbering with the 'th stuff at the end. Not much reason to use that before."
@@ -4564,12 +4668,12 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 2 IN A LONG SEQUENCE OF STUFF."
             "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 3 IN A LONG SEQUENCE OF STUFF."
             "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 4 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 5 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 6 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 7 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 8 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 9 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 10 IN A LONG SEQUENCE OF STUFF."
+            "LOTS OF REPEATING STUFF, SOME good, some bad but still it is repeating. this is the number 5 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but still it is repeating. this is the number 6 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but still it is repeating. this is the number 7 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but still it is repeating. this is the number 8 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but still it is repeating. this is the number 9 in a long sequence of stuff."
+            "lots of repeating stuff, some good, some bad but stILL IT IS REPEATING. THIS IS THE NUMBER 10 IN A LONG SEQUENCE OF STUFF."
             "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 11 IN A LONG SEQUENCE OF STUFF."
             "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 12 IN A LONG SEQUENCE OF STUFF."
             "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 13 IN A LONG SEQUENCE OF STUFF."
@@ -4584,6 +4688,9 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             "YET WE ALSO REPEAT THIS LINE, THIS IS THE THIRD TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
             "YET WE ALSO REPEAT THIS LINE, THIS IS THE FOURTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
             "YET WE ALSO REPEAT THIS LINE, THIS IS THE FIFTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
+            "6aFOWGAnDmt05mJntcBzV3bNWU85fbP8kQu5HkH0MzD4SgYAJEB2QCwxF6udPKDIssZbOuvTkKPQQtU1RpCHqzhJYfuQ2iHuq9bcx7jVEekkf2nZpm8Vmczsg6CPBxkEhCdrYT546e86"
+            "GYAUgqhfDCUguEcwuMAO7iWmFKAVbAPEDRJ17sSAxLEcogpnelEcBc4gYs57Kx3D0ZxbikiglQJo86ZTgJhq6m05NDT5qD2gE1V0CYw2WQlIyRYVbMvHg10NxM31JacXVJiA7lGWK8N9"
+            "TLJVC3YZ0bhOBDG8bzfHvBYI6jVNlJKQ8RH7tCXhtvj7HffZuncn4si8DL7Oyc8N0UfNLqqn3ujJYzXOb3kJvBiPSSWlTwuDz9QkNiuqFzTFRXpxMbwwt9jjVK4SnDssf1Qpc4Fc4fCq"
             "YET WE ALSO REPEAT THIS LINE, THIS IS THE SIXTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
             "YET WE ALSO REPEAT THIS LINE, THIS IS THE EIGTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
             "YET WE ALSO REPEAT THIS LINE, THIS IS THE NINTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
@@ -4595,7 +4702,37 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             "LIURHE NGVH43OECGCLRI8FHSO7R8AB3GWC409NU3P9T757NVV74OE8NFYIECFFÖMOCSRHF ,JSYVBLSE4TMOXW3UMRC9SEN8TYN8ÖOERUCDLC4IGTCOV8EVRNOCS8LHRF"
             "THAT WILL LOOK LIKE GARBAGE, WILL THAT REALLY BE A GOOD IDEA?"
             "THIS IS THE END TOUGH...",
-        "CONTENT STAYS THE SAME BUT PERMISSIONS CHANGE"
+        "CONTENT STAYS THE SAME BUT PERMISSIONS CHANGE",
+        "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"
+        "U1FBM4VSNGCJ11Pizxkibievkspzqaapv2reppc5d4me3cmpakjx4oe9javm93mftqxqj1pnnt4sayg13hkjhqc8snhdr2304opkgdgc1iwrtqlephvqdrbpnnafe1sjj5im6rracd8l"
+        "sbu7diwmvghgwcn6xj8urfi5ihkgfsbmpkpnBHAMUUSWLZYXOFR7UO68OOZ9IFTUY86CXV98LKFZULBWWFULJ8IXZ2ZEA7qsbzayncw2skxqty5g0m2kqynv8dpjrl5h5m1mxxjfgeu6"
+        "v5tqerzcvdwmdalnt5aestykdq4cnpjnyejdb2tf6hyvlokwizswsgaemdmq8vzwzvauysxdplc59z9zno7uysjybqshaskuyjpse4l4ca8CS16VOTWHMFPEZ8QFFEQJDOLJR5U2CVYX"
+        "DKBPDIN0A68F2O4HHQQI5U7IRY2MGS6J9VQTQOKYSGKCSBEZ4B6GWOBRN1YR4KQ05ZQ4BS4L99LAVNCKMN0RXXYWX9MND81IVRLL5PHB5LJLPA68ILTJ8V9IOODBNEMIXC8PEINFWS5R"
+        "YUMCPEWPCDJBDRJAAW07GDKPUAG0IYBNQH2N25CF"
     };
 
     const size_t TEST_SIZES[ASSET_COUNT] = {
@@ -4618,7 +4755,9 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         strlen(TEST_STRINGS[16]) + 1,
         strlen(TEST_STRINGS[17]) + 1,
         strlen(TEST_STRINGS[18]) + 1,
-        strlen(TEST_STRINGS[19]) + 1
+        strlen(TEST_STRINGS[19]) + 1,
+        strlen(TEST_STRINGS[20]) + 1,
+        strlen(TEST_STRINGS[21]) + 1
     };
 
     const uint16_t TEST_PERMISSIONS[ASSET_COUNT] = {
@@ -4641,7 +4780,9 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         0644,
         0644,
         0755,
-        0646
+        0646,
+        0644,
+        0644
     };
 
     for (uint32_t i = 0; i < ASSET_COUNT; ++i)
@@ -4664,7 +4805,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     Longtail_FileInfos* version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
-    uint32_t* compression_types = GetAssetTags(storage, version_paths);
+    uint32_t* compression_types = SetAssetTags(storage, version_paths, Longtail_GetLZ4DefaultQuality());
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -4718,12 +4859,12 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     current_version_paths = 0;
 
     TestAsyncGetIndexComplete get_index_cb;
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb.m_API));
+    ASSERT_EQ(0, compressed_remote_block_store->GetIndex(compressed_remote_block_store, &get_index_cb.m_API));
     get_index_cb.Wait();
     struct Longtail_ContentIndex* block_store_content_index = get_index_cb.m_ContentIndex;
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
-        block_store_api,
+        compressed_remote_block_store,
         job_api,
         0,
         0,
@@ -4745,15 +4886,12 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
     TestAsyncGetIndexComplete get_index_cb2;
-    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb2.m_API));
+    ASSERT_EQ(0, compressed_remote_block_store->GetIndex(compressed_remote_block_store, &get_index_cb2.m_API));
     get_index_cb2.Wait();
     content_index = get_index_cb2.m_ContentIndex;
 
     struct Longtail_CancelAPI* cancel_api = Longtail_CreateAtomicCancelAPI();
     ASSERT_NE((struct Longtail_CancelAPI*)0, cancel_api);
-    Longtail_CancelAPI_HCancelToken cancel_token;
-    ASSERT_EQ(0, cancel_api->CreateToken(cancel_api, &cancel_token));
-    ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
 
     struct BlockStoreProxy
     {
@@ -4801,7 +4939,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             return api->m_Base->GetStats(api->m_Base, out_stats);
         }
     } blockStoreProxy;
-    blockStoreProxy.m_Base = block_store_api;
+    blockStoreProxy.m_Base = compressed_cached_block_store;
     blockStoreProxy.m_FailCounter = 2;
     struct Longtail_BlockStoreAPI* block_store_proxy = Longtail_MakeBlockStoreAPI(
         &blockStoreProxy,
@@ -4813,21 +4951,107 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         BlockStoreProxy::RetargetContent,
         BlockStoreProxy::GetStats);
 
-    ASSERT_EQ(ECANCELED, Longtail_ChangeVersion(
-        block_store_proxy,
-        storage,
-        hash_api,
-        job_api,
-        0,
-        cancel_api,
-        cancel_token,
-        content_index,
-        current_vindex,
-        vindex,
-        version_diff,
-        "old",
-        1));
-    cancel_api->DisposeToken(cancel_api, cancel_token);
+    {
+        Longtail_CancelAPI_HCancelToken cancel_token;
+        ASSERT_EQ(0, cancel_api->CreateToken(cancel_api, &cancel_token));
+        ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
+
+        ASSERT_EQ(ECANCELED, Longtail_ChangeVersion(
+            block_store_proxy,
+            storage,
+            hash_api,
+            job_api,
+            0,
+            cancel_api,
+            cancel_token,
+            content_index,
+            current_vindex,
+            vindex,
+            version_diff,
+            "old",
+            1));
+        cancel_api->DisposeToken(cancel_api, cancel_token);
+    }
+
+    struct TestCancelAPI
+    {
+        struct Longtail_CancelAPI m_API;
+        struct Longtail_CancelAPI* m_BackingAPI;
+        TLongtail_Atomic32 m_QueryCounter;
+        int32_t m_PassCount;
+        TestCancelAPI(struct Longtail_CancelAPI* backingAPI, int passCount)
+            : m_BackingAPI(backingAPI)
+            , m_QueryCounter(0)
+            , m_PassCount(passCount)
+        {
+            Longtail_MakeCancelAPI(this,
+                Dispose,
+                CreateToken,
+                Cancel,
+                IsCancelled,
+                DisposeToken);
+        }
+        static void Dispose(struct Longtail_API* longtail_api)
+        {
+            struct TestCancelAPI* api = (struct TestCancelAPI*)longtail_api;
+            SAFE_DISPOSE_API(api->m_BackingAPI);
+        }
+        static int CreateToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token)
+        {
+            struct TestCancelAPI* api = (struct TestCancelAPI*)cancel_api;
+            return Longtail_CancelAPI_CreateToken(api->m_BackingAPI, out_token);
+        }
+        static int Cancel(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token)
+        {
+            struct TestCancelAPI* api = (struct TestCancelAPI*)cancel_api;
+            return Longtail_CancelAPI_Cancel(api->m_BackingAPI, token);
+        }
+        static int IsCancelled(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token)
+        {
+            struct TestCancelAPI* api = (struct TestCancelAPI*)cancel_api;
+            if (Longtail_AtomicAdd32(&api->m_QueryCounter, 1) > api->m_PassCount)
+            {
+                return ECANCELED;
+            }
+            return Longtail_CancelAPI_IsCancelled(api->m_BackingAPI, token);
+        }
+        static int DisposeToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token)
+        {
+            struct TestCancelAPI* api = (struct TestCancelAPI*)cancel_api;
+            return Longtail_CancelAPI_DisposeToken(api->m_BackingAPI, token);
+        }
+    };
+
+    for (int t = 0; t < 0x7fffffff; ++t)
+    {
+        TestCancelAPI testCancelAPI(cancel_api, t);
+        Longtail_CancelAPI_HCancelToken cancel_token;
+        ASSERT_EQ(0, testCancelAPI.m_API.CreateToken(&testCancelAPI.m_API, &cancel_token));
+        ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
+
+        blockStoreProxy.m_FailCounter = 0x7fffffff;
+        int err = Longtail_ChangeVersion(
+            block_store_proxy,
+            storage,
+            hash_api,
+            job_api,
+            0,
+            &testCancelAPI.m_API,
+            cancel_token,
+            content_index,
+            current_vindex,
+            vindex,
+            version_diff,
+            "old",
+            1);
+        testCancelAPI.m_API.DisposeToken(&testCancelAPI.m_API, cancel_token);
+        if (err == ECANCELED)
+        {
+            continue;
+        }
+        ASSERT_EQ(0, err);
+        break;
+    }
 
     SAFE_DISPOSE_API(block_store_proxy);
     SAFE_DISPOSE_API(cancel_api);
@@ -4835,8 +5059,11 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     Longtail_Free(version_diff);
     Longtail_Free(current_vindex);
     Longtail_Free(vindex);
-    SAFE_DISPOSE_API(block_store_api);
-    SAFE_DISPOSE_API(fs_block_store_api);
+    SAFE_DISPOSE_API(compressed_cached_block_store);
+    SAFE_DISPOSE_API(compressed_remote_block_store);
+    SAFE_DISPOSE_API(cache_block_store_api);
+    SAFE_DISPOSE_API(local_block_store);
+    SAFE_DISPOSE_API(remote_block_store);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
@@ -5644,6 +5871,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     get_index_cb2.Wait();
     content_index = get_index_cb2.m_ContentIndex;
 
+    Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_OFF);
     failable_local_storage_api->m_PassCount = 3;
     failable_local_storage_api->m_WriteError = ENOSPC;
     ASSERT_EQ(ENOSPC, Longtail_ChangeVersion(
@@ -5660,6 +5888,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
         version_diff,
         "old",
         1));
+    Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_ERROR);
 
     Longtail_Free(content_index);
     Longtail_Free(version_diff);
