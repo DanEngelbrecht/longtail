@@ -5422,7 +5422,7 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
             {
                 err = job->m_Err;
             }
-            else if (err = ENOTRECOVERABLE && job->m_Err != ENOTRECOVERABLE)
+            else if ((err == ENOTRECOVERABLE) && (job->m_Err != ENOTRECOVERABLE))
             {
                 err = job->m_Err;
             }
