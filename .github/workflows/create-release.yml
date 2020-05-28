@@ -104,8 +104,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIXED* Include .pdb and .lib for DLLs files in win64 dist package
-          - *CHANGED* Names of shared libraries now include platform and architecture
+          - *CHANGED* Clean up names of shared libraries
         draft: false
         prerelease: false
     - name: Download Linux artifacts

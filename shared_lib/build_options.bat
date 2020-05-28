@@ -1,4 +1,4 @@
-set TARGET=longtail_winx64
+set TARGET=longtail_win32_x64
 set TARGET_TYPE=SHAREDLIB
 
 set LIB_SRC=%BASE_DIR%lib\filestorage\*.c
