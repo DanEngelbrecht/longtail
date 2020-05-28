@@ -3511,6 +3511,7 @@ void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
     hmfree(block_store->m_StoredBlockLookup);
     arrfree(block_store->m_PutRequests);
     arrfree(block_store->m_GetRequests);
+    arrfree(block_store->m_GetIndexRequests);
     Longtail_Free(block_store->m_ContentIndex);
 }
 
