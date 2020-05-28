@@ -261,7 +261,7 @@ static int ReadContent(
     err = job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
     if (err)
     {
-        LONGTAIL_LOG(err == ECANCELED ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) failed with %d",
             storage_api, job_api, content_path, out_content_index,
             err)
         Longtail_Free(scan_jobs);
@@ -512,43 +512,50 @@ static int FSBlockStore_GetIndexSync(
     struct FSBlockStoreAPI* fsblockstore_api,
     struct Longtail_ContentIndex** out_content_index)
 {
-    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), -1);
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (!fsblockstore_api->m_ContentIndex)
     {
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        struct Longtail_ContentIndex* content_index;
+        struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), -1);
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
             job_api,
             fsblockstore_api->m_DefaultMaxBlockSize,
             fsblockstore_api->m_DefaultMaxChunksPerBlock,
             fsblockstore_api->m_ContentPath,
-            &fsblockstore_api->m_ContentIndex);
+            &content_index);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync(%p, %p) failed with %d",
                 fsblockstore_api, out_content_index,
                 err)
-            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
             Longtail_DisposeAPI(&job_api->m_API);
             return err;
         }
+        Longtail_DisposeAPI(&job_api->m_API);
+        job_api = 0;
+        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
 
-        uint64_t block_count = *fsblockstore_api->m_ContentIndex->m_BlockCount;
-        for (uint64_t b = 0; b < block_count; ++b)
+        if (!fsblockstore_api->m_ContentIndex)
         {
-            uint64_t block_hash = fsblockstore_api->m_ContentIndex->m_BlockHashes[b];
-            hmput(fsblockstore_api->m_BlockState, block_hash, 1);
-        }
+            fsblockstore_api->m_ContentIndex = content_index;
+            uint64_t block_count = *fsblockstore_api->m_ContentIndex->m_BlockCount;
+            for (uint64_t b = 0; b < block_count; ++b)
+            {
+                uint64_t block_hash = fsblockstore_api->m_ContentIndex->m_BlockHashes[b];
+                hmput(fsblockstore_api->m_BlockState, block_hash, 1);
+            }
 
-        const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
-        err = Longtail_WriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentIndex, content_index_path);
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", fsblockstore_api->m_ContentPath, err);
+            const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
+            err = Longtail_WriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentIndex, content_index_path);
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", fsblockstore_api->m_ContentPath, err);
+            }
+            Longtail_Free((void*)content_index_path);
         }
-        Longtail_Free((void*)content_index_path);
     }
-    Longtail_DisposeAPI(&job_api->m_API);
 
     intptr_t new_block_count = arrlen(fsblockstore_api->m_AddedBlockIndexes);
     if (new_block_count > 0)
@@ -575,7 +582,6 @@ static int FSBlockStore_GetIndexSync(
         arrfree(fsblockstore_api->m_AddedBlockIndexes);
     }
 
-    job_api = 0;
     size_t content_index_size;
     void* tmp_content_buffer;
     int err = Longtail_WriteContentIndexToBuffer(fsblockstore_api->m_ContentIndex, &tmp_content_buffer, &content_index_size);

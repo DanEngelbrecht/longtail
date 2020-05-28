@@ -104,10 +104,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIXED* Double-free on cache block store when write error happen
-          - *FIXED* Fixed logic when target chunk size is smaller than 65 bytes
-          - *FIXED* Fixed error logging in cache block stire
-          - *FIXED* Fixed error handling in WritePartialAssetsFromBlocks
+          - *FIXED* Reduced log level for ECANCELED errors from WARNING to INFO
+          - *FIXED* FSBlockStore now creates its jobapi only when it needs it
+          - *FIXED* Error/cancel handling in WritePartialAssetFromBlocks
         draft: false
         prerelease: false
     - name: Download Linux artifacts
