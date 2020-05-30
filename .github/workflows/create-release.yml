@@ -95,7 +95,7 @@ jobs:
         ../build.bat
         ../build.bat release
         cd ..
-      - name: build dist
+    - name: build dist
       run: |
         ./dist.bat
     - uses: actions/upload-artifact@master
