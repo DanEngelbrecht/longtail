@@ -29,6 +29,12 @@ jobs:
         ../build.sh
         ../build.sh release
         cd ..
+    - name: build static_lib
+      run: |
+        cd ./static_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: run tests
       run: |
         pushd ./test
@@ -60,6 +66,12 @@ jobs:
         ../build.sh
         ../build.sh release
         cd ..
+    - name: build static_lib
+      run: |
+        cd ./static_lib
+        ../build.sh
+        ../build.sh release
+        cd ..
     - name: run tests
       run: |
         pushd ./test
@@ -85,9 +97,15 @@ jobs:
         ../build.bat
         ../build.bat release
         cd ..
-    - name: build shared_lib
+#    - name: build shared_lib
+#      run: |
+#        cd ./shared_lib
+#        ../build.bat
+#        ../build.bat release
+#        cd ..
+    - name: build static_lib
       run: |
-        cd ./shared_lib
+        cd ./static_lib
         ../build.bat
         ../build.bat release
         cd ..
