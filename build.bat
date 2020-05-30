@@ -153,19 +153,37 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
 
 if "!TARGET_TYPE!" == "EXECUTABLE" (
     set OUTPUT_TARGET=!OUTPUT!.exe
-    set EXTRA_CC_OPTIONS=
-    set EXTRA_LINK_OPTIONS=
 )
 
 if "!TARGET_TYPE!" == "SHAREDLIB" (
     set OUTPUT_TARGET=!OUTPUT!.dll
-    set EXTRA_CC_OPTIONS=/D_USRDLL /D_WINDLL
+)
+
+if "!TARGET_TYPE!" == "STATICLIB" (
+    set OUTPUT_TARGET=!OUTPUT!_static.lib
+    set EXTRA_CC_OPTIONS=lib/D_USRDLL /D_WINDLL
     set EXTRA_LINK_OPTIONS=/pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library
 )
 
 cd !BASE_DIR!\build
 echo Building %OUTPUT_TARGET%
-cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
+if "!TARGET_TYPE!" == "EXECUTABLE" (
+    cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
+)
+if "!TARGET_TYPE!" == "SHAREDLIB" (
+    cl.exe /D_USRDLL /D_WINDLL %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link /pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
+)
+if "!TARGET_TYPE!" == "STATICLIB" (
+    IF NOT EXIST static-lib-!RELEASE_MODE! (
+        mkdir static-lib-!RELEASE_MODE!
+    )
+    cd static-lib-!RELEASE_MODE! 
+    cl.exe /c %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb
+    cd ..
+    lib -nologo -out:!OUTPUT_TARGET! static-lib-!RELEASE_MODE!\*.o !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
+    cd !BASE_DIR!\build
+)
+
 set BUILD_ERROR=%ERRORLEVEL%
 cd !BASE_DIR!
 

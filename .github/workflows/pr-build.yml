@@ -111,12 +111,12 @@ jobs:
         ../build.bat
         ../build.bat release
         cd ..
-#    - name: build shared_lib
-#      run: |
-#        cd ./shared_lib
-#        ../build.bat
-#        ../build.bat release
-#        cd ..
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ../build.bat
+        ../build.bat release
+        cd ..
     - name: build static_lib
       run: |
         cd ./static_lib

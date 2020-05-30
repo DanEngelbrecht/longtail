@@ -11,6 +11,8 @@ cp build/longtail_win32_x64.dll dist
 cp build/longtail_win32_x64.pdb dist
 cp build/longtail_win32_x64.lib dist
 cp build/longtail_win32_x64.exp dist
+cp build/longtail_win32_x64_static.lib dist
+cp build/longtail_win32_x64_debug_static.lib dist
 mkdir dist\include
 mkdir dist\include\src
 mkdir dist\include\lib

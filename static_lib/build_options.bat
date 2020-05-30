@@ -1,5 +1,5 @@
 set TARGET=longtail_win32_x64
-set TARGET_TYPE=SHAREDLIB
+set TARGET_TYPE=STATICLIB
 
 call ..\default_build_options.bat
 
