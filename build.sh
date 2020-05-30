@@ -45,7 +45,7 @@ else
     export CXXFLAGS="$BASE_CXXFLAGS $CXXFLAGS_DEBUG"
 fi
 
-if [ $TARGET_TYPE == "SHAREDLIB" ]; then
+if [ $TARGET_TYPE == "SHAREDLIB" ] || [ $TARGET_TYPE == "STATICLIB" ]; then
     # Keep third-party lib separate from other builds
     # Disable ASAN since it would force user of .so to enable ASAN
     export THIRD_PARTY_LIB="lib${THIRD_PARTY_LIB}"
@@ -78,13 +78,23 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
 fi
 
 if [ $TARGET_TYPE == "EXECUTABLE" ]; then
-    echo Building $OUTPUT
+    echo Building $BASE_DIR/build/$OUTPUT
     clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ]; then
-    echo Building lib${OUTPUT}.so
+    echo Building $BASE_DIR/build/lib${OUTPUT}.so
     clang++ -shared -o $BASE_DIR/build/lib${OUTPUT}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+fi
+
+if [ $TARGET_TYPE == "STATICLIB" ]; then
+    echo Building $BASE_DIR/build/$OUTPUT.a
+    mkdir -p $BASE_DIR/build/static-lib-$RELEASE_MODE
+    cd $BASE_DIR/build/static-lib-$RELEASE_MODE
+    rm -rf $BASE_DIR/build/static-lib-$RELEASE_MODE/*.o
+    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+    ar rc $BASE_DIR/build/$OUTPUT.a *.o $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    cd ..
 fi
 
 #if [ "$TARGET_MODE" = "lib" ]; then
