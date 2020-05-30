@@ -35,7 +35,7 @@ jobs:
         ../build.sh
         ../build.sh release
         cd ..
-      - name: run tests
+    - name: run tests
       run: |
         pushd ./test
         ../build/test_debug
