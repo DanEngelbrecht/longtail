@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [ master ]
 
+strategy:
+  matrix:
+    compiler: [g++, clang++]
+
 jobs:
   linux:
 
@@ -12,6 +16,8 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: build test
+      env:
+        CXX: ${{ matrix.compiler }}
       run: |
         pushd ./test 
         ../build.sh

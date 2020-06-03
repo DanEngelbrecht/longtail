@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+COMPILER=${CXX:-clang++}
+
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export THIRDPARTY_DIR=${BASE_DIR}/third-party/
 
@@ -63,15 +65,15 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     cd $BASE_DIR/build/third-party-$RELEASE_MODE
     rm -rf $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
+    $COMPILER -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
     if [ -n "$THIRDPARTY_SRC_SSE42" ]; then
-        clang++ -c $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
+        $COMPILER -c $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
     fi
     if [ -n "$THIRDPARTY_SRC_AVX2" ]; then
-        clang++ -c $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
+        $COMPILER -c $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
     fi
     if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
-        clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
+        $COMPILER -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
     fi
     ar rc $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
     cd $BASE_DIR
@@ -79,12 +81,12 @@ fi
 
 if [ $TARGET_TYPE == "EXECUTABLE" ]; then
     echo Building $BASE_DIR/build/$OUTPUT
-    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    $COMPILER -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ]; then
     echo Building $BASE_DIR/build/lib${OUTPUT}.so
-    clang++ -shared -o $BASE_DIR/build/lib${OUTPUT}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    $COMPILER -shared -o $BASE_DIR/build/lib${OUTPUT}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi
 
 if [ $TARGET_TYPE == "STATICLIB" ]; then
@@ -92,7 +94,7 @@ if [ $TARGET_TYPE == "STATICLIB" ]; then
     mkdir -p $BASE_DIR/build/static-lib-$RELEASE_MODE
     cd $BASE_DIR/build/static-lib-$RELEASE_MODE
     rm -rf $BASE_DIR/build/static-lib-$RELEASE_MODE/*.o
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+    $COMPILER -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
     ar rc $BASE_DIR/build/$OUTPUT.a *.o $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
     cd ..
 fi
@@ -101,11 +103,11 @@ fi
 #    mkdir -p $BASE_DIR/build/lib-$RELEASE_MODE
 #    rm -rf $BASE_DIR/build/lib-$RELEASE_MODE/*.o
 #    cd $BASE_DIR/build/lib-$RELEASE_MODE
-#    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+#    $COMPILER -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
 #    echo $BASE_DIR/build/$TARGET
 #    ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
 #    cd $BASE_DIR
 #else
 #    echo Building $OUTPUT
-#    clang++ -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+#    $COMPILER -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 #fi
