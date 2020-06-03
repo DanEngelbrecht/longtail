@@ -18,7 +18,12 @@ else
     RELEASE_MODE="debug"
 fi
 
-export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
+export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-cast-align -Wno-unused-function -Wno-deprecated -Wno-unused-parameter -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-padded"
+#-Wno-missing-prototypes
+#-Wno-deprecated-register
+#-Wno-c++98-compat-pedantic
+#-Wno-global-constructors
+#-Wno-unused-template
 
 # -pedantic
 # -Wno-atomic-implicit-seq-cst
@@ -65,15 +70,15 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     cd $BASE_DIR/build/third-party-$RELEASE_MODE
     rm -rf $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
-    $COMPILER -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
+    $COMPILER -c $THIRDPARTY_SRC $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc
     if [ -n "$THIRDPARTY_SRC_SSE42" ]; then
-        $COMPILER -c $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
+        $COMPILER -c $THIRDPARTY_SRC_SSE42 $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc
     fi
     if [ -n "$THIRDPARTY_SRC_AVX2" ]; then
-        $COMPILER -c $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
+        $COMPILER -c $THIRDPARTY_SRC_AVX2 $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc
     fi
     if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
-        $COMPILER -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
+        $COMPILER -c $THIRDPARTY_SRC_AVX512 $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc
     fi
     ar rc $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
     cd $BASE_DIR
@@ -81,12 +86,12 @@ fi
 
 if [ $TARGET_TYPE == "EXECUTABLE" ]; then
     echo Building $BASE_DIR/build/$OUTPUT
-    $COMPILER -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    $COMPILER -o $BASE_DIR/build/$OUTPUT $SRC $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ]; then
     echo Building $BASE_DIR/build/lib${OUTPUT}.so
-    $COMPILER -shared -o $BASE_DIR/build/lib${OUTPUT}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    $COMPILER -shared -o $BASE_DIR/build/lib${OUTPUT}.so $CXXFLAGS $OPT $DISASSEMBLY $ARCH -std=c++11 $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 fi
 
 if [ $TARGET_TYPE == "STATICLIB" ]; then
@@ -94,7 +99,7 @@ if [ $TARGET_TYPE == "STATICLIB" ]; then
     mkdir -p $BASE_DIR/build/static-lib-$RELEASE_MODE
     cd $BASE_DIR/build/static-lib-$RELEASE_MODE
     rm -rf $BASE_DIR/build/static-lib-$RELEASE_MODE/*.o
-    $COMPILER -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+    $COMPILER -c $MAIN_SRC $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC
     ar rc $BASE_DIR/build/$OUTPUT.a *.o $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
     cd ..
 fi
@@ -103,11 +108,11 @@ fi
 #    mkdir -p $BASE_DIR/build/lib-$RELEASE_MODE
 #    rm -rf $BASE_DIR/build/lib-$RELEASE_MODE/*.o
 #    cd $BASE_DIR/build/lib-$RELEASE_MODE
-#    $COMPILER -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+#    $COMPILER -c $MAIN_SRC $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC
 #    echo $BASE_DIR/build/$TARGET
 #    ar rc $BASE_DIR/build/$TARGET *.o $BASE_DIR/build/third-party-$RELEASE_MODE/*.o
 #    cd $BASE_DIR
 #else
 #    echo Building $OUTPUT
-#    $COMPILER -o $BASE_DIR/build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+#    $COMPILER -o $BASE_DIR/build/$OUTPUT $MAIN_SRC $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $BASE_DIR/build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 #fi
