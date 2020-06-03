@@ -4,12 +4,11 @@ on:
   pull_request:
     branches: [ master ]
 
-strategy:
-  matrix:
-    compiler: [g++, clang++]
-
 jobs:
   linux:
+    strategy:
+      matrix:
+        compiler: [g++, clang++]
 
     runs-on: ubuntu-latest
 
