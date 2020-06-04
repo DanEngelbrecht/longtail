@@ -2,7 +2,7 @@
 set -e
 
 if [ "$(uname)" == "Darwin" ]; then
-    export PLATFORM=macos
+    export PLATFORM=darwin
 else
 	export PLATFORM=linux
 fi

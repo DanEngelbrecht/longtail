@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ "$(uname)" == "Darwin" ]; then
-    export PLATFORM=macos
+    export PLATFORM=darwin
 else
 	export PLATFORM=linux
 fi
@@ -9,6 +9,7 @@ fi
 export TARGET=longtail_${PLATFORM}_x64
 export TARGET_TYPE=SHAREDLIB
 
+. ../all_sources.sh
 . ../default_build_options.sh
 
 export MAIN_SRC="$BASE_DIR/shared_lib/shared_lib.c"

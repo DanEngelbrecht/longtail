@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-export THIRDPARTY_DIR=${BASE_DIR}/third-party/
+export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
+export THIRDPARTY_DIR=${BASE_DIR}third-party/
 
 if [ "$1" = "build-third-party" ] || [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] ; then
     BUILD_THIRD_PARTY="build-third-party"

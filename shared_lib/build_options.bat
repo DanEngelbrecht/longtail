@@ -1,8 +1,9 @@
 set TARGET=longtail_win32_x64
 set TARGET_TYPE=SHAREDLIB
 
+call ..\all_sources.bat
 call ..\default_build_options.bat
 
-set MAIN_SRC=%BASE_DIR%\shared_lib\shared_lib.c
+set MAIN_SRC=%BASE_DIR%shared_lib\shared_lib.c
 set CXXFLAGS=%CXXFLAGS% /DLONGTAIL_EXPORT_SYMBOLS /DZSTDLIB_VISIBILITY="" /DLZ4LIB_VISIBILITY=""
 set CXXFLAGS_DEBUG=%CXXFLAGS_DEBUG% /DLONGTAIL_EXPORT_SYMBOLS /DZSTDLIB_VISIBILITY="" /DLZ4LIB_VISIBILITY=""

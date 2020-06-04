@@ -141,7 +141,7 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo Compiling third party dependencies to library !THIRD_PARTY_LIB!
     del /q !BASE_DIR!build\third-party-!RELEASE_MODE!\*.obj >nul 2>&1
     cd !BASE_DIR!build\third-party-!RELEASE_MODE!
-    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC%
+    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% %THIRDPARTY_SRC% %THIRDPARTY_SRC_SSE42% %THIRDPARTY_SRC_AVX2% %THIRDPARTY_SRC_AVX512%
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
     echo Creating third party dependencies library !THIRD_PARTY_LIB!
     lib.exe /nologo *.obj /OUT:!BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
@@ -157,12 +157,12 @@ if "!TARGET_TYPE!" == "EXECUTABLE" (
 
 if "!TARGET_TYPE!" == "SHAREDLIB" (
     set OUTPUT_TARGET=!OUTPUT!.dll
+    set EXTRA_CC_OPTIONS=lib/D_USRDLL /D_WINDLL
+    set EXTRA_LINK_OPTIONS=/pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library
 )
 
 if "!TARGET_TYPE!" == "STATICLIB" (
     set OUTPUT_TARGET=!OUTPUT!_static.lib
-    set EXTRA_CC_OPTIONS=lib/D_USRDLL /D_WINDLL
-    set EXTRA_LINK_OPTIONS=/pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library
 )
 
 cd !BASE_DIR!\build
