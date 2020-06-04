@@ -88,20 +88,20 @@ jobs:
     - name: build test
       run: |
         cd ./test 
-        ../build.bat
-        ../build.bat release
+        ./build.bat
+        ./build.bat release
         cd ..
     - name: build cmd
       run: |
         cd ./cmd
-        ../build.bat
-        ../build.bat release
+        ./build.bat
+        ./build.bat release
         cd ..
     - name: build shared_lib
       run: |
         cd ./shared_lib
-        ../build.bat
-        ../build.bat release
+        ./build.bat
+        ./build.bat release
         cd ..
     - name: build static_lib
       run: |
