@@ -1,18 +1,18 @@
 @echo off
 
 mkdir dist
-cp build/longtail_debug.exe dist
-cp build/longtail.exe dist
-cp build/longtail_win32_x64_debug.dll dist
-cp build/longtail_win32_x64_debug.pdb dist
-cp build/longtail_win32_x64_debug.lib dist
-cp build/longtail_win32_x64_debug.exp dist
-cp build/longtail_win32_x64.dll dist
-cp build/longtail_win32_x64.pdb dist
-cp build/longtail_win32_x64.lib dist
-cp build/longtail_win32_x64.exp dist
-cp build/longtail_win32_x64_static.lib dist
-cp build/longtail_win32_x64_debug_static.lib dist
+cp build\longtail_debug.exe dist
+cp build\longtail.exe dist
+cp build\longtail_win32_x64_debug.dll dist
+cp build\longtail_win32_x64_debug.pdb dist
+cp build\longtail_win32_x64_debug.lib dist
+cp build\longtail_win32_x64_debug.exp dist
+cp build\longtail_win32_x64.dll dist
+cp build\longtail_win32_x64.pdb dist
+cp build\longtail_win32_x64.lib dist
+cp build\longtail_win32_x64.exp dist
+cp build\longtail_win32_x64.a dist
+cp build\longtail_win32_x64_debug.a dist
 mkdir dist\include
 mkdir dist\include\src
 mkdir dist\include\lib

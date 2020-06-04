@@ -1,4 +1,3 @@
-
 @echo off
 SetLocal EnableDelayedExpansion
 
@@ -10,19 +9,22 @@ If %PROCESSOR_ARCHITECTURE% == AMD64 (
 
 set PLATFORM=win32_%ARCH%
 set CXXFLAGS=-std=gnu99 -g -m64 -pthread -msse4.1 -maes -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
-
 set BASE_DIR=%~dp0..\
-call ..\default_build_options.bat
 set LIB_TARGET_FOLDER=!BASE_DIR!build\
 set OBJDIR=!BASE_DIR!build\static-lib
+
+call ..\all_sources.bat
 
 if "%1%" == "release" (
     goto build_release_mode
 )
 
+:build_debug_mode
+
 set LIB_TARGET=%LIB_TARGET_FOLDER%longtail_%PLATFORM%_debug.a
 set OPT=
 set OBJDIR=!BASE_DIR!build\static-lib-debug
+set CXXFLAGS=!CXXFLAGS! -DLONGTAIL_ASSERTS -DBIKESHED_ASSERTS
 
 goto build
 
@@ -56,4 +58,4 @@ if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
 )
 popd
 
-ar rc !LIB_TARGET! !BASE_DIR!build\static_library/*.o
+ar rc !LIB_TARGET! !OBJDIR!\*.o

@@ -141,7 +141,7 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo Compiling third party dependencies to library !THIRD_PARTY_LIB!
     del /q !BASE_DIR!build\third-party-!RELEASE_MODE!\*.obj >nul 2>&1
     cd !BASE_DIR!build\third-party-!RELEASE_MODE!
-    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC%
+    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% %THIRDPARTY_SRC% %THIRDPARTY_SRC_SSE42% %THIRDPARTY_SRC_AVX2% %THIRDPARTY_SRC_AVX512%
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
     echo Creating third party dependencies library !THIRD_PARTY_LIB!
     lib.exe /nologo *.obj /OUT:!BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!

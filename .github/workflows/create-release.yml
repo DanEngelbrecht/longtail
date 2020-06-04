@@ -16,20 +16,20 @@ jobs:
     - name: build cmd
       run: |
         pushd ./cmd
-        ../build.sh
-        ../build.sh release
+        ./build.sh
+        ./build.sh release
         popd
     - name: build shared_lib
       run: |
         cd ./shared_lib
-        ../build.sh
-        ../build.sh release
+        ./build.sh
+        ./build.sh release
         cd ..
     - name: build static_lib
       run: |
         cd ./static_lib
-        ../build.sh
-        ../build.sh release
+        ./build.sh
+        ./build.sh release
         cd ..
     - name: build dist
       run: |
@@ -39,7 +39,7 @@ jobs:
         name: dist-linux-x64
         path: dist
 
-  macos:
+  darwin:
 
     runs-on: macos-latest
 
@@ -48,27 +48,27 @@ jobs:
     - name: build cmd
       run: |
         pushd ./cmd
-        ../build.sh
-        ../build.sh release
+        ./build.sh
+        ./build.sh release
         popd
     - name: build shared_lib
       run: |
         cd ./shared_lib
-        ../build.sh
-        ../build.sh release
+        ./build.sh
+        ./build.sh release
         cd ..
     - name: build static_lib
       run: |
         cd ./static_lib
-        ../build.sh
-        ../build.sh release
+        ./build.sh
+        ./build.sh release
         cd ..
     - name: build dist
       run: |
         ./dist.sh
     - uses: actions/upload-artifact@master
       with:
-        name: dist-macos-x64
+        name: dist-darwin-x64
         path: dist
 
   win32:
@@ -80,20 +80,20 @@ jobs:
     - name: build cmd
       run: |
         cd ./cmd
-        ../build.bat
-        ../build.bat release
+        ./build.bat
+        ./build.bat release
         cd ..
     - name: build shared_lib
       run: |
         cd ./shared_lib
-        ../build.bat
-        ../build.bat release
+        ./build.bat
+        ./build.bat release
         cd ..
     - name: build static_lib
       run: |
         cd ./static_lib
-        ../build.bat
-        ../build.bat release
+        ./build.bat
+        ./build.bat release
         cd ..
     - name: build dist
       run: |
@@ -107,7 +107,7 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    needs: [linux, macos, win32]
+    needs: [linux, darwin, win32]
 
     steps:
     - name: Checkout code
@@ -135,11 +135,11 @@ jobs:
       with:
         name: dist-win32-x64
         path: dist-win32-x64
-    - name: Download macos artifacts
+    - name: Download darwin artifacts
       uses: actions/download-artifact@v1
       with:
-        name: dist-MacOS-x64
-        path: dist-macos-x64
+        name: dist-darwin-x64
+        path: dist-darwin-x64
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
       with:
@@ -148,16 +148,16 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
-    - name: Zip MacOS artifacts
+    - name: Zip darwin artifacts
       uses: montudor/action-zip@v0.1.0
       with:
-        args: zip -qq -r ./macos-x64.zip ./dist-macos-x64
+        args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
     - name: Upload to GitHub release
       uses: Roang-zero1/github-upload-release-artifacts-action@master
       with:
         args: |
           linux-x64.zip
           win32-x64.zip
-          macos-x64.zip
+          darwin-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

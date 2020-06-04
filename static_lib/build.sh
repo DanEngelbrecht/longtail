@@ -2,7 +2,7 @@
 set -e
 
 if [ "$(uname)" == "Darwin" ]; then
-    export PLATFORM="macos"
+    export PLATFORM="darwin"
 else
 	export PLATFORM="linux"
 fi
@@ -12,12 +12,11 @@ ARCH=x64
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../"
 
 PLATFORM="linux_${ARCH}"
-CXXFLAGS="-std=gnu99 -g -m64 -pthread -msse4.1 -maes -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00"
-
-. ../default_build_options.sh
-
+CXXFLAGS="-std=gnu99 -g -m64 -pthread -msse4.1 -maes"
 LIB_TARGET_FOLDER=${BASE_DIR}build/
 OBJDIR=${BASE_DIR}build/static-lib
+
+. ../all_sources.sh
 
 if [ "$1" == "release" ]; then
 	LIB_TARGET="${LIB_TARGET_FOLDER}longtail_${PLATFORM}.a"
