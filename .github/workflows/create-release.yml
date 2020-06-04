@@ -122,7 +122,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *ADDED* Static library targets
+          - *CHANGED* Refactored build scripts
+          - *ADDED* Static clang/gcc libraries for Windows
         draft: false
         prerelease: false
     - name: Download Linux artifacts

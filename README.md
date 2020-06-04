@@ -3,21 +3,23 @@
 |master      | [![Build Status](https://github.com/DanEngelbrecht/longtail/workflows/Build%20Master/badge.svg)](https://github.com/DanEngelbrecht/longtail/workflows/Build%20Master/badge.svg) |
 
 # longtail
-Experimental incremental asset delivery format - closely related to the casync project by Lennart Poettering (https://github.com/systemd/casync). When I started tinkering with this I did not know of that project but has since learned from it but choosen different approaches to a few things. If casync does what you need there is no point in diving into this besides curiousity. If there are aspects of casync that does not work for you (you need in-place updating of folders, or you need all the performance using threading) then it might be interesting.
+Incremental asset delivery format - closely related to the casync project by Lennart Poettering (https://github.com/systemd/casync). When I started tinkering with this I did not know of that project but has since learned from it but choosen different approaches to a few things. If casync does what you need there is no point in diving into this besides curiousity. If there are aspects of casync that does not work for you (you need in-place updating of folders, or you need all the performance using threading) then it might be interesting.
 
 # Current state
-Alpha, most stuff is there and working. It is reasonably tested but unit tests does not cover nearly as much as it should and some parts are not "safe" such as validating file formats etc.
+Beta, most stuff is there and working. It is reasonably tested and used by the go command line front end https://github.com/DanEngelbrecht/golongtail.git and the C# LongtailLib https://github.com/DanEngelbrecht/LongtailLib.git for a couple of pre-production tools.
 
 It is *very* fast though, most functions that takes time are very multithreaded and fairly efficient and care has been taken to handle really large files (such as multi-gigabyte PAK files for games) reasonably fast.
+
+It is very undocumented, specifically the public API has basically zero docs.
 
 # Cloning
 git clone https://github.com/DanEngelbrecht/longtail.git
 
 # Platforms
-The target platforms are Windows, Linux and MacOS and it *should* build and run on all of them, but as this is early on the different platforms may break from time to time.
+The target platforms are Windows, Linux and MacOS and it *should* build and run on all of them with MacOS being the least tested.
 
 # Tests
-To build unit tests, cd to `test`, call `../build/build.sh` for debug and `../build/build.sh release` for release on OSX/Linux, `..\build\build.bat` for debug and `..\build\build.bat release` for release on Windows.
+To build unit tests, cd to `test`, call `./build.sh` for debug and `./build.sh release` for release on OSX/Linux, `.\build.bat` for debug and `.\build.bat release` for release on Windows.
 
 Run test with `output/test_debug` for debug and `output/test` for release on OSX/Linux, `output\test_debug.exe` for debug and `output\test.exe` for release on Windows.
 
@@ -26,9 +28,12 @@ The preferred way of testing with the command line is to use https://github.com/
 
 You can build the C command line but it is not as maintained and up to date.
 
-To build the command line tool, cd to `cmd`, call `../build/build.sh` for debug and `../build/build.sh release` for release on OSX/Linux, `..\build\build.bat` for debug and `..\build\build.bat release` for release on Windows.
+To build the command line tool, cd to `cmd`, call `./build.sh` for debug and `../build.sh release` for release on OSX/Linux, `.\build.bat` for debug and `.\build.bat release` for release on Windows.
 
 Run the command line tool with `output/longtail_debug` for debug and `output/longtail` for release on OSX/Linux, `output\longtail_debug.exe` for debug and `output\longtail.exe` for release on Windows.
+
+# Dynamic and Static library
+There are targets for dynamic libaries (.so and .dll) in `shared_lib` and static libraries (.a) in `static_lib`. Call `./build.sh` for debug and `./build.sh release` for release on OSX/Linux, `.\build.bat` for debug and `.\build.bat release` for release on Windows.
 
 # Concepts
 
@@ -62,7 +67,7 @@ Currently there are:
 
 ### CompressionAPI
 * Brotli - by Google https://github.com/google/brotli
-* Zstandard - by Facebook https://github.com/facebook/zstd
+* ZStandard - by Facebook https://github.com/facebook/zstd
 * LZ4 - by Cyan4973 https://github.com/lz4/lz4
 
 ### JobAPI
@@ -115,5 +120,3 @@ I would not rely on it for any serious production settings at this moment as the
 Also, it only has two forms of storage - disk and memory, it does not have http, S3, GCS or any other fancy stuff in it.
 
 This has been an active choice, as the library is writting in C99 for ultimate portability some sacrifices had to be done. It has minimal dependencies and no complicated build system but it is written so adding other storage mechanisms or exchanging hashing or other parts are reasonably easy. 
-
-I'm also tinkering with a Golang wrapper for the library which I also intend to open source if I don't end up adding it to this repo.
