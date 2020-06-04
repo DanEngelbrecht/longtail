@@ -6,8 +6,9 @@ If %PROCESSOR_ARCHITECTURE% == AMD64 (
 ) Else (
     set ARCH=x86
 )
+set OS=win32
 
-set PLATFORM=win32_%ARCH%
+set PLATFORM=%OS%_%ARCH%
 set CXXFLAGS=-std=gnu99 -g -m64 -pthread -msse4.1 -maes -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
 set BASE_DIR=%~dp0..\
 set LIB_TARGET_FOLDER=!BASE_DIR!build\

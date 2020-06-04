@@ -2,16 +2,16 @@
 set -e
 
 if [ "$(uname)" == "Darwin" ]; then
-    export PLATFORM="darwin"
+    export OS="darwin"
 else
-	export PLATFORM="linux"
+	export OS="linux"
 fi
 
 ARCH=x64
 
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../"
 
-PLATFORM="linux_${ARCH}"
+PLATFORM="${OS}_${ARCH}"
 CXXFLAGS="-std=gnu99 -g -m64 -pthread -msse4.1 -maes"
 LIB_TARGET_FOLDER=${BASE_DIR}build/
 OBJDIR=${BASE_DIR}build/static-lib
