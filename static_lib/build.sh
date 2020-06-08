@@ -4,15 +4,16 @@ set -e
 COMPILER="gcc"
 
 if [ "$(uname)" == "Darwin" ]; then
-    export OS="darwin"
+    OS="darwin"
 	COMPILER="clang"
 else
-	export OS="linux"
+	OS="linux"
 fi
 
 ARCH=x64
 
-export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../"
+BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+BASE_DIR="$(dirname "$BASE_DIR")/"
 
 PLATFORM="${OS}_${ARCH}"
 CXXFLAGS="-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread"
