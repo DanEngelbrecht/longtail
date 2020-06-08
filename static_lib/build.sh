@@ -32,7 +32,7 @@ else
 	OBJDIR="${BASE_DIR}build/static-lib-debug"
 fi
 
-LIB_TARGET="${LIB_TARGET_FOLDER}${LIB_FILENAME}.a"
+LIB_TARGET="${LIB_TARGET_FOLDER}lib${LIB_FILENAME}.a"
 
 echo Building ${LIB_TARGET}
 
@@ -58,8 +58,6 @@ popd
 
 ar rc ${LIB_TARGET} ${OBJDIR}/*.o
 
-cp ${LIB_TARGET} lib${LIB_FILENAME}.a
-
 echo Validating ${LIB_TARGET}
-${COMPILER} ${CXXFLAGS} test.c -o -lm -L. -l${LIB_FILENAME}
+${COMPILER} ${CXXFLAGS} test.c -o -lm -L${BASE_DIR}build -l${LIB_FILENAME}
 ${BASE_DIR}build/static_lib_test
