@@ -74,7 +74,6 @@ TEST_EXECUTABLEPATH="${BASE_DIR}build/static_lib_test"
 
 ar cru -v ${LIB_TARGET} ${OBJDIR}/*.o
 ls -la ${LIB_TARGET}
-LIB_IMPORT_NAME=${LIB_FILENAME}
 
 echo Validating ${LIB_TARGET}
 ${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} test.c -lm -L${LIB_TARGET_FOLDER} -l${LIB_FILENAME} --verbose
