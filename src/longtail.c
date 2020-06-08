@@ -7478,13 +7478,11 @@ static int FeedChunker(struct Longtail_Chunker* c)
     return err;
 }
 
-#ifndef _MSC_VER
-inline uint32_t _rotl(uint32_t x, int shift) {
-    shift &= 31;
-    if (!shift) return x;
-    return (x << shift) | (x >> (32 - shift));
-}
-#endif // _MSC_VER
+#if defined(_MSC_VER)
+#  define LONGTAIL_rotl32(x,r) _rotl(x,r)
+#else
+#  define LONGTAIL_rotl32(x,r) ((x << r) | (x >> (32 - r)))
+#endif
 
 static const struct Longtail_ChunkRange EmptyChunkRange = {0, 0, 0};
 
@@ -7527,7 +7525,7 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
         for (uint32_t i = 0; i < ChunkerWindowSize; ++i)
         {
             uint8_t b = window.buf[i];
-            hash ^= _rotl(hashTable[b], (int)(ChunkerWindowSize-i-1u));
+            hash ^= LONGTAIL_rotl32(hashTable[b], (int)((ChunkerWindowSize-i-1u) & 31));
             c->hWindow[i] = b;
         }
     }
@@ -7545,8 +7543,8 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
         uint8_t in = scoped_buf[pos++];
         uint8_t out = window[idx];
         window[idx++] = in;
-        hash = _rotl(hash, 1) ^
-            _rotl(hashTable[out], (int)(ChunkerWindowSize)) ^
+        hash = LONGTAIL_rotl32(hash, 1) ^
+            LONGTAIL_rotl32(hashTable[out], (int)(ChunkerWindowSize & 31)) ^
             hashTable[in];
 
         if ((hash % d) == discriminator)
