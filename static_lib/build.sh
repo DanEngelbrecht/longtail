@@ -57,19 +57,21 @@ fi
 
 popd
 
+TEST_EXECUTABLEPATH="${BASE_DIR}build/static_lib_test"
+
 if [ "$(uname)" == "Darwin" ]; then
 	echo "libtool -static -o ${LIB_TARGET} ${OBJDIR}/*.o"
 	libtool -static -o ${LIB_TARGET} ${OBJDIR}/*.o
 	ls -la ${LIB_TARGET}
+	LIB_IMPORT_NAME=${LIB_FILENAME}
 else
 	echo "ar rc ${LIB_TARGET} ${OBJDIR}/*.o"
 	ar rc ${LIB_TARGET} ${OBJDIR}/*.o
 	ls -la ${LIB_TARGET}
+	LIB_IMPORT_NAME=lib${LIB_FILENAME}.a
 fi
 
-TEST_EXECUTABLEPATH="${BASE_DIR}build/static_lib_test"
-
 echo Validating ${LIB_TARGET}
-echo "${COMPILER} ${CXXFLAGS} test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:lib${LIB_FILENAME}.a"
-${COMPILER} ${CXXFLAGS} test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:lib${LIB_FILENAME}.a
+echo "${COMPILER} ${CXXFLAGS} -v test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:${LIB_IMPORT_NAME}"
+${COMPILER} ${CXXFLAGS} -v test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:${LIB_IMPORT_NAME}
 ${TEST_EXECUTABLEPATH}
