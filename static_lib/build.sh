@@ -17,7 +17,6 @@ BASE_DIR="$(dirname "$BASE_DIR")/"
 PLATFORM="${OS}_${ARCH}"
 CXXFLAGS="-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread"
 LIB_TARGET_FOLDER=${BASE_DIR}build/static/
-OBJDIR=${BASE_DIR}build/static-lib
 
 mkdir -p $LIB_TARGET_FOLDER
 
@@ -26,19 +25,21 @@ mkdir -p $LIB_TARGET_FOLDER
 if [ "$1" == "release" ]; then
 	LIB_FILENAME="longtail_${PLATFORM}"
 	OPT="-O3"
+	OBJDIR="${BASE_DIR}build/static-lib-release"
 else
 	LIB_FILENAME="longtail_${PLATFORM}_debug"
 	OPT=
 	OBJDIR="${BASE_DIR}build/static-lib-debug"
+	CXXFLAGS="${CXXFLAGS} -DLONGTAIL_ASSERTS -DBIKESHED_ASSERTS"
 fi
 
 LIB_TARGET="${LIB_TARGET_FOLDER}lib${LIB_FILENAME}.a"
 
 echo Building ${LIB_TARGET}
 
-if [ -d ${LIB_TARGET_FOLDER} ]
+if [ -f ${LIB_TARGET} ]
 then
-	rm -rf ${LIB_TARGET_FOLDER}
+	rm ${LIB_TARGET}
 fi
 
 mkdir -p ${LIB_TARGET_FOLDER}
@@ -46,11 +47,6 @@ mkdir -p ${LIB_TARGET_FOLDER}
 if [ -d ${OBJDIR} ]
 then
 	rm -rf ${OBJDIR}
-fi
-
-if [ -f ${BASE_DIR}build/test.o ]
-then
-	rm ${BASE_DIR}build/test.o
 fi
 
 mkdir -p ${OBJDIR}
