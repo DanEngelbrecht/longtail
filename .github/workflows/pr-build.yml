@@ -11,9 +11,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: build static_lib
+      run: |
+        cd ./static_lib
+        ./build.sh
+        ./build.sh release
+        cd ..
+    - name: build shared_lib
+      run: |
+        cd ./shared_lib
+        ./build.sh
+        ./build.sh release
+        cd ..
     - name: build test
       run: |
-        pushd ./test 
+        pushd ./test
         ./build.sh
         ./build.sh release
         popd
@@ -23,18 +35,6 @@ jobs:
         ./build.sh
         ./build.sh release
         popd
-    - name: build shared_lib
-      run: |
-        cd ./shared_lib
-        ./build.sh
-        ./build.sh release
-        cd ..
-    - name: build static_lib
-      run: |
-        cd ./static_lib
-        ./build.sh
-        ./build.sh release
-        cd ..
     - name: run tests
       run: |
         pushd ./test
@@ -57,7 +57,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: build test
       run: |
-        pushd ./test 
+        pushd ./test
         ./build.sh
         ./build.sh release
         popd
