@@ -22,7 +22,7 @@ if "%1%" == "release" (
 
 :build_debug_mode
 
-set LIB_TARGET=%LIB_TARGET_FOLDER%longtail_%PLATFORM%_debug.a
+set LIB_FILENAME=longtail_%PLATFORM%_debug.a
 set OPT=
 set OBJDIR=!BASE_DIR!build\static-lib-debug
 set CXXFLAGS=!CXXFLAGS! -DLONGTAIL_ASSERTS -DBIKESHED_ASSERTS
@@ -31,13 +31,14 @@ goto build
 
 :build_release_mode
 
-set LIB_TARGET=%LIB_TARGET_FOLDER%longtail_%PLATFORM%.a
+set LIB_FILENAME=longtail_%PLATFORM%.a
 set OPT=-O3
 
 goto build
 
 :build
 
+set LIB_TARGET=%LIB_TARGET_FOLDER%%LIB_FILENAME%
 echo Building %LIB_TARGET%
 
 if exist !OBJDIR! rmdir /Q /S !OBJDIR!
@@ -60,3 +61,7 @@ if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
 popd
 
 ar rc !LIB_TARGET! !OBJDIR!\*.o
+
+echo Validating !LIB_TARGET!
+gcc test.c -o !BASE_DIR!build\static_lib_test.exe -lm -L..\build -l:!LIB_FILENAME!
+!BASE_DIR!build\static_lib_test.exe
