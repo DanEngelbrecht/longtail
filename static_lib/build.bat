@@ -9,7 +9,7 @@ If %PROCESSOR_ARCHITECTURE% == AMD64 (
 set OS=win32
 
 set PLATFORM=%OS%_%ARCH%
-set CXXFLAGS=-std=gnu99 -g -m64 -pthread -msse4.1 -maes -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
+set CXXFLAGS=-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread  -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
 set BASE_DIR=%~dp0..\
 set LIB_TARGET_FOLDER=!BASE_DIR!build\
 set OBJDIR=!BASE_DIR!build\static-lib
@@ -63,5 +63,5 @@ popd
 ar rc !LIB_TARGET! !OBJDIR!\*.o
 
 echo Validating !LIB_TARGET!
-gcc test.c -o !BASE_DIR!build\static_lib_test.exe -lm -L..\build -l:!LIB_FILENAME!
+gcc test.c !CXXFLAGS! -o !BASE_DIR!build\static_lib_test.exe -lm -L..\build -l:!LIB_FILENAME!
 !BASE_DIR!build\static_lib_test.exe

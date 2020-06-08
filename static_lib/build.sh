@@ -15,7 +15,7 @@ ARCH=x64
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../"
 
 PLATFORM="${OS}_${ARCH}"
-CXXFLAGS="-std=gnu99 -g -m64 -pthread -msse4.1 -maes"
+CXXFLAGS="-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread"
 LIB_TARGET_FOLDER=${BASE_DIR}build/
 OBJDIR=${BASE_DIR}build/static-lib
 
