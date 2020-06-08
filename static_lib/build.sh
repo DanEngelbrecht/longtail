@@ -19,6 +19,8 @@ CXXFLAGS="-std=gnu99 -g -m64 -pthread -msse4.1 -maes"
 LIB_TARGET_FOLDER=${BASE_DIR}build/
 OBJDIR=${BASE_DIR}build/static-lib
 
+mkdir -p $LIB_TARGET_FOLDER
+
 . ../all_sources.sh
 
 if [ "$1" == "release" ]; then
