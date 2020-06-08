@@ -33,7 +33,7 @@ else
 	OBJDIR="${BASE_DIR}build/static-lib-debug"
 fi
 
-LIB_TARGET="${LIB_TARGET_FOLDER}${LIB_FILENAME}.a"
+LIB_TARGET="${LIB_TARGET_FOLDER}lib${LIB_FILENAME}.a"
 
 echo Building ${LIB_TARGET}
 
@@ -90,9 +90,9 @@ pushd ${BASE_DIR}build
 ${COMPILER} -c ${CXXFLAGS} ${BASE_DIR}/static_lib/test.c
 popd
 
-cp ${LIB_TARGET} lib${LIB_FILENAME}.a
+#cp ${LIB_TARGET} .
 
-${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L. -l${LIB_FILENAME} --verbose
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L${LIB_TARGET_FOLDER} -l${LIB_FILENAME} --verbose
 
 
 #-l:${LIB_FILENAME}.a -L${BASE_DIR}build -lm  --verbose
