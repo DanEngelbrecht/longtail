@@ -75,11 +75,13 @@ TEST_EXECUTABLEPATH="${BASE_DIR}build/static_lib_test"
 
 if [ "$(uname)" == "Darwin" ]; then
 	echo "libtool -static -o ${LIB_TARGET} ${OBJDIR}/*.o"
-	libtool -static -o ${LIB_TARGET} ${OBJDIR}/*.o
+	ar cru -v ${LIB_TARGET} ${OBJDIR}/*.o
+#	libtool -static -o ${LIB_TARGET} ${OBJDIR}/*.o
 	ls -la ${LIB_TARGET}
 	LIB_IMPORT_NAME=${LIB_FILENAME}
 else
 	ar cr -v ${LIB_TARGET} ${OBJDIR}/*.o
+	ls -la ${LIB_TARGET}
 	LIB_IMPORT_NAME=${LIB_FILENAME}
 fi
 
@@ -87,9 +89,8 @@ echo Validating ${LIB_TARGET}
 pushd ${BASE_DIR}build
 ${COMPILER} -c ${CXXFLAGS} ${BASE_DIR}/static_lib/test.c
 popd
-#cp ${LIB_TARGET} .
 
-${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -l:${LIB_FILENAME}.a -lm -L${BASE_DIR}build --verbose
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L${BASE_DIR}build -l:${LIB_FILENAME}.a --verbose
 
 
 #-l:${LIB_FILENAME}.a -L${BASE_DIR}build -lm  --verbose
