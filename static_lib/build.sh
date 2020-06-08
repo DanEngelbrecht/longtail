@@ -68,10 +68,10 @@ else
 	echo "ar rc ${LIB_TARGET} ${OBJDIR}/*.o"
 	ar rc ${LIB_TARGET} ${OBJDIR}/*.o
 	ls -la ${LIB_TARGET}
-	LIB_IMPORT_NAME=lib${LIB_FILENAME}.a
+	LIB_IMPORT_NAME=${LIB_FILENAME}
 fi
 
 echo Validating ${LIB_TARGET}
-echo "${COMPILER} ${CXXFLAGS} -v test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:${LIB_IMPORT_NAME}"
-${COMPILER} ${CXXFLAGS} -v test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:${LIB_IMPORT_NAME}
+echo "${COMPILER} ${CXXFLAGS} -v test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l${LIB_IMPORT_NAME}"
+${COMPILER} ${CXXFLAGS} test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:lib${LIB_IMPORT_NAME}.a --verbose
 ${TEST_EXECUTABLEPATH}
