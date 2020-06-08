@@ -90,7 +90,9 @@ pushd ${BASE_DIR}build
 ${COMPILER} -c ${CXXFLAGS} ${BASE_DIR}/static_lib/test.c
 popd
 
-${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L${BASE_DIR}build -l:${LIB_FILENAME}.a --verbose
+cp ${LIB_TARGET} ${LIB_FILENAME}.a
+
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L. -l:${LIB_FILENAME}.a --verbose
 
 
 #-l:${LIB_FILENAME}.a -L${BASE_DIR}build -lm  --verbose
