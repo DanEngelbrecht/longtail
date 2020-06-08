@@ -16,7 +16,7 @@ BASE_DIR="$(dirname "$BASE_DIR")/"
 
 PLATFORM="${OS}_${ARCH}"
 CXXFLAGS="-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread"
-LIB_TARGET_FOLDER=${BASE_DIR}build/
+LIB_TARGET_FOLDER=${BASE_DIR}build/static/
 OBJDIR=${BASE_DIR}build/static-lib
 
 mkdir -p $LIB_TARGET_FOLDER

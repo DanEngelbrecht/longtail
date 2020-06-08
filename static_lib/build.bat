@@ -11,7 +11,7 @@ set OS=win32
 set PLATFORM=%OS%_%ARCH%
 set CXXFLAGS=-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread  -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
 set BASE_DIR=%~dp0..\
-set LIB_TARGET_FOLDER=!BASE_DIR!build\
+set LIB_TARGET_FOLDER=!BASE_DIR!build\static\
 set OBJDIR=!BASE_DIR!build\static-lib
 
 call ..\all_sources.bat
