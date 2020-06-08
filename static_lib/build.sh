@@ -1,8 +1,11 @@
 #!/bin/bash
 set -e
 
+COMPILER="gcc"
+
 if [ "$(uname)" == "Darwin" ]; then
     export OS="darwin"
+	COMPILER="clang"
 else
 	export OS="linux"
 fi
@@ -36,15 +39,15 @@ mkdir ${OBJDIR}
 
 pushd ${OBJDIR}
 
-gcc -c ${CXXFLAGS} ${OPT} ${THIRDPARTY_SRC} ${SRC}
+${COMPILER} -c ${CXXFLAGS} ${OPT} ${THIRDPARTY_SRC} ${SRC}
 if [ ! -z ${THIRDPARTY_SRC_SSE42} ]; then
-	gcc -c ${CXXFLAGS} ${OPT} -msse4.2 ${THIRDPARTY_SRC_SSE42}
+	${COMPILER} -c ${CXXFLAGS} ${OPT} -msse4.2 ${THIRDPARTY_SRC_SSE42}
 fi
 if [ ! -z ${THIRDPARTY_SRC_AVX2} ]; then
-	gcc -c ${CXXFLAGS} ${OPT} -msse4.2 -mavx2 ${THIRDPARTY_SRC_AVX2}
+	${COMPILER} -c ${CXXFLAGS} ${OPT} -msse4.2 -mavx2 ${THIRDPARTY_SRC_AVX2}
 fi
 if [ ! -z ${THIRDPARTY_SRC_AVX512} ]; then
-	gcc -c ${CXXFLAGS} ${OPT} -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables ${THIRDPARTY_SRC_AVX512}
+	${COMPILER} -c ${CXXFLAGS} ${OPT} -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables ${THIRDPARTY_SRC_AVX512}
 fi
 
 popd
