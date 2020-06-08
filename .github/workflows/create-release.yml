@@ -124,6 +124,7 @@ jobs:
           Changes in this Release
           - *CHANGED* Static library build tweaks
           - *FIXED* _rotl link errors in static library fixed
+          - *CHANGED* static .a libraries are now prefixed with ´lib`
         draft: false
         prerelease: false
     - name: Download Linux artifacts
