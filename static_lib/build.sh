@@ -33,14 +33,28 @@ else
 	OBJDIR="${BASE_DIR}build/static-lib-debug"
 fi
 
-LIB_TARGET="${LIB_TARGET_FOLDER}lib${LIB_FILENAME}.a"
+LIB_TARGET="${LIB_TARGET_FOLDER}${LIB_FILENAME}.a"
 
 echo Building ${LIB_TARGET}
 
-[ -d ${OBJDIR} ] && ( rm -r ${OBJDIR} )
-mkdir ${OBJDIR}
+if [ -d ${LIB_TARGET_FOLDER} ]
+then
+	rm -rf ${LIB_TARGET_FOLDER}
+fi
 
-[ ! -d "${LIB_TARGET_FOLDER}" ] && ( mkdir "${LIB_TARGET_FOLDER}" )
+mkdir -p ${LIB_TARGET_FOLDER}
+
+if [ -d ${OBJDIR} ]
+then
+	rm -rf ${OBJDIR}
+fi
+
+if [ -f ${BASE_DIR}build/test.o ]
+then
+	rm ${BASE_DIR}build/test.o
+fi
+
+mkdir -p ${OBJDIR}
 
 pushd ${OBJDIR}
 
@@ -65,13 +79,22 @@ if [ "$(uname)" == "Darwin" ]; then
 	ls -la ${LIB_TARGET}
 	LIB_IMPORT_NAME=${LIB_FILENAME}
 else
-	echo "ar rc ${LIB_TARGET} ${OBJDIR}/*.o"
-	ar rc ${LIB_TARGET} ${OBJDIR}/*.o
-	ls -la ${LIB_TARGET}
+	ar cr -v ${LIB_TARGET} ${OBJDIR}/*.o
 	LIB_IMPORT_NAME=${LIB_FILENAME}
 fi
 
 echo Validating ${LIB_TARGET}
-echo "${COMPILER} ${CXXFLAGS} -v test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l${LIB_IMPORT_NAME}"
-${COMPILER} ${CXXFLAGS} test.c -o ${TEST_EXECUTABLEPATH} -lm -L${BASE_DIR}build -l:lib${LIB_IMPORT_NAME}.a --verbose
+pushd ${BASE_DIR}build
+${COMPILER} -c ${CXXFLAGS} ${BASE_DIR}/static_lib/test.c
+popd
+#cp ${LIB_TARGET} .
+
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -l:${LIB_FILENAME}.a -lm -L${BASE_DIR}build --verbose
+
+
+#-l:${LIB_FILENAME}.a -L${BASE_DIR}build -lm  --verbose
+#ld -o ${TEST_EXECUTABLEPATH} -lpthread ${BASE_DIR}build/test.o -l:${LIB_FILENAME}.a -lm -L. --verbose
+# --verbose
+# ${CXXFLAGS}
+
 ${TEST_EXECUTABLEPATH}
