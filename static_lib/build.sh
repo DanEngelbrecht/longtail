@@ -5,7 +5,7 @@ COMPILER="gcc"
 
 if [ "$(uname)" == "Darwin" ]; then
     OS="darwin"
-	COMPILER="clang"
+#	COMPILER="clang"
 else
 	OS="linux"
 fi
