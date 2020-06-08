@@ -32,7 +32,7 @@ else
 	OBJDIR="${BASE_DIR}build/static-lib-debug"
 fi
 
-LIB_TARGET="${LIB_TARGET_FOLDER}lib${LIB_FILENAME}.a"
+LIB_TARGET="${LIB_TARGET_FOLDER}${LIB_FILENAME}.a"
 
 echo Building ${LIB_TARGET}
 
