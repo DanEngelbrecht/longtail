@@ -77,11 +77,5 @@ ls -la ${LIB_TARGET}
 LIB_IMPORT_NAME=${LIB_FILENAME}
 
 echo Validating ${LIB_TARGET}
-
-pushd ${BASE_DIR}build
-${COMPILER} -c ${CXXFLAGS} ${BASE_DIR}/static_lib/test.c
-popd
-
-${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L${LIB_TARGET_FOLDER} -l${LIB_FILENAME} --verbose
-
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} test.c -lm -L${LIB_TARGET_FOLDER} -l${LIB_FILENAME} --verbose
 ${TEST_EXECUTABLEPATH}
