@@ -24,15 +24,15 @@ mkdir -p $LIB_TARGET_FOLDER
 . ../all_sources.sh
 
 if [ "$1" == "release" ]; then
-	LIB_FILENAME="longtail_${PLATFORM}.a"
+	LIB_FILENAME="longtail_${PLATFORM}"
 	OPT="-O3"
 else
-	LIB_FILENAME="longtail_${PLATFORM}_debug.a"
+	LIB_FILENAME="longtail_${PLATFORM}_debug"
 	OPT=
 	OBJDIR="${BASE_DIR}build/static-lib-debug"
 fi
 
-LIB_TARGET="${LIB_TARGET_FOLDER}${LIB_FILENAME}"
+LIB_TARGET="${LIB_TARGET_FOLDER}lib${LIB_FILENAME}.a"
 
 echo Building ${LIB_TARGET}
 
@@ -59,5 +59,5 @@ popd
 ar rc ${LIB_TARGET} ${OBJDIR}/*.o
 
 echo Validating ${LIB_TARGET}
-${COMPILER} ${CXXFLAGS} test.c -o ${BASE_DIR}build/static_lib_test -lm -L../build -l:${LIB_FILENAME}
+${COMPILER} ${CXXFLAGS} test.c -o ${BASE_DIR}build/static_lib_test ${LIB_TARGET}
 ${BASE_DIR}build/static_lib_test
