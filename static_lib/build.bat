@@ -22,7 +22,7 @@ if "%1%" == "release" (
 
 :build_debug_mode
 
-set LIB_FILENAME=longtail_%PLATFORM%_debug.a
+set LIB_FILENAME=longtail_%PLATFORM%_debug
 set OPT=
 set OBJDIR=!BASE_DIR!build\static-lib-debug
 set CXXFLAGS=!CXXFLAGS! -DLONGTAIL_ASSERTS -DBIKESHED_ASSERTS
@@ -31,14 +31,14 @@ goto build
 
 :build_release_mode
 
-set LIB_FILENAME=longtail_%PLATFORM%.a
+set LIB_FILENAME=longtail_%PLATFORM%
 set OPT=-O3
 
 goto build
 
 :build
 
-set LIB_TARGET=%LIB_TARGET_FOLDER%%LIB_FILENAME%
+set LIB_TARGET=%LIB_TARGET_FOLDER%lib%LIB_FILENAME%.a
 echo Building %LIB_TARGET%
 
 if exist !OBJDIR! rmdir /Q /S !OBJDIR!
@@ -60,8 +60,11 @@ if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
 )
 popd
 
-ar rc !LIB_TARGET! !OBJDIR!\*.o
+set TEST_EXECUTABLEPATH=%BASE_DIR%build\static_lib_test.exe
+
+ar cru -v !LIB_TARGET! !OBJDIR!\*.o
+ls -la ${LIB_TARGET}
 
 echo Validating !LIB_TARGET!
-gcc test.c !CXXFLAGS! -o !BASE_DIR!build\static_lib_test.exe -lm -L..\build -l:!LIB_FILENAME!
-!BASE_DIR!build\static_lib_test.exe
+gcc -o %TEST_EXECUTABLEPATH% !CXXFLAGS! test.c -lm -L%LIB_TARGET_FOLDER% -l!LIB_FILENAME! --verbose
+%TEST_EXECUTABLEPATH%
