@@ -92,7 +92,7 @@ popd
 
 cp ${LIB_TARGET} lib${LIB_FILENAME}.a
 
-${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L. -l:./lib${LIB_FILENAME}.a --verbose
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASE_DIR}build/test.o -lm -L. -l${LIB_FILENAME} --verbose
 
 
 #-l:${LIB_FILENAME}.a -L${BASE_DIR}build -lm  --verbose
