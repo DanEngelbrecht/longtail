@@ -57,7 +57,11 @@ fi
 
 popd
 
-ar rc ${LIB_TARGET} ${OBJDIR}/*.o
+if [ "$(uname)" == "Darwin" ]; then
+	libtool -static -o ${LIB_TARGET} ${OBJDIR}/*.o
+else
+	ar rc ${LIB_TARGET} ${OBJDIR}/*.o
+fi
 
 TEST_EXECUTABLEPATH="${BASE_DIR}build/static_lib_test"
 
