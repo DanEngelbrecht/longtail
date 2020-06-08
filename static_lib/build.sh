@@ -57,5 +57,5 @@ popd
 ar rc ${LIB_TARGET} ${OBJDIR}/*.o
 
 echo Validating ${LIB_TARGET}
-${COMPILER} test.c -o ${BASE_DIR}build/static_lib_test -lm -L../build -l:${LIB_FILENAME}
+${COMPILER} test.c -o ${BASE_DIR}build/static_lib_test -std=gnu99 -m64 -lm -L../build -l:${LIB_FILENAME}
 ${BASE_DIR}build/static_lib_test
