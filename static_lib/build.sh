@@ -58,6 +58,8 @@ popd
 
 ar rc ${LIB_TARGET} ${OBJDIR}/*.o
 
+cp ${LIB_TARGET} lib${LIB_FILENAME}.a
+
 echo Validating ${LIB_TARGET}
-${COMPILER} ${CXXFLAGS} test.c -o ${BASE_DIR}build/static_lib_test ${LIB_TARGET}
+${COMPILER} ${CXXFLAGS} test.c -o -lm -L. -l${LIB_FILENAME}
 ${BASE_DIR}build/static_lib_test
