@@ -55,13 +55,13 @@ pushd !OBJDIR!
 
 gcc -c !CXXFLAGS! !OPT! !THIRDPARTY_SRC! !SRC!
 if NOT "!THIRDPARTY_SRC_SSE42!" == "" (
-	gcc -c !CXXFLAGS! !OPT! -msse4.2 %THIRDPARTY_SRC_SSE42%
+    gcc -c !CXXFLAGS! !OPT! -msse4.2 %THIRDPARTY_SRC_SSE42%
 )
 if NOT "%THIRDPARTY_SRC_AVX2%" == "" (
-	gcc -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 %THIRDPARTY_SRC_AVX2%
+    gcc -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 %THIRDPARTY_SRC_AVX2%
 )
 if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
-	gcc -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
+    gcc -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
 )
 
 popd
