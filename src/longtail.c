@@ -6786,6 +6786,28 @@ int Longtail_ChangeVersion(
             }
             else
             {
+                uint16_t permissions = 0;
+                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                if (err)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                        block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                        err)
+                    Longtail_Free(full_asset_path);
+                    return err;
+                }
+                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                {
+                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                    if (err)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                            err)
+                        Longtail_Free(full_asset_path);
+                        return err;
+                    }
+                }
                 err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
                 if (err)
                 {
