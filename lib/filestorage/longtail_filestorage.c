@@ -162,9 +162,13 @@ static int FSStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, 
     TMP_STR(path)
     Longtail_DenormalizePath(tmp_path);
     int err = Longtail_GetFilePermissions(tmp_path, out_permissions);
+    if (err == ENOENT)
+    {
+        return err;
+    }
     if (err)
     {
-        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_GetPermissions(%p, %p, %u) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_GetPermissions(%p, %p, %u) failed with %d",
             storage_api, path, out_permissions,
             err)
         return err;
