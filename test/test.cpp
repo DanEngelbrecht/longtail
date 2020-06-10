@@ -5852,6 +5852,10 @@ TEST(Longtail, VersionLocalContent)
 
     Longtail_Free(block_store_content_index_2);
 
+    Longtail_Free(version2_missing_content_index);
+
+    Longtail_Free(version2_aligned_content_index);
+
     Longtail_Free(version2_content_index);
 
     Longtail_Free(version2_index);
