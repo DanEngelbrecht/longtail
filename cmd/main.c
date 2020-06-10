@@ -315,8 +315,8 @@ int UpSync(
     const char* storage_uri_raw,
     const char* source_path,
     const char* optional_source_index_path,
-    const char* target_path,
-    const char* optional_target_version_content_path,
+    const char* target_index_path,
+    const char* optional_target_version_content_index_path,
     uint32_t target_chunk_size,
     uint32_t target_block_size,
     uint32_t max_chunks_per_block,
@@ -538,15 +538,15 @@ int UpSync(
         return err;
     }
 
-    if (optional_target_version_content_path)
+    if (optional_target_version_content_index_path)
     {
         err = Longtail_WriteContentIndex(
             storage_api,
             version_local_content_index,
-            optional_target_version_content_path);
+            optional_target_version_content_index_path);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_path, err);
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_index_path, err);
             Longtail_Free(version_local_content_index);
             Longtail_Free(version_missing_content_index);
             Longtail_Free(existing_remote_content_index);
@@ -562,7 +562,6 @@ int UpSync(
         }
     }
 
-    const char* target_index_path = Longtail_ConcatPath(storage_path, target_path);
     err = Longtail_WriteVersionIndex(
         storage_api,
         source_version_index,
@@ -573,7 +572,6 @@ int UpSync(
         Longtail_Free(version_local_content_index);
         Longtail_Free(version_missing_content_index);
         Longtail_Free(existing_remote_content_index);
-        Longtail_Free((void*)target_index_path);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
@@ -588,7 +586,6 @@ int UpSync(
     Longtail_Free(version_local_content_index);
     Longtail_Free(version_missing_content_index);
     Longtail_Free(existing_remote_content_index);
-    Longtail_Free((void*)target_index_path);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(store_block_store_api);
     SAFE_DISPOSE_API(store_block_fsstore_api);
@@ -931,10 +928,10 @@ int main(int argc, char** argv)
         kgflags_string("source-index-path", 0, "Optional pre-computed index of source-path", false, &source_index_raw);
 
         const char* target_path_raw = 0;
-        kgflags_string("target-path", 0, "Target file path relative to --storage-uri", true, &target_path_raw);
+        kgflags_string("target-path", 0, "Target file path", true, &target_path_raw);
 
-        const char* optional_version_content_path_raw = 0;
-        kgflags_string("version-content-path", 0, "Optional path to store minimal content index for version", false, &optional_version_content_path_raw);
+        const char* optional_version_content_index_path_raw = 0;
+        kgflags_string("version-content-index-path", 0, "Optional path to store minimal content index for version", false, &optional_version_content_index_path_raw);
 
         const char* compression_raw = 0;
         kgflags_string("compression-algorithm", "zstd", "Comression algorithm: none, brotli, brotli_min, brotli_max, brotli_text, brotli_text_min, brotli_text_max, lz4, zstd, zstd_min, zstd_max", false, &compression_raw);
@@ -970,14 +967,14 @@ int main(int argc, char** argv)
         const char* source_path = NormalizePath(source_path_raw);
         const char* source_index = source_index_raw ? NormalizePath(source_index_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
-        const char* optional_target_version_content_path = optional_version_content_path_raw ? NormalizePath(optional_version_content_path_raw) : 0;
+        const char* optional_target_version_content_index_path = optional_version_content_index_path_raw ? NormalizePath(optional_version_content_index_path_raw) : 0;
 
         err = UpSync(
             storage_uri_raw,
             source_path,
             source_index,
             target_path,
-            optional_target_version_content_path,
+            optional_target_version_content_index_path,
             target_chunk_size,
             target_block_size,
             max_chunks_per_block,
