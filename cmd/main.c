@@ -438,11 +438,11 @@ int UpSync(
         return err;
     }
 
-    struct Longtail_ContentIndex* aligned_version_content_index;
+    struct Longtail_ContentIndex* existing_remote_content_index;
     err = SyncRetargetContent(
         store_block_store_api,
         version_content_index,
-        &aligned_version_content_index);
+        &existing_remote_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
@@ -461,16 +461,16 @@ int UpSync(
     struct Longtail_ContentIndex* version_missing_content_index;
     err = Longtail_CreateMissingContent(
         hash_api,
-        aligned_version_content_index,
+        existing_remote_content_index,
         source_version_index,
-        *aligned_version_content_index->m_MaxBlockSize,
-        *aligned_version_content_index->m_MaxChunksPerBlock,
+        *existing_remote_content_index->m_MaxBlockSize,
+        *existing_remote_content_index->m_MaxChunksPerBlock,
         &version_missing_content_index);
 
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
-        Longtail_Free(aligned_version_content_index);
+        Longtail_Free(existing_remote_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
@@ -491,8 +491,8 @@ int UpSync(
             &write_content_progress.m_API,
             0,
             0,
-            aligned_version_content_index,
-            version_content_index,
+            existing_remote_content_index,
+            version_missing_content_index,
             source_version_index,
             source_path);
         Progress_Dispose(&write_content_progress);
@@ -502,7 +502,7 @@ int UpSync(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
         Longtail_Free(version_missing_content_index);
-        Longtail_Free(aligned_version_content_index);
+        Longtail_Free(existing_remote_content_index);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -517,12 +517,15 @@ int UpSync(
     Longtail_Free(version_content_index);
 
     struct Longtail_ContentIndex* version_local_content_index;
-    err = Longtail_MergeContentIndex(aligned_version_content_index, version_missing_content_index, &version_local_content_index);
+    err = Longtail_MergeContentIndex(
+        existing_remote_content_index,
+        version_missing_content_index,
+        &version_local_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version local content index %d", err);
         Longtail_Free(version_missing_content_index);
-        Longtail_Free(aligned_version_content_index);
+        Longtail_Free(existing_remote_content_index);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -537,13 +540,16 @@ int UpSync(
 
     if (optional_target_version_content_path)
     {
-        err = Longtail_WriteContentIndex(storage_api, version_local_content_index, optional_target_version_content_path);
+        err = Longtail_WriteContentIndex(
+            storage_api,
+            version_local_content_index,
+            optional_target_version_content_path);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_path, err);
             Longtail_Free(version_local_content_index);
             Longtail_Free(version_missing_content_index);
-            Longtail_Free(aligned_version_content_index);
+            Longtail_Free(existing_remote_content_index);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
@@ -566,7 +572,7 @@ int UpSync(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version index for `%s` to `%s`, %d", source_path, target_index_path, err);
         Longtail_Free(version_local_content_index);
         Longtail_Free(version_missing_content_index);
-        Longtail_Free(aligned_version_content_index);
+        Longtail_Free(existing_remote_content_index);
         Longtail_Free((void*)target_index_path);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -581,7 +587,7 @@ int UpSync(
 
     Longtail_Free(version_local_content_index);
     Longtail_Free(version_missing_content_index);
-    Longtail_Free(aligned_version_content_index);
+    Longtail_Free(existing_remote_content_index);
     Longtail_Free((void*)target_index_path);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(store_block_store_api);
