@@ -1510,6 +1510,7 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
     {
         *out_permissions = (uint16_t)stat_buf.st_mode;
     }
+    res = errno;
     return res;
 }
 
