@@ -255,42 +255,6 @@ char* GetDefaultContentPath()
     return (char*)default_content_path;
 }
 
-struct AsyncGetIndexComplete
-{
-    struct Longtail_AsyncGetIndexAPI m_API;
-    HLongtail_Sema m_NotifySema;
-    int m_Err;
-    struct Longtail_ContentIndex* m_ContentIndex;
-};
-
-static void AsyncGetIndexComplete_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
-{
-    struct AsyncGetIndexComplete* cb = (struct AsyncGetIndexComplete*)async_complete_api;
-    cb->m_Err = err;
-    cb->m_ContentIndex = content_index;
-    Longtail_PostSema(cb->m_NotifySema, 1);
-}
-
-static void AsyncGetIndexComplete_Init(struct AsyncGetIndexComplete* me)
-{
-    me->m_Err = EINVAL;
-    me->m_API.m_API.Dispose = 0;
-    me->m_API.OnComplete = AsyncGetIndexComplete_OnComplete;
-    me->m_ContentIndex = 0;
-    Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &me->m_NotifySema);
-}
-
-static void AsyncGetIndexComplete_Dispose(struct AsyncGetIndexComplete* me)
-{
-    Longtail_DeleteSema(me->m_NotifySema);
-    Longtail_Free(me->m_NotifySema);
-}
-
-static void AsyncGetIndexComplete_Wait(struct AsyncGetIndexComplete* me)
-{
-    Longtail_WaitSema(me->m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
-}
-
 struct AsyncRetargetContentComplete
 {
     struct Longtail_AsyncRetargetContentAPI m_API;
@@ -326,18 +290,25 @@ static void AsyncRetargetContentComplete_Dispose(struct AsyncRetargetContentComp
     Longtail_Free(api->m_NotifySema);
 }
 
-static struct Longtail_ContentIndex* SyncRetargetContent(struct Longtail_BlockStoreAPI* block_store, struct Longtail_ContentIndex* version_content_index)
+static int SyncRetargetContent(struct Longtail_BlockStoreAPI* block_store, struct Longtail_ContentIndex* version_content_index, struct Longtail_ContentIndex** out_content_index)
 {
     struct AsyncRetargetContentComplete retarget_content_index_complete;
     AsyncRetargetContentComplete_Init(&retarget_content_index_complete);
-    if (block_store->RetargetContent(block_store, version_content_index, &retarget_content_index_complete.m_API))
+    int err = block_store->RetargetContent(block_store, version_content_index, &retarget_content_index_complete.m_API);
+    if (err)
     {
-        return 0;
+        return err;
     }
     AsyncRetargetContentComplete_Wait(&retarget_content_index_complete);
+    err = retarget_content_index_complete.m_Err;
     struct Longtail_ContentIndex* content_index =  retarget_content_index_complete.m_ContentIndex;
     AsyncRetargetContentComplete_Dispose(&retarget_content_index_complete);
-    return content_index;
+    if (err)
+    {
+        return err;
+    }
+    *out_content_index = content_index;
+    return 0;
 }
 
 int UpSync(
@@ -345,6 +316,7 @@ int UpSync(
     const char* source_path,
     const char* optional_source_index_path,
     const char* target_path,
+    const char* optional_target_version_content_path,
     uint32_t target_chunk_size,
     uint32_t target_block_size,
     uint32_t max_chunks_per_block,
@@ -359,35 +331,6 @@ int UpSync(
     struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
 
-    struct Longtail_ContentIndex* block_store_content_index;
-    {
-        struct AsyncGetIndexComplete get_index_complete;
-        AsyncGetIndexComplete_Init(&get_index_complete);
-        int err = store_block_store_api->GetIndex(
-            store_block_store_api,
-            &get_index_complete.m_API);
-        if (!err)
-        {
-            AsyncGetIndexComplete_Wait(&get_index_complete);
-            err = get_index_complete.m_Err;
-        }
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
-            AsyncGetIndexComplete_Dispose(&get_index_complete);
-            SAFE_DISPOSE_API(store_block_store_api);
-            SAFE_DISPOSE_API(store_block_fsstore_api);
-            SAFE_DISPOSE_API(storage_api);
-            SAFE_DISPOSE_API(compression_registry);
-            SAFE_DISPOSE_API(hash_registry);
-            SAFE_DISPOSE_API(job_api);
-            Longtail_Free((char*)storage_path);
-            return err;
-        }
-        block_store_content_index = get_index_complete.m_ContentIndex;
-        AsyncGetIndexComplete_Dispose(&get_index_complete);
-    }
-
     struct Longtail_VersionIndex* source_version_index = 0;
     if (optional_source_index_path)
     {
@@ -398,33 +341,10 @@ int UpSync(
         }
     }
 
-    if (*block_store_content_index->m_HashIdentifier == 0)
-    {
-        if (source_version_index != 0)
-        {
-            hashing_type = *source_version_index->m_HashIdentifier;
-        }
-    }
-    else
-    {
-        hashing_type = *block_store_content_index->m_HashIdentifier;
-    }
-
-    if (source_version_index != 0)
-    {
-        if (*source_version_index->m_HashIdentifier != hashing_type)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Dropping source version index as the hash type (%u) does not match store hash type (%u)", *source_version_index->m_HashIdentifier, *source_version_index->m_HashIdentifier);
-            Longtail_Free(source_version_index);
-            source_version_index = 0;
-        }
-    }
-
     struct Longtail_HashAPI* hash_api;
     int err = hash_registry->GetHashAPI(hash_registry, hashing_type, &hash_api);
     if (err)
     {
-        Longtail_Free(block_store_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
@@ -450,7 +370,6 @@ int UpSync(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", source_path, err);
-            Longtail_Free(block_store_content_index);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
             SAFE_DISPOSE_API(storage_api);
@@ -488,7 +407,6 @@ int UpSync(
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", source_path, err);
             Longtail_Free(tags);
-            Longtail_Free(block_store_content_index);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
             SAFE_DISPOSE_API(storage_api);
@@ -510,7 +428,6 @@ int UpSync(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for `%s`, %d", source_path, err);
         Longtail_Free(source_version_index);
-        Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -521,6 +438,49 @@ int UpSync(
         return err;
     }
 
+    struct Longtail_ContentIndex* aligned_version_content_index;
+    err = SyncRetargetContent(
+        store_block_store_api,
+        version_content_index,
+        &aligned_version_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((char*)storage_path);
+        return err;
+    }
+
+    // Create a new missing content index which only contains the chunks that are not present in the remote store
+    struct Longtail_ContentIndex* version_missing_content_index;
+    err = Longtail_CreateMissingContent(
+        hash_api,
+        aligned_version_content_index,
+        source_version_index,
+        *aligned_version_content_index->m_MaxBlockSize,
+        *aligned_version_content_index->m_MaxChunksPerBlock,
+        &version_missing_content_index);
+
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
+        Longtail_Free(aligned_version_content_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((char*)storage_path);
+        return err;
+    }
     {
         struct Progress write_content_progress;
         Progress_Init(&write_content_progress, "Writing blocks");
@@ -531,21 +491,20 @@ int UpSync(
             &write_content_progress.m_API,
             0,
             0,
-            block_store_content_index,
+            aligned_version_content_index,
             version_content_index,
             source_version_index,
             source_path);
         Progress_Dispose(&write_content_progress);
     }
-    Longtail_Free(block_store_content_index);
-    block_store_content_index = 0;
 
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
+        Longtail_Free(version_missing_content_index);
+        Longtail_Free(aligned_version_content_index);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
-        Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -557,6 +516,46 @@ int UpSync(
     }
     Longtail_Free(version_content_index);
 
+    struct Longtail_ContentIndex* version_local_content_index;
+    err = Longtail_MergeContentIndex(aligned_version_content_index, version_missing_content_index, &version_local_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version local content index %d", err);
+        Longtail_Free(version_missing_content_index);
+        Longtail_Free(aligned_version_content_index);
+        Longtail_Free(version_content_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((char*)storage_path);
+        return err;
+    }
+
+    if (optional_target_version_content_path)
+    {
+        err = Longtail_WriteContentIndex(storage_api, version_local_content_index, optional_target_version_content_path);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_path, err);
+            Longtail_Free(version_local_content_index);
+            Longtail_Free(version_missing_content_index);
+            Longtail_Free(aligned_version_content_index);
+            Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(store_block_fsstore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(hash_registry);
+            SAFE_DISPOSE_API(job_api);
+            Longtail_Free((char*)storage_path);
+            return err;
+        }
+    }
+
     const char* target_index_path = Longtail_ConcatPath(storage_path, target_path);
     err = Longtail_WriteVersionIndex(
         storage_api,
@@ -565,6 +564,9 @@ int UpSync(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version index for `%s` to `%s`, %d", source_path, target_index_path, err);
+        Longtail_Free(version_local_content_index);
+        Longtail_Free(version_missing_content_index);
+        Longtail_Free(aligned_version_content_index);
         Longtail_Free((void*)target_index_path);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -576,6 +578,10 @@ int UpSync(
         Longtail_Free((char*)storage_path);
         return err;
     }
+
+    Longtail_Free(version_local_content_index);
+    Longtail_Free(version_missing_content_index);
+    Longtail_Free(aligned_version_content_index);
     Longtail_Free((void*)target_index_path);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(store_block_store_api);
@@ -716,7 +722,6 @@ int DownSync(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
-//            Longtail_Free(remote_content_index);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(retaining_block_store_api);
@@ -785,7 +790,29 @@ int DownSync(
         return err;
     }
 
-    struct Longtail_ContentIndex* retargetted_version_content_index = SyncRetargetContent(store_block_store_api, version_content_index);
+    struct Longtail_ContentIndex* retargetted_version_content_index;
+    err = SyncRetargetContent(store_block_store_api, version_content_index, &retargetted_version_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to retarget the content index to remote store `%s`, %d", storage_uri_raw, err);
+        Longtail_Free(version_content_index);
+        Longtail_Free(version_diff);
+        Longtail_Free(target_version_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(retaining_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
     Longtail_Free(version_content_index);
     version_content_index = retargetted_version_content_index;
 
@@ -900,6 +927,9 @@ int main(int argc, char** argv)
         const char* target_path_raw = 0;
         kgflags_string("target-path", 0, "Target file path relative to --storage-uri", true, &target_path_raw);
 
+        const char* optional_version_content_path_raw = 0;
+        kgflags_string("version-content-path", 0, "Optional path to store minimal content index for version", false, &optional_version_content_path_raw);
+
         const char* compression_raw = 0;
         kgflags_string("compression-algorithm", "zstd", "Comression algorithm: none, brotli, brotli_min, brotli_max, brotli_text, brotli_text_min, brotli_text_max, lz4, zstd, zstd_min, zstd_max", false, &compression_raw);
 
@@ -934,12 +964,14 @@ int main(int argc, char** argv)
         const char* source_path = NormalizePath(source_path_raw);
         const char* source_index = source_index_raw ? NormalizePath(source_index_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
+        const char* optional_target_version_content_path = optional_version_content_path_raw ? NormalizePath(optional_version_content_path_raw) : 0;
 
         err = UpSync(
             storage_uri_raw,
             source_path,
             source_index,
             target_path,
+            optional_target_version_content_path,
             target_chunk_size,
             target_block_size,
             max_chunks_per_block,

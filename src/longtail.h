@@ -726,14 +726,42 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
+/*! @brief Generate a content index with what is missing.
+ *
+ * Any content in @p version_index that is not present in @p content_index will be included in @p out_content_index
+ * Chunks that are not present in @p content_index will be bundled up in blocks according to @p max_block_size and @p max_chunks_per_block.
+ *
+ * @param[in] hash_api              An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both content index index and version index
+ * @param[in] content_index         The known content to check against
+ * @param[in] version_index         The version index content you test against @p reference_content_index
+ * @param[in] max_block_size        The maximum size if bytes one block is allowed to be
+ * @param[in] max_chunks_per_block  The maximum number of chunks allowed inside one block
+ * @param[out] out_content_index    The resulting missing content index will created and assigned to this pointer reference if successful
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CreateMissingContent(
     struct Longtail_HashAPI* hash_api,
     const struct Longtail_ContentIndex* content_index,
-    const struct Longtail_VersionIndex* version,
+    const struct Longtail_VersionIndex* version_index,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
+
+/*! @brief Generate a content index with what is missing.
+ *
+ * Any content in @p content_index that is not present in @p reference_content_index will be included in @p out_content_index
+ * The content verification will only add blocks from @p content_index that has chunks it can not
+ * find in @p reference_content_index.
+ *
+ * The missing blocks are added in complete form so you might get redundant content in @p out_content_index.
+ *
+ * @param[in] hash_api                  An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both content indexes
+ * @param[in] reference_content_index   The known content to check against
+ * @param[in] content_index             The content you wout want to test againt @p reference_content_index
+ * @param[out] out_content_index        The resulting missing content index will created and assigned to this pointer reference if successful
+ * @return                              Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_GetMissingContent(
     struct Longtail_HashAPI* hash_api,
     const struct Longtail_ContentIndex* reference_content_index,
