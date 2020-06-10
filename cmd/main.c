@@ -620,13 +620,12 @@ int DownSync(
     struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);//retaining_block_store_api);
 
-    const char* source_index_path = Longtail_ConcatPath(storage_path, source_path);
     struct Longtail_VersionIndex* source_version_index = 0;
-    int err = Longtail_ReadVersionIndex(storage_api, source_index_path, &source_version_index);
+    int err = Longtail_ReadVersionIndex(storage_api, source_path, &source_version_index);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_index_path, err);
-        Longtail_Free((void*)source_index_path);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_path, err);
+        Longtail_Free((void*)source_path);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -640,7 +639,6 @@ int DownSync(
         Longtail_Free((void*)storage_path);
         return err;
     }
-    Longtail_Free((void*)source_index_path);
 
     uint32_t hashing_type = *source_version_index->m_HashIdentifier;
     struct Longtail_HashAPI* hash_api;
@@ -716,7 +714,7 @@ int DownSync(
                 target_path,
                 file_infos,
                 tags,
-                *target_version_index->m_TargetChunkSize,
+                target_chunk_size,
                 &target_version_index);
             Progress_Dispose(&create_version_progress);
         }
