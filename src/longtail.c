@@ -7011,7 +7011,7 @@ int Longtail_ValidateContent(
             intptr_t content_chunk_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
             if (content_chunk_index_ptr == -1)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateContent(%p, %p) content index does not contain chunk 0x%" PRIx64 "",
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) content index does not contain chunk 0x%" PRIx64 "",
                     content_index, version_index,
                     chunk_hash)
                 DeleteContentLookup(content_lookup);
@@ -7021,7 +7021,7 @@ int Longtail_ValidateContent(
             LONGTAIL_FATAL_ASSERT(content_index->m_ChunkHashes[content_chunk_index] == chunk_hash, return EINVAL)
             if (content_index->m_ChunkLengths[content_chunk_index] != chunk_size)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateContent(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
                     content_index, version_index,
                     chunk_hash, content_index->m_ChunkLengths[content_chunk_index], chunk_size)
                 DeleteContentLookup(content_lookup);
@@ -7031,7 +7031,7 @@ int Longtail_ValidateContent(
         }
         if (asset_chunked_size != asset_size)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateContent(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
                 content_index, version_index,
                 &version_index->m_NameData[version_index->m_NameOffsets[asset_index]], asset_chunked_size, asset_size)
             DeleteContentLookup(content_lookup);

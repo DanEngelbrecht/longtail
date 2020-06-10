@@ -353,64 +353,79 @@ static int FSBlockStore_PutStoredBlock(
     Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
 
     char* block_path = GetBlockPath(fsblockstore_api, block_hash);
-    char* tmp_block_path = GetTempBlockPath(fsblockstore_api, block_hash);
-
-    int err = EnsureParentPathExists(fsblockstore_api->m_StorageAPI, block_path);
-    if (err)
+    // Check if block exists, if it does it is just the store content index that is out of sync.
+    // Don't write the block unless we have to
+    if (!fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            err)
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        char* tmp_block_path = GetTempBlockPath(fsblockstore_api, block_hash);
+
+        int err = EnsureParentPathExists(fsblockstore_api->m_StorageAPI, block_path);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
+                block_store_api, stored_block, async_complete_api,
+                err)
+            Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+            hmdel(fsblockstore_api->m_BlockState, block_hash);
+            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+            Longtail_Free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            Longtail_Free((char*)block_path);
+            block_path = 0;
+            return err;
+        }
+
+        err = Longtail_WriteStoredBlock(fsblockstore_api->m_StorageAPI, stored_block, tmp_block_path);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
+                block_store_api, stored_block, async_complete_api,
+                err)
+            Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+            hmdel(fsblockstore_api->m_BlockState, block_hash);
+            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+            Longtail_Free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            Longtail_Free((char*)block_path);
+            block_path = 0;
+            return err;
+        }
+
+        err = fsblockstore_api->m_StorageAPI->RenameFile(fsblockstore_api->m_StorageAPI, tmp_block_path, block_path);
+        if (err == EEXIST)
+        {
+            err = fsblockstore_api->m_StorageAPI->RemoveFile(fsblockstore_api->m_StorageAPI, tmp_block_path);
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PutStoredBlock(%p, %p, %p) cant remove temp block file, failed with %d",
+                    block_store_api, stored_block, async_complete_api,
+                    err)
+            }
+        }
+        else if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
+                block_store_api, stored_block, async_complete_api,
+                err)
+            Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+            hmdel(fsblockstore_api->m_BlockState, block_hash);
+            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+            Longtail_Free((char*)tmp_block_path);
+            tmp_block_path = 0;
+            Longtail_Free((char*)block_path);
+            block_path = 0;
+            return err;
+        }
+
         Longtail_Free((char*)tmp_block_path);
         tmp_block_path = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return err;
     }
-
-    err = Longtail_WriteStoredBlock(fsblockstore_api->m_StorageAPI, stored_block, tmp_block_path);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            err)
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return err;
-    }
-
-    err = fsblockstore_api->m_StorageAPI->RenameFile(fsblockstore_api->m_StorageAPI, tmp_block_path, block_path);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            err)
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-        Longtail_Free((char*)tmp_block_path);
-        tmp_block_path = 0;
-        Longtail_Free((char*)block_path);
-        block_path = 0;
-        return err;
-    }
-
-    Longtail_Free((char*)tmp_block_path);
-    tmp_block_path = 0;
     Longtail_Free((char*)block_path);
     block_path = 0;
 
     void* block_index_buffer;
     size_t block_index_buffer_size;
-    err = Longtail_WriteBlockIndexToBuffer(stored_block->m_BlockIndex, &block_index_buffer, &block_index_buffer_size);
+    int err = Longtail_WriteBlockIndexToBuffer(stored_block->m_BlockIndex, &block_index_buffer, &block_index_buffer_size);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
@@ -663,6 +678,8 @@ static int FSBlockStore_RetargetContent(
         Longtail_Free(store_content_index);
         return err;
     }
+    Longtail_Free(store_content_index);
+
     async_complete_api->OnComplete(async_complete_api, retargeted_content_index, 0);
     return 0;
 }

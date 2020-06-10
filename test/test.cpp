@@ -5653,6 +5653,233 @@ TEST(Longtail, BlockStoreRetargetContent)
     SAFE_DISPOSE_API(storage_api);
 }
 
+static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
+{
+    for (size_t n = 0; n < size; n++) {
+        int key = rand() % (sizeof(uint8_t));
+        data[n] = (uint8_t)key;
+    }
+    return data;
+}
+
+static char* GenerateRandomPath(char *str, size_t size)
+{
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ/.";
+    if (size) {
+        --size;
+        for (size_t n = 0; n < size; n++) {
+            int key = rand() % (int) (sizeof charset - 1);
+            str[n] = charset[key];
+        }
+        str[size] = '\0';
+    }
+    return str;
+}
+
+static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const char* root_path, uint32_t asset_count, uint32_t min_content_length, uint32_t max_content_length)
+{
+    for (uint32_t a = 0; a < asset_count; ++a)
+    {
+        char content_path[128];
+        GenerateRandomPath(content_path, sizeof(content_path));
+        size_t content_length = (rand() + rand() + rand() + rand() + rand() + rand()) % (max_content_length - min_content_length) + min_content_length;
+        uint8_t* content_data = (uint8_t*)malloc(content_length);
+        GenerateRandomData(content_data, content_length);
+
+        const char* file_name = storage_api->ConcatPath(storage_api, root_path, content_path);
+        ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, content_length, content_data));
+        storage_api->CloseFile(storage_api, w);
+        w = 0;
+        Longtail_Free((void*)file_name);
+        free(content_data);
+    }
+}
+
+TEST(Longtail, VersionLocalContent)
+{
+    struct Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    struct Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(storage_api, "store", 384, 8);
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+
+    CreateRandomContent(
+        storage_api,
+        "version",
+        56,
+        7,
+        72371);
+    struct Longtail_FileInfos* version1_file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(
+        storage_api,
+        0,
+        0,
+        0,
+        "version",
+        &version1_file_infos));
+
+    struct Longtail_VersionIndex *version1_index;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "version",
+        version1_file_infos,
+        0,
+        128,
+        &version1_index));
+
+    struct Longtail_ContentIndex* version1_content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        version1_index,
+        128,
+        9,
+        &version1_content_index));
+
+    struct Longtail_ContentIndex* version1_aligned_content_index = SyncRetargetContent(
+        block_store,
+        version1_content_index);
+    struct Longtail_ContentIndex* version1_missing_content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        version1_aligned_content_index,
+        version1_index,
+        *version1_aligned_content_index->m_MaxBlockSize,
+        *version1_aligned_content_index->m_MaxChunksPerBlock,
+        &version1_missing_content_index));
+
+    ASSERT_EQ(0, Longtail_WriteContent(
+        storage_api,
+        block_store,
+        job_api,
+        0,
+        0,
+        0,
+        version1_aligned_content_index,
+        version1_content_index,
+        version1_index,
+        "version"));
+
+    struct Longtail_ContentIndex* block_store_content_index_1;
+    ASSERT_EQ(0, Longtail_MergeContentIndex(
+        version1_missing_content_index,
+        version1_aligned_content_index,
+        &block_store_content_index_1));
+
+    ASSERT_EQ(0, Longtail_ValidateContent(
+        block_store_content_index_1,
+        version1_index));
+
+    // Add additional content
+    CreateRandomContent(storage_api, "version", 71, 91, 59377);
+    struct Longtail_FileInfos* version2_file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(
+        storage_api,
+        0,
+        0,
+        0,
+        "version",
+        &version2_file_infos));
+
+    struct Longtail_VersionIndex *version2_index;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "version",
+        version2_file_infos,
+        0,
+        128,
+        &version2_index));
+
+    struct Longtail_ContentIndex* version2_content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        version2_index,
+        192,
+        7,
+        &version2_content_index));
+
+    struct Longtail_ContentIndex* version2_aligned_content_index = SyncRetargetContent(
+        block_store,
+        version2_content_index);
+    struct Longtail_ContentIndex* version2_missing_content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        version2_aligned_content_index,
+        version2_index,
+        *version2_aligned_content_index->m_MaxBlockSize,
+        *version2_aligned_content_index->m_MaxChunksPerBlock,
+        &version2_missing_content_index));
+
+    ASSERT_EQ(0, Longtail_WriteContent(
+        storage_api,
+        block_store,
+        job_api,
+        0,
+        0,
+        0,
+        version2_aligned_content_index,
+        version2_content_index,
+        version2_index,
+        "version"));
+
+    struct Longtail_ContentIndex* block_store_content_index_2;
+    ASSERT_EQ(0, Longtail_MergeContentIndex(
+        version2_missing_content_index,
+        version2_aligned_content_index,
+        &block_store_content_index_2));
+
+    ASSERT_EQ(0, Longtail_ValidateContent(
+        block_store_content_index_2,
+        version2_index));
+    ASSERT_EQ(0, Longtail_ValidateContent(
+        block_store_content_index_2,
+        version1_index));
+    ASSERT_NE(0, Longtail_ValidateContent(
+        block_store_content_index_1,
+        version2_index));
+
+    Longtail_Free(block_store_content_index_2);
+
+    Longtail_Free(version2_missing_content_index);
+
+    Longtail_Free(version2_aligned_content_index);
+
+    Longtail_Free(version2_content_index);
+
+    Longtail_Free(version2_index);
+
+    Longtail_Free(version2_file_infos);
+
+    Longtail_Free(block_store_content_index_1);
+
+    Longtail_Free(version1_missing_content_index);
+
+    Longtail_Free(version1_aligned_content_index);
+
+    Longtail_Free(version1_content_index);
+
+    Longtail_Free(version1_index);
+
+    Longtail_Free(version1_file_infos);
+
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(block_store);
+    SAFE_DISPOSE_API(storage_api);
+}
+
 struct FailableStorageAPI
 {
     struct Longtail_StorageAPI m_API;
