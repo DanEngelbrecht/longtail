@@ -826,9 +826,6 @@ int DownSync(
         return err;
     }
 
-    err = Longtail_ValidateVersion(source_version_content_index, source_version_index);
-    LONGTAIL_FATAL_ASSERT(err == 0, return EINVAL; )
-
     struct Longtail_ContentIndex* retargetted_version_content_index;
     err = SyncRetargetContent(store_block_store_api, source_version_content_index, &retargetted_version_content_index);
     if (err)
@@ -852,10 +849,10 @@ int DownSync(
         return err;
     }
 
-    err = Longtail_ValidateVersion(retargetted_version_content_index, source_version_index);
+    err = Longtail_ValidateContent(retargetted_version_content_index, source_version_index);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateVersion failed with %d", storage_uri_raw, source_path, err);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateContent failed with %d", storage_uri_raw, source_path, err);
         Longtail_Free(retargetted_version_content_index);
         Longtail_Free(source_version_content_index);
         Longtail_Free(version_diff);
@@ -981,7 +978,7 @@ int ValidateVersionIndex(
         return err;
     }
 
-    err = Longtail_ValidateVersion(block_store_content_index, version_index);
+    err = Longtail_ValidateContent(block_store_content_index, version_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not have all the required chunks for %s, failed with %d", storage_uri_raw, version_index_path, err);
