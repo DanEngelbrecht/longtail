@@ -267,7 +267,14 @@ static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const
     TMP_STR(path)
     Longtail_DenormalizePath(tmp_path);
     int err = Longtail_RemoveDir(tmp_path);
-    return err;
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RemoveFile(%p, %s) failed with %d",
+            storage_api, path,
+            err)
+        return err;
+    }
+    return 0;
 }
 
 static int FSStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
