@@ -808,6 +808,8 @@ static int CacheBlockStore_RetargetContent(
     if (err)
     {
         Gather_GetIndexCompleteAPI_OnComplete(get_local_async_api, 0, err);
+        Longtail_Free(retarget_context->m_ContentIndex);
+        return 0;
     }
 
     err = Longtail_BlockStore_GetIndex(cacheblockstore_api->m_RemoteBlockStoreAPI, get_remote_async_api);
