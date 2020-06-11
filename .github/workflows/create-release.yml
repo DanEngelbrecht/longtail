@@ -122,10 +122,18 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *CHANGED* Static library build tweaks
-          - *FIXED* _rotl link errors in static library fixed
-          - *CHANGED* static .a libraries are now prefixed with ´lib`
-          - *FIXED* added small validation of .a files at build time
+          - *ADDED* New option is --version-content-index-path for cmd upsync
+          - *ADDED* new `validate` command to validate that all content of a version index is inside a block store
+          - *CHANGED* downsync --source-path is no longer relative to store-uri.
+          - *CHANGED* upsync --target-path is no longer relative to store-uri. Fixed crash in CreateContentIndex
+          - *CHANGED* silence logging in GetPermissions if file does not exist
+          - *CHANGED* changed `--content-path` option to `--cache-path`
+          - *FIXED* Fixed memory leak in fsblockstore
+          - *FIXED* If fsblockstore tries to store a block to disk and in already exists without part of the index, handle it gracefully and pick it up
+          - *FIXED* Fixed memory leak in fsblockstore
+          - *FIXED* Fixed linux Longtail_GetFilePermissions handling non-existing files
+          - *FIXED* Fixed crash in upsync CreateContentIndex
+          - *FIXED* try to remove write lock for files as well as dirs when removing files
         draft: false
         prerelease: false
     - name: Download Linux artifacts

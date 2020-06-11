@@ -3073,7 +3073,7 @@ int Longtail_InitContentIndexFromData(
     if ((*content_index->m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_0_0_1)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in content index data %" PRIu64 " != %" PRIu64 "", (void*)content_index->m_Version, LONGTAIL_CONTENT_INDEX_VERSION_0_0_1);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") failed with &d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
             content_index, data, data_size,
             EBADF)
         return EBADF;
@@ -3097,7 +3097,7 @@ int Longtail_InitContentIndexFromData(
     if (content_index_data_size > data_size)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Content index data is truncated: %" PRIu64 " <= %" PRIu64, data_size, content_index_data_size)
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") failed with &d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
             content_index, data, data_size,
             EBADF)
         return EBADF;
@@ -6786,6 +6786,28 @@ int Longtail_ChangeVersion(
             }
             else
             {
+                uint16_t permissions = 0;
+                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                if (err)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                        block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                        err)
+                    Longtail_Free(full_asset_path);
+                    return err;
+                }
+                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                {
+                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                    if (err)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                            err)
+                        Longtail_Free(full_asset_path);
+                        return err;
+                    }
+                }
                 err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
                 if (err)
                 {
@@ -6998,8 +7020,8 @@ int Longtail_ValidateContent(
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
     for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
-        uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
+        uint64_t asset_size = chunk_count > 0 ? version_index->m_AssetSizes[asset_index] : 0;
         uint32_t first_chunk_index = version_index->m_AssetChunkIndexStarts[asset_index];
         uint64_t asset_chunked_size = 0;
         for (uint32_t i = 0; i < chunk_count; ++i)
@@ -7015,7 +7037,7 @@ int Longtail_ValidateContent(
                     content_index, version_index,
                     chunk_hash)
                 DeleteContentLookup(content_lookup);
-                return EINVAL;
+                return ENOENT;
             }
             uint64_t content_chunk_index = content_lookup->m_ChunkHashToChunkIndex[content_chunk_index_ptr].value;
             LONGTAIL_FATAL_ASSERT(content_index->m_ChunkHashes[content_chunk_index] == chunk_hash, return EINVAL)
@@ -7060,8 +7082,8 @@ int Longtail_ValidateVersion(
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
     for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
-        uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
+        uint64_t asset_size = chunk_count > 0 ? version_index->m_AssetSizes[asset_index] : 0;
         uint32_t first_chunk_index = version_index->m_AssetChunkIndexStarts[asset_index];
         uint64_t asset_chunked_size = 0;
         for (uint32_t i = 0; i < chunk_count; ++i)
@@ -7096,7 +7118,7 @@ int Longtail_ValidateVersion(
                 chunk_hash)
             hmfree(version_chunk_lookup);
             version_chunk_lookup = 0;
-            return EINVAL;
+            return ENOENT;
         }
         uint64_t version_chunk_index = version_chunk_lookup[version_chunk_index_ptr].value;
         LONGTAIL_FATAL_ASSERT(version_index->m_ChunkHashes[version_chunk_index] == chunk_hash, return EINVAL)

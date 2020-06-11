@@ -889,10 +889,28 @@ LONGTAIL_EXPORT int Longtail_ReadStoredBlock(
     const char* path,
     struct Longtail_StoredBlock** out_stored_block);
 
+/*! @brief Validate that content_index contains all of version_index.
+ *
+ * Validates that all chunks required for @p version_index are present in @p content_index
+ * Validates that reconstructing an asset via chunks results in the same size as recorded in @p version_index
+ *
+ * @param[in] content_index         The content index to validate
+ * @param[in] version_index         The version index used to validate the content of @p content_index
+ * @return                          Return code (errno style), zero on success. Success is when all content required is present
+ */
 LONGTAIL_EXPORT int Longtail_ValidateContent(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
 
+/*! @brief Validate that version_index contains all of content_index.
+ *
+ * Validates that all chunks present in @p content_index are present in @p version_index
+ * Validates that reconstructing an asset via chunks results in the same size as recorded in @p version_index
+ *
+ * @param[in] content_index         The content index to validate
+ * @param[in] version_index         The version index used to validate the content of @p content_index
+ * @return                          Return code (errno style), zero on success. Success is when all content required is present
+ */
 LONGTAIL_EXPORT int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);

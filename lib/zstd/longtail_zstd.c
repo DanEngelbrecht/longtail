@@ -71,6 +71,10 @@ int ZStdCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_ap
     size_t size = ZSTD_decompress( uncompressed, max_uncompressed_size, compressed, compressed_size);
     if (ZSTD_isError(size))
     {
+        int err = ZSTD_getErrorCode(size);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ZStdCompressionAPI_Compress(%p, %p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+            compression_api, compressed, uncompressed, compressed_size, max_uncompressed_size, out_uncompressed_size,
+            err);
         return EINVAL;
     }
     *out_uncompressed_size = size;
