@@ -250,9 +250,9 @@ char* GetDefaultContentPath()
     {
         return 0;
     }
-    const char* default_content_path = Longtail_ConcatPath(tmp_folder, "longtail_cache");
+    const char* default_cache_path = Longtail_ConcatPath(tmp_folder, "longtail_cache");
     Longtail_Free(tmp_folder);
-    return (char*)default_content_path;
+    return (char*)default_cache_path;
 }
 
 struct AsyncRetargetContentComplete
@@ -599,7 +599,7 @@ int UpSync(
 
 int DownSync(
     const char* storage_uri_raw,
-    const char* content_path,
+    const char* cache_path,
     const char* source_path,
     const char* target_path,
     const char* optional_target_index_path,
@@ -614,7 +614,7 @@ int DownSync(
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
-    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, content_path, target_block_size, max_chunks_per_block);
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, cache_path, target_block_size, max_chunks_per_block);
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(store_block_localstore_api, store_block_remotestore_api);
     struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
@@ -985,8 +985,8 @@ int main(int argc, char** argv)
     }
     else
     {
-        const char* content_path_raw = 0;
-        kgflags_string("content-path", 0, "Location for downloaded/cached blocks", false, &content_path_raw);
+        const char* cache_path_raw = 0;
+        kgflags_string("cache-path", 0, "Location for downloaded/cached blocks", false, &cache_path_raw);
 
         const char* target_path_raw = 0;
         kgflags_string("target-path", 0, "Target folder path", true, &target_path_raw);
@@ -1014,7 +1014,7 @@ int main(int argc, char** argv)
         }
         Longtail_SetLogLevel(log_level);
 
-        const char* content_path = NormalizePath(content_path_raw ? content_path_raw : GetDefaultContentPath());
+        const char* cache_path = NormalizePath(cache_path_raw ? cache_path_raw : GetDefaultContentPath());
         const char* target_path = NormalizePath(target_path_raw);
         const char* target_index = target_index_raw ? NormalizePath(target_index_raw) : 0;
         const char* source_path = NormalizePath(source_path_raw);
@@ -1022,7 +1022,7 @@ int main(int argc, char** argv)
         // Downsync!
         err = DownSync(
             storage_uri_raw,
-            content_path,
+            cache_path,
             source_path,
             target_path,
             target_index,
@@ -1034,7 +1034,7 @@ int main(int argc, char** argv)
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_index);
         Longtail_Free((void*)target_path);
-        Longtail_Free((void*)content_path);
+        Longtail_Free((void*)cache_path);
     }
 #if defined(_CRTDBG_MAP_ALLOC)
     _CrtDumpMemoryLeaks();
