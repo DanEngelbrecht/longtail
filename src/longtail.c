@@ -6864,22 +6864,6 @@ int Longtail_ChangeVersion(
             return err;
         }
 
-        uint32_t target_version_chunk_count = *target_version->m_ChunkCount;
-        for (uint32_t i = 0; i < target_version_chunk_count; ++i)
-        {
-            TLongtail_Hash chunk_hash = target_version->m_ChunkHashes[i];
-            intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
-            if (-1 == chunk_content_index_ptr)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                    block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                    EINVAL)
-                DeleteContentLookup(content_lookup);
-                content_lookup = 0;
-                return EINVAL;
-           }
-        }
-
         size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
         uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(asset_indexes_size);
         if (!asset_indexes)
@@ -7051,11 +7035,12 @@ int Longtail_ValidateContent(
             uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             asset_chunked_size += chunk_size;
         }
-        if (asset_chunked_size != asset_size)
+        const char* asset_path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
+        if ((asset_chunked_size != asset_size) && (!IsDirPath(asset_path)))
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
                 content_index, version_index,
-                &version_index->m_NameData[version_index->m_NameOffsets[asset_index]], asset_chunked_size, asset_size)
+                asset_path, asset_chunked_size, asset_size)
             ++asset_size_mismatch_count;
         }
     }
@@ -7124,11 +7109,12 @@ int Longtail_ValidateVersion(
             uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             asset_chunked_size += chunk_size;
         }
-        if (asset_chunked_size != asset_size)
+        const char* asset_path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
+        if ((asset_chunked_size != asset_size) && (!IsDirPath(asset_path)))
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
                 content_index, version_index,
-                &version_index->m_NameData[version_index->m_NameOffsets[asset_index]], asset_chunked_size, asset_size)
+                asset_path, asset_chunked_size, asset_size)
             ++asset_size_mismatch_count;
         }
     }
