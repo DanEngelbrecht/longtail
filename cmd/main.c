@@ -933,6 +933,18 @@ int DownSync(
     return err;
 }
 
+int SetLogLevel(const char* log_level_raw)
+{
+    int log_level = log_level_raw ? ParseLogLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
+    if (log_level == -1)
+    {
+        printf("Invalid log level `%s`\n", log_level_raw);
+        return 1;
+    }
+    Longtail_SetLogLevel(log_level);
+    return 0;
+}
+
 int ValidateVersionIndex(
     const char* storage_uri_raw,
     const char* version_index_path,
@@ -1064,13 +1076,10 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        int log_level = log_level_raw ? ParseLogLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
-        if (log_level == -1)
+        if (SetLogLevel(log_level_raw))
         {
-            printf("Invalid log level `%s`\n", log_level_raw);
             return 1;
         }
-        Longtail_SetLogLevel(log_level);
 
         uint32_t compression = ParseCompressionType(compression_raw);
         if (compression == 0xffffffff)
@@ -1130,13 +1139,10 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        int log_level = log_level_raw ? ParseLogLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
-        if (log_level == -1)
+        if (SetLogLevel(log_level_raw))
         {
-            printf("Invalid log level `%s`\n", log_level_raw);
             return 1;
         }
-        Longtail_SetLogLevel(log_level);
 
         const char* cache_path = NormalizePath(cache_path_raw ? cache_path_raw : GetDefaultContentPath());
         const char* target_path = NormalizePath(target_path_raw);
@@ -1168,6 +1174,11 @@ int main(int argc, char** argv)
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
+            return 1;
+        }
+
+        if (SetLogLevel(log_level_raw))
+        {
             return 1;
         }
 

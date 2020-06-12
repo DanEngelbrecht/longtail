@@ -120,7 +120,7 @@ static char* GetTempBlockPath(struct FSBlockStoreAPI* fsblockstore_api, TLongtai
 struct ScanBlockJob
 {
     struct Longtail_StorageAPI* m_StorageAPI;
-    const char* m_ContentPath;
+    const char* m_ChunksPath;
     const char* m_BlockPath;
     struct Longtail_BlockIndex* m_BlockIndex;
     int m_Err;
@@ -150,7 +150,7 @@ static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
     }
 
     struct Longtail_StorageAPI* storage_api = job->m_StorageAPI;
-    const char* content_path = job->m_ContentPath;
+    const char* content_path = job->m_ChunksPath;
     char* full_block_path = storage_api->ConcatPath(storage_api, content_path, block_path);
 
     job->m_Err = Longtail_ReadBlockIndex(
@@ -184,19 +184,26 @@ static int ReadContent(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore::ReadContent(%p, %p, %s, %p)",
         storage_api, job_api, content_path, out_content_index)
 
+    const char* chunks_path = storage_api->ConcatPath(storage_api, content_path, "chunks");
+    if (!chunks_path)
+    {
+        return ENOMEM;
+    }
+
     struct Longtail_FileInfos* file_infos;
     int err = Longtail_GetFilesRecursively(
         storage_api,
         0,
         0,
         0,
-        content_path,
+        chunks_path,
         &file_infos);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore::ReadContent(%p, %p, %s, %p) failed with %d",
-            storage_api, job_api, content_path, out_content_index,
+            storage_api, job_api, chunks_path, out_content_index,
             err)
+        Longtail_Free((void*)chunks_path);
         return err;
     }
 
@@ -213,6 +220,7 @@ static int ReadContent(
             0,
             out_content_index);
         Longtail_Free(file_infos);
+        Longtail_Free((void*)chunks_path);
         return err;
     }
     Longtail_JobAPI_Group job_group;
@@ -223,7 +231,7 @@ static int ReadContent(
             storage_api, job_api, content_path, out_content_index,
             err)
         Longtail_Free(file_infos);
-        file_infos = 0;
+        Longtail_Free((void*)chunks_path);
         return err;
     }
 
@@ -234,6 +242,8 @@ static int ReadContent(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) failed with %d",
             storage_api, job_api, content_path, out_content_index,
             ENOMEM)
+        Longtail_Free(file_infos);
+        Longtail_Free((void*)chunks_path);
         return ENOMEM;
     }
 
@@ -244,7 +254,7 @@ static int ReadContent(
         job->m_BlockIndex = 0;
 
         job->m_StorageAPI = storage_api;
-        job->m_ContentPath = content_path;
+        job->m_ChunksPath = chunks_path;
         job->m_BlockPath = block_path;
         job->m_BlockIndex = 0;
         job->m_Err = EINVAL;
@@ -266,6 +276,7 @@ static int ReadContent(
             err)
         Longtail_Free(scan_jobs);
         Longtail_Free(file_infos);
+        Longtail_Free((void*)chunks_path);
         return err;
     }
     LONGTAIL_FATAL_ASSERT(!err, return err)
@@ -279,6 +290,7 @@ static int ReadContent(
             ENOMEM)
         Longtail_Free(scan_jobs);
         Longtail_Free(file_infos);
+        Longtail_Free((void*)chunks_path);
         return ENOMEM;
     }
 
@@ -299,6 +311,9 @@ static int ReadContent(
 
     Longtail_Free(file_infos);
     file_infos = 0;
+
+    Longtail_Free((void*)chunks_path);
+    chunks_path = 0;
 
     err = Longtail_CreateContentIndexFromBlocks(
         max_block_size,

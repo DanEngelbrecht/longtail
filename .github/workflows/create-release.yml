@@ -134,6 +134,7 @@ jobs:
           - *FIXED* Fixed linux Longtail_GetFilePermissions handling non-existing files
           - *FIXED* Fixed crash in upsync CreateContentIndex
           - *FIXED* try to remove write lock for files as well as dirs when removing files
+          - *FIXED* fsblockstore, when scanning blocks, only check chunks folder
         draft: false
         prerelease: false
     - name: Download Linux artifacts

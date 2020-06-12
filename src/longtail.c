@@ -7000,28 +7000,48 @@ int Longtail_ValidateContent(
     LONGTAIL_VALIDATE_INPUT(content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(version_index != 0, return EINVAL)
 
-    struct ContentLookup* content_lookup;
-    int err = CreateContentLookup(
-        *content_index->m_BlockCount,
-        content_index->m_BlockHashes,
-        *content_index->m_ChunkCount,
-        content_index->m_ChunkHashes,
-        content_index->m_ChunkBlockIndexes,
-        &content_lookup);
-
-    if (err)
+    struct HashToIndexItem* content_chunk_lookup = 0;
+    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
+    for (uint64_t chunk_index = 0; chunk_index < content_index_chunk_count; ++chunk_index)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ValidateContent(%p, %p) failed with %d",
-            content_index, version_index,
-            err)
-        return err;
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
+        hmput(content_chunk_lookup, chunk_hash, chunk_index);
+    }
+
+    uint32_t chunk_missing_count = 0;
+    uint32_t chunk_size_mismatch_count = 0;
+    uint32_t asset_size_mismatch_count = 0;
+
+    uint64_t version_index_chunk_count = *version_index->m_ChunkCount;
+    for (uint32_t chunk_index = 0; chunk_index < version_index_chunk_count; ++chunk_index)
+    {
+        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
+        intptr_t content_chunk_index_ptr = hmgeti(content_chunk_lookup, chunk_hash);
+        if (content_chunk_index_ptr == -1)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) content index does not contain chunk 0x%" PRIx64 "",
+                content_index, version_index,
+                chunk_hash)
+            ++chunk_missing_count;
+            continue;
+        }
+        uint64_t content_chunk_index = content_chunk_lookup[content_chunk_index_ptr].value;
+        uint32_t content_chunk_size = content_index->m_ChunkLengths[content_chunk_index];
+        uint32_t version_chunk_size = version_index->m_ChunkSizes[chunk_index];
+        if (content_chunk_size != version_chunk_size)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
+                content_index, version_index,
+                chunk_hash, content_chunk_size, version_chunk_size)
+            ++chunk_size_mismatch_count;
+        }
     }
 
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
     for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
+        uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
-        uint64_t asset_size = chunk_count > 0 ? version_index->m_AssetSizes[asset_index] : 0;
         uint32_t first_chunk_index = version_index->m_AssetChunkIndexStarts[asset_index];
         uint64_t asset_chunked_size = 0;
         for (uint32_t i = 0; i < chunk_count; ++i)
@@ -7030,42 +7050,45 @@ int Longtail_ValidateContent(
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
             uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             asset_chunked_size += chunk_size;
-            intptr_t content_chunk_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
-            if (content_chunk_index_ptr == -1)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) content index does not contain chunk 0x%" PRIx64 "",
-                    content_index, version_index,
-                    chunk_hash)
-                DeleteContentLookup(content_lookup);
-                return ENOENT;
-            }
-            uint64_t content_chunk_index = content_lookup->m_ChunkHashToChunkIndex[content_chunk_index_ptr].value;
-            LONGTAIL_FATAL_ASSERT(content_index->m_ChunkHashes[content_chunk_index] == chunk_hash, return EINVAL)
-            if (content_index->m_ChunkLengths[content_chunk_index] != chunk_size)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
-                    content_index, version_index,
-                    chunk_hash, content_index->m_ChunkLengths[content_chunk_index], chunk_size)
-                DeleteContentLookup(content_lookup);
-                content_lookup = 0;
-                return EINVAL;
-            }
         }
         if (asset_chunked_size != asset_size)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
                 content_index, version_index,
                 &version_index->m_NameData[version_index->m_NameOffsets[asset_index]], asset_chunked_size, asset_size)
-            DeleteContentLookup(content_lookup);
-            content_lookup = 0;
-            return EINVAL;
+            ++asset_size_mismatch_count;
         }
     }
 
-    DeleteContentLookup(content_lookup);
-    content_lookup = 0;
+    int err = 0;
+    if (asset_size_mismatch_count > 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) has %u assets that does not match chunk sizes",
+            content_index, version_index,
+            asset_size_mismatch_count)
+        err = err ? err : EINVAL;
+    }
 
-    return 0;
+    if (chunk_missing_count > 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) has %u missing chunks",
+            content_index, version_index,
+            chunk_missing_count)
+        err = ENOENT;
+    }
+
+    if (chunk_size_mismatch_count > 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) has %u chunks that does not match size",
+            content_index, version_index,
+            chunk_size_mismatch_count)
+        err = err ? err : ENOENT;
+    }
+
+    hmfree(content_chunk_lookup);
+    content_chunk_lookup = 0;
+
+    return err;
 }
 
 int Longtail_ValidateVersion(
@@ -7078,30 +7101,35 @@ int Longtail_ValidateVersion(
     LONGTAIL_VALIDATE_INPUT(version_index != 0, EINVAL)
 
     struct HashToIndexItem* version_chunk_lookup = 0;
+    uint64_t version_index_chunk_count = *version_index->m_ChunkCount;
+    for (uint32_t chunk_index = 0; chunk_index < version_index_chunk_count; ++chunk_index)
+    {
+        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
+        hmput(version_chunk_lookup, chunk_hash, chunk_index);
+    }
 
+    uint32_t chunk_missing_count = 0;
+    uint32_t chunk_size_mismatch_count = 0;
+    uint32_t asset_size_mismatch_count = 0;
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
     for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
     {
+        uint64_t asset_size = version_index->m_AssetSizes[asset_index];
         uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
-        uint64_t asset_size = chunk_count > 0 ? version_index->m_AssetSizes[asset_index] : 0;
         uint32_t first_chunk_index = version_index->m_AssetChunkIndexStarts[asset_index];
         uint64_t asset_chunked_size = 0;
         for (uint32_t i = 0; i < chunk_count; ++i)
         {
             uint32_t chunk_index = version_index->m_AssetChunkIndexes[first_chunk_index + i];
-            TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-            hmput(version_chunk_lookup, chunk_hash, chunk_index);
             uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             asset_chunked_size += chunk_size;
         }
         if (asset_chunked_size != asset_size)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateVersion(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) asset size for %s mismatch, accumulated chunks size: %" PRIu64 ", asset size:  %" PRIu64 "",
                 content_index, version_index,
                 &version_index->m_NameData[version_index->m_NameOffsets[asset_index]], asset_chunked_size, asset_size)
-            hmfree(version_chunk_lookup);
-            version_chunk_lookup = 0;
-            return EINVAL;
+            ++asset_size_mismatch_count;
         }
     }
 
@@ -7109,34 +7137,56 @@ int Longtail_ValidateVersion(
     for (uint64_t chunk_index = 0; chunk_index < content_index_chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
-        uint32_t chunk_size = content_index->m_ChunkLengths[chunk_index];
         intptr_t version_chunk_index_ptr = hmgeti(version_chunk_lookup, chunk_hash);
         if (version_chunk_index_ptr == -1)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateVersion(%p, %p) version index does not contain chunk 0x%" PRIx64 "",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) version index does not contain chunk 0x%" PRIx64 "",
                 content_index, version_index,
                 chunk_hash)
-            hmfree(version_chunk_lookup);
-            version_chunk_lookup = 0;
-            return ENOENT;
+            ++chunk_missing_count;
+            continue;
         }
         uint64_t version_chunk_index = version_chunk_lookup[version_chunk_index_ptr].value;
-        LONGTAIL_FATAL_ASSERT(version_index->m_ChunkHashes[version_chunk_index] == chunk_hash, return EINVAL)
-        if (version_index->m_ChunkSizes[version_chunk_index] != chunk_size)
+        uint32_t content_chunk_size = content_index->m_ChunkLengths[chunk_index];
+        uint32_t version_chunk_size = version_index->m_ChunkSizes[version_chunk_index];
+        if (version_chunk_size != content_chunk_size)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ValidateVersion(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
                 content_index, version_index,
-                chunk_hash, chunk_size, version_index->m_ChunkSizes[version_chunk_index])
-            hmfree(version_chunk_lookup);
-            version_chunk_lookup = 0;
-            return EINVAL;
+                chunk_hash, content_chunk_size, version_chunk_size)
+            ++chunk_size_mismatch_count;
         }
+    }
+
+    int err = 0;
+    if (asset_size_mismatch_count > 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) has %u assets that does not match chunk sizes",
+            content_index, version_index,
+            asset_size_mismatch_count)
+        err = err ? err : EINVAL;
+    }
+
+    if (chunk_missing_count > 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) has %u missing chunks",
+            content_index, version_index,
+            chunk_missing_count)
+        err = ENOENT;
+    }
+
+    if (chunk_size_mismatch_count > 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) has %u chunks that does not match size",
+            content_index, version_index,
+            chunk_size_mismatch_count)
+        err = err ? err : ENOENT;
     }
 
     hmfree(version_chunk_lookup);
     version_chunk_lookup = 0;
 
-    return 0;
+    return err;
 }
 
 struct BlockIndexToChunks
