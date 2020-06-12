@@ -7065,7 +7065,7 @@ int Longtail_ValidateContent(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) has %u assets that does not match chunk sizes",
             content_index, version_index,
-            chunk_size_mismatch_count)
+            asset_size_mismatch_count)
         err = err ? err : EINVAL;
     }
 
@@ -7163,7 +7163,7 @@ int Longtail_ValidateVersion(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) has %u assets that does not match chunk sizes",
             content_index, version_index,
-            chunk_size_mismatch_count)
+            asset_size_mismatch_count)
         err = err ? err : EINVAL;
     }
 
