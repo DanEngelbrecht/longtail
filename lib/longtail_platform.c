@@ -1432,15 +1432,16 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
     int res = stat(path, &stat_buf);
     if (res == 0)
     {
-        *out_size = (uint64_t)stat_buf.st_size;
         *out_permissions = (uint16_t)stat_buf.st_mode;
         if ((stat_buf.st_mode & S_IFDIR) == S_IFDIR)
         {
             *out_is_dir = 1;
+            *out_size = 0;
         }
         else
         {
             *out_is_dir = 0;
+            *out_size = (uint64_t)stat_buf.st_size;
         }
     }
     else
