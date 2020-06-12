@@ -1171,6 +1171,14 @@ int main(int argc, char** argv)
             return 1;
         }
 
+        int log_level = log_level_raw ? ParseLogLevel(log_level_raw) : LONGTAIL_LOG_LEVEL_WARNING;
+        if (log_level == -1)
+        {
+            printf("Invalid log level `%s`\n", log_level_raw);
+            return 1;
+        }
+        Longtail_SetLogLevel(log_level);
+
         const char* version_index_path = NormalizePath(version_index_path_raw);
 
         err = ValidateVersionIndex(
