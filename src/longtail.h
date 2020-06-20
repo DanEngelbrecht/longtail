@@ -32,26 +32,74 @@ struct Longtail_VersionDiff;
 
 struct Longtail_API;
 
+/*! @brief Prototype for the Dispose API function.
+ */
 typedef void (*Longtail_DisposeFunc)(struct Longtail_API* api);
 
+/*! @brief Base API interface.
+ *
+ * Each API includes a the basic Longtail_API as the first member of its API structure allowing for a generic Dispose pattern
+ *
+ */
 struct Longtail_API
 {
     Longtail_DisposeFunc Dispose;
 };
 
+/*! @brief Dispose an API.
+ *
+ * Calls the Dispose function of the API base interface. An interface struct adds an the struct Longtail_API member as its first
+ * member making it possible to have a generic pattern for disposing APIs.
+ *
+ * @param[in] api              A pointer to a Longtail_API structure
+ * @return                     void
+ */
 LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
+
+/*! @brief Convenience function to abstract the API dispose
+*/
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&(api)->m_API);}
 
 ////////////// Longtail_CancelAPI
-
 struct Longtail_CancelAPI;
 
+/*! @brief Longtail_CancelAPI cancel token.
+ */
 typedef struct Longtail_CancelAPI_CancelToken* Longtail_CancelAPI_HCancelToken;
 
 typedef int (*Longtail_CancelAPI_CreateTokenFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token);
 typedef int (*Longtail_CancelAPI_CancelFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
 typedef int (*Longtail_CancelAPI_IsCancelledFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
 typedef int (*Longtail_CancelAPI_DisposeTokenFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+
+/*! @brief struct Longtail_CancelAPI.
+ *
+ * API for handling asyncronous cancelling of operations
+ *
+ * The controller of an operation would create a cancel API and a cancel token. Both the API and and the token
+ * is passed to the operation which would check if the cancel token is cancelled at convenient times and abort
+ * if a cancel is detected.
+ *
+ * The controller uses the cancel token to cancel the operation and then waits for the operation to return.
+ *
+ * @code
+ * void DoAsyncWork(struct Longtail_CancelAPI* api, Longtail_CancelAPI_HCancelToken token) {
+ *  while(!api->IsCancelled(api, token)) {
+ *      // Do work
+ *  }
+ * }
+ *
+ * struct Longtail_CancelAPI* api = Longtail_MakeCancelAPI(malloc(sizeof(struct Longtail_CancelAPI)), dispose, create_token, cancel, is_cancelled, dispose_token);
+ * Longtail_CancelAPI_HCancelToken token = api->CreateToken(api);
+ * DoAsyncWork(api, token);
+ * if (UserPressedCancel()) {
+ *  api->Cancel(api, token);
+ * }
+ * WaitForAsyncWork();
+ * api->DisposeToken(api, token);
+ * SAFE_DISPOSE_API(api);
+ * @endcode
+ */
 struct Longtail_CancelAPI
 {
     struct Longtail_API m_API;
@@ -63,6 +111,16 @@ struct Longtail_CancelAPI
 
 LONGTAIL_EXPORT uint64_t Longtail_GetCancelAPISize();
 
+/*! @brief Create a Longtail_CancelAPI cancel API.
+ *
+ * @param[in] mem                   pointer to memory at least sizeof(struct Longtail_CancelAPI) bytes
+ * @param[in] dispose_func          implementation of Longtail_DisposeFunc
+ * @param[in] create_token_func     implementation of Longtail_CancelAPI_CreateTokenFunc
+ * @param[in] cancel_func           implementation of Longtail_CancelAPI_CancelFunc
+ * @param[in] is_cancelled          implementation of Longtail_CancelAPI_IsCancelledFunc
+ * @param[in] dispose_token_func    implementation of Longtail_CancelAPI_DisposeTokenFunc
+ * @return                          initialize API structure (same address as @p mem)
+ */
 LONGTAIL_EXPORT struct Longtail_CancelAPI* Longtail_MakeCancelAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
@@ -71,9 +129,43 @@ LONGTAIL_EXPORT struct Longtail_CancelAPI* Longtail_MakeCancelAPI(
     Longtail_CancelAPI_IsCancelledFunc is_cancelled,
     Longtail_CancelAPI_DisposeTokenFunc dispose_token_func);
 
+/*! @brief Create a cancel token
+ *
+ * The token is valid until disposed with Longtail_CancelAPI_DisposeToken.
+ *
+ * @param[in] cancel_api    pointer to an initialized struct Longtail_CancelAPI
+ * @param[out] out_token    pointer to a uninitialized Longtail_CancelAPI_HCancelToken which will be initialized on success
+ * @return                  errno style error - zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token);
+
+/*! @brief Set a cancel token to cancelled state
+ *
+ * The token is set to cancelled and calling Longtail_CancelAPI_IsCancelled with the token will return ECANCELED
+ * It is allowed to call Longtail_CancelAPI_Cancel multiple times on the same token.
+ *
+ * @param[in] cancel_api    pointer to an initialized struct Longtail_CancelAPI
+ * @param[in] token         pointer to a initialized Longtail_CancelAPI_HCancelToken
+ * @return                  errno style error - zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CancelAPI_Cancel(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+
+/*! @brief Dispose a cancel token
+ *
+ * Calling Dispose on the token invalidates it and renders it unusable.
+ *
+ * @param[in] cancel_api    pointer to an initialized struct Longtail_CancelAPI
+ * @param[in] token         pointer to a initialized Longtail_CancelAPI_HCancelToken
+ * @return                  errno style error - zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+
+/*! @brief Check if token is cancelled
+ *
+ * @param[in] cancel_api    pointer to an initialized struct Longtail_CancelAPI
+ * @param[in] token         pointer to a initialized Longtail_CancelAPI_HCancelToken
+ * @return                  errno style error - zero = not cancelled, ECANCELED if token is cancelled
+ */
 LONGTAIL_EXPORT int Longtail_CancelAPI_IsCancelled(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
 
 ////////////// Longtail_PathFilterAPI
