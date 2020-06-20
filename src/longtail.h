@@ -737,7 +737,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
 
 /*! @brief Create a version index for a struct Longtail_FileInfos.
  *
- * All files are chunked and hashes to create a struct VersionIndex
+ * All files are chunked and hashes to create a struct VersionIndex, allocated using Longtail_Alloc()
  * Free the version index with Longtail_Free()
  *
  * @param[in] storage_api           An implementation of struct Longtail_StorageAPI interface.
@@ -765,11 +765,29 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
+/*! @brief Writes a struct Longtail_VersionIndex to a byte buffer.
+ *
+ * Serializes a struct Longtail_VersionIndex to a buffer which is allocated using Longtail_Alloc()
+ *
+ * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex
+ * @param[out] out_buffer           Pointer to a buffer pointer intitialized on success
+ * @param[out] out_size             Pointer to a size variable intitialized on success
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_WriteVersionIndexToBuffer(
     const struct Longtail_VersionIndex* version_index,
     void** out_buffer,
     size_t* out_size);
 
+/*! @brief Reads a struct Longtail_VersionIndex from a byte buffer.
+ *
+ * Deserializes a struct Longtail_VersionIndex from a buffer, the struct Longtail_VersionIndex is allocated using Longtail_Alloc()
+ *
+ * @param[in] buffer                Buffer containing the serialized struct Longtail_VersionIndex
+ * @param[in] size                  Size of the buffer
+ * @param[out] out_version_index    Pointer to an struct Longtail_VersionIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_ReadVersionIndexFromBuffer(
     const void* buffer,
     size_t size,
