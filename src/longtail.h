@@ -695,9 +695,38 @@ LONGTAIL_EXPORT void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtai
 LONGTAIL_EXPORT void* Longtail_Alloc(size_t s);
 LONGTAIL_EXPORT void Longtail_Free(void* p);
 
+/*! @brief Ensures the full parent path exists.
+ *
+ * Creates any parent directories for @p path if they do not exist.
+ *
+ * @param[in] storage_api           An implementation of struct Longtail_StorageAPI interface.
+ * @param[in] path                  A normalized path
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
-LONGTAIL_EXPORT char* Longtail_Strdup(const char* path);
 
+/*! @brief Duplicates a string.
+ *
+ * Creates a copy of a string using the Longtail_Alloc() function.
+ *
+ * @param[in] str           String to duplicate
+ * @return                  Pointer to newly allocated string, zero if out of memory or invalid input parameter
+ */
+LONGTAIL_EXPORT char* Longtail_Strdup(const char* str);
+
+/*! @brief Get all files and directories in a path recursivley.
+ *
+ * Gets all the files and directories and allocates a struct Longtail_FileInfos structure with the details.
+ * Free the struct Longtail_FileInfos using Longtail_Free()
+ *
+ * @param[in] storage_api           An implementation of struct Longtail_StorageAPI interface.
+ * @param[in] path_filter_api       An implementation of struct Longtail_PathFilter interface or null if no filtering is required
+ * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
+ * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
+ * @param[in] root_path             Root path to search for files and directories - may not be null
+ * @param[out] out_file_infos       Pointer to a struct Longtail_FileInfos* pointer which will be set on success
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_PathFilterAPI* path_filter_api,
@@ -706,6 +735,23 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
+/*! @brief Create a version index for a struct Longtail_FileInfos.
+ *
+ * All files are chunked and hashes to create a struct VersionIndex
+ * Free the version index with Longtail_Free()
+ *
+ * @param[in] storage_api           An implementation of struct Longtail_StorageAPI interface.
+ * @param[in] hash_api              An implementation of struct Longtail_HashAPI interface.
+ * @param[in] job_api               An implementation of struct Longtail_JobAPI interface
+ * @param[in] progress_api          An implementation of struct Longtail_JobAPI interface or null if no progress indication is required
+ * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
+ * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
+ * @param[in] root_path             Root path for files in @p file_infos
+ * @param[in] optional_asset_tags   An array with a tag for each entry in @p file_infos, usually a compression tag, set to zero if no tags are wanted
+ * @param[in] target_chunk_size     The target size of chunks, with minimum size set to @target_chunk_size / 8 and maximum size set to @p target_chunk_size * 2
+ * @param[out] out_version_index    Pointer to a struct Longtail_VersionIndex* pointer which will be set on success
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
