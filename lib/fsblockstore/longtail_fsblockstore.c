@@ -207,9 +207,6 @@ static int ReadContent(
         return err;
     }
 
-    const uint32_t default_path_count = 512;
-    const uint32_t default_path_data_size = default_path_count * 128;
-
     uint32_t path_count = file_infos->m_Count;
     if (path_count == 0)
     {
@@ -279,7 +276,6 @@ static int ReadContent(
         Longtail_Free((void*)chunks_path);
         return err;
     }
-    LONGTAIL_FATAL_ASSERT(!err, return err)
 
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (path_count);
     struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
@@ -295,14 +291,12 @@ static int ReadContent(
     }
 
     uint64_t block_count = 0;
-    uint64_t chunk_count = 0;
     for (uint32_t path_index = 0; path_index < path_count; ++path_index)
     {
         struct ScanBlockJob* job = &scan_jobs[path_index];
         if (job->m_Err == 0)
         {
             block_indexes[block_count] = job->m_BlockIndex;
-            chunk_count += *job->m_BlockIndex->m_ChunkCount;
             ++block_count;
         }
     }
@@ -384,9 +378,7 @@ static int FSBlockStore_PutStoredBlock(
             hmdel(fsblockstore_api->m_BlockState, block_hash);
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
             Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             Longtail_Free((char*)block_path);
-            block_path = 0;
             return err;
         }
 
@@ -400,9 +392,7 @@ static int FSBlockStore_PutStoredBlock(
             hmdel(fsblockstore_api->m_BlockState, block_hash);
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
             Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             Longtail_Free((char*)block_path);
-            block_path = 0;
             return err;
         }
 
@@ -426,9 +416,7 @@ static int FSBlockStore_PutStoredBlock(
             hmdel(fsblockstore_api->m_BlockState, block_hash);
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
             Longtail_Free((char*)tmp_block_path);
-            tmp_block_path = 0;
             Longtail_Free((char*)block_path);
-            block_path = 0;
             return err;
         }
 
@@ -524,7 +512,6 @@ static int FSBlockStore_GetStoredBlock(
             block_store_api, block_hash, async_complete_api,
             err)
         Longtail_Free((char*)block_path);
-        block_path = 0;
         return err;
     }
     Longtail_AtomicAdd64(&fsblockstore_api->m_BlocksGetCount, 1);
@@ -532,7 +519,6 @@ static int FSBlockStore_GetStoredBlock(
     Longtail_AtomicAdd64(&fsblockstore_api->m_BytesGetCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     Longtail_Free(block_path);
-    block_path = 0;
 
     async_complete_api->OnComplete(async_complete_api, stored_block, 0);
     return 0;

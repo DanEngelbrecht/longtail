@@ -162,7 +162,6 @@ struct Bikeshed_JobAPI_Group* CreateJobGroup(struct BikeshedJobAPI* job_api, uin
     job_group->m_PendingJobCount = 0;
     job_group->m_SubmittedJobCount = 0;
     job_group->m_JobsCompleted = 0;
-    err = 0;
 end:
     return job_group;
 on_error:
@@ -351,6 +350,7 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
         if (old_pending_count != bikeshed_job_group->m_PendingJobCount)
         {
             old_pending_count = bikeshed_job_group->m_PendingJobCount;
+            continue;
         }
         Longtail_WaitSema(bikeshed_job_api->m_ReadyCallback.m_Semaphore, 1000);
     }

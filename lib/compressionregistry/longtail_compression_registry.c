@@ -21,11 +21,11 @@ static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
     for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
     {
-        struct Longtail_CompressionAPI* api = default_compression_registry->m_APIs[c];
-        if (api != last_api)
+        struct Longtail_CompressionAPI* compression_api = default_compression_registry->m_APIs[c];
+        if (compression_api != last_api)
         {
-            api->m_API.Dispose(&api->m_API);
-            last_api = api;
+            compression_api->m_API.Dispose(&compression_api->m_API);
+            last_api = compression_api;
         }
     }
     Longtail_Free(default_compression_registry);

@@ -21,11 +21,11 @@ static void DefaultHashRegistry_Dispose(struct Longtail_API* api)
     struct Default_HashRegistry* default_hash_registry = (struct Default_HashRegistry*)api;
     for (uint32_t c = 0; c < default_hash_registry->m_Count; ++c)
     {
-        struct Longtail_HashAPI* api = default_hash_registry->m_APIs[c];
-        if (api != last_api)
+        struct Longtail_HashAPI* hash_api = default_hash_registry->m_APIs[c];
+        if (hash_api != last_api)
         {
-            api->m_API.Dispose(&api->m_API);
-            last_api = api;
+            hash_api->m_API.Dispose(&hash_api->m_API);
+            last_api = hash_api;
         }
     }
     Longtail_Free(default_hash_registry);

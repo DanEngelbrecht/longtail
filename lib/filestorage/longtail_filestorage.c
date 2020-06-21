@@ -306,7 +306,6 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
     if (err == ENOENT)
     {
         Longtail_Free(iterator);
-        iterator = 0;
         return err;
     }
     if (err)
@@ -315,7 +314,6 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
             storage_api, path, out_iterator,
             err)
         Longtail_Free(iterator);
-        iterator = 0;
         return err;
     }
     *out_iterator = iterator;
