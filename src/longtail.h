@@ -793,29 +793,90 @@ LONGTAIL_EXPORT int Longtail_ReadVersionIndexFromBuffer(
     size_t size,
     struct Longtail_VersionIndex** out_version_index);
 
+/*! @brief Writes a struct Longtail_VersionIndex.
+ *
+ * Serializes a struct Longtail_VersionIndex to a file in a struct Longtail_StorageAPI at the specified path.
+ * The parent folder of the file path must exist.
+ *
+ * @param[in] storage_api           An initialized struct Longtail_StorageAPI
+ * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex
+ * @param[in] path                  A path in the storage api to store the version index to
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_WriteVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_VersionIndex* version_index,
     const char* path);
 
+/*! @brief Reads a struct Longtail_VersionIndex.
+ *
+ * Deserializes a struct Longtail_VersionIndex from a file in a struct Longtail_StorageAPI at the specified path.
+ * The file must exist.
+ *
+ * @param[in] storage_api           An initialized struct Longtail_StorageAPI
+ * @param[in] path                  A path in the storage api to read the version index from
+ * @param[out] out_version_index    Pointer to an struct Longtail_VersionIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_ReadVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_VersionIndex** out_version_index);
 
+/*! @brief Get size of content index data.
+ *
+ * Content index data size is the size raw size of the content index excluding the struct Longtail_ContentIndex
+ * header structure.
+ *
+ * @param[in] block_count           Number of blocks
+ * @param[in] chunk_count           Number of chunks
+ * @return                          Number of bytes required to store the content index data
+ */
 LONGTAIL_EXPORT size_t Longtail_GetContentIndexDataSize(
     uint64_t block_count,
     uint64_t chunk_count);
 
+/*! @brief Get size of content index.
+ *
+ * Content index data size is the size size of the content index including the struct Longtail_ContentIndex
+ * header structure.
+ *
+ * @param[in] block_count           Number of blocks
+ * @param[in] chunk_count           Number of chunks
+ * @return                          Number of bytes required to store the content index data
+ */
 LONGTAIL_EXPORT size_t Longtail_GetContentIndexSize(
     uint64_t block_count,
     uint64_t chunk_count);
 
+/*! @brief Initialize content index from raw data.
+ *
+ * Initialize a struct Longtail_ContentIndex from raw data.
+ *
+ * @param[in] content_index Pointer to an uninitialized struct Longtail_VersionIndex
+ * @param[in] data          Pointer to a raw content index data
+ * @param[in] data_size     Size of raw content index data
+ * @return                  Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_InitContentIndexFromData(
     struct Longtail_ContentIndex* content_index,
     void* data,
     uint64_t data_size);
 
+/*! @brief Initialize content index.
+ *
+ * Initialize a struct Longtail_ContentIndex.
+ *
+ * @param[in] content_index         Pointer to an uninitialized struct Longtail_VersionIndex
+ * @param[in] data                  Pointer to a uninitialized contend index data
+ * @param[in] data_size             Size of uninitialized contend index data
+ * @param[in] hash_api              Hash API identifier
+ * @param[in] max_block_size        Max block size
+ * @param[in] max_chunks_per_block  Max chunks per block
+ * @param[in] block_count           Block count
+ * @param[in] chunk_count           Chunk count
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_InitContentIndex(
     struct Longtail_ContentIndex* content_index,
     void* data,
@@ -826,6 +887,19 @@ LONGTAIL_EXPORT int Longtail_InitContentIndex(
     uint64_t block_count,
     uint64_t chunk_count);
 
+/*! @brief Create a struct Longtail_ContentIndex from array of struct Longtail_BlockIndex.
+ *
+ * Allocates and initializes a struct Longtail_ContentIndex structure from an array of
+ * struct Longtail_BlockIndex using Longtail_Alloc()
+ * The resulting struct Longtail_ContentIndex is freed with Longtail_Free()
+ *
+ * @param[in] max_block_size        Max block size
+ * @param[in] max_chunks_per_block  Max chunks per block
+ * @param[in] block_count           Block count - number of struct Longtail_BlockIndex pointers in @p block_indexes
+ * @param[in] block_indexes         Array of pointers to initialized struct Longtail_BlockIndex
+ * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
@@ -833,6 +907,18 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
     struct Longtail_BlockIndex** block_indexes,
     struct Longtail_ContentIndex** out_content_index);
 
+/*! @brief Create a struct Longtail_ContentIndex from an struct Longtail_VersionIndex.
+ *
+ * Creates a struct Longtail_ContentIndex from a struct Longtail_VersionIndex by bundling
+ * chunks into blocks according to @p max_block_size and @p max_chunks_per_block.
+ *
+ * @param[in] hash_api              Hash API identifier
+ * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex
+ * @param[in] max_block_size        Max block size
+ * @param[in] max_chunks_per_block  Max chunks per block
+ * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CreateContentIndex(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_VersionIndex* version_index,
@@ -840,6 +926,21 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndex(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
+/*! @brief Create a struct Longtail_ContentIndex from discreet data.
+ *
+ * Creates a struct Longtail_ContentIndex from discreet data by bundling
+ * chunks into blocks according to @p max_block_size and @p max_chunks_per_block.
+ *
+ * @param[in] hash_api              Hash API identifier
+ * @param[in] chunk_count           Number of chunks
+ * @param[in] chunk_hashes          Array of chunk hashes - entry count must match @p chunk_count
+ * @param[in] chunk_sizes           Array of chunk sizes - entry count must match @p chunk_count
+ * @param[in] optional_chunk_tags   Array of chunk tags - entry count must match @p chunk_count or be set to 0 for no tagging
+ * @param[in] max_block_size        Max block size
+ * @param[in] max_chunks_per_block  Max chunks per block
+ * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
     struct Longtail_HashAPI* hash_api,
     uint64_t chunk_count,
