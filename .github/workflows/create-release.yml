@@ -122,8 +122,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *CHANGED* Cacheblockstore uses ref count instead of full block copy when storing to local cache
-          - *FIXED* Hash map creations now pre-allocates capacity to avoid excessive memory allocations
+          - *ADDED* Added doxygen API documentation
+          - *FIXED* Linting issues and minor bug fixes
+          - *FIXED* Removed redundant hashing in DynamicChunking
         draft: false
         prerelease: false
     - name: Download Linux artifacts

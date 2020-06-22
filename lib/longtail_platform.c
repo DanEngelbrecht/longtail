@@ -319,7 +319,8 @@ void Longtail_NormalizePath(char* path)
 {
     while (*path)
     {
-        *path++ = *path == '\\' ? '/' : *path;
+        *path = ((*path) == '\\') ? '/' : (*path);
+        ++path;
     }
 }
 
@@ -327,7 +328,8 @@ void Longtail_DenormalizePath(char* path)
 {
     while (*path)
     {
-        *path++ = *path == '/' ? '\\' : *path;
+        *path = ((*path) == '/') ? '\\' : (*path);
+        ++path;
     }
 }
 

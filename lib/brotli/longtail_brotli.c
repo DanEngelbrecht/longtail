@@ -81,13 +81,7 @@ int BrotliCompressionAPI_Compress(
     size_t* out_compressed_size)
 {
     struct BrotliSettings* brotli_settings = SettingsIDToCompressionSetting(settings_id);
-    if (brotli_settings == 0)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BrotliCompressionAPI_Compress(%p, %u, %p, %p, %" PRIu64 ", %" PRIu64 ", %p) invalid settings type %u",
-            compression_api, settings_id, uncompressed, compressed, uncompressed_size, max_compressed_size, out_compressed_size,
-            settings_id);
-    }
-    LONGTAIL_FATAL_ASSERT(brotli_settings != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(brotli_settings != 0, return EINVAL)
 
     *out_compressed_size = max_compressed_size;
     if (BROTLI_FALSE == BrotliEncoderCompress(brotli_settings->m_Quality, brotli_settings->m_WindowBits, brotli_settings->m_Mode, uncompressed_size, (const uint8_t*)uncompressed, out_compressed_size, (uint8_t*)compressed))

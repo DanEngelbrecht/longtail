@@ -360,7 +360,7 @@ int UpSync(
     if (source_version_index == 0)
     {
         struct Longtail_FileInfos* file_infos;
-        int err = Longtail_GetFilesRecursively(
+        err = Longtail_GetFilesRecursively(
             storage_api,
             0,
             0,
@@ -698,7 +698,7 @@ int DownSync(
     struct Longtail_VersionIndex* target_version_index = 0;
     if (optional_target_index_path)
     {
-        int err = Longtail_ReadVersionIndex(storage_api, optional_target_index_path, &target_version_index);
+        err = Longtail_ReadVersionIndex(storage_api, optional_target_index_path, &target_version_index);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_target_index_path, err);
@@ -707,7 +707,7 @@ int DownSync(
     if (target_version_index == 0)
     {
         struct Longtail_FileInfos* file_infos;
-        int err = Longtail_GetFilesRecursively(
+        err = Longtail_GetFilesRecursively(
             storage_api,
             0,
             0,
