@@ -951,26 +951,80 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
+/*! @brief Writes a struct Longtail_ContentIndex to a byte buffer.
+ *
+ * Serializes a struct Longtail_ContentIndex to a buffer which is allocated using Longtail_Alloc()
+ *
+ * @param[in] content_index         Pointer to an initialized struct Longtail_ContentIndex
+ * @param[out] out_buffer           Pointer to a buffer pointer intitialized on success
+ * @param[out] out_size             Pointer to a size variable intitialized on success
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_WriteContentIndexToBuffer(
     const struct Longtail_ContentIndex* content_index,
     void** out_buffer,
     size_t* out_size);
 
+/*! @brief Reads a struct Longtail_ContentIndex from a byte buffer.
+ *
+ * Deserializes a struct Longtail_ContentIndex from a buffer, the struct Longtail_ContentIndex is allocated using Longtail_Alloc()
+ *
+ * @param[in] buffer                Buffer containing the serialized struct Longtail_ContentIndex
+ * @param[in] size                  Size of the buffer
+ * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_ReadContentIndexFromBuffer(
     const void* buffer,
     size_t size,
     struct Longtail_ContentIndex** out_content_index);
 
+/*! @brief Writes a struct Longtail_ContentIndex.
+ *
+ * Serializes a struct Longtail_ContentIndex to a file in a struct Longtail_StorageAPI at the specified path.
+ * The parent folder of the file path must exist.
+ *
+ * @param[in] storage_api           An initialized struct Longtail_StorageAPI
+ * @param[in] content_index         Pointer to an initialized struct Longtail_ContentIndex
+ * @param[in] path                  A path in the storage api to store the content index to
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_WriteContentIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_ContentIndex* content_index,
     const char* path);
 
+/*! @brief Reads a struct Longtail_ContentIndex.
+ *
+ * Deserializes a struct Longtail_ContentIndex from a file in a struct Longtail_StorageAPI at the specified path.
+ * The file must exist.
+ *
+ * @param[in] storage_api           An initialized struct Longtail_StorageAPI
+ * @param[in] path                  A path in the storage api to read the Content index from
+ * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_ReadContentIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
     struct Longtail_ContentIndex** out_content_index);
 
+/*! @brief Write content blocks from version data
+ *
+ * Writes all blocks for @p version_content_index using @p version_index and asset_path as data source to a block store
+ *
+ * @param[in] source_storage_api        An initialized struct Longtail_StorageAPI
+ * @param[in] block_store_api           An initialized struct Longtail_BlockStoreAPI
+ * @param[in] job_api                   An initialized struct Longtail_JobAPI
+ * @param[in] progress_api              An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
+ * @param[in] optional_cancel_api       An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
+ * @param[in] optional_cancel_token     A cancel token or null if @p optional_cancel_api is null
+ * @param[in] block_store_content_index The content index of data already in @p block_store_api
+ * @param[in] version_content_index     Data in @p version index and @p assets_folder arrange as content index
+ * @param[in] version_index             Version index of data in  @p assets_folder
+ * @param[in] assets_folder             Path of version data inside @p source_storage_api
+ * @return                  Return code (errno style), zero on success
+ */
 LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
     struct Longtail_BlockStoreAPI* block_store_api,
