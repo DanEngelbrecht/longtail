@@ -140,8 +140,13 @@ int EndsWith(const char *str, const char *suffix)
 static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return 0)
-
     struct ScanBlockJob* job = (struct ScanBlockJob*)context;
+    if (is_cancelled)
+    {
+        job->m_Err = ECANCELED;
+        return 0;
+    }
+
     const char* block_path = job->m_BlockPath;
     if (!EndsWith(block_path, ".lrb"))
     {

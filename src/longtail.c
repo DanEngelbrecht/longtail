@@ -1117,7 +1117,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "DynamicChunking(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "DynamicChunking(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             ECANCELED)
         hash_job->m_Err = ECANCELED;
@@ -4202,7 +4202,7 @@ struct WritePartialAssetFromBlocksJob
 
 int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled);
 
-// Returns the write sync task, or the write task if there is no need for block_readion of block
+// Returns the write sync task, or the write task if there is no need for reading new blocks
 static int CreatePartialAssetWriteJob(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
@@ -4339,9 +4339,51 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     LONGTAIL_FATAL_ASSERT(context !=0, return EINVAL)
     struct WritePartialAssetFromBlocksJob* job = (struct WritePartialAssetFromBlocksJob*)context;
 
+    uint32_t block_reader_job_count = job->m_BlockReaderJobCount;
+
+    if ((!job->m_AssetOutputFile) && job->m_AssetChunkIndexOffset)
+    {
+        LONGTAIL_FATAL_ASSERT(job->m_Err != 0, return 0);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WritePartialAssetFromBlocks(%p, %u, %d) failed due to previous error",
+            context, job_id, is_cancelled)
+        for (uint32_t d = 0; d < block_reader_job_count; ++d)
+        {
+            struct Longtail_StoredBlock* stored_block = job->m_BlockReaderJobs[d].m_StoredBlock;
+            if (stored_block && stored_block->Dispose)
+            {
+                stored_block->Dispose(stored_block);
+            }
+            job->m_BlockReaderJobs[d].m_StoredBlock = 0;
+        }
+        return 0;
+    }
+
+    if (is_cancelled)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+            context, job_id, is_cancelled,
+            ECANCELED)
+
+        for (uint32_t d = 0; d < block_reader_job_count; ++d)
+        {
+            struct Longtail_StoredBlock* stored_block = job->m_BlockReaderJobs[d].m_StoredBlock;
+            if (stored_block && stored_block->Dispose)
+            {
+                stored_block->Dispose(stored_block);
+            }
+            job->m_BlockReaderJobs[d].m_StoredBlock = 0;
+        }
+        if (job->m_AssetOutputFile)
+        {
+            job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+            job->m_AssetOutputFile = 0;
+        }
+        job->m_Err = ECANCELED;
+        return 0;
+    }
+
     // Need to fetch all the data we need from the context since we will reuse the context
     int block_reader_errors = 0;
-    uint32_t block_reader_job_count = job->m_BlockReaderJobCount;
     TLongtail_Hash block_hashes[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     struct Longtail_StoredBlock* stored_block[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     for (uint32_t d = 0; d < block_reader_job_count; ++d)
@@ -4357,11 +4399,11 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         stored_block[d] = job->m_BlockReaderJobs[d].m_StoredBlock;
     }
 
-    if (is_cancelled || block_reader_errors)
+    if (block_reader_errors)
     {
-        LONGTAIL_LOG((is_cancelled || block_reader_errors == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG((block_reader_errors == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
-            is_cancelled ? ECANCELED : block_reader_errors)
+            block_reader_errors)
         for (uint32_t d = 0; d < block_reader_job_count; ++d)
         {
             if (stored_block[d] && stored_block[d]->Dispose)
@@ -4384,19 +4426,6 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     uint32_t write_chunk_count = job->m_AssetChunkCount;
     uint32_t asset_chunk_count = job->m_VersionIndex->m_AssetChunkCounts[job->m_AssetIndex];
     const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[job->m_AssetIndex]];
-
-    if (!job->m_AssetOutputFile && job->m_AssetChunkIndexOffset)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WritePartialAssetFromBlocks(%p, %u, %d) failed due to previous error",
-            context, job_id, is_cancelled)
-        for (uint32_t d = 0; d < block_reader_job_count; ++d)
-        {
-            stored_block[d]->Dispose(stored_block[d]);
-            stored_block[d] = 0;
-        }
-//        job->m_Err = job->m_Err == EINVAL ? ENOTRECOVERABLE : job->m_Err;
-        return 0;
-    }
 
     if (!job->m_AssetOutputFile)
     {
@@ -4522,7 +4551,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             job->m_Err = err;
             return 0;
         }
-        // block_readion of blocks will start immediately
+        // Reading of blocks will start immediately
     }
 
     uint32_t chunk_index_offset = write_chunk_index_offset;
