@@ -335,13 +335,19 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
     int32_t old_pending_count = 0;
     while (bikeshed_job_group->m_PendingJobCount > 0)
     {
-        if (progressAPI)
+        if (bikeshed_job_group->m_Cancelled == 0)
         {
-            progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_group->m_ReservedJobCount, (uint32_t)bikeshed_job_group->m_JobsCompleted);
-        }
-        if (!bikeshed_job_group->m_Cancelled && optional_cancel_api && optional_cancel_token && (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED))
-        {
-            Longtail_AtomicAdd32(&bikeshed_job_group->m_Cancelled, 1);
+            if (progressAPI)
+            {
+                progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_group->m_ReservedJobCount, (uint32_t)bikeshed_job_group->m_JobsCompleted);
+            }
+            if (optional_cancel_api && optional_cancel_token)
+            {
+                if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+                {
+                    Longtail_AtomicAdd32(&bikeshed_job_group->m_Cancelled, 1);
+                }
+            }
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
         {
