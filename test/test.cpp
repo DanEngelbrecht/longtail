@@ -1022,6 +1022,117 @@ TEST(Longtail, Longtail_FSBlockStore)
     SAFE_DISPOSE_API(storage_api);
 }
 
+TEST(Longtail, Longtail_FSBlockStoreReadContent)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks", 524288, 1024);
+
+    TestAsyncGetIndexComplete get_index_complete;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_complete.m_API));
+    get_index_complete.Wait();
+    struct Longtail_ContentIndex* store_index = get_index_complete.m_ContentIndex;
+    ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
+    ASSERT_EQ(0, *store_index->m_BlockCount);
+    ASSERT_EQ(0, *store_index->m_ChunkCount);
+    Longtail_Free(store_index);
+
+    Longtail_StoredBlock put_block;
+    put_block.Dispose = 0;
+    put_block.m_BlockIndex = 0;
+    put_block.m_BlockData = 0;
+
+    TestAsyncGetBlockComplete getCB;
+    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, &getCB.m_API));
+    struct Longtail_StoredBlock* get_block = getCB.m_StoredBlock;
+
+    size_t block_index_size = Longtail_GetBlockIndexSize(2);
+    void* block_index_mem = Longtail_Alloc(block_index_size);
+    put_block.m_BlockIndex = Longtail_InitBlockIndex(block_index_mem, 2);
+    *put_block.m_BlockIndex->m_BlockHash = 0xdeadbeef;
+    *put_block.m_BlockIndex->m_HashIdentifier = hash_api->GetIdentifier(hash_api);
+    *put_block.m_BlockIndex->m_Tag = 0;
+    put_block.m_BlockIndex->m_ChunkHashes[0] = 0xf001fa5;
+    put_block.m_BlockIndex->m_ChunkHashes[1] = 0xfff1fa5;
+    put_block.m_BlockIndex->m_ChunkSizes[0] = 4711;
+    put_block.m_BlockIndex->m_ChunkSizes[1] = 1147;
+    *put_block.m_BlockIndex->m_ChunkCount = 2;
+    put_block.m_BlockChunksDataSize = 4711 + 1147;
+
+    put_block.m_BlockData = Longtail_Alloc(put_block.m_BlockChunksDataSize);
+    memset(put_block.m_BlockData, 77, 4711);
+    memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
+
+    TestAsyncPutBlockComplete putCB;
+    ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block, &putCB.m_API));
+    putCB.Wait();
+    Longtail_Free(put_block.m_BlockIndex);
+    ASSERT_EQ(0, putCB.m_Err);
+
+    struct TestAsyncGetBlockComplete getCB1;
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &getCB1.m_API));
+    getCB1.Wait();
+    get_block = getCB1.m_StoredBlock;
+    ASSERT_EQ(0, getCB1.m_Err);
+
+    ASSERT_NE((Longtail_StoredBlock*)0, get_block);
+    ASSERT_EQ(0xdeadbeef, *get_block->m_BlockIndex->m_BlockHash);
+    ASSERT_EQ(hash_api->GetIdentifier(hash_api), *get_block->m_BlockIndex->m_HashIdentifier);
+    ASSERT_EQ(0, *get_block->m_BlockIndex->m_Tag);
+    ASSERT_EQ(0xf001fa5, get_block->m_BlockIndex->m_ChunkHashes[0]);
+    ASSERT_EQ(0xfff1fa5, get_block->m_BlockIndex->m_ChunkHashes[1]);
+    ASSERT_EQ(4711, get_block->m_BlockIndex->m_ChunkSizes[0]);
+    ASSERT_EQ(1147, get_block->m_BlockIndex->m_ChunkSizes[1]);
+    ASSERT_EQ(2, *get_block->m_BlockIndex->m_ChunkCount);
+    ASSERT_EQ(0, memcmp(put_block.m_BlockData, get_block->m_BlockData, put_block.m_BlockChunksDataSize));
+    Longtail_Free(put_block.m_BlockData);
+    get_block->Dispose(get_block);
+
+    Longtail_BlockStore_Stats stats;
+    block_store_api->GetStats(block_store_api, &stats);
+
+    ASSERT_EQ(1, stats.m_IndexGetCount);
+    ASSERT_EQ(1, stats.m_BlocksGetCount);
+    ASSERT_EQ(1, stats.m_BlocksPutCount);
+    ASSERT_EQ(2, stats.m_ChunksGetCount);
+    ASSERT_EQ(2, stats.m_ChunksPutCount);
+    ASSERT_EQ(5902, stats.m_BytesGetCount);
+    ASSERT_EQ(5902, stats.m_BytesPutCount);
+
+    SAFE_DISPOSE_API(block_store_api);
+
+    block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks", 524288, 1024);
+    TestAsyncGetIndexComplete get_index_cb;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_index_cb.m_API));
+    get_index_cb.Wait();
+    store_index = get_index_cb.m_ContentIndex;
+    ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
+    ASSERT_EQ(1, *store_index->m_BlockCount);
+    ASSERT_EQ(2, *store_index->m_ChunkCount);
+    Longtail_Free(store_index);
+
+    SAFE_DISPOSE_API(block_store_api);
+
+    storage_api->RemoveFile(storage_api, "chunks/store.lci");
+
+    block_store_api = Longtail_CreateFSBlockStoreAPI(storage_api, "chunks", 524288, 1024);
+
+    TestAsyncGetIndexComplete get_reconstructed_index_cb;
+    ASSERT_EQ(0, block_store_api->GetIndex(block_store_api, &get_reconstructed_index_cb.m_API));
+    get_reconstructed_index_cb.Wait();
+    store_index = get_reconstructed_index_cb.m_ContentIndex;
+    ASSERT_NE((struct Longtail_ContentIndex*)0, store_index);
+    ASSERT_EQ(1, *store_index->m_BlockCount);
+    ASSERT_EQ(2, *store_index->m_ChunkCount);
+    Longtail_Free(store_index);
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
+}
+
 TEST(Longtail, Longtail_CacheBlockStore)
 {
     Longtail_StorageAPI* local_storage_api = Longtail_CreateInMemStorageAPI();
