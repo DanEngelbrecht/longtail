@@ -703,6 +703,9 @@ int DownSync(
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_target_index_path, err);
         }
     }
+
+    target_chunk_size = *source_version_index->m_TargetChunkSize;
+
     if (target_version_index == 0)
     {
         struct Longtail_FileInfos* file_infos;
