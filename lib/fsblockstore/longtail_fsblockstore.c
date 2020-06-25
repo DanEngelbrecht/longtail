@@ -171,7 +171,6 @@ static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
         char* validate_file_name = GetBlockPath(storage_api, job->m_ContentPath, block_hash);
         if (strcmp(validate_file_name, full_block_path) != 0)
         {
-            Longtail_Free(validate_file_name);
             Longtail_Free(job->m_BlockIndex);
             job->m_BlockIndex = 0;
             job->m_Err = EBADF;
