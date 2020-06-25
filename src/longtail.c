@@ -2649,6 +2649,16 @@ int Longtail_ReadBlockIndex(
     }
     read_offset += sizeof(struct Longtail_BlockIndexHeader);
 
+    if (blockIndexHeader.m_ChunkCount == 0)
+    {
+        err = EBADF;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) failed with %d",
+            storage_api, path, out_block_index,
+            EBADF)
+        storage_api->CloseFile(storage_api, f);
+        return EBADF;
+    }
+
     size_t block_index_size = Longtail_GetBlockIndexSize(blockIndexHeader.m_ChunkCount);
     if (block_index_size >= block_size)
     {
@@ -3164,17 +3174,18 @@ int Longtail_CreateContentIndexFromBlocks(
     uint64_t chunk_count = 0;
     for (uint64_t b = 0; b < block_count; ++b)
     {
-        chunk_count += *block_indexes[b]->m_ChunkCount;
-        uint32_t block_hash_identifier = *block_indexes[b]->m_HashIdentifier;
+        struct Longtail_BlockIndex* block_index = block_indexes[b];
+        chunk_count += *block_index->m_ChunkCount;
+        uint32_t block_hash_identifier = *block_index->m_HashIdentifier;
         if (hash_identifier == 0)
         {
             hash_identifier = block_hash_identifier;
         }
         else if (hash_identifier != block_hash_identifier)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Block hash identifier are inconsistent, %u != %u", hash_identifier, block_hash_identifier)
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %" PRIu64 ", %p, %p) failed with %d",
-                block_count, block_indexes, out_content_index,
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Block hash identifier are inconsistent for block 0x%" PRIx64 ", %u != %u", *block_index->m_BlockHash, hash_identifier, block_hash_identifier)
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %u, %u, %" PRIu64 ", %p, %p) failed with %d",
+                max_block_size, max_chunks_per_block, block_count, block_indexes, out_content_index,
                 EINVAL)
             return EINVAL;
         }
@@ -3184,8 +3195,8 @@ int Longtail_CreateContentIndexFromBlocks(
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     if (!content_index)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %" PRIu64 ", %p, %p) failed with %d",
-            block_count, block_indexes, out_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %u, %u, %" PRIu64 ", %p, %p) failed with %d",
+            max_block_size, max_chunks_per_block, block_count, block_indexes, out_content_index,
             ENOMEM)
         return ENOMEM;
     }
@@ -3200,8 +3211,8 @@ int Longtail_CreateContentIndexFromBlocks(
         chunk_count);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %" PRIu64 ", %p, %p) failed with %d",
-            block_count, block_indexes, out_content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks(%u, %u, %u, %" PRIu64 ", %p, %p) failed with %d",
+            max_block_size, max_chunks_per_block, block_count, block_indexes, out_content_index,
             err)
         Longtail_Free(content_index);
         return err;
