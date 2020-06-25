@@ -122,8 +122,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIXED* fsblockstore now reads back store index correctly
-          - *FIXED* better validation of stored block on disk
+          - *FIXED* fsblockstore store-via-temp-file is now used consistently
+          - *FIXED* cmd downsync now uses target_chunk_size from target_index
         draft: false
         prerelease: false
     - name: Download Linux artifacts
