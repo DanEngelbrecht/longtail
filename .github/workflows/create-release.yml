@@ -122,8 +122,12 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIXED* fsblockstore store-via-temp-file is now used consistently
-          - *FIXED* cmd downsync now uses target_chunk_size from target_index
+          - *CHANGE* Content indexes no longer contains chunk size or offset into stored block
+            - Newer version can directly read older versions of content index, older version can't read new content indexes
+          - *API* Removed chunk block offset and chunk size for content index
+          - *API* Removed Longtail_StripContentIndex() function
+          - *API* fsblockstore now take optional argument for block extension
+          - *FIXED* fsblockstore no longer tries to merge existing content index if it is unchanged
         draft: false
         prerelease: false
     - name: Download Linux artifacts
