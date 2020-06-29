@@ -124,7 +124,7 @@ jobs:
           Changes in this Release
           - *API* Removed Longtail_StripContentIndex() function
           - *API* Removed chunk block offset and chunk size for content index
-          - *CHANGE* fsblockstore not take optional argument for block extension
+          - *CHANGE* fsblockstore now take optional argument for block extension
           - *FIXED* fsblockstore no longer tries to merge existing content index if it is unchanged
         draft: false
         prerelease: false
