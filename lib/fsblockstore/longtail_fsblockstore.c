@@ -824,9 +824,10 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
                 fsblockstore_api->m_AddedBlockIndexes,
                 &fsblockstore_api->m_ContentIndex);
         }
-        while(new_block_count-- > 0)
+        intptr_t free_block_index = new_block_count;
+        while(free_block_index-- > 0)
         {
-            struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[new_block_count];
+            struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[free_block_index];
             Longtail_Free(block_index);
         }
     }
