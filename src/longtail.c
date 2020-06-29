@@ -2131,6 +2131,7 @@ int Longtail_CreateVersionIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
             storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
             err)
+        Longtail_Free(version_index_mem);
         Longtail_Free(compact_chunk_tags);
         Longtail_Free(compact_chunk_sizes);
         Longtail_Free(compact_chunk_hashes);
@@ -2996,7 +2997,7 @@ size_t Longtail_GetContentIndexDataSize(uint64_t block_count, uint64_t chunk_cou
         sizeof(uint64_t) +                          // m_ChunkCount
         (sizeof(TLongtail_Hash) * block_count) +    // m_BlockHashes[]
         (sizeof(TLongtail_Hash) * chunk_count) +    // m_ChunkHashes[]
-        (sizeof(TLongtail_Hash) * chunk_count)      // m_ChunkBlockIndexes[]
+        (sizeof(uint64_t) * chunk_count)            // m_ChunkBlockIndexes[]
         );
 
     return block_index_data_size;
@@ -3984,8 +3985,9 @@ int Longtail_WriteContent(
     for (uint64_t block_index = 0; block_index < block_count; ++block_index)
     {
         TLongtail_Hash block_hash = version_content_index->m_BlockHashes[block_index];
-        uint32_t block_chunk_count = 0;
-        while(version_content_index->m_ChunkBlockIndexes[block_start_chunk_index + block_chunk_count] == block_index)
+        LONGTAIL_FATAL_ASSERT(version_content_index->m_ChunkBlockIndexes[block_start_chunk_index] == block_index, return EINVAL);
+        uint32_t block_chunk_count = 1;
+        while((block_start_chunk_index + block_chunk_count < block_count) && version_content_index->m_ChunkBlockIndexes[block_start_chunk_index + block_chunk_count] == block_index)
         {
             ++block_chunk_count;
         }
@@ -5074,7 +5076,7 @@ static int BuildAssetWriteList(
     struct AssetWriteList* awl = CreateAssetWriteList(asset_count);
     if (awl == 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) CreateAssetWriteList() failed with %d",
             asset_count, optional_asset_indexes, name_offsets, name_data, chunk_hashes, asset_chunk_counts, asset_chunk_index_starts, asset_chunk_indexes, cl, out_asset_write_list,
             ENOMEM)
         return ENOMEM;
@@ -5097,7 +5099,7 @@ static int BuildAssetWriteList(
         intptr_t find_i = hmgeti(cl->m_ChunkHashToBlockIndex, chunk_hash);
         if (find_i == -1)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) failed with %d",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) hmgeti(cl->m_ChunkHashToBlockIndex, chunk_hash) failed with %d",
                 asset_count, optional_asset_indexes, name_offsets, name_data, chunk_hashes, asset_chunk_counts, asset_chunk_index_starts, asset_chunk_indexes, cl, out_asset_write_list,
                 ENOENT)
             Longtail_Free(awl);
@@ -5113,7 +5115,7 @@ static int BuildAssetWriteList(
             find_i = hmgeti(cl->m_ChunkHashToBlockIndex, next_chunk_hash);
             if (find_i == -1)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) failed with %d",
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) hmgeti(cl->m_ChunkHashToBlockIndex, next_chunk_hash) failed with %d",
                     asset_count, optional_asset_indexes, name_offsets, name_data, chunk_hashes, asset_chunk_counts, asset_chunk_index_starts, asset_chunk_indexes, cl, out_asset_write_list,
                     ENOENT)
                 Longtail_Free(awl);
