@@ -7019,7 +7019,6 @@ int Longtail_ValidateContent(
     }
 
     uint32_t chunk_missing_count = 0;
-    uint32_t chunk_size_mismatch_count = 0;
     uint32_t asset_size_mismatch_count = 0;
 
     uint64_t version_index_chunk_count = *version_index->m_ChunkCount;
@@ -7035,16 +7034,6 @@ int Longtail_ValidateContent(
             ++chunk_missing_count;
             continue;
         }
-//        uint64_t content_chunk_index = content_chunk_lookup[content_chunk_index_ptr].value;
-//        uint32_t content_chunk_size = content_index->m_ChunkLengths[content_chunk_index];
-//        uint32_t version_chunk_size = version_index->m_ChunkSizes[chunk_index];
-//        if (content_chunk_size != version_chunk_size)
-//        {
-//            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
-//                content_index, version_index,
-//                chunk_hash, content_chunk_size, version_chunk_size)
-//            ++chunk_size_mismatch_count;
-//        }
     }
 
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
@@ -7088,14 +7077,6 @@ int Longtail_ValidateContent(
         err = err ? err : ENOENT;
     }
 
-    if (chunk_size_mismatch_count > 0)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) has %u chunks that does not match size",
-            content_index, version_index,
-            chunk_size_mismatch_count)
-        err = err ? err : ENOENT;
-    }
-
     hmfree(content_chunk_lookup);
     content_chunk_lookup = 0;
 
@@ -7121,7 +7102,6 @@ int Longtail_ValidateVersion(
     }
 
     uint32_t chunk_missing_count = 0;
-    uint32_t chunk_size_mismatch_count = 0;
     uint32_t asset_size_mismatch_count = 0;
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
     for (uint32_t asset_index = 0; asset_index < version_index_asset_count; ++asset_index)
@@ -7159,16 +7139,6 @@ int Longtail_ValidateVersion(
             ++chunk_missing_count;
             continue;
         }
-//        uint64_t version_chunk_index = version_chunk_lookup[version_chunk_index_ptr].value;
-//        uint32_t content_chunk_size = content_index->m_ChunkLengths[chunk_index];
-//        uint32_t version_chunk_size = version_index->m_ChunkSizes[version_chunk_index];
-//        if (version_chunk_size != content_chunk_size)
-//        {
-//            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) chunk size for 0x%" PRIx64 " mismatch, content index: %u, version index: %u",
-//                content_index, version_index,
-//                chunk_hash, content_chunk_size, version_chunk_size)
-//            ++chunk_size_mismatch_count;
-//        }
     }
 
     int err = 0;
@@ -7185,14 +7155,6 @@ int Longtail_ValidateVersion(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) has %u missing chunks",
             content_index, version_index,
             chunk_missing_count)
-        err = err ? err : ENOENT;
-    }
-
-    if (chunk_size_mismatch_count > 0)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) has %u chunks that does not match size",
-            content_index, version_index,
-            chunk_size_mismatch_count)
         err = err ? err : ENOENT;
     }
 
