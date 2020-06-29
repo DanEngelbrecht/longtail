@@ -6118,18 +6118,23 @@ int Longtail_MergeContentIndex(
     uint64_t new_content_chunk_count = *new_content_index->m_ChunkCount;
     hmsetcap(block_hash_to_block_index, max_block_count);
     hmsetcap(chunk_hash_to_block_index, new_content_chunk_count);
+    const TLongtail_Hash* new_content_index_chunk_hashes = new_content_index->m_ChunkHashes;
+    const uint64_t* new_content_index_chunk_block_indexes = new_content_index->m_ChunkBlockIndexes;
+    const TLongtail_Hash* new_content_index_block_hashes = new_content_index->m_BlockHashes;
+    const uint32_t* new_content_index_chunk_block_offsets = new_content_index->m_ChunkBlockOffsets;
+    const uint32_t* new_content_index_chunk_lengths = new_content_index->m_ChunkLengths;
     for (uint64_t c = 0; c < new_content_chunk_count; ++c)
     {
-        TLongtail_Hash chunk_hash = new_content_index->m_ChunkHashes[c];
+        TLongtail_Hash chunk_hash = new_content_index_chunk_hashes[c];
         intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
         if (find_block_ptr != -1)
         {
             continue;
         }
-        uint64_t block_index = new_content_index->m_ChunkBlockIndexes[c];
-        TLongtail_Hash block_hash = new_content_index->m_BlockHashes[block_index];
-        uint32_t block_offset = new_content_index->m_ChunkBlockOffsets[c];
-        uint32_t chunk_size = new_content_index->m_ChunkLengths[c];
+        uint64_t block_index = new_content_index_chunk_block_indexes[c];
+        TLongtail_Hash block_hash = new_content_index_block_hashes[block_index];
+        uint32_t block_offset = new_content_index_chunk_block_offsets[c];
+        uint32_t chunk_size = new_content_index_chunk_lengths[c];
 
         compact_chunk_offsets[compact_chunk_count] = block_offset;
         compact_chunk_sizes[compact_chunk_count] = chunk_size;
@@ -6146,19 +6151,24 @@ int Longtail_MergeContentIndex(
         hmput(chunk_hash_to_block_index, chunk_hash, block_hash_to_block_index[find_block_index_ptr].value);
     }
 
+    const TLongtail_Hash* local_content_index_chunk_hashes = local_content_index->m_ChunkHashes;
+    const uint64_t* local_content_index_chunk_block_indexes = local_content_index->m_ChunkBlockIndexes;
+    const TLongtail_Hash* local_content_index_block_hashes = local_content_index->m_BlockHashes;
+    const uint32_t* local_content_index_chunk_block_offsets = local_content_index->m_ChunkBlockOffsets;
+    const uint32_t* local_content_index_chunk_lengths = local_content_index->m_ChunkLengths;
     uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;
     for (uint64_t c = 0; c < local_content_chunk_count; ++c)
     {
-        TLongtail_Hash chunk_hash = local_content_index->m_ChunkHashes[c];
+        TLongtail_Hash chunk_hash = local_content_index_chunk_hashes[c];
         intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
         if (find_block_ptr != -1)
         {
             continue;
         }
-        uint64_t block_index = local_content_index->m_ChunkBlockIndexes[c];
-        TLongtail_Hash block_hash = local_content_index->m_BlockHashes[block_index];
-        uint32_t block_offset = local_content_index->m_ChunkBlockOffsets[c];
-        uint32_t chunk_size = local_content_index->m_ChunkLengths[c];
+        uint64_t block_index = local_content_index_chunk_block_indexes[c];
+        TLongtail_Hash block_hash = local_content_index_block_hashes[block_index];
+        uint32_t block_offset = local_content_index_chunk_block_offsets[c];
+        uint32_t chunk_size = local_content_index_chunk_lengths[c];
 
         compact_chunk_offsets[compact_chunk_count] = block_offset;
         compact_chunk_sizes[compact_chunk_count] = chunk_size;
