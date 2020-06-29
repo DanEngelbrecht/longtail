@@ -3986,11 +3986,12 @@ int Longtail_WriteContent(
     {
         TLongtail_Hash block_hash = version_content_index->m_BlockHashes[block_index];
         LONGTAIL_FATAL_ASSERT(version_content_index->m_ChunkBlockIndexes[block_start_chunk_index] == block_index, return EINVAL);
-        uint32_t block_chunk_count = 1;
-        while((block_start_chunk_index + block_chunk_count < block_count) && version_content_index->m_ChunkBlockIndexes[block_start_chunk_index + block_chunk_count] == block_index)
+        uint64_t chunk_offset_index = block_start_chunk_index + 1;
+        while((chunk_offset_index < version_content_index_chunk_count) && version_content_index->m_ChunkBlockIndexes[chunk_offset_index] == block_index)
         {
-            ++block_chunk_count;
+            ++chunk_offset_index;
         }
+        uint32_t block_chunk_count = (uint32_t)(chunk_offset_index - block_start_chunk_index);
 
         intptr_t block_index_ptr = hmgeti(block_store_lookup, block_hash);
         if (block_index_ptr != -1)
