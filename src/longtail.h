@@ -1465,21 +1465,6 @@ LONGTAIL_EXPORT int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
 
-/*! @brief Create a content index with only the blocks required by the version.
- *
- * Creates a struct Longtail_ContentIndex with the minumum number of blocks from @p full_content_index required to
- * reconstruct the @p version_index
- *
- * @param[in] version_index             The struct Longtail_VersionIndex to fulfill
- * @param[in] full_content_index        The full content index index used to extract block from
- * @param[in] out_reduced_content_index Pointer to an struct Longtail_ContentIndex pointer
- * @return                              Return code (errno style), zero on success. Success is when all content required is present
- */
-int Longtail_StripContentIndex(
-    struct Longtail_VersionIndex* version_index,
-    struct Longtail_ContentIndex* full_content_index,
-    struct Longtail_ContentIndex** out_reduced_content_index);
-
 struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
@@ -1540,8 +1525,6 @@ struct Longtail_ContentIndex
     TLongtail_Hash* m_BlockHashes;      // []
     TLongtail_Hash* m_ChunkHashes;      // []
     uint64_t* m_ChunkBlockIndexes;      // []
-    uint32_t* m_ChunkBlockOffsets;      // []
-    uint32_t* m_ChunkLengths;           // []
 };
 
 LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetVersion(const struct Longtail_ContentIndex* content_index);
