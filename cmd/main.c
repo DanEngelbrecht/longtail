@@ -877,7 +877,7 @@ int DownSync(
     Longtail_Free(source_version_content_index);
     source_version_content_index = retargetted_version_content_index;
 
-/*    {
+    {
         struct Progress change_version_progress;
         Progress_Init(&change_version_progress, "Updating version");
         err = Longtail_ChangeVersion(
@@ -895,7 +895,7 @@ int DownSync(
             target_path,
             retain_permissions ? 1 : 0);
         Progress_Dispose(&change_version_progress);
-    }*/
+    }
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
