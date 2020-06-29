@@ -328,7 +328,7 @@ int UpSync(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
+    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block, ".lrb");
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
 
     struct Longtail_VersionIndex* source_version_index = 0;
@@ -648,8 +648,8 @@ int DownSync(
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
-    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, cache_path, target_block_size, max_chunks_per_block);
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block, ".lsb");
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, cache_path, target_block_size, max_chunks_per_block, ".lrb");
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(store_block_localstore_api, store_block_remotestore_api);
     struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
@@ -877,7 +877,7 @@ int DownSync(
     Longtail_Free(source_version_content_index);
     source_version_content_index = retargetted_version_content_index;
 
-    {
+/*    {
         struct Progress change_version_progress;
         Progress_Init(&change_version_progress, "Updating version");
         err = Longtail_ChangeVersion(
@@ -895,7 +895,7 @@ int DownSync(
             target_path,
             retain_permissions ? 1 : 0);
         Progress_Dispose(&change_version_progress);
-    }
+    }*/
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
@@ -955,7 +955,7 @@ int ValidateVersionIndex(
 {
     const char* storage_path = NormalizePath(storage_uri_raw);
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block);
+    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block, ".lsb");
     struct Longtail_ContentIndex* block_store_content_index;
     {
         struct AsyncGetIndexComplete get_index_complete;

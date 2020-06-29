@@ -12,7 +12,8 @@ LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStor
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
     uint32_t default_max_block_size,
-    uint32_t default_max_chunks_per_block);
+    uint32_t default_max_chunks_per_block,
+    const char* optional_extension);
 
 #ifdef __cplusplus
 }
