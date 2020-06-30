@@ -536,6 +536,139 @@ char* Longtail_Strdup(const char* path)
     return r;
 }
 
+
+
+
+
+//////////////////////////////// Longtail_LookupTable
+
+struct Longtail_LookupTable
+{
+    uint64_t  m_BucketCount;
+
+    uint64_t m_NextFreeIndex;
+    uint64_t m_Capacity;
+    uint64_t m_Count;
+
+    uint64_t* m_Buckets;
+    uint64_t* m_Keys;
+    uint64_t* m_Values;
+    uint64_t* m_NextIndex;
+};
+
+static uint64_t Longtail_LookupTable_Capacity(struct Longtail_LookupTable* lut)
+{
+    return lut->m_Capacity;
+}
+
+static uint64_t Longtail_LookupTable_Size(struct Longtail_LookupTable* lut)
+{
+    return lut->m_Count;
+}
+
+static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
+{
+    if (lut->m_NextFreeIndex == lut->m_Capacity)
+    {
+        return ENOMEM;
+    }
+
+    uint64_t entry_index = lut->m_NextFreeIndex++;
+    lut->m_Keys[entry_index] = key;
+    lut->m_Values[entry_index] = value;
+    lut->m_Count++;
+
+    uint64_t bucket_index = key & (lut->m_BucketCount - 1);
+    uint64_t index = lut->m_Buckets[bucket_index];
+    if (index == 0xfffffffffffffffful)
+    {
+        lut->m_Buckets[bucket_index] = entry_index;
+        return 0;
+    }
+    uint64_t next = lut->m_NextIndex[index];
+    while (next != 0xfffffffffffffffful)
+    {
+        index = next;
+        next = lut->m_NextIndex[index];
+    }
+
+    lut->m_NextIndex[index] = entry_index;
+    return 0;
+}
+
+static uint64_t Longtail_LookupTable_Get(struct Longtail_LookupTable* lut, uint64_t key)
+{
+    uint64_t bucket_index = key & (lut->m_BucketCount - 1);
+    uint64_t index = lut->m_Buckets[bucket_index];
+    while (index != 0xfffffffffffffffful)
+    {
+        if (lut->m_Keys[index] == key)
+        {
+            return lut->m_Values[index];
+        }
+        index = lut->m_NextIndex[index];
+    }
+    return 0xfffffffffffffffful;
+}
+
+static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity, struct Longtail_LookupTable* optional_source_entries)
+{
+    size_t table_size = 1;
+    while (table_size < (capacity / 2))
+    {
+        table_size <<= 1;
+    }
+    size_t mem_size = sizeof(struct Longtail_LookupTable) +
+        sizeof(uint64_t) * table_size +
+        sizeof(uint64_t) * capacity +
+        sizeof(uint64_t) * capacity +
+        sizeof(uint64_t) * capacity;
+    struct Longtail_LookupTable* lut = (struct Longtail_LookupTable*)Longtail_Alloc(mem_size);
+    if (!lut)
+    {
+        return 0;
+    }
+    memset(lut, 0xff, mem_size);
+
+    lut->m_BucketCount = table_size;
+    lut->m_NextFreeIndex = 0;
+    lut->m_Capacity = capacity;
+    lut->m_Count = 0;
+    lut->m_Buckets = (uint64_t*)&lut[1];
+    lut->m_Keys = (uint64_t*)&lut->m_Buckets[table_size];
+    lut->m_Values = &lut->m_Keys[capacity];
+    lut->m_NextIndex = &lut->m_Values[capacity];
+
+    if (optional_source_entries)
+    {
+        for (uint64_t i = 0; i < optional_source_entries->m_BucketCount; ++i)
+        {
+            if (optional_source_entries->m_Buckets[i] != 0xfffffffffffffffful)
+            {
+                uint64_t index = optional_source_entries->m_Buckets[i];
+                while (index != 0xfffffffffffffffful)
+                {
+                    uint64_t key = optional_source_entries->m_Keys[index];
+                    uint64_t value = optional_source_entries->m_Values[index];
+                    Longtail_LookupTable_Put(lut, key, value);
+                    index = optional_source_entries->m_NextIndex[index];
+                }
+            }
+        }
+    }
+    return lut;
+}
+
+
+
+
+
+
+
+
+
+
+
 static int IsDirPath(const char* path)
 {
     LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
@@ -6199,19 +6332,16 @@ int Longtail_MergeContentIndex(
     }
     uint64_t compact_chunk_count = 0;
 
-    struct HashToIndexItem* chunk_hash_to_block_index = 0;
-    struct HashToIndexItem* block_hash_to_block_index = 0;
     uint64_t new_content_chunk_count = *new_content_index->m_ChunkCount;
-    hmsetcap(block_hash_to_block_index, max_block_count);
-    hmsetcap(chunk_hash_to_block_index, new_content_chunk_count);
+    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(max_chunk_count, 0);
+    struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(max_block_count, 0);
     const TLongtail_Hash* new_content_index_chunk_hashes = new_content_index->m_ChunkHashes;
     const uint64_t* new_content_index_chunk_block_indexes = new_content_index->m_ChunkBlockIndexes;
     const TLongtail_Hash* new_content_index_block_hashes = new_content_index->m_BlockHashes;
     for (uint64_t c = 0; c < new_content_chunk_count; ++c)
     {
         TLongtail_Hash chunk_hash = new_content_index_chunk_hashes[c];
-        intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
-        if (find_block_ptr != -1)
+        if (Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash) != 0xfffffffffffffffful)
         {
             continue;
         }
@@ -6219,26 +6349,25 @@ int Longtail_MergeContentIndex(
         TLongtail_Hash block_hash = new_content_index_block_hashes[block_index];
         compact_chunk_hashes[compact_chunk_count++] = chunk_hash;
 
-        intptr_t find_block_index_ptr = hmgeti(block_hash_to_block_index, block_hash);
-        if (find_block_index_ptr == -1)
+        uint64_t find_block_index = Longtail_LookupTable_Get(block_hash_to_block_index, block_hash);
+        if (find_block_index == 0xfffffffffffffffful)
         {
-            hmput(block_hash_to_block_index, block_hash, compact_block_count);
-            hmput(chunk_hash_to_block_index, chunk_hash, compact_block_count);
+            Longtail_LookupTable_Put(block_hash_to_block_index, block_hash, compact_block_count);
+            Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, compact_block_count);
             compact_block_hashes[compact_block_count++] = block_hash;
             continue;
         }
-        hmput(chunk_hash_to_block_index, chunk_hash, block_hash_to_block_index[find_block_index_ptr].value);
+        Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, find_block_index);
     }
 
+    uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;
     const TLongtail_Hash* local_content_index_chunk_hashes = local_content_index->m_ChunkHashes;
     const uint64_t* local_content_index_chunk_block_indexes = local_content_index->m_ChunkBlockIndexes;
     const TLongtail_Hash* local_content_index_block_hashes = local_content_index->m_BlockHashes;
-    uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;
     for (uint64_t c = 0; c < local_content_chunk_count; ++c)
     {
         TLongtail_Hash chunk_hash = local_content_index_chunk_hashes[c];
-        intptr_t find_block_ptr = hmgeti(chunk_hash_to_block_index, chunk_hash);
-        if (find_block_ptr != -1)
+        if (Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash) != 0xfffffffffffffffful)
         {
             continue;
         }
@@ -6246,15 +6375,15 @@ int Longtail_MergeContentIndex(
         TLongtail_Hash block_hash = local_content_index_block_hashes[block_index];
         compact_chunk_hashes[compact_chunk_count++] = chunk_hash;
 
-        intptr_t find_block_index_ptr = hmgeti(block_hash_to_block_index, block_hash);
-        if (find_block_index_ptr == -1)
+        uint64_t find_block_index = Longtail_LookupTable_Get(block_hash_to_block_index, block_hash);
+        if (find_block_index == 0xfffffffffffffffful)
         {
-            hmput(block_hash_to_block_index, block_hash, compact_block_count);
-            hmput(chunk_hash_to_block_index, chunk_hash, compact_block_count);
+            Longtail_LookupTable_Put(block_hash_to_block_index, block_hash, compact_block_count);
+            Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, compact_block_count);
             compact_block_hashes[compact_block_count++] = block_hash;
             continue;
         }
-        hmput(chunk_hash_to_block_index, chunk_hash, block_hash_to_block_index[find_block_index_ptr].value);
+        Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, find_block_index);
     }
 
     size_t content_index_size = Longtail_GetContentIndexSize(compact_block_count, compact_chunk_count);
@@ -6264,8 +6393,8 @@ int Longtail_MergeContentIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) failed with %d",
             local_content_index, new_content_index, out_content_index,
             ENOMEM)
-        hmfree(block_hash_to_block_index);
-        hmfree(chunk_hash_to_block_index);
+        Longtail_Free(block_hash_to_block_index);
+        Longtail_Free(chunk_hash_to_block_index);
         Longtail_Free(compact_chunk_hashes);
         Longtail_Free(compact_block_hashes);
         return ENOMEM;
@@ -6285,8 +6414,8 @@ int Longtail_MergeContentIndex(
             local_content_index, new_content_index, out_content_index,
             err)
         Longtail_Free(compact_content_index);
-        hmfree(block_hash_to_block_index);
-        hmfree(chunk_hash_to_block_index);
+        Longtail_Free(block_hash_to_block_index);
+        Longtail_Free(chunk_hash_to_block_index);
         Longtail_Free(compact_chunk_hashes);
         Longtail_Free(compact_block_hashes);
         return err;
@@ -6297,12 +6426,12 @@ int Longtail_MergeContentIndex(
     for (uint64_t c = 0; c < compact_chunk_count; ++c)
     {
         TLongtail_Hash chunk_hash = compact_chunk_hashes[c];
-        uint64_t block_index = hmget(chunk_hash_to_block_index, chunk_hash);
+        uint64_t block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
         compact_content_index->m_ChunkBlockIndexes[c] = block_index;
     }
     *out_content_index = compact_content_index;
-    hmfree(block_hash_to_block_index);
-    hmfree(chunk_hash_to_block_index);
+    Longtail_Free(block_hash_to_block_index);
+    Longtail_Free(chunk_hash_to_block_index);
     Longtail_Free(compact_chunk_hashes);
     Longtail_Free(compact_block_hashes);
     return 0;
