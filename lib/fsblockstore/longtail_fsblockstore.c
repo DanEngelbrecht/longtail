@@ -49,7 +49,6 @@ struct FSBlockStoreAPI
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
     LONGTAIL_FATAL_ASSERT(out_name, return)
-    sprintf(&out_name[0], "0x%016" PRIx64, block_hash);
     sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
     memmove(out_name, &out_name[7], 4);
     out_name[4] = '/';
