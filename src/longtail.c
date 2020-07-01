@@ -7483,6 +7483,7 @@ struct Longtail_Chunker
 {
     struct Longtail_ChunkerParams params;
     struct Array buf;
+    uint32_t max_feed;
     uint32_t off;
     uint32_t hValue;
     uint8_t hWindow[ChunkerWindowSize];
@@ -7512,7 +7513,13 @@ static uint32_t discriminatorFromAvg(double avg)
     LONGTAIL_FATAL_ASSERT(params->min <= params->avg, return EINVAL)
     LONGTAIL_FATAL_ASSERT(params->avg <= params->max, return EINVAL)
 
-    size_t chunker_size = sizeof(struct Longtail_Chunker) + params->max;
+    size_t max_feed = params->max * 4;
+    if (max_feed >= 0xffffffffu)
+    {
+        max_feed = 0xffffffffu;
+    }
+
+    size_t chunker_size = sizeof(struct Longtail_Chunker) + max_feed;
     struct Longtail_Chunker* c = (struct Longtail_Chunker*)Longtail_Alloc(chunker_size);
     if (!c)
     {
@@ -7524,6 +7531,7 @@ static uint32_t discriminatorFromAvg(double avg)
     c->params = *params;
     c->buf.data = (uint8_t*)&c[1];
     c->buf.len = 0;
+    c->max_feed = (uint32_t)max_feed;
     c->off = 0;
     c->hValue = 0;
     c->hDiscriminator = discriminatorFromAvg((double)params->avg);
@@ -7547,7 +7555,7 @@ static int FeedChunker(struct Longtail_Chunker* c)
         c->buf.len -= c->off;
         c->off = 0;
     }
-    uint32_t feed_max = (uint32_t)(c->params.max - c->buf.len);
+    uint32_t feed_max = (uint32_t)(c->max_feed - c->buf.len);
     uint32_t feed_count;
     int err = c->fFeeder(c->cFeederContext, c, feed_max, (char*)&c->buf.data[c->buf.len], &feed_count);
     c->buf.len += feed_count;
@@ -7603,7 +7611,10 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
     uint32_t hash = 0;
     struct Longtail_ChunkRange scoped_data = {&c->buf.data[c->off], c->processed_count + c->off, left};
     {
-        struct Longtail_ChunkRange window = {&scoped_data.buf[c->params.min - ChunkerWindowSize], c->processed_count + c->off + c->params.min - ChunkerWindowSize, ChunkerWindowSize};
+        struct Longtail_ChunkRange window = {
+            &scoped_data.buf[c->params.min - ChunkerWindowSize],
+            c->processed_count + c->off + c->params.min - ChunkerWindowSize,
+            ChunkerWindowSize};
         for (uint32_t i = 0; i < ChunkerWindowSize; ++i)
         {
             uint8_t b = window.buf[i];
@@ -7615,7 +7626,7 @@ struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c)
     uint32_t pos = c->params.min;
     uint32_t idx = 0;
 
-    uint32_t data_len = scoped_data.len;
+    uint32_t data_len = scoped_data.len > c->params.max ? c->params.max : scoped_data.len;
     uint8_t* window = c->hWindow;
     const uint32_t discriminator = c->hDiscriminator - 1;
     const uint8_t* scoped_buf = scoped_data.buf;
