@@ -729,7 +729,7 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     }
 
     size_t path_size = path_len + 1;
-    char* dir_path = alloca(path_size);
+    char* dir_path = (char*)alloca(path_size);
     memcpy(dir_path, path, path_size);
 
     dir_path[delim_pos] = '\0';
