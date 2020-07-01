@@ -758,15 +758,6 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
 
 
 
-#define hmsetcap(hm, cap) \
-    if (cap > 0 ) { \
-        arrsetcap(hm, (cap) + 1); \
-        memset(hm, 0, sizeof(*(hm))); \
-        arrsetlen(hm, 1); \
-        hm = &hm[1]; \
-    }
-
-
 struct HashToIndexItem
 {
     TLongtail_Hash key;
@@ -3784,7 +3775,6 @@ static int CreateAssetPartLookup(
 
     struct ChunkHashToAssetPart* asset_part_lookup = 0;
     uint64_t asset_count = *version_index->m_AssetCount;
-    hmsetcap(asset_part_lookup, *version_index->m_AssetChunkIndexCount);
     for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
         const char* path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
