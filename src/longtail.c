@@ -11,6 +11,17 @@
 #include <stdarg.h>
 #include <errno.h>
 
+#if defined(__clang__) || defined(__GNUC__)
+#if defined(WIN32)
+    #include <malloc.h>
+#else
+    #include <alloca.h>
+#endif
+#elif defined(_MSC_VER)
+    #include <malloc.h>
+    #define alloca _alloca
+#endif
+
 /*
 #if defined(LONGTAIL_ASSERTS)
 void* Longtail_NukeMalloc(size_t s);
@@ -702,24 +713,28 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
 
-    char* dir_path = Longtail_Strdup(path);
-    if (!dir_path)
+    size_t delim_pos = 0;
+    size_t path_len = 0;
+    while (path[path_len] != 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, ENOMEM)
-        return ENOMEM;
+        if (path[path_len] == '/')
+        {
+            delim_pos = path_len;
+        }
+        ++path_len;
     }
-    char* last_path_delimiter = (char*)strrchr(dir_path, '/');
-    if (last_path_delimiter == 0)
+    if (path[delim_pos] != '/')
     {
-        Longtail_Free(dir_path);
-        dir_path = 0;
         return 0;
     }
-    *last_path_delimiter = '\0';
+
+    size_t path_size = path_len + 1;
+    char* dir_path = alloca(path_size);
+    memcpy(dir_path, path, path_size);
+
+    dir_path[delim_pos] = '\0';
     if (storage_api->IsDir(storage_api, dir_path))
     {
-        Longtail_Free(dir_path);
-        dir_path = 0;
         return 0;
     }
 
@@ -727,21 +742,14 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
-        Longtail_Free(dir_path);
-        dir_path = 0;
         return err;
     }
     err = SafeCreateDir(storage_api, dir_path);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
-        Longtail_Free(dir_path);
-        dir_path = 0;
         return err;
     }
-
-    Longtail_Free(dir_path);
-    dir_path = 0;
     return 0;
 }
 
