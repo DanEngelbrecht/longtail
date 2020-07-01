@@ -546,7 +546,6 @@ struct Longtail_LookupTable
 {
     uint64_t  m_BucketCount;
 
-    uint64_t m_NextFreeIndex;
     uint64_t m_Capacity;
     uint64_t m_Count;
 
@@ -556,43 +555,31 @@ struct Longtail_LookupTable
     uint64_t* m_NextIndex;
 };
 
-static uint64_t Longtail_LookupTable_Capacity(struct Longtail_LookupTable* lut)
-{
-    return lut->m_Capacity;
-}
-
-static uint64_t Longtail_LookupTable_Size(struct Longtail_LookupTable* lut)
-{
-    return lut->m_Count;
-}
-
 static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
 {
-    if (lut->m_NextFreeIndex == lut->m_Capacity)
-    {
-        return ENOMEM;
-    }
+    LONGTAIL_FATAL_ASSERT(lut->m_Count < lut->m_Capacity, return ENOMEM)
 
-    uint64_t entry_index = lut->m_NextFreeIndex++;
+    uint64_t entry_index = lut->m_Count++;
     lut->m_Keys[entry_index] = key;
     lut->m_Values[entry_index] = value;
-    lut->m_Count++;
 
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
-    uint64_t index = lut->m_Buckets[bucket_index];
+    uint64_t* buckets = lut->m_Buckets;
+    uint64_t index = buckets[bucket_index];
     if (index == 0xfffffffffffffffful)
     {
-        lut->m_Buckets[bucket_index] = entry_index;
+        buckets[bucket_index] = entry_index;
         return 0;
     }
-    uint64_t next = lut->m_NextIndex[index];
+    uint64_t* next_index = lut->m_NextIndex;
+    uint64_t next = next_index[index];
     while (next != 0xfffffffffffffffful)
     {
         index = next;
-        next = lut->m_NextIndex[index];
+        next = next_index[index];
     }
 
-    lut->m_NextIndex[index] = entry_index;
+    next_index[index] = entry_index;
     return 0;
 }
 
@@ -600,13 +587,15 @@ static uint64_t Longtail_LookupTable_Get(struct Longtail_LookupTable* lut, uint6
 {
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
     uint64_t index = lut->m_Buckets[bucket_index];
+    const uint64_t* keys = lut->m_Keys;
+    const uint64_t* next_index = lut->m_NextIndex;
     while (index != 0xfffffffffffffffful)
     {
-        if (lut->m_Keys[index] == key)
+        if (keys[index] == key)
         {
             return lut->m_Values[index];
         }
-        index = lut->m_NextIndex[index];
+        index = next_index[index];
     }
     return 0xfffffffffffffffful;
 }
@@ -631,7 +620,6 @@ static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity,
     memset(lut, 0xff, mem_size);
 
     lut->m_BucketCount = table_size;
-    lut->m_NextFreeIndex = 0;
     lut->m_Capacity = capacity;
     lut->m_Count = 0;
     lut->m_Buckets = (uint64_t*)&lut[1];
