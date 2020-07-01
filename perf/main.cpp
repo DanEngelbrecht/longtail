@@ -22,7 +22,7 @@ struct Longtail_LookupTable
     uint64_t  m_BucketCount;
 
     uint64_t m_NextFreeIndex;
-    uint64_t m_Capcacity;
+    uint64_t m_Capacity;
     uint64_t m_Count;
 
     uint64_t* m_Buckets;
@@ -33,7 +33,7 @@ struct Longtail_LookupTable
 
 static uint64_t Longtail_LookupTable_Capacity(struct Longtail_LookupTable* lut)
 {
-    return lut->m_Capcacity;
+    return lut->m_Capacity;
 }
 
 static uint64_t Longtail_LookupTable_Size(struct Longtail_LookupTable* lut)
@@ -43,7 +43,7 @@ static uint64_t Longtail_LookupTable_Size(struct Longtail_LookupTable* lut)
 
 static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
 {
-    if (lut->m_NextFreeIndex == lut->m_Capcacity)
+    if (lut->m_NextFreeIndex == lut->m_Capacity)
     {
         return ENOMEM;
     }
@@ -83,7 +83,7 @@ static uint64_t Longtail_LookupTable_Get(struct Longtail_LookupTable* lut, uint6
     {
         if (lut->m_Keys[index] == key)
         {
-            return index;
+            return lut->m_Values[index];
         }
         index = lut->m_NextIndex[index];
     }
@@ -111,7 +111,7 @@ static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity,
 
     lut->m_BucketCount = table_size;
     lut->m_NextFreeIndex = 0;
-    lut->m_Capcacity = capacity;
+    lut->m_Capacity = capacity;
     lut->m_Count = 0;
     lut->m_Buckets = (uint64_t*)&lut[1];
     lut->m_Keys = (uint64_t*)&lut->m_Buckets[table_size];
