@@ -6177,14 +6177,13 @@ int Longtail_RetargetContent(
 
     uint32_t hash_identifier = (*reference_content_index->m_BlockCount) != 0 ? (*reference_content_index->m_HashIdentifier) : (*content_index->m_HashIdentifier);
 
-    struct HashToIndexItem* chunk_to_reference_block_index_lookup = 0;
     uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
-    hmsetcap(chunk_to_reference_block_index_lookup, reference_chunk_count);
+    struct Longtail_LookupTable* chunk_to_reference_block_index_lookup = Longtail_LookupTable_Create(reference_chunk_count, 0);
     for (uint64_t i = 0; i < reference_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
         uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
-        hmput(chunk_to_reference_block_index_lookup, chunk_hash, block_index);
+        Longtail_LookupTable_Put(chunk_to_reference_block_index_lookup, chunk_hash, block_index);
     }
 
     size_t requested_block_hashes_size = sizeof(TLongtail_Hash) * *reference_content_index->m_BlockCount;
@@ -6194,35 +6193,32 @@ int Longtail_RetargetContent(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
             reference_content_index, content_index, out_content_index,
             ENOMEM)
-        hmfree(chunk_to_reference_block_index_lookup);
+        Longtail_Free(chunk_to_reference_block_index_lookup);
         return ENOMEM;
     }
 
     uint64_t requested_block_count = 0;
-    struct HashToIndexItem* requested_blocks_lookup = 0;
+    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(*content_index->m_BlockCount, 0);
     uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
-    hmsetcap(requested_blocks_lookup, *content_index->m_BlockCount);
     for (uint32_t i = 0; i < content_index_chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
-        intptr_t reference_block_index_ptr = hmgeti(chunk_to_reference_block_index_lookup, chunk_hash);
-        if (reference_block_index_ptr == -1)
+        uint64_t reference_block_index = Longtail_LookupTable_Get(chunk_to_reference_block_index_lookup, chunk_hash);
+        if (reference_block_index == 0xfffffffffffffffful)
         {
             // If the chunk is not in the reference content index, just drop it
             continue;
         }
-        uint64_t reference_block_index = chunk_to_reference_block_index_lookup[reference_block_index_ptr].value;
         TLongtail_Hash reference_block_hash = reference_content_index->m_BlockHashes[reference_block_index];
 
-        intptr_t request_block_index_ptr = hmgeti(requested_blocks_lookup, reference_block_hash);
-        if (-1 == request_block_index_ptr)
+        if (Longtail_LookupTable_Get(requested_blocks_lookup, reference_block_hash) == 0xfffffffffffffffful)
         {
             requested_block_hashes[requested_block_count] = reference_block_hash;
-            hmput(requested_blocks_lookup, reference_block_hash, requested_block_count);
+            Longtail_LookupTable_Put(requested_blocks_lookup, reference_block_hash, requested_block_count);
             ++requested_block_count;
         }
     }
-    hmfree(chunk_to_reference_block_index_lookup);
+    Longtail_Free(chunk_to_reference_block_index_lookup);
     chunk_to_reference_block_index_lookup = 0;
 
     uint64_t chunk_count = 0;
@@ -6230,7 +6226,7 @@ int Longtail_RetargetContent(
     for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
     {
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
-        if (-1 == hmgeti(requested_blocks_lookup, block_hash))
+        if (Longtail_LookupTable_Get(requested_blocks_lookup, block_hash) == 0xfffffffffffffffful)
         {
             continue;
         }
@@ -6244,7 +6240,6 @@ int Longtail_RetargetContent(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
             reference_content_index, content_index, out_content_index,
             ENOMEM)
-        hmfree(chunk_to_reference_block_index_lookup);
         Longtail_Free(requested_block_hashes);
         return ENOMEM;
     }
@@ -6264,7 +6259,7 @@ int Longtail_RetargetContent(
             err)
 
         Longtail_Free(resulting_content_index);
-        hmfree(requested_blocks_lookup);
+        Longtail_Free(requested_blocks_lookup);
         Longtail_Free(requested_block_hashes);
         return err;
     }
@@ -6275,19 +6270,18 @@ int Longtail_RetargetContent(
     for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
     {
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
-        intptr_t block_index_ptr = hmgeti(requested_blocks_lookup, block_hash);
-        if (-1 == block_index_ptr)
+        uint64_t block_index = Longtail_LookupTable_Get(requested_blocks_lookup, block_hash);
+        if (block_index == 0xfffffffffffffffful)
         {
             continue;
         }
         TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[c];
-        uint64_t block_index = requested_blocks_lookup[block_index_ptr].value;
         resulting_content_index->m_ChunkBlockIndexes[chunk_index] = block_index;
         resulting_content_index->m_ChunkHashes[chunk_index] = chunk_hash;
         ++chunk_index;
     }
 
-    hmfree(requested_blocks_lookup);
+    Longtail_Free(requested_blocks_lookup);
     Longtail_Free(requested_block_hashes);
     *out_content_index = resulting_content_index;
     return 0;
