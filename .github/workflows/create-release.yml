@@ -129,7 +129,7 @@ jobs:
           - *CHANGE* Merge memory allocations to bigger single chunks
           - *CHANGE* Longtail_MergeContentIndex is now multi threaded
           - *CHANGE* Job dispatching is done in batches when possible
-          - *CHANGE* Longtail_RetargetContent() is not significantly faster
+          - *CHANGE* Longtail_RetargetContent() is now significantly faster
         draft: false
         prerelease: false
     - name: Download Linux artifacts
