@@ -594,6 +594,46 @@ static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t k
     return 0;
 }
 
+static int Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
+{
+    LONGTAIL_FATAL_ASSERT(lut->m_Count < lut->m_Capacity, return 0)
+
+    uint64_t bucket_index = key & (lut->m_BucketCount - 1);
+    uint64_t* buckets = lut->m_Buckets;
+    uint64_t index = buckets[bucket_index];
+    if (index == 0xfffffffffffffffful)
+    {
+        uint64_t entry_index = lut->m_Count++;
+        lut->m_Keys[entry_index] = key;
+        lut->m_Values[entry_index] = value;
+        buckets[bucket_index] = entry_index;
+        return 1;
+    }
+    if (lut->m_Keys[index] == key)
+    {
+        return 0;
+    }
+    uint64_t* keys = lut->m_Keys;
+    uint64_t* next_index = lut->m_NextIndex;
+    uint64_t next = next_index[index];
+    while (next != 0xfffffffffffffffful)
+    {
+        if (keys[next] == key)
+        {
+            return 0;
+        }
+        index = next;
+        next = next_index[index];
+    }
+
+    uint64_t entry_index = lut->m_Count++;
+    keys[entry_index] = key;
+    lut->m_Values[entry_index] = value;
+    buckets[bucket_index] = entry_index;
+    next_index[index] = entry_index;
+    return 0;
+}
+
 static uint64_t Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key)
 {
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
