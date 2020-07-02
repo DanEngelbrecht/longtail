@@ -6006,8 +6006,10 @@ int Longtail_RetargetContent(
         Longtail_LookupTable_Put(chunk_to_requested_block_index_lookup, chunk_hash, block_index);
     }
 
+    uint64_t reference_block_count = *reference_content_index->m_BlockCount;
     uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
-    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(*reference_content_index->m_BlockCount, 0);
+
+    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(reference_block_count, 0);
     if (!requested_blocks_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
@@ -6017,9 +6019,9 @@ int Longtail_RetargetContent(
         return ENOMEM;
     }
 
-    size_t work_mem_size = (sizeof(TLongtail_Hash) * *reference_content_index->m_BlockCount) +
-        (sizeof(TLongtail_Hash) * *reference_content_index->m_ChunkCount) +
-        (sizeof(TLongtail_Hash) * *reference_content_index->m_ChunkCount);
+    size_t work_mem_size = (sizeof(TLongtail_Hash) * reference_block_count) +
+        (sizeof(TLongtail_Hash) * reference_chunk_count) +
+        (sizeof(uint64_t) * reference_chunk_count);
     void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
     {
@@ -6032,8 +6034,8 @@ int Longtail_RetargetContent(
     }
 
     TLongtail_Hash* tmp_requested_block_hashes = (TLongtail_Hash*)work_mem;
-    TLongtail_Hash* tmp_requested_chunk_hashes = &tmp_requested_block_hashes[*reference_content_index->m_BlockCount];
-    uint64_t* tmp_requested_chunk_block_indexes = (uint64_t*)&tmp_requested_chunk_hashes[*reference_content_index->m_ChunkCount];
+    TLongtail_Hash* tmp_requested_chunk_hashes = &tmp_requested_block_hashes[reference_block_count];
+    uint64_t* tmp_requested_chunk_block_indexes = (uint64_t*)&tmp_requested_chunk_hashes[reference_chunk_count];
 
     uint64_t chunk_count = 0;
     uint64_t block_count = 0;
