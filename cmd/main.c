@@ -801,6 +801,28 @@ int DownSync(
         return err;
     }
 
+    if ((*version_diff->m_SourceRemovedCount == 0) &&
+        (*version_diff->m_ModifiedContentCount == 0) &&
+        (*version_diff->m_TargetAddedCount == 0) &&
+        (*version_diff->m_ModifiedPermissionsCount == 0 || !retain_permissions) )
+    {
+        Longtail_Free(version_diff);
+        Longtail_Free(target_version_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(retaining_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return 0;
+    }
+
     // IDEA: Potentially we could create the content index based on the diff, right?
     struct Longtail_ContentIndex* source_version_content_index;
     err = Longtail_CreateContentIndex(
