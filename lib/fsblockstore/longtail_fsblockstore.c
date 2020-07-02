@@ -2,7 +2,6 @@
 
 #include "../../src/ext/stb_ds.h"
 #include "../longtail_platform.h"
-#include "../bikeshed/longtail_bikeshed.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -18,6 +17,7 @@ struct BlockHashToBlockState
 struct FSBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
+    struct Longtail_JobAPI* m_JobAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
     char* m_ContentPath;
     HLongtail_SpinLock m_Lock;
@@ -619,7 +619,7 @@ static int FSBlockStore_GetIndexSync(
     {
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
         struct Longtail_ContentIndex* content_index;
-        struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), -1);
+        struct Longtail_JobAPI* job_api = fsblockstore_api->m_JobAPI;
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
             job_api,
@@ -633,11 +633,8 @@ static int FSBlockStore_GetIndexSync(
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync(%p, %p) failed with %d",
                 fsblockstore_api, out_content_index,
                 err)
-            Longtail_DisposeAPI(&job_api->m_API);
             return err;
         }
-        Longtail_DisposeAPI(&job_api->m_API);
-        job_api = 0;
         Longtail_LockSpinLock(fsblockstore_api->m_Lock);
 
         if (!fsblockstore_api->m_ContentIndex)
@@ -850,7 +847,7 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
             if (!err)
             {
                 struct Longtail_ContentIndex* merged_content_index;
-                err = Longtail_MergeContentIndex(existing_content_index, fsblockstore_api->m_ContentIndex, &merged_content_index);
+                err = Longtail_MergeContentIndex(fsblockstore_api->m_JobAPI, existing_content_index, fsblockstore_api->m_ContentIndex, &merged_content_index);
                 if (!err)
                 {
                     Longtail_Free(fsblockstore_api->m_ContentIndex);
@@ -877,6 +874,7 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
 
 static int FSBlockStore_Init(
     void* mem,
+    struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
     uint32_t default_max_block_size,
@@ -907,6 +905,7 @@ static int FSBlockStore_Init(
 
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)block_store_api;
 
+    api->m_JobAPI = job_api;
     api->m_StorageAPI = storage_api;
     api->m_ContentPath = Longtail_Strdup(content_path);
     api->m_ContentIndex = 0;
@@ -959,6 +958,7 @@ static int FSBlockStore_Init(
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
+    struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
     uint32_t default_max_block_size,
@@ -983,6 +983,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_BlockStoreAPI* block_store_api;
     int err = FSBlockStore_Init(
         mem,
+        job_api,
         storage_api,
         content_path,
         default_max_block_size,
