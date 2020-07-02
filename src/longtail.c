@@ -594,7 +594,7 @@ static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t k
     return 0;
 }
 
-static uint64_t Longtail_LookupTable_Get(struct Longtail_LookupTable* lut, uint64_t key)
+static uint64_t Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key)
 {
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
     uint64_t index = lut->m_Buckets[bucket_index];
@@ -628,8 +628,6 @@ static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity,
     {
         return 0;
     }
-    memset(lut, 0xff, mem_size);
-
     lut->m_BucketCount = table_size;
     lut->m_Capacity = capacity;
     lut->m_Count = 0;
@@ -637,6 +635,9 @@ static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity,
     lut->m_Keys = (uint64_t*)&lut->m_Buckets[table_size];
     lut->m_Values = &lut->m_Keys[capacity];
     lut->m_NextIndex = &lut->m_Values[capacity];
+
+    memset(lut->m_Buckets, 0xff, sizeof(uint64_t) * table_size);
+    memset(lut->m_NextIndex, 0xff, sizeof(uint64_t) * capacity);
 
     if (optional_source_entries == 0)
     {
@@ -1515,6 +1516,9 @@ static int ChunkAssets(
     uint32_t* tmp_tags = (uint32_t*)&tmp_sizes[max_chunk_count];
     struct HashJob* tmp_hash_jobs = (struct HashJob*)&tmp_tags[max_chunk_count];
 
+    Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc) * job_count);
+    void** ctxs = (void**)Longtail_Alloc(sizeof(void*) * job_count);
+
     uint64_t jobs_started = 0;
     uint64_t chunks_offset = 0;
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
@@ -1548,21 +1552,22 @@ static int ChunkAssets(
             job->m_ChunkTags = &tmp_tags[chunks_offset];
             job->m_TargetChunkSize = target_chunk_size;
             job->m_Err = EINVAL;
-
-            Longtail_JobAPI_JobFunc func[1] = {DynamicChunking};
-            void* ctx[1] = {&tmp_hash_jobs[jobs_started]};
-
-            Longtail_JobAPI_Jobs jobs;
-            err = job_api->CreateJobs(job_api, job_group, 1, func, ctx, &jobs);
-            LONGTAIL_FATAL_ASSERT(!err, return err)
-            err = job_api->ReadyJobs(job_api, 1, jobs);
-            LONGTAIL_FATAL_ASSERT(!err, return err)
-
-            jobs_started++;
-
+            funcs[jobs_started] = DynamicChunking;
+            ctxs[jobs_started] = job;
             chunks_offset += asset_max_chunk_count;
+            ++jobs_started;
         }
     }
+    // TODO: Add logic here if we end up creating more jobs than can be held in a uint32_t
+    LONGTAIL_FATAL_ASSERT(jobs_started < 0xffffffff, return ENOMEM);
+    Longtail_JobAPI_Jobs jobs;
+    err = job_api->CreateJobs(job_api, job_group, (uint32_t)jobs_started, funcs, ctxs, &jobs);
+    LONGTAIL_FATAL_ASSERT(!err, return err)
+    err = job_api->ReadyJobs(job_api, (uint32_t)jobs_started, jobs);
+    LONGTAIL_FATAL_ASSERT(!err, return err)
+
+    Longtail_Free(ctxs);
+    Longtail_Free(funcs);
 
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
@@ -3960,6 +3965,8 @@ int Longtail_WriteContent(
     LONGTAIL_FATAL_ASSERT(write_block_jobs != 0, return ENOMEM)
     uint32_t block_start_chunk_index = 0;
     uint32_t job_count = 0;
+    Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc*) * block_count);
+    void** ctxs = (void**)Longtail_Alloc(sizeof(void*) * block_count);
     for (uint64_t block_index = 0; block_index < block_count; ++block_index)
     {
         TLongtail_Hash block_hash = version_content_index->m_BlockHashes[block_index];
@@ -3977,7 +3984,7 @@ int Longtail_WriteContent(
             continue;
         }
 
-        struct WriteBlockJob* job = &write_block_jobs[job_count++];
+        struct WriteBlockJob* job = &write_block_jobs[job_count];
         job->m_AsyncCompleteAPI.m_API.Dispose = 0;
         job->m_AsyncCompleteAPI.OnComplete = 0;
         job->m_SourceStorageAPI = source_storage_api;
@@ -3994,19 +4001,23 @@ int Longtail_WriteContent(
         job->m_ChunkSizes = chunk_sizes;
         job->m_Err = EINVAL;
 
-        Longtail_JobAPI_JobFunc func[1] = { WriteContentBlockJob };
-        void* ctx[1] = { job };
+        funcs[job_count] = WriteContentBlockJob;
+        ctxs[job_count] = job;
 
-        Longtail_JobAPI_Jobs jobs;
-        err = job_api->CreateJobs(job_api, job_group, 1, func, ctx, &jobs);
-        LONGTAIL_FATAL_ASSERT(err == 0, return err)
-        err = job_api->ReadyJobs(job_api, 1, jobs);
-        LONGTAIL_FATAL_ASSERT(err == 0, return err)
-
+        ++job_count;
         block_start_chunk_index += block_chunk_count;
     }
     Longtail_Free(block_store_lookup);
     block_store_lookup = 0;
+
+    Longtail_JobAPI_Jobs jobs;
+    err = job_api->CreateJobs(job_api, job_group, job_count, funcs, ctxs, &jobs);
+    LONGTAIL_FATAL_ASSERT(err == 0, return err)
+    err = job_api->ReadyJobs(job_api, job_count, jobs);
+    LONGTAIL_FATAL_ASSERT(err == 0, return err)
+
+    Longtail_Free(ctxs);
+    Longtail_Free(funcs);
 
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
@@ -5979,86 +5990,91 @@ int Longtail_RetargetContent(
 
     uint32_t hash_identifier = (*reference_content_index->m_BlockCount) != 0 ? (*reference_content_index->m_HashIdentifier) : (*content_index->m_HashIdentifier);
 
+    uint64_t requested_chunk_count = *content_index->m_ChunkCount;
+    struct Longtail_LookupTable* chunk_to_requested_block_index_lookup = Longtail_LookupTable_Create(requested_chunk_count, 0);
+    if (!chunk_to_requested_block_index_lookup)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
+            reference_content_index, content_index, out_content_index,
+            ENOMEM)
+        return ENOMEM;
+    }
+    for (uint64_t i = 0; i < requested_chunk_count; ++i)
+    {
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[i];
+        Longtail_LookupTable_Put(chunk_to_requested_block_index_lookup, chunk_hash, block_index);
+    }
+
     uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
-    struct Longtail_LookupTable* chunk_to_reference_block_index_lookup = Longtail_LookupTable_Create(reference_chunk_count, 0);
-    if (!chunk_to_reference_block_index_lookup)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-            reference_content_index, content_index, out_content_index,
-            ENOMEM)
-        return ENOMEM;
-    }
-    for (uint64_t i = 0; i < reference_chunk_count; ++i)
-    {
-        TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
-        uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
-        Longtail_LookupTable_Put(chunk_to_reference_block_index_lookup, chunk_hash, block_index);
-    }
-
-    size_t requested_block_hashes_size = sizeof(TLongtail_Hash) * *reference_content_index->m_BlockCount;
-    TLongtail_Hash* requested_block_hashes = (TLongtail_Hash*)Longtail_Alloc(requested_block_hashes_size);
-    if (requested_block_hashes == 0)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-            reference_content_index, content_index, out_content_index,
-            ENOMEM)
-        Longtail_Free(chunk_to_reference_block_index_lookup);
-        return ENOMEM;
-    }
-
-    uint64_t requested_block_count = 0;
-    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(*content_index->m_BlockCount, 0);
+    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(*reference_content_index->m_BlockCount, 0);
     if (!requested_blocks_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
             reference_content_index, content_index, out_content_index,
             ENOMEM)
-        Longtail_Free(requested_block_hashes);
-        Longtail_Free(chunk_to_reference_block_index_lookup);
+        Longtail_Free(chunk_to_requested_block_index_lookup);
         return ENOMEM;
     }
-    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
-    for (uint32_t i = 0; i < content_index_chunk_count; ++i)
-    {
-        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
-        uint64_t reference_block_index = Longtail_LookupTable_Get(chunk_to_reference_block_index_lookup, chunk_hash);
-        if (reference_block_index == 0xfffffffffffffffful)
-        {
-            // If the chunk is not in the reference content index, just drop it
-            continue;
-        }
-        TLongtail_Hash reference_block_hash = reference_content_index->m_BlockHashes[reference_block_index];
 
-        if (Longtail_LookupTable_Get(requested_blocks_lookup, reference_block_hash) == 0xfffffffffffffffful)
-        {
-            requested_block_hashes[requested_block_count] = reference_block_hash;
-            Longtail_LookupTable_Put(requested_blocks_lookup, reference_block_hash, requested_block_count);
-            ++requested_block_count;
-        }
+    size_t work_mem_size = (sizeof(TLongtail_Hash) * *reference_content_index->m_BlockCount) +
+        (sizeof(TLongtail_Hash) * *reference_content_index->m_ChunkCount) +
+        (sizeof(TLongtail_Hash) * *reference_content_index->m_ChunkCount);
+    void* work_mem = Longtail_Alloc(work_mem_size);
+    if (!work_mem)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
+            reference_content_index, content_index, out_content_index,
+            ENOMEM)
+        Longtail_Free(requested_blocks_lookup);
+        Longtail_Free(chunk_to_requested_block_index_lookup);
+        return ENOMEM;
     }
-    Longtail_Free(chunk_to_reference_block_index_lookup);
-    chunk_to_reference_block_index_lookup = 0;
+
+    TLongtail_Hash* tmp_requested_block_hashes = (TLongtail_Hash*)work_mem;
+    TLongtail_Hash* tmp_requested_chunk_hashes = &tmp_requested_block_hashes[*reference_content_index->m_BlockCount];
+    uint64_t* tmp_requested_chunk_block_indexes = (uint64_t*)&tmp_requested_chunk_hashes[*reference_content_index->m_ChunkCount];
 
     uint64_t chunk_count = 0;
-    uint64_t reference_content_chunk_count = *reference_content_index->m_ChunkCount;
-    for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
+    uint64_t block_count = 0;
+    for (uint64_t i = 0; i < reference_chunk_count; ++i)
     {
-        TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
-        if (Longtail_LookupTable_Get(requested_blocks_lookup, block_hash) == 0xfffffffffffffffful)
+        TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
+        uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
+        TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[block_index];
+        if (Longtail_LookupTable_Get(chunk_to_requested_block_index_lookup, chunk_hash) != 0xfffffffffffffffful)
         {
+            uint64_t find_block_index = Longtail_LookupTable_Get(requested_blocks_lookup, block_hash);
+            if (find_block_index == 0xfffffffffffffffful)
+            {
+                Longtail_LookupTable_Put(requested_blocks_lookup, block_hash, block_count);
+                tmp_requested_chunk_block_indexes[chunk_count] = block_count;
+                tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
+                tmp_requested_block_hashes[block_count++] = block_hash;
+                continue;
+            }
+            tmp_requested_chunk_block_indexes[chunk_count] = find_block_index;
+            tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
             continue;
         }
-        ++chunk_count;
+        uint64_t find_block_index = Longtail_LookupTable_Get(requested_blocks_lookup, block_hash);
+        if (find_block_index != 0xfffffffffffffffful)
+        {
+            tmp_requested_chunk_block_indexes[chunk_count] = find_block_index;
+            tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
+        }
     }
 
-    size_t content_index_size = Longtail_GetContentIndexSize(requested_block_count, chunk_count);
+    size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
     struct Longtail_ContentIndex* resulting_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     if (!resulting_content_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
             reference_content_index, content_index, out_content_index,
             ENOMEM)
-        Longtail_Free(requested_block_hashes);
+        Longtail_Free(work_mem);
+        Longtail_Free(requested_blocks_lookup);
+        Longtail_Free(chunk_to_requested_block_index_lookup);
         return ENOMEM;
     }
     int err = Longtail_InitContentIndex(
@@ -6068,7 +6084,7 @@ int Longtail_RetargetContent(
         hash_identifier,
         *reference_content_index->m_MaxBlockSize,
         *reference_content_index->m_MaxChunksPerBlock,
-        requested_block_count,
+        block_count,
         chunk_count);
     if (err)
     {
@@ -6076,42 +6092,56 @@ int Longtail_RetargetContent(
             reference_content_index, content_index, out_content_index,
             err)
 
-        Longtail_Free(resulting_content_index);
+        Longtail_Free(work_mem);
         Longtail_Free(requested_blocks_lookup);
-        Longtail_Free(requested_block_hashes);
+        Longtail_Free(chunk_to_requested_block_index_lookup);
         return err;
     }
 
-    memmove(resulting_content_index->m_BlockHashes, requested_block_hashes, sizeof(TLongtail_Hash) * requested_block_count);
+    memmove(resulting_content_index->m_BlockHashes, tmp_requested_block_hashes, sizeof(TLongtail_Hash) * block_count);
+    memmove(resulting_content_index->m_ChunkHashes, tmp_requested_chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    memmove(resulting_content_index->m_ChunkBlockIndexes, tmp_requested_chunk_block_indexes, sizeof(uint64_t) * chunk_count);
 
-    uint64_t chunk_index = 0;
-    for (uint64_t c = 0; c < reference_content_chunk_count; ++c)
+    Longtail_Free(work_mem);
+    Longtail_Free(requested_blocks_lookup);
+    Longtail_Free(chunk_to_requested_block_index_lookup);
+    return 0;
+}
+
+struct FindNewChunksJob
+{
+    const struct Longtail_ContentIndex* m_ContentIndex;
+    const struct Longtail_LookupTable* m_ChunkHashToBlockIndex;
+    uint64_t m_StartRange;
+    uint64_t m_EndRange;
+    uint64_t* m_ChunkBlockIndexes;
+};
+
+static int FindNewChunks(void* context, uint32_t job_id, int is_cancelled)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FindNewChunks(%p, %u)",
+        context, job_id)
+    LONGTAIL_FATAL_ASSERT(context != 0, return 0)
+    struct FindNewChunksJob* job = (struct FindNewChunksJob*)context;
+
+    for (uint64_t c = job->m_StartRange; c < job->m_EndRange; ++c)
     {
-        TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[reference_content_index->m_ChunkBlockIndexes[c]];
-        uint64_t block_index = Longtail_LookupTable_Get(requested_blocks_lookup, block_hash);
-        if (block_index == 0xfffffffffffffffful)
-        {
-            continue;
-        }
-        TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[c];
-        resulting_content_index->m_ChunkBlockIndexes[chunk_index] = block_index;
-        resulting_content_index->m_ChunkHashes[chunk_index] = chunk_hash;
-        ++chunk_index;
+        TLongtail_Hash chunk_hash = job->m_ContentIndex->m_ChunkHashes[c];
+        job->m_ChunkBlockIndexes[c] = Longtail_LookupTable_Get(job->m_ChunkHashToBlockIndex, chunk_hash);
     }
 
-    Longtail_Free(requested_blocks_lookup);
-    Longtail_Free(requested_block_hashes);
-    *out_content_index = resulting_content_index;
     return 0;
 }
 
 int Longtail_MergeContentIndex(
+    struct Longtail_JobAPI* job_api,
     struct Longtail_ContentIndex* local_content_index,
     struct Longtail_ContentIndex* new_content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex(%p, %p, %p)",
         local_content_index, new_content_index, out_content_index)
+    LONGTAIL_VALIDATE_INPUT(job_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(local_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(new_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(((*local_content_index->m_BlockCount) == 0 || (*new_content_index->m_BlockCount) == 0) || ((*local_content_index->m_HashIdentifier) == (*new_content_index->m_HashIdentifier)), return EINVAL)
@@ -6120,8 +6150,8 @@ int Longtail_MergeContentIndex(
 
     uint64_t max_block_count = *local_content_index->m_BlockCount + *new_content_index->m_BlockCount;
     uint64_t max_chunk_count = *local_content_index->m_ChunkCount + *new_content_index->m_ChunkCount;
-
     size_t work_mem_size = (sizeof(TLongtail_Hash) * max_block_count) +
+        (sizeof(TLongtail_Hash) * max_chunk_count) +
         (sizeof(TLongtail_Hash) * max_chunk_count);
     void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
@@ -6133,79 +6163,99 @@ int Longtail_MergeContentIndex(
     }
     TLongtail_Hash* tmp_compact_block_hashes = (TLongtail_Hash*)work_mem;
     TLongtail_Hash* tmp_compact_chunk_hashes = (TLongtail_Hash*)&tmp_compact_block_hashes[max_block_count];
+    TLongtail_Hash* tmp_compact_chunk_block_indexes = (TLongtail_Hash*)&tmp_compact_chunk_hashes[max_chunk_count];
 
-    uint64_t compact_block_count = 0;
-    uint64_t compact_chunk_count = 0;
-
-    uint64_t new_content_chunk_count = *new_content_index->m_ChunkCount;
-    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(max_chunk_count, 0);
-    if (!chunk_hash_to_block_index)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) failed with %d",
-            local_content_index, new_content_index, out_content_index,
-            ENOMEM)
-        Longtail_Free(work_mem);
-        return ENOMEM;
-    }
+    uint64_t compact_block_count = *new_content_index->m_BlockCount;
     struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(max_block_count, 0);
-    if (!block_hash_to_block_index)
+    for (uint64_t b = 0; b < compact_block_count; ++b)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeContentIndex(%p, %p, %p) failed with %d",
-            local_content_index, new_content_index, out_content_index,
-            ENOMEM)
-        Longtail_Free(chunk_hash_to_block_index);
-        Longtail_Free(work_mem);
-        return ENOMEM;
+        TLongtail_Hash block_hash = new_content_index->m_BlockHashes[b];
+        Longtail_LookupTable_Put(block_hash_to_block_index, block_hash, b);
+        tmp_compact_block_hashes[b] = block_hash;
     }
-    const TLongtail_Hash* new_content_index_chunk_hashes = new_content_index->m_ChunkHashes;
-    const uint64_t* new_content_index_chunk_block_indexes = new_content_index->m_ChunkBlockIndexes;
-    const TLongtail_Hash* new_content_index_block_hashes = new_content_index->m_BlockHashes;
-    for (uint64_t c = 0; c < new_content_chunk_count; ++c)
-    {
-        TLongtail_Hash chunk_hash = new_content_index_chunk_hashes[c];
-        if (Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash) != 0xfffffffffffffffful)
-        {
-            continue;
-        }
-        uint64_t block_index = new_content_index_chunk_block_indexes[c];
-        TLongtail_Hash block_hash = new_content_index_block_hashes[block_index];
-        tmp_compact_chunk_hashes[compact_chunk_count++] = chunk_hash;
 
-        uint64_t find_block_index = Longtail_LookupTable_Get(block_hash_to_block_index, block_hash);
-        if (find_block_index == 0xfffffffffffffffful)
-        {
-            Longtail_LookupTable_Put(block_hash_to_block_index, block_hash, compact_block_count);
-            Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, compact_block_count);
-            tmp_compact_block_hashes[compact_block_count++] = block_hash;
-            continue;
-        }
-        Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, find_block_index);
+    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(max_chunk_count, 0);
+    uint64_t compact_chunk_count = *new_content_index->m_ChunkCount;
+    for (uint64_t c = 0; c < compact_chunk_count; ++c)
+    {
+        TLongtail_Hash chunk_hash = new_content_index->m_ChunkHashes[c];
+        uint64_t block_index = new_content_index->m_ChunkBlockIndexes[c];
+
+        tmp_compact_chunk_hashes[c] = chunk_hash;
+        tmp_compact_chunk_block_indexes[c] = block_index;
+
+        Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, block_index);
     }
 
     uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;
-    const TLongtail_Hash* local_content_index_chunk_hashes = local_content_index->m_ChunkHashes;
-    const uint64_t* local_content_index_chunk_block_indexes = local_content_index->m_ChunkBlockIndexes;
-    const TLongtail_Hash* local_content_index_block_hashes = local_content_index->m_BlockHashes;
-    for (uint64_t c = 0; c < local_content_chunk_count; ++c)
+    if (local_content_chunk_count > 0)
     {
-        TLongtail_Hash chunk_hash = local_content_index_chunk_hashes[c];
-        if (Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash) != 0xfffffffffffffffful)
-        {
-            continue;
-        }
-        uint64_t block_index = local_content_index_chunk_block_indexes[c];
-        TLongtail_Hash block_hash = local_content_index_block_hashes[block_index];
-        tmp_compact_chunk_hashes[compact_chunk_count++] = chunk_hash;
+        uint32_t worker_count = job_api->GetWorkerCount(job_api);
 
-        uint64_t find_block_index = Longtail_LookupTable_Get(block_hash_to_block_index, block_hash);
-        if (find_block_index == 0xfffffffffffffffful)
+        uint64_t* chunk_block_indexes = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * local_content_chunk_count);
+        const uint32_t min_chunks_per_job = 65536;
+        uint64_t chunks_per_job = worker_count > 0 ? local_content_chunk_count / worker_count : local_content_chunk_count;
+        if (chunks_per_job < min_chunks_per_job)
         {
-            Longtail_LookupTable_Put(block_hash_to_block_index, block_hash, compact_block_count);
-            Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, compact_block_count);
-            tmp_compact_block_hashes[compact_block_count++] = block_hash;
-            continue;
+            chunks_per_job = min_chunks_per_job;
         }
-        Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, find_block_index);
+        uint32_t job_count = (uint32_t)((local_content_chunk_count + chunks_per_job  - 1)/ chunks_per_job);
+
+        struct FindNewChunksJob* jobs = (struct FindNewChunksJob*)Longtail_Alloc(sizeof(struct FindNewChunksJob) * job_count);
+        Longtail_JobAPI_Group job_group = 0;
+        job_api->ReserveJobs(job_api, job_count, &job_group);
+
+        Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc) * job_count);
+        void** ctxs = Longtail_Alloc(sizeof(void*) * job_count);
+
+        uint64_t chunk_job_start = 0;
+        for (uint32_t j = 0; j < job_count; ++j)
+        {
+            struct FindNewChunksJob* job = &jobs[j];
+            job->m_ContentIndex = local_content_index;
+            job->m_ChunkHashToBlockIndex = chunk_hash_to_block_index;
+            job->m_StartRange = chunk_job_start;
+            job->m_EndRange = chunk_job_start + chunks_per_job;
+            if (job->m_EndRange > local_content_chunk_count)
+            {
+                job->m_EndRange = local_content_chunk_count;
+            }
+            job->m_ChunkBlockIndexes = chunk_block_indexes;
+            funcs[j] = FindNewChunks;
+            ctxs[j] = job;
+            chunk_job_start += chunks_per_job;
+        }
+        Longtail_JobAPI_Jobs runjobs;
+        job_api->CreateJobs(job_api, job_group, job_count, funcs, ctxs, &runjobs);
+        job_api->ReadyJobs(job_api, job_count, runjobs);
+
+        job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
+
+        Longtail_Free(ctxs);
+        Longtail_Free(jobs);
+
+        for (uint64_t c = 0; c < local_content_chunk_count; ++c)
+        {
+            TLongtail_Hash chunk_hash = local_content_index->m_ChunkHashes[c];
+            uint64_t compact_block_index = chunk_block_indexes[c];
+            if (compact_block_index != 0xfffffffffffffffful)
+            {
+                continue;
+            }
+            tmp_compact_chunk_hashes[compact_chunk_count] = chunk_hash;
+            uint64_t block_index = local_content_index->m_ChunkBlockIndexes[c];
+            TLongtail_Hash block_hash = local_content_index->m_BlockHashes[block_index];
+            compact_block_index = Longtail_LookupTable_Get(block_hash_to_block_index, block_hash);
+            if (compact_block_index == 0xfffffffffffffffful)
+            {
+                Longtail_LookupTable_Put(block_hash_to_block_index, block_hash, compact_block_count);
+                tmp_compact_chunk_block_indexes[compact_chunk_count++] = compact_block_count;
+                tmp_compact_block_hashes[compact_block_count++] = block_hash;
+                continue;
+            }
+            tmp_compact_chunk_block_indexes[compact_chunk_count++] = compact_block_index;
+        }
+        Longtail_Free(chunk_block_indexes);
     }
 
     size_t content_index_size = Longtail_GetContentIndexSize(compact_block_count, compact_chunk_count);
@@ -6243,12 +6293,8 @@ int Longtail_MergeContentIndex(
 
     memcpy(compact_content_index->m_BlockHashes, tmp_compact_block_hashes, sizeof(TLongtail_Hash) * compact_block_count);
     memcpy(compact_content_index->m_ChunkHashes, tmp_compact_chunk_hashes, sizeof(TLongtail_Hash) * compact_chunk_count);
-    for (uint64_t c = 0; c < compact_chunk_count; ++c)
-    {
-        TLongtail_Hash chunk_hash = tmp_compact_chunk_hashes[c];
-        uint64_t block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
-        compact_content_index->m_ChunkBlockIndexes[c] = block_index;
-    }
+    memcpy(compact_content_index->m_ChunkBlockIndexes, tmp_compact_chunk_block_indexes, sizeof(uint64_t) * compact_chunk_count);
+
     *out_content_index = compact_content_index;
     Longtail_Free(block_hash_to_block_index);
     Longtail_Free(chunk_hash_to_block_index);

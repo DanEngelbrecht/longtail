@@ -12,6 +12,7 @@ struct CacheBlockStoreAPI
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_BlockStoreAPI* m_LocalBlockStoreAPI;
     struct Longtail_BlockStoreAPI* m_RemoteBlockStoreAPI;
+    struct Longtail_JobAPI* m_JobAPI;
 
     TLongtail_Atomic32 m_PendingRequestCount;
 
@@ -560,6 +561,7 @@ static void Gather_GetIndexCompleteAPI_OnComplete(struct Longtail_AsyncGetIndexA
 struct GetIndexContext
 {
     struct Longtail_AsyncGetIndexAPI* m_AsyncCompleteAPI;
+    struct Longtail_JobAPI* m_JobAPI;
     struct Longtail_ContentIndex* m_LocalIndex;
     struct Longtail_ContentIndex* m_RemoteIndex;
     TLongtail_Atomic32 m_PendingCount;
@@ -580,7 +582,7 @@ static void GetIndex_GetIndexesCompleteAPI_OnComplete(void* context)
         return;
     }
     struct Longtail_ContentIndex* full_content_index = 0;
-    err = Longtail_MergeContentIndex(retarget_context->m_RemoteIndex, retarget_context->m_LocalIndex, &full_content_index);
+    err = Longtail_MergeContentIndex(retarget_context->m_JobAPI, retarget_context->m_RemoteIndex, retarget_context->m_LocalIndex, &full_content_index);
     Longtail_Free(retarget_context->m_LocalIndex);
     Longtail_Free(retarget_context->m_RemoteIndex);
     if (err)
@@ -641,6 +643,7 @@ static int CacheBlockStore_GetIndex(
     }
 
     getindex_context->m_AsyncCompleteAPI = async_complete_api;
+    getindex_context->m_JobAPI = cacheblockstore_api->m_JobAPI;
     getindex_context->m_LocalIndex = 0;
     getindex_context->m_RemoteIndex = 0;
     getindex_context->m_PendingCount = 2;
@@ -687,8 +690,9 @@ static int CacheBlockStore_GetIndex(
 
 struct RetargetContext
 {
-    struct Longtail_ContentIndex* m_ContentIndex;
     struct Longtail_AsyncRetargetContentAPI* m_AsyncCompleteAPI;
+    struct Longtail_JobAPI* m_JobAPI;
+    struct Longtail_ContentIndex* m_ContentIndex;
     struct Longtail_ContentIndex* m_LocalIndex;
     struct Longtail_ContentIndex* m_RemoteIndex;
     TLongtail_Atomic32 m_PendingCount;
@@ -710,7 +714,7 @@ static void RetargetContent_GetIndexesCompleteAPI_OnComplete(void* context)
         return;
     }
     struct Longtail_ContentIndex* full_content_index = 0;
-    err = Longtail_MergeContentIndex(retarget_context->m_RemoteIndex, retarget_context->m_LocalIndex, &full_content_index);
+    err = Longtail_MergeContentIndex(retarget_context->m_JobAPI, retarget_context->m_RemoteIndex, retarget_context->m_LocalIndex, &full_content_index);
     Longtail_Free(retarget_context->m_LocalIndex);
     Longtail_Free(retarget_context->m_RemoteIndex);
     if (err)
@@ -794,6 +798,7 @@ static int CacheBlockStore_RetargetContent(
 
     retarget_context->m_ContentIndex = content_index_copy;
     retarget_context->m_AsyncCompleteAPI = async_complete_api;
+    retarget_context->m_JobAPI = cacheblockstore_api->m_JobAPI;
     retarget_context->m_LocalIndex = 0;
     retarget_context->m_RemoteIndex = 0;
     retarget_context->m_PendingCount = 2;
@@ -884,6 +889,7 @@ static void CacheBlockStore_Dispose(struct Longtail_API* api)
 
 static int CacheBlockStore_Init(
     void* mem,
+    struct Longtail_JobAPI* job_api,
     struct Longtail_BlockStoreAPI* local_block_store,
     struct Longtail_BlockStoreAPI* remote_block_store,
     struct Longtail_BlockStoreAPI** out_block_store_api)
@@ -913,6 +919,7 @@ static int CacheBlockStore_Init(
 
     api->m_LocalBlockStoreAPI = local_block_store;
     api->m_RemoteBlockStoreAPI = remote_block_store;
+    api->m_JobAPI = job_api;
     api->m_PendingRequestCount = 0;
 
     api->m_IndexGetCount = 0;
@@ -934,6 +941,7 @@ static int CacheBlockStore_Init(
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateCacheBlockStoreAPI(
+    struct Longtail_JobAPI* job_api,
     struct Longtail_BlockStoreAPI* local_block_store,
     struct Longtail_BlockStoreAPI* remote_block_store)
 {
@@ -953,6 +961,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCacheBlockStoreAPI(
     struct Longtail_BlockStoreAPI* block_store_api;
     int err = CacheBlockStore_Init(
         mem,
+        job_api,
         local_block_store,
         remote_block_store,
         &block_store_api);

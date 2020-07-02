@@ -328,7 +328,7 @@ int UpSync(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
 
     struct Longtail_VersionIndex* source_version_index = 0;
@@ -517,6 +517,7 @@ int UpSync(
 
     struct Longtail_ContentIndex* version_local_content_index;
     err = Longtail_MergeContentIndex(
+        job_api,
         existing_remote_content_index,
         version_missing_content_index,
         &version_local_content_index);
@@ -648,9 +649,9 @@ int DownSync(
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
-    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
-    struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(store_block_localstore_api, store_block_remotestore_api);
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
     struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);//retaining_block_store_api);
@@ -954,8 +955,9 @@ int ValidateVersionIndex(
     uint32_t max_chunks_per_block)
 {
     const char* storage_path = NormalizePath(storage_uri_raw);
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
     struct Longtail_ContentIndex* block_store_content_index;
     {
         struct AsyncGetIndexComplete get_index_complete;
@@ -973,6 +975,7 @@ int ValidateVersionIndex(
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
             SAFE_DISPOSE_API(store_block_api);
             SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(job_api);
             Longtail_Free((void*)storage_path);
             return err;
         }
@@ -988,6 +991,7 @@ int ValidateVersionIndex(
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(job_api);
         Longtail_Free((void*)storage_path);
         return err;
     }
@@ -1000,6 +1004,7 @@ int ValidateVersionIndex(
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(job_api);
         Longtail_Free((void*)storage_path);
         return err;
     }
@@ -1007,6 +1012,7 @@ int ValidateVersionIndex(
     Longtail_Free(block_store_content_index);
     SAFE_DISPOSE_API(store_block_api);
     SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(job_api);
     Longtail_Free((void*)storage_path);
     return 0;
 }

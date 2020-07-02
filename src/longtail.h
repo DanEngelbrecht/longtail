@@ -1102,12 +1102,14 @@ LONGTAIL_EXPORT int Longtail_RetargetContent(
  * Create a join of two content indexes, @p local_content_index has precedence, if a chunk is present in @p local_content_index the
  * block containing it is added to @p out_content_index over a block from @p new_content_index.
  *
+ * @param[in] job_api                   An initialized struct Longtail_JobAPI
  * @param[in] local_content_index       The known content used a base
  * @param[in] new_content_index         The content you want add - only blocks containing chunks not in @p local_content_index will be added
  * @param[out] out_content_index        The resulting content index will be created and assigned to this pointer reference if successful
  * @return                              Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_MergeContentIndex(
+    struct Longtail_JobAPI* job_api,
     struct Longtail_ContentIndex* local_content_index,
     struct Longtail_ContentIndex* new_content_index,
     struct Longtail_ContentIndex** out_content_index);

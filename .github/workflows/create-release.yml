@@ -122,10 +122,14 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
+          - *API* Longtail_MergeContentIndex(), Longtail_CreateCacheBlockStoreAPI() and Longtail_CreateFSBlockStoreAPI() not takes a job_api as a required argument
           - *CHANGE* Use faster hash lookup for simple hash -> index mapping
           - *CHANGE* Optimized EnsureParentPathExists
           - *CHANGE* Increased size of chunk buffer to reduce IO churn
           - *CHANGE* Merge memory allocations to bigger single chunks
+          - *CHANGE* Longtail_MergeContentIndex is now multi threaded
+          - *CHANGE* Job dispatching is done in batches when possible
+          - *CHANGE* Longtail_RetargetContent() is not significantly faster
         draft: false
         prerelease: false
     - name: Download Linux artifacts
