@@ -6107,6 +6107,9 @@ int Longtail_RetargetContent(
     Longtail_Free(work_mem);
     Longtail_Free(requested_blocks_lookup);
     Longtail_Free(chunk_to_requested_block_index_lookup);
+
+    *out_content_index = resulting_content_index;
+
     return 0;
 }
 
@@ -6208,7 +6211,7 @@ int Longtail_MergeContentIndex(
         job_api->ReserveJobs(job_api, job_count, &job_group);
 
         Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc) * job_count);
-        void** ctxs = Longtail_Alloc(sizeof(void*) * job_count);
+        void** ctxs = (void**)Longtail_Alloc(sizeof(void*) * job_count);
 
         uint64_t chunk_job_start = 0;
         for (uint32_t j = 0; j < job_count; ++j)
@@ -6234,6 +6237,7 @@ int Longtail_MergeContentIndex(
         job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
 
         Longtail_Free(ctxs);
+        Longtail_Free(funcs);
         Longtail_Free(jobs);
 
         for (uint64_t c = 0; c < local_content_chunk_count; ++c)

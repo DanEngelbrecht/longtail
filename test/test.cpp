@@ -5419,7 +5419,9 @@ TEST(Longtail, BlockStoreRetargetContent)
         *cache_store_index->m_MaxChunksPerBlock,
         &version_1_content_index));
 
-    struct Longtail_ContentIndex* retarget_cache_content_index = SyncRetargetContent(cached_block_store_api, version_1_content_index);
+    struct Longtail_ContentIndex* retarget_cache_content_index = SyncRetargetContent(
+        cached_block_store_api,
+        version_1_content_index);
     ASSERT_EQ(0, *retarget_cache_content_index->m_BlockCount);
     ASSERT_EQ(0, *retarget_cache_content_index->m_ChunkCount);
 
