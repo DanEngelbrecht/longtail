@@ -660,7 +660,7 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #    define LONGTAIL_FATAL_ASSERT(x, bail) \
         if (!(x)) \
         { \
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Assert failed `%s`\n", __FILE__, __LINE__, #x); \
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Assert failed in %s(): failed on condition: `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
             if (Longtail_Assert_private) \
             { \
                 Longtail_Assert_private(#x, __FILE__, __LINE__); \
@@ -682,7 +682,7 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #   define LONGTAIL_VALIDATE_INPUT(x, bail) \
     if (!(x)) \
     { \
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation failed for `%s`\n", __FILE__, __LINE__, #x); \
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation for `%s()`: failed on condition `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
         bail; \
     }
 #endif // defined(LONGTAIL_ASSERTS)

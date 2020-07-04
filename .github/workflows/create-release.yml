@@ -124,6 +124,7 @@ jobs:
           Changes in this Release
           - *CHANGE* Faster MergeContentIndex via threading
           - *FIX* Free order corrected in test
+          - *FIX* Assert and input validation now prints function it fails inside
         draft: false
         prerelease: false
     - name: Download Linux artifacts
