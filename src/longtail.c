@@ -6171,6 +6171,51 @@ static int FindNewChunks(void* context, uint32_t job_id, int is_cancelled)
     return 0;
 }
 
+struct MergeContentIndex_BuildBlockHashToBlockIndex_Context
+{
+    struct Longtail_ContentIndex* new_content_index;
+    struct Longtail_LookupTable* block_hash_to_block_index;
+    TLongtail_Hash* tmp_compact_block_hashes;
+};
+
+static int MergeContentIndex_BuildBlockHashToBlockIndex(void* context, uint32_t job_id, int is_cancelled)
+{
+    struct MergeContentIndex_BuildBlockHashToBlockIndex_Context* c = (struct MergeContentIndex_BuildBlockHashToBlockIndex_Context*)context;
+    const uint64_t compact_block_count = *c->new_content_index->m_BlockCount;
+    for (uint64_t block_index = 0; block_index < compact_block_count; ++block_index)
+    {
+        TLongtail_Hash block_hash = c->new_content_index->m_BlockHashes[block_index];
+        Longtail_LookupTable_Put(c->block_hash_to_block_index, block_hash, block_index);
+        c->tmp_compact_block_hashes[block_index] = block_hash;
+    }
+    return 0;
+}
+
+struct MergeContentIndex_BuildChunkHashToBlockIndex_Context
+{
+    struct Longtail_ContentIndex* new_content_index;
+    struct Longtail_LookupTable* chunk_hash_to_block_index;
+    TLongtail_Hash* tmp_compact_chunk_hashes;
+    TLongtail_Hash* tmp_compact_chunk_block_indexes;
+};
+
+static int MergeContentIndex_BuildChunkHashToBlockIndex(void* context, uint32_t job_id, int is_cancelled)
+{
+    struct MergeContentIndex_BuildChunkHashToBlockIndex_Context* c = (struct MergeContentIndex_BuildChunkHashToBlockIndex_Context*)context;
+    const uint64_t compact_chunk_count = *c->new_content_index->m_ChunkCount;
+    for (uint64_t chunk_index = 0; chunk_index < compact_chunk_count; ++chunk_index)
+    {
+        TLongtail_Hash chunk_hash = c->new_content_index->m_ChunkHashes[chunk_index];
+        uint64_t block_index = c->new_content_index->m_ChunkBlockIndexes[chunk_index];
+
+        c->tmp_compact_chunk_hashes[chunk_index] = chunk_hash;
+        c->tmp_compact_chunk_block_indexes[chunk_index] = block_index;
+
+        Longtail_LookupTable_Put(c->chunk_hash_to_block_index, chunk_hash, block_index);
+    }
+    return 0;
+}
+
 int Longtail_MergeContentIndex(
     struct Longtail_JobAPI* job_api,
     struct Longtail_ContentIndex* local_content_index,
@@ -6203,26 +6248,34 @@ int Longtail_MergeContentIndex(
     TLongtail_Hash* tmp_compact_chunk_hashes = (TLongtail_Hash*)&tmp_compact_block_hashes[max_block_count];
     TLongtail_Hash* tmp_compact_chunk_block_indexes = (TLongtail_Hash*)&tmp_compact_chunk_hashes[max_chunk_count];
 
-    uint64_t compact_block_count = *new_content_index->m_BlockCount;
     struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(max_block_count, 0);
-    for (uint64_t b = 0; b < compact_block_count; ++b)
-    {
-        TLongtail_Hash block_hash = new_content_index->m_BlockHashes[b];
-        Longtail_LookupTable_Put(block_hash_to_block_index, block_hash, b);
-        tmp_compact_block_hashes[b] = block_hash;
-    }
+    uint64_t compact_chunk_count = *new_content_index->m_ChunkCount;
 
     struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(max_chunk_count, 0);
-    uint64_t compact_chunk_count = *new_content_index->m_ChunkCount;
-    for (uint64_t c = 0; c < compact_chunk_count; ++c)
+    uint64_t compact_block_count = *new_content_index->m_BlockCount;
+
     {
-        TLongtail_Hash chunk_hash = new_content_index->m_ChunkHashes[c];
-        uint64_t block_index = new_content_index->m_ChunkBlockIndexes[c];
+        struct MergeContentIndex_BuildBlockHashToBlockIndex_Context block_hash_to_block_index_context;
+        block_hash_to_block_index_context.new_content_index = new_content_index;
+        block_hash_to_block_index_context.block_hash_to_block_index = block_hash_to_block_index;
+        block_hash_to_block_index_context.tmp_compact_block_hashes = tmp_compact_block_hashes;
 
-        tmp_compact_chunk_hashes[c] = chunk_hash;
-        tmp_compact_chunk_block_indexes[c] = block_index;
+        struct MergeContentIndex_BuildChunkHashToBlockIndex_Context chunk_hash_to_block_index_context;
+        chunk_hash_to_block_index_context.new_content_index = new_content_index;
+        chunk_hash_to_block_index_context.chunk_hash_to_block_index = chunk_hash_to_block_index;
+        chunk_hash_to_block_index_context.tmp_compact_chunk_hashes = tmp_compact_chunk_hashes;
+        chunk_hash_to_block_index_context.tmp_compact_chunk_block_indexes = tmp_compact_chunk_block_indexes;
 
-        Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, block_index);
+        Longtail_JobAPI_JobFunc funcs[2] = {MergeContentIndex_BuildBlockHashToBlockIndex, MergeContentIndex_BuildChunkHashToBlockIndex};
+        void* ctxs[2] = {&block_hash_to_block_index_context, &chunk_hash_to_block_index_context};
+
+        Longtail_JobAPI_Group job_group = 0;
+        job_api->ReserveJobs(job_api, 2, &job_group);
+
+        Longtail_JobAPI_Jobs jobs;
+        job_api->CreateJobs(job_api, job_group, 2, funcs, ctxs, &jobs);
+        job_api->ReadyJobs(job_api, 2, jobs);
+        job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
     }
 
     uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;

@@ -5845,10 +5845,10 @@ TEST(Longtail, VersionLocalContent)
 
     Longtail_Free(version1_file_infos);
 
-    SAFE_DISPOSE_API(job_api);
-    SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(block_store);
+    SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(hash_api);
 }
 
 struct FailableStorageAPI
