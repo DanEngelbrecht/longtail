@@ -6180,7 +6180,7 @@ TEST(Longtail, Longtail_ThreadedBlockStore)
     get_block->Dispose(get_block);
 
     Longtail_BlockStore_Stats stats;
-    fsblock_store_api->GetStats(block_store_api, &stats);
+    fsblock_store_api->GetStats(fsblock_store_api, &stats);
 
     ASSERT_EQ(1, stats.m_IndexGetCount);
     ASSERT_EQ(1, stats.m_BlocksGetCount);
