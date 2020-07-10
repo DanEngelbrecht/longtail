@@ -15,6 +15,7 @@
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/retainingblockstore/longtail_retainingblockstore.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
+#include "../lib/threadedblockstore/longtail_threadedblockstore.h"
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/zstd/longtail_zstd.h"
@@ -651,7 +652,8 @@ int DownSync(
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
     struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
-    struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
+    struct Longtail_BlockStoreAPI* store_block_threadedstored_api = Longtail_CreateThreadedBlockStoreAPI(store_block_localstore_api, 8, -1);
+    struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_threadedstored_api, store_block_remotestore_api);
     struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);//retaining_block_store_api);
@@ -664,6 +666,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -684,6 +687,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -724,6 +728,7 @@ int DownSync(
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(retaining_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
+            SAFE_DISPOSE_API(store_block_threadedstored_api);
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
             SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -765,6 +770,7 @@ int DownSync(
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(retaining_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
+            SAFE_DISPOSE_API(store_block_threadedstored_api);
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
             SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -790,6 +796,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -812,6 +819,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -840,6 +848,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -863,6 +872,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -886,6 +896,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -929,6 +940,7 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(retaining_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_threadedstored_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
@@ -947,6 +959,7 @@ int DownSync(
     SAFE_DISPOSE_API(store_block_store_api);
     SAFE_DISPOSE_API(retaining_block_store_api);
     SAFE_DISPOSE_API(compress_block_store_api);
+    SAFE_DISPOSE_API(store_block_threadedstored_api);
     SAFE_DISPOSE_API(store_block_cachestore_api);
     SAFE_DISPOSE_API(store_block_localstore_api);
     SAFE_DISPOSE_API(store_block_remotestore_api);
