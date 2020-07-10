@@ -406,8 +406,8 @@ static int ThreadBlockStore_Init(
     uint8_t* thread_mem = (uint8_t*)&api->m_WorkerThreads[thread_count];
     for (uint32_t t = 0; t < thread_count; ++t)
     {
-        int res = Longtail_CreateThread(thread_mem, Worker, 0, api, thread_priority, &api->m_WorkerThreads[t]);
-        if (!res)
+        err = Longtail_CreateThread(thread_mem, Worker, 0, api, thread_priority, &api->m_WorkerThreads[t]);
+        if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p, %p) failed with %d",
                 api, backing_block_store,
