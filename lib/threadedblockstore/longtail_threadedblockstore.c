@@ -169,7 +169,7 @@ static int ThreadBlockStore_PutStoredBlock(
     Longtail_AtomicAdd32(&api->m_PendingRequestCount, 1);
 
     Longtail_LockSpinLock(api->m_Lock);
-    while (api->m_RequestQueueReadPos == api->m_RequestQueueWritePos)
+    while (api->m_RequestQueueWritePos - api->m_RequestQueueReadPos == REQUEST_QUEUE_SIZE)
     {
         Longtail_UnlockSpinLock(api->m_Lock);
         Longtail_Sleep(100);
@@ -179,7 +179,9 @@ static int ThreadBlockStore_PutStoredBlock(
     request->m_Type = PUT_STORED_BLOCK;
     request->m_Request.m_PutStoredBlock.m_StoredBlock = stored_block;
     request->m_Request.m_PutStoredBlock.m_AsyncCompleteAPI = async_complete_api;
+    ++api->m_RequestQueueWritePos;
     Longtail_UnlockSpinLock(api->m_Lock);
+    Longtail_PostSema(api->m_RequestSemaphore, 1);
     return 0;
 }
 
@@ -212,7 +214,7 @@ static int ThreadBlockStore_GetStoredBlock(
     Longtail_AtomicAdd32(&api->m_PendingRequestCount, 1);
 
     Longtail_LockSpinLock(api->m_Lock);
-    while (api->m_RequestQueueReadPos == api->m_RequestQueueWritePos)
+    while (api->m_RequestQueueWritePos - api->m_RequestQueueReadPos == REQUEST_QUEUE_SIZE)
     {
         Longtail_UnlockSpinLock(api->m_Lock);
         Longtail_Sleep(100);
@@ -222,7 +224,9 @@ static int ThreadBlockStore_GetStoredBlock(
     request->m_Type = GET_STORED_BLOCK;
     request->m_Request.m_GetStoredBlock.m_BlockHash = block_hash;
     request->m_Request.m_GetStoredBlock.m_AsyncCompleteAPI = async_complete_api;
+    ++api->m_RequestQueueWritePos;
     Longtail_UnlockSpinLock(api->m_Lock);
+    Longtail_PostSema(api->m_RequestSemaphore, 1);
     return 0;
 }
 
@@ -239,7 +243,7 @@ static int ThreadBlockStore_GetIndex(
     Longtail_AtomicAdd32(&api->m_PendingRequestCount, 1);
 
     Longtail_LockSpinLock(api->m_Lock);
-    while (api->m_RequestQueueReadPos == api->m_RequestQueueWritePos)
+    while (api->m_RequestQueueWritePos - api->m_RequestQueueReadPos == REQUEST_QUEUE_SIZE)
     {
         Longtail_UnlockSpinLock(api->m_Lock);
         Longtail_Sleep(100);
@@ -248,7 +252,9 @@ static int ThreadBlockStore_GetIndex(
     struct WorkerRequest* request = &api->m_RequestQueue[api->m_RequestQueueWritePos % REQUEST_QUEUE_SIZE];
     request->m_Type = GET_INDEX;
     request->m_Request.m_GetIndex.m_AsyncCompleteAPI = async_complete_api;
+    ++api->m_RequestQueueWritePos;
     Longtail_UnlockSpinLock(api->m_Lock);
+    Longtail_PostSema(api->m_RequestSemaphore, 1);
     return 0;
 }
 
@@ -267,7 +273,7 @@ static int ThreadBlockStore_RetargetContent(
     Longtail_AtomicAdd32(&api->m_PendingRequestCount, 1);
 
     Longtail_LockSpinLock(api->m_Lock);
-    while (api->m_RequestQueueReadPos == api->m_RequestQueueWritePos)
+    while (api->m_RequestQueueWritePos - api->m_RequestQueueReadPos == REQUEST_QUEUE_SIZE)
     {
         Longtail_UnlockSpinLock(api->m_Lock);
         Longtail_Sleep(100);
@@ -277,7 +283,9 @@ static int ThreadBlockStore_RetargetContent(
     request->m_Type = RETARGET_CONTENT;
     request->m_Request.m_RetargetContent.m_ContentIndex = content_index;
     request->m_Request.m_RetargetContent.m_AsyncCompleteAPI = async_complete_api;
+    ++api->m_RequestQueueWritePos;
     Longtail_UnlockSpinLock(api->m_Lock);
+    Longtail_PostSema(api->m_RequestSemaphore, 1);
     return 0;
 }
 
@@ -371,7 +379,7 @@ static int ThreadBlockStore_Init(
     int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadBlockStoreAPI(%p, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p, %p) failed with %d",
             api, backing_block_store,
             ENOMEM)
         return err;
@@ -379,7 +387,7 @@ static int ThreadBlockStore_Init(
     err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &api->m_RequestSemaphore);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadBlockStoreAPI(%p, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p, %p) failed with %d",
             api, backing_block_store,
             ENOMEM)
         Longtail_DeleteSpinLock(api->m_Lock);
@@ -401,19 +409,19 @@ static int ThreadBlockStore_Init(
     return 0;
 }
 
-struct Longtail_BlockStoreAPI* Longtail_CreateThreadBlockStoreAPI(
+struct Longtail_BlockStoreAPI* Longtail_CreateThreadedBlockStoreAPI(
     struct Longtail_BlockStoreAPI* backing_block_store,
     uint32_t thread_count,
     int thread_priority)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateThreadBlockStoreAPI(%p)", backing_block_store)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateThreadedBlockStoreAPI(%p)", backing_block_store)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return 0)
 
     size_t api_size = sizeof(struct ThreadBlockStoreAPI);
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadBlockStoreAPI(%p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p) failed with %d",
             backing_block_store,
             ENOMEM)
         return 0;
@@ -427,7 +435,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateThreadBlockStoreAPI(
         &block_store_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadBlockStoreAPI(%p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p) failed with %d",
             backing_block_store,
             err)
         Longtail_Free(mem);
