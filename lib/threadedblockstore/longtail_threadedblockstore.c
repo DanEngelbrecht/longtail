@@ -87,11 +87,6 @@ static int Worker(void* context)
 
         struct WorkerRequest request;
         Longtail_LockSpinLock(api->m_Lock);
-        if (api->m_RequestQueueReadPos == api->m_RequestQueueWritePos)
-        {
-            // TODO: This should never happen?
-            continue;
-        }
         request = api->m_RequestQueue[api->m_RequestQueueReadPos % REQUEST_QUEUE_SIZE];
         ++api->m_RequestQueueReadPos;
         Longtail_UnlockSpinLock(api->m_Lock);
@@ -389,7 +384,7 @@ static int ThreadBlockStore_Init(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p, %p) failed with %d",
             api, backing_block_store,
-            ENOMEM)
+            err)
         Longtail_DeleteSpinLock(api->m_Lock);
         Longtail_Free(api->m_Lock);
         return err;
@@ -397,12 +392,51 @@ static int ThreadBlockStore_Init(
     api->m_PendingRequestCount = 0;
 
     api->m_WorkerThreads = (HLongtail_Thread*)Longtail_Alloc(sizeof(HLongtail_Thread) * thread_count + Longtail_GetThreadSize() * thread_count);
-    // TODO: Check OOM
+    if (!api->m_WorkerThreads)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p, %p) failed with %d",
+            api, backing_block_store,
+            ENOMEM)
+        Longtail_DeleteSema(api->m_RequestSemaphore);
+        Longtail_Free(api->m_RequestSemaphore);
+        Longtail_DeleteSpinLock(api->m_Lock);
+        Longtail_Free(api->m_Lock);
+        return ENOMEM;
+    }
     uint8_t* thread_mem = (uint8_t*)&api->m_WorkerThreads[thread_count];
     for (uint32_t t = 0; t < thread_count; ++t)
     {
         int res = Longtail_CreateThread(thread_mem, Worker, 0, api, thread_priority, &api->m_WorkerThreads[t]);
-        // TODO: Check OOM
+        if (!res)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateThreadedBlockStoreAPI(%p, %p) failed with %d",
+                api, backing_block_store,
+                err)
+            if(t > 0)
+            {
+                Longtail_LockSpinLock(api->m_Lock);
+                for (uint32_t w = 0; w < t; ++w)
+                {
+                    struct WorkerRequest* request = &api->m_RequestQueue[(api->m_RequestQueueWritePos + w) % REQUEST_QUEUE_SIZE];
+                    request->m_Type = EXIT;
+                }
+                api->m_RequestQueueWritePos += t;
+                Longtail_UnlockSpinLock(api->m_Lock);
+                Longtail_PostSema(api->m_RequestSemaphore, t);
+
+                for (uint32_t s = 0; s < t; ++s)
+                {
+                    Longtail_JoinThread(api->m_WorkerThreads[s], LONGTAIL_TIMEOUT_INFINITE);
+                    Longtail_DeleteThread(api->m_WorkerThreads[s]);
+                }
+            }
+            Longtail_Free(api->m_WorkerThreads);
+            Longtail_DeleteSema(api->m_RequestSemaphore);
+            Longtail_Free(api->m_RequestSemaphore);
+            Longtail_DeleteSpinLock(api->m_Lock);
+            Longtail_Free(api->m_Lock);
+            return err;
+        }
         thread_mem += Longtail_GetThreadSize();
     }
     *out_block_store_api = block_store_api;
