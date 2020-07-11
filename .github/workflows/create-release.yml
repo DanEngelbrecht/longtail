@@ -122,9 +122,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *CHANGE* Faster MergeContentIndex via threading
-          - *FIX* Free order corrected in test
-          - *FIX* Assert and input validation now prints function it fails inside
+          - *FIX* Reduced IO operations when reading content to store in blocks
+          - *CHANGE* Assert and input validation now prints function it fails inside
+          - *CHANGE* Default block/chunk options in command line tool now matched golongtail default
         draft: false
         prerelease: false
     - name: Download Linux artifacts
