@@ -3765,6 +3765,10 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
     char* write_buffer = block_data_buffer;
     char* write_ptr = write_buffer;
 
+    struct AssetPart* asset_part = 0;
+    Longtail_StorageAPI_HOpenFile file_handle = 0;
+    uint64_t asset_file_size = 0;
+
     uint32_t tag = 0;
     for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
     {
@@ -3773,13 +3777,8 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         intptr_t tmp;
         intptr_t asset_part_index = hmgeti_ts(job->m_AssetPartLookup, chunk_hash, tmp);
         LONGTAIL_FATAL_ASSERT(asset_part_index != -1, job->m_Err = EINVAL; return 0)
-        struct AssetPart* asset_part = &job->m_AssetPartLookup[asset_part_index].value;
-        const char* asset_path = asset_part->m_Path;
-        LONGTAIL_FATAL_ASSERT(!IsDirPath(asset_path), job->m_Err = EINVAL; return 0)
-
-        char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
-        uint64_t asset_content_offset = asset_part->m_Start;
-        if (chunk_index != first_chunk_index && tag != asset_part->m_Tag)
+        struct AssetPart* next_asset_part = &job->m_AssetPartLookup[asset_part_index].value;
+        if (chunk_index != first_chunk_index && tag != next_asset_part->m_Tag)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteContentBlockJob(%p, %u, %d): Warning: Inconsistent tag type for chunks inside block 0x%" PRIx64 ", retaining 0x%" PRIx64 "",
                 context, job_id, is_cancelled,
@@ -3787,30 +3786,47 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         }
         else
         {
-            tag = asset_part->m_Tag;
+            tag = next_asset_part->m_Tag;
         }
-        Longtail_StorageAPI_HOpenFile file_handle;
-        int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
-        if (err)
+
+        if ((!asset_part) || (next_asset_part->m_Path != asset_part->m_Path))
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
-                context, job_id, is_cancelled,
-                err);
-            Longtail_Free(block_data_buffer);
-            job->m_Err = err;
-            return 0;
+            if (file_handle)
+            {
+                source_storage_api->CloseFile(source_storage_api, file_handle);
+                file_handle = 0;
+            }
+            asset_file_size = 0;
+            const char* asset_path = next_asset_part->m_Path;
+            LONGTAIL_FATAL_ASSERT(!IsDirPath(asset_path), job->m_Err = EINVAL; return 0)
+
+            char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
+            int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
+            Longtail_Free(full_path);
+            full_path = 0;
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
+                    context, job_id, is_cancelled,
+                    err);
+                Longtail_Free(block_data_buffer);
+                job->m_Err = err;
+                return 0;
+            }
+            err = source_storage_api->GetSize(source_storage_api, file_handle, &asset_file_size);
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
+                    context, job_id, is_cancelled,
+                    err);
+                Longtail_Free(block_data_buffer);
+                job->m_Err = err;
+                return 0;
+            }
         }
-        uint64_t asset_file_size;
-        err = source_storage_api->GetSize(source_storage_api, file_handle, &asset_file_size);
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
-                context, job_id, is_cancelled,
-                err);
-            Longtail_Free(block_data_buffer);
-            job->m_Err = err;
-            return 0;
-        }
+        asset_part = next_asset_part;
+
+        uint64_t asset_content_offset = asset_part->m_Start;
         if (asset_file_size < (asset_content_offset + chunk_size))
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Source asset file does not match indexed size %" PRIu64 " < %" PRIu64,
@@ -3823,7 +3839,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
             job->m_Err = EBADF;
             return 0;
         }
-        err = source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
+        int err = source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
@@ -3835,10 +3851,12 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
             return 0;
         }
         write_ptr += chunk_size;
+    }
 
+    if (file_handle)
+    {
         source_storage_api->CloseFile(source_storage_api, file_handle);
-        Longtail_Free((char*)full_path);
-        full_path = 0;
+        file_handle = 0;
     }
 
     size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
