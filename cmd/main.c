@@ -243,18 +243,6 @@ static char* NormalizePath(const char* path)
     return normalized_path;
 }
 
-char* GetDefaultContentPath()
-{
-    char* tmp_folder = Longtail_GetTempFolder();
-    if (!tmp_folder)
-    {
-        return 0;
-    }
-    const char* default_cache_path = Longtail_ConcatPath(tmp_folder, "longtail_cache");
-    Longtail_Free(tmp_folder);
-    return (char*)default_cache_path;
-}
-
 struct AsyncRetargetContentComplete
 {
     struct Longtail_AsyncRetargetContentAPI m_API;
@@ -650,9 +638,20 @@ int DownSync(
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
-    struct Longtail_BlockStoreAPI* store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
-    struct Longtail_BlockStoreAPI* store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
-    struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
+    struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
+    struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
+    if (cache_path)
+    {
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
+        store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
+        compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
+    }
+    else
+    {
+        compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_remotestore_api, compression_registry);
+    }
+
     struct Longtail_BlockStoreAPI* retaining_block_store_api = 0;//Longtail_CreateRetainingBlockStoreAPI(compress_block_store_api);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);//retaining_block_store_api);
 
@@ -1174,7 +1173,7 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        const char* cache_path = NormalizePath(cache_path_raw ? cache_path_raw : GetDefaultContentPath());
+        const char* cache_path = cache_path_raw ? NormalizePath(cache_path_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
         const char* target_index = target_index_raw ? NormalizePath(target_index_raw) : 0;
         const char* source_path = NormalizePath(source_path_raw);
