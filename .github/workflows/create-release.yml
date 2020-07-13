@@ -123,6 +123,7 @@ jobs:
         body: |
           Changes in this Release
           - *FIX* cmd: if no `--cache-path` is given, default to not using cache
+          - *FIX* Longtail_ReadBlockIndex can now correctly read very small blocks
         draft: false
         prerelease: false
     - name: Download Linux artifacts

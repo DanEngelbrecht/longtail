@@ -2677,8 +2677,8 @@ int Longtail_ReadBlockIndex(
         return EBADF;
     }
 
-    size_t block_index_size = Longtail_GetBlockIndexSize(blockIndexHeader.m_ChunkCount);
-    if (block_index_size >= block_size)
+    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(blockIndexHeader.m_ChunkCount);
+    if (block_index_data_size >= block_size)
     {
         err = EBADF;
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) failed with %d",
@@ -2688,7 +2688,7 @@ int Longtail_ReadBlockIndex(
         return EBADF;
     }
 
-    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(blockIndexHeader.m_ChunkCount);
+    size_t block_index_size = Longtail_GetBlockIndexSize(blockIndexHeader.m_ChunkCount);
     void* block_index_mem = Longtail_Alloc(block_index_size);
     if (!block_index_mem)
     {
