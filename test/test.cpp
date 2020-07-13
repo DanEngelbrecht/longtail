@@ -6106,3 +6106,115 @@ TEST(Longtail, TestChangeVersionDiskFull)
     SAFE_DISPOSE_API(&failable_local_storage_api->m_API);
     SAFE_DISPOSE_API(mem_storage);
 }
+
+struct HashToIndexLookup
+{
+    TLongtail_Hash key;
+    uint64_t value;
+};
+
+TEST(Longtail, TestLongtailBlockFS)
+{
+    static const uint32_t MAX_BLOCK_SIZE = 65536u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 8u;
+
+    Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "chunks", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
+
+    CreateRandomContent(mem_storage, "source", 32, MAX_CHUNKS_PER_BLOCK, MAX_BLOCK_SIZE);
+
+    Longtail_FileInfos* version_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version_paths);
+
+    uint32_t* compression_types = GetAssetTags(mem_storage, version_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        mem_storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "source",
+        version_paths,
+        compression_types,
+        16,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+
+    Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+            hash_api,
+            vindex,
+            MAX_BLOCK_SIZE / 4,
+            MAX_CHUNKS_PER_BLOCK / 2,
+            &content_index));
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        0,
+        0,
+        0,
+        &block_store_content_index));
+    ASSERT_EQ(0, Longtail_WriteContent(
+        mem_storage,
+        block_store,
+        job_api,
+        0,
+        0,
+        0,
+        block_store_content_index,
+        content_index,
+        vindex,
+        "source"));
+
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+    TestAsyncGetIndexComplete get_index_complete;
+    ASSERT_EQ(0, block_store->GetIndex(block_store, &get_index_complete.m_API));
+    get_index_complete.Wait();
+    block_store_content_index = get_index_complete.m_ContentIndex;
+
+    // Now we have a filled block store, a version index for "source" and a matching content index
+    struct HashToIndexLookup* block_hash_to_block_index_lookup = 0;
+    for (uint64_t b = 0; b < *block_store_content_index->m_BlockCount; ++b)
+    {
+        hmput(block_hash_to_block_index_lookup, block_store_content_index->m_BlockHashes[b], b);
+    }
+    struct HashToIndexLookup* asset_lookup = 0;
+    for (uint32_t a = 0; a < *vindex->m_AssetCount; ++a)
+    {
+        const char* path = &vindex->m_NameData[vindex->m_NameOffsets[a]];
+
+        uint64_t path_hash = 0;
+        ASSERT_EQ(0, hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), path, &path_hash));
+        hmput(asset_lookup, path_hash, a);
+    }
+
+    hmfree(asset_lookup);
+    hmfree(block_hash_to_block_index_lookup);
+
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+
+    Longtail_Free(content_index);
+    content_index = 0;
+
+    Longtail_Free(vindex);
+    vindex = 0;
+
+    Longtail_Free(compression_types);
+    compression_types = 0;
+
+    Longtail_Free(version_paths);
+    version_paths = 0;
+    SAFE_DISPOSE_API(block_store);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(mem_storage);
+}
