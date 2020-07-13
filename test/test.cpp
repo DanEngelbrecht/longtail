@@ -6114,6 +6114,82 @@ struct HashToIndexLookup
     uint64_t value;
 };
 
+int ReadAsset(
+    Longtail_BlockStoreAPI* block_store,
+    Longtail_ContentIndex* content_index,
+    struct HashToIndexLookup* chunk_hash_to_block_index_lookup,
+    Longtail_VersionIndex* version_index,
+    uint64_t asset_index,
+    uint64_t* out_size,
+    void** out_buf)
+{
+    uint64_t size = version_index->m_AssetSizes[asset_index];
+    char* buffer = (char*)Longtail_Alloc(size);
+    uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
+    uint32_t chunk_offset = version_index->m_AssetChunkIndexStarts[asset_index];
+    uint64_t asset_offset = 0;
+    struct Longtail_StoredBlock* stored_block = 0;
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_offset + c];
+        TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
+        uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
+
+        intptr_t block_index_ptr = hmgeti(chunk_hash_to_block_index_lookup, chunk_hash);
+        if (block_index_ptr == -1)
+        {
+            return ENOENT;
+        }
+        uint64_t block_index = chunk_hash_to_block_index_lookup[block_index_ptr].value;
+
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+
+        if (!stored_block || (*stored_block->m_BlockIndex->m_BlockHash) != block_hash)
+        {
+            if (stored_block && stored_block->Dispose)
+            {
+                stored_block->Dispose(stored_block);
+            }
+            // Lets start naive and request each block in turn.
+            // We should be more effective and figure out list of blocks needed
+            // and then fill out all parts of the buffer with the chunks for each block
+            TestAsyncGetBlockComplete getCB;
+            int err = block_store->GetStoredBlock(block_store, block_hash, &getCB.m_API);
+            if (err)
+            {
+                return err;
+            }
+            stored_block = getCB.m_StoredBlock;
+        }
+        uint32_t block_chunks_count = *stored_block->m_BlockIndex->m_ChunkCount;
+        uint32_t chunk_block_offset = 0;
+        for (uint32_t c = 0; c < block_chunks_count; ++c)
+        {
+            if (stored_block->m_BlockIndex->m_ChunkHashes[c] == chunk_hash)
+            {
+                break;
+            }
+            chunk_block_offset += stored_block->m_BlockIndex->m_ChunkSizes[c];
+        }
+        const char* block_data = (char*)stored_block->m_BlockData;
+
+        memcpy(&buffer[asset_offset], &block_data[chunk_block_offset], chunk_size);
+
+        asset_offset += chunk_size;
+    }
+    if (stored_block && stored_block->Dispose)
+    {
+        stored_block->Dispose(stored_block);
+    }
+    if (asset_offset != size)
+    {
+        return EINVAL;
+    }
+    *out_size = size;
+    *out_buf = buffer;
+    return 0;
+}
+
 TEST(Longtail, TestLongtailBlockFS)
 {
     static const uint32_t MAX_BLOCK_SIZE = 65536u;
@@ -6187,6 +6263,12 @@ TEST(Longtail, TestLongtailBlockFS)
     {
         hmput(block_hash_to_block_index_lookup, block_store_content_index->m_BlockHashes[b], b);
     }
+    struct HashToIndexLookup* chunk_hash_to_block_index_lookup = 0;
+    for (uint64_t c = 0; c < *block_store_content_index->m_ChunkCount; ++c)
+    {
+        uint64_t block_index = block_store_content_index->m_ChunkBlockIndexes[c];
+        hmput(chunk_hash_to_block_index_lookup, block_store_content_index->m_ChunkHashes[c], block_index);
+    }
     struct HashToIndexLookup* asset_lookup = 0;
     for (uint32_t a = 0; a < *vindex->m_AssetCount; ++a)
     {
@@ -6195,6 +6277,52 @@ TEST(Longtail, TestLongtailBlockFS)
         uint64_t path_hash = 0;
         ASSERT_EQ(0, hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), path, &path_hash));
         hmput(asset_lookup, path_hash, a);
+    }
+
+    for (uint32_t f = 0; f < version_paths->m_Count; ++f)
+    {
+        const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
+        uint64_t path_hash = 0;
+        ASSERT_EQ(0, hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), path, &path_hash));
+        intptr_t asset_index_ptr = hmgeti(asset_lookup, path_hash);
+        ASSERT_NE(-1, asset_index_ptr);
+        uint64_t asset_index = asset_lookup[asset_index_ptr].value;
+
+        char* full_path = mem_storage->ConcatPath(mem_storage, "source", path);
+        if (mem_storage->IsFile(mem_storage, full_path))
+        {
+            uint64_t size;
+            char* buf;
+            ASSERT_EQ(0, ReadAsset(
+                block_store,
+                block_store_content_index,
+                chunk_hash_to_block_index_lookup,
+                vindex,
+                asset_index,
+                &size,
+                (void**)&buf));
+
+            Longtail_StorageAPI_HOpenFile open_file;
+            ASSERT_EQ(0, mem_storage->OpenReadFile(mem_storage, full_path, &open_file));
+            uint64_t validate_size;
+            ASSERT_EQ(0, mem_storage->GetSize(mem_storage, open_file, &validate_size));
+            char* validate_buf = (char*)Longtail_Alloc(validate_size);
+            ASSERT_EQ(0, mem_storage->Read(mem_storage, open_file, 0, validate_size, validate_buf));
+            mem_storage->CloseFile(mem_storage, open_file);
+
+            ASSERT_EQ(size, validate_size);
+            const uint8_t* p1 = (const uint8_t*)buf;
+            const uint8_t* p2 = (const uint8_t*)validate_buf;
+            for (uint64_t i = 0; i < size; ++i)
+            {
+                ASSERT_EQ(p1[i], p2[i]);
+            }
+
+            Longtail_Free(buf);
+
+            Longtail_Free(validate_buf);
+        }
+        Longtail_Free(full_path);
     }
 
     hmfree(asset_lookup);
