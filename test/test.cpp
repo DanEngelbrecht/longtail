@@ -6127,8 +6127,10 @@ int ReadAsset(
     char* buffer = (char*)Longtail_Alloc(size);
     uint32_t chunk_count = version_index->m_AssetChunkCounts[asset_index];
     uint32_t chunk_offset = version_index->m_AssetChunkIndexStarts[asset_index];
-    uint64_t asset_offset = 0;
-    struct Longtail_StoredBlock* stored_block = 0;
+
+    struct HashToIndexLookup* requested_block_lookup = 0;
+    TLongtail_Hash* requested_block_hashes = 0;
+
     for (uint32_t c = 0; c < chunk_count; ++c)
     {
         uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_offset + c];
@@ -6144,47 +6146,61 @@ int ReadAsset(
 
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
 
-        if (!stored_block || (*stored_block->m_BlockIndex->m_BlockHash) != block_hash)
+        if (hmgeti(requested_block_lookup, block_hash) == -1)
         {
-            if (stored_block && stored_block->Dispose)
-            {
-                stored_block->Dispose(stored_block);
-            }
-            // Lets start naive and request each block in turn.
-            // We should be more effective and figure out list of blocks needed
-            // and then fill out all parts of the buffer with the chunks for each block
-            TestAsyncGetBlockComplete getCB;
-            int err = block_store->GetStoredBlock(block_store, block_hash, &getCB.m_API);
-            if (err)
-            {
-                return err;
-            }
-            stored_block = getCB.m_StoredBlock;
+            hmput(requested_block_lookup, block_hash, arrlen(requested_block_hashes));
+            arrput(requested_block_hashes, block_hash);
         }
-        uint32_t block_chunks_count = *stored_block->m_BlockIndex->m_ChunkCount;
-        uint32_t chunk_block_offset = 0;
-        for (uint32_t c = 0; c < block_chunks_count; ++c)
+    }
+
+    // TODO: This could be threaded per block
+    uint64_t block_count = (uint64_t)arrlen(requested_block_hashes);
+    for (uint64_t b = 0; b < block_count; ++b)
+    {
+        TLongtail_Hash block_hash = requested_block_hashes[b];
+        TestAsyncGetBlockComplete getCB;
+        int err = block_store->GetStoredBlock(block_store, block_hash, &getCB.m_API);
+        if (err)
         {
-            if (stored_block->m_BlockIndex->m_ChunkHashes[c] == chunk_hash)
-            {
-                break;
-            }
+            return err;
+        }
+        struct Longtail_StoredBlock* stored_block = getCB.m_StoredBlock;
+        uint32_t chunk_block_offset = 0;
+        struct HashToIndexLookup* block_chunk_lookup = 0;
+        for (uint32_t c = 0; c < *stored_block->m_BlockIndex->m_ChunkCount; ++c)
+        {
+            TLongtail_Hash chunk_hash = stored_block->m_BlockIndex->m_ChunkHashes[c];
+            hmput(block_chunk_lookup, chunk_hash, chunk_block_offset);
             chunk_block_offset += stored_block->m_BlockIndex->m_ChunkSizes[c];
         }
+
         const char* block_data = (char*)stored_block->m_BlockData;
+        uint64_t asset_offset = 0;
+        for (uint32_t c = 0; c < chunk_count; ++c)
+        {
+            uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_offset + c];
+            TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
+            uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
+            intptr_t chunk_block_offset_ptr = hmgeti(block_chunk_lookup, chunk_hash);
+            if (chunk_block_offset_ptr == -1)
+            {
+                asset_offset += chunk_size;
+                continue;
+            }
+            uint32_t chunk_block_offset = (uint32_t)block_chunk_lookup[chunk_block_offset_ptr].value;
+            memcpy(&buffer[asset_offset], &block_data[chunk_block_offset], chunk_size);
+            asset_offset += chunk_size;
+        }
 
-        memcpy(&buffer[asset_offset], &block_data[chunk_block_offset], chunk_size);
+        hmfree(block_chunk_lookup);
+        if (stored_block->Dispose)
+        {
+            stored_block->Dispose(stored_block);
+        }
+    }
+    arrfree(requested_block_hashes);
+    hmfree(requested_block_lookup);
 
-        asset_offset += chunk_size;
-    }
-    if (stored_block && stored_block->Dispose)
-    {
-        stored_block->Dispose(stored_block);
-    }
-    if (asset_offset != size)
-    {
-        return EINVAL;
-    }
     *out_size = size;
     *out_buf = buffer;
     return 0;
@@ -6198,7 +6214,9 @@ TEST(Longtail, TestLongtailBlockFS)
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
-    Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "chunks", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "chunks", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
+    Longtail_BlockStoreAPI* block_store = Longtail_CreateCompressBlockStoreAPI(raw_block_store, compression_registry);
 
     CreateRandomContent(mem_storage, "source", 32, MAX_CHUNKS_PER_BLOCK, MAX_BLOCK_SIZE);
 
@@ -6206,7 +6224,7 @@ TEST(Longtail, TestLongtailBlockFS)
     ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
 
-    uint32_t* compression_types = GetAssetTags(mem_storage, version_paths);
+    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);//Longtail_GetZStdMinQuality());
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -6343,6 +6361,8 @@ TEST(Longtail, TestLongtailBlockFS)
     Longtail_Free(version_paths);
     version_paths = 0;
     SAFE_DISPOSE_API(block_store);
+    SAFE_DISPOSE_API(raw_block_store);
+    SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(mem_storage);
