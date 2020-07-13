@@ -5625,7 +5625,8 @@ TEST(Longtail, BlockStoreRetargetContent)
 static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
 {
     for (size_t n = 0; n < size; n++) {
-        int key = rand() % (sizeof(uint8_t));
+        int r = rand();
+        int key = r & 0xff;
         data[n] = (uint8_t)key;
     }
     return data;
