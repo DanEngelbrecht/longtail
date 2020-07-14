@@ -6210,7 +6210,145 @@ struct BlockRange
     struct ChunkRange value;
 };
 
+int ReadFromBlock(
+    struct Longtail_StoredBlock* stored_block,
+    struct ChunkRange range,
+    struct BlockStoreFS* block_store_fs,
+    struct OpenBlockStoreFile* block_store_file,
+    uint64_t start,
+    uint64_t size,
+    char* buffer,
+    uint32_t chunk_offset)
+{
+    uint64_t read_end = start + size;
+    uint32_t chunk_block_offset = 0;
+    struct HashToIndexLookup* block_chunk_lookup = 0;
+    for (uint32_t c = 0; c < *stored_block->m_BlockIndex->m_ChunkCount; ++c)
+    {
+        TLongtail_Hash chunk_hash = stored_block->m_BlockIndex->m_ChunkHashes[c];
+        hmput(block_chunk_lookup, chunk_hash, chunk_block_offset);
+        chunk_block_offset += stored_block->m_BlockIndex->m_ChunkSizes[c];
+    }
+    uint64_t asset_offset = range.asset_start_offset;
+    for (uint32_t c = range.chunk_start; c < range.chunk_end; ++c)
+    {
+        uint32_t chunk_index = block_store_fs->version_index->m_AssetChunkIndexes[chunk_offset + c];
+        TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
+        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+        uint64_t asset_offset_chunk_end = asset_offset + chunk_size;
+        if (asset_offset_chunk_end < start)
+        {
+            // We sure could use a more efficient lookup to pos here :)
+            asset_offset = asset_offset_chunk_end;
+            continue;
+        }
+
+        const char* block_data = (char*)stored_block->m_BlockData;
+
+        intptr_t chunk_block_offset_ptr = hmgeti(block_chunk_lookup, chunk_hash);
+        if (chunk_block_offset_ptr == -1)
+        {
+            asset_offset += chunk_size;
+            continue;
+        }
+        uint32_t chunk_offset = 0;
+        uint32_t read_length = chunk_size;
+        if (asset_offset < start)
+        {
+            chunk_offset = (uint32_t)(start - asset_offset);
+            read_length = chunk_size - chunk_offset;
+            asset_offset = start;
+        }
+        if (asset_offset + read_length > read_end)
+        {
+            read_length = (uint32_t)(read_end - asset_offset);
+        }
+
+        uint32_t chunk_block_offset = (uint32_t)block_chunk_lookup[chunk_block_offset_ptr].value;
+        memcpy(&buffer[asset_offset - start], &block_data[chunk_block_offset + chunk_offset], read_length);
+        asset_offset += read_length;
+    }
+    hmfree(block_chunk_lookup);
+    return 0;
+}
+
+struct ReadFromBlockJobData
+{
+    struct Longtail_JobAPI* job_api;
+    uint64_t block_index;
+    struct ChunkRange range;
+    struct BlockStoreFS* block_store_fs;
+    struct OpenBlockStoreFile* block_store_file;
+    uint64_t start;
+    uint64_t size;
+    char* buffer;
+    uint32_t chunk_offset;
+    struct Longtail_StoredBlock* stored_block;
+    int err;
+};
+
+struct TestReadBlockComplete
+{
+    struct Longtail_AsyncGetStoredBlockAPI m_API;
+    uint32_t job_id;
+    struct ReadFromBlockJobData* data;
+    static void OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, Longtail_StoredBlock* stored_block, int err)
+    {
+        struct TestReadBlockComplete* cb = (struct TestReadBlockComplete*)async_complete_api;
+        cb->data->err = err;
+        cb->data->stored_block = stored_block;
+        cb->data->job_api->ResumeJob(cb->data->job_api, cb->job_id);
+        Longtail_Free(cb);
+    }
+};
+
+
+int ReadFromBlockJob(void* context, uint32_t job_id, int is_cancelled)
+{
+    struct ReadFromBlockJobData* data = (struct ReadFromBlockJobData*)context;
+
+    if (!data->stored_block)
+    {
+        if (data->err)
+        {
+            return 0;
+        }
+        // Don't need dynamic alloc, could be part of struct ReadFromBlockJobData since it covers the lifetime of struct TestReadBlockComplete
+        struct TestReadBlockComplete* complete_cb = (struct TestReadBlockComplete*)Longtail_Alloc(sizeof(struct TestReadBlockComplete));
+        complete_cb->m_API.m_API.Dispose = 0;
+        complete_cb->m_API.OnComplete = TestReadBlockComplete::OnComplete;
+        complete_cb->job_id = job_id;
+        complete_cb->data = data;
+
+        TLongtail_Hash block_hash = data->block_store_fs->content_index->m_BlockHashes[data->block_index];
+        int err = data->block_store_fs->block_store->GetStoredBlock(data->block_store_fs->block_store, block_hash, &complete_cb->m_API);
+        if (err)
+        {
+            data->err = err;
+            Longtail_Free(complete_cb);
+            return 0;
+        }
+        return EBUSY;
+    }
+
+    data->err = ReadFromBlock(
+        data->stored_block,
+        data->range,
+        data->block_store_fs,
+        data->block_store_file,
+        data->start,
+        data->size,
+        data->buffer,
+        data->chunk_offset);
+    if (data->stored_block->Dispose)
+    {
+        data->stored_block->Dispose(data->stored_block);
+    }
+    return 0;
+}
+
 int ReadBlockStoreFile(
+    struct Longtail_JobAPI* job_api,
     struct BlockStoreFS* block_store_fs,
     struct OpenBlockStoreFile* block_store_file,
     uint64_t start,
@@ -6283,19 +6421,14 @@ int ReadBlockStoreFile(
     }
 
     intptr_t block_count = arrlen(block_indexes);
-
-    if (block_count > 1)
+    if (block_count == 0)
     {
-        // Thread it
-    }
-    else
-    {
-        // run inline
+        return 0;
     }
 
-    for (intptr_t b = 0; b < arrlen(block_indexes); ++b)
+    if (block_count == 1)
     {
-        uint64_t block_index = block_indexes[b];
+        uint64_t block_index = block_indexes[0];
         struct ChunkRange range = hmget(block_range_map, block_index);
 
         TLongtail_Hash block_hash = block_store_fs->content_index->m_BlockHashes[block_index];
@@ -6310,58 +6443,67 @@ int ReadBlockStoreFile(
             return getCB.m_Err;
         }
         struct Longtail_StoredBlock* stored_block = getCB.m_StoredBlock;
-        uint32_t chunk_block_offset = 0;
-        struct HashToIndexLookup* block_chunk_lookup = 0;
-        for (uint32_t c = 0; c < *stored_block->m_BlockIndex->m_ChunkCount; ++c)
-        {
-            TLongtail_Hash chunk_hash = stored_block->m_BlockIndex->m_ChunkHashes[c];
-            hmput(block_chunk_lookup, chunk_hash, chunk_block_offset);
-            chunk_block_offset += stored_block->m_BlockIndex->m_ChunkSizes[c];
-        }
-        uint64_t asset_offset = range.asset_start_offset;
-        for (uint32_t c = range.chunk_start; c < range.chunk_end; ++c)
-        {
-            uint32_t chunk_index = block_store_fs->version_index->m_AssetChunkIndexes[chunk_offset + c];
-            TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
-            uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
-            uint64_t asset_offset_chunk_end = asset_offset + chunk_size;
-            if (asset_offset_chunk_end < start)
-            {
-                // We sure could use a more efficient lookup to pos here :)
-                asset_offset = asset_offset_chunk_end;
-                continue;
-            }
 
-            const char* block_data = (char*)stored_block->m_BlockData;
-
-            intptr_t chunk_block_offset_ptr = hmgeti(block_chunk_lookup, chunk_hash);
-            if (chunk_block_offset_ptr == -1)
-            {
-                asset_offset += chunk_size;
-                continue;
-            }
-            uint32_t chunk_offset = 0;
-            uint32_t read_length = chunk_size;
-            if (asset_offset < start)
-            {
-                chunk_offset = (uint32_t)(start - asset_offset);
-                read_length = chunk_size - chunk_offset;
-                asset_offset = start;
-            }
-            if (asset_offset + read_length > read_end)
-            {
-                read_length = (uint32_t)(read_end - asset_offset);
-            }
-
-            uint32_t chunk_block_offset = (uint32_t)block_chunk_lookup[chunk_block_offset_ptr].value;
-            memcpy(&buffer[asset_offset - start], &block_data[chunk_block_offset + chunk_offset], read_length);
-            asset_offset += read_length;
-        }
-        hmfree(block_chunk_lookup);
+        err = ReadFromBlock(
+            stored_block,
+            range,
+            block_store_fs,
+            block_store_file,
+            start,
+            size,
+            buffer,
+            chunk_offset);
         if (stored_block->Dispose)
         {
             stored_block->Dispose(stored_block);
         }
+        if (err)
+        {
+            return err;
+        }
+    }
+    else
+    {
+        uint32_t block_count = (uint32_t)arrlen(block_indexes);
+        struct ReadFromBlockJobData* job_datas = (struct ReadFromBlockJobData*)Longtail_Alloc(sizeof(struct ReadFromBlockJobData) * block_count);
+        LONGTAIL_FATAL_ASSERT(job_datas, return ENOMEM)
+        Longtail_JobAPI_Group job_group;
+        int err = job_api->ReserveJobs(job_api, block_count, &job_group);
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
+
+        Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc) * block_count);
+        void** ctxs = (void**)Longtail_Alloc(sizeof(void*) * block_count);
+
+        for (uint32_t b = 0; b < block_count; ++b)
+        {
+            uint64_t block_index = block_indexes[b];
+            struct ChunkRange range = hmget(block_range_map, block_index);
+
+            job_datas[b].job_api = job_api;
+            job_datas[b].block_index = block_index;
+            job_datas[b].range = range;
+            job_datas[b].block_store_fs = block_store_fs;
+            job_datas[b].block_store_file = block_store_file;
+            job_datas[b].start = start;
+            job_datas[b].size = size;
+            job_datas[b].buffer = buffer;
+            job_datas[b].chunk_offset = chunk_offset;
+            job_datas[b].stored_block = 0;
+            job_datas[b].err = 0;
+
+            funcs[b] = ReadFromBlockJob;
+            ctxs[b] = &job_datas[b];
+        }
+        Longtail_JobAPI_Jobs jobs;
+        err = job_api->CreateJobs(job_api, job_group, block_count, funcs, ctxs, &jobs);
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
+        err = job_api->ReadyJobs(job_api, block_count, jobs);
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
+        err = job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
+        LONGTAIL_FATAL_ASSERT(err == 0, return err)
+        Longtail_Free(ctxs);
+        Longtail_Free(funcs);
+        Longtail_Free(job_datas);
     }
 
     hmfree(block_range_map);
@@ -6376,18 +6518,20 @@ TEST(Longtail, TestLongtailBlockFS)
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();//Longtail_CreateFSStorageAPI();//
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
-    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
     Longtail_BlockStoreAPI* block_store = Longtail_CreateCompressBlockStoreAPI(raw_block_store, compression_registry);
 
-    CreateRandomContent(mem_storage, "source", 711, 1, MAX_BLOCK_SIZE * 7);
+    printf("\nCreating...\n");
+
+    CreateRandomContent(mem_storage, "source", 711, 1, MAX_BLOCK_SIZE * 17);
 
     Longtail_FileInfos* version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
 
-    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);//Longtail_GetZStdMinQuality());
+    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, Longtail_GetZStdMinQuality());
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
@@ -6440,7 +6584,7 @@ TEST(Longtail, TestLongtailBlockFS)
 
 //    uint64_t data_read_count = 0;
 
-//    printf("\nReading...\n");
+    printf("\nReading...\n");
 
     struct BlockStoreFS* block_store_fs;
     ASSERT_EQ(0, OpenBlockStoreFS(hash_api, block_store, block_store_content_index, vindex, &block_store_fs));
@@ -6457,9 +6601,9 @@ TEST(Longtail, TestLongtailBlockFS)
             char* buf = (char*)Longtail_Alloc(size);
             if (size > 64)
             {
-                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 0, 32, buf));
-                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 32, size - 64, &buf[32]));
-                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, size - 32, 32, &buf[size - 32]));
+                ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, 0, 32, buf));
+                ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, 32, size - 64, &buf[32]));
+                ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, size - 32, 32, &buf[size - 32]));
             }
             else if (size > 0)
             {
@@ -6471,7 +6615,7 @@ TEST(Longtail, TestLongtailBlockFS)
                     {
                         s = size - o;
                     }
-                    ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, o, s, &buf[o]));
+                    ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, o, s, &buf[o]));
                     o += s;
                 }
             }
@@ -6508,7 +6652,7 @@ TEST(Longtail, TestLongtailBlockFS)
 
     CloseBlockStoreFS(block_store_fs);
 
-//    printf("\nDone...\n");
+    printf("\nDone...\n");
 
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
