@@ -6163,8 +6163,6 @@ void CloseBlockStoreFS(struct BlockStoreFS* block_store_fs)
 
 struct OpenBlockStoreFile
 {
-    struct HashToIndexLookup* requested_block_lookup;
-    TLongtail_Hash* requested_block_hashes;
     uint32_t asset_index;
 };
 
@@ -6182,41 +6180,14 @@ int OpenAsset(struct BlockStoreFS* block_store_fs, const char* path, struct Open
         return ENOENT;
     }
     uint64_t asset_index = block_store_fs->asset_lookup[asset_index_ptr].value;
-    uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[asset_index];
-    uint32_t chunk_offset = block_store_fs->version_index->m_AssetChunkIndexStarts[asset_index];
     struct OpenBlockStoreFile* block_store_file = (struct OpenBlockStoreFile*)Longtail_Alloc(sizeof(struct OpenBlockStoreFile));
-    block_store_file->requested_block_lookup = 0;
-    block_store_file->requested_block_hashes = 0;
     block_store_file->asset_index = (uint32_t)asset_index;
-    for (uint32_t c = 0; c < chunk_count; ++c)
-    {
-        uint32_t chunk_index = block_store_fs->version_index->m_AssetChunkIndexes[chunk_offset + c];
-        TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
-        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
-
-        intptr_t block_index_ptr = hmgeti(block_store_fs->chunk_hash_to_block_index_lookup, chunk_hash);
-        if (block_index_ptr == -1)
-        {
-            return ENOENT;
-        }
-        uint64_t block_index = block_store_fs->chunk_hash_to_block_index_lookup[block_index_ptr].value;
-
-        TLongtail_Hash block_hash = block_store_fs->content_index->m_BlockHashes[block_index];
-
-        if (hmgeti(block_store_file->requested_block_lookup, block_hash) == -1)
-        {
-            hmput(block_store_file->requested_block_lookup, block_hash, arrlen(block_store_file->requested_block_hashes));
-            arrput(block_store_file->requested_block_hashes, block_hash);
-        }
-    }
     *out_block_store_file = block_store_file;
     return 0;
 }
 
 void CloseAsset(struct BlockStoreFS* block_store_fs, struct OpenBlockStoreFile* block_store_file)
 {
-    hmfree(block_store_file->requested_block_lookup);
-    arrfree(block_store_file->requested_block_hashes);
     Longtail_Free(block_store_file);
 }
 
@@ -6226,31 +6197,117 @@ int GetAssetSize(struct BlockStoreFS* block_store_fs, struct OpenBlockStoreFile*
     return 0;
 }
 
+struct ChunkRange
+{
+    uint64_t asset_start_offset;
+    uint32_t chunk_start;
+    uint32_t chunk_end;
+};
+
+struct BlockRange
+{
+    TLongtail_Hash key;
+    struct ChunkRange value;
+};
+
 int ReadBlockStoreFile(
     struct BlockStoreFS* block_store_fs,
     struct OpenBlockStoreFile* block_store_file,
-    uint64_t* out_size,
-    void** out_buffer)
+    uint64_t start,
+    uint64_t size,
+    void* out_buffer)
 {
-    uint64_t size = block_store_fs->version_index->m_AssetSizes[block_store_file->asset_index];
-    char* buffer = (char*)Longtail_Alloc(size);
-    if (!buffer)
-    {
-        return ENOMEM;
-    }
+    char* buffer = (char*)out_buffer;
 
     uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[block_store_file->asset_index];
     uint32_t chunk_offset = block_store_fs->version_index->m_AssetChunkIndexStarts[block_store_file->asset_index];
 
-    uint64_t block_count = (uint64_t)arrlen(block_store_file->requested_block_hashes);
-    for (uint64_t b = 0; b < block_count; ++b)
+    const uint64_t read_end = start + size;
+    uint32_t chunk_start_index = 0;
+    uint64_t asset_pos = 0;
+    // Would be nice to have a faster way to get to starting position...
+    for (uint32_t c = 0; c < chunk_count; ++c)
     {
-        TLongtail_Hash block_hash = block_store_file->requested_block_hashes[b];
+        uint32_t chunk_index = block_store_fs->version_index->m_AssetChunkIndexes[chunk_offset + c];
+        TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
+        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+        uint64_t asset_offset_chunk_end = asset_pos + chunk_size;
+        if (asset_offset_chunk_end >= start)
+        {
+            chunk_start_index = c;
+            break;
+        }
+        asset_pos = asset_offset_chunk_end;
+    }
+
+    struct BlockRange* block_range_map = 0;
+    uint64_t* block_indexes = 0;
+
+    intptr_t last_block_index = (uint64_t)-1;
+    uint64_t last_block_range_index_ptr = -1;
+
+    // Logic is flawed here, most likely - we end up with a chunk range for a block that ends up outside of write range...
+    for (uint32_t c = chunk_start_index; c < chunk_count; ++c)
+    {
+        uint32_t chunk_index = block_store_fs->version_index->m_AssetChunkIndexes[chunk_offset + c];
+        TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
+        intptr_t block_find_index_ptr = hmgeti(block_store_fs->chunk_hash_to_block_index_lookup, chunk_hash);
+        uint64_t block_index = block_store_fs->chunk_hash_to_block_index_lookup[block_find_index_ptr].value;
+        if ((block_index != (uint64_t)-1) && (block_index == last_block_index))
+        {
+            block_range_map[last_block_range_index_ptr].value.chunk_end = c + 1;
+        }
+        else
+        {
+            last_block_range_index_ptr = hmgeti(block_range_map, block_index);
+            if (last_block_range_index_ptr == -1)
+            {
+                struct ChunkRange range = {asset_pos, c, c + 1};
+                hmput(block_range_map, block_index, range);
+                arrput(block_indexes, block_index);
+                last_block_range_index_ptr = hmgeti(block_range_map, block_index);
+            }
+            else
+            {
+                block_range_map[last_block_range_index_ptr].value.chunk_end = c + 1;
+            }
+            last_block_index = block_index;
+        }
+
+        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+        asset_pos += chunk_size;
+        if (asset_pos >= read_end)
+        {
+            break;
+        }
+    }
+
+    intptr_t block_count = arrlen(block_indexes);
+
+    if (block_count > 1)
+    {
+        // Thread it
+    }
+    else
+    {
+        // run inline
+    }
+
+    for (intptr_t b = 0; b < arrlen(block_indexes); ++b)
+    {
+        uint64_t block_index = block_indexes[b];
+        struct ChunkRange range = hmget(block_range_map, block_index);
+
+        TLongtail_Hash block_hash = block_store_fs->content_index->m_BlockHashes[block_index];
         TestAsyncGetBlockComplete getCB;
         int err = block_store_fs->block_store->GetStoredBlock(block_store_fs->block_store, block_hash, &getCB.m_API);
         if (err)
         {
             return err;
+        }
+        if (getCB.m_Err)
+        {
+            return getCB.m_Err;
         }
         struct Longtail_StoredBlock* stored_block = getCB.m_StoredBlock;
         uint32_t chunk_block_offset = 0;
@@ -6261,49 +6318,70 @@ int ReadBlockStoreFile(
             hmput(block_chunk_lookup, chunk_hash, chunk_block_offset);
             chunk_block_offset += stored_block->m_BlockIndex->m_ChunkSizes[c];
         }
-
-        const char* block_data = (char*)stored_block->m_BlockData;
-        uint64_t asset_offset = 0;
-        for (uint32_t c = 0; c < chunk_count; ++c)
+        uint64_t asset_offset = range.asset_start_offset;
+        for (uint32_t c = range.chunk_start; c < range.chunk_end; ++c)
         {
             uint32_t chunk_index = block_store_fs->version_index->m_AssetChunkIndexes[chunk_offset + c];
             TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
             uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+            uint64_t asset_offset_chunk_end = asset_offset + chunk_size;
+            if (asset_offset_chunk_end < start)
+            {
+                // We sure could use a more efficient lookup to pos here :)
+                asset_offset = asset_offset_chunk_end;
+                continue;
+            }
+
+            const char* block_data = (char*)stored_block->m_BlockData;
+
             intptr_t chunk_block_offset_ptr = hmgeti(block_chunk_lookup, chunk_hash);
             if (chunk_block_offset_ptr == -1)
             {
                 asset_offset += chunk_size;
                 continue;
             }
-            uint32_t chunk_block_offset = (uint32_t)block_chunk_lookup[chunk_block_offset_ptr].value;
-            memcpy(&buffer[asset_offset], &block_data[chunk_block_offset], chunk_size);
-            asset_offset += chunk_size;
-        }
+            uint32_t chunk_offset = 0;
+            uint32_t read_length = chunk_size;
+            if (asset_offset < start)
+            {
+                chunk_offset = (uint32_t)(start - asset_offset);
+                read_length = chunk_size - chunk_offset;
+                asset_offset = start;
+            }
+            if (asset_offset + read_length > read_end)
+            {
+                read_length = (uint32_t)(read_end - asset_offset);
+            }
 
+            uint32_t chunk_block_offset = (uint32_t)block_chunk_lookup[chunk_block_offset_ptr].value;
+            memcpy(&buffer[asset_offset - start], &block_data[chunk_block_offset + chunk_offset], read_length);
+            asset_offset += read_length;
+        }
         hmfree(block_chunk_lookup);
         if (stored_block->Dispose)
         {
             stored_block->Dispose(stored_block);
         }
     }
-    *out_size = size;
-    *out_buffer = buffer;
+
+    hmfree(block_range_map);
+    arrfree(block_indexes);
     return 0;
 }
 
 TEST(Longtail, TestLongtailBlockFS)
 {
-    static const uint32_t MAX_BLOCK_SIZE = 65536u;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 8u;
+    static const uint32_t MAX_BLOCK_SIZE = 8192u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 64u;
 
-    Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();//Longtail_CreateFSStorageAPI();//
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "chunks", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
+    Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
     Longtail_BlockStoreAPI* block_store = Longtail_CreateCompressBlockStoreAPI(raw_block_store, compression_registry);
 
-    CreateRandomContent(mem_storage, "source", 32, MAX_CHUNKS_PER_BLOCK, MAX_BLOCK_SIZE);
+    CreateRandomContent(mem_storage, "source", 711, 1, MAX_BLOCK_SIZE * 7);
 
     Longtail_FileInfos* version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
@@ -6322,7 +6400,7 @@ TEST(Longtail, TestLongtailBlockFS)
         "source",
         version_paths,
         compression_types,
-        16,
+        MAX_BLOCK_SIZE / MAX_CHUNKS_PER_BLOCK,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
 
@@ -6360,6 +6438,10 @@ TEST(Longtail, TestLongtailBlockFS)
     get_index_complete.Wait();
     block_store_content_index = get_index_complete.m_ContentIndex;
 
+//    uint64_t data_read_count = 0;
+
+//    printf("\nReading...\n");
+
     struct BlockStoreFS* block_store_fs;
     ASSERT_EQ(0, OpenBlockStoreFS(hash_api, block_store, block_store_content_index, vindex, &block_store_fs));
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)
@@ -6371,8 +6453,29 @@ TEST(Longtail, TestLongtailBlockFS)
             struct OpenBlockStoreFile* block_store_file;
             ASSERT_EQ(0, OpenAsset(block_store_fs, path, &block_store_file));
             uint64_t size;
-            char* buf;
-            ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, &size, (void**)&buf));
+            ASSERT_EQ(0, GetAssetSize(block_store_fs, block_store_file, &size));
+            char* buf = (char*)Longtail_Alloc(size);
+            if (size > 64)
+            {
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 0, 32, buf));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 32, size - 64, &buf[32]));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, size - 32, 32, &buf[size - 32]));
+            }
+            else if (size > 0)
+            {
+                uint64_t o = 0;
+                while (o < size)
+                {
+                    uint64_t s = o % 3 + 1;
+                    if (o + s > size)
+                    {
+                        s = size - o;
+                    }
+                    ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, o, s, &buf[o]));
+                    o += s;
+                }
+            }
+
             CloseAsset(block_store_fs, block_store_file);
 
             Longtail_StorageAPI_HOpenFile open_file;
@@ -6388,8 +6491,13 @@ TEST(Longtail, TestLongtailBlockFS)
             const uint8_t* p2 = (const uint8_t*)validate_buf;
             for (uint64_t i = 0; i < size; ++i)
             {
-                ASSERT_EQ(p1[i], p2[i]);
+                if (p1[i] != p2[i])
+                {
+                    ASSERT_TRUE(false);
+                }
             }
+
+//            data_read_count += size;
 
             Longtail_Free(buf);
 
@@ -6399,6 +6507,8 @@ TEST(Longtail, TestLongtailBlockFS)
     }
 
     CloseBlockStoreFS(block_store_fs);
+
+//    printf("\nDone...\n");
 
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
