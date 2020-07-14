@@ -6117,6 +6117,7 @@ struct HashToIndexLookup
 struct BlockStoreFS
 {
     Longtail_HashAPI* hash_api;
+    struct Longtail_JobAPI* job_api;
     struct Longtail_BlockStoreAPI* block_store;
     struct Longtail_ContentIndex* content_index;
     struct Longtail_VersionIndex* version_index;
@@ -6126,6 +6127,7 @@ struct BlockStoreFS
 
 int OpenBlockStoreFS(
     Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
     struct Longtail_BlockStoreAPI* block_store,
     struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
@@ -6133,6 +6135,7 @@ int OpenBlockStoreFS(
 {
     struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)Longtail_Alloc(sizeof(struct BlockStoreFS));
     block_store_fs->hash_api = hash_api;
+    block_store_fs->job_api = job_api;
     block_store_fs->block_store = block_store;
     block_store_fs->content_index = content_index;
     block_store_fs->version_index = version_index;
@@ -6274,7 +6277,6 @@ int ReadFromBlock(
 
 struct ReadFromBlockJobData
 {
-    struct Longtail_JobAPI* job_api;
     uint64_t block_index;
     struct ChunkRange range;
     struct BlockStoreFS* block_store_fs;
@@ -6295,9 +6297,10 @@ struct TestReadBlockComplete
     static void OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, Longtail_StoredBlock* stored_block, int err)
     {
         struct TestReadBlockComplete* cb = (struct TestReadBlockComplete*)async_complete_api;
+        struct Longtail_JobAPI* job_api = cb->data->block_store_fs->job_api;
         cb->data->err = err;
         cb->data->stored_block = stored_block;
-        cb->data->job_api->ResumeJob(cb->data->job_api, cb->job_id);
+        job_api->ResumeJob(job_api, cb->job_id);
         Longtail_Free(cb);
     }
 };
@@ -6348,7 +6351,6 @@ int ReadFromBlockJob(void* context, uint32_t job_id, int is_cancelled)
 }
 
 int ReadBlockStoreFile(
-    struct Longtail_JobAPI* job_api,
     struct BlockStoreFS* block_store_fs,
     struct OpenBlockStoreFile* block_store_file,
     uint64_t start,
@@ -6384,7 +6386,6 @@ int ReadBlockStoreFile(
     intptr_t last_block_index = (uint64_t)-1;
     uint64_t last_block_range_index_ptr = -1;
 
-    // Logic is flawed here, most likely - we end up with a chunk range for a block that ends up outside of write range...
     for (uint32_t c = chunk_start_index; c < chunk_count; ++c)
     {
         uint32_t chunk_index = block_store_fs->version_index->m_AssetChunkIndexes[chunk_offset + c];
@@ -6464,6 +6465,7 @@ int ReadBlockStoreFile(
     }
     else
     {
+        struct Longtail_JobAPI* job_api = block_store_fs->job_api;
         uint32_t block_count = (uint32_t)arrlen(block_indexes);
         struct ReadFromBlockJobData* job_datas = (struct ReadFromBlockJobData*)Longtail_Alloc(sizeof(struct ReadFromBlockJobData) * block_count);
         LONGTAIL_FATAL_ASSERT(job_datas, return ENOMEM)
@@ -6479,7 +6481,6 @@ int ReadBlockStoreFile(
             uint64_t block_index = block_indexes[b];
             struct ChunkRange range = hmget(block_range_map, block_index);
 
-            job_datas[b].job_api = job_api;
             job_datas[b].block_index = block_index;
             job_datas[b].range = range;
             job_datas[b].block_store_fs = block_store_fs;
@@ -6587,7 +6588,7 @@ TEST(Longtail, TestLongtailBlockFS)
 //    printf("\nReading...\n");
 
     struct BlockStoreFS* block_store_fs;
-    ASSERT_EQ(0, OpenBlockStoreFS(hash_api, block_store, block_store_content_index, vindex, &block_store_fs));
+    ASSERT_EQ(0, OpenBlockStoreFS(hash_api, job_api, block_store, block_store_content_index, vindex, &block_store_fs));
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)
     {
         const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
@@ -6601,9 +6602,9 @@ TEST(Longtail, TestLongtailBlockFS)
             char* buf = (char*)Longtail_Alloc(size);
             if (size > 64)
             {
-                ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, 0, 32, buf));
-                ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, 32, size - 64, &buf[32]));
-                ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, size - 32, 32, &buf[size - 32]));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 0, 32, buf));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 32, size - 64, &buf[32]));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, size - 32, 32, &buf[size - 32]));
             }
             else if (size > 0)
             {
@@ -6615,7 +6616,7 @@ TEST(Longtail, TestLongtailBlockFS)
                     {
                         s = size - o;
                     }
-                    ASSERT_EQ(0, ReadBlockStoreFile(job_api, block_store_fs, block_store_file, o, s, &buf[o]));
+                    ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, o, s, &buf[o]));
                     o += s;
                 }
             }
