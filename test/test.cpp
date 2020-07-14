@@ -6523,9 +6523,9 @@ TEST(Longtail, TestLongtailBlockFS)
     Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
     Longtail_BlockStoreAPI* block_store = Longtail_CreateCompressBlockStoreAPI(raw_block_store, compression_registry);
 
-    printf("\nCreating...\n");
+//    printf("\nCreating...\n");
 
-    CreateRandomContent(mem_storage, "source", 711, 1, MAX_BLOCK_SIZE * 17);
+    CreateRandomContent(mem_storage, "source", 117, 1, MAX_BLOCK_SIZE * 17);
 
     Longtail_FileInfos* version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
@@ -6584,7 +6584,7 @@ TEST(Longtail, TestLongtailBlockFS)
 
 //    uint64_t data_read_count = 0;
 
-    printf("\nReading...\n");
+//    printf("\nReading...\n");
 
     struct BlockStoreFS* block_store_fs;
     ASSERT_EQ(0, OpenBlockStoreFS(hash_api, block_store, block_store_content_index, vindex, &block_store_fs));
@@ -6652,7 +6652,7 @@ TEST(Longtail, TestLongtailBlockFS)
 
     CloseBlockStoreFS(block_store_fs);
 
-    printf("\nDone...\n");
+//    printf("\nDone...\n");
 
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
