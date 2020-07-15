@@ -5623,6 +5623,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     SAFE_DISPOSE_API(storage_api);
 }
 
+
 static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
 {
     for (size_t n = 0; n < size; n++) {
@@ -5653,7 +5654,7 @@ static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const c
     {
         char content_path[128];
         GenerateRandomPath(content_path, sizeof(content_path));
-        size_t content_length = (rand() + rand() + rand() + rand() + rand() + rand()) % (max_content_length - min_content_length) + min_content_length;
+        size_t content_length = ((((uint64_t)rand()) << 32) + rand()) % (max_content_length - min_content_length) + min_content_length;
         uint8_t* content_data = (uint8_t*)malloc(content_length);
         GenerateRandomData(content_data, content_length);
 
@@ -6125,13 +6126,13 @@ TEST(Longtail, TestLongtailBlockFS)
 
 //    printf("\nCreating...\n");
 
-    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 1, MAX_BLOCK_SIZE * 9);
+    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, MAX_BLOCK_SIZE * 9);
 
     Longtail_FileInfos* version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
 
-    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, Longtail_GetZStdMinQuality());
+    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);//Longtail_GetZStdMinQuality());
     ASSERT_NE((uint32_t*)0, compression_types);
     Longtail_VersionIndex* vindex;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
