@@ -6116,6 +6116,7 @@ struct HashToIndexLookup
 
 struct BlockStoreFS
 {
+    struct Longtail_StorageAPI m_API;
     Longtail_HashAPI* hash_api;
     struct Longtail_JobAPI* job_api;
     struct Longtail_BlockStoreAPI* block_store;
@@ -6125,64 +6126,6 @@ struct BlockStoreFS
     struct HashToIndexLookup* asset_lookup;
     uint64_t* chunk_asset_offsets;
 };
-
-int OpenBlockStoreFS(
-    Longtail_HashAPI* hash_api,
-    struct Longtail_JobAPI* job_api,
-    struct Longtail_BlockStoreAPI* block_store,
-    struct Longtail_ContentIndex* content_index,
-    struct Longtail_VersionIndex* version_index,
-    struct BlockStoreFS** out_block_store_fs)
-{
-    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)Longtail_Alloc(sizeof(struct BlockStoreFS));
-    block_store_fs->hash_api = hash_api;
-    block_store_fs->job_api = job_api;
-    block_store_fs->block_store = block_store;
-    block_store_fs->content_index = content_index;
-    block_store_fs->version_index = version_index;
-    block_store_fs->chunk_hash_to_block_index_lookup = 0;
-    block_store_fs->asset_lookup = 0;
-    block_store_fs->chunk_asset_offsets = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount));
-
-    for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
-    {
-        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
-        hmput(block_store_fs->chunk_hash_to_block_index_lookup, content_index->m_ChunkHashes[c], block_index);
-    }
-    for (uint32_t a = 0; a < *version_index->m_AssetCount; ++a)
-    {
-        TLongtail_Hash path_hash = version_index->m_PathHashes[a];
-        hmput(block_store_fs->asset_lookup, path_hash, a);
-
-        uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[a];
-        if (chunk_count == 0)
-        {
-            continue;
-        }
-        uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[a];
-        const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
-        uint64_t* chunk_asset_offsets = &block_store_fs->chunk_asset_offsets[chunk_start_index];
-        uint64_t offset = 0;
-        for (uint32_t c = 0; c < chunk_count; ++c)
-        {
-            uint32_t chunk_index = chunk_indexes[c];
-            uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
-            chunk_asset_offsets[c] = offset;
-            offset += chunk_size;
-        }
-    }
-
-    *out_block_store_fs = block_store_fs;
-    return 0;
-}
-
-void CloseBlockStoreFS(struct BlockStoreFS* block_store_fs)
-{
-    hmfree(block_store_fs->asset_lookup);
-    hmfree(block_store_fs->chunk_hash_to_block_index_lookup);
-    Longtail_Free(block_store_fs->chunk_asset_offsets);
-    Longtail_Free(block_store_fs);
-}
 
 struct OpenBlockStoreFile
 {
@@ -6602,6 +6545,287 @@ int ReadBlockStoreFile(
     arrfree(block_indexes);
     return 0;
 }
+
+int Longtail_BlockStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)storage_api;
+    struct OpenBlockStoreFile* block_store_file;
+    int err = OpenAsset(block_store_fs, path, &block_store_file);
+    if (err)
+    {
+        return err;
+    }
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)block_store_file;
+    return 0;
+}
+
+int Longtail_BlockStorage_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
+{
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)storage_api;
+    struct OpenBlockStoreFile* block_store_file = (struct OpenBlockStoreFile*)f;
+    int err = GetAssetSize(block_store_fs, block_store_file, out_size);
+    return err;
+}
+
+int Longtail_BlockStorage_Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
+{
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)storage_api;
+    struct OpenBlockStoreFile* block_store_file = (struct OpenBlockStoreFile*)f;
+    int err = ReadBlockStoreFile(block_store_fs, block_store_file, offset, length, output);
+    return err;
+}
+
+int Longtail_BlockStorage_OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+{
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
+{
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions)
+{
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
+{
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)storage_api;
+    uint64_t path_hash = 0;
+    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    if (err)
+    {
+        return err;
+    }
+    intptr_t asset_index_ptr = hmgeti(block_store_fs->asset_lookup, path_hash);
+    if (asset_index_ptr == -1)
+    {
+        return ENOENT;
+    }
+    uint64_t asset_index = block_store_fs->asset_lookup[asset_index_ptr].value;
+    *out_permissions = block_store_fs->version_index->m_Permissions[asset_index];
+    return 0;
+}
+
+void Longtail_BlockStorage_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
+{
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)storage_api;
+    struct OpenBlockStoreFile* block_store_file = (struct OpenBlockStoreFile*)f;
+    CloseAsset(block_store_fs, block_store_file);
+}
+
+int Longtail_BlockStorage_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
+{
+    return ENOTSUP;
+}
+
+char* Longtail_BlockStorage_ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
+{
+    size_t root_len = strlen(root_path);
+    if (root_len == 0)
+    {
+        return Longtail_Strdup(sub_path);
+    }
+    if (root_path[root_len - 1] == '/')
+    {
+        --root_len;
+    }
+    size_t sub_len = strlen(sub_path);
+    size_t path_len = root_len + 1 + sub_len;
+    char* path = (char*)Longtail_Alloc(path_len + 1);
+    if (!path)
+    {
+        return 0;
+    }
+    memcpy(path, root_path, root_len);
+    path[root_len] = '/';
+    memcpy(&path[root_len + 1], sub_path, sub_len);
+    return path;
+}
+
+int Longtail_BlockStorage_IsDir(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    size_t path_len = strlen(path);
+    if (path_len == 0)
+    {
+        return 0;
+    }
+    if (path[strlen(path)- 1] == '/')
+    {
+        return 1;
+    }
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)storage_api;
+    uint64_t path_hash = 0;
+    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    if (err)
+    {
+        return err;
+    }
+    intptr_t asset_index_ptr = hmgeti(block_store_fs->asset_lookup, path_hash);
+    if (asset_index_ptr != -1)
+    {
+        // Its a file since all paths in version index ends with forward-slash
+        return 0;
+    }
+    char* tmp_path = (char*)Longtail_Alloc(path_len + 1 + 1);
+    strcpy(tmp_path, path);
+    tmp_path[path_len] = '/';
+    tmp_path[path_len + 1] = 0;
+    path_hash = 0;
+    err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    Longtail_Free(tmp_path);
+    if (err)
+    {
+        return err;
+    }
+    asset_index_ptr = hmgeti(block_store_fs->asset_lookup, path_hash);
+    if (asset_index_ptr == -1)
+    {
+        return 0;
+    }
+    return 1;
+}
+
+int Longtail_BlockStorage_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    size_t path_len = strlen(path);
+    if (path_len == 0)
+    {
+        return 0;
+    }
+    if (path[strlen(path)- 1] == '/')
+    {
+        return 0;
+    }
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)storage_api;
+    uint64_t path_hash = 0;
+    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    if (err)
+    {
+        return err;
+    }
+    intptr_t asset_index_ptr = hmgeti(block_store_fs->asset_lookup, path_hash);
+    if (asset_index_ptr != -1)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+int Longtail_BlockStorage_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
+{
+    // TODO
+    return ENOTSUP;
+}
+
+int Longtail_BlockStorage_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    // TODO
+    return ENOTSUP;
+}
+
+void Longtail_BlockStorage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    // TODO
+}
+
+int Longtail_BlockStorage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)
+{
+    // TODO
+    return ENOTSUP;
+}
+
+
+void CloseBlockStoreFS(struct Longtail_API* api)
+{
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)api;
+    hmfree(block_store_fs->asset_lookup);
+    hmfree(block_store_fs->chunk_hash_to_block_index_lookup);
+    Longtail_Free(block_store_fs->chunk_asset_offsets);
+    Longtail_Free(block_store_fs);
+}
+
+int OpenBlockStoreFS(
+    Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_BlockStoreAPI* block_store,
+    struct Longtail_ContentIndex* content_index,
+    struct Longtail_VersionIndex* version_index,
+    struct BlockStoreFS** out_block_store_fs)
+{
+    struct BlockStoreFS* block_store_fs = (struct BlockStoreFS*)Longtail_Alloc(sizeof(struct BlockStoreFS));
+    block_store_fs->m_API.m_API.Dispose = CloseBlockStoreFS;
+    block_store_fs->hash_api = hash_api;
+    block_store_fs->job_api = job_api;
+    block_store_fs->block_store = block_store;
+    block_store_fs->content_index = content_index;
+    block_store_fs->version_index = version_index;
+    block_store_fs->chunk_hash_to_block_index_lookup = 0;
+    block_store_fs->asset_lookup = 0;
+    block_store_fs->chunk_asset_offsets = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount));
+
+    for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
+    {
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
+        hmput(block_store_fs->chunk_hash_to_block_index_lookup, content_index->m_ChunkHashes[c], block_index);
+    }
+    for (uint32_t a = 0; a < *version_index->m_AssetCount; ++a)
+    {
+        TLongtail_Hash path_hash = version_index->m_PathHashes[a];
+        hmput(block_store_fs->asset_lookup, path_hash, a);
+
+        uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[a];
+        if (chunk_count == 0)
+        {
+            continue;
+        }
+        uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[a];
+        const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
+        uint64_t* chunk_asset_offsets = &block_store_fs->chunk_asset_offsets[chunk_start_index];
+        uint64_t offset = 0;
+        for (uint32_t c = 0; c < chunk_count; ++c)
+        {
+            uint32_t chunk_index = chunk_indexes[c];
+            uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+            chunk_asset_offsets[c] = offset;
+            offset += chunk_size;
+        }
+    }
+
+    *out_block_store_fs = block_store_fs;
+    return 0;
+}
+
+void CloseBlockStoreFS(struct BlockStoreFS* block_store_fs)
+{
+    hmfree(block_store_fs->asset_lookup);
+    hmfree(block_store_fs->chunk_hash_to_block_index_lookup);
+    Longtail_Free(block_store_fs->chunk_asset_offsets);
+    Longtail_Free(block_store_fs);
+}
+
 
 TEST(Longtail, TestLongtailBlockFS)
 {
