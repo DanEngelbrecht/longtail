@@ -1652,8 +1652,8 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
 size_t Longtail_LookupTable_GetSize(size_t capacity);
 struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries);
 int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
+uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
+uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
 
 #ifdef __cplusplus
 }
