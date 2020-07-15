@@ -5683,7 +5683,7 @@ TEST(Longtail, VersionLocalContent)
         "version",
         56,
         7,
-        72371);
+        5371);
     struct Longtail_FileInfos* version1_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(
         storage_api,
@@ -6114,8 +6114,8 @@ TEST(Longtail, TestChangeVersionDiskFull)
 
 TEST(Longtail, TestLongtailBlockFS)
 {
-    static const uint32_t MAX_BLOCK_SIZE = 8192u;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 64u;
+    static const uint32_t MAX_BLOCK_SIZE = 4096;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 32u;
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();//Longtail_CreateFSStorageAPI();//
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
@@ -6126,7 +6126,7 @@ TEST(Longtail, TestLongtailBlockFS)
 
 //    printf("\nCreating...\n");
 
-    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, MAX_BLOCK_SIZE * 9);
+    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, MAX_BLOCK_SIZE * 7);
 
     Longtail_FileInfos* version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
