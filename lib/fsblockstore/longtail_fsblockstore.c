@@ -46,12 +46,35 @@ struct FSBlockStoreAPI
 
 #define MAX_BLOCK_NAME_LENGTH   32
 
+static const char* HashLUT = "0123456789abcdef";
+
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
     LONGTAIL_FATAL_ASSERT(out_name, return)
-    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
-    memmove(out_name, &out_name[7], 4);
+    out_name[7] = HashLUT[(block_hash >> 60) & 0xf];
+    out_name[8] = HashLUT[(block_hash >> 56) & 0xf];
+    out_name[9] = HashLUT[(block_hash >> 52) & 0xf];
+    out_name[10] = HashLUT[(block_hash >> 48) & 0xf];
+    out_name[11] = HashLUT[(block_hash >> 44) & 0xf];
+    out_name[12] = HashLUT[(block_hash >> 40) & 0xf];
+    out_name[13] = HashLUT[(block_hash >> 36) & 0xf];
+    out_name[14] = HashLUT[(block_hash >> 32) & 0xf];
+    out_name[15] = HashLUT[(block_hash >> 28) & 0xf];
+    out_name[16] = HashLUT[(block_hash >> 24) & 0xf];
+    out_name[17] = HashLUT[(block_hash >> 20) & 0xf];
+    out_name[18] = HashLUT[(block_hash >> 16) & 0xf];
+    out_name[19] = HashLUT[(block_hash >> 12) & 0xf];
+    out_name[20] = HashLUT[(block_hash >> 8) & 0xf];
+    out_name[21] = HashLUT[(block_hash >> 4) & 0xf];
+    out_name[22] = HashLUT[(block_hash >> 0) & 0xf];
+    out_name[0] = out_name[7];
+    out_name[1] = out_name[8];
+    out_name[2] = out_name[9];
+    out_name[3] = out_name[10];
     out_name[4] = '/';
+    out_name[5] = '0';
+    out_name[6] = 'x';
+    out_name[23] = 0;
 }
 
 static char* GetBlockPath(struct Longtail_StorageAPI* storage_api, const char* content_path, const char* block_extension, TLongtail_Hash block_hash)
