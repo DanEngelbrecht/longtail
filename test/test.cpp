@@ -6120,12 +6120,12 @@ TEST(Longtail, TestLongtailBlockFS)
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE / 4, MAX_CHUNKS_PER_BLOCK / 2, 0);
+    Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* block_store = Longtail_CreateCompressBlockStoreAPI(raw_block_store, compression_registry);
 
 //    printf("\nCreating...\n");
 
-    CreateRandomContent(mem_storage, "source", 117, 1, MAX_BLOCK_SIZE * 17);
+    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 1, MAX_BLOCK_SIZE * 9);
 
     Longtail_FileInfos* version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
@@ -6204,7 +6204,7 @@ TEST(Longtail, TestLongtailBlockFS)
             uint64_t size;
             ASSERT_EQ(0, block_store_fs->GetSize(block_store_fs, block_store_file, &size));
             char* buf = (char*)Longtail_Alloc(size);
-            if (size > 64)
+            if (size >= (256 + 32))
             {
                 ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, 0, 32, buf));
                 ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, 32, 128, &buf[32]));
