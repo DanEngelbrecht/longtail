@@ -6123,6 +6123,7 @@ struct BlockStoreFS
     struct Longtail_VersionIndex* version_index;
     struct HashToIndexLookup* chunk_hash_to_block_index_lookup;
     struct HashToIndexLookup* asset_lookup;
+    uint64_t* chunk_asset_offsets;
 };
 
 int OpenBlockStoreFS(
@@ -6141,6 +6142,7 @@ int OpenBlockStoreFS(
     block_store_fs->version_index = version_index;
     block_store_fs->chunk_hash_to_block_index_lookup = 0;
     block_store_fs->asset_lookup = 0;
+    block_store_fs->chunk_asset_offsets = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount));
 
     for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
     {
@@ -6151,6 +6153,23 @@ int OpenBlockStoreFS(
     {
         TLongtail_Hash path_hash = version_index->m_PathHashes[a];
         hmput(block_store_fs->asset_lookup, path_hash, a);
+
+        uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[a];
+        if (chunk_count == 0)
+        {
+            continue;
+        }
+        uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[a];
+        const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
+        uint64_t* chunk_asset_offsets = &block_store_fs->chunk_asset_offsets[chunk_start_index];
+        uint64_t offset = 0;
+        for (uint32_t c = 0; c < chunk_count; ++c)
+        {
+            uint32_t chunk_index = chunk_indexes[c];
+            uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+            chunk_asset_offsets[c] = offset;
+            offset += chunk_size;
+        }
     }
 
     *out_block_store_fs = block_store_fs;
@@ -6161,6 +6180,7 @@ void CloseBlockStoreFS(struct BlockStoreFS* block_store_fs)
 {
     hmfree(block_store_fs->asset_lookup);
     hmfree(block_store_fs->chunk_hash_to_block_index_lookup);
+    Longtail_Free(block_store_fs->chunk_asset_offsets);
     Longtail_Free(block_store_fs);
 }
 
@@ -6174,7 +6194,7 @@ struct OpenBlockStoreFile
 int OpenAsset(struct BlockStoreFS* block_store_fs, const char* path, struct OpenBlockStoreFile** out_block_store_file)
 {
     uint64_t path_hash = 0;
-    int err = block_store_fs->hash_api->HashBuffer(block_store_fs->hash_api, (uint32_t)strlen(path), path, &path_hash);
+    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
     if (err)
     {
         return err;
@@ -6354,105 +6374,75 @@ int ReadFromBlockJob(void* context, uint32_t job_id, int is_cancelled)
     return 0;
 }
 
+static uint32_t FindStartChunk(const uint64_t* a, uint32_t n, uint64_t val) {
+    uint32_t first = 0;
+    uint32_t count = n;
+    while (count > 0)
+    {
+        uint32_t step = count/2;
+        uint32_t it = first + step;
+        if (a[it] < val)
+        {
+            first = it + 1;
+            count -= step + 1;
+        }
+        else
+        {
+            count = step;
+        }
+    }
+    if (first == n)
+    {
+        return first - 1;
+    }
+    if (a[first] > val)
+    {
+        return first - 1;
+    }
+    return first;
+}
+
 int Seek(struct BlockStoreFS* block_store_fs,
     struct OpenBlockStoreFile* block_store_file,
     uint64_t pos)
 {
-    uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[block_store_file->asset_index];
-    uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[block_store_file->asset_index];
-    const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
-
-    // We could opt to search from the shortest path, from start or finish by guessing using pos and asset_size
-    uint64_t asset_size = block_store_fs->version_index->m_AssetSizes[block_store_file->asset_index];
-
     if (pos == block_store_file->seek_asset_pos)
     {
         return 0;
     }
+    uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[block_store_file->asset_index];
     if (chunk_count == 0)
     {
-        return EIO;
+        return pos == 0 ? 0 : EIO;
     }
-    if (block_store_file->seek_asset_pos < (asset_size / 4) && pos > asset_size / 2)
+    uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[block_store_file->asset_index];
+
+    const uint64_t* chunk_asset_offsets = &block_store_fs->chunk_asset_offsets[chunk_start_index];
+    if (block_store_file->seek_chunk_offset < chunk_count)
     {
-        uint32_t chunk_index = chunk_indexes[chunk_count - 1];
-        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
-        if (chunk_size > asset_size)
+        if (pos >= chunk_asset_offsets[block_store_file->seek_chunk_offset])
         {
-            return EIO;
-        }
-        block_store_file->seek_asset_pos = asset_size - chunk_size;
-        block_store_file->seek_chunk_offset = chunk_count - 1;
-        if (block_store_file->seek_asset_pos == pos)
-        {
-            return 0;
-        }
-    }
-    else if (pos < (asset_size / 4) && block_store_file->seek_asset_pos > asset_size / 2)
-    {
-        block_store_file->seek_asset_pos = 0;
-        block_store_file->seek_chunk_offset = 0;
-    }
-    if (pos > block_store_file->seek_asset_pos)
-    {
-        // Would be nice to have a faster way to get to starting position...
-        uint64_t seek_asset_pos = block_store_file->seek_asset_pos;
-        uint32_t seek_chunk_offset = 0;
-        uint32_t c = block_store_file->seek_chunk_offset;
-        while(c < chunk_count)
-        {
-            uint32_t chunk_index = chunk_indexes[c];
-            TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
-            uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
-            uint64_t asset_offset_chunk_end = seek_asset_pos + chunk_size;
-            if (asset_offset_chunk_end > asset_size)
+            if (block_store_file->seek_chunk_offset == chunk_count - 1)
             {
-                return EIO;
+                // on last block
+                return 0;
             }
-            if (asset_offset_chunk_end >= pos)
+            else if (pos < chunk_asset_offsets[block_store_file->seek_chunk_offset + 1])
             {
-                seek_chunk_offset = c;
-                break;
+                return 0;
             }
-            seek_asset_pos = asset_offset_chunk_end;
-            ++c;
         }
-        if (c == chunk_count && pos > asset_size)
-        {
-            return EIO;
-        }
-        block_store_file->seek_asset_pos = seek_asset_pos;
-        block_store_file->seek_chunk_offset = seek_chunk_offset;
-        return 0;
     }
 
-    uint32_t seek_chunk_offset = 0;
-    uint32_t c = block_store_file->seek_chunk_offset;
-    uint64_t seek_asset_pos = block_store_file->seek_asset_pos;
-    while (c-- > 0)
-    {
-        uint32_t chunk_index = chunk_indexes[c];
-        TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
-        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
-        if (seek_asset_pos < chunk_size)
-        {
-            return EIO;
-        }
-        uint64_t asset_offset_chunk_end = seek_asset_pos - chunk_size;
-        if (asset_offset_chunk_end < pos)
-        {
-            seek_asset_pos = asset_offset_chunk_end;
-            seek_chunk_offset = c;
-            break;
-        }
-        seek_asset_pos = asset_offset_chunk_end;
-    }
-    if (c == 0 && seek_asset_pos > 0)
-    {
-        return EIO;
-    }
-    block_store_file->seek_asset_pos = seek_asset_pos;
-    block_store_file->seek_chunk_offset = seek_chunk_offset;
+    const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
+
+    uint64_t asset_size = block_store_fs->version_index->m_AssetSizes[block_store_file->asset_index];
+
+    uint32_t start_chunk_index = FindStartChunk(chunk_asset_offsets, chunk_count, pos);
+    uint64_t start_asset_offset = chunk_asset_offsets[start_chunk_index];
+
+    block_store_file->seek_asset_pos = start_asset_offset;
+    block_store_file->seek_chunk_offset = start_chunk_index;
     return 0;
 }
 
@@ -6704,8 +6694,10 @@ TEST(Longtail, TestLongtailBlockFS)
             if (size > 64)
             {
                 ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 0, 32, buf));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 32, 128, &buf[32]));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 160, 96, &buf[160]));
                 ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, size - 32, 32, &buf[size - 32]));
-                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 32, size - 64, &buf[32]));
+                ASSERT_EQ(0, ReadBlockStoreFile(block_store_fs, block_store_file, 256, size - (256 + 32), &buf[256]));
             }
             else if (size > 0)
             {
