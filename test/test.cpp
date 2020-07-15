@@ -6826,6 +6826,62 @@ void CloseBlockStoreFS(struct BlockStoreFS* block_store_fs)
     Longtail_Free(block_store_fs);
 }
 
+static int BlockStoreStorage_Init(
+    void* mem,
+    Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_BlockStoreAPI* block_store,
+    struct Longtail_ContentIndex* content_index,
+    struct Longtail_VersionIndex* version_index,
+    struct Longtail_StorageAPI** out_storage_api)
+{
+    return ENOTSUP;
+}
+
+struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
+    Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_BlockStoreAPI* block_store,
+    struct Longtail_ContentIndex* content_index,
+    struct Longtail_VersionIndex* version_index)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p,) failed with %d",
+        hash_api, job_api, block_store, content_index, version_index)
+    LONGTAIL_VALIDATE_INPUT(hash_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(job_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(block_store != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(content_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(version_index != 0, return 0)
+
+    size_t api_size = sizeof(struct BlockStoreFS);
+    void* mem = Longtail_Alloc(api_size);
+    if (!mem)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p,) failed with %d",
+            hash_api, job_api, block_store, content_index, version_index,
+            ENOMEM)
+        return 0;
+    }
+    struct Longtail_StorageAPI* storage_api;
+    int err = BlockStoreStorage_Init(
+        mem,
+        hash_api,
+        job_api,
+        block_store,
+        content_index,
+        version_index,
+        &storage_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p,) failed with %d",
+            hash_api, job_api, block_store, content_index, version_index,
+            err)
+        Longtail_Free(mem);
+        return 0;
+    }
+    return storage_api;
+}
+
 
 TEST(Longtail, TestLongtailBlockFS)
 {
