@@ -2,6 +2,8 @@
 
 #include "../../src/ext/stb_ds.h"
 
+#include <errno.h>
+
 #if defined(__clang__) || defined(__GNUC__)
 #if defined(WIN32)
     #include <malloc.h>
