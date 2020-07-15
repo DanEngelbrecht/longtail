@@ -704,9 +704,203 @@ static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity,
 
 
 
+#if defined(__clang__) || defined(__GNUC__)
+#define utf8_nonnull __attribute__((nonnull))
+#define utf8_pure __attribute__((pure))
+#define utf8_restrict __restrict__
+#define utf8_weak __attribute__((weak))
+#elif defined(_MSC_VER)
+#define utf8_nonnull
+#define utf8_pure
+#define utf8_restrict __restrict
+#define utf8_weak __inline
+#else
+#error Non clang, non gcc, non MSVC compiler found!
+#endif
 
+#define utf8_int32_t int32_t
+#define utf8_null 0
 
+void *utf8codepoint(const void *utf8_restrict str,
+                    utf8_int32_t *utf8_restrict out_codepoint) {
+  const char *s = (const char *)str;
 
+  if (0xf0 == (0xf8 & s[0])) {
+    // 4 byte utf8 codepoint
+    *out_codepoint = ((0x07 & s[0]) << 18) | ((0x3f & s[1]) << 12) |
+                     ((0x3f & s[2]) << 6) | (0x3f & s[3]);
+    s += 4;
+  } else if (0xe0 == (0xf0 & s[0])) {
+    // 3 byte utf8 codepoint
+    *out_codepoint =
+        ((0x0f & s[0]) << 12) | ((0x3f & s[1]) << 6) | (0x3f & s[2]);
+    s += 3;
+  } else if (0xc0 == (0xe0 & s[0])) {
+    // 2 byte utf8 codepoint
+    *out_codepoint = ((0x1f & s[0]) << 6) | (0x3f & s[1]);
+    s += 2;
+  } else {
+    // 1 byte utf8 codepoint otherwise
+    *out_codepoint = s[0];
+    s += 1;
+  }
+
+  return (void *)s;
+}
+
+void *utf8catcodepoint(void *utf8_restrict str, utf8_int32_t chr, size_t n) {
+  char *s = (char *)str;
+
+  if (0 == ((utf8_int32_t)0xffffff80 & chr)) {
+    // 1-byte/7-bit ascii
+    // (0b0xxxxxxx)
+    if (n < 1) {
+      return utf8_null;
+    }
+    s[0] = (char)chr;
+    s += 1;
+  } else if (0 == ((utf8_int32_t)0xfffff800 & chr)) {
+    // 2-byte/11-bit utf8 code point
+    // (0b110xxxxx 0b10xxxxxx)
+    if (n < 2) {
+      return utf8_null;
+    }
+    s[0] = 0xc0 | (char)(chr >> 6);
+    s[1] = 0x80 | (char)(chr & 0x3f);
+    s += 2;
+  } else if (0 == ((utf8_int32_t)0xffff0000 & chr)) {
+    // 3-byte/16-bit utf8 code point
+    // (0b1110xxxx 0b10xxxxxx 0b10xxxxxx)
+    if (n < 3) {
+      return utf8_null;
+    }
+    s[0] = 0xe0 | (char)(chr >> 12);
+    s[1] = 0x80 | (char)((chr >> 6) & 0x3f);
+    s[2] = 0x80 | (char)(chr & 0x3f);
+    s += 3;
+  } else { // if (0 == ((int)0xffe00000 & chr)) {
+    // 4-byte/21-bit utf8 code point
+    // (0b11110xxx 0b10xxxxxx 0b10xxxxxx 0b10xxxxxx)
+    if (n < 4) {
+      return utf8_null;
+    }
+    s[0] = 0xf0 | (char)(chr >> 18);
+    s[1] = 0x80 | (char)((chr >> 12) & 0x3f);
+    s[2] = 0x80 | (char)((chr >> 6) & 0x3f);
+    s[3] = 0x80 | (char)(chr & 0x3f);
+    s += 4;
+  }
+
+  return s;
+}
+
+size_t utf8codepointsize(utf8_int32_t chr) {
+  if (0 == ((utf8_int32_t)0xffffff80 & chr)) {
+    return 1;
+  } else if (0 == ((utf8_int32_t)0xfffff800 & chr)) {
+    return 2;
+  } else if (0 == ((utf8_int32_t)0xffff0000 & chr)) {
+    return 3;
+  } else { // if (0 == ((int)0xffe00000 & chr)) {
+    return 4;
+  }
+}
+
+utf8_int32_t utf8lwrcodepoint(utf8_int32_t cp) {
+  if (((0x0041 <= cp) && (0x005a >= cp)) ||
+      ((0x00c0 <= cp) && (0x00d6 >= cp)) ||
+      ((0x00d8 <= cp) && (0x00de >= cp)) ||
+      ((0x0391 <= cp) && (0x03a1 >= cp)) ||
+      ((0x03a3 <= cp) && (0x03ab >= cp))) {
+    cp += 32;
+  } else if (((0x0100 <= cp) && (0x012f >= cp)) ||
+             ((0x0132 <= cp) && (0x0137 >= cp)) ||
+             ((0x014a <= cp) && (0x0177 >= cp)) ||
+             ((0x0182 <= cp) && (0x0185 >= cp)) ||
+             ((0x01a0 <= cp) && (0x01a5 >= cp)) ||
+             ((0x01de <= cp) && (0x01ef >= cp)) ||
+             ((0x01f8 <= cp) && (0x021f >= cp)) ||
+             ((0x0222 <= cp) && (0x0233 >= cp)) ||
+             ((0x0246 <= cp) && (0x024f >= cp)) ||
+             ((0x03d8 <= cp) && (0x03ef >= cp))) {
+    cp |= 0x1;
+  } else if (((0x0139 <= cp) && (0x0148 >= cp)) ||
+             ((0x0179 <= cp) && (0x017e >= cp)) ||
+             ((0x01af <= cp) && (0x01b0 >= cp)) ||
+             ((0x01b3 <= cp) && (0x01b6 >= cp)) ||
+             ((0x01cd <= cp) && (0x01dc >= cp))) {
+    cp += 1;
+    cp &= ~0x1;
+  } else {
+    switch (cp) {
+    default: break;
+    case 0x0178: cp = 0x00ff; break;
+    case 0x0243: cp = 0x0180; break;
+    case 0x018e: cp = 0x01dd; break;
+    case 0x023d: cp = 0x019a; break;
+    case 0x0220: cp = 0x019e; break;
+    case 0x01b7: cp = 0x0292; break;
+    case 0x01c4: cp = 0x01c6; break;
+    case 0x01c7: cp = 0x01c9; break;
+    case 0x01ca: cp = 0x01cc; break;
+    case 0x01f1: cp = 0x01f3; break;
+    case 0x01f7: cp = 0x01bf; break;
+    case 0x0187: cp = 0x0188; break;
+    case 0x018b: cp = 0x018c; break;
+    case 0x0191: cp = 0x0192; break;
+    case 0x0198: cp = 0x0199; break;
+    case 0x01a7: cp = 0x01a8; break;
+    case 0x01ac: cp = 0x01ad; break;
+    case 0x01af: cp = 0x01b0; break;
+    case 0x01b8: cp = 0x01b9; break;
+    case 0x01bc: cp = 0x01bd; break;
+    case 0x01f4: cp = 0x01f5; break;
+    case 0x023b: cp = 0x023c; break;
+    case 0x0241: cp = 0x0242; break;
+    case 0x03fd: cp = 0x037b; break;
+    case 0x03fe: cp = 0x037c; break;
+    case 0x03ff: cp = 0x037d; break;
+    case 0x037f: cp = 0x03f3; break;
+    case 0x0386: cp = 0x03ac; break;
+    case 0x0388: cp = 0x03ad; break;
+    case 0x0389: cp = 0x03ae; break;
+    case 0x038a: cp = 0x03af; break;
+    case 0x038c: cp = 0x03cc; break;
+    case 0x038e: cp = 0x03cd; break;
+    case 0x038f: cp = 0x03ce; break;
+    case 0x0370: cp = 0x0371; break;
+    case 0x0372: cp = 0x0373; break;
+    case 0x0376: cp = 0x0377; break;
+    case 0x03f4: cp = 0x03d1; break;
+    case 0x03cf: cp = 0x03d7; break;
+    case 0x03f9: cp = 0x03f2; break;
+    case 0x03f7: cp = 0x03f8; break;
+    case 0x03fa: cp = 0x03fb; break;
+    };
+  }
+
+  return cp;
+}
+
+void Longtail_ToLowerCase(char *str) {
+  void *p, *pn;
+  utf8_int32_t cp;
+
+  p = (char *)str;
+  pn = utf8codepoint(p, &cp);
+
+  while (cp != 0) {
+    const utf8_int32_t lwr_cp = utf8lwrcodepoint(cp);
+    const size_t size = utf8codepointsize(lwr_cp);
+
+    if (lwr_cp != cp) {
+      utf8catcodepoint(p, lwr_cp, size);
+    }
+
+    p = pn;
+    pn = utf8codepoint(p, &cp);
+  }
+}
 
 
 static int IsDirPath(const char* path)
@@ -715,16 +909,20 @@ static int IsDirPath(const char* path)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 
-static int GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
+int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
 {
     LONGTAIL_FATAL_ASSERT(hash_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_hash != 0, return EINVAL)
+    uint32_t pathlen = (uint32_t)strlen(path);
+    char* buf = alloca(pathlen + 1);
+    memcpy(buf, path, pathlen + 1);
+    Longtail_ToLowerCase(buf);
     uint64_t hash;
-    int err = hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), (void*)path, &hash);
+    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)buf, &hash);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "GetPathHash(%p, %s, %p) hash_api->HashBuffer() failed with %d", (void*)hash_api, path, (void*)out_hash, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash(%p, %s, %p) hash_api->HashBuffer() failed with %d", (void*)hash_api, path, (void*)out_hash, err)
         return err;
     }
     *out_hash = (TLongtail_Hash)hash;
@@ -1286,7 +1484,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
         return 0;
     }
 
-    hash_job->m_Err = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
+    hash_job->m_Err = Longtail_GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
     if (hash_job->m_Err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",

@@ -1646,6 +1646,9 @@ typedef int (*Longtail_Chunker_Feeder)(void* context, struct Longtail_Chunker* c
     void* context,
     struct Longtail_Chunker** out_chunker);
 
+void Longtail_ToLowerCase(char* str);
+int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
+
 #ifdef __cplusplus
 }
 #endif

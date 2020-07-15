@@ -6,6 +6,17 @@
 #include <errno.h>
 #include <inttypes.h>
 
+#if defined(__clang__) || defined(__GNUC__)
+#if defined(WIN32)
+    #include <malloc.h>
+#else
+    #include <alloca.h>
+#endif
+#elif defined(_MSC_VER)
+    #include <malloc.h>
+    #define alloca _alloca
+#endif
+
 static const uint32_t Prime = 0x01000193;
 static const uint32_t Seed  = 0x811C9DC5;
 
@@ -64,7 +75,11 @@ static void InMemStorageAPI_Dispose(struct Longtail_API* storage_api)
 
 static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 {
-    return fnv1a((void*)path, (uint32_t)strlen(path));
+    uint32_t pathlen = (uint32_t)strlen(path);
+    char* buf = alloca(pathlen + 1);
+    memcpy(buf, path, pathlen + 1);
+    Longtail_ToLowerCase(buf);
+    return fnv1a((void*)buf, pathlen);
 }
 
 static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
