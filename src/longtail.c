@@ -923,7 +923,7 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_hash != 0, return EINVAL)
     uint32_t pathlen = (uint32_t)strlen(path);
-    char* buf = alloca(pathlen + 1);
+    char* buf = (char*)alloca(pathlen + 1);
     memcpy(buf, path, pathlen + 1);
     Longtail_ToLowerCase(buf);
     uint64_t hash;

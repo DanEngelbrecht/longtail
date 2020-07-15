@@ -76,7 +76,7 @@ static void InMemStorageAPI_Dispose(struct Longtail_API* storage_api)
 static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 {
     uint32_t pathlen = (uint32_t)strlen(path);
-    char* buf = alloca(pathlen + 1);
+    char* buf = (char*)alloca(pathlen + 1);
     memcpy(buf, path, pathlen + 1);
     Longtail_ToLowerCase(buf);
     return fnv1a((void*)buf, pathlen);
