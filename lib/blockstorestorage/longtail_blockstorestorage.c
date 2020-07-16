@@ -11,10 +11,12 @@
     #include <malloc.h>
 #else
     #include <alloca.h>
+    #define CompareIgnoreCase strcasecmp
 #endif
 #elif defined(_MSC_VER)
     #include <malloc.h>
     #define alloca _alloca
+    #define CompareIgnoreCase _stricmp
 #endif
 
 #if defined(_WIN32)
@@ -60,7 +62,7 @@ static SORTFUNC(BlockStoreStorageAPI_PathEntryParentPathCompare)
     {
         return a_is_dir ? -1 : 1;
     }
-    return _stricmp(a->m_Name, b->m_Name);
+    return CompareIgnoreCase(a->m_Name, b->m_Name);
 }
 
 static TLongtail_Hash BlockStoreStorageAPI_GetParentPathHash(struct Longtail_HashAPI* hash_api, const char* path)
