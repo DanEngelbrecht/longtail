@@ -15,6 +15,147 @@
     #define alloca _alloca
 #endif
 
+#if defined(_WIN32)
+    #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+    #define QSORT(base, count, size, func, context) qsort_s(base, count, size, func, context)
+#elif defined(__clang__) || defined(__GNUC__)
+    #if defined(__APPLE__)
+        #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, context, func)
+    #else
+        #define SORTFUNC(name) int name(const void* a_ptr, const void* b_ptr, void* context)
+        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, func, context)
+    #endif
+#endif
+
+struct PathEntry
+{
+    const char* m_Path;
+    TLongtail_Hash m_ParentHash;
+    uint32_t m_AssetIndex;
+    uint32_t m_ChildCount;
+    uint32_t m_ChildStartIndex;
+};
+
+static SORTFUNC(PathEntryParentPathCompare)
+{
+    struct PathLookup* path_lookup = (struct PathLookup*)context;
+    struct PathEntry* a = (struct PathEntry*)a_ptr;
+    struct PathEntry* b = (struct PathEntry*)b_ptr;
+    if (a->m_ParentHash < b->m_ParentHash)
+    {
+        return -1;
+    }
+    else if (a->m_ParentHash > b->m_ParentHash)
+    {
+        return 1;
+    }
+    size_t a_length = strlen(a->m_Path);
+    size_t b_length = strlen(b->m_Path);
+    int a_is_dir = a_length == 0 || (a->m_Path[a_length - 1] == '/');
+    int b_is_dir = b_length == 0 || (b->m_Path[b_length - 1] == '/');
+    if (a_is_dir != b_is_dir)
+    {
+        return a_is_dir ? -1 : 1;
+    }
+    return stricmp(a->m_Path, b->m_Path);
+}
+
+static TLongtail_Hash GetParentPathHash(struct Longtail_HashAPI* hash_api, const char* path)
+{
+    size_t path_length = strlen(path);
+    size_t scan_pos = path_length;
+    if (scan_pos > 0 && path[scan_pos - 1] == '/')
+    {
+        --scan_pos;
+    }
+    while (scan_pos > 0)
+    {
+        --scan_pos;
+        if (path[scan_pos] == '/')
+        {
+            break;
+        }
+    }
+    if (scan_pos == 0)
+    {
+        return 0;
+    }
+    size_t dir_length = scan_pos;
+    char* dir_path = (char*)alloca(dir_length + 2);
+    strncpy(dir_path, path, dir_length + 1);
+    dir_path[dir_length + 1] = '\0';
+    TLongtail_Hash hash;
+    Longtail_GetPathHash(hash_api, dir_path, &hash);
+    return hash;
+}
+
+struct PathLookup
+{
+    struct Longtail_VersionIndex* m_VersionIndex;
+    struct PathEntry* m_PathEntries;
+    struct Longtail_LookupTable* m_LookupTable;
+};
+
+size_t GetPathEntriesSize(uint32_t asset_count)
+{
+    size_t path_lookup_size = sizeof(struct PathLookup) +
+        sizeof(struct PathEntry) * (asset_count + 1) +
+        Longtail_LookupTable_GetSize(asset_count + 1);
+    return path_lookup_size;
+}
+
+struct PathLookup* BuildPathEntires(
+    void* mem,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_VersionIndex* version_index)
+{
+    struct PathLookup* path_lookup = (struct PathLookup*)mem;
+
+    uint32_t asset_count = *version_index->m_AssetCount;
+    path_lookup->m_VersionIndex = version_index;
+    path_lookup->m_PathEntries = (struct PathEntry*)&path_lookup[1];
+    path_lookup->m_LookupTable = Longtail_LookupTable_Create(&path_lookup->m_PathEntries[asset_count + 1], asset_count + 1, 0);
+    path_lookup->m_PathEntries[0].m_Path = "";
+    path_lookup->m_PathEntries[0].m_ParentHash = 0;
+    path_lookup->m_PathEntries[0].m_AssetIndex = 0;
+    path_lookup->m_PathEntries[0].m_ChildCount = 0;
+    path_lookup->m_PathEntries[0].m_ChildStartIndex = 0;
+    for (uint32_t a = 0; a < asset_count; ++a)
+    {
+        const char* path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
+        struct PathEntry* path_entry = &path_lookup->m_PathEntries[a + 1];
+        path_entry->m_Path = path;
+        path_entry->m_ParentHash = GetParentPathHash(hash_api, path);
+        path_entry->m_AssetIndex = a;
+        path_entry->m_ChildCount = 0;
+        path_entry->m_ChildStartIndex = 0;
+    }
+    QSORT(&path_lookup->m_PathEntries[1], asset_count, sizeof(struct PathEntry), PathEntryParentPathCompare, path_lookup);
+
+    Longtail_LookupTable_Put(path_lookup->m_LookupTable, 0, 0);
+    for (uint32_t a = 0; a < asset_count; ++a)
+    {
+        uint32_t asset_index = path_lookup->m_PathEntries[a + 1].m_AssetIndex;
+        Longtail_LookupTable_Put(path_lookup->m_LookupTable, version_index->m_PathHashes[asset_index], a  + 1);
+    }
+    struct Longtail_LookupTable* find_first_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(asset_count + 1)), asset_count, 0);
+    for (uint32_t p = 0; p < asset_count; ++p)
+    {
+        TLongtail_Hash parent_hash = path_lookup->m_PathEntries[p + 1].m_ParentHash;
+        uint32_t parent_index = (uint32_t)*Longtail_LookupTable_Get(path_lookup->m_LookupTable, parent_hash);
+        if (0 == Longtail_LookupTable_PutUnique(find_first_lookup, parent_hash, p))
+        {
+            path_lookup->m_PathEntries[parent_index].m_ChildStartIndex = p + 1;
+        }
+        path_lookup->m_PathEntries[parent_index].m_ChildCount++;
+    }
+    Longtail_Free(find_first_lookup);
+
+    return path_lookup;
+};
+
+
 struct BlockStoreStorageAPI
 {
     struct Longtail_StorageAPI m_API;
@@ -24,7 +165,8 @@ struct BlockStoreStorageAPI
     struct Longtail_ContentIndex* content_index;
     struct Longtail_VersionIndex* version_index;
     struct Longtail_LookupTable* chunk_hash_to_block_index_lookup;
-    struct Longtail_LookupTable* asset_lookup;
+//    struct Longtail_LookupTable* asset_lookup;
+    struct PathLookup* m_PathLookup;
     uint64_t* chunk_asset_offsets;
 };
 
@@ -393,13 +535,14 @@ static int BlockStoreStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage
     {
         return err;
     }
-    uint64_t* asset_index = Longtail_LookupTable_Get(block_store_fs->asset_lookup, path_hash);
-    if (asset_index == 0)
+    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    if (path_entry_index == 0)
     {
         return ENOENT;
     }
+    uint32_t asset_index = block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index].m_AssetIndex;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)Longtail_Alloc(sizeof(struct BlockStoreStorageAPI_OpenFile));
-    block_store_file->asset_index = (uint32_t)*asset_index;
+    block_store_file->asset_index = asset_index;
     block_store_file->seek_chunk_offset = 0;
     block_store_file->seek_asset_pos = 0;
     *out_open_file = (Longtail_StorageAPI_HOpenFile)block_store_file;
@@ -451,12 +594,13 @@ static int BlockStoreStorageAPI_GetPermissions(struct Longtail_StorageAPI* stora
     {
         return err;
     }
-    uint64_t* asset_index = Longtail_LookupTable_Get(block_store_fs->asset_lookup, path_hash);
-    if (asset_index == 0)
+    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    if (path_entry_index == 0)
     {
         return ENOENT;
     }
-    *out_permissions = block_store_fs->version_index->m_Permissions[*asset_index];
+    uint32_t asset_index = block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index].m_AssetIndex;
+    *out_permissions = block_store_fs->version_index->m_Permissions[asset_index];
     return 0;
 }
 
@@ -520,8 +664,8 @@ static int BlockStoreStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, c
         return err;
     }
 
-    uint64_t* asset_index = Longtail_LookupTable_Get(block_store_fs->asset_lookup, path_hash);
-    if (asset_index != 0)
+    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    if (path_entry_index == 0)
     {
         // Its a file since all paths in version index ends with forward-slash
         return 0;
@@ -537,8 +681,8 @@ static int BlockStoreStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, c
     {
         return err;
     }
-    asset_index = Longtail_LookupTable_Get(block_store_fs->asset_lookup, path_hash);
-    if (asset_index == 0)
+    path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    if (path_entry_index == 0)
     {
         return 0;
     }
@@ -563,8 +707,8 @@ static int BlockStoreStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, 
     {
         return err;
     }
-    uint64_t* asset_index = Longtail_LookupTable_Get(block_store_fs->asset_lookup, path_hash);
-    if (asset_index == 0)
+    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    if (path_entry_index == 0)
     {
         return 0;
     }
@@ -581,27 +725,110 @@ static int BlockStoreStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_a
     return ENOTSUP;
 }
 
+struct PathIterator
+{
+    struct BlockStoreStorageAPI* block_store_fs;
+    uint32_t m_PathEntryOffsetEnd;
+    uint32_t m_PathEntryOffset;
+};
+
 static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
 {
-    // TODO
-    return ENOTSUP;
+    struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
+    size_t path_len = strlen(path);
+    TLongtail_Hash path_hash = 0;
+    if (path_len > 0)
+    {
+        if (path[path_len -1 ] == '/')
+        {
+            int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+            if (err)
+            {
+                return err;
+            }
+        }
+        else
+        {
+            char* tmp_path = (char*)alloca(path_len + 2);
+            memcpy(tmp_path, path, path_len);
+            tmp_path[path_len] = '/';
+            tmp_path[path_len + 1] = 0;
+            int err = Longtail_GetPathHash(block_store_fs->hash_api, tmp_path, &path_hash);
+            if (err)
+            {
+                return err;
+            }
+        }
+    }
+    uint64_t* path_entry_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    if (!path_entry_index_ptr)
+    {
+        return ENOENT;
+    }
+    struct PathEntry* p = &block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index_ptr];
+    if (p->m_ChildCount == 0)
+    {
+        return 0;
+    }
+    struct PathIterator* path_iterator = (struct PathIterator*)Longtail_Alloc(sizeof(struct PathIterator));
+    if (path_iterator == 0)
+    {
+        return ENOMEM;
+    }
+    path_iterator->block_store_fs = block_store_fs;
+    path_iterator->m_PathEntryOffset = p->m_ChildStartIndex;
+    path_iterator->m_PathEntryOffsetEnd = p->m_ChildStartIndex + p->m_ChildCount;
+    *out_iterator = (Longtail_StorageAPI_HIterator)path_iterator;
+    return 0;
 }
 
 static int BlockStoreStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
-    // TODO
-    return ENOTSUP;
+    struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    ++path_iterator->m_PathEntryOffset;
+    if (path_iterator->m_PathEntryOffset == path_iterator->m_PathEntryOffsetEnd)
+    {
+        return ENOENT;
+    }
+    return 0;
 }
 
 static void BlockStoreStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
-    // TODO
+    struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    Longtail_Free(path_iterator);
 }
 
-static int BlockStoreStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)
+static int BlockStoreStorageAPI_GetEntryProperties(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HIterator iterator,
+    struct Longtail_StorageAPI_EntryProperties* out_properties)
 {
-    // TODO
-    return ENOTSUP;
+    struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    struct PathEntry* path_entry = &path_iterator->block_store_fs->m_PathLookup->m_PathEntries[path_iterator->m_PathEntryOffset];
+    const char* name_start = path_entry->m_Path;
+    size_t search_pos = 0;
+    int is_dir = 0;
+    while (path_entry->m_Path[search_pos] != '\0')
+    {
+        if (path_entry->m_Path[search_pos] == '/')
+        {
+            if (path_entry->m_Path[search_pos + 1] == '\0')
+            {
+                is_dir = 1;
+                break;
+            }
+            ++search_pos;
+            name_start = &path_entry->m_Path[search_pos];
+        }
+        ++search_pos;
+    }
+
+    out_properties->m_Name = name_start;
+    out_properties->m_IsDir = is_dir;
+    out_properties->m_Permissions = path_iterator->block_store_fs->version_index->m_Permissions[path_entry->m_AssetIndex];
+    out_properties->m_Size = path_iterator->block_store_fs->version_index->m_AssetSizes[path_entry->m_AssetIndex];
+    return 0;
 }
 
 static void BlockStoreStorageAPI_Dispose(struct Longtail_API* api)
@@ -651,8 +878,8 @@ static int BlockStoreStorageAPI_Init(
     char* p = (char*)&block_store_fs[1];
     block_store_fs->chunk_hash_to_block_index_lookup = Longtail_LookupTable_Create(p, *content_index->m_ChunkCount, 0);
     p += Longtail_LookupTable_GetSize(*content_index->m_ChunkCount);
-    block_store_fs->asset_lookup = Longtail_LookupTable_Create(p, *version_index->m_AssetCount, 0);
-    p += Longtail_LookupTable_GetSize(*version_index->m_AssetCount);
+    block_store_fs->m_PathLookup = BuildPathEntires(p, hash_api, version_index);
+    p += GetPathEntriesSize(*version_index->m_AssetCount);
     block_store_fs->chunk_asset_offsets = (uint64_t*)p;
 
     for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
@@ -662,9 +889,6 @@ static int BlockStoreStorageAPI_Init(
     }
     for (uint32_t a = 0; a < *version_index->m_AssetCount; ++a)
     {
-        TLongtail_Hash path_hash = version_index->m_PathHashes[a];
-        Longtail_LookupTable_Put(block_store_fs->asset_lookup, path_hash, a);
-
         uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[a];
         if (chunk_count == 0)
         {
@@ -703,9 +927,9 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
     LONGTAIL_VALIDATE_INPUT(version_index != 0, return 0)
 
     size_t api_size = sizeof(struct BlockStoreStorageAPI) + 
-        sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount) +
         Longtail_LookupTable_GetSize(*content_index->m_ChunkCount) +
-        Longtail_LookupTable_GetSize(*version_index->m_AssetCount);
+        GetPathEntriesSize(*version_index->m_AssetCount) +
+        sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount);
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {

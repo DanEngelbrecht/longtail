@@ -5636,12 +5636,27 @@ static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
 
 static char* GenerateRandomPath(char *str, size_t size)
 {
-    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ.";
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ./";
     if (size) {
         --size;
         for (size_t n = 0; n < size; n++) {
-            int key = rand() % (int) (sizeof charset - 1);
+            size_t allowed_range = sizeof(charset) - 1;
+            if (size > 0 && str[size - 1] == '/')
+            {
+                // Don't allow double forward slahes
+                --allowed_range;
+            }
+            int key = rand() % (int) (allowed_range);
             str[n] = charset[key];
+        }
+        if (size > 0)
+        {
+            if (str[size - 1] == '/')
+            {
+                size_t allowed_range = sizeof(charset) - 2;
+                int key = rand() % (int) (allowed_range);
+                str[size - 1] = charset[key];
+            }
         }
         str[size] = '\0';
     }
@@ -6194,6 +6209,13 @@ TEST(Longtail, TestLongtailBlockFS)
         block_store_content_index,
         vindex);
     ASSERT_NE((struct Longtail_StorageAPI*)0, block_store_fs);
+
+    Longtail_FileInfos* block_store_storage_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(block_store_fs, 0, 0, 0, "", &block_store_storage_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, block_store_storage_paths);
+    ASSERT_EQ(block_store_storage_paths->m_Count, version_paths->m_Count);
+    Longtail_Free(block_store_storage_paths);
+
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)
     {
         const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
