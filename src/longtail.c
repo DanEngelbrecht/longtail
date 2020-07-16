@@ -653,7 +653,7 @@ uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint6
 static size_t GetLookupTableSize(size_t capacity)
 {
     size_t table_size = 1;
-    while (table_size < (capacity / 2))
+    while (table_size < (capacity / 8))
     {
         table_size <<= 1;
     }
