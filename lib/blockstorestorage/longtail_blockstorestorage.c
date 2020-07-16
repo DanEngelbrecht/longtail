@@ -30,7 +30,7 @@
 
 struct PathEntry
 {
-    const char* m_Path;
+    const char* m_Name;
     TLongtail_Hash m_ParentHash;
     uint32_t m_AssetIndex;
     uint32_t m_ChildCount;
@@ -50,15 +50,15 @@ static SORTFUNC(PathEntryParentPathCompare)
     {
         return 1;
     }
-    size_t a_length = strlen(a->m_Path);
-    size_t b_length = strlen(b->m_Path);
-    int a_is_dir = a_length == 0 || (a->m_Path[a_length - 1] == '/');
-    int b_is_dir = b_length == 0 || (b->m_Path[b_length - 1] == '/');
+    size_t a_length = strlen(a->m_Name);
+    size_t b_length = strlen(b->m_Name);
+    int a_is_dir = a_length == 0 || (a->m_Name[a_length - 1] == '/');
+    int b_is_dir = b_length == 0 || (b->m_Name[b_length - 1] == '/');
     if (a_is_dir != b_is_dir)
     {
         return a_is_dir ? -1 : 1;
     }
-    return stricmp(a->m_Path, b->m_Path);
+    return stricmp(a->m_Name, b->m_Name);
 }
 
 static TLongtail_Hash GetParentPathHash(struct Longtail_HashAPI* hash_api, const char* path)
@@ -90,6 +90,29 @@ static TLongtail_Hash GetParentPathHash(struct Longtail_HashAPI* hash_api, const
     return hash;
 }
 
+const char* GetName(const char* path)
+{
+    const char* name_start = path;
+    size_t search_pos = 0;
+    int is_dir = 0;
+    while (path[search_pos] != '\0')
+    {
+        if (path[search_pos] == '/')
+        {
+            if (path[search_pos + 1] == '\0')
+            {
+                is_dir = 1;
+                break;
+            }
+            ++search_pos;
+            name_start = &path[search_pos];
+        }
+        ++search_pos;
+    }
+    return name_start;
+}
+
+
 struct PathLookup
 {
     struct Longtail_VersionIndex* m_VersionIndex;
@@ -116,7 +139,7 @@ struct PathLookup* BuildPathEntires(
     path_lookup->m_VersionIndex = version_index;
     path_lookup->m_PathEntries = (struct PathEntry*)&path_lookup[1];
     path_lookup->m_LookupTable = Longtail_LookupTable_Create(&path_lookup->m_PathEntries[asset_count + 1], asset_count + 1, 0);
-    path_lookup->m_PathEntries[0].m_Path = "";
+    path_lookup->m_PathEntries[0].m_Name = "";
     path_lookup->m_PathEntries[0].m_ParentHash = 0;
     path_lookup->m_PathEntries[0].m_AssetIndex = 0;
     path_lookup->m_PathEntries[0].m_ChildCount = 0;
@@ -125,7 +148,7 @@ struct PathLookup* BuildPathEntires(
     {
         const char* path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
         struct PathEntry* path_entry = &path_lookup->m_PathEntries[a + 1];
-        path_entry->m_Path = path;
+        path_entry->m_Name = GetName(path);
         path_entry->m_ParentHash = GetParentPathHash(hash_api, path);
         path_entry->m_AssetIndex = a;
         path_entry->m_ChildCount = 0;
@@ -818,28 +841,12 @@ static int BlockStoreStorageAPI_GetEntryProperties(
         path_iterator->m_TempPath = 0;
     }
     struct PathEntry* path_entry = &path_iterator->block_store_fs->m_PathLookup->m_PathEntries[path_iterator->m_PathEntryOffset];
-    const char* name_start = path_entry->m_Path;
-    size_t search_pos = 0;
-    int is_dir = 0;
-    while (path_entry->m_Path[search_pos] != '\0')
-    {
-        if (path_entry->m_Path[search_pos] == '/')
-        {
-            if (path_entry->m_Path[search_pos + 1] == '\0')
-            {
-                is_dir = 1;
-                break;
-            }
-            ++search_pos;
-            name_start = &path_entry->m_Path[search_pos];
-        }
-        ++search_pos;
-    }
-
-    path_iterator->m_TempPath = Longtail_Strdup(name_start);
+    size_t name_length = strlen(path_entry->m_Name);
+    int is_dir = ((name_length > 0) && (path_entry->m_Name[name_length - 1] == '/')) ? 1 : 0;
+    path_iterator->m_TempPath = Longtail_Strdup(path_entry->m_Name);
     if (is_dir)
     {
-        path_iterator->m_TempPath[strlen(path_iterator->m_TempPath) - 1] = '\0';
+        path_iterator->m_TempPath[name_length - 1] = '\0';
     }
 
     out_properties->m_Name = path_iterator->m_TempPath;
