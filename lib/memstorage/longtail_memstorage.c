@@ -153,16 +153,18 @@ static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtai
         return EINVAL;
     }
     struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
-    Longtail_UnlockSpinLock(instance->m_SpinLock);
-    // A bit dangerous - we assume nobody is writing to the file while we are reading
     if ((ptrdiff_t)(offset + length) > arrlen(path_entry->m_Content))
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
             storage_api, f, offset, length, output,
             EIO)
+        Longtail_UnlockSpinLock(instance->m_SpinLock);
         return EIO;
     }
-    memcpy(output, &path_entry->m_Content[offset], length);
+    void* content_ptr = &path_entry->m_Content[offset];
+    // A bit dangerous - we assume nobody is writing to the file while we are reading (which is unsupported here)
+    Longtail_UnlockSpinLock(instance->m_SpinLock);
+    memcpy(output, content_ptr, length);
     return 0;
 }
 
