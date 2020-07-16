@@ -3,6 +3,7 @@
 #include "../../src/ext/stb_ds.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <string.h>
 
 #if defined(__clang__) || defined(__GNUC__)
@@ -29,7 +30,7 @@
     #endif
 #endif
 
-struct PathEntry
+struct BlockStoreStorageAPI_PathEntry
 {
     const char* m_Name;
     TLongtail_Hash m_ParentHash;
@@ -38,11 +39,11 @@ struct PathEntry
     uint32_t m_ChildStartIndex;
 };
 
-static SORTFUNC(PathEntryParentPathCompare)
+static SORTFUNC(BlockStoreStorageAPI_PathEntryParentPathCompare)
 {
-    struct PathLookup* path_lookup = (struct PathLookup*)context;
-    struct PathEntry* a = (struct PathEntry*)a_ptr;
-    struct PathEntry* b = (struct PathEntry*)b_ptr;
+    struct BlockStoreStorageAPI_PathLookup* path_lookup = (struct BlockStoreStorageAPI_PathLookup*)context;
+    struct BlockStoreStorageAPI_PathEntry* a = (struct BlockStoreStorageAPI_PathEntry*)a_ptr;
+    struct BlockStoreStorageAPI_PathEntry* b = (struct BlockStoreStorageAPI_PathEntry*)b_ptr;
     if (a->m_ParentHash < b->m_ParentHash)
     {
         return -1;
@@ -59,10 +60,10 @@ static SORTFUNC(PathEntryParentPathCompare)
     {
         return a_is_dir ? -1 : 1;
     }
-    return stricmp(a->m_Name, b->m_Name);
+    return _stricmp(a->m_Name, b->m_Name);
 }
 
-static TLongtail_Hash GetParentPathHash(struct Longtail_HashAPI* hash_api, const char* path)
+static TLongtail_Hash BlockStoreStorageAPI_GetParentPathHash(struct Longtail_HashAPI* hash_api, const char* path)
 {
     size_t path_length = strlen(path);
     size_t scan_pos = path_length;
@@ -91,7 +92,7 @@ static TLongtail_Hash GetParentPathHash(struct Longtail_HashAPI* hash_api, const
     return hash;
 }
 
-const char* GetName(const char* path)
+const char* BlockStoreStorageAPI_GetPathName(const char* path)
 {
     const char* name_start = path;
     size_t search_pos = 0;
@@ -114,31 +115,29 @@ const char* GetName(const char* path)
 }
 
 
-struct PathLookup
+struct BlockStoreStorageAPI_PathLookup
 {
-    struct Longtail_VersionIndex* m_VersionIndex;
-    struct PathEntry* m_PathEntries;
+    struct BlockStoreStorageAPI_PathEntry* m_PathEntries;
     struct Longtail_LookupTable* m_LookupTable;
 };
 
 size_t GetPathEntriesSize(uint32_t asset_count)
 {
-    size_t path_lookup_size = sizeof(struct PathLookup) +
-        sizeof(struct PathEntry) * (asset_count + 1) +
+    size_t path_lookup_size = sizeof(struct BlockStoreStorageAPI_PathLookup) +
+        sizeof(struct BlockStoreStorageAPI_PathEntry) * (asset_count + 1) +
         Longtail_LookupTable_GetSize(asset_count + 1);
     return path_lookup_size;
 }
 
-struct PathLookup* BuildPathEntires(
+static struct BlockStoreStorageAPI_PathLookup* BlockStoreStorageAPI_CreatePathLookup(
     void* mem,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_VersionIndex* version_index)
 {
-    struct PathLookup* path_lookup = (struct PathLookup*)mem;
+    struct BlockStoreStorageAPI_PathLookup* path_lookup = (struct BlockStoreStorageAPI_PathLookup*)mem;
 
     uint32_t asset_count = *version_index->m_AssetCount;
-    path_lookup->m_VersionIndex = version_index;
-    path_lookup->m_PathEntries = (struct PathEntry*)&path_lookup[1];
+    path_lookup->m_PathEntries = (struct BlockStoreStorageAPI_PathEntry*)&path_lookup[1];
     path_lookup->m_LookupTable = Longtail_LookupTable_Create(&path_lookup->m_PathEntries[asset_count + 1], asset_count + 1, 0);
     path_lookup->m_PathEntries[0].m_Name = "";
     path_lookup->m_PathEntries[0].m_ParentHash = 0;
@@ -148,14 +147,14 @@ struct PathLookup* BuildPathEntires(
     for (uint32_t a = 0; a < asset_count; ++a)
     {
         const char* path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
-        struct PathEntry* path_entry = &path_lookup->m_PathEntries[a + 1];
-        path_entry->m_Name = GetName(path);
-        path_entry->m_ParentHash = GetParentPathHash(hash_api, path);
+        struct BlockStoreStorageAPI_PathEntry* path_entry = &path_lookup->m_PathEntries[a + 1];
+        path_entry->m_Name = BlockStoreStorageAPI_GetPathName(path);
+        path_entry->m_ParentHash = BlockStoreStorageAPI_GetParentPathHash(hash_api, path);
         path_entry->m_AssetIndex = a;
         path_entry->m_ChildCount = 0;
         path_entry->m_ChildStartIndex = 0;
     }
-    QSORT(&path_lookup->m_PathEntries[1], asset_count, sizeof(struct PathEntry), PathEntryParentPathCompare, path_lookup);
+    QSORT(&path_lookup->m_PathEntries[1], asset_count, sizeof(struct BlockStoreStorageAPI_PathEntry), BlockStoreStorageAPI_PathEntryParentPathCompare, path_lookup);
 
     Longtail_LookupTable_Put(path_lookup->m_LookupTable, 0, 0);
     for (uint32_t a = 0; a < asset_count; ++a)
@@ -183,29 +182,28 @@ struct PathLookup* BuildPathEntires(
 struct BlockStoreStorageAPI
 {
     struct Longtail_StorageAPI m_API;
-    struct Longtail_HashAPI* hash_api;
-    struct Longtail_JobAPI* job_api;
-    struct Longtail_BlockStoreAPI* block_store;
-    struct Longtail_ContentIndex* content_index;
-    struct Longtail_VersionIndex* version_index;
-    struct Longtail_LookupTable* chunk_hash_to_block_index_lookup;
-//    struct Longtail_LookupTable* asset_lookup;
-    struct PathLookup* m_PathLookup;
-    uint64_t* chunk_asset_offsets;
+    struct Longtail_HashAPI* m_HashAPI;
+    struct Longtail_JobAPI* m_JobAPI;
+    struct Longtail_BlockStoreAPI* m_BlockStore;
+    struct Longtail_ContentIndex* m_ContentIndex;
+    struct Longtail_VersionIndex* m_VersionIndex;
+    struct Longtail_LookupTable* m_ChunkHashToBlockIndexLookup;
+    struct BlockStoreStorageAPI_PathLookup* m_PathLookup;
+    uint64_t* m_ChunkAssetOffsets;
 };
 
 struct BlockStoreStorageAPI_OpenFile
 {
-    uint32_t asset_index;
-    uint32_t seek_chunk_offset;
-    uint64_t seek_asset_pos;
+    uint32_t m_AssetIndex;
+    uint32_t m_SeekChunkOffset;
+    uint64_t m_SeekAssetPos;
 };
 
 struct BlockStoreStorageAPI_ChunkRange
 {
-    uint64_t asset_start_offset;
-    uint32_t chunk_start;
-    uint32_t chunk_end;
+    uint64_t m_AssetStartOffset;
+    uint32_t m_ChunkStart;
+    uint32_t m_ChunkEnd;
 };
 
 struct BlockStoreStorageAPI_BlockRange
@@ -228,24 +226,27 @@ static int BlockStoreStorageAPI_ReadFromBlock(
     uint32_t chunk_block_offset = 0;
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
     size_t block_chunk_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
-    void* mem = Longtail_Alloc(block_chunk_lookup_size);
-    if (mem == 0)
+    void* work_mem = Longtail_Alloc(block_chunk_lookup_size);
+    if (work_mem == 0)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock(%p, %p, %p, %p, %" PRIu64 ", %" PRIu64 ", %p, %p) failed with %d",
+            stored_block, range, block_store_fs, block_store_file, start, size, buffer, chunk_indexes,
+            ENOMEM)
         return ENOMEM;
     }
-    struct Longtail_LookupTable* block_chunk_lookup = Longtail_LookupTable_Create(mem, chunk_count, 0);
+    struct Longtail_LookupTable* block_chunk_lookup = Longtail_LookupTable_Create(work_mem, chunk_count, 0);
     for (uint32_t c = 0; c < *stored_block->m_BlockIndex->m_ChunkCount; ++c)
     {
         TLongtail_Hash chunk_hash = stored_block->m_BlockIndex->m_ChunkHashes[c];
         Longtail_LookupTable_Put(block_chunk_lookup, chunk_hash, chunk_block_offset);
         chunk_block_offset += stored_block->m_BlockIndex->m_ChunkSizes[c];
     }
-    uint64_t asset_offset = range.asset_start_offset;
-    for (uint32_t c = range.chunk_start; c < range.chunk_end; ++c)
+    uint64_t asset_offset = range.m_AssetStartOffset;
+    for (uint32_t c = range.m_ChunkStart; c < range.m_ChunkEnd; ++c)
     {
         uint32_t chunk_index = chunk_indexes[c];
-        TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
-        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+        TLongtail_Hash chunk_hash = block_store_fs->m_VersionIndex->m_ChunkHashes[chunk_index];
+        uint32_t chunk_size = block_store_fs->m_VersionIndex->m_ChunkSizes[chunk_index];
         uint64_t asset_offset_chunk_end = asset_offset + chunk_size;
         LONGTAIL_FATAL_ASSERT(asset_offset_chunk_end >= start, return EINVAL)
 
@@ -274,7 +275,7 @@ static int BlockStoreStorageAPI_ReadFromBlock(
         memcpy(&buffer[asset_offset - start], &block_data[chunk_block_offset + chunk_offset], read_length);
         asset_offset += read_length;
     }
-    Longtail_Free(block_chunk_lookup);
+    Longtail_Free(work_mem);
     return 0;
 }
 
@@ -283,73 +284,73 @@ struct BlockStoreStorageAPI_ReadFromBlockJobData;
 struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI
 {
     struct Longtail_AsyncGetStoredBlockAPI m_API;
-    uint32_t job_id;
-    struct BlockStoreStorageAPI_ReadFromBlockJobData* data;
+    uint32_t m_JobID;
+    struct BlockStoreStorageAPI_ReadFromBlockJobData* m_Data;
 };
 
 
 struct BlockStoreStorageAPI_ReadFromBlockJobData
 {
-	struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI on_read_block_complete_api;
-    uint64_t block_index;
-    struct BlockStoreStorageAPI_ChunkRange range;
-    struct BlockStoreStorageAPI* block_store_fs;
-    struct BlockStoreStorageAPI_OpenFile* block_store_file;
-    uint64_t start;
-    uint64_t size;
-    char* buffer;
-    const uint32_t* chunk_indexes;
-    struct Longtail_StoredBlock* stored_block;
-    int err;
+	struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI m_OnReadBlockCompleteAPI;
+    uint64_t m_BlockIndex;
+    struct BlockStoreStorageAPI_ChunkRange m_Range;
+    struct BlockStoreStorageAPI* m_BlockStoreFS;
+    struct BlockStoreStorageAPI_OpenFile* m_BlockStoreFile;
+    uint64_t m_Start;
+    uint64_t m_Size;
+    char* m_Buffer;
+    const uint32_t* m_ChunkIndexes;
+    struct Longtail_StoredBlock* m_StoredBlock;
+    int m_Err;
 };
 
 static void BlockStoreStorageAPI_ReadBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
     struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI* cb = (struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI*)async_complete_api;
-    struct Longtail_JobAPI* job_api = cb->data->block_store_fs->job_api;
-    cb->data->err = err;
-    cb->data->stored_block = stored_block;
-    job_api->ResumeJob(job_api, cb->job_id);
+    struct Longtail_JobAPI* job_api = cb->m_Data->m_BlockStoreFS->m_JobAPI;
+    cb->m_Data->m_Err = err;
+    cb->m_Data->m_StoredBlock = stored_block;
+    job_api->ResumeJob(job_api, cb->m_JobID);
 }
 
 static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id, int is_cancelled)
 {
     struct BlockStoreStorageAPI_ReadFromBlockJobData* data = (struct BlockStoreStorageAPI_ReadFromBlockJobData*)context;
 
-    if (!data->stored_block)
+    if (!data->m_StoredBlock)
     {
-        if (data->err)
+        if (data->m_Err)
         {
             return 0;
         }
         // Don't need dynamic alloc, could be part of struct BlockStoreStorageAPI_ReadFromBlockJobData since it covers the lifetime of struct BlockStoreStorageAPI_ReadBlock_OnComplete
-        struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI* complete_cb = &data->on_read_block_complete_api;
+        struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI* complete_cb = &data->m_OnReadBlockCompleteAPI;
         complete_cb->m_API.OnComplete = BlockStoreStorageAPI_ReadBlock_OnComplete;
-        complete_cb->job_id = job_id;
-        complete_cb->data = data;
+        complete_cb->m_JobID = job_id;
+        complete_cb->m_Data = data;
 
-        TLongtail_Hash block_hash = data->block_store_fs->content_index->m_BlockHashes[data->block_index];
-        int err = data->block_store_fs->block_store->GetStoredBlock(data->block_store_fs->block_store, block_hash, &complete_cb->m_API);
+        TLongtail_Hash block_hash = data->m_BlockStoreFS->m_ContentIndex->m_BlockHashes[data->m_BlockIndex];
+        int err = data->m_BlockStoreFS->m_BlockStore->GetStoredBlock(data->m_BlockStoreFS->m_BlockStore, block_hash, &complete_cb->m_API);
         if (err)
         {
-            data->err = err;
+            data->m_Err = err;
             return 0;
         }
         return EBUSY;
     }
 
-    data->err = BlockStoreStorageAPI_ReadFromBlock(
-        data->stored_block,
-        data->range,
-        data->block_store_fs,
-        data->block_store_file,
-        data->start,
-        data->size,
-        data->buffer,
-        data->chunk_indexes);
-    if (data->stored_block->Dispose)
+    data->m_Err = BlockStoreStorageAPI_ReadFromBlock(
+        data->m_StoredBlock,
+        data->m_Range,
+        data->m_BlockStoreFS,
+        data->m_BlockStoreFile,
+        data->m_Start,
+        data->m_Size,
+        data->m_Buffer,
+        data->m_ChunkIndexes);
+    if (data->m_StoredBlock->Dispose)
     {
-        data->stored_block->Dispose(data->stored_block);
+        data->m_StoredBlock->Dispose(data->m_StoredBlock);
     }
     return 0;
 }
@@ -387,43 +388,44 @@ static int BlockStoreStorageAPI_SeekFile(
     struct BlockStoreStorageAPI_OpenFile* block_store_file,
     uint64_t pos)
 {
-    if (pos == block_store_file->seek_asset_pos)
+    if (pos == block_store_file->m_SeekAssetPos)
     {
         return 0;
     }
-    uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[block_store_file->asset_index];
+    uint32_t asset_index = block_store_file->m_AssetIndex;
+    uint32_t chunk_count = block_store_fs->m_VersionIndex->m_AssetChunkCounts[asset_index];
     if (chunk_count == 0)
     {
         return pos == 0 ? 0 : EIO;
     }
-    uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[block_store_file->asset_index];
+    uint32_t chunk_start_index = block_store_fs->m_VersionIndex->m_AssetChunkIndexStarts[asset_index];
 
-    const uint64_t* chunk_asset_offsets = &block_store_fs->chunk_asset_offsets[chunk_start_index];
-    if (block_store_file->seek_chunk_offset < chunk_count)
+    const uint64_t* chunk_asset_offsets = &block_store_fs->m_ChunkAssetOffsets[chunk_start_index];
+    if (block_store_file->m_SeekChunkOffset < chunk_count)
     {
-        if (pos >= chunk_asset_offsets[block_store_file->seek_chunk_offset])
+        if (pos >= chunk_asset_offsets[block_store_file->m_SeekChunkOffset])
         {
-            if (block_store_file->seek_chunk_offset == chunk_count - 1)
+            if (block_store_file->m_SeekChunkOffset == chunk_count - 1)
             {
                 // on last block
                 return 0;
             }
-            else if (pos < chunk_asset_offsets[block_store_file->seek_chunk_offset + 1])
+            else if (pos < chunk_asset_offsets[block_store_file->m_SeekChunkOffset + 1])
             {
                 return 0;
             }
         }
     }
 
-    const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
+    const uint32_t* chunk_indexes = &block_store_fs->m_VersionIndex->m_AssetChunkIndexes[chunk_start_index];
 
-    uint64_t asset_size = block_store_fs->version_index->m_AssetSizes[block_store_file->asset_index];
+    uint64_t asset_size = block_store_fs->m_VersionIndex->m_AssetSizes[asset_index];
 
     uint32_t start_chunk_index = BlockStoreStorageAPI_FindStartChunk(chunk_asset_offsets, chunk_count, pos);
     uint64_t start_asset_offset = chunk_asset_offsets[start_chunk_index];
 
-    block_store_file->seek_asset_pos = start_asset_offset;
-    block_store_file->seek_chunk_offset = start_chunk_index;
+    block_store_file->m_SeekAssetPos = start_asset_offset;
+    block_store_file->m_SeekChunkOffset = start_chunk_index;
     return 0;
 }
 
@@ -436,19 +438,32 @@ static int BlockStoreStorageAPI_ReadFile(
 {
     char* buffer = (char*)out_buffer;
 
-    uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[block_store_file->asset_index];
-    uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[block_store_file->asset_index];
-    const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
-
+    uint32_t asset_index = block_store_file->m_AssetIndex;
     const uint64_t read_end = start + size;
+    uint64_t asset_size = block_store_fs->m_VersionIndex->m_AssetSizes[asset_index];
+    if (read_end > asset_size)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFile(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+            block_store_fs, block_store_file, start, size, out_buffer,
+            EIO)
+        return EIO;
+    }
+
+    uint32_t chunk_count = block_store_fs->m_VersionIndex->m_AssetChunkCounts[asset_index];
+    uint32_t chunk_start_index = block_store_fs->m_VersionIndex->m_AssetChunkIndexStarts[asset_index];
+    const uint32_t* chunk_indexes = &block_store_fs->m_VersionIndex->m_AssetChunkIndexes[chunk_start_index];
+
     int err = BlockStoreStorageAPI_SeekFile(block_store_fs, block_store_file, start);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFile(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+            block_store_fs, block_store_file, start, size, out_buffer,
+            err)
         return err;
     }
 
-    uint32_t seek_chunk_offset = block_store_file->seek_chunk_offset;
-    uint64_t seek_asset_pos = block_store_file->seek_asset_pos;
+    uint32_t seek_chunk_offset = block_store_file->m_SeekChunkOffset;
+    uint64_t seek_asset_pos = block_store_file->m_SeekAssetPos;
 
     struct BlockStoreStorageAPI_BlockRange* block_range_map = 0;
     uint64_t* block_indexes = 0;
@@ -459,11 +474,11 @@ static int BlockStoreStorageAPI_ReadFile(
     for (uint32_t c = seek_chunk_offset; c < chunk_count; ++c)
     {
         uint32_t chunk_index = chunk_indexes[c];
-        TLongtail_Hash chunk_hash = block_store_fs->version_index->m_ChunkHashes[chunk_index];
-        uint64_t block_index = *Longtail_LookupTable_Get(block_store_fs->chunk_hash_to_block_index_lookup, chunk_hash);
+        TLongtail_Hash chunk_hash = block_store_fs->m_VersionIndex->m_ChunkHashes[chunk_index];
+        uint64_t block_index = *Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
         if ((last_block_index != 0xfffffffffffffffful) && (block_index == last_block_index))
         {
-            block_range_map[last_block_range_index_ptr].value.chunk_end = c + 1;
+            block_range_map[last_block_range_index_ptr].value.m_ChunkEnd = c + 1;
         }
         else
         {
@@ -477,14 +492,14 @@ static int BlockStoreStorageAPI_ReadFile(
             }
             else
             {
-                block_range_map[last_block_range_index_ptr].value.chunk_end = c + 1;
+                block_range_map[last_block_range_index_ptr].value.m_ChunkEnd = c + 1;
             }
             last_block_index = block_index;
         }
-        block_store_file->seek_chunk_offset = c;
-        block_store_file->seek_asset_pos = seek_asset_pos;
+        block_store_file->m_SeekChunkOffset = c;
+        block_store_file->m_SeekAssetPos = seek_asset_pos;
 
-        uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+        uint32_t chunk_size = block_store_fs->m_VersionIndex->m_ChunkSizes[chunk_index];
         seek_asset_pos += chunk_size;
         if (seek_asset_pos >= read_end)
         {
@@ -498,7 +513,7 @@ static int BlockStoreStorageAPI_ReadFile(
         return 0;
     }
 
-    struct Longtail_JobAPI* job_api = block_store_fs->job_api;
+    struct Longtail_JobAPI* job_api = block_store_fs->m_JobAPI;
 
 	size_t work_mem_size = sizeof(struct BlockStoreStorageAPI_ReadFromBlockJobData) * block_count +
 		sizeof(Longtail_JobAPI_JobFunc) * block_count +
@@ -506,6 +521,9 @@ static int BlockStoreStorageAPI_ReadFile(
 	void* work_mem = Longtail_Alloc(work_mem_size);
 	if (!work_mem)
 	{
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFile(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+            block_store_fs, block_store_file, start, size, out_buffer,
+            ENOMEM)
 		return ENOMEM;
 	}
     struct BlockStoreStorageAPI_ReadFromBlockJobData* job_datas = (struct BlockStoreStorageAPI_ReadFromBlockJobData*)work_mem;
@@ -521,16 +539,16 @@ static int BlockStoreStorageAPI_ReadFile(
         uint64_t block_index = block_indexes[b];
         struct BlockStoreStorageAPI_ChunkRange range = hmget(block_range_map, block_index);
 
-        job_datas[b].block_index = block_index;
-        job_datas[b].range = range;
-        job_datas[b].block_store_fs = block_store_fs;
-        job_datas[b].block_store_file = block_store_file;
-        job_datas[b].start = start;
-        job_datas[b].size = size;
-        job_datas[b].buffer = buffer;
-        job_datas[b].chunk_indexes = chunk_indexes;
-        job_datas[b].stored_block = 0;
-        job_datas[b].err = 0;
+        job_datas[b].m_BlockIndex = block_index;
+        job_datas[b].m_Range = range;
+        job_datas[b].m_BlockStoreFS = block_store_fs;
+        job_datas[b].m_BlockStoreFile = block_store_file;
+        job_datas[b].m_Start = start;
+        job_datas[b].m_Size = size;
+        job_datas[b].m_Buffer = buffer;
+        job_datas[b].m_ChunkIndexes = chunk_indexes;
+        job_datas[b].m_StoredBlock = 0;
+        job_datas[b].m_Err = 0;
 
         funcs[b] = BlockStoreStorageAPI_ReadFromBlockJob;
         ctxs[b] = &job_datas[b];
@@ -549,104 +567,220 @@ static int BlockStoreStorageAPI_ReadFile(
     return 0;
 }
 
-static int BlockStoreStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
+static int BlockStoreStorageAPI_OpenReadFile(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    Longtail_StorageAPI_HOpenFile* out_open_file)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(out_open_file != 0, return 0)
+
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
 
     uint64_t path_hash = 0;
-    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_OpenReadFile(%p, `%s`, %p) failed with %d",
+            block_store_fs, path, out_open_file,
+            err)
         return err;
     }
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "BlockStoreStorageAPI_OpenReadFile(%p, `%s`, %p) failed with %d",
+            block_store_fs, path, out_open_file,
+            ENOENT)
         return ENOENT;
     }
     uint32_t asset_index = block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index].m_AssetIndex;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)Longtail_Alloc(sizeof(struct BlockStoreStorageAPI_OpenFile));
-    block_store_file->asset_index = asset_index;
-    block_store_file->seek_chunk_offset = 0;
-    block_store_file->seek_asset_pos = 0;
+    block_store_file->m_AssetIndex = asset_index;
+    block_store_file->m_SeekChunkOffset = 0;
+    block_store_file->m_SeekAssetPos = 0;
     *out_open_file = (Longtail_StorageAPI_HOpenFile)block_store_file;
     return 0;
 }
 
-static int BlockStoreStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
+static int BlockStoreStorageAPI_GetSize(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HOpenFile f,
+    uint64_t* out_size)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(f != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(out_size != 0, return 0)
+
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)f;
-    *out_size = block_store_fs->version_index->m_AssetSizes[block_store_file->asset_index];
+    *out_size = block_store_fs->m_VersionIndex->m_AssetSizes[block_store_file->m_AssetIndex];
     return 0;
 }
 
-static int BlockStoreStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
+static int BlockStoreStorageAPI_Read(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HOpenFile f,
+    uint64_t offset,
+    uint64_t length,
+    void* output)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(f != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(output != 0, return 0)
+
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)f;
     int err = BlockStoreStorageAPI_ReadFile(block_store_fs, block_store_file, offset, length, output);
-    return err;
-}
-
-static int BlockStoreStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
-{
-    return ENOTSUP;
-}
-
-static int BlockStoreStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
-{
-    return ENOTSUP;
-}
-
-static int BlockStoreStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
-{
-    return ENOTSUP;
-}
-
-static int BlockStoreStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions)
-{
-    return ENOTSUP;
-}
-
-static int BlockStoreStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
-{
-    struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
-    uint64_t path_hash = 0;
-    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+            storage_api, f, offset, length, output,
+            err)
+        return err;
+    }
+    return 0;
+}
+
+static int BlockStoreStorageAPI_OpenWriteFile(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    uint64_t initial_size,
+    Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(out_open_file != 0, return 0)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_OpenWriteFile(%p, `%s`, %" PRIu64 ", %p) failed with %d",
+        storage_api, path, initial_size, out_open_file,
+        ENOTSUP)
+    return ENOTSUP;
+}
+
+static int BlockStoreStorageAPI_Write(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HOpenFile f,
+    uint64_t offset,
+    uint64_t length,
+    const void* input)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(f != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(input != 0, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_Write(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+        storage_api, f, offset, length, input,
+        ENOTSUP)
+    return ENOTSUP;
+}
+
+static int BlockStoreStorageAPI_SetSize(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HOpenFile f,
+    uint64_t length)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(f != 0, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_SetSize(%p, %p, %" PRIu64 ") failed with %d",
+        storage_api, f, length,
+        ENOTSUP)
+    return ENOTSUP;
+}
+
+static int BlockStoreStorageAPI_SetPermissions(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    uint16_t permissions)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_SetPermissions(%p, `%s`, %u) failed with %d",
+        storage_api, path, permissions,
+        ENOTSUP)
+    return ENOTSUP;
+}
+
+static int BlockStoreStorageAPI_GetPermissions(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    uint16_t* out_permissions)
+{
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(out_permissions != 0, return 0)
+
+    struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
+    uint64_t path_hash = 0;
+    int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_GetPermissions(%p, `%s`, %p) failed with %d",
+            storage_api, path, out_permissions,
+            err)
         return err;
     }
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "BlockStoreStorageAPI_GetPermissions(%p, `%s`, %p) failed with %d",
+            storage_api, path, out_permissions,
+            ENOENT)
         return ENOENT;
     }
     uint32_t asset_index = block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index].m_AssetIndex;
-    *out_permissions = block_store_fs->version_index->m_Permissions[asset_index];
+    *out_permissions = block_store_fs->m_VersionIndex->m_Permissions[asset_index];
     return 0;
 }
 
-static void BlockStoreStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
+static void BlockStoreStorageAPI_CloseFile(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HOpenFile f)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return)
+    LONGTAIL_VALIDATE_INPUT(f != 0, return)
+
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)f;
     Longtail_Free(block_store_file);
 }
 
-static int BlockStoreStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
+static int BlockStoreStorageAPI_CreateDir(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_CreateDir(%p, `%s`) failed with %d",
+        storage_api, path,
+        ENOTSUP)
     return ENOTSUP;
 }
 
-static int BlockStoreStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
+static int BlockStoreStorageAPI_RenameFile(
+    struct Longtail_StorageAPI* storage_api,
+    const char* source_path,
+    const char* target_path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(source_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(target_path != 0, return 0)
+
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_RenameFile(%p, `%s`, `%s`) failed with %d",
+        storage_api, source_path, target_path,
+        ENOTSUP)
     return ENOTSUP;
 }
 
-static char* BlockStoreStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
+static char* BlockStoreStorageAPI_ConcatPath(
+    struct Longtail_StorageAPI* storage_api,
+    const char* root_path,
+    const char* sub_path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(root_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(sub_path != 0, return 0)
+
     size_t root_len = strlen(root_path);
     if (root_len == 0)
     {
@@ -661,6 +795,9 @@ static char* BlockStoreStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage
     char* path = (char*)Longtail_Alloc(path_len + 1);
     if (!path)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ConcatPath(%p, `%s`, `%s`) failed with %d",
+            storage_api, root_path, sub_path,
+            ENOMEM)
         return 0;
     }
     memcpy(path, root_path, root_len);
@@ -669,8 +806,13 @@ static char* BlockStoreStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage
     return path;
 }
 
-static int BlockStoreStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const char* path)
+static int BlockStoreStorageAPI_IsDir(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+
     size_t path_len = strlen(path);
     if (path_len == 0)
     {
@@ -682,9 +824,12 @@ static int BlockStoreStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, c
     }
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     uint64_t path_hash = 0;
-    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_IsDir(%p, `%s`) failed with %d",
+            storage_api, path,
+            err)
         return err;
     }
 
@@ -700,9 +845,12 @@ static int BlockStoreStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, c
     tmp_path[path_len] = '/';
     tmp_path[path_len + 1] = 0;
     path_hash = 0;
-    err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    err = Longtail_GetPathHash(block_store_fs->m_HashAPI, tmp_path, &path_hash);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_IsDir(%p, `%s`) failed with %d",
+            storage_api, path,
+            err)
         return err;
     }
     path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
@@ -713,22 +861,30 @@ static int BlockStoreStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, c
     return 1;
 }
 
-static int BlockStoreStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
+static int BlockStoreStorageAPI_IsFile(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+
     size_t path_len = strlen(path);
     if (path_len == 0)
     {
         return 0;
     }
-    if (path[strlen(path)- 1] == '/')
+    if (path[path_len- 1] == '/')
     {
         return 0;
     }
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     uint64_t path_hash = 0;
-    int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+    int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_IsFile(%p, `%s`) failed with %d",
+            storage_api, path,
+            err)
         return err;
     }
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
@@ -739,26 +895,40 @@ static int BlockStoreStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, 
     return 1;
 }
 
-static int BlockStoreStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
+static int BlockStoreStorageAPI_RemoveDir(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
     return ENOTSUP;
 }
 
-static int BlockStoreStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
+static int BlockStoreStorageAPI_RemoveFile(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
     return ENOTSUP;
 }
 
-struct PathIterator
+struct BlockStoreStorageAPI_Iterator
 {
-    struct BlockStoreStorageAPI* block_store_fs;
     char* m_TempPath;
     uint32_t m_PathEntryOffsetEnd;
     uint32_t m_PathEntryOffset;
 };
 
-static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
+static int BlockStoreStorageAPI_StartFind(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    Longtail_StorageAPI_HIterator* out_iterator)
 {
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(out_iterator != 0, return 0)
+
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     size_t path_len = strlen(path);
     TLongtail_Hash path_hash = 0;
@@ -766,9 +936,12 @@ static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_ap
     {
         if (path[path_len -1 ] == '/')
         {
-            int err = Longtail_GetPathHash(block_store_fs->hash_api, path, &path_hash);
+            int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
             if (err)
             {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_StartFind(%p, `%s`, %p) failed with %d",
+                    storage_api, path, out_iterator,
+                    err)
                 return err;
             }
         }
@@ -778,9 +951,12 @@ static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_ap
             memcpy(tmp_path, path, path_len);
             tmp_path[path_len] = '/';
             tmp_path[path_len + 1] = 0;
-            int err = Longtail_GetPathHash(block_store_fs->hash_api, tmp_path, &path_hash);
+            int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, tmp_path, &path_hash);
             if (err)
             {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_StartFind(%p, `%s`, %p) failed with %d",
+                    storage_api, path, out_iterator,
+                    err)
                 return err;
             }
         }
@@ -790,17 +966,19 @@ static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_ap
     {
         return ENOENT;
     }
-    struct PathEntry* p = &block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index_ptr];
+    struct BlockStoreStorageAPI_PathEntry* p = &block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index_ptr];
     if (p->m_ChildCount == 0)
     {
         return 0;
     }
-    struct PathIterator* path_iterator = (struct PathIterator*)Longtail_Alloc(sizeof(struct PathIterator));
+    struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)Longtail_Alloc(sizeof(struct BlockStoreStorageAPI_Iterator));
     if (path_iterator == 0)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_StartFind(%p, `%s`, %p) failed with %d",
+            storage_api, path, out_iterator,
+            ENOMEM)
         return ENOMEM;
     }
-    path_iterator->block_store_fs = block_store_fs;
     path_iterator->m_TempPath = 0;
     path_iterator->m_PathEntryOffset = p->m_ChildStartIndex;
     path_iterator->m_PathEntryOffsetEnd = p->m_ChildStartIndex + p->m_ChildCount;
@@ -808,9 +986,14 @@ static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_ap
     return 0;
 }
 
-static int BlockStoreStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+static int BlockStoreStorageAPI_FindNext(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HIterator iterator)
 {
-    struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(iterator != 0, return 0)
+
+    struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)iterator;
     if (path_iterator->m_TempPath)
     {
         Longtail_Free(path_iterator->m_TempPath);
@@ -824,9 +1007,13 @@ static int BlockStoreStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api
     return 0;
 }
 
-static void BlockStoreStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+static void BlockStoreStorageAPI_CloseFind(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HIterator iterator)
 {
-    struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return)
+    LONGTAIL_VALIDATE_INPUT(iterator != 0, return)
+    struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)iterator;
     Longtail_Free(path_iterator);
 }
 
@@ -835,13 +1022,18 @@ static int BlockStoreStorageAPI_GetEntryProperties(
     Longtail_StorageAPI_HIterator iterator,
     struct Longtail_StorageAPI_EntryProperties* out_properties)
 {
-    struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(iterator != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(out_properties != 0, return 0)
+
+    struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
+    struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)iterator;
     if (path_iterator->m_TempPath)
     {
         Longtail_Free(path_iterator->m_TempPath);
         path_iterator->m_TempPath = 0;
     }
-    struct PathEntry* path_entry = &path_iterator->block_store_fs->m_PathLookup->m_PathEntries[path_iterator->m_PathEntryOffset];
+    struct BlockStoreStorageAPI_PathEntry* path_entry = &block_store_fs->m_PathLookup->m_PathEntries[path_iterator->m_PathEntryOffset];
     size_t name_length = strlen(path_entry->m_Name);
     int is_dir = ((name_length > 0) && (path_entry->m_Name[name_length - 1] == '/')) ? 1 : 0;
     path_iterator->m_TempPath = Longtail_Strdup(path_entry->m_Name);
@@ -852,8 +1044,8 @@ static int BlockStoreStorageAPI_GetEntryProperties(
 
     out_properties->m_Name = path_iterator->m_TempPath;
     out_properties->m_IsDir = is_dir;
-    out_properties->m_Permissions = path_iterator->block_store_fs->version_index->m_Permissions[path_entry->m_AssetIndex];
-    out_properties->m_Size = path_iterator->block_store_fs->version_index->m_AssetSizes[path_entry->m_AssetIndex];
+    out_properties->m_Permissions = block_store_fs->m_VersionIndex->m_Permissions[path_entry->m_AssetIndex];
+    out_properties->m_Size = block_store_fs->m_VersionIndex->m_AssetSizes[path_entry->m_AssetIndex];
     return 0;
 }
 
@@ -872,6 +1064,14 @@ static int BlockStoreStorageAPI_Init(
     struct Longtail_VersionIndex* version_index,
     struct Longtail_StorageAPI** out_storage_api)
 {
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(hash_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(job_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(block_store != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(content_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(version_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(out_storage_api != 0, return 0)
+
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)mem;
 
     block_store_fs->m_API.m_API.Dispose = BlockStoreStorageAPI_Dispose;
@@ -895,39 +1095,39 @@ static int BlockStoreStorageAPI_Init(
     block_store_fs->m_API.FindNext = BlockStoreStorageAPI_FindNext;
     block_store_fs->m_API.CloseFind = BlockStoreStorageAPI_CloseFind;
     block_store_fs->m_API.GetEntryProperties = BlockStoreStorageAPI_GetEntryProperties;
-    block_store_fs->hash_api = hash_api;
-    block_store_fs->job_api = job_api;
-    block_store_fs->block_store = block_store;
-    block_store_fs->content_index = content_index;
-    block_store_fs->version_index = version_index;
+    block_store_fs->m_HashAPI = hash_api;
+    block_store_fs->m_JobAPI = job_api;
+    block_store_fs->m_BlockStore = block_store;
+    block_store_fs->m_ContentIndex = content_index;
+    block_store_fs->m_VersionIndex = version_index;
 
     char* p = (char*)&block_store_fs[1];
-    block_store_fs->chunk_hash_to_block_index_lookup = Longtail_LookupTable_Create(p, *content_index->m_ChunkCount, 0);
+    block_store_fs->m_ChunkHashToBlockIndexLookup = Longtail_LookupTable_Create(p, *content_index->m_ChunkCount, 0);
     p += Longtail_LookupTable_GetSize(*content_index->m_ChunkCount);
-    block_store_fs->m_PathLookup = BuildPathEntires(p, hash_api, version_index);
+    block_store_fs->m_PathLookup = BlockStoreStorageAPI_CreatePathLookup(p, hash_api, version_index);
     p += GetPathEntriesSize(*version_index->m_AssetCount);
-    block_store_fs->chunk_asset_offsets = (uint64_t*)p;
+    block_store_fs->m_ChunkAssetOffsets = (uint64_t*)p;
 
     for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
     {
         uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
-        Longtail_LookupTable_Put(block_store_fs->chunk_hash_to_block_index_lookup, content_index->m_ChunkHashes[c], block_index);
+        Longtail_LookupTable_Put(block_store_fs->m_ChunkHashToBlockIndexLookup, content_index->m_ChunkHashes[c], block_index);
     }
     for (uint32_t a = 0; a < *version_index->m_AssetCount; ++a)
     {
-        uint32_t chunk_count = block_store_fs->version_index->m_AssetChunkCounts[a];
+        uint32_t chunk_count = block_store_fs->m_VersionIndex->m_AssetChunkCounts[a];
         if (chunk_count == 0)
         {
             continue;
         }
-        uint32_t chunk_start_index = block_store_fs->version_index->m_AssetChunkIndexStarts[a];
-        const uint32_t* chunk_indexes = &block_store_fs->version_index->m_AssetChunkIndexes[chunk_start_index];
-        uint64_t* chunk_asset_offsets = &block_store_fs->chunk_asset_offsets[chunk_start_index];
+        uint32_t chunk_start_index = block_store_fs->m_VersionIndex->m_AssetChunkIndexStarts[a];
+        const uint32_t* chunk_indexes = &block_store_fs->m_VersionIndex->m_AssetChunkIndexes[chunk_start_index];
+        uint64_t* chunk_asset_offsets = &block_store_fs->m_ChunkAssetOffsets[chunk_start_index];
         uint64_t offset = 0;
         for (uint32_t c = 0; c < chunk_count; ++c)
         {
             uint32_t chunk_index = chunk_indexes[c];
-            uint32_t chunk_size = block_store_fs->version_index->m_ChunkSizes[chunk_index];
+            uint32_t chunk_size = block_store_fs->m_VersionIndex->m_ChunkSizes[chunk_index];
             chunk_asset_offsets[c] = offset;
             offset += chunk_size;
         }
