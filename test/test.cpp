@@ -5636,15 +5636,15 @@ static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
 
 static char* GenerateRandomPath(char *str, size_t size)
 {
-    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ./";
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ.////////////////////////";
     if (size) {
         --size;
         for (size_t n = 0; n < size; n++) {
             size_t allowed_range = sizeof(charset) - 1;
-            if (size > 0 && str[size - 1] == '/')
+            if ((n == 0) || (n > 0 && str[n - 1] == '/'))
             {
-                // Don't allow double forward slahes
-                --allowed_range;
+                // Don't allow leading or double forward slashes
+                allowed_range -= 24;
             }
             int key = rand() % (int) (allowed_range);
             str[n] = charset[key];
@@ -5653,22 +5653,35 @@ static char* GenerateRandomPath(char *str, size_t size)
         {
             if (str[size - 1] == '/')
             {
-                size_t allowed_range = sizeof(charset) - 2;
+                size_t allowed_range = sizeof(charset) - 25;
                 int key = rand() % (int) (allowed_range);
                 str[size - 1] = charset[key];
             }
         }
         str[size] = '\0';
+        LONGTAIL_FATAL_ASSERT(str[0] != '/', return 0);
+        LONGTAIL_FATAL_ASSERT(str[size - 1] != '/', return 0);
     }
     return str;
 }
 
 static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const char* root_path, uint32_t asset_count, uint32_t min_content_length, uint32_t max_content_length)
 {
+    char content_path[64];
+    content_path[0] = 0;
+    size_t parent_length = 0;
     for (uint32_t a = 0; a < asset_count; ++a)
     {
-        char content_path[128];
-        GenerateRandomPath(content_path, sizeof(content_path));
+        if (12 == (a % 13))
+        {
+            size_t path_length = 2 + (rand() % 29);
+            GenerateRandomPath(content_path, path_length);
+            parent_length = strlen(content_path);
+            content_path[parent_length++] = '/';
+            content_path[parent_length] = '\0';
+        }
+        size_t path_length = 2 + (rand() % 30);
+        GenerateRandomPath(&content_path[parent_length], path_length);
         size_t content_length = ((((uint64_t)rand()) << 32) + rand()) % (max_content_length - min_content_length) + min_content_length;
         uint8_t* content_data = (uint8_t*)malloc(content_length);
         GenerateRandomData(content_data, content_length);
@@ -6213,7 +6226,41 @@ TEST(Longtail, TestLongtailBlockFS)
     Longtail_FileInfos* block_store_storage_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(block_store_fs, 0, 0, 0, "", &block_store_storage_paths));
     ASSERT_NE((Longtail_FileInfos*)0, block_store_storage_paths);
-    ASSERT_EQ(block_store_storage_paths->m_Count, version_paths->m_Count);
+    ASSERT_EQ(version_paths->m_Count, block_store_storage_paths->m_Count);
+
+    struct Longtail_LookupTable* version_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(version_paths->m_Count)), version_paths->m_Count, 0);
+    for (uint32_t f = 0; f < version_paths->m_Count; ++f)
+    {
+        uint64_t hash;
+        const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
+        Longtail_GetPathHash(hash_api, path, &hash);
+        Longtail_LookupTable_Put(version_paths_lookup, hash, f);
+    }
+    struct Longtail_LookupTable* block_store_storage_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(block_store_storage_paths->m_Count)), block_store_storage_paths->m_Count, 0);
+    for (uint32_t f = 0; f <  block_store_storage_paths->m_Count; ++f)
+    {
+        uint64_t hash;
+        const char* path = &block_store_storage_paths->m_PathData[block_store_storage_paths->m_PathStartOffsets[f]];
+        Longtail_GetPathHash(hash_api, path, &hash);
+        Longtail_LookupTable_Put(block_store_storage_paths_lookup, hash, f);
+        ASSERT_NE((uint64_t*)0, Longtail_LookupTable_Get(version_paths_lookup, hash));
+    }
+
+    for (uint32_t f = 0; f < version_paths->m_Count; ++f)
+    {
+        uint64_t hash;
+        const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
+        Longtail_GetPathHash(hash_api, path, &hash);
+        uint64_t i = *Longtail_LookupTable_Get(block_store_storage_paths_lookup, hash);
+        ASSERT_EQ(version_paths->m_Sizes[f], block_store_storage_paths->m_Sizes[i]);
+        ASSERT_EQ(version_paths->m_Permissions[f], block_store_storage_paths->m_Permissions[i]);
+        ASSERT_STREQ(path, &block_store_storage_paths->m_PathData[block_store_storage_paths->m_PathStartOffsets[i]]);
+    }
+
+    Longtail_Free(block_store_storage_paths_lookup);
+    Longtail_Free(version_paths_lookup);
+
+    ASSERT_EQ(block_store_storage_paths->m_Count, *vindex->m_AssetCount);
     Longtail_Free(block_store_storage_paths);
 
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)

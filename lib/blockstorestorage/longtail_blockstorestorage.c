@@ -641,7 +641,7 @@ static char* BlockStoreStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage
     }
     memcpy(path, root_path, root_len);
     path[root_len] = '/';
-    memcpy(&path[root_len + 1], sub_path, sub_len);
+    strcpy(&path[root_len + 1], sub_path);
     return path;
 }
 
@@ -728,6 +728,7 @@ static int BlockStoreStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_a
 struct PathIterator
 {
     struct BlockStoreStorageAPI* block_store_fs;
+    char* m_TempPath;
     uint32_t m_PathEntryOffsetEnd;
     uint32_t m_PathEntryOffset;
 };
@@ -776,6 +777,7 @@ static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_ap
         return ENOMEM;
     }
     path_iterator->block_store_fs = block_store_fs;
+    path_iterator->m_TempPath = 0;
     path_iterator->m_PathEntryOffset = p->m_ChildStartIndex;
     path_iterator->m_PathEntryOffsetEnd = p->m_ChildStartIndex + p->m_ChildCount;
     *out_iterator = (Longtail_StorageAPI_HIterator)path_iterator;
@@ -785,6 +787,11 @@ static int BlockStoreStorageAPI_StartFind(struct Longtail_StorageAPI* storage_ap
 static int BlockStoreStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    if (path_iterator->m_TempPath)
+    {
+        Longtail_Free(path_iterator->m_TempPath);
+        path_iterator->m_TempPath = 0;
+    }
     ++path_iterator->m_PathEntryOffset;
     if (path_iterator->m_PathEntryOffset == path_iterator->m_PathEntryOffsetEnd)
     {
@@ -805,6 +812,11 @@ static int BlockStoreStorageAPI_GetEntryProperties(
     struct Longtail_StorageAPI_EntryProperties* out_properties)
 {
     struct PathIterator* path_iterator = (struct PathIterator*)iterator;
+    if (path_iterator->m_TempPath)
+    {
+        Longtail_Free(path_iterator->m_TempPath);
+        path_iterator->m_TempPath = 0;
+    }
     struct PathEntry* path_entry = &path_iterator->block_store_fs->m_PathLookup->m_PathEntries[path_iterator->m_PathEntryOffset];
     const char* name_start = path_entry->m_Path;
     size_t search_pos = 0;
@@ -824,7 +836,13 @@ static int BlockStoreStorageAPI_GetEntryProperties(
         ++search_pos;
     }
 
-    out_properties->m_Name = name_start;
+    path_iterator->m_TempPath = Longtail_Strdup(name_start);
+    if (is_dir)
+    {
+        path_iterator->m_TempPath[strlen(path_iterator->m_TempPath) - 1] = '\0';
+    }
+
+    out_properties->m_Name = path_iterator->m_TempPath;
     out_properties->m_IsDir = is_dir;
     out_properties->m_Permissions = path_iterator->block_store_fs->version_index->m_Permissions[path_entry->m_AssetIndex];
     out_properties->m_Size = path_iterator->block_store_fs->version_index->m_AssetSizes[path_entry->m_AssetIndex];
