@@ -467,6 +467,7 @@ static int BlockStoreStorageAPI_ReadFile(
     uint32_t seek_chunk_offset = block_store_file->m_SeekChunkOffset;
     uint64_t seek_asset_pos = block_store_file->m_SeekAssetPos;
 
+    // TODO: Replace with Longtail_LookupTable
     struct BlockStoreStorageAPI_BlockRange* block_range_map = 0;
     uint64_t* block_indexes = 0;
 

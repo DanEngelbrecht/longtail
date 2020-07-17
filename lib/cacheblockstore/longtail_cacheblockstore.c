@@ -231,6 +231,7 @@ void PreflightGetLocalStoreIndexOnComplete(struct Longtail_AsyncGetIndexAPI* asy
         return;
     }
 
+    // TODO: Replace with Longtail_LookupTable
     struct BlockLookup* local_block_indexes = 0;
     for (uint64_t b = 0; b < *content_index->m_BlockCount; ++b)
     {

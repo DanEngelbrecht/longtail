@@ -3644,6 +3644,7 @@ static int CreateAssetPartLookup(
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_assert_part_lookup != 0, return EINVAL)
 
+    // TODO: Replace with Longtail_LookupTable - capacity is version_index->m_AssetChunkIndexCount
     struct ChunkHashToAssetPart* asset_part_lookup = 0;
     uint64_t asset_count = *version_index->m_AssetCount;
     for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
