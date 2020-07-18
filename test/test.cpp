@@ -5665,38 +5665,76 @@ static char* GenerateRandomPath(char *str, size_t size)
     return str;
 }
 
-static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const char* root_path, uint32_t asset_count, uint32_t min_content_length, uint32_t max_content_length)
+static void CreateRandomContent(
+    struct Longtail_StorageAPI* storage_api,
+    const char* root_path,
+    uint32_t* file_count_left,
+    uint32_t min_content_length,
+    uint32_t max_content_length,
+    int depth)
 {
-    char content_path[64];
-    content_path[0] = 0;
-    size_t parent_length = 0;
-    for (uint32_t a = 0; a < asset_count; ++a)
+    while (*file_count_left)
     {
-        if (12 == (a % 13))
+        switch(rand() % 8)
         {
-            size_t path_length = 2 + (rand() % 29);
-            GenerateRandomPath(content_path, path_length);
-            parent_length = strlen(content_path);
-            content_path[parent_length++] = '/';
-            content_path[parent_length] = '\0';
-        }
-        size_t path_length = 2 + (rand() % 30);
-        GenerateRandomPath(&content_path[parent_length], path_length);
-        size_t content_length = ((((uint64_t)rand()) << 32) + rand()) % (max_content_length - min_content_length) + min_content_length;
-        uint8_t* content_data = (uint8_t*)malloc(content_length);
-        GenerateRandomData(content_data, content_length);
+            case 0:
+                if (depth > 0)
+                {
+                    return;
+                }
+                break;
+            case 1:
+            case 2:
+                {
+                    char content_path[32];
+                    size_t path_length = 2 + (rand() % 29);
+                    GenerateRandomPath(content_path, path_length);
+                    const char* dir_name = storage_api->ConcatPath(storage_api, root_path, content_path);
+                    if (storage_api->IsDir(storage_api, dir_name) || storage_api->IsFile(storage_api, dir_name))
+                    {
+                        Longtail_Free((void*)dir_name);
+                        continue;
+                    }
+                    *file_count_left = *file_count_left - 1;
+                    CreateRandomContent(storage_api, dir_name, file_count_left, min_content_length, max_content_length, depth + 1);
+                    Longtail_Free((void*)dir_name);
+                }
+                break;
+            default:
+                {
+                    char content_path[32];
+                    size_t path_length = 2 + (rand() % 29);
+                    GenerateRandomPath(content_path, path_length);
+                    const char* file_name = storage_api->ConcatPath(storage_api, root_path, content_path);
+                    if (storage_api->IsDir(storage_api, file_name) || storage_api->IsFile(storage_api, file_name))
+                    {
+                        Longtail_Free((void*)file_name);
+                        continue;
+                    }
+                    ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
 
-        const char* file_name = storage_api->ConcatPath(storage_api, root_path, content_path);
-        ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
-        Longtail_StorageAPI_HOpenFile w;
-        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
-        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
-        ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, content_length, content_data));
-        storage_api->CloseFile(storage_api, w);
-        w = 0;
-        Longtail_Free((void*)file_name);
-        free(content_data);
+                    size_t content_length = ((((uint64_t)rand()) << 32) + rand()) % (max_content_length - min_content_length) + min_content_length;
+                    uint8_t* content_data = (uint8_t*)malloc(content_length);
+                    GenerateRandomData(content_data, content_length);
+
+                    Longtail_StorageAPI_HOpenFile w;
+                    ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
+                    ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+                    ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, content_length, content_data));
+                    storage_api->CloseFile(storage_api, w);
+                    w = 0;
+                    Longtail_Free((void*)file_name);
+                    free(content_data);
+                }
+                break;
+        }
     }
+}
+
+static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const char* root_path, uint32_t file_count, uint32_t min_content_length, uint32_t max_content_length)
+{
+    uint32_t file_count_left = file_count;
+    CreateRandomContent(storage_api, root_path, &file_count_left, min_content_length, max_content_length, 0);
 }
 
 TEST(Longtail, VersionLocalContent)
@@ -5779,7 +5817,7 @@ TEST(Longtail, VersionLocalContent)
         version1_index));
 
     // Add additional content
-    CreateRandomContent(storage_api, "version", 71, 91, 59377);
+    CreateRandomContent(storage_api, "version", 31, 91, 19377);
     struct Longtail_FileInfos* version2_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(
         storage_api,
@@ -6143,7 +6181,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
 TEST(Longtail, TestLongtailBlockFS)
 {
     static const uint32_t MAX_BLOCK_SIZE = 4096;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 16u;
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();//Longtail_CreateFSStorageAPI();//
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
