@@ -5636,31 +5636,15 @@ static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
 
 static char* GenerateRandomPath(char *str, size_t size)
 {
-    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ.////////////////////////";
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ.";
     if (size) {
         --size;
         for (size_t n = 0; n < size; n++) {
             size_t allowed_range = sizeof(charset) - 1;
-            if ((n == 0) || (n > 0 && str[n - 1] == '/'))
-            {
-                // Don't allow leading or double forward slashes
-                allowed_range -= 24;
-            }
             int key = rand() % (int) (allowed_range);
             str[n] = charset[key];
         }
-        if (size > 0)
-        {
-            if (str[size - 1] == '/')
-            {
-                size_t allowed_range = sizeof(charset) - 25;
-                int key = rand() % (int) (allowed_range);
-                str[size - 1] = charset[key];
-            }
-        }
         str[size] = '\0';
-        LONGTAIL_FATAL_ASSERT(str[0] != '/', return 0);
-        LONGTAIL_FATAL_ASSERT(str[size - 1] != '/', return 0);
     }
     return str;
 }
@@ -5696,6 +5680,7 @@ static void CreateRandomContent(
                         continue;
                     }
                     *file_count_left = *file_count_left - 1;
+                    ASSERT_EQ(0, storage_api->CreateDir(storage_api, dir_name));
                     CreateRandomContent(storage_api, dir_name, file_count_left, min_content_length, max_content_length, depth + 1);
                     Longtail_Free((void*)dir_name);
                 }
@@ -5711,7 +5696,6 @@ static void CreateRandomContent(
                         Longtail_Free((void*)file_name);
                         continue;
                     }
-                    ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
 
                     size_t content_length = ((((uint64_t)rand()) << 32) + rand()) % (max_content_length - min_content_length) + min_content_length;
                     uint8_t* content_data = (uint8_t*)malloc(content_length);
@@ -5734,6 +5718,8 @@ static void CreateRandomContent(
 static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const char* root_path, uint32_t file_count, uint32_t min_content_length, uint32_t max_content_length)
 {
     uint32_t file_count_left = file_count;
+    ASSERT_EQ(0, EnsureParentPathExists(storage_api, root_path));
+    storage_api->CreateDir(storage_api, root_path);
     CreateRandomContent(storage_api, root_path, &file_count_left, min_content_length, max_content_length, 0);
 }
 
