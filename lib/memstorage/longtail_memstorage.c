@@ -176,11 +176,10 @@ static uint32_t InMemStorageAPI_GetParentPathHash(const char* path)
         return 0;
     }
     size_t dir_length = (uintptr_t)dir_path_begin - (uintptr_t)path;
-    char* dir_path = (char*)Longtail_Alloc(dir_length + 1);
+    char* dir_path = (char*)alloca(dir_length + 1);
     strncpy(dir_path, path, dir_length);
     dir_path[dir_length] = '\0';
     uint32_t hash = InMemStorageAPI_GetPathHash(dir_path);
-    Longtail_Free(dir_path);
     return hash;
 }
 
