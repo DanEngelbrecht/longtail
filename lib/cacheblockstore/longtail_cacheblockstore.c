@@ -1,7 +1,6 @@
 #include "longtail_cacheblockstore.h"
 
 #include "../longtail_platform.h"
-#include "../../src/ext/stb_ds.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -225,33 +224,45 @@ void PreflightGetLocalStoreIndexOnComplete(struct Longtail_AsyncGetIndexAPI* asy
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "PreflightGetLocalStoreIndexOnComplete(%p, %p) failed with %d",
             async_complete_api, content_index,
             err)
-        Longtail_Free(api->m_PreflightBlockRefCounts);
-        Longtail_Free(api->m_PreflightBlockHashes);
         Longtail_Free(api);
         return;
     }
 
-    // TODO: Replace with Longtail_LookupTable
-    struct BlockLookup* local_block_indexes = 0;
-    for (uint64_t b = 0; b < *content_index->m_BlockCount; ++b)
+    size_t local_block_indexes_size = Longtail_LookupTable_GetSize(*content_index->m_BlockCount);
+    size_t work_mem_size =
+        local_block_indexes_size +
+        sizeof(TLongtail_Hash) * api->m_PreflightBlockCount +
+        sizeof(uint32_t) * api->m_PreflightBlockCount;
+    char* work_mem = (char*)Longtail_Alloc(work_mem_size);
+    if (!work_mem)
     {
-        hmput(local_block_indexes, content_index->m_BlockHashes[b], b);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "PreflightGetLocalStoreIndexOnComplete(%p, %p) failed with %d",
+            async_complete_api, content_index,
+            ENOMEM)
+        Longtail_Free(content_index);
+        Longtail_Free(api);
+        return;
     }
 
-    TLongtail_Hash* remote_preflight_blocks = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * api->m_PreflightBlockCount);
-    uint32_t* remote_preflight_blocks_ref_counts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * api->m_PreflightBlockCount);
+    struct Longtail_LookupTable* local_block_indexes = Longtail_LookupTable_Create(work_mem, *content_index->m_BlockCount, 0);
+    for (uint64_t b = 0; b < *content_index->m_BlockCount; ++b)
+    {
+        Longtail_LookupTable_Put(local_block_indexes, content_index->m_BlockHashes[b], b);
+    }
+    TLongtail_Hash* remote_preflight_blocks = (TLongtail_Hash*)&work_mem[local_block_indexes_size];
+    uint32_t* remote_preflight_blocks_ref_counts = (uint32_t*)&remote_preflight_blocks[api->m_PreflightBlockCount];
     uint64_t remote_preflight_block_count = 0;
 
     for (uint64_t b = 0; b < api->m_PreflightBlockCount; ++b)
     {
-        if (hmgeti(local_block_indexes, api->m_PreflightBlockHashes[b]) == -1)
+        TLongtail_Hash block_hash = api->m_PreflightBlockHashes[b];
+        if (Longtail_LookupTable_Get(local_block_indexes, block_hash) == 0)
         {
-            remote_preflight_blocks[remote_preflight_block_count] = api->m_PreflightBlockHashes[b];
+            remote_preflight_blocks[remote_preflight_block_count] = block_hash;
             remote_preflight_blocks_ref_counts[remote_preflight_block_count] = api->m_PreflightBlockRefCounts[b];
             ++remote_preflight_block_count;
         }
     }
-    hmfree(local_block_indexes);
 
     err = api->m_CacheBlockStoreAPI->m_RemoteBlockStoreAPI->PreflightGet(
         api->m_CacheBlockStoreAPI->m_RemoteBlockStoreAPI,
@@ -259,11 +270,8 @@ void PreflightGetLocalStoreIndexOnComplete(struct Longtail_AsyncGetIndexAPI* asy
         remote_preflight_blocks,
         remote_preflight_blocks_ref_counts);
 
-    Longtail_Free(remote_preflight_blocks_ref_counts);
-    Longtail_Free(remote_preflight_blocks);
+    Longtail_Free(work_mem);
 
-    Longtail_Free(api->m_PreflightBlockRefCounts);
-    Longtail_Free(api->m_PreflightBlockHashes);
     Longtail_Free(content_index);
     Longtail_Free(api);
     if (err)
@@ -295,13 +303,24 @@ static int CacheBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
         return err;
     }
 
-    struct PreflightGetLocalStoreIndex* preflight_get_local_store_index = (struct PreflightGetLocalStoreIndex*)Longtail_Alloc(sizeof(struct PreflightGetLocalStoreIndex));
+    size_t preflight_get_local_store_index_size =
+        sizeof(struct PreflightGetLocalStoreIndex) +
+        sizeof(TLongtail_Hash) * block_count +
+        sizeof(uint32_t) * block_count;
+    struct PreflightGetLocalStoreIndex* preflight_get_local_store_index = (struct PreflightGetLocalStoreIndex*)Longtail_Alloc(preflight_get_local_store_index_size);
+    if (!preflight_get_local_store_index)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "CacheBlockStore_PreflightGet(%p, % " PRIu64 ", %p, %p) failed with %d",
+            block_store_api, block_count, block_hashes, block_ref_counts,
+            ENOMEM)
+        return ENOMEM;
+    }
 
     preflight_get_local_store_index->m_API.OnComplete = PreflightGetLocalStoreIndexOnComplete;
     preflight_get_local_store_index->m_CacheBlockStoreAPI = api;
     preflight_get_local_store_index->m_PreflightBlockCount = block_count;
-    preflight_get_local_store_index->m_PreflightBlockHashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * block_count);
-    preflight_get_local_store_index->m_PreflightBlockRefCounts = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * block_count);
+    preflight_get_local_store_index->m_PreflightBlockHashes = (TLongtail_Hash*)&preflight_get_local_store_index[1];
+    preflight_get_local_store_index->m_PreflightBlockRefCounts = (uint32_t*)&preflight_get_local_store_index->m_PreflightBlockHashes[block_count];
 
     for (uint64_t b = 0; b < block_count; ++b)
     {
@@ -315,8 +334,6 @@ static int CacheBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "CacheBlockStore_PreflightGet(%p, % " PRIu64 ", %p, %p) failed with %d",
             block_store_api, block_count, block_hashes, block_ref_counts,
             err)
-        Longtail_Free(preflight_get_local_store_index->m_PreflightBlockHashes);
-        Longtail_Free(preflight_get_local_store_index->m_PreflightBlockRefCounts);
         Longtail_Free(preflight_get_local_store_index);
         return err;
     }
