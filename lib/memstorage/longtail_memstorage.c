@@ -479,8 +479,9 @@ static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const 
         return 0;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
+    int is_dir = path_entry->m_Content == 0;
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return path_entry->m_Content == 0;
+    return is_dir;
 }
 static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
@@ -496,8 +497,9 @@ static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const
         return 0;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
+    int is_file = path_entry->m_Content != 0;
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return path_entry->m_Content != 0;
+    return is_file;
 }
 
 static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
