@@ -812,7 +812,7 @@ static int BlockStoreStorageAPI_IsDir(
     {
         return 0;
     }
-    if (path[strlen(path)- 1] == '/')
+    if (path[path_len- 1] == '/')
     {
         return 1;
     }
@@ -936,7 +936,7 @@ static int BlockStoreStorageAPI_StartFind(
     TLongtail_Hash path_hash = 0;
     if (path_len > 0)
     {
-        if (path[path_len -1 ] == '/')
+        if (path[path_len - 1] == '/')
         {
             int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
             if (err)
