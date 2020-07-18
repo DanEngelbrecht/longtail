@@ -971,7 +971,7 @@ static int BlockStoreStorageAPI_StartFind(
     struct BlockStoreStorageAPI_PathEntry* p = &block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index_ptr];
     if (p->m_ChildCount == 0)
     {
-        return 0;
+        return ENOENT;
     }
     struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)Longtail_Alloc(sizeof(struct BlockStoreStorageAPI_Iterator));
     if (path_iterator == 0)
