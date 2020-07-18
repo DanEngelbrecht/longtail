@@ -203,6 +203,7 @@ struct BlockStoreStorageAPI_OpenFile
 
 struct BlockStoreStorageAPI_ChunkRange
 {
+    TLongtail_Hash m_BlockHash;
     uint64_t m_AssetStartOffset;
     uint32_t m_ChunkStart;
     uint32_t m_ChunkEnd;
@@ -216,7 +217,7 @@ struct BlockStoreStorageAPI_BlockRange
 
 static int BlockStoreStorageAPI_ReadFromBlock(
     struct Longtail_StoredBlock* stored_block,
-    struct BlockStoreStorageAPI_ChunkRange range,
+    struct BlockStoreStorageAPI_ChunkRange* range,
     struct BlockStoreStorageAPI* block_store_fs,
     struct BlockStoreStorageAPI_OpenFile* block_store_file,
     uint64_t start,
@@ -243,8 +244,8 @@ static int BlockStoreStorageAPI_ReadFromBlock(
         Longtail_LookupTable_Put(block_chunk_lookup, chunk_hash, chunk_block_offset);
         chunk_block_offset += stored_block->m_BlockIndex->m_ChunkSizes[c];
     }
-    uint64_t asset_offset = range.m_AssetStartOffset;
-    for (uint32_t c = range.m_ChunkStart; c < range.m_ChunkEnd; ++c)
+    uint64_t asset_offset = range->m_AssetStartOffset;
+    for (uint32_t c = range->m_ChunkStart; c < range->m_ChunkEnd; ++c)
     {
         uint32_t chunk_index = chunk_indexes[c];
         TLongtail_Hash chunk_hash = block_store_fs->m_VersionIndex->m_ChunkHashes[chunk_index];
@@ -294,8 +295,7 @@ struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI
 struct BlockStoreStorageAPI_ReadFromBlockJobData
 {
 	struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI m_OnReadBlockCompleteAPI;
-    uint64_t m_BlockIndex;
-    struct BlockStoreStorageAPI_ChunkRange m_Range;
+    struct BlockStoreStorageAPI_ChunkRange* m_Range;
     struct BlockStoreStorageAPI* m_BlockStoreFS;
     struct BlockStoreStorageAPI_OpenFile* m_BlockStoreFile;
     uint64_t m_Start;
@@ -331,8 +331,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         complete_cb->m_JobID = job_id;
         complete_cb->m_Data = data;
 
-        TLongtail_Hash block_hash = data->m_BlockStoreFS->m_ContentIndex->m_BlockHashes[data->m_BlockIndex];
-        int err = data->m_BlockStoreFS->m_BlockStore->GetStoredBlock(data->m_BlockStoreFS->m_BlockStore, block_hash, &complete_cb->m_API);
+        int err = data->m_BlockStoreFS->m_BlockStore->GetStoredBlock(data->m_BlockStoreFS->m_BlockStore, data->m_Range->m_BlockHash, &complete_cb->m_API);
         if (err)
         {
             data->m_Err = err;
@@ -467,37 +466,26 @@ static int BlockStoreStorageAPI_ReadFile(
     uint32_t seek_chunk_offset = block_store_file->m_SeekChunkOffset;
     uint64_t seek_asset_pos = block_store_file->m_SeekAssetPos;
 
-    // TODO: Replace with Longtail_LookupTable
-    struct BlockStoreStorageAPI_BlockRange* block_range_map = 0;
-    uint64_t* block_indexes = 0;
-
-    uint64_t last_block_index = 0xfffffffffffffffful;
-    uint64_t last_block_range_index_ptr = -1;
+    uint32_t max_block_count = chunk_count - seek_chunk_offset;
+    size_t block_range_map_size = Longtail_LookupTable_GetSize(max_block_count);
+    struct Longtail_LookupTable* block_range_map = Longtail_LookupTable_Create(Longtail_Alloc(block_range_map_size), max_block_count, 0);
+    struct BlockStoreStorageAPI_ChunkRange* chunk_ranges = 0;
 
     for (uint32_t c = seek_chunk_offset; c < chunk_count; ++c)
     {
         uint32_t chunk_index = chunk_indexes[c];
         TLongtail_Hash chunk_hash = block_store_fs->m_VersionIndex->m_ChunkHashes[chunk_index];
         uint64_t block_index = *Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
-        if ((last_block_index != 0xfffffffffffffffful) && (block_index == last_block_index))
+        TLongtail_Hash block_hash = block_store_fs->m_ContentIndex->m_BlockHashes[block_index];
+        uint64_t* chunk_range_index = Longtail_LookupTable_PutUnique(block_range_map, block_hash, arrlen(chunk_ranges));
+        if (chunk_range_index)
         {
-            block_range_map[last_block_range_index_ptr].value.m_ChunkEnd = c + 1;
+            chunk_ranges[*chunk_range_index].m_ChunkEnd = c + 1;
         }
         else
         {
-            last_block_range_index_ptr = hmgeti(block_range_map, block_index);
-            if (last_block_range_index_ptr == -1)
-            {
-                struct BlockStoreStorageAPI_ChunkRange range = {seek_asset_pos, c, c + 1};
-                hmput(block_range_map, block_index, range);
-                arrput(block_indexes, block_index);
-                last_block_range_index_ptr = hmgeti(block_range_map, block_index);
-            }
-            else
-            {
-                block_range_map[last_block_range_index_ptr].value.m_ChunkEnd = c + 1;
-            }
-            last_block_index = block_index;
+            struct BlockStoreStorageAPI_ChunkRange range = {block_hash, seek_asset_pos, c, c + 1};
+            arrput(chunk_ranges, range);
         }
         block_store_file->m_SeekChunkOffset = c;
         block_store_file->m_SeekAssetPos = seek_asset_pos;
@@ -510,11 +498,8 @@ static int BlockStoreStorageAPI_ReadFile(
         }
     }
 
-    uint32_t block_count = (uint32_t)arrlen(block_indexes);
-    if (block_count == 0)
-    {
-        return 0;
-    }
+    uint32_t block_count = (uint32_t)arrlen(chunk_ranges);
+    LONGTAIL_FATAL_ASSERT(block_count > 0, return EINVAL);
 
     struct Longtail_JobAPI* job_api = block_store_fs->m_JobAPI;
 
@@ -539,10 +524,8 @@ static int BlockStoreStorageAPI_ReadFile(
 
     for (uint32_t b = 0; b < block_count; ++b)
     {
-        uint64_t block_index = block_indexes[b];
-        struct BlockStoreStorageAPI_ChunkRange range = hmget(block_range_map, block_index);
+        struct BlockStoreStorageAPI_ChunkRange* range = &chunk_ranges[b];
 
-        job_datas[b].m_BlockIndex = block_index;
         job_datas[b].m_Range = range;
         job_datas[b].m_BlockStoreFS = block_store_fs;
         job_datas[b].m_BlockStoreFile = block_store_file;
@@ -565,8 +548,8 @@ static int BlockStoreStorageAPI_ReadFile(
     LONGTAIL_FATAL_ASSERT(err == 0, return err)
     Longtail_Free(work_mem);
 
-    hmfree(block_range_map);
-    arrfree(block_indexes);
+    Longtail_Free(block_range_map);
+    arrfree(chunk_ranges);
     return 0;
 }
 
