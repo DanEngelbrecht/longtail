@@ -2078,7 +2078,8 @@ int Longtail_CreateVersionIndex(
     size_t work_mem_compact_size = (sizeof(uint32_t) * assets_chunk_index_count) +
         (sizeof(TLongtail_Hash) * assets_chunk_index_count) + 
         (sizeof(uint32_t) * assets_chunk_index_count) +
-        (sizeof(uint32_t) * assets_chunk_index_count);
+        (sizeof(uint32_t) * assets_chunk_index_count) +
+        Longtail_LookupTable_GetSize(assets_chunk_index_count);
     void* work_mem_compact = Longtail_Alloc(work_mem_compact_size);
     if (!work_mem_compact)
     {
@@ -2098,7 +2099,7 @@ int Longtail_CreateVersionIndex(
     uint32_t* tmp_compact_chunk_tags =  (uint32_t*)&tmp_compact_chunk_sizes[assets_chunk_index_count];
 
     uint32_t unique_chunk_count = 0;
-    struct Longtail_LookupTable* chunk_hash_to_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(assets_chunk_index_count)), assets_chunk_index_count, 0);
+    struct Longtail_LookupTable* chunk_hash_to_index = Longtail_LookupTable_Create(&tmp_compact_chunk_tags[assets_chunk_index_count], assets_chunk_index_count, 0);
     if (!chunk_hash_to_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
@@ -2128,9 +2129,6 @@ int Longtail_CreateVersionIndex(
             tmp_asset_chunk_indexes[c] = (uint32_t)*chunk_index;
         }
     }
-
-    Longtail_Free(chunk_hash_to_index);
-    chunk_hash_to_index = 0;
 
     size_t version_index_size = Longtail_GetVersionIndexSize(path_count, unique_chunk_count, assets_chunk_index_count, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
