@@ -323,6 +323,9 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
     {
         if (data->m_Err)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
+                context, job_id, is_cancelled,
+                data->m_Err)
             return 0;
         }
         // Don't need dynamic alloc, could be part of struct BlockStoreStorageAPI_ReadFromBlockJobData since it covers the lifetime of struct BlockStoreStorageAPI_ReadBlock_OnComplete
@@ -334,6 +337,9 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         int err = data->m_BlockStoreFS->m_BlockStore->GetStoredBlock(data->m_BlockStoreFS->m_BlockStore, data->m_Range->m_BlockHash, &complete_cb->m_API);
         if (err)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
+                context, job_id, is_cancelled,
+                err)
             data->m_Err = err;
             return 0;
         }
@@ -573,6 +579,7 @@ static int BlockStoreStorageAPI_OpenReadFile(
             err)
         return err;
     }
+
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
@@ -706,6 +713,7 @@ static int BlockStoreStorageAPI_GetPermissions(
             err)
         return err;
     }
+
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
@@ -839,6 +847,7 @@ static int BlockStoreStorageAPI_IsDir(
             err)
         return err;
     }
+
     path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
@@ -873,6 +882,7 @@ static int BlockStoreStorageAPI_IsFile(
             err)
         return err;
     }
+
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
@@ -887,6 +897,9 @@ static int BlockStoreStorageAPI_RemoveDir(
 {
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_RemoveDir(%p, `%s`) failed with %d",
+        storage_api, path,
+        ENOTSUP)
     return ENOTSUP;
 }
 
@@ -896,6 +909,9 @@ static int BlockStoreStorageAPI_RemoveFile(
 {
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_RemoveFile(%p, `%s`) failed with %d",
+        storage_api, path,
+        ENOTSUP)
     return ENOTSUP;
 }
 
@@ -1159,6 +1175,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
         content_index,
         version_index,
         &storage_api);
+
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p,) failed with %d",
@@ -1167,5 +1184,6 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
         Longtail_Free(mem);
         return 0;
     }
+
     return storage_api;
 }
