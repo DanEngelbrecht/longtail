@@ -6,6 +6,7 @@
 
 #include "ext/stb_ds.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdarg.h>
@@ -566,7 +567,7 @@ struct Longtail_LookupTable
     uint64_t* m_NextIndex;
 };
 
-static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
+int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
 {
     LONGTAIL_FATAL_ASSERT(lut->m_Count < lut->m_Capacity, return ENOMEM)
 
@@ -594,7 +595,7 @@ static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t k
     return 0;
 }
 
-static uint64_t Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
+uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
 {
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
     uint64_t* buckets = lut->m_Buckets;
@@ -606,11 +607,11 @@ static uint64_t Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut,
         lut->m_Keys[entry_index] = key;
         lut->m_Values[entry_index] = value;
         buckets[bucket_index] = entry_index;
-        return 0xfffffffffffffffful;
+        return 0;
     }
     if (lut->m_Keys[index] == key)
     {
-        return lut->m_Values[index];
+        return &lut->m_Values[index];
     }
     uint64_t* keys = lut->m_Keys;
     uint64_t* next_index = lut->m_NextIndex;
@@ -620,7 +621,7 @@ static uint64_t Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut,
         index = next;
         if (keys[index] == key)
         {
-            return lut->m_Values[index];
+            return &lut->m_Values[index];
         }
         next = next_index[index];
     }
@@ -630,10 +631,10 @@ static uint64_t Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut,
     keys[entry_index] = key;
     lut->m_Values[entry_index] = value;
     next_index[index] = entry_index;
-    return 0xfffffffffffffffful;
+    return 0;
 }
 
-static uint64_t Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key)
+uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key)
 {
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
     uint64_t index = lut->m_Buckets[bucket_index];
@@ -643,30 +644,38 @@ static uint64_t Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut,
     {
         if (keys[index] == key)
         {
-            return lut->m_Values[index];
+            return &lut->m_Values[index];
         }
         index = next_index[index];
     }
-    return 0xfffffffffffffffful;
+    return 0;
 }
 
-static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity, struct Longtail_LookupTable* optional_source_entries)
+static size_t GetLookupTableSize(size_t capacity)
 {
     size_t table_size = 1;
-    while (table_size < (capacity / 2))
+    while (table_size < (capacity / 8))
     {
         table_size <<= 1;
     }
+    return table_size;
+}
+
+size_t Longtail_LookupTable_GetSize(size_t capacity)
+{
+    size_t table_size = GetLookupTableSize(capacity);
     size_t mem_size = sizeof(struct Longtail_LookupTable) +
         sizeof(uint64_t) * table_size +
         sizeof(uint64_t) * capacity +
         sizeof(uint64_t) * capacity +
         sizeof(uint64_t) * capacity;
-    struct Longtail_LookupTable* lut = (struct Longtail_LookupTable*)Longtail_Alloc(mem_size);
-    if (!lut)
-    {
-        return 0;
-    }
+    return mem_size;
+}
+
+struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries)
+{
+    struct Longtail_LookupTable* lut = (struct Longtail_LookupTable*)mem;
+    size_t table_size = GetLookupTableSize(capacity);
     lut->m_BucketCount = table_size;
     lut->m_Capacity = capacity;
     lut->m_Count = 0;
@@ -699,15 +708,13 @@ static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity,
     return lut;
 }
 
-
-
-
-
-
-
-
-
-
+void Longtail_ToLowerCase(char *str)
+{
+    for ( ; *str; ++str)
+    {
+        *str = tolower(*str);
+    }
+}
 
 static int IsDirPath(const char* path)
 {
@@ -715,16 +722,20 @@ static int IsDirPath(const char* path)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 
-static int GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
+int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
 {
     LONGTAIL_FATAL_ASSERT(hash_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_hash != 0, return EINVAL)
+    uint32_t pathlen = (uint32_t)strlen(path);
+    char* buf = (char*)alloca(pathlen + 1);
+    memcpy(buf, path, pathlen + 1);
+    Longtail_ToLowerCase(buf);
     uint64_t hash;
-    int err = hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), (void*)path, &hash);
+    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)buf, &hash);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "GetPathHash(%p, %s, %p) hash_api->HashBuffer() failed with %d", (void*)hash_api, path, (void*)out_hash, err)
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash(%p, %s, %p) hash_api->HashBuffer() failed with %d", (void*)hash_api, path, (void*)out_hash, err)
         return err;
     }
     *out_hash = (TLongtail_Hash)hash;
@@ -1286,7 +1297,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
         return 0;
     }
 
-    hash_job->m_Err = GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
+    hash_job->m_Err = Longtail_GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
     if (hash_job->m_Err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
@@ -2067,7 +2078,8 @@ int Longtail_CreateVersionIndex(
     size_t work_mem_compact_size = (sizeof(uint32_t) * assets_chunk_index_count) +
         (sizeof(TLongtail_Hash) * assets_chunk_index_count) + 
         (sizeof(uint32_t) * assets_chunk_index_count) +
-        (sizeof(uint32_t) * assets_chunk_index_count);
+        (sizeof(uint32_t) * assets_chunk_index_count) +
+        Longtail_LookupTable_GetSize(assets_chunk_index_count);
     void* work_mem_compact = Longtail_Alloc(work_mem_compact_size);
     if (!work_mem_compact)
     {
@@ -2087,7 +2099,7 @@ int Longtail_CreateVersionIndex(
     uint32_t* tmp_compact_chunk_tags =  (uint32_t*)&tmp_compact_chunk_sizes[assets_chunk_index_count];
 
     uint32_t unique_chunk_count = 0;
-    struct Longtail_LookupTable* chunk_hash_to_index = Longtail_LookupTable_Create(assets_chunk_index_count, 0);
+    struct Longtail_LookupTable* chunk_hash_to_index = Longtail_LookupTable_Create(&tmp_compact_chunk_tags[assets_chunk_index_count], assets_chunk_index_count, 0);
     if (!chunk_hash_to_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
@@ -2103,8 +2115,8 @@ int Longtail_CreateVersionIndex(
     for (uint32_t c = 0; c < assets_chunk_index_count; ++c)
     {
         TLongtail_Hash h = asset_chunk_hashes[c];
-        uint64_t chunk_index = Longtail_LookupTable_PutUnique(chunk_hash_to_index, h, unique_chunk_count);
-        if (chunk_index == 0xfffffffffffffffful)
+        uint64_t* chunk_index = Longtail_LookupTable_PutUnique(chunk_hash_to_index, h, unique_chunk_count);
+        if (chunk_index == 0)
         {
             tmp_compact_chunk_hashes[unique_chunk_count] = h;
             tmp_compact_chunk_sizes[unique_chunk_count] = asset_chunk_sizes[c];
@@ -2114,12 +2126,9 @@ int Longtail_CreateVersionIndex(
         }
         else
         {
-            tmp_asset_chunk_indexes[c] = (uint32_t)chunk_index;
+            tmp_asset_chunk_indexes[c] = (uint32_t)*chunk_index;
         }
     }
-
-    Longtail_Free(chunk_hash_to_index);
-    chunk_hash_to_index = 0;
 
     size_t version_index_size = Longtail_GetVersionIndexSize(path_count, unique_chunk_count, assets_chunk_index_count, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(version_index_size);
@@ -3146,7 +3155,7 @@ static uint64_t GetUniqueHashes(
     LONGTAIL_FATAL_ASSERT(hashes != 0, return 0)
     LONGTAIL_FATAL_ASSERT(hash_count == 0 || out_unique_hash_indexes != 0, return 0)
 
-    struct Longtail_LookupTable* lookup_table = Longtail_LookupTable_Create(hash_count, 0);
+    struct Longtail_LookupTable* lookup_table = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(hash_count)), hash_count, 0);
     if (!lookup_table)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "GetUniqueHashes(%" PRIu64 ", %p, %p) failed with %d",
@@ -3159,8 +3168,8 @@ static uint64_t GetUniqueHashes(
     for (uint64_t i = 0; i < hash_count; ++i)
     {
         TLongtail_Hash hash = hashes[i];
-        uint64_t lookup_index = Longtail_LookupTable_PutUnique(lookup_table, hash, 1);
-        if (lookup_index == 0xfffffffffffffffful)
+        uint64_t* lookup_index = Longtail_LookupTable_PutUnique(lookup_table, hash, 1);
+        if (lookup_index == 0)
         {
             out_unique_hash_indexes[unique_hash_count++] = i;
         }
@@ -3611,31 +3620,48 @@ int Longtail_ReadContentIndex(
     return 0;
 }
 
-struct AssetPart
+struct ChunkAssetPartReference
 {
-    const char* m_Path;
-    uint64_t m_Start;
+    const char* m_AssetPath;
+    uint32_t m_ChunkIndex;
+    uint64_t m_AssetOffset;
     uint32_t m_Tag;
 };
 
-struct ChunkHashToAssetPart
+struct AssetPartLookup
 {
-    TLongtail_Hash key;
-    struct AssetPart value;
+    struct ChunkAssetPartReference* m_ChunkAssetPartReferences;
+    struct Longtail_LookupTable* m_ChunkHashToIndex;
 };
 
 static int CreateAssetPartLookup(
     struct Longtail_VersionIndex* version_index,
-    struct ChunkHashToAssetPart** out_assert_part_lookup)
+    struct AssetPartLookup** out_assert_part_lookup)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CreateAssetPartLookup(%p, %p)",
         version_index, out_assert_part_lookup)
     LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(out_assert_part_lookup != 0, return EINVAL)
 
-    struct ChunkHashToAssetPart* asset_part_lookup = 0;
-    uint64_t asset_count = *version_index->m_AssetCount;
-    for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
+    uint32_t asset_chunk_index_count = *version_index->m_AssetChunkIndexCount;
+    size_t asset_part_lookup_size =
+        sizeof(struct AssetPartLookup) +
+        Longtail_LookupTable_GetSize(asset_chunk_index_count) +
+        sizeof(struct ChunkAssetPartReference) * asset_chunk_index_count;
+    struct AssetPartLookup* asset_part_lookup = (struct AssetPartLookup*)Longtail_Alloc(asset_part_lookup_size);
+    if (!asset_part_lookup_size)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CreateAssetPartLookup(%p, %p) failed with %d",
+            version_index, out_assert_part_lookup,
+            ENOMEM)
+        return ENOMEM;
+    }
+    asset_part_lookup->m_ChunkAssetPartReferences = (struct ChunkAssetPartReference*)&asset_part_lookup[1];
+    asset_part_lookup->m_ChunkHashToIndex = Longtail_LookupTable_Create(&asset_part_lookup->m_ChunkAssetPartReferences[asset_chunk_index_count], asset_chunk_index_count, 0);
+
+    uint32_t unique_chunk_count = 0;
+    uint32_t asset_count = *version_index->m_AssetCount;
+    for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
         const char* path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
         uint64_t asset_chunk_count = version_index->m_AssetChunkCounts[asset_index];
@@ -3649,15 +3675,16 @@ static int CreateAssetPartLookup(
             uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
             uint32_t tag = version_index->m_ChunkTags[chunk_index];
-            intptr_t lookup_ptr = hmgeti(asset_part_lookup, chunk_hash);
-            if (lookup_ptr == -1)
+            if (0 == Longtail_LookupTable_PutUnique(asset_part_lookup->m_ChunkHashToIndex, chunk_hash, unique_chunk_count))
             {
-                struct AssetPart asset_part = {
+                struct ChunkAssetPartReference chunk_asset_part_reference =
+                {
                     path,
+                    unique_chunk_count,
                     asset_chunk_offset,
                     tag
                 };
-                hmput(asset_part_lookup, chunk_hash, asset_part);
+                asset_part_lookup->m_ChunkAssetPartReferences[unique_chunk_count++] = chunk_asset_part_reference;
             }
             asset_chunk_offset += chunk_size;
         }
@@ -3678,7 +3705,7 @@ struct WriteBlockJob
     TLongtail_Hash m_BlockHash;
     const struct Longtail_ContentIndex* m_ContentIndex;
     const uint32_t* m_ChunkSizes;
-    struct ChunkHashToAssetPart* m_AssetPartLookup;
+    struct AssetPartLookup* m_AssetPartLookup;
     uint64_t m_FirstChunkIndex;
     uint32_t m_ChunkCount;
     int m_Err;
@@ -3765,20 +3792,21 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
     char* write_buffer = block_data_buffer;
     char* write_ptr = write_buffer;
 
-    struct AssetPart* asset_part = 0;
+    const char* asset_path = 0;
+    uint32_t tag = 0;
+
     Longtail_StorageAPI_HOpenFile file_handle = 0;
     uint64_t asset_file_size = 0;
 
-    uint32_t tag = 0;
     for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
         uint32_t chunk_size = job->m_ChunkSizes[chunk_index];
-        intptr_t tmp;
-        intptr_t asset_part_index = hmgeti_ts(job->m_AssetPartLookup, chunk_hash, tmp);
-        LONGTAIL_FATAL_ASSERT(asset_part_index != -1, job->m_Err = EINVAL; return 0)
-        struct AssetPart* next_asset_part = &job->m_AssetPartLookup[asset_part_index].value;
-        if (chunk_index != first_chunk_index && tag != next_asset_part->m_Tag)
+        uint64_t* asset_part_index = Longtail_LookupTable_Get(job->m_AssetPartLookup->m_ChunkHashToIndex, chunk_hash);
+        LONGTAIL_FATAL_ASSERT(asset_part_index != 0, job->m_Err = EINVAL; return 0)
+        const struct ChunkAssetPartReference* next_asset_part = &job->m_AssetPartLookup->m_ChunkAssetPartReferences[*asset_part_index];
+
+        if (asset_path && tag != next_asset_part->m_Tag)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "WriteContentBlockJob(%p, %u, %d): Warning: Inconsistent tag type for chunks inside block 0x%" PRIx64 ", retaining 0x%" PRIx64 "",
                 context, job_id, is_cancelled,
@@ -3789,18 +3817,16 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
             tag = next_asset_part->m_Tag;
         }
 
-        if ((!asset_part) || (next_asset_part->m_Path != asset_part->m_Path))
+        if (next_asset_part->m_AssetPath != asset_path)
         {
             if (file_handle)
             {
                 source_storage_api->CloseFile(source_storage_api, file_handle);
                 file_handle = 0;
             }
-            asset_file_size = 0;
-            const char* asset_path = next_asset_part->m_Path;
-            LONGTAIL_FATAL_ASSERT(!IsDirPath(asset_path), job->m_Err = EINVAL; return 0)
+            LONGTAIL_FATAL_ASSERT(!IsDirPath(next_asset_part->m_AssetPath), job->m_Err = EINVAL; return 0)
 
-            char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
+            char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, next_asset_part->m_AssetPath);
             int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
             Longtail_Free(full_path);
             full_path = 0;
@@ -3813,7 +3839,8 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
                 job->m_Err = err;
                 return 0;
             }
-            err = source_storage_api->GetSize(source_storage_api, file_handle, &asset_file_size);
+            uint64_t next_asset_file_size = 0;
+            err = source_storage_api->GetSize(source_storage_api, file_handle, &next_asset_file_size);
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
@@ -3823,14 +3850,15 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
                 job->m_Err = err;
                 return 0;
             }
+            asset_file_size = next_asset_file_size;
+            asset_path = next_asset_part->m_AssetPath;
         }
-        asset_part = next_asset_part;
 
-        uint64_t asset_content_offset = asset_part->m_Start;
-        if (asset_file_size < (asset_content_offset + chunk_size))
+        uint64_t asset_offset = next_asset_part->m_AssetOffset;
+        if (asset_file_size < (asset_offset + chunk_size))
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Source asset file does not match indexed size %" PRIu64 " < %" PRIu64,
-                asset_file_size, (asset_content_offset + chunk_size))
+                asset_file_size, (asset_offset + chunk_size))
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
                 context, job_id, is_cancelled,
                 EBADF);
@@ -3839,7 +3867,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
             job->m_Err = EBADF;
             return 0;
         }
-        int err = source_storage_api->Read(source_storage_api, file_handle, asset_content_offset, chunk_size, write_ptr);
+        int err = source_storage_api->Read(source_storage_api, file_handle, asset_offset, chunk_size, write_ptr);
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlockJob(%p, %u, %d) failed with %d",
@@ -3930,7 +3958,7 @@ int Longtail_WriteContent(
     }
 
     uint32_t version_chunk_count = *version_index->m_ChunkCount;
-    struct Longtail_LookupTable* chunk_lookup = Longtail_LookupTable_Create(version_chunk_count, 0);
+    struct Longtail_LookupTable* chunk_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(version_chunk_count)), version_chunk_count, 0);
     if (!chunk_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
@@ -3955,14 +3983,14 @@ int Longtail_WriteContent(
     }
     for (uint64_t c = 0; c < version_content_index_chunk_count; ++c)
     {
-        uint64_t version_chunk_index = Longtail_LookupTable_Get(chunk_lookup, version_content_index->m_ChunkHashes[c]);
-        if (version_chunk_index == 0xfffffffffffffffful)
+        uint64_t* version_chunk_index = Longtail_LookupTable_Get(chunk_lookup, version_content_index->m_ChunkHashes[c]);
+        if (version_chunk_index == 0)
         {
             Longtail_Free(chunk_sizes);
             Longtail_Free(chunk_lookup);
             return EINVAL;
         }
-        chunk_sizes[c] = version_index->m_ChunkSizes[version_chunk_index];
+        chunk_sizes[c] = version_index->m_ChunkSizes[*version_chunk_index];
     }
     Longtail_Free(chunk_lookup);
     chunk_lookup = 0;
@@ -3978,7 +4006,7 @@ int Longtail_WriteContent(
         return err;
     }
 
-    struct ChunkHashToAssetPart* asset_part_lookup;
+    struct AssetPartLookup* asset_part_lookup;
     err = CreateAssetPartLookup(version_index, &asset_part_lookup);
     if (err)
     {
@@ -3990,13 +4018,13 @@ int Longtail_WriteContent(
     }
 
     uint64_t block_store_block_count = block_store_content_index ? *block_store_content_index->m_BlockCount : 0;
-    struct Longtail_LookupTable* block_store_lookup = Longtail_LookupTable_Create(block_store_block_count, 0);
+    struct Longtail_LookupTable* block_store_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(block_store_block_count)), block_store_block_count, 0);
     if (!block_store_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
             source_storage_api, block_store_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, block_store_content_index, version_content_index, version_index, assets_folder,
             ENOMEM)
-        hmfree(asset_part_lookup);
+        Longtail_Free(asset_part_lookup);
         Longtail_Free(chunk_sizes);
         return ENOMEM;
     }
@@ -4013,7 +4041,7 @@ int Longtail_WriteContent(
             source_storage_api, block_store_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, block_store_content_index, version_content_index, version_index, assets_folder,
             ENOMEM)
         Longtail_Free(block_store_lookup);
-        hmfree(asset_part_lookup);
+        Longtail_Free(asset_part_lookup);
         Longtail_Free(chunk_sizes);
         return ENOMEM;
     }
@@ -4033,7 +4061,7 @@ int Longtail_WriteContent(
         }
         uint32_t block_chunk_count = (uint32_t)(chunk_offset_index - block_start_chunk_index);
 
-        if (Longtail_LookupTable_Get(block_store_lookup, block_hash) != 0xfffffffffffffffful)
+        if (Longtail_LookupTable_Get(block_store_lookup, block_hash) != 0)
         {
             block_start_chunk_index += block_chunk_count;
             continue;
@@ -4080,7 +4108,7 @@ int Longtail_WriteContent(
         LONGTAIL_LOG(err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
             source_storage_api, block_store_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, block_store_content_index, version_content_index, version_index, assets_folder,
             err)
-        hmfree(asset_part_lookup);
+        Longtail_Free(asset_part_lookup);
         Longtail_Free(write_block_jobs);
         Longtail_Free(chunk_sizes);
         return err;
@@ -4096,7 +4124,7 @@ int Longtail_WriteContent(
         }
     }
 
-    hmfree(asset_part_lookup);
+    Longtail_Free(asset_part_lookup);
     Longtail_Free(write_block_jobs);
 
     if (err)
@@ -4271,7 +4299,7 @@ static int CreatePartialAssetWriteJob(
     {
         uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
         TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-        uint64_t block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+        uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
         int has_block = 0;
         for (uint32_t d = 0; d < job->m_BlockReaderJobCount; ++d)
@@ -4578,7 +4606,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         block_chunks_count += *block_index->m_ChunkCount;
     }
 
-    uint32_t* lookup_mem = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * (block_chunks_count * 3));
+    void* lookup_mem = Longtail_Alloc(sizeof(uint32_t) * (block_chunks_count * 3) + Longtail_LookupTable_GetSize(block_chunks_count));
     if (!lookup_mem)
     {
         for (uint32_t d = 0; d < block_reader_job_count; ++d)
@@ -4596,10 +4624,10 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         job->m_Err = ENOMEM;
         return 0;
     }
-    uint32_t* chunk_sizes = lookup_mem;
-    uint32_t* chunk_offsets = &lookup_mem[block_chunks_count];
-    uint32_t* block_indexes = &lookup_mem[block_chunks_count * 2];
-    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(block_chunks_count, 0);
+    uint32_t* chunk_sizes = (uint32_t*)lookup_mem;
+    uint32_t* chunk_offsets = &chunk_sizes[block_chunks_count];
+    uint32_t* block_indexes = &chunk_offsets[block_chunks_count];
+    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(&block_indexes[block_chunks_count], block_chunks_count, 0);
     if (!block_chunks_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
@@ -4635,8 +4663,8 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         uint32_t chunk_index = job->m_VersionIndex->m_AssetChunkIndexes[chunk_index_start + chunk_index_offset];
         TLongtail_Hash chunk_hash = job->m_VersionIndex->m_ChunkHashes[chunk_index];
 
-        uint64_t chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, chunk_hash);
-        if (chunk_block_index == 0xfffffffffffffffful)
+        uint64_t* chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, chunk_hash);
+        if (chunk_block_index == 0)
         {
             for (uint32_t d = 0; d < block_reader_job_count; ++d)
             {
@@ -4651,14 +4679,13 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 LONGTAIL_FATAL_ASSERT(err == 0, job->m_Err = EINVAL; return 0)
             }
             job->m_Err = EINVAL;
-            Longtail_Free(block_chunks_lookup);
             Longtail_Free(lookup_mem);
             return 0;
         }
 
-        uint32_t chunk_block_offset = chunk_offsets[chunk_block_index];
-        uint32_t chunk_size = chunk_sizes[chunk_block_index];
-        uint32_t block_index = block_indexes[chunk_block_index];
+        uint32_t chunk_block_offset = chunk_offsets[*chunk_block_index];
+        uint32_t chunk_size = chunk_sizes[*chunk_block_index];
+        uint32_t block_index = block_indexes[*chunk_block_index];
         const char* block_data = (char*)stored_block[block_index]->m_BlockData;
 
         int err = job->m_VersionStorageAPI->Write(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset, chunk_size, &block_data[chunk_block_offset]);
@@ -4682,7 +4709,6 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 int sync_err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
                 LONGTAIL_FATAL_ASSERT(sync_err == 0, return 0)
             }
-            Longtail_Free(block_chunks_lookup);
             Longtail_Free(lookup_mem);
             return 0;
         }
@@ -4690,7 +4716,6 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
         ++chunk_index_offset;
     }
-    Longtail_Free(block_chunks_lookup);
     Longtail_Free(lookup_mem);
 
     for (uint32_t d = 0; d < block_reader_job_count; ++d)
@@ -4801,7 +4826,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
     uint32_t* chunk_sizes = lookup_mem;
     uint32_t* chunk_offsets = &lookup_mem[block_chunks_count];
     uint64_t chunk_count = *block_index->m_ChunkCount;
-    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(chunk_count, 0);
+    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(chunk_count)), chunk_count, 0);
     if (!block_chunks_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
@@ -4908,11 +4933,11 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             uint32_t chunk_index = version_index->m_AssetChunkIndexes[asset_chunk_index_start + asset_chunk_index];
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
 
-            intptr_t chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, chunk_hash);
-            LONGTAIL_FATAL_ASSERT(chunk_block_index != 0xfffffffffffffffful, job->m_Err = EINVAL; return 0)
+            uint64_t* chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, chunk_hash);
+            LONGTAIL_FATAL_ASSERT(chunk_block_index != 0, job->m_Err = EINVAL; return 0)
 
-            uint32_t chunk_block_offset = chunk_offsets[chunk_block_index];
-            uint32_t chunk_size = chunk_sizes[chunk_block_index];
+            uint32_t chunk_block_offset = chunk_offsets[*chunk_block_index];
+            uint32_t chunk_size = chunk_sizes[*chunk_block_index];
 
             err = version_storage_api->Write(version_storage_api, asset_file, asset_write_offset, chunk_size, &block_data[chunk_block_offset]);
             if (err)
@@ -5005,8 +5030,8 @@ static SORTFUNC(BlockJobCompare)
 //    {
 //        return 0;
 //    }
-    uint64_t a_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, a_first_chunk_hash);
-    uint64_t b_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, b_first_chunk_hash);
+    uint64_t a_block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, a_first_chunk_hash);
+    uint64_t b_block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, b_first_chunk_hash);
     if (a_block_index < b_block_index)
     {
         return -1;
@@ -5085,8 +5110,8 @@ static int BuildAssetWriteList(
         }
         uint32_t chunk_index = asset_chunk_indexes[asset_chunk_offset];
         TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
-        intptr_t content_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
-        if (content_block_index == 0xfffffffffffffffful)
+        uint64_t* content_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+        if (content_block_index == 0)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash) failed with %d",
                 asset_count, optional_asset_indexes, name_offsets, name_data, chunk_hashes, asset_chunk_counts, asset_chunk_index_starts, asset_chunk_indexes, chunk_hash_to_block_index, out_asset_write_list,
@@ -5100,8 +5125,8 @@ static int BuildAssetWriteList(
         {
             uint32_t next_chunk_index = asset_chunk_indexes[asset_chunk_offset + c];
             TLongtail_Hash next_chunk_hash = chunk_hashes[next_chunk_index];
-            uint64_t next_content_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, next_chunk_hash);
-            if (next_content_block_index == 0xfffffffffffffffful)
+            uint64_t* next_content_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, next_chunk_hash);
+            if (next_content_block_index == 0)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList(%u, %p, %p, %s, %p, %p, %p, %p, %p, %p) Longtail_LookupTable_Get(chunk_hash_to_block_index, next_chunk_hash) failed with %d",
                     asset_count, optional_asset_indexes, name_offsets, name_data, chunk_hashes, asset_chunk_counts, asset_chunk_index_starts, asset_chunk_indexes, chunk_hash_to_block_index, out_asset_write_list,
@@ -5109,7 +5134,7 @@ static int BuildAssetWriteList(
                 Longtail_Free(awl);
                 return ENOENT;
             }
-            if (content_block_index != next_content_block_index)
+            if (*content_block_index != *next_content_block_index)
             {
                 is_block_job = 0;
                 // We don't break here since we want to validate that all the chunks are in the content index
@@ -5180,7 +5205,7 @@ static int WriteAssets(
     TLongtail_Hash* tmp_block_ref_hashes = (TLongtail_Hash*)work_mem;
     uint32_t* tmp_block_ref_counts = (uint32_t*)&tmp_block_ref_hashes[block_count];
 
-    struct Longtail_LookupTable* block_ref_count_map = Longtail_LookupTable_Create(block_count, 0);
+    struct Longtail_LookupTable* block_ref_count_map = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(block_count)), block_count, 0);
     if (!block_ref_count_map)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
@@ -5196,7 +5221,7 @@ static int WriteAssets(
         {
             uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
             TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
-            uint64_t block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+            uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
             TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
             Longtail_LookupTable_Put(block_ref_count_map, block_hash, block_ref_count);
             tmp_block_ref_hashes[block_ref_count] = block_hash;
@@ -5208,7 +5233,7 @@ static int WriteAssets(
             {
                 uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
                 TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
-                uint64_t next_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+                uint64_t next_block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
                 if (next_block_index != block_index)
                 {
                     break;
@@ -5244,7 +5269,7 @@ static int WriteAssets(
             {
                 uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
                 TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-                uint64_t block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+                uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
                 TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
                 int has_block = 0;
                 for (uint32_t d = 0; d < block_read_job_count; ++d)
@@ -5258,16 +5283,16 @@ static int WriteAssets(
                 if (!has_block)
                 {
                     block_hashes[block_read_job_count++] = block_hash;
-                    uint64_t block_ref_index = Longtail_LookupTable_PutUnique(block_ref_count_map, block_hash, block_ref_count);
-                    if (block_ref_index != 0xfffffffffffffffful)
-                    {
-                        ++tmp_block_ref_counts[block_ref_index];
-                    }
-                    else
+                    uint64_t* block_ref_index = Longtail_LookupTable_PutUnique(block_ref_count_map, block_hash, block_ref_count);
+                    if (block_ref_index == 0)
                     {
                         tmp_block_ref_hashes[block_ref_count] = block_hash;
                         tmp_block_ref_counts[block_ref_count] = 1;
                         ++block_ref_count;
+                    }
+                    else
+                    {
+                        ++tmp_block_ref_counts[*block_ref_index];
                     }
                 }
                 ++chunk_index_offset;
@@ -5326,7 +5351,7 @@ static int WriteAssets(
     {
         uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
         TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
-        uint64_t block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+        uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
 
         struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
         struct BlockReaderJob* block_job = &job->m_BlockReadJob;
@@ -5359,9 +5384,9 @@ static int WriteAssets(
         {
             uint32_t next_asset_index = awl->m_BlockJobAssetIndexes[j];
             TLongtail_Hash next_first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[next_asset_index]]];
-            uint64_t next_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, next_first_chunk_hash);
-            LONGTAIL_FATAL_ASSERT(0xfffffffffffffffful != next_block_index, return EINVAL)
-            if (block_index != next_block_index)
+            uint64_t* next_block_index = Longtail_LookupTable_Get(chunk_hash_to_block_index, next_first_chunk_hash);
+            LONGTAIL_FATAL_ASSERT(next_block_index != 0, return EINVAL)
+            if (block_index != *next_block_index)
             {
                 break;
             }
@@ -5528,7 +5553,7 @@ int Longtail_WriteVersion(
     }
 
     uint64_t chunk_count = *content_index->m_ChunkCount;
-    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(chunk_count, 0);
+    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(chunk_count)), chunk_count, 0);
     if (!chunk_hash_to_block_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteVersion(%p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
@@ -5717,7 +5742,7 @@ static int DiffHashes(
     {
         // Reorder the new hashes so they are in the same order that they where when they were created
         // so chunks that belongs together are group together in blocks
-        struct Longtail_LookupTable* added_hashes_lookup = Longtail_LookupTable_Create(added, 0);
+        struct Longtail_LookupTable* added_hashes_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(added)), added, 0);
         if (!added_hashes_lookup)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DiffHashes(%p, %" PRIu64 ", %p, %" PRIu64 ", %p, %p, %p, %p) failed with %d",
@@ -5733,7 +5758,7 @@ static int DiffHashes(
         for (uint64_t i = 0; i < new_hash_count; ++i)
         {
             TLongtail_Hash hash = new_hashes[i];
-            if (Longtail_LookupTable_Get(added_hashes_lookup, hash) == 0xfffffffffffffffful)
+            if (Longtail_LookupTable_Get(added_hashes_lookup, hash) == 0)
             {
                 continue;
             }
@@ -5821,7 +5846,7 @@ int Longtail_CreateMissingContent(
     uint32_t* tmp_diff_chunk_sizes = (uint32_t*)work_mem;
     uint32_t* tmp_diff_chunk_tags = &tmp_diff_chunk_sizes[added_hash_count];
 
-    struct Longtail_LookupTable* chunk_index_lookup = Longtail_LookupTable_Create(chunk_count, 0);
+    struct Longtail_LookupTable* chunk_index_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(chunk_count)), chunk_count, 0);
     if (!chunk_index_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateMissingContent(%p, %p, %p, %u, %u, %p) failed with %d",
@@ -5837,7 +5862,7 @@ int Longtail_CreateMissingContent(
 
     for (uint32_t j = 0; j < added_hash_count; ++j)
     {
-        uint64_t chunk_index = Longtail_LookupTable_Get(chunk_index_lookup, added_hashes[j]);
+        uint64_t chunk_index = *Longtail_LookupTable_Get(chunk_index_lookup, added_hashes[j]);
         tmp_diff_chunk_sizes[j] = version_index->m_ChunkSizes[chunk_index];
         tmp_diff_chunk_tags[j] = version_index->m_ChunkTags[chunk_index];
     }
@@ -5885,7 +5910,7 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
     // add that block to out_content_index
 
     uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
-    struct Longtail_LookupTable* chunk_to_reference_block_index_lookup = Longtail_LookupTable_Create(reference_chunk_count, 0);
+    struct Longtail_LookupTable* chunk_to_reference_block_index_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(reference_chunk_count)), reference_chunk_count, 0);
     if (!chunk_to_reference_block_index_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetMissingContent(%p, %p, %p, %p) failed with %d",
@@ -5912,7 +5937,7 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
     }
 
     uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
-    struct Longtail_LookupTable* block_hash_to_missing_index = Longtail_LookupTable_Create(content_index_chunk_count ,0);
+    struct Longtail_LookupTable* block_hash_to_missing_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(content_index_chunk_count)), content_index_chunk_count ,0);
     if (!block_hash_to_missing_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetMissingContent(%p, %p, %p, %p) failed with %d",
@@ -5928,13 +5953,13 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
     for (uint64_t c = 0; c < content_index_chunk_count; ++c)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[c];
-        if (Longtail_LookupTable_Get(chunk_to_reference_block_index_lookup, chunk_hash) != 0xfffffffffffffffful)
+        if (Longtail_LookupTable_Get(chunk_to_reference_block_index_lookup, chunk_hash) != 0)
         {
             continue;
         }
         uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        if (Longtail_LookupTable_PutUnique(block_hash_to_missing_index, block_hash, missing_block_count) != 0xfffffffffffffffful)
+        if (Longtail_LookupTable_PutUnique(block_hash_to_missing_index, block_hash, missing_block_count) != 0)
         {
             continue;
         }
@@ -5959,7 +5984,7 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[c];
         uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        if (Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash) == 0xfffffffffffffffful)
+        if (Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash) == 0)
         {
             continue;
         }
@@ -6015,7 +6040,7 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
         uint64_t block_index = content_index->m_ChunkBlockIndexes[chunk_index];
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        uint64_t missing_block_index = Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash);
+        uint64_t missing_block_index = *Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash);
         resulting_content_index->m_ChunkHashes[c] = chunk_hash;
         resulting_content_index->m_ChunkBlockIndexes[c] = missing_block_index;
     }
@@ -6043,7 +6068,7 @@ int Longtail_RetargetContent(
     uint32_t hash_identifier = (*reference_content_index->m_BlockCount) != 0 ? (*reference_content_index->m_HashIdentifier) : (*content_index->m_HashIdentifier);
 
     uint64_t requested_chunk_count = *content_index->m_ChunkCount;
-    struct Longtail_LookupTable* chunk_to_requested_block_index_lookup = Longtail_LookupTable_Create(requested_chunk_count, 0);
+    struct Longtail_LookupTable* chunk_to_requested_block_index_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(requested_chunk_count)), requested_chunk_count, 0);
     if (!chunk_to_requested_block_index_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
@@ -6061,7 +6086,7 @@ int Longtail_RetargetContent(
     uint64_t reference_block_count = *reference_content_index->m_BlockCount;
     uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
 
-    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(reference_block_count, 0);
+    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(reference_block_count)), reference_block_count, 0);
     if (!requested_blocks_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
@@ -6096,24 +6121,24 @@ int Longtail_RetargetContent(
         TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
         uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[block_index];
-        if (Longtail_LookupTable_Get(chunk_to_requested_block_index_lookup, chunk_hash) != 0xfffffffffffffffful)
+        if (Longtail_LookupTable_Get(chunk_to_requested_block_index_lookup, chunk_hash) != 0)
         {
-            uint64_t find_block_index = Longtail_LookupTable_PutUnique(requested_blocks_lookup, block_hash, block_count);
-            if (find_block_index == 0xfffffffffffffffful)
+            uint64_t* find_block_index = Longtail_LookupTable_PutUnique(requested_blocks_lookup, block_hash, block_count);
+            if (find_block_index == 0)
             {
                 tmp_requested_chunk_block_indexes[chunk_count] = block_count;
                 tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
                 tmp_requested_block_hashes[block_count++] = block_hash;
                 continue;
             }
-            tmp_requested_chunk_block_indexes[chunk_count] = find_block_index;
+            tmp_requested_chunk_block_indexes[chunk_count] = *find_block_index;
             tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
             continue;
         }
-        uint64_t find_block_index = Longtail_LookupTable_Get(requested_blocks_lookup, block_hash);
-        if (find_block_index != 0xfffffffffffffffful)
+        uint64_t* find_block_index = Longtail_LookupTable_Get(requested_blocks_lookup, block_hash);
+        if (find_block_index != 0)
         {
-            tmp_requested_chunk_block_indexes[chunk_count] = find_block_index;
+            tmp_requested_chunk_block_indexes[chunk_count] = *find_block_index;
             tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
         }
     }
@@ -6183,7 +6208,8 @@ static int FindNewChunks(void* context, uint32_t job_id, int is_cancelled)
     for (uint64_t c = job->m_StartRange; c < job->m_EndRange; ++c)
     {
         TLongtail_Hash chunk_hash = job->m_ContentIndex->m_ChunkHashes[c];
-        job->m_ChunkBlockIndexes[c] = Longtail_LookupTable_Get(job->m_ChunkHashToBlockIndex, chunk_hash);
+        uint64_t* block_index = Longtail_LookupTable_Get(job->m_ChunkHashToBlockIndex, chunk_hash);
+        job->m_ChunkBlockIndexes[c] = block_index ? *block_index : 0xfffffffffffffffful;
     }
 
     return 0;
@@ -6266,10 +6292,10 @@ int Longtail_MergeContentIndex(
     TLongtail_Hash* tmp_compact_chunk_hashes = (TLongtail_Hash*)&tmp_compact_block_hashes[max_block_count];
     TLongtail_Hash* tmp_compact_chunk_block_indexes = (TLongtail_Hash*)&tmp_compact_chunk_hashes[max_chunk_count];
 
-    struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(max_block_count, 0);
+    struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(max_block_count)), max_block_count, 0);
     uint64_t compact_chunk_count = *new_content_index->m_ChunkCount;
 
-    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(max_chunk_count, 0);
+    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(max_chunk_count)), max_chunk_count, 0);
     uint64_t compact_block_count = *new_content_index->m_BlockCount;
 
     {
@@ -6355,14 +6381,14 @@ int Longtail_MergeContentIndex(
             tmp_compact_chunk_hashes[compact_chunk_count] = chunk_hash;
             uint64_t block_index = local_content_index->m_ChunkBlockIndexes[c];
             TLongtail_Hash block_hash = local_content_index->m_BlockHashes[block_index];
-            compact_block_index = Longtail_LookupTable_PutUnique(block_hash_to_block_index, block_hash, compact_block_count);
-            if (compact_block_index == 0xfffffffffffffffful)
+            uint64_t* compact_block_index_ptr = Longtail_LookupTable_PutUnique(block_hash_to_block_index, block_hash, compact_block_count);
+            if (compact_block_index_ptr == 0)
             {
                 tmp_compact_chunk_block_indexes[compact_chunk_count++] = compact_block_count;
                 tmp_compact_block_hashes[compact_block_count++] = block_hash;
                 continue;
             }
-            tmp_compact_chunk_block_indexes[compact_chunk_count++] = compact_block_index;
+            tmp_compact_chunk_block_indexes[compact_chunk_count++] = *compact_block_index_ptr;
         }
         Longtail_Free(chunk_block_indexes);
     }
@@ -6599,7 +6625,7 @@ int Longtail_CreateVersionDiff(
     uint32_t source_asset_count = *source_version->m_AssetCount;
     uint32_t target_asset_count = *target_version->m_AssetCount;
 
-    struct Longtail_LookupTable* source_path_hash_to_index = Longtail_LookupTable_Create(source_asset_count ,0);
+    struct Longtail_LookupTable* source_path_hash_to_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(source_asset_count)), source_asset_count ,0);
     if (!source_path_hash_to_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) failed with %d",
@@ -6607,7 +6633,7 @@ int Longtail_CreateVersionDiff(
             ENOMEM)
         return ENOMEM;
     }
-    struct Longtail_LookupTable* target_path_hash_to_index = Longtail_LookupTable_Create(target_asset_count ,0);
+    struct Longtail_LookupTable* target_path_hash_to_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(target_asset_count)), target_asset_count ,0);
     if (!target_path_hash_to_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) failed with %d",
@@ -6695,8 +6721,8 @@ int Longtail_CreateVersionDiff(
     {
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
-        uint32_t source_asset_index = (uint32_t)Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
-        uint32_t target_asset_index = (uint32_t)Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+        uint32_t source_asset_index = (uint32_t)*Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+        uint32_t target_asset_index = (uint32_t)*Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
 
         const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
         const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
@@ -6730,7 +6756,7 @@ int Longtail_CreateVersionDiff(
         }
         else if (source_path_hash < target_path_hash)
         {
-            source_asset_index = (uint32_t)Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+            source_asset_index = (uint32_t)*Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Removed asset %s", source_path)
             removed_source_asset_indexes[source_removed_count] = source_asset_index;
             ++source_removed_count;
@@ -6738,7 +6764,7 @@ int Longtail_CreateVersionDiff(
         }
         else
         {
-            target_asset_index = (uint32_t)Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+            target_asset_index = (uint32_t)*Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Added asset %s", target_path)
             added_target_asset_indexes[target_added_count] = target_asset_index;
             ++target_added_count;
@@ -6749,7 +6775,7 @@ int Longtail_CreateVersionDiff(
     {
         // source_path_hash removed
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
-        uint32_t source_asset_index = (uint32_t)Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+        uint32_t source_asset_index = (uint32_t)*Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
         const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Removed asset %s", source_path)
         removed_source_asset_indexes[source_removed_count] = source_asset_index;
@@ -6760,7 +6786,7 @@ int Longtail_CreateVersionDiff(
     {
         // target_path_hash added
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
-        uint32_t target_asset_index = (uint32_t)Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+        uint32_t target_asset_index = (uint32_t)*Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
         const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Added asset %s", target_path)
         added_target_asset_indexes[target_added_count] = target_asset_index;
@@ -6996,7 +7022,7 @@ int Longtail_ChangeVersion(
     if (write_asset_count > 0)
     {
         uint64_t chunk_count = *content_index->m_ChunkCount;
-        struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(chunk_count, 0);
+        struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(chunk_count)), chunk_count, 0);
         if (!chunk_hash_to_block_index)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
@@ -7129,7 +7155,7 @@ int Longtail_ValidateContent(
     LONGTAIL_VALIDATE_INPUT(version_index != 0, return EINVAL)
 
     uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
-    struct Longtail_LookupTable* content_chunk_lookup = Longtail_LookupTable_Create(content_index_chunk_count ,0);
+    struct Longtail_LookupTable* content_chunk_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(content_index_chunk_count)), content_index_chunk_count ,0);
     if (!content_chunk_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ValidateContent(%p, %p) failed with %d",
@@ -7150,7 +7176,7 @@ int Longtail_ValidateContent(
     for (uint32_t chunk_index = 0; chunk_index < version_index_chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-        if (Longtail_LookupTable_Get(content_chunk_lookup, chunk_hash) == 0xfffffffffffffffful)
+        if (Longtail_LookupTable_Get(content_chunk_lookup, chunk_hash) == 0)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateContent(%p, %p) content index does not contain chunk 0x%" PRIx64 "",
                 content_index, version_index,
@@ -7216,7 +7242,7 @@ int Longtail_ValidateVersion(
     LONGTAIL_VALIDATE_INPUT(version_index != 0, EINVAL)
 
     uint64_t version_index_chunk_count = *version_index->m_ChunkCount;
-    struct Longtail_LookupTable* version_chunk_lookup = Longtail_LookupTable_Create(version_index_chunk_count, 0);
+    struct Longtail_LookupTable* version_chunk_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(version_index_chunk_count)), version_index_chunk_count, 0);
     if (!version_chunk_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) failed with %d",
@@ -7259,7 +7285,7 @@ int Longtail_ValidateVersion(
     for (uint64_t chunk_index = 0; chunk_index < content_index_chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
-        if (Longtail_LookupTable_Get(version_chunk_lookup, chunk_hash) == 0xfffffffffffffffful)
+        if (Longtail_LookupTable_Get(version_chunk_lookup, chunk_hash) == 0)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ValidateVersion(%p, %p) version index does not contain chunk 0x%" PRIx64 "",
                 content_index, version_index,

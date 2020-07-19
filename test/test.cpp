@@ -8,6 +8,7 @@
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/atomiccancel/longtail_atomiccancel.h"
+#include "../lib/blockstorestorage/longtail_blockstorestorage.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressblockstore/longtail_compressblockstore.h"
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
@@ -5622,10 +5623,12 @@ TEST(Longtail, BlockStoreRetargetContent)
     SAFE_DISPOSE_API(storage_api);
 }
 
+
 static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
 {
     for (size_t n = 0; n < size; n++) {
-        int key = rand() % (sizeof(uint8_t));
+        int r = rand();
+        int key = r & 0xff;
         data[n] = (uint8_t)key;
     }
     return data;
@@ -5633,11 +5636,12 @@ static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
 
 static char* GenerateRandomPath(char *str, size_t size)
 {
-    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ/.";
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKILMNOPQRSTUVWXYZ.";
     if (size) {
         --size;
         for (size_t n = 0; n < size; n++) {
-            int key = rand() % (int) (sizeof charset - 1);
+            size_t allowed_range = sizeof(charset) - 1;
+            int key = rand() % (int) (allowed_range);
             str[n] = charset[key];
         }
         str[size] = '\0';
@@ -5645,27 +5649,78 @@ static char* GenerateRandomPath(char *str, size_t size)
     return str;
 }
 
-static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const char* root_path, uint32_t asset_count, uint32_t min_content_length, uint32_t max_content_length)
+static void CreateRandomContent(
+    struct Longtail_StorageAPI* storage_api,
+    const char* root_path,
+    uint32_t* file_count_left,
+    uint32_t min_content_length,
+    uint32_t max_content_length,
+    int depth)
 {
-    for (uint32_t a = 0; a < asset_count; ++a)
+    while (*file_count_left)
     {
-        char content_path[128];
-        GenerateRandomPath(content_path, sizeof(content_path));
-        size_t content_length = (rand() + rand() + rand() + rand() + rand() + rand()) % (max_content_length - min_content_length) + min_content_length;
-        uint8_t* content_data = (uint8_t*)malloc(content_length);
-        GenerateRandomData(content_data, content_length);
+        switch(rand() % 8)
+        {
+            case 0:
+                if (depth > 0)
+                {
+                    return;
+                }
+                break;
+            case 1:
+            case 2:
+                {
+                    char content_path[32];
+                    size_t path_length = 2 + (rand() % 29);
+                    GenerateRandomPath(content_path, path_length);
+                    const char* dir_name = storage_api->ConcatPath(storage_api, root_path, content_path);
+                    if (storage_api->IsDir(storage_api, dir_name) || storage_api->IsFile(storage_api, dir_name))
+                    {
+                        Longtail_Free((void*)dir_name);
+                        continue;
+                    }
+                    *file_count_left = *file_count_left - 1;
+                    ASSERT_EQ(0, storage_api->CreateDir(storage_api, dir_name));
+                    CreateRandomContent(storage_api, dir_name, file_count_left, min_content_length, max_content_length, depth + 1);
+                    Longtail_Free((void*)dir_name);
+                }
+                break;
+            default:
+                {
+                    char content_path[32];
+                    size_t path_length = 2 + (rand() % 29);
+                    GenerateRandomPath(content_path, path_length);
+                    const char* file_name = storage_api->ConcatPath(storage_api, root_path, content_path);
+                    if (storage_api->IsDir(storage_api, file_name) || storage_api->IsFile(storage_api, file_name))
+                    {
+                        Longtail_Free((void*)file_name);
+                        continue;
+                    }
 
-        const char* file_name = storage_api->ConcatPath(storage_api, root_path, content_path);
-        ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
-        Longtail_StorageAPI_HOpenFile w;
-        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
-        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
-        ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, content_length, content_data));
-        storage_api->CloseFile(storage_api, w);
-        w = 0;
-        Longtail_Free((void*)file_name);
-        free(content_data);
+                    size_t content_length = ((((uint64_t)rand()) << 32) + rand()) % (max_content_length - min_content_length) + min_content_length;
+                    uint8_t* content_data = (uint8_t*)malloc(content_length);
+                    GenerateRandomData(content_data, content_length);
+
+                    Longtail_StorageAPI_HOpenFile w;
+                    ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
+                    ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+                    ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, content_length, content_data));
+                    storage_api->CloseFile(storage_api, w);
+                    w = 0;
+                    Longtail_Free((void*)file_name);
+                    free(content_data);
+                }
+                break;
+        }
     }
+}
+
+static void CreateRandomContent(struct Longtail_StorageAPI* storage_api, const char* root_path, uint32_t file_count, uint32_t min_content_length, uint32_t max_content_length)
+{
+    uint32_t file_count_left = file_count;
+    ASSERT_EQ(0, EnsureParentPathExists(storage_api, root_path));
+    storage_api->CreateDir(storage_api, root_path);
+    CreateRandomContent(storage_api, root_path, &file_count_left, min_content_length, max_content_length, 0);
 }
 
 TEST(Longtail, VersionLocalContent)
@@ -5680,7 +5735,7 @@ TEST(Longtail, VersionLocalContent)
         "version",
         56,
         7,
-        72371);
+        5371);
     struct Longtail_FileInfos* version1_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(
         storage_api,
@@ -5748,7 +5803,7 @@ TEST(Longtail, VersionLocalContent)
         version1_index));
 
     // Add additional content
-    CreateRandomContent(storage_api, "version", 71, 91, 59377);
+    CreateRandomContent(storage_api, "version", 31, 91, 19377);
     struct Longtail_FileInfos* version2_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(
         storage_api,
@@ -6104,5 +6159,220 @@ TEST(Longtail, TestChangeVersionDiskFull)
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(&failable_remote_storage_api->m_API);
     SAFE_DISPOSE_API(&failable_local_storage_api->m_API);
+    SAFE_DISPOSE_API(mem_storage);
+}
+
+
+
+TEST(Longtail, TestLongtailBlockFS)
+{
+    static const uint32_t MAX_BLOCK_SIZE = 4096;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 16u;
+
+    Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();//Longtail_CreateFSStorageAPI();//
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
+    Longtail_BlockStoreAPI* block_store = Longtail_CreateCompressBlockStoreAPI(raw_block_store, compression_registry);
+
+//    printf("\nCreating...\n");
+
+    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, MAX_BLOCK_SIZE * 7);
+
+    Longtail_FileInfos* version_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version_paths);
+
+    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);//Longtail_GetZStdMinQuality());
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        mem_storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "source",
+        version_paths,
+        compression_types,
+        MAX_BLOCK_SIZE / MAX_CHUNKS_PER_BLOCK,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+
+    Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+            hash_api,
+            vindex,
+            MAX_BLOCK_SIZE / 4,
+            MAX_CHUNKS_PER_BLOCK / 2,
+            &content_index));
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        hash_api,
+        0,
+        0,
+        0,
+        &block_store_content_index));
+    ASSERT_EQ(0, Longtail_WriteContent(
+        mem_storage,
+        block_store,
+        job_api,
+        0,
+        0,
+        0,
+        block_store_content_index,
+        content_index,
+        vindex,
+        "source"));
+
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+    TestAsyncGetIndexComplete get_index_complete;
+    ASSERT_EQ(0, block_store->GetIndex(block_store, &get_index_complete.m_API));
+    get_index_complete.Wait();
+    block_store_content_index = get_index_complete.m_ContentIndex;
+
+//    uint64_t data_read_count = 0;
+
+//    printf("\nReading...\n");
+
+    struct Longtail_StorageAPI* block_store_fs = Longtail_CreateBlockStoreStorageAPI(
+        hash_api,
+        job_api,
+        block_store,
+        block_store_content_index,
+        vindex);
+    ASSERT_NE((struct Longtail_StorageAPI*)0, block_store_fs);
+
+    Longtail_FileInfos* block_store_storage_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(block_store_fs, 0, 0, 0, "", &block_store_storage_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, block_store_storage_paths);
+    ASSERT_EQ(version_paths->m_Count, block_store_storage_paths->m_Count);
+
+    struct Longtail_LookupTable* version_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(version_paths->m_Count)), version_paths->m_Count, 0);
+    for (uint32_t f = 0; f < version_paths->m_Count; ++f)
+    {
+        uint64_t hash;
+        const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
+        Longtail_GetPathHash(hash_api, path, &hash);
+        Longtail_LookupTable_Put(version_paths_lookup, hash, f);
+    }
+    struct Longtail_LookupTable* block_store_storage_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(block_store_storage_paths->m_Count)), block_store_storage_paths->m_Count, 0);
+    for (uint32_t f = 0; f <  block_store_storage_paths->m_Count; ++f)
+    {
+        uint64_t hash;
+        const char* path = &block_store_storage_paths->m_PathData[block_store_storage_paths->m_PathStartOffsets[f]];
+        Longtail_GetPathHash(hash_api, path, &hash);
+        Longtail_LookupTable_Put(block_store_storage_paths_lookup, hash, f);
+        ASSERT_NE((uint64_t*)0, Longtail_LookupTable_Get(version_paths_lookup, hash));
+    }
+
+    for (uint32_t f = 0; f < version_paths->m_Count; ++f)
+    {
+        uint64_t hash;
+        const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
+        Longtail_GetPathHash(hash_api, path, &hash);
+        uint64_t i = *Longtail_LookupTable_Get(block_store_storage_paths_lookup, hash);
+        ASSERT_EQ(version_paths->m_Sizes[f], block_store_storage_paths->m_Sizes[i]);
+        ASSERT_EQ(version_paths->m_Permissions[f], block_store_storage_paths->m_Permissions[i]);
+        ASSERT_STREQ(path, &block_store_storage_paths->m_PathData[block_store_storage_paths->m_PathStartOffsets[i]]);
+    }
+
+    Longtail_Free(block_store_storage_paths_lookup);
+    Longtail_Free(version_paths_lookup);
+
+    ASSERT_EQ(block_store_storage_paths->m_Count, *vindex->m_AssetCount);
+    Longtail_Free(block_store_storage_paths);
+
+    for (uint32_t f = 0; f < version_paths->m_Count; ++f)
+    {
+        const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
+        char* full_path = mem_storage->ConcatPath(mem_storage, "source", path);
+        if (mem_storage->IsFile(mem_storage, full_path))
+        {
+            Longtail_StorageAPI_HOpenFile block_store_file;
+            ASSERT_EQ(0, block_store_fs->OpenReadFile(block_store_fs, path, &block_store_file));
+            uint64_t size;
+            ASSERT_EQ(0, block_store_fs->GetSize(block_store_fs, block_store_file, &size));
+            char* buf = (char*)Longtail_Alloc(size);
+            if (size >= (256 + 32))
+            {
+                ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, 0, 32, buf));
+                ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, 32, 128, &buf[32]));
+                ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, 160, 96, &buf[160]));
+                ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, size - 32, 32, &buf[size - 32]));
+                ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, 256, size - (256 + 32), &buf[256]));
+            }
+            else if (size > 0)
+            {
+                uint64_t o = 0;
+                while (o < size)
+                {
+                    uint64_t s = o % 3 + 1;
+                    if (o + s > size)
+                    {
+                        s = size - o;
+                    }
+                    ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, o, s, &buf[o]));
+                    o += s;
+                }
+            }
+
+            block_store_fs->CloseFile(block_store_fs, block_store_file);
+
+            Longtail_StorageAPI_HOpenFile open_file;
+            ASSERT_EQ(0, mem_storage->OpenReadFile(mem_storage, full_path, &open_file));
+            uint64_t validate_size;
+            ASSERT_EQ(0, mem_storage->GetSize(mem_storage, open_file, &validate_size));
+            char* validate_buf = (char*)Longtail_Alloc(validate_size);
+            ASSERT_EQ(0, mem_storage->Read(mem_storage, open_file, 0, validate_size, validate_buf));
+            mem_storage->CloseFile(mem_storage, open_file);
+
+            ASSERT_EQ(size, validate_size);
+            const uint8_t* p1 = (const uint8_t*)buf;
+            const uint8_t* p2 = (const uint8_t*)validate_buf;
+            for (uint64_t i = 0; i < size; ++i)
+            {
+                if (p1[i] != p2[i])
+                {
+                    ASSERT_TRUE(false);
+                }
+            }
+
+//            data_read_count += size;
+
+            Longtail_Free(buf);
+
+            Longtail_Free(validate_buf);
+        }
+        Longtail_Free(full_path);
+    }
+
+    SAFE_DISPOSE_API(block_store_fs);
+
+//    printf("\nDone...\n");
+
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+
+    Longtail_Free(content_index);
+    content_index = 0;
+
+    Longtail_Free(vindex);
+    vindex = 0;
+
+    Longtail_Free(compression_types);
+    compression_types = 0;
+
+    Longtail_Free(version_paths);
+    version_paths = 0;
+    SAFE_DISPOSE_API(block_store);
+    SAFE_DISPOSE_API(raw_block_store);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(mem_storage);
 }

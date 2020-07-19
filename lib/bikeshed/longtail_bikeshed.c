@@ -184,8 +184,8 @@ static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task
     }
     LONGTAIL_FATAL_ASSERT(wrapper->m_JobGroup->m_PendingJobCount > 0, return BIKESHED_TASK_RESULT_COMPLETE)
     LONGTAIL_FATAL_ASSERT(res == 0, return BIKESHED_TASK_RESULT_COMPLETE)
-    Longtail_AtomicAdd32(&wrapper->m_JobGroup->m_PendingJobCount, -1);
     Longtail_AtomicAdd32(&wrapper->m_JobGroup->m_JobsCompleted, 1);
+    Longtail_AtomicAdd32(&wrapper->m_JobGroup->m_PendingJobCount, -1);
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
