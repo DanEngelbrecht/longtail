@@ -1084,6 +1084,11 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
     os_unfair_lock_unlock(&spin_lock->m_Lock);
 }
 
+void Longtail_Yield()
+{
+    sched_yield();
+}
+
 #else
 
 struct Longtail_Sema
@@ -1195,10 +1200,12 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
     pthread_spin_unlock(&spin_lock->m_Lock);
 }
 
+void Longtail_Yield()
+{
+    pthread_yield();
+}
+
 #endif
-
-
-
 
 
 
@@ -1584,11 +1591,6 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
 char* Longtail_GetTempFolder()
 {
     return Longtail_Strdup("/tmp");
-}
-
-void Longtail_Yield()
-{
-    pthread_yield();
 }
 
 #endif
