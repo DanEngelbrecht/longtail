@@ -1626,7 +1626,7 @@ void Longtail_LockRWReadLock(HLongtail_RWLock rw_lock)
         {
             if (tries == 16)
             {
-                Sleep(1);
+                Longtail_Sleep(100);
                 tries = 0;
             }
             else
@@ -1661,7 +1661,7 @@ void Longtail_LockRWWriteLock(HLongtail_RWLock rw_lock)
         Longtail_AtomicAdd32(&rw_lock->m_LockCounter, MAX_READER_COUNT);
         if (tries == 8)
         {
-            Sleep(1);
+            Longtail_Sleep(100);
             tries = 0;
         }
         else
@@ -1677,7 +1677,7 @@ void Longtail_LockRWWriteLock(HLongtail_RWLock rw_lock)
         // We are next in line for a writer lock, go full speed
         if (tries == 8)
         {
-            Sleep(1);
+            Longtail_Sleep(100);
             tries = 0;
         }
         else
