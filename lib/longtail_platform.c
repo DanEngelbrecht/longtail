@@ -742,6 +742,8 @@ char* Longtail_GetTempFolder()
 #include <pthread.h>
 #include <pwd.h>
 
+#include <assert.h>
+
 uint32_t Longtail_GetCPUCount()
 {
    return (uint32_t)sysconf(_SC_NPROCESSORS_ONLN);
@@ -1580,5 +1582,90 @@ char* Longtail_GetTempFolder()
     return Longtail_Strdup("/tmp");
 }
 
+
+struct Longtail_RWLock
+{
+    TLongtail_Atomic32 m_ReaderCount;
+//    pthread_rwlock_t m_Lock;
+};
+
+size_t Longtail_GetRWLockSize()
+{
+    return sizeof(struct Longtail_RWLock);
+}
+
+int Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rw_lock)
+{
+    HLongtail_RWLock rw_lock = (HLongtail_RWLock)mem;
+    rw_lock->m_ReaderCount = 0x00ffffff;
+//    int err = pthread_rwlock_init(&rw_lock->m_Lock, 0);
+//    assert(err == 0);
+    *out_rw_lock = rw_lock;
+    return 0;
+}
+
+void Longtail_DeleteRWLock(HLongtail_RWLock rw_lock)
+{
+//    int err = pthread_rwlock_destroy(&rw_lock->m_Lock);
+//    assert(err == 0);
+}
+
+void Longtail_LockRWReadLock(HLongtail_RWLock rw_lock)
+{
+    while (1)
+    {
+        while (rw_lock->m_ReaderCount < 0)
+        {
+            pthread_yield();
+        }
+        int32_t res = Longtail_AtomicAdd32(&rw_lock->m_ReaderCount, -1);
+        if (res > 0)
+        {
+            return;
+        }
+        else
+        {
+            Longtail_AtomicAdd32(&rw_lock->m_ReaderCount, 1);
+        }
+    }
+//    int err = pthread_rwlock_rdlock(&rw_lock->m_Lock);
+//    assert(err == 0);
+}
+
+void Longtail_UnlockRWReadLock(HLongtail_RWLock rw_lock)
+{
+    Longtail_AtomicAdd32(&rw_lock->m_ReaderCount, 1);
+//    int err = pthread_rwlock_unlock(&rw_lock->m_Lock);
+//    assert(err == 0);
+}
+
+void Longtail_LockRWWriteLock(HLongtail_RWLock rw_lock)
+{
+    while (1)
+    {
+        while (rw_lock->m_ReaderCount < 0x00ffffff)
+        {
+            pthread_yield();
+        }
+        int32_t res = Longtail_AtomicAdd32(&rw_lock->m_ReaderCount, -0x00ffffff);
+        if (res == 0)
+        {
+            return;
+        }
+        else
+        {
+            Longtail_AtomicAdd32(&rw_lock->m_ReaderCount, 0x00ffffff);
+        }
+    }
+//    int err = pthread_rwlock_wrlock(&rw_lock->m_Lock);
+//    assert(err == 0);
+}
+
+void Longtail_UnlockRWWriteLock(HLongtail_RWLock rw_lock)
+{
+    Longtail_AtomicAdd32(&rw_lock->m_ReaderCount, 0x00ffffff);
+//    int err = pthread_rwlock_unlock(&rw_lock->m_Lock);
+//    assert(err == 0);
+}
 
 #endif

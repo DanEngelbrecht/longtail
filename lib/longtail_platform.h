@@ -78,6 +78,16 @@ const char* Longtail_ConcatPath(const char* folder, const char* file);
 
 char* Longtail_GetTempFolder();
 
+typedef struct Longtail_RWLock* HLongtail_RWLock;
+size_t  Longtail_GetRWLockSize();
+int     Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rw_lock);
+
+void    Longtail_DeleteRWLock(HLongtail_RWLock rw_lock);
+void    Longtail_LockRWReadLock(HLongtail_RWLock rw_lock);
+void    Longtail_UnlockRWReadLock(HLongtail_RWLock rw_lock);
+void    Longtail_LockRWWriteLock(HLongtail_RWLock rw_lock);
+void    Longtail_UnlockRWWriteLock(HLongtail_RWLock rw_lock);
+
 #ifdef __cplusplus
 }
 #endif
