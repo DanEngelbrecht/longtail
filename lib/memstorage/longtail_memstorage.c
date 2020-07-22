@@ -90,7 +90,8 @@ static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api,
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWReadLock(instance->m_Lock);
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it != -1)
     {
         struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
@@ -121,7 +122,8 @@ static int InMemStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Long
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockRWReadLock(instance->m_Lock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it == -1) {
         Longtail_UnlockRWReadLock(instance->m_Lock);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_GetSize(%p, %p, %p) failed with %d",
@@ -144,7 +146,8 @@ static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtai
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockRWReadLock(instance->m_Lock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it == -1) {
         Longtail_UnlockRWReadLock(instance->m_Lock);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
@@ -202,7 +205,8 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(path);
     Longtail_LockRWWriteLock(instance->m_Lock);
-    if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
+    intptr_t tmp;
+    if (parent_path_hash != 0 && hmgeti_ts(instance->m_PathHashToContent, parent_path_hash, tmp) == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_OpenWriteFile(%p, %p, %s, %" PRIu64 ", %p) failed with %d",
@@ -211,7 +215,7 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
         return ENOENT;
     }
     struct PathEntry* path_entry = 0;
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it != -1)
     {
         path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
@@ -250,7 +254,8 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockRWWriteLock(instance->m_Lock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
@@ -287,7 +292,8 @@ static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Long
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockRWWriteLock(instance->m_Lock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
@@ -309,7 +315,8 @@ static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_ap
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWWriteLock(instance->m_Lock);
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
@@ -331,7 +338,8 @@ static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_ap
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWReadLock(instance->m_Lock);
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t it = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (it == -1)
     {
         Longtail_UnlockRWReadLock(instance->m_Lock);
@@ -358,7 +366,8 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
     uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(path);
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWWriteLock(instance->m_Lock);
-    if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
+    intptr_t tmp;
+    if (parent_path_hash != 0 && hmgeti_ts(instance->m_PathHashToContent, parent_path_hash, tmp) == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_CreateDir(%p, %s) failed with %d",
@@ -366,7 +375,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
             EINVAL)
         return EINVAL;
     }
-    intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t source_path_ptr = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (source_path_ptr != -1)
     {
         struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
@@ -412,7 +421,8 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
     uint32_t target_path_hash = InMemStorageAPI_GetPathHash(target_path);
     uint32_t target_parent_path_hash = InMemStorageAPI_GetParentPathHash(target_path);
     Longtail_LockRWWriteLock(instance->m_Lock);
-    intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, source_path_hash);
+    intptr_t tmp;
+    intptr_t source_path_ptr = hmgeti_ts(instance->m_PathHashToContent, source_path_hash, tmp);
     if (source_path_ptr == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
@@ -423,7 +433,7 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
     }
     struct PathEntry* source_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
 
-    intptr_t target_path_ptr = hmgeti(instance->m_PathHashToContent, target_path_hash);
+    intptr_t target_path_ptr = hmgeti_ts(instance->m_PathHashToContent, target_path_hash, tmp);
     if (target_path_ptr != -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
@@ -472,7 +482,8 @@ static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const 
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t source_path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWReadLock(instance->m_Lock);
-    intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, source_path_hash);
+    intptr_t tmp;
+    intptr_t source_path_ptr = hmgeti_ts(instance->m_PathHashToContent, source_path_hash, tmp);
     if (source_path_ptr == -1)
     {
         Longtail_UnlockRWReadLock(instance->m_Lock);
@@ -483,6 +494,7 @@ static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const 
     Longtail_UnlockRWReadLock(instance->m_Lock);
     return is_dir;
 }
+
 static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
@@ -490,7 +502,8 @@ static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWReadLock(instance->m_Lock);
-    intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t source_path_ptr = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (source_path_ptr == -1)
     {
         Longtail_UnlockRWReadLock(instance->m_Lock);
@@ -509,7 +522,8 @@ static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, co
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWWriteLock(instance->m_Lock);
-    intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t source_path_ptr = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (source_path_ptr == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);
@@ -545,7 +559,8 @@ static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, c
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockRWWriteLock(instance->m_Lock);
-    intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
+    intptr_t tmp;
+    intptr_t source_path_ptr = hmgeti_ts(instance->m_PathHashToContent, path_hash, tmp);
     if (source_path_ptr == -1)
     {
         Longtail_UnlockRWWriteLock(instance->m_Lock);

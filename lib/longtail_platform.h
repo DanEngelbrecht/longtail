@@ -11,6 +11,7 @@ static const uint64_t LONGTAIL_TIMEOUT_INFINITE = ((uint64_t)-1);
 
 uint32_t    Longtail_GetCPUCount();
 void        Longtail_Sleep(uint64_t timeout_us);
+void        Longtail_Yield();
 
 typedef int32_t volatile TLongtail_Atomic32;
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount);
