@@ -122,10 +122,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIX* cmd: if no `--cache-path` is given, default to not using cache
-          - *FIX* Longtail_ReadBlockIndex can now correctly read very small blocks
-          - *ADDED* BlockStoreStorageAPI - use a BlockStoreAPI as a StorageAPI
-          - *FIX* Performance improvements and cleanups
+          - *ADDED* portable read/write spin lock
+          - *CHANGED* memstorage uses read/write spin lock
         draft: false
         prerelease: false
     - name: Download Linux artifacts
