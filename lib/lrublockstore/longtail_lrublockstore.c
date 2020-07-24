@@ -7,6 +7,78 @@
 #include <errno.h>
 #include <inttypes.h>
 
+struct LRU
+{
+    uint32_t* m_FreeIndexes;
+    uint32_t* m_AllocatedIndexes;
+    uint32_t m_MaxCount;
+    uint32_t m_AllocatedCount;
+};
+
+size_t LRU_GetSize(uint32_t max_count)
+{
+    return sizeof(struct LRU) +
+        sizeof(uint32_t) * max_count +
+        sizeof(uint32_t) * max_count;
+}
+
+struct LRU* LRU_Create(void* mem, uint32_t max_count)
+{
+    LONGTAIL_FATAL_ASSERT(mem, return 0)
+    struct LRU* lru = (struct LRU*)mem;
+    lru->m_FreeIndexes = (uint32_t*)&lru[1];
+    lru->m_AllocatedIndexes = (uint32_t*)&lru->m_FreeIndexes[max_count];
+    lru->m_MaxCount = max_count;
+    lru->m_AllocatedCount = 0;
+    for (uint32_t i = 0; i < max_count; ++i)
+    {
+        lru->m_FreeIndexes[i] = i;
+    }
+    return lru;
+}
+
+uint32_t LRU_Evict(struct LRU* lru)
+{
+    LONGTAIL_FATAL_ASSERT(lru, return lru->m_MaxCount)
+    LONGTAIL_FATAL_ASSERT(lru->m_AllocatedCount > 0, return lru->m_MaxCount)
+    uint32_t index = lru->m_AllocatedIndexes[0];
+    for(uint32_t scan = 0; scan < lru->m_AllocatedCount - 1; ++scan)
+    {
+        lru->m_AllocatedIndexes[scan] = lru->m_AllocatedIndexes[scan + 1];
+    }
+    --lru->m_AllocatedCount;
+    lru->m_FreeIndexes[lru->m_AllocatedCount] = index;
+    return index;
+}
+
+uint32_t LRU_Put(struct LRU* lru)
+{
+    LONGTAIL_FATAL_ASSERT(lru, return lru->m_MaxCount)
+    LONGTAIL_FATAL_ASSERT(lru->m_AllocatedCount != lru->m_MaxCount, return lru->m_MaxCount)
+    uint32_t index = lru->m_FreeIndexes[lru->m_AllocatedCount];
+    lru->m_AllocatedIndexes[lru->m_AllocatedCount] = index;
+    ++lru->m_AllocatedCount;
+    return index;
+}
+
+void LRU_Refresh(struct LRU* lru, uint32_t index)
+{
+    LONGTAIL_FATAL_ASSERT(lru, return)
+    for (uint32_t i = 0; i < lru->m_AllocatedCount; ++i)
+    {
+        if (lru->m_AllocatedIndexes[i] == index)
+        {
+            while(++i < lru->m_AllocatedCount)
+            {
+                lru->m_AllocatedIndexes[i - 1] = lru->m_AllocatedIndexes[i];
+            }
+            lru->m_AllocatedIndexes[lru->m_AllocatedCount - 1] = index;
+            return;
+        }
+    }
+    LONGTAIL_FATAL_ASSERT(0, return)
+}
+
 struct LRUBlockStoreAPI;
 
 struct LRUStoredBlock {
@@ -36,109 +108,76 @@ struct LRUBlockStoreAPI
     struct BlockHashToCompleteCallbacks* m_BlockHashToCompleteCallbacks;
     HLongtail_SpinLock m_Lock;
     TLongtail_Atomic32 m_PendingRequestCount;
-    uint32_t m_AllocatedCount;
-    uint32_t m_MaxCount;
     struct LRUStoredBlock* m_CachedBlocks;
-    uint32_t* m_FreeCacheBlocks;
-    uint32_t* m_AllocatedBlocks;
+    struct LRU* m_LRU;
+
+    TLongtail_Atomic64 m_IndexGetCount;
+    TLongtail_Atomic64 m_BlocksGetCount;
+    TLongtail_Atomic64 m_BlocksPutCount;
+    TLongtail_Atomic64 m_ChunksGetCount;
+    TLongtail_Atomic64 m_ChunksPutCount;
+    TLongtail_Atomic64 m_BytesGetCount;
+    TLongtail_Atomic64 m_BytesPutCount;
+    TLongtail_Atomic64 m_IndexGetRetryCount;
+    TLongtail_Atomic64 m_BlockGetRetryCount;
+    TLongtail_Atomic64 m_BlockPutRetryCount;
+    TLongtail_Atomic64 m_IndexGetFailCount;
+    TLongtail_Atomic64 m_BlockGetFailCount;
+    TLongtail_Atomic64 m_BlockPutFailCount;
 };
 
 int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
     struct LRUStoredBlock* b = (struct LRUStoredBlock*)stored_block;
-    Longtail_AtomicAdd32(&b->m_RefCount, -1);
-    return 0;
-}
-
-uint32_t EvictLRUBlock(struct LRUBlockStoreAPI* api)
-{
-    uint32_t evict_index = api->m_AllocatedCount;
-    while (evict_index > 0)
+    int32_t ref_count = Longtail_AtomicAdd32(&b->m_RefCount, -1);
+    if (ref_count > 0)
     {
-        --evict_index;
-        uint32_t block_index = api->m_AllocatedBlocks[evict_index];
-        struct LRUStoredBlock* stored_block = &api->m_CachedBlocks[block_index];
-        if (stored_block->m_RefCount == 0)
-        {
-            TLongtail_Hash block_hash = *stored_block->m_StoredBlock.m_BlockIndex->m_BlockHash;
-            api->m_FreeCacheBlocks[--api->m_AllocatedCount] = block_index;
-            hmdel(api->m_BlockHashToLRUStoredBlock, block_hash);
-            if (stored_block->m_OriginalStoredBlock->Dispose)
-            {
-                stored_block->m_OriginalStoredBlock->Dispose(stored_block->m_OriginalStoredBlock);
-            }
-            return block_index;
-        }
+        return 0;
     }
-    return api->m_MaxCount;
+    struct LRUBlockStoreAPI* api = b->m_LRUBlockStoreAPI;
+    struct Longtail_StoredBlock* original_stored_block = b->m_OriginalStoredBlock;
+    if (original_stored_block->Dispose)
+    {
+        original_stored_block->Dispose(original_stored_block);
+    }
+    return 0;
 }
 
 struct LRUStoredBlock* StoreBlock(struct LRUBlockStoreAPI* api, struct Longtail_StoredBlock* original_stored_block)
 {
-    uint32_t block_index = EvictLRUBlock(api);
-    if (block_index == api->m_MaxCount)
+    if (api->m_LRU->m_AllocatedCount == api->m_LRU->m_MaxCount)
     {
-        return 0;
+        uint32_t block_index = LRU_Evict(api->m_LRU);
+        struct LRUStoredBlock* stored_block = &api->m_CachedBlocks[block_index];
+        stored_block->m_StoredBlock.Dispose(&stored_block->m_StoredBlock);
     }
+    uint32_t block_index = LRU_Put(api->m_LRU);
     TLongtail_Hash block_hash = *original_stored_block->m_BlockIndex->m_BlockHash;
     struct LRUStoredBlock* allocated_block = &api->m_CachedBlocks[block_index];
     allocated_block->m_OriginalStoredBlock = original_stored_block;
     allocated_block->m_LRUBlockStoreAPI = api;
-    allocated_block->m_StoredBlock.Dispose = 0;
+    allocated_block->m_StoredBlock.Dispose = LRUStoredBlock_Dispose;
     allocated_block->m_StoredBlock.m_BlockChunksDataSize = original_stored_block->m_BlockChunksDataSize;
     allocated_block->m_StoredBlock.m_BlockData = original_stored_block->m_BlockData;
     allocated_block->m_StoredBlock.m_BlockIndex = original_stored_block->m_BlockIndex;
     hmput(api->m_BlockHashToLRUStoredBlock, block_hash, block_index);
+    allocated_block->m_RefCount = 1;
     return allocated_block;
 }
 
 struct LRUStoredBlock* GetLRUBlock(struct LRUBlockStoreAPI* api, TLongtail_Hash block_hash)
 {
     intptr_t tmp;
-    intptr_t find_ptr = hmget_ts(api->m_BlockHashToLRUStoredBlock, block_hash, tmp);
+    intptr_t find_ptr = hmgeti_ts(api->m_BlockHashToLRUStoredBlock, block_hash, tmp);
     if (find_ptr == -1)
     {
         return 0;
     }
     uint32_t block_index = api->m_BlockHashToLRUStoredBlock[find_ptr].value;
     struct LRUStoredBlock* stored_block = &api->m_CachedBlocks[block_index];
-    uint32_t allocation_slot = 0;
-    while (allocation_slot < api->m_AllocatedCount)
-    {
-        if (api->m_AllocatedBlocks[allocation_slot] == block_index)
-        {
-            break;
-        }
-        ++allocation_slot;
-    }
-    if (allocation_slot > 0)
-    {
-        uint32_t tmp = api->m_AllocatedBlocks[0];
-        api->m_AllocatedBlocks[0] = block_index;
-        api->m_AllocatedBlocks[allocation_slot] = tmp;
-    }
+    LRU_Refresh(api->m_LRU, block_index);
+    Longtail_AtomicAdd32(&stored_block->m_RefCount, 1);
     return stored_block;
-}
-
-struct LRUStoredBlock* LRUStoredBlock_CreateBlock(struct LRUBlockStoreAPI* sharing_block_store_api, struct Longtail_StoredBlock* original_stored_block)
-{
-    size_t shared_stored_block_size = sizeof(struct LRUStoredBlock);
-    struct LRUStoredBlock* shared_stored_block = (struct LRUStoredBlock*)Longtail_Alloc(shared_stored_block_size);
-    if (!shared_stored_block)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUStoredBlock_CreateBlock(%p, %p) failed with %d",
-            sharing_block_store_api, original_stored_block,
-            ENOMEM)
-        return 0;
-    }
-    shared_stored_block->m_StoredBlock.Dispose = LRUStoredBlock_Dispose;
-    shared_stored_block->m_StoredBlock.m_BlockIndex = original_stored_block->m_BlockIndex;
-    shared_stored_block->m_StoredBlock.m_BlockData = original_stored_block->m_BlockData;
-    shared_stored_block->m_StoredBlock.m_BlockChunksDataSize = original_stored_block->m_BlockChunksDataSize;
-    shared_stored_block->m_OriginalStoredBlock = original_stored_block;
-    shared_stored_block->m_LRUBlockStoreAPI = sharing_block_store_api;
-    shared_stored_block->m_RefCount = 0;
-    return shared_stored_block;
 }
 
 static int LRUBlockStore_PutStoredBlock(
@@ -153,6 +192,10 @@ static int LRUBlockStore_PutStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+
+    Longtail_AtomicAdd64(&api->m_BlocksPutCount, 1);
+    Longtail_AtomicAdd64(&api->m_ChunksPutCount, *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_BytesPutCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     return api->m_BackingBlockStore->PutStoredBlock(
         api->m_BackingBlockStore,
@@ -210,7 +253,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
         return;
     }
 
-    struct LRUStoredBlock* shared_stored_block = LRUStoredBlock_CreateBlock(api, stored_block);
+    struct LRUStoredBlock* shared_stored_block = StoreBlock(api, stored_block);
     if (!shared_stored_block)
     {
         struct Longtail_AsyncGetStoredBlockAPI** list;
@@ -238,6 +281,9 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
     Longtail_AtomicAdd32(&shared_stored_block->m_RefCount, (int32_t)arrlen(list));
     Longtail_UnlockSpinLock(api->m_Lock);
     size_t wait_count = arrlen(list);
+    Longtail_AtomicAdd64(&api->m_BlocksGetCount, wait_count);
+    Longtail_AtomicAdd64(&api->m_ChunksGetCount, *shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_BytesGetCount, Longtail_GetBlockIndexDataSize(*shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + shared_stored_block->m_StoredBlock.m_BlockChunksDataSize);
     for (size_t i = 0; i < wait_count; ++i)
     {
         list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
@@ -261,10 +307,12 @@ static int LRUBlockStore_GetStoredBlock(
     Longtail_LockSpinLock(api->m_Lock);
 
     struct LRUStoredBlock* lru_block = GetLRUBlock(api, block_hash);
-    if (lru_block != 0)
+    if (lru_block != 0 && lru_block->m_RefCount > 0)
     {
-        Longtail_AtomicAdd32(&lru_block->m_RefCount, 1);
         Longtail_UnlockSpinLock(api->m_Lock);
+        Longtail_AtomicAdd64(&api->m_BlocksGetCount, 1);
+        Longtail_AtomicAdd64(&api->m_ChunksGetCount, *lru_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
+        Longtail_AtomicAdd64(&api->m_BytesGetCount, Longtail_GetBlockIndexDataSize(*lru_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + lru_block->m_StoredBlock.m_BlockChunksDataSize);
         async_complete_api->OnComplete(async_complete_api, &lru_block->m_StoredBlock, 0);
         return 0;
     }
@@ -306,24 +354,8 @@ static int LRUBlockStore_GetStoredBlock(
         &share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
-            block_store_api, block_hash, async_complete_api,
-            err)
-
-        struct Longtail_AsyncGetStoredBlockAPI** list;
-        Longtail_LockSpinLock(api->m_Lock);
-        list = hmget(api->m_BlockHashToCompleteCallbacks, block_hash);
-        hmdel(api->m_BlockHashToCompleteCallbacks, block_hash);
-        Longtail_UnlockSpinLock(api->m_Lock);
-
-        // Anybody else who was successfully put up on wait list will get the error forwarded in their OnComplete
-        size_t wait_count = arrlen(list);
-        for (size_t i = 0; i < wait_count; ++i)
-        {
-            list[i]->OnComplete(list[i], 0, err);
-        }
-        arrfree(list);
-        return err;
+        // We shortcut here since the logic to get from backing store is in OnComplete
+        LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(&share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI, 0, err);
     }
     return 0;
 }
@@ -348,6 +380,7 @@ static int LRUBlockStore_GetIndex(
             err)
         return err;
     }
+    Longtail_AtomicAdd64(&api->m_IndexGetCount, 1);
     return 0;
 }
 
@@ -384,6 +417,19 @@ static int LRUBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api
     LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    out_stats->m_IndexGetCount = api->m_IndexGetCount;
+    out_stats->m_BlocksGetCount = api->m_BlocksGetCount;
+    out_stats->m_BlocksPutCount = api->m_BlocksPutCount;
+    out_stats->m_ChunksGetCount = api->m_ChunksGetCount;
+    out_stats->m_ChunksPutCount = api->m_ChunksPutCount;
+    out_stats->m_BytesGetCount = api->m_BytesGetCount;
+    out_stats->m_BytesPutCount = api->m_BytesPutCount;
+    out_stats->m_IndexGetRetryCount = api->m_IndexGetRetryCount;
+    out_stats->m_BlockGetRetryCount = api->m_BlockGetRetryCount;
+    out_stats->m_BlockPutRetryCount = api->m_BlockPutRetryCount;
+    out_stats->m_IndexGetFailCount = api->m_IndexGetFailCount;
+    out_stats->m_BlockGetFailCount = api->m_BlockGetFailCount;
+    out_stats->m_BlockPutFailCount = api->m_BlockPutFailCount;
     return 0;
 }
 
@@ -401,11 +447,15 @@ static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Dispose(%p) waiting for %d pending requests", api, (int32_t)api->m_PendingRequestCount);
         }
     }
+    while (api->m_LRU->m_AllocatedCount > 0)
+    {
+        uint32_t block_index = LRU_Evict(api->m_LRU);
+        struct LRUStoredBlock* lru_block = &api->m_CachedBlocks[block_index];
+        lru_block->m_StoredBlock.Dispose(&lru_block->m_StoredBlock);
+    }
     hmfree(api->m_BlockHashToCompleteCallbacks);
     hmfree(api->m_BlockHashToLRUStoredBlock);
-    Longtail_Free(api->m_CachedBlocks);
-    Longtail_Free(api->m_FreeCacheBlocks);
-    Longtail_Free(api->m_AllocatedBlocks);
+    Longtail_Free(api->m_LRU);
     Longtail_DeleteSpinLock(api->m_Lock);
     Longtail_Free(api->m_Lock);
     Longtail_Free(api);
@@ -443,15 +493,8 @@ static int LRUBlockStore_Init(
     api->m_BlockHashToCompleteCallbacks = 0;
     api->m_PendingRequestCount = 0;
 
-    api->m_AllocatedCount = 0;
-    api->m_MaxCount = max_lru_count;
-    api->m_CachedBlocks = (struct LRUStoredBlock*)Longtail_Alloc(sizeof(struct LRUStoredBlock*) * max_lru_count);
-    api->m_FreeCacheBlocks = (uint32_t*)Longtail_Alloc(sizeof(uint32_t*) * max_lru_count);
-    api->m_AllocatedBlocks = (uint32_t*)Longtail_Alloc(sizeof(uint32_t*) * max_lru_count);
-    for (uint32_t b = 0; b < max_lru_count; ++b)
-    {
-        api->m_FreeCacheBlocks[b] = b;
-    }
+    api->m_LRU = LRU_Create(Longtail_Alloc(LRU_GetSize(max_lru_count)), max_lru_count);
+    api->m_CachedBlocks = (struct LRUStoredBlock*)Longtail_Alloc(sizeof(struct LRUStoredBlock) * max_lru_count);
 
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
@@ -461,6 +504,21 @@ static int LRUBlockStore_Init(
             ENOMEM)
         return err;
     }
+
+    api->m_IndexGetCount = 0;
+    api->m_BlocksGetCount = 0;
+    api->m_BlocksPutCount = 0;
+    api->m_ChunksGetCount = 0;
+    api->m_ChunksPutCount = 0;
+    api->m_BytesGetCount = 0;
+    api->m_BytesPutCount = 0;
+    api->m_IndexGetRetryCount = 0;
+    api->m_BlockGetRetryCount = 0;
+    api->m_BlockPutRetryCount = 0;
+    api->m_IndexGetFailCount = 0;
+    api->m_BlockGetFailCount = 0;
+    api->m_BlockPutFailCount = 0;
+
     *out_block_store_api = block_store_api;
     return 0;
 }
