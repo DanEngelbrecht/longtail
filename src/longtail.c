@@ -469,6 +469,7 @@ void Longtail_DisposeAPI(struct Longtail_API* api)
     if (api->Dispose)
     {
         api->Dispose(api);
+        api->Dispose = 0;
     }
 }
 
