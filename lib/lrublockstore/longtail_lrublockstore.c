@@ -149,6 +149,7 @@ struct LRUStoredBlock* StoreBlock(struct LRUBlockStoreAPI* api, struct Longtail_
     {
         uint32_t block_index = LRU_Evict(api->m_LRU);
         struct LRUStoredBlock* stored_block = &api->m_CachedBlocks[block_index];
+        hmdel(api->m_BlockHashToLRUStoredBlock, *stored_block->m_OriginalStoredBlock->m_BlockIndex->m_BlockHash);
         stored_block->m_StoredBlock.Dispose(&stored_block->m_StoredBlock);
     }
     uint32_t block_index = LRU_Put(api->m_LRU);
@@ -451,6 +452,7 @@ static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
     {
         uint32_t block_index = LRU_Evict(api->m_LRU);
         struct LRUStoredBlock* lru_block = &api->m_CachedBlocks[block_index];
+        hmdel(api->m_BlockHashToLRUStoredBlock, *lru_block->m_OriginalStoredBlock->m_BlockIndex->m_BlockHash);
         lru_block->m_StoredBlock.Dispose(&lru_block->m_StoredBlock);
     }
     hmfree(api->m_BlockHashToCompleteCallbacks);
