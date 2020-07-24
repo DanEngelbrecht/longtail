@@ -1407,11 +1407,12 @@ int VersionIndex_cp(
         return err;
     }
 
-    char* buffer = Longtail_Alloc(size > 65536 ? 65536 : size);
+    const size_t BUFFER_SIZE=536870912;
+    char* buffer = Longtail_Alloc(size > BUFFER_SIZE ? BUFFER_SIZE : size);
     uint64_t off = 0;
     while (size > off)
     {
-        uint64_t part = (size - off) > 65536 ? 65536 : (size - off);
+        uint64_t part = (size - off) > BUFFER_SIZE ? BUFFER_SIZE : (size - off);
         block_store_fs->Read(block_store_fs, f, off, part, buffer);
         storage_api->Write(storage_api, outf, off, part, buffer);
         off += part;
