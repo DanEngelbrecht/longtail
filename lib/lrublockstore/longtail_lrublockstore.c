@@ -130,11 +130,26 @@ int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
     struct LRUStoredBlock* b = (struct LRUStoredBlock*)stored_block;
     int32_t ref_count = Longtail_AtomicAdd32(&b->m_RefCount, -1);
-    if (ref_count > 0)
+    if (ref_count > 1)
     {
         return 0;
     }
     struct LRUBlockStoreAPI* api = b->m_LRUBlockStoreAPI;
+    if (ref_count == 1)
+    {
+        Longtail_LockSpinLock(api->m_Lock);
+        intptr_t tmp;
+        intptr_t find_ptr = hmgeti_ts(api->m_BlockHashToLRUStoredBlock, *stored_block->m_BlockIndex->m_BlockHash, tmp);
+        if (find_ptr == -1)
+        {
+            Longtail_UnlockSpinLock(api->m_Lock);
+            return 0;
+        }
+        uint32_t block_index = api->m_BlockHashToLRUStoredBlock[find_ptr].value;
+        LRU_Refresh(api->m_LRU, block_index);
+        Longtail_UnlockSpinLock(api->m_Lock);
+        return 0;
+    }
     struct Longtail_StoredBlock* original_stored_block = b->m_OriginalStoredBlock;
     if (original_stored_block->Dispose)
     {
@@ -145,16 +160,23 @@ int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
 struct LRUStoredBlock* StoreBlock(struct LRUBlockStoreAPI* api, struct Longtail_StoredBlock* original_stored_block)
 {
+    struct Longtail_StoredBlock* dispose_block = 0;
     Longtail_LockSpinLock(api->m_Lock);
     if (api->m_LRU->m_AllocatedCount == api->m_LRU->m_MaxCount)
     {
         uint32_t block_index = LRU_Evict(api->m_LRU);
         struct LRUStoredBlock* stored_block = &api->m_CachedBlocks[block_index];
         hmdel(api->m_BlockHashToLRUStoredBlock, *stored_block->m_OriginalStoredBlock->m_BlockIndex->m_BlockHash);
-        stored_block->m_StoredBlock.Dispose(&stored_block->m_StoredBlock);
+        dispose_block = &stored_block->m_StoredBlock;
     }
     uint32_t block_index = LRU_Put(api->m_LRU);
     Longtail_UnlockSpinLock(api->m_Lock);
+
+    if (dispose_block && dispose_block->Dispose)
+    {
+        dispose_block->Dispose(dispose_block);
+    }
+
     TLongtail_Hash block_hash = *original_stored_block->m_BlockIndex->m_BlockHash;
     struct LRUStoredBlock* allocated_block = &api->m_CachedBlocks[block_index];
     allocated_block->m_OriginalStoredBlock = original_stored_block;
@@ -178,7 +200,7 @@ struct LRUStoredBlock* GetLRUBlock(struct LRUBlockStoreAPI* api, TLongtail_Hash 
     }
     uint32_t block_index = api->m_BlockHashToLRUStoredBlock[find_ptr].value;
     struct LRUStoredBlock* stored_block = &api->m_CachedBlocks[block_index];
-    LRU_Refresh(api->m_LRU, block_index);
+//    LRU_Refresh(api->m_LRU, block_index);
     Longtail_AtomicAdd32(&stored_block->m_RefCount, 1);
     return stored_block;
 }
