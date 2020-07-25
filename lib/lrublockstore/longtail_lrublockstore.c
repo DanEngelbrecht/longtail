@@ -149,6 +149,7 @@ int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
             original_stored_block->Dispose(original_stored_block);
         }
     }
+    Longtail_Free(b);
     return 0;
 }
 
