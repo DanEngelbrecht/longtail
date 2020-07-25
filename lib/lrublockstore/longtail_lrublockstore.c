@@ -457,6 +457,7 @@ static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
     }
     hmfree(api->m_BlockHashToCompleteCallbacks);
     hmfree(api->m_BlockHashToLRUStoredBlock);
+    Longtail_Free(api->m_CachedBlocks);
     Longtail_Free(api->m_LRU);
     Longtail_DeleteSpinLock(api->m_Lock);
     Longtail_Free(api->m_Lock);
