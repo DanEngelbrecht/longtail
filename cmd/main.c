@@ -7,6 +7,7 @@
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
+#include "../lib/blockstorestorage/longtail_blockstorestorage.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
@@ -1038,6 +1039,443 @@ int ValidateVersionIndex(
     return 0;
 }
 
+int VersionIndex_ls(
+    const char* storage_uri_raw,
+    const char* version_index_path,
+    const char* cache_path,
+    uint32_t target_block_size,
+    uint32_t max_chunks_per_block,
+    const char* ls_dir)
+{
+    const char* storage_path = NormalizePath(storage_uri_raw);
+
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
+    struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
+    struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
+    struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
+    struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
+    if (cache_path)
+    {
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
+        store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
+        compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
+    }
+    else
+    {
+        compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_remotestore_api, compression_registry);
+    }
+
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);//retaining_block_store_api);
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    {
+        struct AsyncGetIndexComplete get_index_complete;
+        AsyncGetIndexComplete_Init(&get_index_complete);
+        int err = store_block_store_api->GetIndex(
+            store_block_store_api,
+            &get_index_complete.m_API);
+        if (!err)
+        {
+            AsyncGetIndexComplete_Wait(&get_index_complete);
+            err = get_index_complete.m_Err;
+        }
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(compress_block_store_api);
+            SAFE_DISPOSE_API(store_block_cachestore_api);
+            SAFE_DISPOSE_API(store_block_localstore_api);
+            SAFE_DISPOSE_API(store_block_remotestore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(hash_registry);
+            SAFE_DISPOSE_API(job_api);
+            Longtail_Free((void*)storage_path);
+            return err;
+        }
+        block_store_content_index = get_index_complete.m_ContentIndex;
+        AsyncGetIndexComplete_Dispose(&get_index_complete);
+    }
+
+    struct Longtail_VersionIndex* version_index = 0;
+    int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    struct Longtail_HashAPI* hash_api;
+    err = hash_registry->GetHashAPI(hash_registry, *version_index->m_HashIdentifier, &hash_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+
+    }
+
+    struct Longtail_StorageAPI* block_store_fs = Longtail_CreateBlockStoreStorageAPI(
+        hash_api,
+        job_api,
+        store_block_store_api,
+        block_store_content_index,
+        version_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file system for version index `%s`, failed with %d", version_index_path, err);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    Longtail_StorageAPI_HIterator fs_iterator;
+    err = block_store_fs->StartFind(block_store_fs, ls_dir[0] == '.' ? &ls_dir[1] : ls_dir, &fs_iterator);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file iteration for version index `%s`, failed with %d", version_index_path, err);
+        SAFE_DISPOSE_API(block_store_fs);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+    do
+    {
+        struct Longtail_StorageAPI_EntryProperties properties;
+        err = block_store_fs->GetEntryProperties(block_store_fs, fs_iterator, &properties);
+        if (!err)
+        {
+            char permission_string[11];
+            permission_string[0] = properties.m_IsDir ? 'd' : '-';
+            permission_string[1] = ((properties.m_Permissions & 0400) != 0) ? 'r' : '-';
+            permission_string[2] = ((properties.m_Permissions & 0200) != 0) ? 'w' : '-';
+            permission_string[3] = ((properties.m_Permissions & 0100) != 0) ? 'x' : '-';
+            permission_string[4] = ((properties.m_Permissions & 0040) != 0) ? 'r' : '-';
+            permission_string[5] = ((properties.m_Permissions & 0020) != 0) ? 'w' : '-';
+            permission_string[6] = ((properties.m_Permissions & 0010) != 0) ? 'x' : '-';
+            permission_string[7] = ((properties.m_Permissions & 0004) != 0) ? 'r' : '-';
+            permission_string[8] = ((properties.m_Permissions & 0002) != 0) ? 'w' : '-';
+            permission_string[9] = ((properties.m_Permissions & 0001) != 0) ? 'x' : '-';
+            permission_string[10] = 0;
+            printf("%s %12" PRIu64 " %s\n", permission_string, properties.m_Size, properties.m_Name);
+        }
+    } while (block_store_fs->FindNext(block_store_fs, fs_iterator) == 0);
+
+    block_store_fs->CloseFind(block_store_fs, fs_iterator);
+    
+
+    SAFE_DISPOSE_API(block_store_fs);
+    Longtail_Free(block_store_content_index);
+    SAFE_DISPOSE_API(store_block_store_api);
+    SAFE_DISPOSE_API(compress_block_store_api);
+    SAFE_DISPOSE_API(store_block_cachestore_api);
+    SAFE_DISPOSE_API(store_block_localstore_api);
+    SAFE_DISPOSE_API(store_block_remotestore_api);
+    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(hash_registry);
+    SAFE_DISPOSE_API(job_api);
+    Longtail_Free((void*)storage_path);
+    return 0;
+}
+
+int VersionIndex_cp(
+    const char* storage_uri_raw,
+    const char* version_index_path,
+    const char* cache_path,
+    uint32_t target_block_size,
+    uint32_t max_chunks_per_block,
+    const char* source_path,
+    const char* target_path)
+{
+    const char* storage_path = NormalizePath(storage_uri_raw);
+
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
+    struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
+    struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
+    struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
+    struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
+    if (cache_path)
+    {
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
+        store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
+        compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
+    }
+    else
+    {
+        compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_remotestore_api, compression_registry);
+    }
+
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);//retaining_block_store_api);
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    {
+        struct AsyncGetIndexComplete get_index_complete;
+        AsyncGetIndexComplete_Init(&get_index_complete);
+        int err = store_block_store_api->GetIndex(
+            store_block_store_api,
+            &get_index_complete.m_API);
+        if (!err)
+        {
+            AsyncGetIndexComplete_Wait(&get_index_complete);
+            err = get_index_complete.m_Err;
+        }
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
+            SAFE_DISPOSE_API(store_block_store_api);
+            SAFE_DISPOSE_API(compress_block_store_api);
+            SAFE_DISPOSE_API(store_block_cachestore_api);
+            SAFE_DISPOSE_API(store_block_localstore_api);
+            SAFE_DISPOSE_API(store_block_remotestore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(hash_registry);
+            SAFE_DISPOSE_API(job_api);
+            Longtail_Free((void*)storage_path);
+            return err;
+        }
+        block_store_content_index = get_index_complete.m_ContentIndex;
+        AsyncGetIndexComplete_Dispose(&get_index_complete);
+    }
+
+    struct Longtail_VersionIndex* version_index = 0;
+    int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    struct Longtail_HashAPI* hash_api;
+    err = hash_registry->GetHashAPI(hash_registry, *version_index->m_HashIdentifier, &hash_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+
+    }
+
+    struct Longtail_StorageAPI* block_store_fs = Longtail_CreateBlockStoreStorageAPI(
+        hash_api,
+        job_api,
+        store_block_store_api,
+        block_store_content_index,
+        version_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file system for version index `%s`, failed with %d", version_index_path, err);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    Longtail_StorageAPI_HOpenFile f;
+    err = block_store_fs->OpenReadFile(block_store_fs, source_path[0] == '.' ? &source_path[1] : source_path, &f);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to open file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
+        SAFE_DISPOSE_API(block_store_fs);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+    uint64_t size;
+    err = block_store_fs->GetSize(block_store_fs, f, &size);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get size of file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
+        block_store_fs->CloseFile(block_store_fs, f);
+        SAFE_DISPOSE_API(block_store_fs);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+    Longtail_StorageAPI_HOpenFile outf;
+    err = storage_api->OpenWriteFile(storage_api, target_path, size, &outf);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to open file `%s`, failed with %d", target_path, err);
+        block_store_fs->CloseFile(block_store_fs, f);
+        SAFE_DISPOSE_API(block_store_fs);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    const size_t BUFFER_SIZE=536870912;
+    char* buffer = (char*)Longtail_Alloc(size > BUFFER_SIZE ? BUFFER_SIZE : size);
+    uint64_t off = 0;
+    while (size > off)
+    {
+        uint64_t part = (size - off) > BUFFER_SIZE ? BUFFER_SIZE : (size - off);
+        block_store_fs->Read(block_store_fs, f, off, part, buffer);
+        storage_api->Write(storage_api, outf, off, part, buffer);
+        off += part;
+    }
+    Longtail_Free(buffer);
+
+    storage_api->CloseFile(storage_api, outf);
+    block_store_fs->CloseFile(block_store_fs, f);
+
+    uint16_t permissions;
+    err = block_store_fs->GetPermissions(block_store_fs, source_path[0] == '.' ? &source_path[1] : source_path, &permissions);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get permissions of file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
+        SAFE_DISPOSE_API(block_store_fs);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    err = storage_api->SetPermissions(storage_api, target_path, permissions);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to set permissions of file `%s`, failed with %d", target_path, err);
+        SAFE_DISPOSE_API(block_store_fs);
+        Longtail_Free(block_store_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    SAFE_DISPOSE_API(block_store_fs);
+    Longtail_Free(block_store_content_index);
+    SAFE_DISPOSE_API(store_block_store_api);
+    SAFE_DISPOSE_API(compress_block_store_api);
+    SAFE_DISPOSE_API(store_block_cachestore_api);
+    SAFE_DISPOSE_API(store_block_localstore_api);
+    SAFE_DISPOSE_API(store_block_remotestore_api);
+    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(hash_registry);
+    SAFE_DISPOSE_API(job_api);
+    Longtail_Free((void*)storage_path);
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
 #if defined(_CRTDBG_MAP_ALLOC)
@@ -1064,7 +1502,7 @@ int main(int argc, char** argv)
 
     if (argc < 2)
     {
-        kgflags_set_custom_description("Use command `upsync` or `downsync`");
+        kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls` or `cp`");
         kgflags_print_usage();
         return 1;
     }
@@ -1072,9 +1510,11 @@ int main(int argc, char** argv)
     const char* command = argv[1];
     if ((strcmp(command, "upsync") != 0) &&
         (strcmp(command, "downsync") != 0) &&
-        (strcmp(command, "validate") != 0))
+        (strcmp(command, "validate") != 0) &&
+        (strcmp(command, "ls") != 0) &&
+        (strcmp(command, "cp") != 0))
     {
-        kgflags_set_custom_description("Use command `upsync`, `downsync` or `validate`");
+        kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls` or `cp`");
         kgflags_print_usage();
         return 1;
     }
@@ -1220,6 +1660,83 @@ int main(int argc, char** argv)
             max_chunks_per_block);
 
         Longtail_Free((void*)version_index_path);
+    }
+    else if (strcmp(command, "ls") == 0)
+    {
+        const char* cache_path_raw = 0;
+        kgflags_string("cache-path", 0, "Location for downloaded/cached blocks", false, &cache_path_raw);
+
+        const char* version_index_path_raw = 0;
+        kgflags_string("version-index-path", 0, "Version index file path", true, &version_index_path_raw);
+
+        if (!kgflags_parse(argc, argv)) {
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+
+        if (kgflags_get_non_flag_args_count() < 2)
+        {
+            kgflags_set_custom_description("Use ls <path>");
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+        const char* ls_dir_raw = kgflags_get_non_flag_arg(1);
+
+        const char* cache_path = cache_path_raw ? NormalizePath(cache_path_raw) : 0;
+        const char* version_index_path = NormalizePath(version_index_path_raw);
+        const char* ls_dir = NormalizePath(ls_dir_raw);
+
+        err = VersionIndex_ls(
+            storage_uri_raw,
+            version_index_path,
+            cache_path,
+            target_block_size,
+            max_chunks_per_block,
+            ls_dir);
+	// ls [path] --source-path <version.lvi> --storage-uri <store-uri>
+	// cp source target --source-path <version.lvi> --storage-uri <store-uri>
+	// 
+
+    }
+    else if (strcmp(command, "cp") == 0)
+    {
+        const char* cache_path_raw = 0;
+        kgflags_string("cache-path", 0, "Location for downloaded/cached blocks", false, &cache_path_raw);
+
+        const char* version_index_path_raw = 0;
+        kgflags_string("version-index-path", 0, "Version index file path", true, &version_index_path_raw);
+
+        if (!kgflags_parse(argc, argv)) {
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+
+        if (kgflags_get_non_flag_args_count() < 3)
+        {
+            kgflags_set_custom_description("Use cp <source-path> <target-path>");
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+        const char* source_path_raw = kgflags_get_non_flag_arg(1);
+        const char* target_path_raw = kgflags_get_non_flag_arg(2);
+
+        const char* cache_path = cache_path_raw ? NormalizePath(cache_path_raw) : 0;
+        const char* version_index_path = NormalizePath(version_index_path_raw);
+        const char* source_path = NormalizePath(source_path_raw);
+        const char* target_path = NormalizePath(target_path_raw);
+
+        err = VersionIndex_cp(
+            storage_uri_raw,
+            version_index_path,
+            cache_path,
+            target_block_size,
+            max_chunks_per_block,
+            source_path,
+            target_path);
     }
 #if defined(_CRTDBG_MAP_ALLOC)
     _CrtDumpMemoryLeaks();
