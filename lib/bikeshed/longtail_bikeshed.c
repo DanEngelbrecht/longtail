@@ -241,10 +241,14 @@ static int Bikeshed_CreateJobs(
     int err = EINVAL;
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     struct Bikeshed_JobAPI_Group* bikeshed_job_group = (struct Bikeshed_JobAPI_Group*)job_group;
+    void* work_mem = 0;
     BikeShed_TaskFunc* func = 0;
     void** ctx = 0;
     Bikeshed_TaskID* task_ids = 0;
     uint32_t job_range_start = 0;
+    size_t work_mem_size =
+        sizeof(BikeShed_TaskFunc) * job_count +
+        sizeof(void*) * job_count;
 
     int32_t new_job_count = Longtail_AtomicAdd32(&bikeshed_job_group->m_SubmittedJobCount, (int32_t)job_count);
     LONGTAIL_FATAL_ASSERT(new_job_count > 0, return EINVAL);
@@ -255,13 +259,20 @@ static int Bikeshed_CreateJobs(
     }
     job_range_start = (uint32_t)(new_job_count - job_count);
 
-    func = (BikeShed_TaskFunc*)Longtail_Alloc(sizeof(BikeShed_TaskFunc) * job_count);
+    work_mem = Longtail_Alloc(work_mem_size);
+    if (!work_mem)
+    {
+        err = ENOMEM;
+        goto on_error;
+    }
+
+    func = (BikeShed_TaskFunc*)work_mem;
     if (!func)
     {
         err = ENOMEM;
         goto on_error;
     }
-    ctx = (void**)Longtail_Alloc(sizeof(void*) * job_count);
+    ctx = (void**)&func[job_count];
     if (!ctx)
     {
         err = ENOMEM;
@@ -289,8 +300,7 @@ static int Bikeshed_CreateJobs(
     *out_jobs = task_ids;
     err = 0;
 end:
-    Longtail_Free(ctx);
-    Longtail_Free(func);
+    Longtail_Free(work_mem);
     return err;
 on_error:
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Bikeshed_CreateJobs(%p, %p, %u, %p, %p, %p) failed with %d",
