@@ -145,6 +145,7 @@ int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
 struct LRUStoredBlock* StoreBlock(struct LRUBlockStoreAPI* api, struct Longtail_StoredBlock* original_stored_block)
 {
+    Longtail_LockSpinLock(api->m_Lock);
     if (api->m_LRU->m_AllocatedCount == api->m_LRU->m_MaxCount)
     {
         uint32_t block_index = LRU_Evict(api->m_LRU);
@@ -153,6 +154,7 @@ struct LRUStoredBlock* StoreBlock(struct LRUBlockStoreAPI* api, struct Longtail_
         stored_block->m_StoredBlock.Dispose(&stored_block->m_StoredBlock);
     }
     uint32_t block_index = LRU_Put(api->m_LRU);
+    Longtail_UnlockSpinLock(api->m_Lock);
     TLongtail_Hash block_hash = *original_stored_block->m_BlockIndex->m_BlockHash;
     struct LRUStoredBlock* allocated_block = &api->m_CachedBlocks[block_index];
     allocated_block->m_OriginalStoredBlock = original_stored_block;
