@@ -1408,7 +1408,7 @@ int VersionIndex_cp(
     }
 
     const size_t BUFFER_SIZE=536870912;
-    char* buffer = Longtail_Alloc(size > BUFFER_SIZE ? BUFFER_SIZE : size);
+    char* buffer = (char*)Longtail_Alloc(size > BUFFER_SIZE ? BUFFER_SIZE : size);
     uint64_t off = 0;
     while (size > off)
     {
