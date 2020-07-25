@@ -44,7 +44,7 @@ struct FSBlockStoreAPI
     TLongtail_Atomic64 m_BlockPutFailCount;
 };
 
-#define MAX_BLOCK_NAME_LENGTH   32
+#define BLOCK_NAME_LENGTH   23
 
 static const char* HashLUT = "0123456789abcdef";
 
@@ -74,17 +74,16 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
     out_name[4] = '/';
     out_name[5] = '0';
     out_name[6] = 'x';
-    out_name[23] = 0;
 }
 
 static char* GetBlockPath(struct Longtail_StorageAPI* storage_api, const char* content_path, const char* block_extension, TLongtail_Hash block_hash)
 {
     LONGTAIL_FATAL_ASSERT(storage_api, return 0)
     LONGTAIL_FATAL_ASSERT(content_path, return 0)
-    char block_name[MAX_BLOCK_NAME_LENGTH];
-    GetBlockName(block_hash, block_name);
-    char file_name[72];
-    sprintf(file_name, "chunks/%s%s", block_name, block_extension);
+    char file_name[7 + BLOCK_NAME_LENGTH + 15 + 1];
+    strcpy(file_name, "chunks/");
+    GetBlockName(block_hash, &file_name[7]);
+    strcpy(&file_name[7 + BLOCK_NAME_LENGTH], block_extension);
     return storage_api->ConcatPath(storage_api, content_path, file_name);
 }
 
@@ -92,10 +91,10 @@ static char* GetTempBlockPath(struct Longtail_StorageAPI* storage_api, const cha
 {
     LONGTAIL_FATAL_ASSERT(storage_api, return 0)
     LONGTAIL_FATAL_ASSERT(content_path, return 0)
-    char block_name[MAX_BLOCK_NAME_LENGTH];
-    GetBlockName(block_hash, block_name);
-    char file_name[72];
-    sprintf(file_name, "chunks/%s.tmp", block_name);
+    char file_name[7 + BLOCK_NAME_LENGTH + 15 + 1];
+    strcpy(file_name, "chunks/");
+    GetBlockName(block_hash, &file_name[7]);
+    strcpy(&file_name[7 + BLOCK_NAME_LENGTH], ".tmp");
     return storage_api->ConcatPath(storage_api, content_path, file_name);
 }
 
@@ -994,6 +993,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     LONGTAIL_VALIDATE_INPUT(content_path != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(default_max_block_size != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(default_max_chunks_per_block != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(optional_extension == 0 || strlen(optional_extension) < 15, return 0)
     size_t api_size = sizeof(struct FSBlockStoreAPI);
     void* mem = Longtail_Alloc(api_size);
     if (!mem)

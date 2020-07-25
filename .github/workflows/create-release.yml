@@ -122,6 +122,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
+          - *FIX* remove slow sprintf calls
           - *ADDED* longtail command now has `ls` and `cp` commands
         draft: false
         prerelease: false
