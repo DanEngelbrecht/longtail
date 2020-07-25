@@ -459,8 +459,6 @@ static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
     }
     hmfree(api->m_BlockHashToCompleteCallbacks);
     hmfree(api->m_BlockHashToLRUStoredBlock);
-    Longtail_Free(api->m_CachedBlocks);
-    Longtail_Free(api->m_LRU);
     Longtail_DeleteSpinLock(api->m_Lock);
     Longtail_Free(api->m_Lock);
     Longtail_Free(api);
@@ -498,8 +496,8 @@ static int LRUBlockStore_Init(
     api->m_BlockHashToCompleteCallbacks = 0;
     api->m_PendingRequestCount = 0;
 
-    api->m_LRU = LRU_Create(Longtail_Alloc(LRU_GetSize(max_lru_count)), max_lru_count);
-    api->m_CachedBlocks = (struct LRUStoredBlock*)Longtail_Alloc(sizeof(struct LRUStoredBlock) * max_lru_count);
+    api->m_CachedBlocks = (struct LRUStoredBlock*)&api[1];
+    api->m_LRU = LRU_Create(&api->m_CachedBlocks[max_lru_count], max_lru_count);
 
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
@@ -535,7 +533,11 @@ struct Longtail_BlockStoreAPI* Longtail_CreateLRUBlockStoreAPI(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateLRUBlockStoreAPI(%p)", backing_block_store)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return 0)
 
-    size_t api_size = sizeof(struct LRUBlockStoreAPI);
+    size_t api_size =
+        sizeof(struct LRUBlockStoreAPI) +
+        sizeof(struct LRUStoredBlock) * max_lru_count +
+        LRU_GetSize(max_lru_count);
+
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
