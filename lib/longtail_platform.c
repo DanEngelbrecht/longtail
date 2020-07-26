@@ -733,20 +733,21 @@ void Longtail_Yield()
 
 struct Longtail_RWLock
 {
-    TLongtail_Atomic32 m_LockCounter;
+    SRWLOCK m_Lock;
 };
+
+const int MAX_READER_COUNT = 65536;
 
 size_t Longtail_GetRWLockSize()
 {
     return sizeof(struct Longtail_RWLock);
 }
 
-const int MAX_READER_COUNT = 65536;
 
 int Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rw_lock)
 {
     HLongtail_RWLock rw_lock = (HLongtail_RWLock)mem;
-    rw_lock->m_LockCounter = MAX_READER_COUNT;
+    InitializeSRWLock(&rw_lock->m_Lock);
     *out_rw_lock = rw_lock;
     return 0;
 }
@@ -757,78 +758,22 @@ void Longtail_DeleteRWLock(HLongtail_RWLock rw_lock)
 
 void Longtail_LockRWReadLock(HLongtail_RWLock rw_lock)
 {
-    uint32_t tries = 0;
-    while (1)
-    {
-        while (rw_lock->m_LockCounter <= 1)
-        {
-            if (tries == 16)
-            {
-                Longtail_Sleep(100);
-                tries = 0;
-            }
-            else
-            {
-                Longtail_Yield();
-            }
-        }
-        int32_t res = Longtail_AtomicAdd32(&rw_lock->m_LockCounter, -1);
-        if (res > 0)
-        {
-            return;
-        }
-        else
-        {
-            Longtail_AtomicAdd32(&rw_lock->m_LockCounter, 1);
-        }
-    }
+    AcquireSRWLockShared(&rw_lock->m_Lock);
 }
 
 void Longtail_UnlockRWReadLock(HLongtail_RWLock rw_lock)
 {
-    Longtail_AtomicAdd32(&rw_lock->m_LockCounter, 1);
+    ReleaseSRWLockShared(&rw_lock->m_Lock);
 }
 
 void Longtail_LockRWWriteLock(HLongtail_RWLock rw_lock)
 {
-    int32_t res = Longtail_AtomicAdd32(&rw_lock->m_LockCounter, -MAX_READER_COUNT);
-    uint32_t tries = 0;
-    while (res <= -MAX_READER_COUNT)
-    {
-        // If we are not the first to try the writer lock, back off write lock
-        Longtail_AtomicAdd32(&rw_lock->m_LockCounter, MAX_READER_COUNT);
-        if (tries == 8)
-        {
-            Longtail_Sleep(100);
-            tries = 0;
-        }
-        else
-        {
-            Longtail_Yield();
-            ++tries;
-        }
-        res = Longtail_AtomicAdd32(&rw_lock->m_LockCounter, -MAX_READER_COUNT);
-    }
-    tries = 0;
-    while (res != 0)
-    {
-        // We are next in line for a writer lock, go full speed
-        if (tries == 8)
-        {
-            Longtail_Sleep(100);
-            tries = 0;
-        }
-        else
-        {
-            Longtail_Yield();
-        }
-        res = rw_lock->m_LockCounter;
-    }
+    AcquireSRWLockExclusive(&rw_lock->m_Lock);
 }
 
 void Longtail_UnlockRWWriteLock(HLongtail_RWLock rw_lock)
 {
-    Longtail_AtomicAdd32(&rw_lock->m_LockCounter, MAX_READER_COUNT);
+    ReleaseSRWLockExclusive(&rw_lock->m_Lock);
 }
 
 #endif
