@@ -515,7 +515,7 @@ static int LRUBlockStore_Init(
 
     api->m_LRU = LRU_Create(&api[1], max_lru_count);
 
-    int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
+    int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateLRUBlockStoreAPI(%p, %p) failed with %d",
