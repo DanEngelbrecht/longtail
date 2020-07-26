@@ -1416,7 +1416,7 @@ int VersionIndex_cp(
         return err;
     }
 
-    const size_t BUFFER_SIZE=131072;
+    const size_t BUFFER_SIZE=128*1024*1024;
     char* buffer = (char*)Longtail_Alloc(size > BUFFER_SIZE ? BUFFER_SIZE : size);
     uint64_t off = 0;
     while (size > off)
