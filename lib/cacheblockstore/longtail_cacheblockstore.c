@@ -196,7 +196,6 @@ static int CacheBlockStore_PutStoredBlock(
             block_store_api, stored_block, async_complete_api,
             err)
         PutStoredBlockPutLocalComplete(&put_stored_block_put_local_complete_api->m_API, err);
-        Longtail_Free(put_stored_block_put_local_complete_api);
     }
     return 0;
 }
