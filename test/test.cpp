@@ -16,6 +16,7 @@
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/hashregistry/longtail_full_hash_registry.h"
 #include "../lib/hashregistry/longtail_blake3_hash_registry.h"
+#include "../lib/lrublockstore/longtail_lrublockstore.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
@@ -1117,6 +1118,252 @@ TEST(Longtail, Longtail_FSBlockStoreReadContent)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
+}
+
+static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
+{
+    for (size_t n = 0; n < size; n++) {
+        int r = rand();
+        int key = r & 0xff;
+        data[n] = (uint8_t)key;
+    }
+    return data;
+}
+
+static int GeneratedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
+{
+    Longtail_Free(stored_block);
+    return 0;
+}
+
+static Longtail_StoredBlock* GenerateStoredBlock(struct Longtail_HashAPI* hash_api, uint32_t chunk_count, const uint32_t* chunk_sizes)
+{
+    uint32_t block_chunks_data_size = 0;
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        block_chunks_data_size += chunk_sizes[c];
+    }
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    size_t block_size = sizeof(struct Longtail_StoredBlock) + block_index_size + block_chunks_data_size;
+
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_size);
+    if (!stored_block)
+    {
+        return 0;
+    }
+    stored_block->Dispose = GeneratedStoredBlock_Dispose;
+    stored_block->m_BlockChunksDataSize = block_chunks_data_size;
+    stored_block->m_BlockIndex = Longtail_InitBlockIndex(&stored_block[1], chunk_count);
+    stored_block->m_BlockData = &((uint8_t*)stored_block->m_BlockIndex)[block_index_size];
+    uint8_t* chunk_data = (uint8_t*)stored_block->m_BlockData;
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        stored_block->m_BlockIndex->m_ChunkSizes[c] = chunk_sizes[c];
+        GenerateRandomData(chunk_data, chunk_sizes[c]);
+        hash_api->HashBuffer(hash_api, chunk_sizes[c], chunk_data, &stored_block->m_BlockIndex->m_ChunkHashes[c]);
+        chunk_data += chunk_sizes[c];
+    }
+    size_t hash_buffer_size = sizeof(TLongtail_Hash) * chunk_count;
+    hash_api->HashBuffer(hash_api, (uint32_t)(hash_buffer_size), (void*)stored_block->m_BlockIndex->m_ChunkHashes, stored_block->m_BlockIndex->m_BlockHash);
+    *stored_block->m_BlockIndex->m_HashIdentifier = hash_api->GetIdentifier(hash_api);
+    *stored_block->m_BlockIndex->m_ChunkCount = chunk_count;
+    *stored_block->m_BlockIndex->m_Tag = 0;
+    return stored_block;
+}
+
+
+TEST(Longtail, Longtail_TestLRUBlockStore)
+{
+    Longtail_StorageAPI* local_storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage_api, "chunks", 524288, 1024, 0);
+    Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(local_block_store_api, 3);
+
+    static const uint32_t BLOCK_COUNT = 7;
+    TLongtail_Hash block_hashes[BLOCK_COUNT];
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 2;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {1244, 4323};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, lru_block_store_api->PutStoredBlock(lru_block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[0] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 1;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {124};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, lru_block_store_api->PutStoredBlock(lru_block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[1] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 3;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {144, 423, 1239};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, lru_block_store_api->PutStoredBlock(lru_block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[2] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 3;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {1, 1244, 4323};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, lru_block_store_api->PutStoredBlock(lru_block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[3] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 1;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {124444};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, lru_block_store_api->PutStoredBlock(lru_block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[4] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 2;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {124, 323};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, lru_block_store_api->PutStoredBlock(lru_block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[5] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 4;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {624, 885, 81, 771};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, lru_block_store_api->PutStoredBlock(lru_block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[6] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    for (uint32_t b = 0; b < BLOCK_COUNT; ++b)
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(0, lru_block_store_api->GetStoredBlock(lru_block_store_api, block_hashes[b], &getCB1.m_API));
+        getCB1.Wait();
+        struct Longtail_StoredBlock* get_block = getCB1.m_StoredBlock;
+        ASSERT_EQ(0, getCB1.m_Err);
+        if (get_block->Dispose)
+        {
+            get_block->Dispose(get_block);
+        }
+    }
+
+    Longtail_BlockStore_Stats lru_stats;
+    lru_block_store_api->GetStats(lru_block_store_api, &lru_stats);
+    Longtail_BlockStore_Stats local_stats;
+    local_block_store_api->GetStats(local_block_store_api, &local_stats);
+
+    ASSERT_EQ(BLOCK_COUNT, lru_stats.m_BlocksGetCount);
+    ASSERT_EQ(BLOCK_COUNT, local_stats.m_BlocksGetCount);
+
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(0, lru_block_store_api->GetStoredBlock(lru_block_store_api, block_hashes[0], &getCB1.m_API));
+        getCB1.Wait();
+        struct Longtail_StoredBlock* get_block = getCB1.m_StoredBlock;
+        ASSERT_EQ(0, getCB1.m_Err);
+        if (get_block->Dispose)
+        {
+            get_block->Dispose(get_block);
+        }
+    }
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(0, lru_block_store_api->GetStoredBlock(lru_block_store_api, block_hashes[6], &getCB1.m_API));
+        getCB1.Wait();
+        struct Longtail_StoredBlock* get_block = getCB1.m_StoredBlock;
+        ASSERT_EQ(0, getCB1.m_Err);
+        if (get_block->Dispose)
+        {
+            get_block->Dispose(get_block);
+        }
+    }
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(0, lru_block_store_api->GetStoredBlock(lru_block_store_api, block_hashes[5], &getCB1.m_API));
+        getCB1.Wait();
+        struct Longtail_StoredBlock* get_block = getCB1.m_StoredBlock;
+        ASSERT_EQ(0, getCB1.m_Err);
+        if (get_block->Dispose)
+        {
+            get_block->Dispose(get_block);
+        }
+    }
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(0, lru_block_store_api->GetStoredBlock(lru_block_store_api, block_hashes[3], &getCB1.m_API));
+        getCB1.Wait();
+        struct Longtail_StoredBlock* get_block = getCB1.m_StoredBlock;
+        ASSERT_EQ(0, getCB1.m_Err);
+        if (get_block->Dispose)
+        {
+            get_block->Dispose(get_block);
+        }
+    }
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(0, lru_block_store_api->GetStoredBlock(lru_block_store_api, block_hashes[0], &getCB1.m_API));
+        getCB1.Wait();
+        struct Longtail_StoredBlock* get_block = getCB1.m_StoredBlock;
+        ASSERT_EQ(0, getCB1.m_Err);
+        if (get_block->Dispose)
+        {
+            get_block->Dispose(get_block);
+        }
+    }
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(0, lru_block_store_api->GetStoredBlock(lru_block_store_api, block_hashes[3], &getCB1.m_API));
+        getCB1.Wait();
+        struct Longtail_StoredBlock* get_block = getCB1.m_StoredBlock;
+        ASSERT_EQ(0, getCB1.m_Err);
+        if (get_block->Dispose)
+        {
+            get_block->Dispose(get_block);
+        }
+    }
+    lru_block_store_api->GetStats(lru_block_store_api, &lru_stats);
+    local_block_store_api->GetStats(local_block_store_api, &local_stats);
+    ASSERT_EQ(BLOCK_COUNT + 6, lru_stats.m_BlocksGetCount);
+    ASSERT_EQ(BLOCK_COUNT + 3, local_stats.m_BlocksGetCount);
+
+    SAFE_DISPOSE_API(lru_block_store_api);
+    SAFE_DISPOSE_API(local_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(local_storage_api);
 }
 
 TEST(Longtail, Longtail_CacheBlockStore)
@@ -5623,16 +5870,6 @@ TEST(Longtail, BlockStoreRetargetContent)
     SAFE_DISPOSE_API(storage_api);
 }
 
-
-static uint8_t* GenerateRandomData(uint8_t* data, size_t size)
-{
-    for (size_t n = 0; n < size; n++) {
-        int r = rand();
-        int key = r & 0xff;
-        data[n] = (uint8_t)key;
-    }
-    return data;
-}
 
 static char* GenerateRandomPath(char *str, size_t size)
 {

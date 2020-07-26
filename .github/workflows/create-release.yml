@@ -124,6 +124,8 @@ jobs:
           Changes in this Release
           - *FIX* remove slow sprintf calls
           - *ADDED* longtail command now has `ls` and `cp` commands
+          - *ADDED* Longtail_CreateLRUBlockStoreAPI - a block store which keeps recently used blocks in memory
+          - *FIXED* Double free in cacheblockstore when backing store returned an error on GetStoredBlock
         draft: false
         prerelease: false
     - name: Download Linux artifacts

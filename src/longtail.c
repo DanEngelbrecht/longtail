@@ -651,6 +651,11 @@ uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint6
     return 0;
 }
 
+uint64_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut)
+{
+    return lut->m_Capacity - lut->m_Count;
+}
+
 static size_t GetLookupTableSize(size_t capacity)
 {
     size_t table_size = 1;
