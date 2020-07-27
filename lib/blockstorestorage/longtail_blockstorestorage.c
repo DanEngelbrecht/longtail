@@ -163,7 +163,15 @@ static struct BlockStoreStorageAPI_PathLookup* BlockStoreStorageAPI_CreatePathLo
     for (uint32_t a = 0; a < asset_count; ++a)
     {
         uint32_t asset_index = path_lookup->m_PathEntries[a + 1].m_AssetIndex;
-        Longtail_LookupTable_Put(path_lookup->m_LookupTable, version_index->m_PathHashes[asset_index], a  + 1);
+        const char* path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
+        uint64_t path_hash = 0;
+        // We need to use new case insensitive path hash!
+        int err = Longtail_GetPathHash(hash_api, path, &path_hash);
+        if (err)
+        {
+            return 0;
+        }
+        Longtail_LookupTable_Put(path_lookup->m_LookupTable, path_hash, a + 1);
     }
     struct Longtail_LookupTable* find_first_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(asset_count + 1)), asset_count, 0);
     for (uint32_t p = 0; p < asset_count; ++p)
@@ -1176,7 +1184,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
     struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p,) failed with %d",
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p)",
         hash_api, job_api, block_store, content_index, version_index)
     LONGTAIL_VALIDATE_INPUT(hash_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(job_api != 0, return 0)
@@ -1191,7 +1199,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p,) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBlockStoreStorageAPI(%p, %p, %p, %p, %p) failed with %d",
             hash_api, job_api, block_store, content_index, version_index,
             ENOMEM)
         return 0;
