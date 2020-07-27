@@ -163,7 +163,7 @@ static struct BlockStoreStorageAPI_PathLookup* BlockStoreStorageAPI_CreatePathLo
     for (uint32_t a = 0; a < asset_count; ++a)
     {
         uint32_t asset_index = path_lookup->m_PathEntries[a + 1].m_AssetIndex;
-        const char* path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
+        const char* path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
         uint64_t path_hash = 0;
         // We need to use new case insensitive path hash!
         int err = Longtail_GetPathHash(hash_api, path, &path_hash);
