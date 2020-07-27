@@ -122,7 +122,10 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIX* include longtail_blockstorestorage.h and longtail_lrublockstore.h in distribution
+          - *FIX* Link error in Win32 static library (CompareIgnoreCase)
+          - *FIX* Make parent path look up in blockstorestorage be case insensitive
+          - *FIX* Block FindNext in blockstorestorage after last file is found
+          - *CHANGE* Dont require storage uri when using `ls` in command line tool
         draft: false
         prerelease: false
     - name: Download Linux artifacts
