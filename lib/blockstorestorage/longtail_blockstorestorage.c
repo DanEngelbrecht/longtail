@@ -9,6 +9,7 @@
 #if defined(__clang__) || defined(__GNUC__)
 #if defined(WIN32)
     #include <malloc.h>
+    #define CompareIgnoreCase _stricmp
 #else
     #include <alloca.h>
     #define CompareIgnoreCase strcasecmp
