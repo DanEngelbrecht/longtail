@@ -1031,6 +1031,10 @@ static int BlockStoreStorageAPI_FindNext(
         Longtail_Free(path_iterator->m_TempPath);
         path_iterator->m_TempPath = 0;
     }
+    if (path_iterator->m_PathEntryOffset == path_iterator->m_PathEntryOffsetEnd)
+    {
+        return EINVAL;
+    }
     ++path_iterator->m_PathEntryOffset;
     if (path_iterator->m_PathEntryOffset == path_iterator->m_PathEntryOffsetEnd)
     {
