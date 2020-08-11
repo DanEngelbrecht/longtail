@@ -992,13 +992,13 @@ TEST(Longtail, Longtail_FSBlockStore)
     Longtail_BlockStore_Stats stats;
     block_store_api->GetStats(block_store_api, &stats);
 
-    ASSERT_EQ(1, stats.m_IndexGetCount);
-    ASSERT_EQ(1, stats.m_BlocksGetCount);
-    ASSERT_EQ(1, stats.m_BlocksPutCount);
-    ASSERT_EQ(2, stats.m_ChunksGetCount);
-    ASSERT_EQ(2, stats.m_ChunksPutCount);
-    ASSERT_EQ(5902, stats.m_BytesGetCount);
-    ASSERT_EQ(5902, stats.m_BytesPutCount);
+    ASSERT_EQ(1, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count]);
+    ASSERT_EQ(2, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(1, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]);
+    ASSERT_EQ(2, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]);
+    ASSERT_EQ(2, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]);
+    ASSERT_EQ(5902, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]);
+    ASSERT_EQ(5902, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]);
 
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
@@ -1078,13 +1078,13 @@ TEST(Longtail, Longtail_FSBlockStoreReadContent)
     Longtail_BlockStore_Stats stats;
     block_store_api->GetStats(block_store_api, &stats);
 
-    ASSERT_EQ(1, stats.m_IndexGetCount);
-    ASSERT_EQ(1, stats.m_BlocksGetCount);
-    ASSERT_EQ(1, stats.m_BlocksPutCount);
-    ASSERT_EQ(2, stats.m_ChunksGetCount);
-    ASSERT_EQ(2, stats.m_ChunksPutCount);
-    ASSERT_EQ(5902, stats.m_BytesGetCount);
-    ASSERT_EQ(5902, stats.m_BytesPutCount);
+    ASSERT_EQ(1, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count]);
+    ASSERT_EQ(2, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(1, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]);
+    ASSERT_EQ(2, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]);
+    ASSERT_EQ(2, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]);
+    ASSERT_EQ(5902, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]);
+    ASSERT_EQ(5902, stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]);
 
     SAFE_DISPOSE_API(block_store_api);
 
@@ -1285,8 +1285,8 @@ TEST(Longtail, Longtail_TestLRUBlockStore)
     Longtail_BlockStore_Stats local_stats;
     local_block_store_api->GetStats(local_block_store_api, &local_stats);
 
-    ASSERT_EQ(BLOCK_COUNT, lru_stats.m_BlocksGetCount);
-    ASSERT_EQ(BLOCK_COUNT, local_stats.m_BlocksGetCount);
+    ASSERT_EQ(BLOCK_COUNT, lru_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(BLOCK_COUNT, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
 
     {
         struct TestAsyncGetBlockComplete getCB1;
@@ -1356,8 +1356,8 @@ TEST(Longtail, Longtail_TestLRUBlockStore)
     }
     lru_block_store_api->GetStats(lru_block_store_api, &lru_stats);
     local_block_store_api->GetStats(local_block_store_api, &local_stats);
-    ASSERT_EQ(BLOCK_COUNT + 6, lru_stats.m_BlocksGetCount);
-    ASSERT_EQ(BLOCK_COUNT + 3, local_stats.m_BlocksGetCount);
+    ASSERT_EQ(BLOCK_COUNT + 6, lru_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(BLOCK_COUNT + 3, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
 
     SAFE_DISPOSE_API(lru_block_store_api);
     SAFE_DISPOSE_API(local_block_store_api);
@@ -1446,29 +1446,29 @@ TEST(Longtail, Longtail_CacheBlockStore)
     Longtail_BlockStore_Stats local_stats;
     local_block_store_api->GetStats(local_block_store_api, &local_stats);
 
-    ASSERT_EQ(1, cache_stats.m_IndexGetCount);
-    ASSERT_EQ(1, cache_stats.m_BlocksGetCount);
-    ASSERT_EQ(0, cache_stats.m_BlocksPutCount);
-    ASSERT_EQ(2, cache_stats.m_ChunksGetCount);
-    ASSERT_EQ(0, cache_stats.m_ChunksPutCount);
-    ASSERT_EQ(5902, cache_stats.m_BytesGetCount);
-    ASSERT_EQ(0, cache_stats.m_BytesPutCount);
+    ASSERT_EQ(1, cache_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count]);
+    ASSERT_EQ(2, cache_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(0, cache_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]);
+    ASSERT_EQ(2, cache_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]);
+    ASSERT_EQ(0, cache_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]);
+    ASSERT_EQ(5902, cache_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]);
+    ASSERT_EQ(0, cache_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]);
 
-    ASSERT_EQ(1, remote_stats.m_IndexGetCount);
-    ASSERT_EQ(1, remote_stats.m_BlocksGetCount);
-    ASSERT_EQ(1, remote_stats.m_BlocksPutCount);
-    ASSERT_EQ(2, remote_stats.m_ChunksGetCount);
-    ASSERT_EQ(2, remote_stats.m_ChunksPutCount);
-    ASSERT_EQ(5902, remote_stats.m_BytesGetCount);
-    ASSERT_EQ(5902, remote_stats.m_BytesPutCount);
+    ASSERT_EQ(1, remote_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count]);
+    ASSERT_EQ(2, remote_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(1, remote_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]);
+    ASSERT_EQ(2, remote_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]);
+    ASSERT_EQ(2, remote_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]);
+    ASSERT_EQ(5902, remote_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]);
+    ASSERT_EQ(5902, remote_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]);
 
-    ASSERT_EQ(1, local_stats.m_IndexGetCount);
-    ASSERT_EQ(0, local_stats.m_BlocksGetCount);
-    ASSERT_EQ(1, local_stats.m_BlocksPutCount);
-    ASSERT_EQ(0, local_stats.m_ChunksGetCount);
-    ASSERT_EQ(2, local_stats.m_ChunksPutCount);
-    ASSERT_EQ(0, local_stats.m_BytesGetCount);
-    ASSERT_EQ(5902, local_stats.m_BytesPutCount);
+    ASSERT_EQ(1, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count]);
+    ASSERT_EQ(2, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(1, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]);
+    ASSERT_EQ(0, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]);
+    ASSERT_EQ(2, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]);
+    ASSERT_EQ(0, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]);
+    ASSERT_EQ(5902, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]);
 
     SAFE_DISPOSE_API(cache_block_store_api);
     SAFE_DISPOSE_API(remote_block_store_api);
@@ -1614,21 +1614,21 @@ TEST(Longtail, Longtail_CompressBlockStore)
     Longtail_BlockStore_Stats local_stats;
     local_block_store_api->GetStats(local_block_store_api, &local_stats);
 
-    ASSERT_EQ(1, compress_stats.m_IndexGetCount);
-    ASSERT_EQ(2, compress_stats.m_BlocksGetCount);
-    ASSERT_EQ(2, compress_stats.m_BlocksPutCount);
-    ASSERT_EQ(4, compress_stats.m_ChunksGetCount);
-    ASSERT_EQ(4, compress_stats.m_ChunksPutCount);
-    ASSERT_EQ(5992, compress_stats.m_BytesGetCount);
-    ASSERT_EQ(11804, compress_stats.m_BytesPutCount);
+    ASSERT_EQ(1, compress_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count]);
+    ASSERT_EQ(3, compress_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(2, compress_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]);
+    ASSERT_EQ(4, compress_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]);
+    ASSERT_EQ(4, compress_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]);
+    ASSERT_EQ(5992, compress_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]);
+    ASSERT_EQ(11804, compress_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]);
 
-    ASSERT_EQ(1, local_stats.m_IndexGetCount);
-    ASSERT_EQ(2, local_stats.m_BlocksGetCount);
-    ASSERT_EQ(2, local_stats.m_BlocksPutCount);
-    ASSERT_EQ(4, local_stats.m_ChunksGetCount);
-    ASSERT_EQ(4, local_stats.m_ChunksPutCount);
-    ASSERT_EQ(5992, local_stats.m_BytesGetCount);
-    ASSERT_EQ(5992, local_stats.m_BytesPutCount);
+    ASSERT_EQ(1, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count]);
+    ASSERT_EQ(3, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]);
+    ASSERT_EQ(2, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]);
+    ASSERT_EQ(4, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]);
+    ASSERT_EQ(4, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]);
+    ASSERT_EQ(5992, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]);
+    ASSERT_EQ(5992, local_stats.m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]);
 
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(local_block_store_api);
