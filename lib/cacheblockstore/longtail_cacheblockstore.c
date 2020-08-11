@@ -146,6 +146,7 @@ static int CacheBlockStore_PutStoredBlock(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
             block_store_api, stored_block, async_complete_api,
             ENOMEM)
+        Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         return ENOMEM;
     }
     put_stored_block_put_remote_complete_api->m_API.m_API.Dispose = 0;
@@ -161,9 +162,9 @@ static int CacheBlockStore_PutStoredBlock(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
             block_store_api, stored_block, async_complete_api,
             err)
+        Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1);
         Longtail_Free(put_stored_block_put_remote_complete_api);
-        Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         return err;
     }
 
