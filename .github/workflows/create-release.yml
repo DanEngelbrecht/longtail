@@ -122,10 +122,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIX* Link error in Win32 static library (CompareIgnoreCase)
-          - *FIX* Make parent path look up in blockstorestorage be case insensitive
-          - *FIX* Block FindNext in blockstorestorage after last file is found
-          - *CHANGE* Dont require storage uri when using `ls` in command line tool
+          - *API-CHANGE* Stats structure is now array of uint64_t with enum
+          - *CHANGE* Block store stats count for GetIndex/GetStoredBlock/PutStoredBlock/PreflightGet/RetargetContent is for each *call*, successful or not
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -308,7 +308,8 @@ LONGTAIL_EXPORT int Longtail_GetCompressionRegistry_GetCompressionAPI(struct Lon
 typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
 typedef struct Longtail_StorageAPI_Iterator* Longtail_StorageAPI_HIterator;
 
-enum {
+enum
+{
     Longtail_StorageAPI_OtherExecuteAccess  = 0001,
     Longtail_StorageAPI_OtherWriteAccess    = 0002,
     Longtail_StorageAPI_OtherReadAccess     = 0004,
@@ -582,21 +583,39 @@ LONGTAIL_EXPORT void Longtail_AsyncRetargetContent_OnComplete(struct Longtail_As
 
 struct Longtail_BlockStoreAPI;
 
+enum
+{
+    Longtail_BlockStoreAPI_StatU64_GetIndex_Count,
+    Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount,
+    Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount,
+
+    Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count,
+    Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount,
+    Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount,
+    Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count,
+    Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count,
+
+    Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count,
+    Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount,
+    Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount,
+    Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count,
+    Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count,
+
+    Longtail_BlockStoreAPI_StatU64_RetargetContent_Count,
+    Longtail_BlockStoreAPI_StatU64_RetargetContent_RetryCount,
+    Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount,
+
+    Longtail_BlockStoreAPI_StatU64_PreflightGet_Count,
+    Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount,
+    Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount,
+
+    Longtail_BlockStoreAPI_StatU64_GetStats_Count,
+        Longtail_BlockStoreAPI_StatU64_Count
+};
+
 struct Longtail_BlockStore_Stats
 {
-    uint64_t m_IndexGetCount;
-    uint64_t m_BlocksGetCount;
-    uint64_t m_BlocksPutCount;
-    uint64_t m_ChunksGetCount;
-    uint64_t m_ChunksPutCount;
-    uint64_t m_BytesGetCount;
-    uint64_t m_BytesPutCount;
-    uint64_t m_IndexGetRetryCount;
-    uint64_t m_BlockGetRetryCount;
-    uint64_t m_BlockPutRetryCount;
-    uint64_t m_IndexGetFailCount;
-    uint64_t m_BlockGetFailCount;
-    uint64_t m_BlockPutFailCount;
+    uint64_t m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
 };
 
 typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);

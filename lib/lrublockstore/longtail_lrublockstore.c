@@ -101,19 +101,7 @@ struct LRUBlockStoreAPI
     TLongtail_Atomic32 m_PendingRequestCount;
     struct LRU* m_LRU;
 
-    TLongtail_Atomic64 m_IndexGetCount;
-    TLongtail_Atomic64 m_BlocksGetCount;
-    TLongtail_Atomic64 m_BlocksPutCount;
-    TLongtail_Atomic64 m_ChunksGetCount;
-    TLongtail_Atomic64 m_ChunksPutCount;
-    TLongtail_Atomic64 m_BytesGetCount;
-    TLongtail_Atomic64 m_BytesPutCount;
-    TLongtail_Atomic64 m_IndexGetRetryCount;
-    TLongtail_Atomic64 m_BlockGetRetryCount;
-    TLongtail_Atomic64 m_BlockPutRetryCount;
-    TLongtail_Atomic64 m_IndexGetFailCount;
-    TLongtail_Atomic64 m_BlockGetFailCount;
-    TLongtail_Atomic64 m_BlockPutFailCount;
+    TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
 };
 
 int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
@@ -214,14 +202,19 @@ static int LRUBlockStore_PutStoredBlock(
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
 
-    Longtail_AtomicAdd64(&api->m_BlocksPutCount, 1);
-    Longtail_AtomicAdd64(&api->m_ChunksPutCount, *stored_block->m_BlockIndex->m_ChunkCount);
-    Longtail_AtomicAdd64(&api->m_BytesPutCount, Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
-    return api->m_BackingBlockStore->PutStoredBlock(
+    int err = api->m_BackingBlockStore->PutStoredBlock(
         api->m_BackingBlockStore,
         stored_block,
         async_complete_api);
+    if (err)
+    {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
+    }
+    return err;
 }
 
 static int LRUBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
@@ -230,12 +223,20 @@ static int LRUBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store
     LONGTAIL_VALIDATE_INPUT(block_hashes, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(block_ref_counts, return EINVAL)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
+
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
-    return api->m_BackingBlockStore->PreflightGet(
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
+
+    int err = api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
         block_count,
         block_hashes,
         block_ref_counts);
+    if (err)
+    {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
+    }
+    return err;
 }
 
 struct LRUBlockStore_AsyncGetStoredBlockAPI
@@ -257,6 +258,8 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
 
     if (err)
     {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+
         struct Longtail_AsyncGetStoredBlockAPI** list;
         Longtail_LockSpinLock(api->m_Lock);
         list = hmget(api->m_BlockHashToCompleteCallbacks, block_hash);
@@ -277,6 +280,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
     struct LRUStoredBlock* shared_stored_block = StoreBlock(api, stored_block);
     if (!shared_stored_block)
     {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         struct Longtail_AsyncGetStoredBlockAPI** list;
         Longtail_LockSpinLock(api->m_Lock);
         list = hmget(api->m_BlockHashToCompleteCallbacks, block_hash);
@@ -302,9 +306,8 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
     Longtail_AtomicAdd32(&shared_stored_block->m_RefCount, (int32_t)arrlen(list));
     Longtail_UnlockSpinLock(api->m_Lock);
     size_t wait_count = arrlen(list);
-    Longtail_AtomicAdd64(&api->m_BlocksGetCount, wait_count);
-    Longtail_AtomicAdd64(&api->m_ChunksGetCount, *shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
-    Longtail_AtomicAdd64(&api->m_BytesGetCount, Longtail_GetBlockIndexDataSize(*shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + shared_stored_block->m_StoredBlock.m_BlockChunksDataSize);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + shared_stored_block->m_StoredBlock.m_BlockChunksDataSize);
     for (size_t i = 0; i < wait_count; ++i)
     {
         list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
@@ -324,6 +327,7 @@ static int LRUBlockStore_GetStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
     Longtail_LockSpinLock(api->m_Lock);
 
@@ -331,9 +335,8 @@ static int LRUBlockStore_GetStoredBlock(
     if (lru_block != 0 && lru_block->m_RefCount > 0)
     {
         Longtail_UnlockSpinLock(api->m_Lock);
-        Longtail_AtomicAdd64(&api->m_BlocksGetCount, 1);
-        Longtail_AtomicAdd64(&api->m_ChunksGetCount, *lru_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
-        Longtail_AtomicAdd64(&api->m_BytesGetCount, Longtail_GetBlockIndexDataSize(*lru_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + lru_block->m_StoredBlock.m_BlockChunksDataSize);
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *lru_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*lru_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + lru_block->m_StoredBlock.m_BlockChunksDataSize);
         async_complete_api->OnComplete(async_complete_api, &lru_block->m_StoredBlock, 0);
         return 0;
     }
@@ -360,6 +363,7 @@ static int LRUBlockStore_GetStoredBlock(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
             block_store_api, block_hash, async_complete_api,
             ENOMEM)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         return ENOMEM;
     }
 
@@ -375,6 +379,7 @@ static int LRUBlockStore_GetStoredBlock(
         &share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI);
     if (err)
     {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         // We shortcut here since the logic to get from backing store is in OnComplete
         LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(&share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI, 0, err);
     }
@@ -391,6 +396,8 @@ static int LRUBlockStore_GetIndex(
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1);
+
     int err = api->m_BackingBlockStore->GetIndex(
         api->m_BackingBlockStore,
         async_complete_api);
@@ -399,9 +406,9 @@ static int LRUBlockStore_GetIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_GetIndex(%p, %p) failed with %d",
             block_store_api, async_complete_api,
             err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1);
         return err;
     }
-    Longtail_AtomicAdd64(&api->m_IndexGetCount, 1);
     return 0;
 }
 
@@ -417,6 +424,7 @@ static int LRUBlockStore_RetargetContent(
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_Count], 1);
     int err = api->m_BackingBlockStore->RetargetContent(
         api->m_BackingBlockStore,
         content_index,
@@ -426,6 +434,7 @@ static int LRUBlockStore_RetargetContent(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_RetargetContent(%p, %p, %p) failed with %d",
             block_store_api, content_index, async_complete_api,
             err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
         return err;
     }
     return 0;
@@ -437,20 +446,12 @@ static int LRUBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
-    out_stats->m_IndexGetCount = api->m_IndexGetCount;
-    out_stats->m_BlocksGetCount = api->m_BlocksGetCount;
-    out_stats->m_BlocksPutCount = api->m_BlocksPutCount;
-    out_stats->m_ChunksGetCount = api->m_ChunksGetCount;
-    out_stats->m_ChunksPutCount = api->m_ChunksPutCount;
-    out_stats->m_BytesGetCount = api->m_BytesGetCount;
-    out_stats->m_BytesPutCount = api->m_BytesPutCount;
-    out_stats->m_IndexGetRetryCount = api->m_IndexGetRetryCount;
-    out_stats->m_BlockGetRetryCount = api->m_BlockGetRetryCount;
-    out_stats->m_BlockPutRetryCount = api->m_BlockPutRetryCount;
-    out_stats->m_IndexGetFailCount = api->m_IndexGetFailCount;
-    out_stats->m_BlockGetFailCount = api->m_BlockGetFailCount;
-    out_stats->m_BlockPutFailCount = api->m_BlockPutFailCount;
+    for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
+    {
+        out_stats->m_StatU64[s] = api->m_StatU64[s];
+    }
     return 0;
 }
 
@@ -524,19 +525,10 @@ static int LRUBlockStore_Init(
         return err;
     }
 
-    api->m_IndexGetCount = 0;
-    api->m_BlocksGetCount = 0;
-    api->m_BlocksPutCount = 0;
-    api->m_ChunksGetCount = 0;
-    api->m_ChunksPutCount = 0;
-    api->m_BytesGetCount = 0;
-    api->m_BytesPutCount = 0;
-    api->m_IndexGetRetryCount = 0;
-    api->m_BlockGetRetryCount = 0;
-    api->m_BlockPutRetryCount = 0;
-    api->m_IndexGetFailCount = 0;
-    api->m_BlockGetFailCount = 0;
-    api->m_BlockPutFailCount = 0;
+    for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
+    {
+        api->m_StatU64[s] = 0;
+    }
 
     *out_block_store_api = block_store_api;
     return 0;
