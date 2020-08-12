@@ -123,6 +123,7 @@ jobs:
         body: |
           Changes in this Release
           - *API-CHANGE* Stats structure is now array of uint64_t with enum
+          - *API-CHANGE* New function `Flush` added to BlockStoreAPI
           - *CHANGE* Block store stats count for GetIndex/GetStoredBlock/PutStoredBlock/PreflightGet/RetargetContent is for each *call*, successful or not
         draft: false
         prerelease: false
