@@ -14,12 +14,12 @@ struct CompressBlockStoreAPI
     struct Longtail_CompressionRegistryAPI* m_CompressionRegistryAPI;
     struct Longtail_BlockStore_Stats m_Stats;
 
-    TLongtail_Atomic32 m_PendingRequestCount;
+    TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
 
     HLongtail_SpinLock m_Lock;
     struct Longtail_AsyncFlushAPI** m_PendingAsyncFlushAPIs;
 
-    TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
+    TLongtail_Atomic32 m_PendingRequestCount;
 };
 
 static void CompressBlockStore_NotifyFlushed(struct CompressBlockStoreAPI* compressblockstore_api)
@@ -491,6 +491,7 @@ static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_stor
 
 static int CompressBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct CompressBlockStoreAPI* compressblockstore_api = (struct CompressBlockStoreAPI*)block_store_api;
     if (compressblockstore_api->m_PendingRequestCount > 0)
     {
@@ -555,6 +556,7 @@ static int CompressBlockStore_Init(
     api->m_BackingBlockStore = backing_block_store;
     api->m_CompressionRegistryAPI = compression_registry;
     api->m_PendingRequestCount = 0;
+    api->m_PendingAsyncFlushAPIs = 0;
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
     {

@@ -347,6 +347,13 @@ static int RetainingBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_sto
     return 0;
 }
 
+static int RetainingBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RetainingBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
+    async_complete_api->OnComplete(async_complete_api, 0);
+    return 0;
+}
+
 static void RetainingBlockStore_Dispose(struct Longtail_API* api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RetainingBlockStore_Dispose(%p)", api)
@@ -392,7 +399,8 @@ static int RetainingBlockStore_Init(
         RetainingBlockStore_GetStoredBlock,
         RetainingBlockStore_GetIndex,
         RetainingBlockStore_RetargetContent,
-        RetainingBlockStore_GetStats);
+        RetainingBlockStore_GetStats,
+        RetainingBlockStore_Flush);
     if (!block_store_api)
     {
         return EINVAL;
