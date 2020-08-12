@@ -579,6 +579,27 @@ LONGTAIL_EXPORT struct Longtail_AsyncRetargetContentAPI* Longtail_MakeAsyncRetar
 
 LONGTAIL_EXPORT void Longtail_AsyncRetargetContent_OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
 
+////////////// Longtail_AsyncFlushAPI
+
+struct Longtail_AsyncFlushAPI;
+
+typedef void (*Longtail_AsyncFlush_OnCompleteFunc)(struct Longtail_AsyncFlushAPI* async_complete_api, int err);
+
+struct Longtail_AsyncFlushAPI
+{
+    struct Longtail_API m_API;
+    Longtail_AsyncFlush_OnCompleteFunc OnComplete;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncFlushAPISize();
+
+LONGTAIL_EXPORT struct Longtail_AsyncFlushAPI* Longtail_MakeAsyncFlushAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncFlush_OnCompleteFunc on_complete_func);
+
+LONGTAIL_EXPORT void Longtail_AsyncFlush_OnComplete(struct Longtail_AsyncFlushAPI* async_complete_api, int err);
+
 ////////////// Longtail_BlockStoreAPI
 
 struct Longtail_BlockStoreAPI;
@@ -609,6 +630,9 @@ enum
     Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount,
     Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount,
 
+    Longtail_BlockStoreAPI_StatU64_Flush_Count,
+    Longtail_BlockStoreAPI_StatU64_Flush_FailCount,
+
     Longtail_BlockStoreAPI_StatU64_GetStats_Count,
         Longtail_BlockStoreAPI_StatU64_Count
 };
@@ -624,6 +648,7 @@ typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStore
 typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_RetargetContentFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
+typedef int (*Longtail_BlockStore_FlushFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
 struct Longtail_BlockStoreAPI
 {
@@ -634,6 +659,7 @@ struct Longtail_BlockStoreAPI
     Longtail_BlockStore_GetIndexFunc GetIndex;
     Longtail_BlockStore_RetargetContentFunc RetargetContent;
     Longtail_BlockStore_GetStatsFunc GetStats;
+    Longtail_BlockStore_FlushFunc Flush;
 };
 
 
@@ -647,7 +673,8 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetIndexFunc get_index_func,
     Longtail_BlockStore_RetargetContentFunc retarget_content_func,
-    Longtail_BlockStore_GetStatsFunc get_stats_func);
+    Longtail_BlockStore_GetStatsFunc get_stats_func,
+    Longtail_BlockStore_FlushFunc flush_func);
 
 LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
@@ -655,6 +682,7 @@ LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStor
 LONGTAIL_EXPORT int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
+LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);

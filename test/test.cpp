@@ -3740,6 +3740,8 @@ public:
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
     static int GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
+    static int Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
+    static int RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 private:
     struct Longtail_HashAPI* m_HashAPI;
     struct Longtail_JobAPI* m_JobAPI;
@@ -3763,12 +3765,20 @@ private:
 
 int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api, struct Longtail_JobAPI* job_api)
 {
-    block_store->m_API.m_API.Dispose = TestAsyncBlockStore::Dispose;
-    block_store->m_API.PutStoredBlock = TestAsyncBlockStore::PutStoredBlock;
-    block_store->m_API.PreflightGet = TestAsyncBlockStore::PreflightGet;
-    block_store->m_API.GetStoredBlock = TestAsyncBlockStore::GetStoredBlock;
-    block_store->m_API.GetIndex = TestAsyncBlockStore::GetIndex;
-    block_store->m_API.GetStats = TestAsyncBlockStore::GetStats;
+    struct Longtail_BlockStoreAPI* api = Longtail_MakeBlockStoreAPI(
+        &block_store->m_API,
+        TestAsyncBlockStore::Dispose,
+        TestAsyncBlockStore::PutStoredBlock,
+        TestAsyncBlockStore::PreflightGet,
+        TestAsyncBlockStore::GetStoredBlock,
+        TestAsyncBlockStore::GetIndex,
+        TestAsyncBlockStore::RetargetContent,
+        TestAsyncBlockStore::GetStats,
+        TestAsyncBlockStore::Flush);
+    if (!api)
+    {
+        return ENOMEM;
+    }
     block_store->m_HashAPI = hash_api;
     block_store->m_JobAPI = job_api;
     block_store->m_ExitFlag = 0;
@@ -4122,12 +4132,22 @@ int TestAsyncBlockStore::GetIndex(
     return 0;
 }
 
+int TestAsyncBlockStore::RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api)
+{
+    return ENOTSUP;
+}
+
 int TestAsyncBlockStore::GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
     return 0;
 }
 
+int TestAsyncBlockStore::Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+{
+    async_complete_api->OnComplete(async_complete_api, 0);
+    return 0;
+}
 
 TEST(Longtail, AsyncBlockStore)
 {
@@ -5324,6 +5344,11 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
             return api->m_Base->GetStats(api->m_Base, out_stats);
         }
+        static int Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+        {
+            async_complete_api->OnComplete(async_complete_api, 0);
+            return 0;
+        }
     } blockStoreProxy;
     blockStoreProxy.m_Base = compressed_remote_block_store;
     blockStoreProxy.m_FailCounter = 2;
@@ -5335,7 +5360,8 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         BlockStoreProxy::GetStoredBlock,
         BlockStoreProxy::GetIndex,
         BlockStoreProxy::RetargetContent,
-        BlockStoreProxy::GetStats);
+        BlockStoreProxy::GetStats,
+        BlockStoreProxy::Flush);
 
     {
         Longtail_CancelAPI_HCancelToken cancel_token;
