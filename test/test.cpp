@@ -6016,7 +6016,7 @@ static void CreateRandomContent(
 {
     while (*file_count_left)
     {
-        switch(rand() % 8)
+        switch(rand() % 16)
         {
             case 0:
                 if (depth > 0)
@@ -6729,6 +6729,145 @@ TEST(Longtail, TestLongtailBlockFS)
     SAFE_DISPOSE_API(block_store);
     SAFE_DISPOSE_API(raw_block_store);
     SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(mem_storage);
+}
+
+struct FSBlockStoreSyncWriteContentWorkerContext {
+    Longtail_StorageAPI* mem_storage;
+    Longtail_HashAPI* hash_api;
+    Longtail_JobAPI* job_api;
+    const char* storage_path;
+    Longtail_VersionIndex* vindex;
+    Longtail_ContentIndex* content_index;
+    uint32_t MAX_BLOCK_SIZE;
+    uint32_t MAX_CHUNKS_PER_BLOCK;
+};
+
+static int FSBlockStoreSyncWriteContentWorker(
+    Longtail_StorageAPI* mem_storage,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    const char* storage_path,
+    Longtail_VersionIndex* vindex,
+    Longtail_ContentIndex* content_index,
+    uint32_t MAX_BLOCK_SIZE,
+    uint32_t MAX_CHUNKS_PER_BLOCK)
+{
+    Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
+    TestAsyncGetIndexComplete get_index_complete;
+    int err = block_store->GetIndex(block_store, &get_index_complete.m_API);
+    if (err)
+    {
+        return err;
+    }
+    get_index_complete.Wait();
+    if (get_index_complete.m_Err)
+    {
+        return get_index_complete.m_Err;
+    }
+    struct Longtail_ContentIndex* block_store_content_index = get_index_complete.m_ContentIndex;
+
+    err = Longtail_WriteContent(
+        mem_storage,
+        block_store,
+        job_api,
+        0,
+        0,
+        0,
+        block_store_content_index,
+        content_index,
+        vindex,
+        storage_path);
+    Longtail_Free(block_store_content_index);
+    return err;
+}
+
+int TestLongtailFSBlockStoreSyncWorkerCB(void* context_data)
+{
+    struct FSBlockStoreSyncWriteContentWorkerContext* context = (struct FSBlockStoreSyncWriteContentWorkerContext*)context_data;
+    return FSBlockStoreSyncWriteContentWorker(
+        context->mem_storage,
+        context->hash_api,
+        context->job_api,
+        context->storage_path,
+        context->vindex,
+        context->content_index,
+        context->MAX_BLOCK_SIZE,
+        context->MAX_CHUNKS_PER_BLOCK);
+}
+
+
+TEST(Longtail, TestLongtailFSBlockStoreSync)
+{
+    static const uint32_t MAX_BLOCK_SIZE = 63356;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 64u;
+
+    Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
+
+    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 7, 0, (MAX_BLOCK_SIZE * 3) >> 1);
+
+    Longtail_FileInfos* version_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version_paths);
+
+    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        mem_storage,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        "source",
+        version_paths,
+        compression_types,
+        (MAX_BLOCK_SIZE / MAX_CHUNKS_PER_BLOCK) * 2,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+    Longtail_Free(compression_types);
+    Longtail_Free(version_paths);
+
+    Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateContentIndex(
+            hash_api,
+            vindex,
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK,
+            &content_index));
+
+    struct FSBlockStoreSyncWriteContentWorkerContext ctx = { mem_storage, hash_api, job_api, "source", vindex, content_index, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK};
+    HLongtail_Thread workerThreads[8];
+    for (uint32_t t = 0; t < 8; ++t)
+    {
+        int err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestLongtailFSBlockStoreSyncWorkerCB, 0, &ctx, -1, &workerThreads[t]);
+        if (err)
+        {
+            while (t--)
+            {
+                Longtail_JoinThread(workerThreads[t], LONGTAIL_TIMEOUT_INFINITE);
+                Longtail_DeleteThread(workerThreads[t]);
+                Longtail_Free(workerThreads[t]);
+            }
+            ASSERT_EQ(0, err);
+        }
+    }
+
+    for (uint32_t t = 0; t < 8; ++t)
+    {
+        Longtail_JoinThread(workerThreads[t], LONGTAIL_TIMEOUT_INFINITE);
+        Longtail_DeleteThread(workerThreads[t]);
+        Longtail_Free(workerThreads[t]);
+    }
+
+    Longtail_Free(content_index);
+    Longtail_Free(vindex);
+
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(mem_storage);
