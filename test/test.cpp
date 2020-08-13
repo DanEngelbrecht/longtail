@@ -4226,7 +4226,6 @@ int TestAsyncBlockStore::GetStats(struct Longtail_BlockStoreAPI* block_store_api
 
 int TestAsyncBlockStore::Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     class TestAsyncBlockStore* block_store = (class TestAsyncBlockStore*)block_store_api;
     if (block_store->m_PendingRequestCount > 0)
     {
@@ -4408,10 +4407,21 @@ TEST(Longtail, AsyncBlockStore)
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
 
-    TestAsyncFlushComplete flushCB;
-    ASSERT_EQ(0, async_block_store_api->Flush(async_block_store_api, &flushCB.m_API));
-    flushCB.Wait();
-    ASSERT_EQ(0, flushCB.m_Err);
+    TestAsyncFlushComplete asyncStoreFlushCB;
+    ASSERT_EQ(0, async_block_store_api->Flush(async_block_store_api, &asyncStoreFlushCB.m_API));
+
+    TestAsyncFlushComplete cacheStoreFlushCB;
+    ASSERT_EQ(0, async_block_store_api->Flush(async_block_store_api, &cacheStoreFlushCB.m_API));
+
+    TestAsyncFlushComplete compressStoreFlushCB;
+    ASSERT_EQ(0, async_block_store_api->Flush(async_block_store_api, &compressStoreFlushCB.m_API));
+
+    asyncStoreFlushCB.Wait();
+    ASSERT_EQ(0, asyncStoreFlushCB.m_Err);
+    cacheStoreFlushCB.Wait();
+    ASSERT_EQ(0, cacheStoreFlushCB.m_Err);
+    compressStoreFlushCB.Wait();
+    ASSERT_EQ(0, compressStoreFlushCB.m_Err);
 
     ASSERT_EQ(0, Longtail_WriteVersion(
         block_store_api,
