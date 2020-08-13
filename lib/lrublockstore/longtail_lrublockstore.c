@@ -107,13 +107,17 @@ struct LRUBlockStoreAPI
     TLongtail_Atomic32 m_PendingRequestCount;
 };
 
-static void LRUBlockStore_NotifyFlushed(struct LRUBlockStoreAPI* lrublockstore_api)
+static void LRUBlockStore_CompleteRequest(struct LRUBlockStoreAPI* lrublockstore_api)
 {
+    LONGTAIL_FATAL_ASSERT(lrublockstore_api->m_PendingRequestCount > 0, return)
+    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(lrublockstore_api->m_Lock);
-    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = lrublockstore_api->m_PendingAsyncFlushAPIs;
-    lrublockstore_api->m_PendingAsyncFlushAPIs = 0;
+    if (0 == Longtail_AtomicAdd32(&lrublockstore_api->m_PendingRequestCount, -1))
+    {
+        pendingAsyncFlushAPIs = lrublockstore_api->m_PendingAsyncFlushAPIs;
+        lrublockstore_api->m_PendingAsyncFlushAPIs = 0;
+    }
     Longtail_UnlockSpinLock(lrublockstore_api->m_Lock);
-
     size_t c = arrlen(pendingAsyncFlushAPIs);
     for (size_t n = 0; n < c; ++n)
     {
@@ -291,10 +295,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        if (0 == Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1))
-        {
-            LRUBlockStore_NotifyFlushed(api);
-        }
+        LRUBlockStore_CompleteRequest(api);
         return;
     }
 
@@ -316,10 +317,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
         }
         arrfree(list);
         stored_block->Dispose(stored_block);
-        if (0 == Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1))
-        {
-            LRUBlockStore_NotifyFlushed(api);
-        }
+        LRUBlockStore_CompleteRequest(api);
         return;
     }
 
@@ -337,10 +335,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
         list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
     }
     arrfree(list);
-    if (0 == Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1))
-    {
-        LRUBlockStore_NotifyFlushed(api);
-    }
+    LRUBlockStore_CompleteRequest(api);
 }
 
 static int LRUBlockStore_GetStoredBlock(
@@ -486,13 +481,14 @@ static int LRUBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, s
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+    Longtail_LockSpinLock(api->m_Lock);
     if (api->m_PendingRequestCount > 0)
     {
-        Longtail_LockSpinLock(api->m_Lock);
         arrput(api->m_PendingAsyncFlushAPIs, async_complete_api);
         Longtail_UnlockSpinLock(api->m_Lock);
         return 0;
     }
+    Longtail_UnlockSpinLock(api->m_Lock);
     async_complete_api->OnComplete(async_complete_api, 0);
     return 0;
 }

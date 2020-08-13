@@ -22,13 +22,17 @@ struct CacheBlockStoreAPI
     TLongtail_Atomic32 m_PendingRequestCount;
 };
 
-static void CacheBlockStore_NotifyFlushed(struct CacheBlockStoreAPI* cacheblockstore_api)
+static void CacheBlockStore_CompleteRequest(struct CacheBlockStoreAPI* cacheblockstore_api)
 {
+    LONGTAIL_FATAL_ASSERT(cacheblockstore_api->m_PendingRequestCount > 0, return)
+    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(cacheblockstore_api->m_Lock);
-    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = cacheblockstore_api->m_PendingAsyncFlushAPIs;
-    cacheblockstore_api->m_PendingAsyncFlushAPIs = 0;
+    if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
+    {
+        pendingAsyncFlushAPIs = cacheblockstore_api->m_PendingAsyncFlushAPIs;
+        cacheblockstore_api->m_PendingAsyncFlushAPIs = 0;
+    }
     Longtail_UnlockSpinLock(cacheblockstore_api->m_Lock);
-
     size_t c = arrlen(pendingAsyncFlushAPIs);
     for (size_t n = 0; n < c; ++n)
     {
@@ -113,10 +117,7 @@ static void PutStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlockAP
         remote_put_api->m_AsyncCompleteAPI->OnComplete(remote_put_api->m_AsyncCompleteAPI, remote_put_api->m_RemoteErr);
         Longtail_Free(remote_put_api);
     }
-    if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-    {
-        CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-    }
+    CacheBlockStore_CompleteRequest(cacheblockstore_api);
 }
 
 static void PutStoredBlockPutRemoteComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
@@ -142,10 +143,7 @@ static void PutStoredBlockPutRemoteComplete(struct Longtail_AsyncPutStoredBlockA
         }
         Longtail_Free(api);
     }
-    if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-    {
-        CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-    }
+    CacheBlockStore_CompleteRequest(cacheblockstore_api);
 }
 
 static int CacheBlockStore_PutStoredBlock(
@@ -188,10 +186,7 @@ static int CacheBlockStore_PutStoredBlock(
             block_store_api, stored_block, async_complete_api,
             err)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
-        if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-        {
-            CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-        }
+        CacheBlockStore_CompleteRequest(cacheblockstore_api);
         Longtail_Free(put_stored_block_put_remote_complete_api);
         return err;
     }
@@ -392,10 +387,7 @@ static void OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlock
     }
     api->m_StoredBlock->Dispose(api->m_StoredBlock);
     Longtail_Free(api);
-    if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-    {
-        CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-    }
+    CacheBlockStore_CompleteRequest(cacheblockstore_api);
 }
 
 struct OnGetStoredBlockGetRemoteComplete_API
@@ -430,10 +422,7 @@ static int StoreBlockCopyToLocalCache(struct CacheBlockStoreAPI* cacheblockstore
             local_block_store, cached_stored_block, &put_local->m_API,
             err)
         Longtail_Free(put_local);
-        if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-        {
-            CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-        }
+        CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return err;
     }
     return 0;
@@ -451,10 +440,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         api->async_complete_api->OnComplete(api->async_complete_api, stored_block, err);
         Longtail_Free(api);
-        if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-        {
-            CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-        }
+        CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return;
     }
     LONGTAIL_FATAL_ASSERT(stored_block, return)
@@ -473,10 +459,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
         stored_block->Dispose(stored_block);
         api->async_complete_api->OnComplete(api->async_complete_api, 0, ENOMEM);
         Longtail_Free(api);
-        if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-        {
-            CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-        }
+        CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return;
     }
 
@@ -492,10 +475,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
         cached_stored_block->Dispose(cached_stored_block);
     }
     Longtail_Free(api);
-    if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-    {
-        CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-    }
+    CacheBlockStore_CompleteRequest(cacheblockstore_api);
 }
 
 struct OnGetStoredBlockGetLocalComplete_API
@@ -542,16 +522,10 @@ static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlock
             Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             Longtail_Free(on_get_stored_block_get_remote_complete);
             api->async_complete_api->OnComplete(api->async_complete_api, 0, err);
-            if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-            {
-                CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-            }
+            CacheBlockStore_CompleteRequest(cacheblockstore_api);
         }
         Longtail_Free(api);
-        if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-        {
-            CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-        }
+        CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return;
     }
     if (err)
@@ -562,10 +536,7 @@ static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlock
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         api->async_complete_api->OnComplete(api->async_complete_api, 0, err);
         Longtail_Free(api);
-        if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-        {
-            CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-        }
+        CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return;
     }
     LONGTAIL_FATAL_ASSERT(stored_block, return)
@@ -573,10 +544,7 @@ static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlock
     Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
     api->async_complete_api->OnComplete(api->async_complete_api, stored_block, err);
     Longtail_Free(api);
-    if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
-    {
-        CacheBlockStore_NotifyFlushed(cacheblockstore_api);
-    }
+    CacheBlockStore_CompleteRequest(cacheblockstore_api);
 }
 
 static int CacheBlockStore_GetStoredBlock(
@@ -965,17 +933,17 @@ static int CacheBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api,
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
+    Longtail_LockSpinLock(cacheblockstore_api->m_Lock);
     if (cacheblockstore_api->m_PendingRequestCount > 0)
     {
-        Longtail_LockSpinLock(cacheblockstore_api->m_Lock);
         arrput(cacheblockstore_api->m_PendingAsyncFlushAPIs, async_complete_api);
         Longtail_UnlockSpinLock(cacheblockstore_api->m_Lock);
         return 0;
     }
+    Longtail_UnlockSpinLock(cacheblockstore_api->m_Lock);
     async_complete_api->OnComplete(async_complete_api, 0);
     return 0;
 }
-
 
 static void CacheBlockStore_Dispose(struct Longtail_API* api)
 {

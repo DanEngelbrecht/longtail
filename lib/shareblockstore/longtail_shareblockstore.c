@@ -41,13 +41,17 @@ struct ShareBlockStoreAPI
     TLongtail_Atomic32 m_PendingRequestCount;
 };
 
-static void SharedStoredBlock_NotifyFlushed(struct ShareBlockStoreAPI* api)
+static void SharedBlockStore_CompleteRequest(struct ShareBlockStoreAPI* sharedblockstore_api)
 {
-    Longtail_LockSpinLock(api->m_Lock);
-    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = api->m_PendingAsyncFlushAPIs;
-    api->m_PendingAsyncFlushAPIs = 0;
-    Longtail_UnlockSpinLock(api->m_Lock);
-
+    LONGTAIL_FATAL_ASSERT(sharedblockstore_api->m_PendingRequestCount > 0, return)
+    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
+    Longtail_LockSpinLock(sharedblockstore_api->m_Lock);
+    if (0 == Longtail_AtomicAdd32(&sharedblockstore_api->m_PendingRequestCount, -1))
+    {
+        pendingAsyncFlushAPIs = sharedblockstore_api->m_PendingAsyncFlushAPIs;
+        sharedblockstore_api->m_PendingAsyncFlushAPIs = 0;
+    }
+    Longtail_UnlockSpinLock(sharedblockstore_api->m_Lock);
     size_t c = arrlen(pendingAsyncFlushAPIs);
     for (size_t n = 0; n < c; ++n)
     {
@@ -167,10 +171,7 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        if (0 == Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1))
-        {
-            SharedStoredBlock_NotifyFlushed(api);
-        }
+        SharedBlockStore_CompleteRequest(api);
         return;
     }
 
@@ -191,10 +192,7 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
         }
         arrfree(list);
         stored_block->Dispose(stored_block);
-        if (0 == Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1))
-        {
-            SharedStoredBlock_NotifyFlushed(api);
-        }
+        SharedBlockStore_CompleteRequest(api);
         return;
     }
 
@@ -211,10 +209,7 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
         list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
     }
     arrfree(list);
-    if (0 == Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1))
-    {
-        SharedStoredBlock_NotifyFlushed(api);
-    }
+    SharedBlockStore_CompleteRequest(api);
 }
 
 static int ShareBlockStore_GetStoredBlock(
@@ -363,13 +358,14 @@ static int ShareBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api,
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    Longtail_LockSpinLock(api->m_Lock);
     if (api->m_PendingRequestCount > 0)
     {
-        Longtail_LockSpinLock(api->m_Lock);
         arrput(api->m_PendingAsyncFlushAPIs, async_complete_api);
         Longtail_UnlockSpinLock(api->m_Lock);
         return 0;
     }
+    Longtail_UnlockSpinLock(api->m_Lock);
     async_complete_api->OnComplete(async_complete_api, 0);
     return 0;
 }

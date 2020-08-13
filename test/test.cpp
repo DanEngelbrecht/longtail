@@ -3779,7 +3779,7 @@ public:
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
     static int Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
     static int RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
-    static void NotifyFlushed(class TestAsyncBlockStore* block_store);
+    static void CompleteRequest(class TestAsyncBlockStore* block_store);
 private:
     struct Longtail_HashAPI* m_HashAPI;
     struct Longtail_JobAPI* m_JobAPI;
@@ -3803,13 +3803,17 @@ private:
     static int Worker(void* context_data);
 };
 
-void TestAsyncBlockStore::NotifyFlushed(class TestAsyncBlockStore* block_store)
+void TestAsyncBlockStore::CompleteRequest(class TestAsyncBlockStore* block_store)
 {
+    LONGTAIL_FATAL_ASSERT(block_store->m_PendingRequestCount > 0, return)
+    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(block_store->m_IOLock);
-    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = block_store->m_PendingAsyncFlushAPIs;
-    block_store->m_PendingAsyncFlushAPIs = 0;
+    if (0 == Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1))
+    {
+        pendingAsyncFlushAPIs = block_store->m_PendingAsyncFlushAPIs;
+        block_store->m_PendingAsyncFlushAPIs = 0;
+    }
     Longtail_UnlockSpinLock(block_store->m_IOLock);
-
     size_t c = arrlen(pendingAsyncFlushAPIs);
     for (size_t n = 0; n < c; ++n)
     {
@@ -3817,7 +3821,6 @@ void TestAsyncBlockStore::NotifyFlushed(class TestAsyncBlockStore* block_store)
     }
     arrfree(pendingAsyncFlushAPIs);
 }
-
 
 int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api, struct Longtail_JobAPI* job_api)
 {
@@ -4047,10 +4050,7 @@ int TestAsyncBlockStore::Worker(void* context_data)
 
             async_complete_api->OnComplete(async_complete_api, err);
 
-            if (0 == Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1))
-            {
-                NotifyFlushed(block_store);
-            }
+            CompleteRequest(block_store);
             continue;
         }
         ptrdiff_t get_request_count = arrlen(block_store->m_GetRequests);
@@ -4077,19 +4077,13 @@ int TestAsyncBlockStore::Worker(void* context_data)
                 struct Longtail_StoredBlock* stored_block = 0;
                 int err = WorkerGetRequest(serialized_block_data, &stored_block);
                 async_complete_api->OnComplete(async_complete_api, stored_block, err);
-                if (0 == Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1))
-                {
-                    NotifyFlushed(block_store);
-                }
+                CompleteRequest(block_store);
                 continue;
             }
             else
             {
                 async_complete_api->OnComplete(async_complete_api, 0, ENOENT);
-                if (0 == Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1))
-                {
-                    NotifyFlushed(block_store);
-                }
+                CompleteRequest(block_store);
                 continue;
             }
         }
@@ -4126,17 +4120,11 @@ int TestAsyncBlockStore::Worker(void* context_data)
             if (err)
             {
                 async_complete_api->OnComplete(async_complete_api, 0, err);
-                if (0 == Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1))
-                {
-                    NotifyFlushed(block_store);
-                }
+                CompleteRequest(block_store);
                 continue;
             }
             async_complete_api->OnComplete(async_complete_api, content_index, 0);
-            if (0 == Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1))
-            {
-                NotifyFlushed(block_store);
-            }
+                CompleteRequest(block_store);
             continue;
         }
         else
@@ -4227,15 +4215,15 @@ int TestAsyncBlockStore::GetStats(struct Longtail_BlockStoreAPI* block_store_api
 int TestAsyncBlockStore::Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
     class TestAsyncBlockStore* block_store = (class TestAsyncBlockStore*)block_store_api;
+    Longtail_LockSpinLock(block_store->m_IOLock);
     if (block_store->m_PendingRequestCount > 0)
     {
-        Longtail_LockSpinLock(block_store->m_IOLock);
         arrput(block_store->m_PendingAsyncFlushAPIs, async_complete_api);
         Longtail_UnlockSpinLock(block_store->m_IOLock);
         return 0;
     }
+    Longtail_UnlockSpinLock(block_store->m_IOLock);
     async_complete_api->OnComplete(async_complete_api, 0);
-    return 0;
     return 0;
 }
 
