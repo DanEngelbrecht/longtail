@@ -134,15 +134,16 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api)
 
     const char* content_index_lock_path = storage_api->ConcatPath(storage_api, content_path, "store.lci.lock");
     Longtail_StorageAPI_HOpenFile content_index_lock_file;
-    int retries_left = 99;
+    int try_count = 14; // Maximum delay ~8 seconds
+    uint64_t retry_delay = 1000;
 
     // We try to open the file for write, if we succeed no live process is in the process of updating the index
     err = storage_api->OpenWriteFile(storage_api, content_index_lock_path, 0, &content_index_lock_file);
     while (err)
     {
-        Longtail_Sleep(100000);
+        Longtail_Sleep(retry_delay);
         err = storage_api->OpenWriteFile(storage_api, content_index_lock_path, 0, &content_index_lock_file);
-        if (--retries_left == 0)
+        if (--try_count == 0)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteContentIndex(%p, %s, %p) failed with %d",
                 storage_api, content_path, content_index,
@@ -151,6 +152,7 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api)
             Longtail_Free((void*)content_index_path_tmp);
             return err;
         }
+        retry_delay *= 2;
     }
 
     const char* content_index_path = storage_api->ConcatPath(storage_api, content_path, "store.lci");
