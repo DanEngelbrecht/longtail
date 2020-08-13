@@ -512,7 +512,7 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
         const char* validatePath = Longtail_ConcatPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
-        DWORD attr = GetFileAttributes(validatePath);
+        DWORD attr = GetFileAttributesA(validatePath);
         Longtail_Free((char*)validatePath);
         if (attr == INVALID_FILE_ATTRIBUTES)
         {
