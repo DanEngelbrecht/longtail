@@ -14,6 +14,8 @@ struct BlockHashToBlockState
     uint32_t value;
 };
 
+#define TMP_EXTENSION_LENGTH (1 + 16)
+
 struct FSBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
@@ -31,7 +33,7 @@ struct FSBlockStoreAPI
     const char* m_BlockExtension;
     uint32_t m_DefaultMaxBlockSize;
     uint32_t m_DefaultMaxChunksPerBlock;
-    char m_TmpExtension[17+1];
+    char m_TmpExtension[TMP_EXTENSION_LENGTH + 1];
 };
 
 #define BLOCK_NAME_LENGTH   23
@@ -103,7 +105,7 @@ static char* GetTempBlockPath(struct Longtail_StorageAPI* storage_api, const cha
 {
     LONGTAIL_FATAL_ASSERT(storage_api, return 0)
     LONGTAIL_FATAL_ASSERT(content_path, return 0)
-    char file_name[7 + BLOCK_NAME_LENGTH + 15 + 1];
+    char file_name[7 + BLOCK_NAME_LENGTH + TMP_EXTENSION_LENGTH + 1];
     strcpy(file_name, "chunks/");
     GetBlockName(block_hash, &file_name[7]);
     strcpy(&file_name[7 + BLOCK_NAME_LENGTH], tmp_extension);
