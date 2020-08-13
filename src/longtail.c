@@ -4122,6 +4122,16 @@ int Longtail_WriteContent(
     Longtail_Free(block_store_lookup);
     block_store_lookup = 0;
 
+    if (job_count == 0)
+    {
+        Longtail_Free(ctxs);
+        Longtail_Free(funcs);
+        Longtail_Free(asset_part_lookup);
+        Longtail_Free(write_block_jobs);
+        Longtail_Free(chunk_sizes);
+        return 0;
+    }
+
     Longtail_JobAPI_Jobs jobs;
     err = job_api->CreateJobs(job_api, job_group, job_count, funcs, ctxs, &jobs);
     LONGTAIL_FATAL_ASSERT(err == 0, return err)
