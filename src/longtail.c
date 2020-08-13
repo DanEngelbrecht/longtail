@@ -489,6 +489,7 @@ void Longtail_SetAssert(Longtail_Assert assert_func)
 
 void Longtail_DisposeAPI(struct Longtail_API* api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_DisposeAPI(%p)", (void*)api)
     if (api->Dispose)
     {
         api->Dispose(api);
