@@ -110,8 +110,12 @@ static char* GetTempBlockPath(struct Longtail_StorageAPI* storage_api, const cha
     return storage_api->ConcatPath(storage_api, content_path, file_name);
 }
 
-static int SafeWriteContentIndex(struct FSBlockStoreAPI* api, struct Longtail_StorageAPI* storage_api, const char* content_path, struct Longtail_ContentIndex* content_index)
+static int SafeWriteContentIndex(struct FSBlockStoreAPI* api)
 {
+    struct Longtail_StorageAPI* storage_api = api->m_StorageAPI;
+    const char* content_path = api->m_ContentPath;
+    struct Longtail_ContentIndex* content_index = api->m_ContentIndex;
+
     char tmp_store_path[5 + 17 + 1];
     strcpy(tmp_store_path, "store");
     strcpy(&tmp_store_path[5], api->m_TmpExtension);
@@ -126,16 +130,68 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api, struct Longtail_St
         return err;
     }
 
+    const char* content_index_lock_path = storage_api->ConcatPath(storage_api, content_path, "store.lci.lock");
+    Longtail_StorageAPI_HOpenFile content_index_lock_file;
+    int retries_left = 99;
+
+    // We try to open the file for write, if we succeed no live process is in the process of updating the index
+    err = storage_api->OpenWriteFile(storage_api, content_index_lock_path, 0, &content_index_lock_file);
+    while (err)
+    {
+        Longtail_Sleep(100000);
+        err = storage_api->OpenWriteFile(storage_api, content_index_lock_path, 0, &content_index_lock_file);
+        if (--retries_left == 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteContentIndex(%p, %s, %p) failed with %d",
+                storage_api, content_path, content_index,
+                err)
+            Longtail_Free((void*)content_index_lock_path);
+            Longtail_Free((void*)content_index_path_tmp);
+            return err;
+        }
+    }
+
+    const char* content_index_path = storage_api->ConcatPath(storage_api, content_path, "store.lci");
+    struct Longtail_ContentIndex* existing_content_index = 0;
+
+    // We only pick it up if we can actually read it, if it can't be read or don't exist we will ignore old index
+    int read_old_index_err = Longtail_ReadContentIndex(storage_api, content_index_path, &existing_content_index);
+
+    if (!read_old_index_err)
+    {
+        struct Longtail_ContentIndex* merged_content_index = 0;
+        err = Longtail_MergeContentIndex(
+            api->m_JobAPI,
+            existing_content_index,
+            content_index,
+            &merged_content_index);
+        if (!err)
+        {
+            Longtail_Free(existing_content_index);
+            Longtail_Free((void*)content_index_path);
+            storage_api->CloseFile(storage_api, content_index_lock_file);
+            storage_api->RemoveFile(storage_api, content_index_lock_path);
+            Longtail_Free((void*)content_index_path_tmp);
+            return err;
+        }
+        content_index = merged_content_index;
+    }
+
     err = Longtail_WriteContentIndex(storage_api, content_index, content_index_path_tmp);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteContentIndex(%p, %s, %p) failed with %d",
             storage_api, content_path, content_index,
             err)
+        Longtail_Free(existing_content_index);
+        Longtail_Free((void*)content_index_path);
+        storage_api->CloseFile(storage_api, content_index_lock_file);
+        storage_api->RemoveFile(storage_api, content_index_lock_path);
+        Longtail_Free((void*)content_index_lock_path);
         Longtail_Free((void*)content_index_path_tmp);
         return err;
     }
-    const char* content_index_path = storage_api->ConcatPath(storage_api, content_path, "store.lci");
+
     if (storage_api->IsFile(storage_api, content_index_path))
     {
         err = storage_api->RemoveFile(storage_api, content_index_path);
@@ -144,11 +200,17 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api, struct Longtail_St
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteContentIndex(%p, %s, %p) failed with %d",
                 storage_api, content_path, content_index,
                 err)
+            Longtail_Free(existing_content_index);
             Longtail_Free((void*)content_index_path);
+            storage_api->RemoveFile(storage_api, content_index_path_tmp);
+            storage_api->CloseFile(storage_api, content_index_lock_file);
+            storage_api->RemoveFile(storage_api, content_index_lock_path);
+            Longtail_Free((void*)content_index_lock_path);
             Longtail_Free((void*)content_index_path_tmp);
             return err;
         }
     }
+
     err = storage_api->RenameFile(storage_api, content_index_path_tmp, content_index_path);
     if (err)
     {
@@ -157,9 +219,19 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api, struct Longtail_St
             err)
         storage_api->RemoveFile(storage_api, content_index_path_tmp);
     }
+    storage_api->CloseFile(storage_api, content_index_lock_file);
+    storage_api->RemoveFile(storage_api, content_index_lock_path);
 
+    Longtail_Free(existing_content_index);
     Longtail_Free((void*)content_index_path);
+    Longtail_Free((void*)content_index_lock_path);
     Longtail_Free((void*)content_index_path_tmp);
+
+    if (api->m_ContentIndex != content_index)
+    {
+        Longtail_Free(api->m_ContentIndex);
+        api->m_ContentIndex = content_index;
+    }
 
     return err;
 }
@@ -664,6 +736,52 @@ static int FSBlockStore_GetStoredBlock(
     return 0;
 }
 
+int FSBlockStore_GetContentIndexFromStorage(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_JobAPI* job_api,
+    const char* content_path,
+    const char* block_extension,
+    uint32_t default_max_block_size,
+    uint32_t default_max_chunks_per_block,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    struct Longtail_ContentIndex* content_index = 0;
+    const char* content_index_path = storage_api->ConcatPath(storage_api, content_path, "store.lci");
+    if (storage_api->IsFile(storage_api, content_index_path))
+    {
+        int err = Longtail_ReadContentIndex(storage_api, content_index_path, &content_index);
+        if (err)
+        {
+            Longtail_Free((void*)content_index_path);
+            return err;
+        }
+    }
+    Longtail_Free((void*)content_index_path);
+    if (content_index)
+    {
+        *out_content_index = content_index;
+        return 0;
+    }
+    int err = ReadContent(
+        storage_api,
+        job_api,
+        default_max_block_size,
+        default_max_chunks_per_block,
+        content_path,
+        block_extension,
+        &content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetContentIndexFromStorage(%p, %p, `%s`, `%s`, %u, %u, %p) failed with %d",
+            storage_api, job_api, content_path, block_extension, default_max_block_size, default_max_chunks_per_block, out_content_index,
+            err)
+        return err;
+    }
+    *out_content_index = content_index;
+    return 0;
+}
+
+
 static int FSBlockStore_GetIndexSync(
     struct FSBlockStoreAPI* fsblockstore_api,
     struct Longtail_ContentIndex** out_content_index)
@@ -672,15 +790,15 @@ static int FSBlockStore_GetIndexSync(
     if (!fsblockstore_api->m_ContentIndex)
     {
         Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+
         struct Longtail_ContentIndex* content_index;
-        struct Longtail_JobAPI* job_api = fsblockstore_api->m_JobAPI;
-        int err = ReadContent(
+        int err = FSBlockStore_GetContentIndexFromStorage(
             fsblockstore_api->m_StorageAPI,
-            job_api,
-            fsblockstore_api->m_DefaultMaxBlockSize,
-            fsblockstore_api->m_DefaultMaxChunksPerBlock,
+            fsblockstore_api->m_JobAPI,
             fsblockstore_api->m_ContentPath,
             fsblockstore_api->m_BlockExtension,
+            fsblockstore_api->m_DefaultMaxBlockSize,
+            fsblockstore_api->m_DefaultMaxChunksPerBlock,
             &content_index);
         if (err)
         {
@@ -689,8 +807,10 @@ static int FSBlockStore_GetIndexSync(
                 err)
             return err;
         }
+
         Longtail_LockSpinLock(fsblockstore_api->m_Lock);
 
+        // Check if someone else beat us to it...
         if (!fsblockstore_api->m_ContentIndex)
         {
             fsblockstore_api->m_ContentIndex = content_index;
@@ -700,12 +820,10 @@ static int FSBlockStore_GetIndexSync(
                 uint64_t block_hash = fsblockstore_api->m_ContentIndex->m_BlockHashes[b];
                 hmput(fsblockstore_api->m_BlockState, block_hash, 1);
             }
-
-            err = SafeWriteContentIndex(fsblockstore_api, fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, fsblockstore_api->m_ContentIndex);
-            if (err)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", fsblockstore_api->m_ContentPath, err);
-            }
+        }
+        else
+        {
+            Longtail_Free(content_index);
         }
     }
 
@@ -884,30 +1002,9 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
     if (api->m_ContentIndex)
     {
         const char* content_index_path = api->m_StorageAPI->ConcatPath(api->m_StorageAPI, api->m_ContentPath, "store.lci");
-        if (!api->m_StorageAPI->IsFile(api->m_StorageAPI, content_index_path))
+        if ((!api->m_StorageAPI->IsFile(api->m_StorageAPI, content_index_path)) || (new_block_count > 0))
         {
-            err = SafeWriteContentIndex(api, api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
-            if (err)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", api->m_ContentPath, err);
-            }
-        }
-        else if (new_block_count > 0)
-        {
-            struct Longtail_ContentIndex* existing_content_index;
-            err = Longtail_ReadContentIndex(api->m_StorageAPI, content_index_path, &existing_content_index);
-            if (!err)
-            {
-                struct Longtail_ContentIndex* merged_content_index;
-                err = Longtail_MergeContentIndex(api->m_JobAPI, existing_content_index, api->m_ContentIndex, &merged_content_index);
-                if (!err)
-                {
-                    Longtail_Free(api->m_ContentIndex);
-                    api->m_ContentIndex = merged_content_index;
-                }
-                Longtail_Free(existing_content_index);
-            }
-            err = SafeWriteContentIndex(api, api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
+            err = SafeWriteContentIndex(api);
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", api->m_ContentPath, err);
@@ -998,21 +1095,6 @@ static int FSBlockStore_Init(
         api->m_StatU64[s] = 0;
     }
 
-    const char* content_index_path = storage_api->ConcatPath(storage_api, content_path, "store.lci");
-    if (api->m_StorageAPI->IsFile(api->m_StorageAPI, content_index_path))
-    {
-        int err = Longtail_ReadContentIndex(api->m_StorageAPI, content_index_path, &api->m_ContentIndex);
-        if (!err)
-        {
-            uint64_t block_count = *api->m_ContentIndex->m_BlockCount;
-            for (uint64_t b = 0; b < block_count; ++b)
-            {
-                uint64_t block_hash = api->m_ContentIndex->m_BlockHashes[b];
-                hmput(api->m_BlockState, block_hash, 1);
-            }
-        }
-    }
-    Longtail_Free((void*)content_index_path);
     int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
