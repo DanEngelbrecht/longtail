@@ -167,7 +167,7 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api)
             existing_content_index,
             content_index,
             &merged_content_index);
-        if (!err)
+        if (err)
         {
             Longtail_Free(existing_content_index);
             Longtail_Free((void*)content_index_path);
