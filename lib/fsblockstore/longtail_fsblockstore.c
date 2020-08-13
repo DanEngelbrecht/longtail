@@ -31,11 +31,34 @@ struct FSBlockStoreAPI
     const char* m_BlockExtension;
     uint32_t m_DefaultMaxBlockSize;
     uint32_t m_DefaultMaxChunksPerBlock;
+    char m_TmpExtension[17+1];
 };
 
 #define BLOCK_NAME_LENGTH   23
 
 static const char* HashLUT = "0123456789abcdef";
+
+static void GetUniqueExtension(uint64_t id, char* extension)
+{
+    extension[0] = '.';
+    extension[1] = HashLUT[(id >> 60) & 0xf];
+    extension[2] = HashLUT[(id >> 56) & 0xf];
+    extension[3] = HashLUT[(id >> 52) & 0xf];
+    extension[4] = HashLUT[(id >> 48) & 0xf];
+    extension[5] = HashLUT[(id >> 44) & 0xf];
+    extension[6] = HashLUT[(id >> 40) & 0xf];
+    extension[7] = HashLUT[(id >> 36) & 0xf];
+    extension[8] = HashLUT[(id >> 32) & 0xf];
+    extension[9] = HashLUT[(id >> 28) & 0xf];
+    extension[10] = HashLUT[(id >> 24) & 0xf];
+    extension[11] = HashLUT[(id >> 20) & 0xf];
+    extension[12] = HashLUT[(id >> 16) & 0xf];
+    extension[13] = HashLUT[(id >> 12) & 0xf];
+    extension[14] = HashLUT[(id >> 8) & 0xf];
+    extension[15] = HashLUT[(id >> 4) & 0xf];
+    extension[16] = HashLUT[(id >> 0) & 0xf];
+    extension[17] = 0;
+}
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
@@ -76,20 +99,23 @@ static char* GetBlockPath(struct Longtail_StorageAPI* storage_api, const char* c
     return storage_api->ConcatPath(storage_api, content_path, file_name);
 }
 
-static char* GetTempBlockPath(struct Longtail_StorageAPI* storage_api, const char* content_path, TLongtail_Hash block_hash)
+static char* GetTempBlockPath(struct Longtail_StorageAPI* storage_api, const char* content_path, TLongtail_Hash block_hash, const char* tmp_extension)
 {
     LONGTAIL_FATAL_ASSERT(storage_api, return 0)
     LONGTAIL_FATAL_ASSERT(content_path, return 0)
     char file_name[7 + BLOCK_NAME_LENGTH + 15 + 1];
     strcpy(file_name, "chunks/");
     GetBlockName(block_hash, &file_name[7]);
-    strcpy(&file_name[7 + BLOCK_NAME_LENGTH], ".tmp");
+    strcpy(&file_name[7 + BLOCK_NAME_LENGTH], tmp_extension);
     return storage_api->ConcatPath(storage_api, content_path, file_name);
 }
 
-static int SafeWriteContentIndex(struct Longtail_StorageAPI* storage_api, const char* content_path, struct Longtail_ContentIndex* content_index)
+static int SafeWriteContentIndex(struct FSBlockStoreAPI* api, struct Longtail_StorageAPI* storage_api, const char* content_path, struct Longtail_ContentIndex* content_index)
 {
-    const char* content_index_path_tmp = storage_api->ConcatPath(storage_api, content_path, "store.tmp");
+    char tmp_store_path[5 + 17 + 1];
+    strcpy(tmp_store_path, "store");
+    strcpy(&tmp_store_path[5], api->m_TmpExtension);
+    const char* content_index_path_tmp = storage_api->ConcatPath(storage_api, content_path, tmp_store_path);
     int err = EnsureParentPathExists(storage_api, content_index_path_tmp);
     if (err)
     {
@@ -138,7 +164,7 @@ static int SafeWriteContentIndex(struct Longtail_StorageAPI* storage_api, const 
     return err;
 }
 
-static int SafeWriteStoredBlock(struct Longtail_StorageAPI* storage_api, const char* content_path, const char* block_extension, struct Longtail_StoredBlock* stored_block)
+static int SafeWriteStoredBlock(struct FSBlockStoreAPI* api, struct Longtail_StorageAPI* storage_api, const char* content_path, const char* block_extension, struct Longtail_StoredBlock* stored_block)
 {
     TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
     char* block_path = GetBlockPath(storage_api, content_path, block_extension, block_hash);
@@ -151,7 +177,7 @@ static int SafeWriteStoredBlock(struct Longtail_StorageAPI* storage_api, const c
         return 0;
     }
 
-    char* tmp_block_path = GetTempBlockPath(storage_api, content_path, block_hash);
+    char* tmp_block_path = GetTempBlockPath(storage_api, content_path, block_hash, api->m_TmpExtension);
     int err = EnsureParentPathExists(storage_api, tmp_block_path);
     if (err)
     {
@@ -175,18 +201,26 @@ static int SafeWriteStoredBlock(struct Longtail_StorageAPI* storage_api, const c
     }
 
     err = storage_api->RenameFile(storage_api, tmp_block_path, block_path);
-    if (err == EEXIST)
+    if (err)
     {
-        err = storage_api->RemoveFile(storage_api, tmp_block_path);
-        if (err)
+        int remove_err = storage_api->RemoveFile(storage_api, tmp_block_path);
+        if (remove_err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "SafeWriteStoredBlock(%p, %s, %p) cant remove redundant temp block file, failed with %d",
                 storage_api, content_path, stored_block,
-                err)
+                remove_err)
         }
     }
-    else if (err)
+
+    if (err && (err != EEXIST))
     {
+        // Someone beat us to it, all good.
+        if (storage_api->IsFile(storage_api, block_path))
+        {
+            Longtail_Free((char*)tmp_block_path);
+            Longtail_Free((void*)block_path);
+            return 0;
+        }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteStoredBlock(%p, %s, %p) failed to rename temp block file, failed with %d",
             storage_api, content_path, stored_block,
             err)
@@ -511,7 +545,7 @@ static int FSBlockStore_PutStoredBlock(
     hmput(fsblockstore_api->m_BlockState, block_hash, 0);
     Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
 
-    int err = SafeWriteStoredBlock(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, fsblockstore_api->m_BlockExtension, stored_block);
+    int err = SafeWriteStoredBlock(fsblockstore_api, fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, fsblockstore_api->m_BlockExtension, stored_block);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
@@ -667,7 +701,7 @@ static int FSBlockStore_GetIndexSync(
                 hmput(fsblockstore_api->m_BlockState, block_hash, 1);
             }
 
-            err = SafeWriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, fsblockstore_api->m_ContentIndex);
+            err = SafeWriteContentIndex(fsblockstore_api, fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, fsblockstore_api->m_ContentIndex);
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", fsblockstore_api->m_ContentPath, err);
@@ -852,7 +886,7 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
         const char* content_index_path = api->m_StorageAPI->ConcatPath(api->m_StorageAPI, api->m_ContentPath, "store.lci");
         if (!api->m_StorageAPI->IsFile(api->m_StorageAPI, content_index_path))
         {
-            err = SafeWriteContentIndex(api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
+            err = SafeWriteContentIndex(api, api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", api->m_ContentPath, err);
@@ -873,7 +907,7 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
                 }
                 Longtail_Free(existing_content_index);
             }
-            err = SafeWriteContentIndex(api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
+            err = SafeWriteContentIndex(api, api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", api->m_ContentPath, err);
@@ -921,6 +955,7 @@ static int FSBlockStore_Init(
     uint32_t default_max_block_size,
     uint32_t default_max_chunks_per_block,
     const char* optional_extension,
+    uint64_t unique_id,
     struct Longtail_BlockStoreAPI** out_block_store_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_Init(%p, %p, %s, %u, %u, %p)",
@@ -954,6 +989,7 @@ static int FSBlockStore_Init(
     api->m_BlockState = 0;
     api->m_AddedBlockIndexes = 0;
     api->m_BlockExtension = optional_extension ? optional_extension : ".lrb";
+    GetUniqueExtension(unique_id, api->m_TmpExtension);
     api->m_DefaultMaxBlockSize = default_max_block_size;
     api->m_DefaultMaxChunksPerBlock = default_max_chunks_per_block;
 
@@ -1014,6 +1050,10 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
             ENOMEM)
         return 0;
     }
+    uint64_t computer_id = Longtail_GetProcessIdentity();
+    uintptr_t instance_id = (uintptr_t)mem;
+    uint64_t unique_id = computer_id ^ instance_id;
+
     struct Longtail_BlockStoreAPI* block_store_api;
     int err = FSBlockStore_Init(
         mem,
@@ -1023,6 +1063,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
         default_max_block_size,
         default_max_chunks_per_block,
         optional_extension,
+        unique_id,
         &block_store_api);
     if (err)
     {
