@@ -6804,14 +6804,14 @@ int TestLongtailFSBlockStoreSyncWorkerCB(void* context_data)
 
 TEST(Longtail, TestLongtailFSBlockStoreSync)
 {
-    static const uint32_t MAX_BLOCK_SIZE = 32786;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 32u;
+    static const uint32_t MAX_BLOCK_SIZE = 26973;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
 
-    for (uint32_t i = 0; i < 3; ++i)
+    for (uint32_t i = 0; i < 4; ++i)
     {
         CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, (MAX_BLOCK_SIZE * 3) >> 1);
 
@@ -6846,7 +6846,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
                 MAX_CHUNKS_PER_BLOCK,
                 &content_index));
 
-        static const uint32_t WORKER_COUNT = 16;
+        static const uint32_t WORKER_COUNT = 8;
         struct FSBlockStoreSyncWriteContentWorkerContext ctx = { mem_storage, hash_api, job_api, "source", vindex, content_index, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK};
         HLongtail_Thread workerThreads[WORKER_COUNT];
         for (uint32_t t = 0; t < WORKER_COUNT; ++t)
