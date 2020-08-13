@@ -20,6 +20,9 @@ struct FSBlockStoreAPI
     struct Longtail_JobAPI* m_JobAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
     char* m_ContentPath;
+
+    TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
+
     HLongtail_SpinLock m_Lock;
 
     struct Longtail_ContentIndex* m_ContentIndex;
@@ -28,8 +31,6 @@ struct FSBlockStoreAPI
     const char* m_BlockExtension;
     uint32_t m_DefaultMaxBlockSize;
     uint32_t m_DefaultMaxChunksPerBlock;
-
-    TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
 };
 
 #define BLOCK_NAME_LENGTH   23
@@ -805,79 +806,104 @@ static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api,
     return 0;
 }
 
-static void FSBlockStore_Dispose(struct Longtail_API* api)
+static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_Dispose(%p)", api)
-    LONGTAIL_FATAL_ASSERT(api, return)
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
-    intptr_t new_block_count = arrlen(fsblockstore_api->m_AddedBlockIndexes);
+    struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)block_store_api;
+    Longtail_LockSpinLock(api->m_Lock);
+
+    int err = 0;
+
+    intptr_t new_block_count = arrlen(api->m_AddedBlockIndexes);
     if (new_block_count > 0)
     {
-        if (fsblockstore_api->m_ContentIndex)
+        if (api->m_ContentIndex)
         {
             struct Longtail_ContentIndex* new_content_index;
-            int err = UpdateContentIndex(
-                fsblockstore_api->m_ContentIndex,
-                fsblockstore_api->m_AddedBlockIndexes,
+            err = UpdateContentIndex(
+                api->m_ContentIndex,
+                api->m_AddedBlockIndexes,
                 &new_content_index);
             if (!err)
             {
-                Longtail_Free(fsblockstore_api->m_ContentIndex);
-                fsblockstore_api->m_ContentIndex = new_content_index;
+                Longtail_Free(api->m_ContentIndex);
+                api->m_ContentIndex = new_content_index;
             }
         }
         else
         {
             Longtail_CreateContentIndexFromBlocks(
-                fsblockstore_api->m_DefaultMaxBlockSize,
-                fsblockstore_api->m_DefaultMaxChunksPerBlock,
-                (uint64_t)(arrlen(fsblockstore_api->m_AddedBlockIndexes)),
-                fsblockstore_api->m_AddedBlockIndexes,
-                &fsblockstore_api->m_ContentIndex);
+                api->m_DefaultMaxBlockSize,
+                api->m_DefaultMaxChunksPerBlock,
+                (uint64_t)(arrlen(api->m_AddedBlockIndexes)),
+                api->m_AddedBlockIndexes,
+                &api->m_ContentIndex);
         }
         intptr_t free_block_index = new_block_count;
         while(free_block_index-- > 0)
         {
-            struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[free_block_index];
+            struct Longtail_BlockIndex* block_index = api->m_AddedBlockIndexes[free_block_index];
             Longtail_Free(block_index);
         }
     }
-    arrfree(fsblockstore_api->m_AddedBlockIndexes);
+    arrfree(api->m_AddedBlockIndexes);
 
-    if (fsblockstore_api->m_ContentIndex)
+    if (api->m_ContentIndex)
     {
-        const char* content_index_path = fsblockstore_api->m_StorageAPI->ConcatPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, "store.lci");
-        if (!fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, content_index_path))
+        const char* content_index_path = api->m_StorageAPI->ConcatPath(api->m_StorageAPI, api->m_ContentPath, "store.lci");
+        if (!api->m_StorageAPI->IsFile(api->m_StorageAPI, content_index_path))
         {
-            int err = SafeWriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, fsblockstore_api->m_ContentIndex);
+            err = SafeWriteContentIndex(api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", fsblockstore_api->m_ContentPath, err);
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", api->m_ContentPath, err);
             }
         }
         else if (new_block_count > 0)
         {
             struct Longtail_ContentIndex* existing_content_index;
-            int err = Longtail_ReadContentIndex(fsblockstore_api->m_StorageAPI, content_index_path, &existing_content_index);
+            err = Longtail_ReadContentIndex(api->m_StorageAPI, content_index_path, &existing_content_index);
             if (!err)
             {
                 struct Longtail_ContentIndex* merged_content_index;
-                err = Longtail_MergeContentIndex(fsblockstore_api->m_JobAPI, existing_content_index, fsblockstore_api->m_ContentIndex, &merged_content_index);
+                err = Longtail_MergeContentIndex(api->m_JobAPI, existing_content_index, api->m_ContentIndex, &merged_content_index);
                 if (!err)
                 {
-                    Longtail_Free(fsblockstore_api->m_ContentIndex);
-                    fsblockstore_api->m_ContentIndex = merged_content_index;
+                    Longtail_Free(api->m_ContentIndex);
+                    api->m_ContentIndex = merged_content_index;
                 }
                 Longtail_Free(existing_content_index);
             }
-            err = SafeWriteContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentPath, fsblockstore_api->m_ContentIndex);
+            err = SafeWriteContentIndex(api->m_StorageAPI, api->m_ContentPath, api->m_ContentIndex);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", fsblockstore_api->m_ContentPath, err);
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Failed to store content index for `%s`, %d", api->m_ContentPath, err);
             }
         }
         Longtail_Free((void*)content_index_path);
     }
+
+    Longtail_UnlockSpinLock(api->m_Lock);
+
+    if (async_complete_api)
+    {
+        async_complete_api->OnComplete(async_complete_api, err);
+        return 0;
+    }
+    return err;
+}
+
+static void FSBlockStore_Dispose(struct Longtail_API* api)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_Dispose(%p)", api)
+    LONGTAIL_FATAL_ASSERT(api, return)
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
+
+    int err = FSBlockStore_Flush(&fsblockstore_api->m_BlockStoreAPI, 0);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_Flush failed for `%s`, %d", fsblockstore_api->m_ContentPath, err);
+    }
+
     hmfree(fsblockstore_api->m_BlockState);
     fsblockstore_api->m_BlockState = 0;
     Longtail_DeleteSpinLock(fsblockstore_api->m_Lock);
@@ -912,7 +938,8 @@ static int FSBlockStore_Init(
         FSBlockStore_GetStoredBlock,
         FSBlockStore_GetIndex,
         FSBlockStore_RetargetContent,
-        FSBlockStore_GetStats);
+        FSBlockStore_GetStats,
+        FSBlockStore_Flush);
     if (!block_store_api)
     {
         return EINVAL;

@@ -424,6 +424,26 @@ uint64_t Longtail_GetBlockStoreAPISize()
     return sizeof(struct Longtail_BlockStoreAPI);
 }
 
+uint64_t Longtail_GetAsyncFlushAPISize()
+{
+    return sizeof(struct Longtail_AsyncFlushAPI);
+}
+
+struct Longtail_AsyncFlushAPI* Longtail_MakeAsyncFlushAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncFlush_OnCompleteFunc on_complete_func)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
+    struct Longtail_AsyncFlushAPI* api = (struct Longtail_AsyncFlushAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->OnComplete = on_complete_func;
+    return api;
+}
+
+void Longtail_AsyncFlush_OnComplete(struct Longtail_AsyncFlushAPI* async_complete_api, int err) { async_complete_api->OnComplete(async_complete_api, err); }
+
+
 struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
@@ -432,7 +452,8 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetIndexFunc get_index_func,
     Longtail_BlockStore_RetargetContentFunc retarget_content_func,
-    Longtail_BlockStore_GetStatsFunc get_stats_func)
+    Longtail_BlockStore_GetStatsFunc get_stats_func,
+    Longtail_BlockStore_FlushFunc flush_func)
 {
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
     struct Longtail_BlockStoreAPI* api = (struct Longtail_BlockStoreAPI*)mem;
@@ -443,6 +464,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     api->GetIndex = get_index_func;
     api->RetargetContent = retarget_content_func;
     api->GetStats = get_stats_func;
+    api->Flush = flush_func;
     return api;
 }
 
@@ -452,6 +474,7 @@ int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
 int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api) { return block_store_api->GetIndex(block_store_api, async_complete_api); }
 int Longtail_BlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api) { return block_store_api->RetargetContent(block_store_api, content_index, async_complete_api); }
 int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats) { return block_store_api->GetStats(block_store_api, out_stats); }
+int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api) {return block_store_api->Flush(block_store_api, async_complete_api); }
 
 Longtail_Assert Longtail_Assert_private = 0;
 
@@ -466,6 +489,7 @@ void Longtail_SetAssert(Longtail_Assert assert_func)
 
 void Longtail_DisposeAPI(struct Longtail_API* api)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_DisposeAPI(%p)", (void*)api)
     if (api->Dispose)
     {
         api->Dispose(api);

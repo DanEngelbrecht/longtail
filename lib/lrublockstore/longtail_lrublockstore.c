@@ -95,14 +95,36 @@ struct LRUBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_BlockStoreAPI* m_BackingBlockStore;
-    struct BlockHashToLRUStoredBlock* m_BlockHashToLRUStoredBlock;
-    struct BlockHashToCompleteCallbacks* m_BlockHashToCompleteCallbacks;
-    HLongtail_SpinLock m_Lock;
-    TLongtail_Atomic32 m_PendingRequestCount;
-    struct LRU* m_LRU;
 
     TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
+
+    HLongtail_SpinLock m_Lock;
+    struct Longtail_AsyncFlushAPI** m_PendingAsyncFlushAPIs;
+    struct LRU* m_LRU;
+    struct BlockHashToLRUStoredBlock* m_BlockHashToLRUStoredBlock;
+    struct BlockHashToCompleteCallbacks* m_BlockHashToCompleteCallbacks;
+
+    TLongtail_Atomic32 m_PendingRequestCount;
 };
+
+static void LRUBlockStore_CompleteRequest(struct LRUBlockStoreAPI* lrublockstore_api)
+{
+    LONGTAIL_FATAL_ASSERT(lrublockstore_api->m_PendingRequestCount > 0, return)
+    struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
+    Longtail_LockSpinLock(lrublockstore_api->m_Lock);
+    if (0 == Longtail_AtomicAdd32(&lrublockstore_api->m_PendingRequestCount, -1))
+    {
+        pendingAsyncFlushAPIs = lrublockstore_api->m_PendingAsyncFlushAPIs;
+        lrublockstore_api->m_PendingAsyncFlushAPIs = 0;
+    }
+    Longtail_UnlockSpinLock(lrublockstore_api->m_Lock);
+    size_t c = arrlen(pendingAsyncFlushAPIs);
+    for (size_t n = 0; n < c; ++n)
+    {
+        pendingAsyncFlushAPIs[n]->OnComplete(pendingAsyncFlushAPIs[n], 0);
+    }
+    arrfree(pendingAsyncFlushAPIs);
+}
 
 int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
@@ -273,7 +295,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
-        Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
+        LRUBlockStore_CompleteRequest(api);
         return;
     }
 
@@ -295,7 +317,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
         }
         arrfree(list);
         stored_block->Dispose(stored_block);
-        Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
+        LRUBlockStore_CompleteRequest(api);
         return;
     }
 
@@ -313,7 +335,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
         list[i]->OnComplete(list[i], &shared_stored_block->m_StoredBlock, 0);
     }
     arrfree(list);
-    Longtail_AtomicAdd32(&api->m_PendingRequestCount, -1);
+    LRUBlockStore_CompleteRequest(api);
 }
 
 static int LRUBlockStore_GetStoredBlock(
@@ -455,6 +477,22 @@ static int LRUBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api
     return 0;
 }
 
+static int LRUBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
+    struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+    Longtail_LockSpinLock(api->m_Lock);
+    if (api->m_PendingRequestCount > 0)
+    {
+        arrput(api->m_PendingAsyncFlushAPIs, async_complete_api);
+        Longtail_UnlockSpinLock(api->m_Lock);
+        return 0;
+    }
+    Longtail_UnlockSpinLock(api->m_Lock);
+    async_complete_api->OnComplete(async_complete_api, 0);
+    return 0;
+}
+
 static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Dispose(%p)", base_api)
@@ -502,7 +540,8 @@ static int LRUBlockStore_Init(
         LRUBlockStore_GetStoredBlock,
         LRUBlockStore_GetIndex,
         LRUBlockStore_RetargetContent,
-        LRUBlockStore_GetStats);
+        LRUBlockStore_GetStats,
+        LRUBlockStore_Flush);
     if (!block_store_api)
     {
         return EINVAL;
@@ -513,6 +552,7 @@ static int LRUBlockStore_Init(
     api->m_BlockHashToLRUStoredBlock = 0;
     api->m_BlockHashToCompleteCallbacks = 0;
     api->m_PendingRequestCount = 0;
+    api->m_PendingAsyncFlushAPIs = 0;
 
     api->m_LRU = LRU_Create(&api[1], max_lru_count);
 
