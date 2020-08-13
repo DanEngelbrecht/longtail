@@ -745,8 +745,6 @@ uint64_t Longtail_GetProcessIdentity()
     char computername[1023+1];
     DWORD computernamesize = sizeof(computername);
     GetComputerNameA(computername, &computernamesize);
-//    char hostname[1023+1];
-//    gethostname(hostname, sizeof(hostname));
     uint64_t hostname_hash = HostnameFNV1A(computername, computernamesize);
     return (uint64_t)GetCurrentProcessId() + (hostname_hash << 32);
 }
