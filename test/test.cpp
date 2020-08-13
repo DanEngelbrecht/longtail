@@ -6760,11 +6760,13 @@ static int FSBlockStoreSyncWriteContentWorker(
     int err = block_store->GetIndex(block_store, &get_index_complete.m_API);
     if (err)
     {
+        SAFE_DISPOSE_API(block_store);
         return err;
     }
     get_index_complete.Wait();
     if (get_index_complete.m_Err)
     {
+        SAFE_DISPOSE_API(block_store);
         return get_index_complete.m_Err;
     }
     struct Longtail_ContentIndex* block_store_content_index = get_index_complete.m_ContentIndex;
@@ -6781,6 +6783,7 @@ static int FSBlockStoreSyncWriteContentWorker(
         vindex,
         storage_path);
     Longtail_Free(block_store_content_index);
+    SAFE_DISPOSE_API(block_store);
     return err;
 }
 
@@ -6801,72 +6804,76 @@ int TestLongtailFSBlockStoreSyncWorkerCB(void* context_data)
 
 TEST(Longtail, TestLongtailFSBlockStoreSync)
 {
-    static const uint32_t MAX_BLOCK_SIZE = 63356;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 64u;
+    static const uint32_t MAX_BLOCK_SIZE = 32786;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 32u;
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
 
-    CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 7, 0, (MAX_BLOCK_SIZE * 3) >> 1);
+    for (uint32_t i = 0; i < 3; ++i)
+    {
+        CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, (MAX_BLOCK_SIZE * 3) >> 1);
 
-    Longtail_FileInfos* version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
-    ASSERT_NE((Longtail_FileInfos*)0, version_paths);
+        Longtail_FileInfos* version_paths;
+        ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
+        ASSERT_NE((Longtail_FileInfos*)0, version_paths);
 
-    uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);
-    ASSERT_NE((uint32_t*)0, compression_types);
-    Longtail_VersionIndex* vindex;
-    ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        mem_storage,
-        hash_api,
-        job_api,
-        0,
-        0,
-        0,
-        "source",
-        version_paths,
-        compression_types,
-        (MAX_BLOCK_SIZE / MAX_CHUNKS_PER_BLOCK) * 2,
-        &vindex));
-    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
-    Longtail_Free(compression_types);
-    Longtail_Free(version_paths);
-
-    Longtail_ContentIndex* content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
+        uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);
+        ASSERT_NE((uint32_t*)0, compression_types);
+        Longtail_VersionIndex* vindex;
+        ASSERT_EQ(0, Longtail_CreateVersionIndex(
+            mem_storage,
             hash_api,
-            vindex,
-            MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK,
-            &content_index));
+            job_api,
+            0,
+            0,
+            0,
+            "source",
+            version_paths,
+            compression_types,
+            (MAX_BLOCK_SIZE / MAX_CHUNKS_PER_BLOCK) * 2,
+            &vindex));
+        ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+        Longtail_Free(compression_types);
+        Longtail_Free(version_paths);
 
-    struct FSBlockStoreSyncWriteContentWorkerContext ctx = { mem_storage, hash_api, job_api, "source", vindex, content_index, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK};
-    HLongtail_Thread workerThreads[8];
-    for (uint32_t t = 0; t < 8; ++t)
-    {
-        int err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestLongtailFSBlockStoreSyncWorkerCB, 0, &ctx, -1, &workerThreads[t]);
-        if (err)
+        Longtail_ContentIndex* content_index;
+        ASSERT_EQ(0, Longtail_CreateContentIndex(
+                hash_api,
+                vindex,
+                MAX_BLOCK_SIZE,
+                MAX_CHUNKS_PER_BLOCK,
+                &content_index));
+
+        static const uint32_t WORKER_COUNT = 16;
+        struct FSBlockStoreSyncWriteContentWorkerContext ctx = { mem_storage, hash_api, job_api, "source", vindex, content_index, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK};
+        HLongtail_Thread workerThreads[WORKER_COUNT];
+        for (uint32_t t = 0; t < WORKER_COUNT; ++t)
         {
-            while (t--)
+            int err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestLongtailFSBlockStoreSyncWorkerCB, 0, &ctx, -1, &workerThreads[t]);
+            if (err)
             {
-                Longtail_JoinThread(workerThreads[t], LONGTAIL_TIMEOUT_INFINITE);
-                Longtail_DeleteThread(workerThreads[t]);
-                Longtail_Free(workerThreads[t]);
+                while (t--)
+                {
+                    Longtail_JoinThread(workerThreads[t], LONGTAIL_TIMEOUT_INFINITE);
+                    Longtail_DeleteThread(workerThreads[t]);
+                    Longtail_Free(workerThreads[t]);
+                }
+                ASSERT_EQ(0, err);
             }
-            ASSERT_EQ(0, err);
         }
-    }
 
-    for (uint32_t t = 0; t < 8; ++t)
-    {
-        Longtail_JoinThread(workerThreads[t], LONGTAIL_TIMEOUT_INFINITE);
-        Longtail_DeleteThread(workerThreads[t]);
-        Longtail_Free(workerThreads[t]);
-    }
+        for (uint32_t t = 0; t < WORKER_COUNT; ++t)
+        {
+            Longtail_JoinThread(workerThreads[t], LONGTAIL_TIMEOUT_INFINITE);
+            Longtail_DeleteThread(workerThreads[t]);
+            Longtail_Free(workerThreads[t]);
+        }
 
-    Longtail_Free(content_index);
-    Longtail_Free(vindex);
+        Longtail_Free(content_index);
+        Longtail_Free(vindex);
+    }
 
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
