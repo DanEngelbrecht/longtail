@@ -134,7 +134,7 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api)
 
     const char* content_index_lock_path = storage_api->ConcatPath(storage_api, content_path, "store.lci.lock");
     Longtail_StorageAPI_HOpenFile content_index_lock_file;
-    int try_count = 14; // Maximum delay ~8 seconds
+    int try_count = 16; // Maximum delay ~32 seconds
     uint64_t retry_delay = 1000;
 
     // We try to open the file for write, if we succeed no live process is in the process of updating the index
