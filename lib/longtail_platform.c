@@ -3,6 +3,20 @@
 #include <stdint.h>
 #include <errno.h>
 
+static const uint32_t HostnamePrime = 0x01000193;
+static const uint32_t HostnameSeed  = 0x811C9DC5;
+
+static uint32_t HostnameFNV1A(const void* data, uint32_t numBytes)
+{
+    uint32_t hash = HostnameSeed;
+    const unsigned char* ptr = (const unsigned char*)data;
+    while (numBytes--)
+    {
+        hash = ((*ptr++) ^ hash) * HostnamePrime;
+    }
+    return hash;
+}
+
 #if defined(_WIN32)
 
 #include <Windows.h>
@@ -726,6 +740,14 @@ char* Longtail_GetTempFolder()
     return Longtail_Strdup(expanded);
 }
 
+uint64_t Longtail_GetProcessIdentity()
+{
+    char computername[1023+1];
+    DWORD computernamesize = sizeof(computername);
+    GetComputerNameA(computername, &computernamesize);
+    uint64_t hostname_hash = HostnameFNV1A(computername, computernamesize);
+    return (uint64_t)GetCurrentProcessId() + (hostname_hash << 32);
+}
 
 #endif
 
@@ -1580,5 +1602,12 @@ char* Longtail_GetTempFolder()
     return Longtail_Strdup("/tmp");
 }
 
+uint64_t Longtail_GetProcessIdentity()
+{
+    char hostname[1023+1];
+    gethostname(hostname, sizeof(hostname));
+    uint64_t hostname_hash = HostnameFNV1A(hostname, strlen(hostname));
+    return (uint64_t)getpid() + (hostname_hash << 32);
+}
 
 #endif

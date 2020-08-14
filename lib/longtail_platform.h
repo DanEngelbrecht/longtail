@@ -78,6 +78,8 @@ const char* Longtail_ConcatPath(const char* folder, const char* file);
 
 char* Longtail_GetTempFolder();
 
+uint64_t Longtail_GetProcessIdentity();
+
 #ifdef __cplusplus
 }
 #endif
