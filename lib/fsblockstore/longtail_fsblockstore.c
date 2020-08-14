@@ -117,7 +117,7 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api)
     struct Longtail_StorageAPI* storage_api = api->m_StorageAPI;
     const char* content_path = api->m_ContentPath;
 
-    char tmp_store_path[5 + 17 + 1];
+    char tmp_store_path[5 + TMP_EXTENSION_LENGTH + 1];
     strcpy(tmp_store_path, "store");
     strcpy(&tmp_store_path[5], api->m_TmpExtension);
     const char* content_index_path_tmp = storage_api->ConcatPath(storage_api, content_path, tmp_store_path);
