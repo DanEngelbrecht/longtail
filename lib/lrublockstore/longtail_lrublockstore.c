@@ -481,6 +481,7 @@ static int LRUBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, s
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
     Longtail_LockSpinLock(api->m_Lock);
     if (api->m_PendingRequestCount > 0)
     {

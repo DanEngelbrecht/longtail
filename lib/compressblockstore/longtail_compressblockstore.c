@@ -476,6 +476,7 @@ static int CompressBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_a
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct CompressBlockStoreAPI* compressblockstore_api = (struct CompressBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&compressblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
     Longtail_LockSpinLock(compressblockstore_api->m_Lock);
     if (compressblockstore_api->m_PendingRequestCount > 0)
     {

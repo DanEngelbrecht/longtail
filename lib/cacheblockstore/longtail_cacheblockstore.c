@@ -933,6 +933,7 @@ static int CacheBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api,
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
     Longtail_LockSpinLock(cacheblockstore_api->m_Lock);
     if (cacheblockstore_api->m_PendingRequestCount > 0)
     {
