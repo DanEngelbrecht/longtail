@@ -125,6 +125,7 @@ jobs:
           - *API-CHANGE* Stats structure is now array of uint64_t with enum
           - *API-CHANGE* New function `Flush` added to BlockStoreAPI
           - *CHANGE* Block store stats count for GetIndex/GetStoredBlock/PutStoredBlock/PreflightGet/RetargetContent is for each *call*, successful or not
+          - *FIX* Robustness in fsblockstore - now possible to share same cache location from multiple processes/hosts
         draft: false
         prerelease: false
     - name: Download Linux artifacts
