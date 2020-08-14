@@ -4024,19 +4024,8 @@ int Longtail_WriteContent(
     Longtail_Free(chunk_lookup);
     chunk_lookup = 0;
 
-    Longtail_JobAPI_Group job_group = 0;
-    int err = job_api->ReserveJobs(job_api, (uint32_t)block_count, &job_group);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
-            source_storage_api, block_store_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, block_store_content_index, version_content_index, version_index, assets_folder,
-            err)
-        Longtail_Free(chunk_sizes);
-        return err;
-    }
-
     struct AssetPartLookup* asset_part_lookup;
-    err = CreateAssetPartLookup(version_index, &asset_part_lookup);
+    int err = CreateAssetPartLookup(version_index, &asset_part_lookup);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
@@ -4130,6 +4119,17 @@ int Longtail_WriteContent(
         Longtail_Free(write_block_jobs);
         Longtail_Free(chunk_sizes);
         return 0;
+    }
+
+    Longtail_JobAPI_Group job_group = 0;
+    err = job_api->ReserveJobs(job_api, (uint32_t)job_count, &job_group);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
+            source_storage_api, block_store_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, block_store_content_index, version_content_index, version_index, assets_folder,
+            err)
+        Longtail_Free(chunk_sizes);
+        return err;
     }
 
     Longtail_JobAPI_Jobs jobs;
