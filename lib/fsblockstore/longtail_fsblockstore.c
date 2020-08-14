@@ -972,6 +972,8 @@ static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api,
 static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
+
     Longtail_LockSpinLock(api->m_Lock);
 
     int err = 0;
@@ -1025,6 +1027,11 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
     }
 
     Longtail_UnlockSpinLock(api->m_Lock);
+
+    if (err)
+    {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_FailCount], 1);
+    }
 
     if (async_complete_api)
     {

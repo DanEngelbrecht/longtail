@@ -38,6 +38,8 @@ struct ShareBlockStoreAPI
     struct BlockHashToCompleteCallbacks* m_BlockHashToCompleteCallbacks;
     struct Longtail_AsyncFlushAPI** m_PendingAsyncFlushAPIs;
 
+    TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
+
     TLongtail_Atomic32 m_PendingRequestCount;
 };
 
@@ -118,11 +120,19 @@ static int ShareBlockStore_PutStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
-    return api->m_BackingBlockStore->PutStoredBlock(
+    int err = api->m_BackingBlockStore->PutStoredBlock(
         api->m_BackingBlockStore,
         stored_block,
         async_complete_api);
+    if (!err)
+    {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
+    }
+    return err;
 }
 
 static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
@@ -132,11 +142,17 @@ static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
     LONGTAIL_VALIDATE_INPUT(block_ref_counts, return EINVAL)
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
-    return api->m_BackingBlockStore->PreflightGet(
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
+    int err = api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
         block_count,
         block_hashes,
         block_ref_counts);
+    if (err)
+    {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
+    }
+    return err;
 }
 
 struct ShareBlockStore_AsyncGetStoredBlockAPI
@@ -158,6 +174,7 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
 
     if (err)
     {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         struct Longtail_AsyncGetStoredBlockAPI** list;
         Longtail_LockSpinLock(api->m_Lock);
         list = hmget(api->m_BlockHashToCompleteCallbacks, block_hash);
@@ -178,6 +195,8 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
     struct SharedStoredBlock* shared_stored_block = SharedStoredBlock_CreateBlock(api, stored_block);
     if (!shared_stored_block)
     {
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+
         struct Longtail_AsyncGetStoredBlockAPI** list;
         Longtail_LockSpinLock(api->m_Lock);
         list = hmget(api->m_BlockHashToCompleteCallbacks, block_hash);
@@ -195,6 +214,9 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
         SharedBlockStore_CompleteRequest(api);
         return;
     }
+
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     struct Longtail_AsyncGetStoredBlockAPI** list;
     Longtail_LockSpinLock(api->m_Lock);
@@ -223,6 +245,7 @@ static int ShareBlockStore_GetStoredBlock(
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
     Longtail_LockSpinLock(api->m_Lock);
 
@@ -232,6 +255,8 @@ static int ShareBlockStore_GetStoredBlock(
         struct SharedStoredBlock* shared_stored_block = api->m_BlockHashToSharedStoredBlock[find_block_ptr].value;
         Longtail_AtomicAdd32(&shared_stored_block->m_RefCount, 1);
         Longtail_UnlockSpinLock(api->m_Lock);
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + shared_stored_block->m_StoredBlock.m_BlockChunksDataSize);
         async_complete_api->OnComplete(async_complete_api, &shared_stored_block->m_StoredBlock, 0);
         return 0;
     }
@@ -258,6 +283,7 @@ static int ShareBlockStore_GetStoredBlock(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
             block_store_api, block_hash, async_complete_api,
             ENOMEM)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         return ENOMEM;
     }
 
@@ -290,6 +316,7 @@ static int ShareBlockStore_GetStoredBlock(
             list[i]->OnComplete(list[i], 0, err);
         }
         arrfree(list);
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         return err;
     }
     return 0;
@@ -305,6 +332,7 @@ static int ShareBlockStore_GetIndex(
     LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1);
     int err = api->m_BackingBlockStore->GetIndex(
         api->m_BackingBlockStore,
         async_complete_api);
@@ -313,6 +341,7 @@ static int ShareBlockStore_GetIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetIndex(%p, %p) failed with %d",
             block_store_api, async_complete_api,
             err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1);
         return err;
     }
     return 0;
@@ -330,6 +359,7 @@ static int ShareBlockStore_RetargetContent(
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_Count], 1);
     int err = api->m_BackingBlockStore->RetargetContent(
         api->m_BackingBlockStore,
         content_index,
@@ -339,6 +369,7 @@ static int ShareBlockStore_RetargetContent(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_RetargetContent(%p, %p, %p) failed with %d",
             block_store_api, content_index, async_complete_api,
             err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
         return err;
     }
     return 0;
@@ -350,7 +381,12 @@ static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_a
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
+    {
+        out_stats->m_StatU64[s] = api->m_StatU64[s];
+    }
     return 0;
 }
 
@@ -358,6 +394,7 @@ static int ShareBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api,
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
     Longtail_LockSpinLock(api->m_Lock);
     if (api->m_PendingRequestCount > 0)
     {
@@ -423,6 +460,10 @@ static int ShareBlockStore_Init(
     api->m_BlockHashToCompleteCallbacks = 0;
     api->m_PendingRequestCount = 0;
     api->m_PendingAsyncFlushAPIs = 0;
+    for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
+    {
+        api->m_StatU64[s] = 0;
+    }
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
