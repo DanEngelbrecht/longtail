@@ -676,13 +676,12 @@ static int FSBlockStore_PutStoredBlock(
     return 0;
 }
 
-static int FSBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+static int FSBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_PreflightGet(%p, %u %p, %p)",
-        block_store_api, block_count, block_hashes, block_ref_counts)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_PreflightGet(%p, %p)",
+        block_store_api, content_index)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(block_count == 0 || block_hashes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(block_count == 0 || block_ref_counts != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(content_index, return EINVAL)
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
     return 0;
@@ -889,34 +888,9 @@ static int FSBlockStore_GetIndexSync(
     return 0;
 }
 
-static int FSBlockStore_GetIndex(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_AsyncGetIndexAPI* async_complete_api)
-{
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndex(%p, %u, %p)",
-        block_store_api, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1);
-    struct Longtail_ContentIndex* content_index;
-    int err = FSBlockStore_GetIndexSync(fsblockstore_api, &content_index);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndex(%p, %p) failed with %d",
-            block_store_api, async_complete_api,
-            err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1);
-        return err;
-    }
-    async_complete_api->OnComplete(async_complete_api, content_index, 0);
-    return 0;
-}
-
 static int FSBlockStore_RetargetContent(
     struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_ContentIndex* content_index,
+    const struct Longtail_ContentIndex* content_index,
     struct Longtail_AsyncRetargetContentAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_RetargetContent(%p, %p, %p)",
@@ -1086,7 +1060,6 @@ static int FSBlockStore_Init(
         FSBlockStore_PutStoredBlock,
         FSBlockStore_PreflightGet,
         FSBlockStore_GetStoredBlock,
-        FSBlockStore_GetIndex,
         FSBlockStore_RetargetContent,
         FSBlockStore_GetStats,
         FSBlockStore_Flush);

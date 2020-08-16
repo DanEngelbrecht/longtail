@@ -16,7 +16,6 @@
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
-#include "../lib/retainingblockstore/longtail_retainingblockstore.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/lz4/longtail_lz4.h"
