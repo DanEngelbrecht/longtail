@@ -4940,6 +4940,8 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         "source"));
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
+    Longtail_Free(content_index);
+    content_index = 0;
 
     Longtail_VersionDiff* version_diff;
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
