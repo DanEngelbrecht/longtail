@@ -273,11 +273,13 @@ static void PreflightGet_RetargetContentCompleteAPI_OnComplete(struct Longtail_A
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "PreflightGet_RetargetContentCompleteAPI_OnComplete(%p, %p, %d) failed with %d",
             async_complete_api, content_index, err,
             err)
+        Longtail_Free(preflight_remote_content_index);
         Longtail_Free(content_index);
         Longtail_Free(retarget_context->m_PreflightContentIndex);
         Longtail_Free(retarget_context);
         return;
     }
+    Longtail_Free(preflight_remote_content_index);
     Longtail_Free(content_index);
     Longtail_Free(retarget_context->m_PreflightContentIndex);
     Longtail_Free(retarget_context);
