@@ -112,14 +112,16 @@ static char* GetTempBlockPath(struct Longtail_StorageAPI* storage_api, const cha
     strcpy(&file_name[7 + BLOCK_NAME_LENGTH], tmp_extension);
     return storage_api->ConcatPath(storage_api, content_path, file_name);
 }
+
 static Longtail_StorageAPI_HOpenFile LockContentIndex(
     struct Longtail_StorageAPI* storage_api,
     HLongtail_SpinLock lock,
     const char* content_index_lock_path)
 {
     Longtail_StorageAPI_HOpenFile content_index_lock_file;
-    int try_count = 16; // Maximum delay ~32 seconds
+    int try_count = 50;
     uint64_t retry_delay = 1000;
+    uint64_t total_delay = 0;
 
     int err = EnsureParentPathExists(storage_api, content_index_lock_path);
     if (err)
@@ -139,6 +141,7 @@ static Longtail_StorageAPI_HOpenFile LockContentIndex(
             Longtail_UnlockSpinLock(lock);
         }
         Longtail_Sleep(retry_delay);
+        total_delay += retry_delay;
         err = storage_api->OpenWriteFile(storage_api, content_index_lock_path, 0, &content_index_lock_file);
         if (lock)
         {
@@ -146,12 +149,13 @@ static Longtail_StorageAPI_HOpenFile LockContentIndex(
         }
         if (--try_count == 0)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LockContentIndex(%p, `%s`) failed with %d",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LockContentIndex(%p, `%s`) failed with %d, waited %f seconds",
                 storage_api, content_index_lock_path,
-                err)
+                err,
+                (total_delay / 1000) / 1000.f)
             return 0;
         }
-        retry_delay *= 2;
+        retry_delay += 2000;
     }
     return content_index_lock_file;
 }
@@ -192,9 +196,9 @@ static int SafeWriteContentIndex(struct FSBlockStoreAPI* api)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteContentIndex(%p) failed with %d",
             api,
-            err)
+            EPERM)
         Longtail_Free((void*)content_index_path_tmp);
-        return err;
+        return EPERM;
     }
 
     const char* content_index_path = storage_api->ConcatPath(storage_api, content_path, "store.lci");
@@ -313,13 +317,6 @@ static int SafeWriteStoredBlock(struct FSBlockStoreAPI* api, struct Longtail_Sto
     err = Longtail_WriteStoredBlock(storage_api, stored_block, tmp_block_path);
     if (err)
     {
-/*        // Someone beat us to it, all good.
-        if (storage_api->IsFile(storage_api, block_path))
-        {
-            Longtail_Free((char*)tmp_block_path);
-            Longtail_Free((void*)block_path);
-            return 0;
-        }*/
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteStoredBlock(%p, %s, %p) failed with %d",
             storage_api, content_path, stored_block,
             err)
@@ -823,6 +820,9 @@ int FSBlockStore_GetContentIndexFromStorage(
         int err = Longtail_ReadContentIndex(storage_api, content_index_path, &content_index);
         if (err)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync(%p, %p) failed with %d",
+                fsblockstore_api, out_content_index,
+                err)
             Longtail_Free((void*)content_index_path);
             UnlockContentIndex(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_ContentIndexLockPath, content_index_lock_file);
             return err;
