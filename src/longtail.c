@@ -3680,6 +3680,7 @@ int Longtail_ReadContentIndex(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) failed with %d",
             storage_api, path, out_content_index,
             err)
+        storage_api->CloseFile(storage_api, file_handle);
         return err;
     }
     uint64_t content_index_size = sizeof(struct Longtail_ContentIndex) + content_index_data_size;
