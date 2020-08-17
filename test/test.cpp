@@ -3889,7 +3889,7 @@ int TestAsyncBlockStore::Worker(void* context_data)
                 continue;
             }
             async_complete_api->OnComplete(async_complete_api, content_index, 0);
-                CompleteRequest(block_store);
+            CompleteRequest(block_store);
             continue;
         }
 
