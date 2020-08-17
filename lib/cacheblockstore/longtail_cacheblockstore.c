@@ -623,7 +623,9 @@ static void RetargetRemoteContent_RetargetContentCompleteAPI_OnComplete(struct L
     err = Longtail_MergeContentIndex(
         api->m_JobAPI,
         retarget_context->m_LocalRetargettedContentIndex,
-        content_index,&merged_content_index);
+        content_index,
+        &merged_content_index);
+    Longtail_Free(content_index);
     Longtail_Free(retarget_context->m_LocalRetargettedContentIndex);
     if (err)
     {
