@@ -313,13 +313,13 @@ static int SafeWriteStoredBlock(struct FSBlockStoreAPI* api, struct Longtail_Sto
     err = Longtail_WriteStoredBlock(storage_api, stored_block, tmp_block_path);
     if (err)
     {
-        // Someone beat us to it, all good.
+/*        // Someone beat us to it, all good.
         if (storage_api->IsFile(storage_api, block_path))
         {
             Longtail_Free((char*)tmp_block_path);
             Longtail_Free((void*)block_path);
             return 0;
-        }
+        }*/
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteStoredBlock(%p, %s, %p) failed with %d",
             storage_api, content_path, stored_block,
             err)

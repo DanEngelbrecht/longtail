@@ -4510,6 +4510,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
 
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, cancel_api, cancel_token, "testdata", &file_infos));
+    ASSERT_NE(0, file_infos->m_Count);
 
     Longtail_VersionIndex* vindex = 0;
 
