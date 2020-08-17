@@ -1281,6 +1281,26 @@ int VersionIndex_cp(
     }
     Longtail_Free(version_content_index);
 
+    err = Longtail_ValidateContent(block_store_content_index, version_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateContent failed with %d", storage_uri_raw, source_path, err);
+        Longtail_Free(block_store_content_index);
+        Longtail_Free(version_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
     struct Longtail_StorageAPI* block_store_fs = Longtail_CreateBlockStoreStorageAPI(
         hash_api,
         job_api,

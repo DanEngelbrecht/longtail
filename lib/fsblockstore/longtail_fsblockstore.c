@@ -464,11 +464,6 @@ static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
         Longtail_Free(validate_file_name);
     }
 
-    if (job->m_Err)
-    {
-        storage_api->RemoveFile(storage_api, full_block_path);
-    }
-
     Longtail_Free(full_block_path);
     full_block_path = 0;
     return 0;
