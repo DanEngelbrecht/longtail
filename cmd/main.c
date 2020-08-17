@@ -790,9 +790,10 @@ int DownSync(
 
     // IDEA: Potentially we could create the content index based on the diff, right?
     struct Longtail_ContentIndex* source_version_content_index;
-    err = Longtail_CreateContentIndex(
+    err = Longtail_CreateContentIndexFromDiff(
         hash_api,
         source_version_index,
+        version_diff,
         target_block_size,
         max_chunks_per_block,
         &source_version_content_index);
