@@ -3537,7 +3537,7 @@ struct TestGetBlockRequest
 struct TestRetargetContentRequest
 {
     struct Longtail_AsyncRetargetContentAPI* async_complete_api;
-    const struct Longtail_ContentIndex* content_index;
+    struct Longtail_ContentIndex* content_index;
 };
 
 struct TestStoredBlockLookup
@@ -3880,6 +3880,7 @@ int TestAsyncBlockStore::Worker(void* context_data)
             struct Longtail_ContentIndex* content_index;
             int err = Longtail_RetargetContent(block_store->m_ContentIndex, retarget_content_request->content_index, &content_index);
             Longtail_UnlockSpinLock(block_store->m_IndexLock);
+            Longtail_Free(retarget_content_request->content_index);
 
             if (err)
             {
@@ -3951,7 +3952,21 @@ int TestAsyncBlockStore::RetargetContent(struct Longtail_BlockStoreAPI* block_st
 
     struct TestRetargetContentRequest retarget_content_request;
     retarget_content_request.async_complete_api = async_complete_api;
-    retarget_content_request.content_index = content_index;
+    void* buffer;
+    size_t size;
+    int err = Longtail_WriteContentIndexToBuffer(content_index, &buffer, &size);
+    if (err)
+    {
+        return err;
+    }
+    struct Longtail_ContentIndex* content_index_copy;
+    err = Longtail_ReadContentIndexFromBuffer(buffer, size, &content_index_copy);
+    Longtail_Free(buffer);
+    if (err)
+    {
+        return err;
+    }
+    retarget_content_request.content_index = content_index_copy;
 
     Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, 1);
     Longtail_LockSpinLock(block_store->m_IOLock);
