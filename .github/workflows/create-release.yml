@@ -122,8 +122,14 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *ADDED* Added Stats to SharedBlockStore
-          - *ADDED* Added FlushCount stats to block stores
+          - *API CHANGE* Removed GetIndex from BlockStoreAPI - use RetargetContent insted
+          - *API CHANGE* Removed blockstore stats for GetIndex
+          - *API CHANGE* BlockStoreAPI::Preflight now takes a content index instead of a list of blockstore
+          - *API CHANGE* BlockStoreAPI::RetargetContent now expects a `const struct Longtail_ContentIndex*` instead of `struct Longtail_ContentIndex*`
+          - *API CHANGE* `Longtail_CreateMissingContent` now takes a hash identifier instead of an struct Longtail_HashAPI pointer
+          - *REMOVED* retainingblockstore has been removed (was broken and unneeded)
+          - *ADDED* Longtail_CreateContentIndexFromDiff which creates a content index from a target version and a version diff
+          - *FIXED* Corrected stats enum in compressblockstore
         draft: false
         prerelease: false
     - name: Download Linux artifacts

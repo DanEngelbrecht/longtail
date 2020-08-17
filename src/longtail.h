@@ -537,27 +537,6 @@ LONGTAIL_EXPORT struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetSto
 
 LONGTAIL_EXPORT void Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
 
-////////////// Longtail_AsyncGetIndexAPI
-
-struct Longtail_AsyncGetIndexAPI;
-
-typedef void (*Longtail_AsyncGetIndex_OnCompleteFunc)(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
-
-struct Longtail_AsyncGetIndexAPI
-{
-    struct Longtail_API m_API;
-    Longtail_AsyncGetIndex_OnCompleteFunc OnComplete;
-};
-
-LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetIndexAPISize();
-
-LONGTAIL_EXPORT struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
-    void* mem,
-    Longtail_DisposeFunc dispose_func,
-    Longtail_AsyncGetIndex_OnCompleteFunc on_complete_func);
-
-LONGTAIL_EXPORT void Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
-
 ////////////// Longtail_AsyncRetargetContentAPI
 
 struct Longtail_AsyncRetargetContentAPI;
@@ -606,10 +585,6 @@ struct Longtail_BlockStoreAPI;
 
 enum
 {
-    Longtail_BlockStoreAPI_StatU64_GetIndex_Count,
-    Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount,
-    Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount,
-
     Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count,
     Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount,
     Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount,
@@ -643,10 +618,9 @@ struct Longtail_BlockStore_Stats
 };
 
 typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
+typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_RetargetContentFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_RetargetContentFunc)(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 typedef int (*Longtail_BlockStore_FlushFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
@@ -656,7 +630,6 @@ struct Longtail_BlockStoreAPI
     Longtail_BlockStore_PutStoredBlockFunc PutStoredBlock;
     Longtail_BlockStore_PreflightGetFunc PreflightGet;
     Longtail_BlockStore_GetStoredBlockFunc GetStoredBlock;
-    Longtail_BlockStore_GetIndexFunc GetIndex;
     Longtail_BlockStore_RetargetContentFunc RetargetContent;
     Longtail_BlockStore_GetStatsFunc GetStats;
     Longtail_BlockStore_FlushFunc Flush;
@@ -671,16 +644,14 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
     Longtail_BlockStore_PreflightGetFunc preflight_get_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
-    Longtail_BlockStore_GetIndexFunc get_index_func,
     Longtail_BlockStore_RetargetContentFunc retarget_content_func,
     Longtail_BlockStore_GetStatsFunc get_stats_func,
     Longtail_BlockStore_FlushFunc flush_func);
 
 LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts);
+LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-LONGTAIL_EXPORT int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
-LONGTAIL_EXPORT int Longtail_BlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
+LONGTAIL_EXPORT int Longtail_BlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
@@ -973,6 +944,28 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndex(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
+/*! @brief Create a struct Longtail_ContentIndex from an struct Longtail_VersionIndex.
+ *
+ * Creates a struct Longtail_ContentIndex from a struct Longtail_VersionIndex by bundling
+ * chunks into blocks according to @p max_block_size and @p max_chunks_per_block.
+ * It only includes data that is listed in the version_diff's modified and target added assets.
+ *
+ * @param[in] hash_api              Hash API identifier
+ * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex
+ * @param[in] version_diff          Pointer to an initialized struct Longtail_VersionDiff
+ * @param[in] max_block_size        Max block size
+ * @param[in] max_chunks_per_block  Max chunks per block
+ * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_CreateContentIndexFromDiff(
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_VersionIndex* version_index,
+    struct Longtail_VersionDiff* version_diff,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
+    struct Longtail_ContentIndex** out_content_index);
+
 /*! @brief Create a struct Longtail_ContentIndex from discreet data.
  *
  * Creates a struct Longtail_ContentIndex from discreet data by bundling
@@ -1066,8 +1059,8 @@ LONGTAIL_EXPORT int Longtail_ReadContentIndex(
  * @param[in] progress_api              An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
  * @param[in] optional_cancel_api       An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token     A cancel token or null if @p optional_cancel_api is null
- * @param[in] block_store_content_index The content index of data already in @p block_store_api
- * @param[in] version_content_index     Data in @p version index and @p assets_folder arrange as content index
+ * @param[in] block_store_content_index @p version_content_index retargetted to @p block_store_api (see Longtail_BlockStoreAPI::RetargetContent)
+ * @param[in] version_content_index     Data in @p version index and @p assets_folder arranged as content index (see CreateContentIndex and CreateContentIndexFromDiff)
  * @param[in] version_index             Version index of data in  @p assets_folder
  * @param[in] assets_folder             Path of version data inside @p source_storage_api
  * @return                  Return code (errno style), zero on success
@@ -1114,14 +1107,14 @@ LONGTAIL_EXPORT int Longtail_CreateMissingContent(
  *
  * The missing blocks are added in complete form so you might get redundant content in @p out_content_index.
  *
- * @param[in] hash_api                  An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both content indexes
+ * @param[in] hash_identifier           The hash identifier to use, if any of the content_indexes has any blocks their hash identifier must match @p hash_identifier
  * @param[in] reference_content_index   The known content to check against
  * @param[in] content_index             The content you want to test against @p reference_content_index
  * @param[out] out_content_index        The resulting missing content index will be created and assigned to this pointer reference if successful
  * @return                              Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_GetMissingContent(
-    struct Longtail_HashAPI* hash_api,
+    uint32_t hash_identifier,
     const struct Longtail_ContentIndex* reference_content_index,
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index);
@@ -1237,7 +1230,7 @@ LONGTAIL_EXPORT int Longtail_CreateVersionDiff(
  * @param[in] progress_api          An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
  * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
- * @param[in] content_index         The content index for @p block_store_api
+ * @param[in] content_index         @p target_version retargetted to @p block_storage_api (see Longtail_BlockStoreAPI::RetargetContent)
  * @param[in] source_version        The version index for the current version
  * @param[in] target_version        The version index for the target version
  * @param[in] version_diff          The version diff between @p source_version and @p target_version

@@ -209,19 +209,16 @@ static int CompressBlockStore_PutStoredBlock(
     return err;
 }
 
-static int CompressBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+static int CompressBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, %p)", block_store_api, content_index)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(block_hashes, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(block_ref_counts, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(content_index, return EINVAL)
     struct CompressBlockStoreAPI* api = (struct CompressBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
     int err = api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
-        block_count,
-        block_hashes,
-        block_ref_counts);
+        content_index);
     if (err)
     {
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
@@ -319,7 +316,7 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetBackingStoreComplete(%p, %p, %d) failed with %d",
                 async_complete_api, stored_block, err,
                 err)
-            Longtail_AtomicAdd64(&blockstore->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1);
+            Longtail_AtomicAdd64(&blockstore->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         }
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, err);
         Longtail_Free(async_block_store);
@@ -348,7 +345,7 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "OnGetBackingStoreComplete(%p, %p, %d) failed with %d",
             async_complete_api, stored_block, err,
             err)
-        Longtail_AtomicAdd64(&blockstore->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1);
+        Longtail_AtomicAdd64(&blockstore->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         stored_block->Dispose(stored_block);
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0, err);
         Longtail_Free(async_block_store);
@@ -406,30 +403,9 @@ static int CompressBlockStore_GetStoredBlock(
     return 0;
 }
 
-static int CompressBlockStore_GetIndex(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_AsyncGetIndexAPI* async_complete_api)
-{
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetIndex(%p, %u, %p)",
-        block_store_api, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-
-    struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1);
-    int err = block_store->m_BackingBlockStore->GetIndex(
-        block_store->m_BackingBlockStore,
-        async_complete_api);
-    if (err)
-    {
-        Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1);
-    }
-    return err;
-}
-
 static int CompressBlockStore_RetargetContent(
     struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_ContentIndex* content_index,
+    const struct Longtail_ContentIndex* content_index,
     struct Longtail_AsyncRetargetContentAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_RetargetContent(%p, %p, %p)",
@@ -527,7 +503,6 @@ static int CompressBlockStore_Init(
         CompressBlockStore_PutStoredBlock,
         CompressBlockStore_PreflightGet,
         CompressBlockStore_GetStoredBlock,
-        CompressBlockStore_GetIndex,
         CompressBlockStore_RetargetContent,
         CompressBlockStore_GetStats,
         CompressBlockStore_Flush);

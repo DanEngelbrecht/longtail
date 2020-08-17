@@ -16,7 +16,6 @@
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
-#include "../lib/retainingblockstore/longtail_retainingblockstore.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/lz4/longtail_lz4.h"
@@ -588,42 +587,6 @@ int UpSync(
     return 0;
 }
 
-struct AsyncGetIndexComplete
-{
-    struct Longtail_AsyncGetIndexAPI m_API;
-    HLongtail_Sema m_NotifySema;
-    int m_Err;
-    struct Longtail_ContentIndex* m_ContentIndex;
-};
-
-static void AsyncGetIndexComplete_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
-{
-    struct AsyncGetIndexComplete* cb = (struct AsyncGetIndexComplete*)async_complete_api;
-    cb->m_Err = err;
-    cb->m_ContentIndex = content_index;
-    Longtail_PostSema(cb->m_NotifySema, 1);
-}
-
-static void AsyncGetIndexComplete_Init(struct AsyncGetIndexComplete* me)
-{
-    me->m_Err = EINVAL;
-    me->m_API.m_API.Dispose = 0;
-    me->m_API.OnComplete = AsyncGetIndexComplete_OnComplete;
-    me->m_ContentIndex = 0;
-    Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &me->m_NotifySema);
-}
-
-static void AsyncGetIndexComplete_Dispose(struct AsyncGetIndexComplete* me)
-{
-    Longtail_DeleteSema(me->m_NotifySema);
-    Longtail_Free(me->m_NotifySema);
-}
-
-static void AsyncGetIndexComplete_Wait(struct AsyncGetIndexComplete* me)
-{
-    Longtail_WaitSema(me->m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
-}
-
 int DownSync(
     const char* storage_uri_raw,
     const char* cache_path,
@@ -827,9 +790,10 @@ int DownSync(
 
     // IDEA: Potentially we could create the content index based on the diff, right?
     struct Longtail_ContentIndex* source_version_content_index;
-    err = Longtail_CreateContentIndex(
+    err = Longtail_CreateContentIndexFromDiff(
         hash_api,
         source_version_index,
+        version_diff,
         target_block_size,
         max_chunks_per_block,
         &source_version_content_index);
@@ -854,7 +818,10 @@ int DownSync(
     }
 
     struct Longtail_ContentIndex* retargetted_version_content_index;
-    err = SyncRetargetContent(store_block_store_api, source_version_content_index, &retargetted_version_content_index);
+    err = SyncRetargetContent(
+        store_block_store_api,
+        source_version_content_index,
+        &retargetted_version_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to retarget the content index to remote store `%s`, %d", storage_uri_raw, err);
@@ -980,45 +947,74 @@ int ValidateVersionIndex(
 {
     const char* storage_path = NormalizePath(storage_uri_raw);
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
+    struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
-    struct Longtail_ContentIndex* block_store_content_index;
-    {
-        struct AsyncGetIndexComplete get_index_complete;
-        AsyncGetIndexComplete_Init(&get_index_complete);
-        int err = store_block_api->GetIndex(
-            store_block_api,
-            &get_index_complete.m_API);
-        if (!err)
-        {
-            AsyncGetIndexComplete_Wait(&get_index_complete);
-            err = get_index_complete.m_Err;
-        }
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
-            SAFE_DISPOSE_API(store_block_api);
-            SAFE_DISPOSE_API(storage_api);
-            SAFE_DISPOSE_API(job_api);
-            Longtail_Free((void*)storage_path);
-            return err;
-        }
-        block_store_content_index = get_index_complete.m_ContentIndex;
-        AsyncGetIndexComplete_Dispose(&get_index_complete);
-    }
-
+    
     struct Longtail_VersionIndex* version_index = 0;
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
-        Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
         Longtail_Free((void*)storage_path);
         return err;
     }
+
+    struct Longtail_HashAPI* hash_api;
+    err = hash_registry->GetHashAPI(hash_registry, *version_index->m_HashIdentifier, &hash_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
+        Longtail_Free(version_index);
+        SAFE_DISPOSE_API(store_block_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    struct Longtail_ContentIndex* version_content_index;
+    err = Longtail_CreateContentIndex(
+        hash_api,
+        version_index,
+        target_block_size,
+        max_chunks_per_block,
+        &version_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for version index `%s`", version_index_path, err);
+        Longtail_Free(version_index);
+        SAFE_DISPOSE_API(store_block_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    err = SyncRetargetContent(
+        store_block_api,
+        version_content_index,
+        &block_store_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget content index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
+        Longtail_Free(version_content_index);
+        Longtail_Free(version_index);
+        SAFE_DISPOSE_API(store_block_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+    Longtail_Free(version_content_index);
 
     err = Longtail_ValidateContent(block_store_content_index, version_index);
     if (err)
@@ -1028,6 +1024,7 @@ int ValidateVersionIndex(
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
         Longtail_Free((void*)storage_path);
         return err;
@@ -1036,6 +1033,7 @@ int ValidateVersionIndex(
     Longtail_Free(block_store_content_index);
     SAFE_DISPOSE_API(store_block_api);
     SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(hash_registry);
     SAFE_DISPOSE_API(job_api);
     Longtail_Free((void*)storage_path);
     return 0;
@@ -1196,44 +1194,11 @@ int VersionIndex_cp(
     struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(lru_block_store_api);
 
-    struct Longtail_ContentIndex* block_store_content_index;
-    {
-        struct AsyncGetIndexComplete get_index_complete;
-        AsyncGetIndexComplete_Init(&get_index_complete);
-        int err = store_block_store_api->GetIndex(
-            store_block_store_api,
-            &get_index_complete.m_API);
-        if (!err)
-        {
-            AsyncGetIndexComplete_Wait(&get_index_complete);
-            err = get_index_complete.m_Err;
-        }
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to get store index for `%s`, %d", storage_uri_raw, err);
-            SAFE_DISPOSE_API(store_block_store_api);
-            SAFE_DISPOSE_API(lru_block_store_api);
-            SAFE_DISPOSE_API(compress_block_store_api);
-            SAFE_DISPOSE_API(store_block_cachestore_api);
-            SAFE_DISPOSE_API(store_block_localstore_api);
-            SAFE_DISPOSE_API(store_block_remotestore_api);
-            SAFE_DISPOSE_API(storage_api);
-            SAFE_DISPOSE_API(compression_registry);
-            SAFE_DISPOSE_API(hash_registry);
-            SAFE_DISPOSE_API(job_api);
-            Longtail_Free((void*)storage_path);
-            return err;
-        }
-        block_store_content_index = get_index_complete.m_ContentIndex;
-        AsyncGetIndexComplete_Dispose(&get_index_complete);
-    }
-
     struct Longtail_VersionIndex* version_index = 0;
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
-        Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -1253,7 +1218,75 @@ int VersionIndex_cp(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    struct Longtail_ContentIndex* version_content_index;
+    err = Longtail_CreateContentIndex(
+        hash_api,
+        version_index,
+        target_block_size,
+        max_chunks_per_block,
+        &version_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for version index `%s`", version_index_path, err);
+        Longtail_Free(version_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
+    struct Longtail_ContentIndex* block_store_content_index;
+    err = SyncRetargetContent(
+        store_block_store_api,
+        version_content_index,
+        &block_store_content_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget content index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
+        Longtail_Free(version_content_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+    Longtail_Free(version_content_index);
+
+    err = Longtail_ValidateContent(block_store_content_index, version_index);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateContent failed with %d", storage_uri_raw, source_path, err);
         Longtail_Free(block_store_content_index);
+        Longtail_Free(version_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);

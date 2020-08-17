@@ -269,7 +269,7 @@ static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const
     int err = Longtail_RemoveDir(tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RemoveFile(%p, %s) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_RemoveDir(%p, %s) failed with %d",
             storage_api, path,
             err)
         return err;

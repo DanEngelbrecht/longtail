@@ -135,19 +135,16 @@ static int ShareBlockStore_PutStoredBlock(
     return err;
 }
 
-static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, const TLongtail_Hash* block_hashes, const uint32_t* block_ref_counts)
+static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, %p)", block_store_api, content_index)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(block_hashes, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(block_ref_counts, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, 0x%" PRIx64 ", %p, %p)", block_store_api, block_count, block_hashes, block_ref_counts)
+    LONGTAIL_VALIDATE_INPUT(content_index, return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
     int err = api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
-        block_count,
-        block_hashes,
-        block_ref_counts);
+        content_index);
     if (err)
     {
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
@@ -322,34 +319,9 @@ static int ShareBlockStore_GetStoredBlock(
     return 0;
 }
 
-static int ShareBlockStore_GetIndex(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_AsyncGetIndexAPI* async_complete_api)
-{
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetIndex(%p, %u, %p)", block_store_api, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
-
-    struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1);
-    int err = api->m_BackingBlockStore->GetIndex(
-        api->m_BackingBlockStore,
-        async_complete_api);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetIndex(%p, %p) failed with %d",
-            block_store_api, async_complete_api,
-            err)
-        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1);
-        return err;
-    }
-    return 0;
-}
-
 static int ShareBlockStore_RetargetContent(
     struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_ContentIndex* content_index,
+    const struct Longtail_ContentIndex* content_index,
     struct Longtail_AsyncRetargetContentAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_RetargetContent(%p, %p, %p)",
@@ -445,7 +417,6 @@ static int ShareBlockStore_Init(
         ShareBlockStore_PutStoredBlock,
         ShareBlockStore_PreflightGet,
         ShareBlockStore_GetStoredBlock,
-        ShareBlockStore_GetIndex,
         ShareBlockStore_RetargetContent,
         ShareBlockStore_GetStats,
         ShareBlockStore_Flush);
