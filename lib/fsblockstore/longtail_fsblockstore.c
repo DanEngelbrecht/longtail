@@ -807,7 +807,7 @@ int FSBlockStore_GetContentIndexFromStorage(
         fsblockstore_api->m_ContentIndexLockPath);
     if (!content_index_lock_file)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync(%p, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetContentIndexFromStorage(%p, %p) failed with %d",
             fsblockstore_api, out_content_index,
             EPERM)
         return EPERM;
@@ -820,7 +820,7 @@ int FSBlockStore_GetContentIndexFromStorage(
         int err = Longtail_ReadContentIndex(storage_api, content_index_path, &content_index);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync(%p, %p) failed with %d",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetContentIndexFromStorage(%p, %p) failed with %d",
                 fsblockstore_api, out_content_index,
                 err)
             Longtail_Free((void*)content_index_path);
