@@ -657,8 +657,8 @@ static void RetargetLocalContent_RetargetContentCompleteAPI_OnComplete(struct Lo
     struct Longtail_ContentIndex* local_missing_content_index;
     err = Longtail_GetMissingContent(
         *retarget_context->m_RetargetContentIndex->m_HashIdentifier,
-        retarget_context->m_RetargetContentIndex,
         content_index,
+        retarget_context->m_RetargetContentIndex,
         &local_missing_content_index);
     Longtail_Free(retarget_context->m_RetargetContentIndex);
     if (err)
