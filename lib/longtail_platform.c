@@ -115,6 +115,8 @@ static int Win32ErrorToErrno(DWORD err)
         return EBUSY;
         case WAIT_TIMEOUT:
         return ETIME;
+        case ERROR_DIR_NOT_EMPTY:
+        return ENOTEMPTY;
         default:
         return EINVAL;
     }

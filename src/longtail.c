@@ -6965,8 +6965,13 @@ int Longtail_ChangeVersion(
 
         uint32_t retry_count = 10;
         uint32_t successful_remove_count = 0;
-        while (successful_remove_count < remove_count)
+        while (retry_count && (successful_remove_count < remove_count))
         {
+            if (retry_count < 10)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", remove_count - successful_remove_count, version_path)
+            }
+            --retry_count;
             if ((successful_remove_count & 0x7f) == 0x7f) {
                 if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
                 {
@@ -6976,7 +6981,6 @@ int Longtail_ChangeVersion(
                     return ECANCELED;
                 }
             }
-            --retry_count;
             for (uint32_t r = 0; r < remove_count; ++r)
             {
                 uint32_t asset_index = remove_indexes[r];
@@ -7089,14 +7093,6 @@ int Longtail_ChangeVersion(
                 full_asset_path = 0;
                 remove_indexes[r] = 0xffffffff;
                 ++successful_remove_count;
-            }
-            if (successful_remove_count < remove_count)
-            {
-                --retry_count;
-                if (retry_count == 1)
-                {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", remove_count - successful_remove_count, version_path)
-                }
             }
         }
         Longtail_Free(remove_indexes);
