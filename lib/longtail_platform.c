@@ -1252,10 +1252,6 @@ int Longtail_CreateDirectory(const char* path)
         return 0;
     }
     int e = errno;
-    if (e == EEXIST)
-    {
-        return 0;
-    }
     return e;
 }
 
