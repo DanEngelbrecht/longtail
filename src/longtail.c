@@ -7152,6 +7152,8 @@ int Longtail_ChangeVersion(
                         continue;
                     }
                 }
+                Longtail_Free(full_asset_path);
+                full_asset_path = 0;
                 remove_indexes[r] = 0xffffffff;
                 ++successful_remove_count;
             }
