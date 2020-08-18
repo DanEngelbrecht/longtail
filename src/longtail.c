@@ -41,11 +41,13 @@ void Longtail_NukeFree(void* p);
 
 #define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
 #define LONGTAIL_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
-#define LONGTAIL_VERSION_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,2)
+#define LONGTAIL_VERSION_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
+#define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
+#define LONGTAIL_VERSION_INDEX_VERSION_0_0_3  LONGTAIL_VERSION(0,0,3)
 #define LONGTAIL_CONTENT_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
 #define LONGTAIL_CONTENT_INDEX_VERSION_1_0_0  LONGTAIL_VERSION(1,0,0)
 
-uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_1;
+uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_3;
 
 #if defined(_WIN32)
     #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
@@ -1801,9 +1803,9 @@ static int InitVersionIndexFromData(
     version_index->m_Version = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_1)
+    if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_3 && (*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, LONGTAIL_VERSION_INDEX_VERSION_0_0_1);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentContentIndexVersion);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
             (void*)version_index, data, data_size,
             EBADF)
@@ -1925,7 +1927,7 @@ int Longtail_BuildVersionIndex(
     version_index->m_AssetCount = &p[3];
     version_index->m_ChunkCount = &p[4];
     version_index->m_AssetChunkIndexCount = &p[5];
-    *version_index->m_Version = LONGTAIL_VERSION_INDEX_VERSION_0_0_1;
+    *version_index->m_Version = Longtail_CurrentContentIndexVersion;
     *version_index->m_HashIdentifier = hash_api_identifier;
     *version_index->m_TargetChunkSize = target_chunk_size;
     *version_index->m_AssetCount = asset_count;
@@ -4413,7 +4415,9 @@ static int CreatePartialAssetWriteJob(
     {
         uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
         TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-        uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+        const uint64_t* block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+        LONGTAIL_FATAL_ASSERT(block_index_ptr, return EINVAL)
+        uint64_t block_index = *block_index_ptr;
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
         int has_block = 0;
         for (uint32_t d = 0; d < job->m_BlockReaderJobCount; ++d)
@@ -5144,8 +5148,12 @@ static SORTFUNC(BlockJobCompare)
 //    {
 //        return 0;
 //    }
-    uint64_t a_block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, a_first_chunk_hash);
-    uint64_t b_block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, b_first_chunk_hash);
+    const uint64_t* a_block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, a_first_chunk_hash);
+    LONGTAIL_FATAL_ASSERT(a_block_index_ptr, return 0)
+    const uint64_t* b_block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, b_first_chunk_hash);
+    LONGTAIL_FATAL_ASSERT(b_block_index_ptr, return 0)
+    uint64_t a_block_index = *a_block_index_ptr;
+    uint64_t b_block_index = *b_block_index_ptr;
     if (a_block_index < b_block_index)
     {
         return -1;
@@ -5311,7 +5319,9 @@ static int WriteAssets(
         {
             uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
             TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
-            uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+            const uint64_t* block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+            LONGTAIL_FATAL_ASSERT(block_index_ptr, return EINVAL);
+            uint64_t block_index = *block_index_ptr;
             TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
 
             ++j;
@@ -5319,7 +5329,9 @@ static int WriteAssets(
             {
                 uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
                 TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
-                uint64_t next_block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+                const uint64_t* next_block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+                LONGTAIL_FATAL_ASSERT(next_block_index_ptr, return EINVAL);
+                uint64_t next_block_index = *next_block_index_ptr;
                 if (next_block_index != block_index)
                 {
                     break;
@@ -5355,7 +5367,9 @@ static int WriteAssets(
             {
                 uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
                 TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
-                uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+                const uint64_t* block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+                LONGTAIL_FATAL_ASSERT(block_index_ptr, return EINVAL)
+                uint64_t block_index = *block_index_ptr;
                 TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
                 int has_block = 0;
                 for (uint32_t d = 0; d < block_read_job_count; ++d)
@@ -5421,7 +5435,9 @@ static int WriteAssets(
     {
         uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
         TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
-        uint64_t block_index = *Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+        const uint64_t* block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+        LONGTAIL_FATAL_ASSERT(block_index_ptr, return EINVAL)
+        uint64_t block_index = *block_index_ptr;
 
         struct WriteAssetsFromBlockJob* job = &block_jobs[block_job_count++];
         struct BlockReaderJob* block_job = &job->m_BlockReadJob;
@@ -5932,7 +5948,9 @@ int Longtail_CreateMissingContent(
 
     for (uint32_t j = 0; j < added_hash_count; ++j)
     {
-        uint64_t chunk_index = *Longtail_LookupTable_Get(chunk_index_lookup, added_hashes[j]);
+        const uint64_t* chunk_index_ptr = Longtail_LookupTable_Get(chunk_index_lookup, added_hashes[j]);
+        LONGTAIL_FATAL_ASSERT(chunk_index_ptr, return EINVAL)
+        uint64_t chunk_index = *chunk_index_ptr;
         tmp_diff_chunk_sizes[j] = version_index->m_ChunkSizes[chunk_index];
         tmp_diff_chunk_tags[j] = version_index->m_ChunkTags[chunk_index];
     }
@@ -6109,7 +6127,9 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
         uint64_t block_index = content_index->m_ChunkBlockIndexes[chunk_index];
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        uint64_t missing_block_index = *Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash);
+        const uint64_t* missing_block_index_ptr = Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash);
+        LONGTAIL_FATAL_ASSERT(missing_block_index_ptr, return EINVAL)
+        uint64_t missing_block_index = *missing_block_index_ptr;
         resulting_content_index->m_ChunkHashes[c] = chunk_hash;
         resulting_content_index->m_ChunkBlockIndexes[c] = missing_block_index;
     }
@@ -6680,6 +6700,30 @@ static void InitVersionDiff(struct Longtail_VersionDiff* version_diff)
     p += sizeof(uint32_t) * modified_permissions_count;
 }
 
+LONGTAIL_EXPORT int Longtail_RehashPathHashes(
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_VersionIndex* version_index)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RehashPathHashes(%p, %p)",
+        hash_api, version_index)
+    if (*version_index->m_Version >= LONGTAIL_VERSION_INDEX_VERSION_0_0_3)
+    {
+        return 0;
+    }
+    uint32_t asset_count = *version_index->m_AssetCount;
+    for (uint32_t a = 0; a < asset_count; ++a)
+    {
+        const char* path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
+        int err = Longtail_GetPathHash(hash_api, path, &version_index->m_PathHashes[a]);
+        if (err)
+        {
+            return err;
+        }
+    }
+    return 0;
+}
+
+
 int Longtail_CreateVersionDiff(
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
@@ -6790,8 +6834,12 @@ int Longtail_CreateVersionDiff(
     {
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
-        uint32_t source_asset_index = (uint32_t)*Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
-        uint32_t target_asset_index = (uint32_t)*Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+        const uint64_t* source_asset_index_ptr = Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+        LONGTAIL_FATAL_ASSERT(source_asset_index_ptr, return EINVAL)
+        uint32_t source_asset_index = (uint32_t)*source_asset_index_ptr;
+        const uint64_t* target_asset_index_ptr = Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+        LONGTAIL_FATAL_ASSERT(target_asset_index_ptr, return EINVAL)
+        uint32_t target_asset_index = (uint32_t)*target_asset_index_ptr;
 
         const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
         const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
@@ -6825,7 +6873,9 @@ int Longtail_CreateVersionDiff(
         }
         else if (source_path_hash < target_path_hash)
         {
-            source_asset_index = (uint32_t)*Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+            const uint64_t* source_asset_index_ptr = Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+            LONGTAIL_FATAL_ASSERT(source_asset_index_ptr, return EINVAL)
+            source_asset_index = (uint32_t)*source_asset_index_ptr;
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Removed asset %s", source_path)
             removed_source_asset_indexes[source_removed_count] = source_asset_index;
             ++source_removed_count;
@@ -6833,7 +6883,9 @@ int Longtail_CreateVersionDiff(
         }
         else
         {
-            target_asset_index = (uint32_t)*Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+            const uint64_t* target_asset_index_ptr = Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+            LONGTAIL_FATAL_ASSERT(target_asset_index_ptr, return EINVAL)
+            target_asset_index = (uint32_t)*target_asset_index_ptr;
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Added asset %s", target_path)
             added_target_asset_indexes[target_added_count] = target_asset_index;
             ++target_added_count;
@@ -6844,7 +6896,9 @@ int Longtail_CreateVersionDiff(
     {
         // source_path_hash removed
         TLongtail_Hash source_path_hash = source_path_hashes[source_index];
-        uint32_t source_asset_index = (uint32_t)*Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+        const uint64_t* source_asset_index_ptr = Longtail_LookupTable_Get(source_path_hash_to_index, source_path_hash);
+        LONGTAIL_FATAL_ASSERT(source_asset_index_ptr, return EINVAL)
+        uint32_t source_asset_index = (uint32_t)*source_asset_index_ptr;
         const char* source_path = &source_version->m_NameData[source_version->m_NameOffsets[source_asset_index]];
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Removed asset %s", source_path)
         removed_source_asset_indexes[source_removed_count] = source_asset_index;
@@ -6855,7 +6909,9 @@ int Longtail_CreateVersionDiff(
     {
         // target_path_hash added
         TLongtail_Hash target_path_hash = target_path_hashes[target_index];
-        uint32_t target_asset_index = (uint32_t)*Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+        const uint64_t* target_asset_index_ptr = Longtail_LookupTable_Get(target_path_hash_to_index, target_path_hash);
+        LONGTAIL_FATAL_ASSERT(target_asset_index_ptr, return EINVAL)
+        uint32_t target_asset_index = (uint32_t)*target_asset_index_ptr;
         const char* target_path = &target_version->m_NameData[target_version->m_NameOffsets[target_asset_index]];
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Added asset %s", target_path)
         added_target_asset_indexes[target_added_count] = target_asset_index;
@@ -6961,128 +7017,156 @@ int Longtail_ChangeVersion(
         return err;
     }
 
-    uint32_t retry_count = 10;
-    uint32_t successful_remove_count = 0;
-    uint32_t removed_count = *version_diff->m_SourceRemovedCount;
-    while (successful_remove_count < removed_count)
+    uint32_t remove_count = *version_diff->m_SourceRemovedCount;
+    if (remove_count > 0)
     {
-        if ((successful_remove_count & 0x7f) == 0x7f) {
-            if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                    block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                    ECANCELED)
-                return ECANCELED;
-            }
-        }
-        --retry_count;
-        for (uint32_t r = 0; r < removed_count; ++r)
+        uint32_t* remove_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * remove_count);
+        if (!remove_indexes)
         {
-            uint32_t asset_index = version_diff->m_SourceRemovedAssetIndexes[r];
-            const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
-            char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-            if (IsDirPath(asset_path))
-            {
-                full_asset_path[strlen(full_asset_path) - 1] = '\0';
-                uint16_t permissions = 0;
-                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
-                if (err)
-                {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                        block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                        err)
-                    Longtail_Free(full_asset_path);
-                    return err;
-                }
-                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
-                {
-                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
-                    if (err)
-                    {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                            err)
-                        Longtail_Free(full_asset_path);
-                        return err;
-                    }
-                }
-                err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
-                if (err)
-                {
-                    if (version_storage_api->IsDir(version_storage_api, full_asset_path))
-                    {
-                        if (!retry_count)
-                        {
-                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                                block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                                err)
-                            Longtail_Free(full_asset_path);
-                            full_asset_path = 0;
-                            return err;
-                        }
-                        Longtail_Free(full_asset_path);
-                        full_asset_path = 0;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                uint16_t permissions = 0;
-                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
-                if (err)
-                {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                        block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                        err)
-                    Longtail_Free(full_asset_path);
-                    return err;
-                }
-                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
-                {
-                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
-                    if (err)
-                    {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                            err)
-                        Longtail_Free(full_asset_path);
-                        return err;
-                    }
-                }
-                err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
-                if (err)
-                {
-                    if (version_storage_api->IsFile(version_storage_api, full_asset_path))
-                    {
-                        if (!retry_count)
-                        {
-                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
-                                block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                                err)
-                            Longtail_Free(full_asset_path);
-                            full_asset_path = 0;
-                            return err;
-                        }
-                        Longtail_Free(full_asset_path);
-                        full_asset_path = 0;
-                        break;
-                    }
-                }
-            }
-            ++successful_remove_count;
-            Longtail_Free(full_asset_path);
-            full_asset_path = 0;
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                ENOMEM)
+            return ENOMEM;
         }
-        if (successful_remove_count < removed_count)
+        memcpy(remove_indexes, version_diff->m_SourceRemovedAssetIndexes, sizeof(uint32_t) * remove_count);
+
+        uint32_t retry_count = 10;
+        uint32_t successful_remove_count = 0;
+        while (successful_remove_count < remove_count)
         {
+            if ((successful_remove_count & 0x7f) == 0x7f) {
+                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                        block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                        ECANCELED)
+                    return ECANCELED;
+                }
+            }
             --retry_count;
-            if (retry_count == 1)
+            for (uint32_t r = 0; r < remove_count; ++r)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", removed_count - successful_remove_count, version_path)
+                uint32_t asset_index = remove_indexes[r];
+                if (asset_index == 0xffffffff)
+                {
+                    continue;
+                }
+                const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
+                char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+                if (IsDirPath(asset_path))
+                {
+                    full_asset_path[strlen(full_asset_path) - 1] = '\0';
+                    if (!version_storage_api->IsDir(version_storage_api, full_asset_path))
+                    {
+                        remove_indexes[r] = 0xffffffff;
+                        Longtail_Free(full_asset_path);
+                        continue;
+                    }
+                    uint16_t permissions = 0;
+                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                    if (err)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                            err)
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
+                    }
+                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                    {
+                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess));
+                        if (err)
+                        {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                                block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                                err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                    }
+                    err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
+                    if (err && version_storage_api->IsDir(version_storage_api, full_asset_path))
+                    {
+                        if (!retry_count)
+                        {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                                block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                                err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                        Longtail_Free(full_asset_path);
+                        full_asset_path = 0;
+                        continue;
+                    }
+                }
+                else
+                {
+                    if (!version_storage_api->IsFile(version_storage_api, full_asset_path))
+                    {
+                        remove_indexes[r] = 0xffffffff;
+                        Longtail_Free(full_asset_path);
+                        continue;
+                    }
+                    uint16_t permissions = 0;
+                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                    if (err)
+                    {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                            block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                            err)
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
+                    }
+                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                    {
+                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                        if (err)
+                        {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                                block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                                err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                    }
+                    err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
+                    if (err && version_storage_api->IsFile(version_storage_api, full_asset_path))
+                    {
+                        if (!retry_count)
+                        {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                                block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                                err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                        Longtail_Free(full_asset_path);
+                        full_asset_path = 0;
+                        continue;
+                    }
+                }
+                remove_indexes[r] = 0xffffffff;
+                ++successful_remove_count;
+            }
+            if (successful_remove_count < remove_count)
+            {
+                --retry_count;
+                if (retry_count == 1)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", remove_count - successful_remove_count, version_path)
+                }
             }
         }
+        Longtail_Free(remove_indexes);
     }
+
 
     uint32_t added_count = *version_diff->m_TargetAddedCount;
     uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;

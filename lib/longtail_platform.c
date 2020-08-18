@@ -373,7 +373,7 @@ int Longtail_IsDir(const char* path)
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
-        if (e == ENOENT){
+        if (e == ENOENT || e == EACCES){
             return 0;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
@@ -388,7 +388,7 @@ int Longtail_IsFile(const char* path)
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
-        if (e == ENOENT){
+        if (e == ENOENT || e == EACCES){
             return 0;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
@@ -638,7 +638,7 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
     {
         int e = Win32ErrorToErrno(GetLastError());
         if (e == ENOENT){
-            return 0;
+            return e;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
         return e;
