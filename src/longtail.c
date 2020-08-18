@@ -381,6 +381,11 @@ struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetStoredBlockAPI(
 
 void Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err) { async_complete_api->OnComplete(async_complete_api, stored_block, err); }
 
+uint64_t Longtail_GetAsyncRetargetContentAPISize()
+{
+    return sizeof(struct Longtail_AsyncRetargetContentAPI);
+}
+
 struct Longtail_AsyncRetargetContentAPI* Longtail_MakeAsyncRetargetContentAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
