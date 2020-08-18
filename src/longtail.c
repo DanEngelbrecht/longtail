@@ -41,13 +41,11 @@ void Longtail_NukeFree(void* p);
 
 #define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
 #define LONGTAIL_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
-#define LONGTAIL_VERSION_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
 #define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
-#define LONGTAIL_VERSION_INDEX_VERSION_0_0_3  LONGTAIL_VERSION(0,0,3)
 #define LONGTAIL_CONTENT_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
 #define LONGTAIL_CONTENT_INDEX_VERSION_1_0_0  LONGTAIL_VERSION(1,0,0)
 
-uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_3;
+uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_2;
 
 #if defined(_WIN32)
     #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
@@ -1803,7 +1801,7 @@ static int InitVersionIndexFromData(
     version_index->m_Version = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_3 && (*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
+    if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentContentIndexVersion);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
@@ -6700,31 +6698,8 @@ static void InitVersionDiff(struct Longtail_VersionDiff* version_diff)
     p += sizeof(uint32_t) * modified_permissions_count;
 }
 
-LONGTAIL_EXPORT int Longtail_RehashPathHashes(
-    struct Longtail_HashAPI* hash_api,
-    struct Longtail_VersionIndex* version_index)
-{
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RehashPathHashes(%p, %p)",
-        hash_api, version_index)
-    if (*version_index->m_Version >= LONGTAIL_VERSION_INDEX_VERSION_0_0_3)
-    {
-        return 0;
-    }
-    uint32_t asset_count = *version_index->m_AssetCount;
-    for (uint32_t a = 0; a < asset_count; ++a)
-    {
-        const char* path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
-        int err = Longtail_GetPathHash(hash_api, path, &version_index->m_PathHashes[a]);
-        if (err)
-        {
-            return err;
-        }
-    }
-    return 0;
-}
-
-
 int Longtail_CreateVersionDiff(
+    struct Longtail_HashAPI* hash_api,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
     struct Longtail_VersionDiff** out_version_diff)
@@ -6734,6 +6709,8 @@ int Longtail_CreateVersionDiff(
     LONGTAIL_VALIDATE_INPUT(source_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(target_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_version_diff != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(hash_api->GetIdentifier(hash_api) == *source_version->m_HashIdentifier, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(hash_api->GetIdentifier(hash_api) == *target_version->m_HashIdentifier, return EINVAL)
 
     uint32_t source_asset_count = *source_version->m_AssetCount;
     uint32_t target_asset_count = *target_version->m_AssetCount;
@@ -6774,16 +6751,32 @@ int Longtail_CreateVersionDiff(
 
     for (uint32_t i = 0; i < source_asset_count; ++i)
     {
-        TLongtail_Hash path_hash = source_version->m_PathHashes[i];
-        source_path_hashes[i] = path_hash;
-        Longtail_LookupTable_Put(source_path_hash_to_index, path_hash, i);
+        // We are re-hashing since we might have an older version hash that is incompatible
+        const char* path = &source_version->m_NameData[source_version->m_NameOffsets[i]];
+        int err = Longtail_GetPathHash(hash_api, path, &source_path_hashes[i]);
+        if (err)
+        {
+            Longtail_Free(hashes);
+            Longtail_Free(source_path_hash_to_index);
+            Longtail_Free(source_path_hash_to_index);
+            return err;
+        }
+        Longtail_LookupTable_Put(source_path_hash_to_index, source_path_hashes[i], i);
     }
 
     for (uint32_t i = 0; i < target_asset_count; ++i)
     {
-        TLongtail_Hash path_hash = target_version->m_PathHashes[i];
-        target_path_hashes[i] = path_hash;
-        Longtail_LookupTable_Put(target_path_hash_to_index, path_hash, i);
+        // We are re-hashing since we might have an older version hash that is incompatible
+        const char* path = &target_version->m_NameData[target_version->m_NameOffsets[i]];
+        int err = Longtail_GetPathHash(hash_api, path, &target_path_hashes[i]);
+        if (err)
+        {
+            Longtail_Free(hashes);
+            Longtail_Free(source_path_hash_to_index);
+            Longtail_Free(source_path_hash_to_index);
+            return err;
+        }
+        Longtail_LookupTable_Put(source_path_hash_to_index, target_path_hashes[i], i);
     }
 
     qsort(source_path_hashes, source_asset_count, sizeof(TLongtail_Hash), CompareHashes);
@@ -7168,7 +7161,6 @@ int Longtail_ChangeVersion(
         }
         Longtail_Free(remove_indexes);
     }
-
 
     uint32_t added_count = *version_diff->m_TargetAddedCount;
     uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;

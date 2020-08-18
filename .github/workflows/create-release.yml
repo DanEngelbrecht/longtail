@@ -122,7 +122,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIXED* Added missing Longtail_GetAsyncRetargetContentAPISize() implementation
+          - *CHANGED API* `Longtail_CreateVersionDiff` now takes `hash_api` as first argument
+          - *FIXED* Fixed delete asset retry logic in `Longtail_ChangeVersion`
+          - *FIXED* Added ASSERTS in all lookup location to avoid hard crashes in debug
         draft: false
         prerelease: false
     - name: Download Linux artifacts

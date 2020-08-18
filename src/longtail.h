@@ -1201,31 +1201,19 @@ LONGTAIL_EXPORT int Longtail_WriteVersion(
     const char* version_path,
     int retain_permissions);
 
-/*! @brief Rehash the path hashes for a struct Longtail_VersionIndex.
- *
- * Updates the path hash fields in a version index using the supplied hash algorithm if the hash is not up to date.
- * This is useful if you are reading an older version of the version index which used a different algorithm for version index.
- * If the hash is up to date the version_index is untouched
- *
- * @param[in] hash_api             An implementation of struct Longtail_HashAPI interface
- * @param[in] version_index        The version index to update
- * @return                         Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_RehashPathHashes(
-    struct Longtail_HashAPI* hash_api,
-    struct Longtail_VersionIndex* version_index);
-
 /*! @brief Get the difference between to struct Longtail_VersionIndex.
  *
  * Returns a struct Longtail_VersionDiff with the additions, modifications and deletions required to change
  * a version from @p source_version to @p target_version.
  *
+ * @param[in] hash_api             An implementation of struct Longtail_HashAPI interface
  * @param[in] source_version       The version index we have
  * @param[in] target_version       The version index we want
  * @param[out] out_version_diff    The resulting diff between @p source_version and @p target_version
  * @return                         Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_CreateVersionDiff(
+    struct Longtail_HashAPI* hash_api,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
     struct Longtail_VersionDiff** out_version_diff);

@@ -742,52 +742,9 @@ int DownSync(
         }
     }
 
-    err = Longtail_RehashPathHashes(
-        hash_api,
-        target_version_index);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to rehash target version index `%s`, %d", target_path, err);
-        Longtail_Free(target_version_index);
-        Longtail_Free(source_version_index);
-        SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(store_block_cachestore_api);
-        SAFE_DISPOSE_API(store_block_localstore_api);
-        SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(hash_registry);
-        SAFE_DISPOSE_API(job_api);
-        Longtail_Free((void*)storage_path);
-        return err;
-    }
-
-    err = Longtail_RehashPathHashes(
-        hash_api,
-        source_version_index);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to rehash source version index `%s` and `%s`, %d", source_path, err);
-        Longtail_Free(target_version_index);
-        Longtail_Free(source_version_index);
-        SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(store_block_cachestore_api);
-        SAFE_DISPOSE_API(store_block_localstore_api);
-        SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(hash_registry);
-        SAFE_DISPOSE_API(job_api);
-        Longtail_Free((void*)storage_path);
-        return err;
-    }
-
     struct Longtail_VersionDiff* version_diff;
     err = Longtail_CreateVersionDiff(
+        hash_api,
         target_version_index,
         source_version_index,
         &version_diff);
@@ -832,7 +789,6 @@ int DownSync(
         return 0;
     }
 
-    // IDEA: Potentially we could create the content index based on the diff, right?
     struct Longtail_ContentIndex* source_version_content_index;
     err = Longtail_CreateContentIndexFromDiff(
         hash_api,
