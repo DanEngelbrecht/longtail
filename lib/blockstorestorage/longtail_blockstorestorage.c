@@ -177,7 +177,9 @@ static struct BlockStoreStorageAPI_PathLookup* BlockStoreStorageAPI_CreatePathLo
     for (uint32_t p = 0; p < asset_count; ++p)
     {
         TLongtail_Hash parent_hash = path_lookup->m_PathEntries[p + 1].m_ParentHash;
-        uint32_t parent_index = (uint32_t)*Longtail_LookupTable_Get(path_lookup->m_LookupTable, parent_hash);
+        const uint64_t* parent_index_ptr = Longtail_LookupTable_Get(path_lookup->m_LookupTable, parent_hash);
+        LONGTAIL_FATAL_ASSERT(parent_index_ptr, return 0)
+        uint32_t parent_index = (uint32_t)*parent_index_ptr;
         if (0 == Longtail_LookupTable_PutUnique(find_first_lookup, parent_hash, p))
         {
             path_lookup->m_PathEntries[parent_index].m_ChildStartIndex = p + 1;
@@ -502,7 +504,9 @@ static int BlockStoreStorageAPI_ReadFile(
     {
         uint32_t chunk_index = chunk_indexes[c];
         TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
-        uint64_t block_index = *Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
+        const uint64_t* block_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
+        LONGTAIL_FATAL_ASSERT(block_index_ptr, EINVAL)
+        uint64_t block_index = *block_index_ptr;
         TLongtail_Hash block_hash = block_hashes[block_index];
         uint64_t* chunk_range_index = Longtail_LookupTable_PutUnique(block_range_map, block_hash, arrlen(chunk_ranges));
         if (chunk_range_index)

@@ -163,7 +163,7 @@ int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
     return 0;
 }
 
-struct LRUStoredBlock* StoreBlock(struct LRUBlockStoreAPI* api, struct Longtail_StoredBlock* original_stored_block)
+struct LRUStoredBlock* CreateLRUBlock(struct LRUBlockStoreAPI* api, struct Longtail_StoredBlock* original_stored_block)
 {
     TLongtail_Hash block_hash = *original_stored_block->m_BlockIndex->m_BlockHash;
     struct LRUStoredBlock* allocated_block = (struct LRUStoredBlock*)Longtail_Alloc(sizeof(struct LRUStoredBlock));
@@ -174,25 +174,6 @@ struct LRUStoredBlock* StoreBlock(struct LRUBlockStoreAPI* api, struct Longtail_
     allocated_block->m_StoredBlock.m_BlockData = original_stored_block->m_BlockData;
     allocated_block->m_StoredBlock.m_BlockIndex = original_stored_block->m_BlockIndex;
     allocated_block->m_RefCount = 1;
-
-    struct Longtail_StoredBlock* dispose_block = 0;
-
-    Longtail_LockSpinLock(api->m_Lock);
-    if (api->m_LRU->m_AllocatedCount == api->m_LRU->m_MaxCount)
-    {
-        struct LRUStoredBlock* stored_block = LRU_Evict(api->m_LRU);
-        hmdel(api->m_BlockHashToLRUStoredBlock, *stored_block->m_OriginalStoredBlock->m_BlockIndex->m_BlockHash);
-        dispose_block = &stored_block->m_StoredBlock;
-    }
-    struct LRUStoredBlock** stored_block_slot = LRU_Put(api->m_LRU);
-    *stored_block_slot = allocated_block;
-    hmput(api->m_BlockHashToLRUStoredBlock, block_hash, allocated_block);
-    Longtail_UnlockSpinLock(api->m_Lock);
-
-    if (dispose_block && dispose_block->Dispose)
-    {
-        dispose_block->Dispose(dispose_block);
-    }
     return allocated_block;
 }
 
@@ -296,7 +277,7 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
         return;
     }
 
-    struct LRUStoredBlock* shared_stored_block = StoreBlock(api, stored_block);
+    struct LRUStoredBlock* shared_stored_block = CreateLRUBlock(api, stored_block);
     if (!shared_stored_block)
     {
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
@@ -319,12 +300,29 @@ static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_Asyn
     }
 
     struct Longtail_AsyncGetStoredBlockAPI** list;
+    struct Longtail_StoredBlock* dispose_block = 0;
+
     Longtail_LockSpinLock(api->m_Lock);
+    if (api->m_LRU->m_AllocatedCount == api->m_LRU->m_MaxCount)
+    {
+        dispose_block = &LRU_Evict(api->m_LRU)->m_StoredBlock;
+        hmdel(api->m_BlockHashToLRUStoredBlock, *dispose_block->m_BlockIndex->m_BlockHash);
+    }
+    *LRU_Put(api->m_LRU) = shared_stored_block;
+    hmput(api->m_BlockHashToLRUStoredBlock, block_hash, shared_stored_block);
+
     list = hmget(api->m_BlockHashToCompleteCallbacks, block_hash);
     hmdel(api->m_BlockHashToCompleteCallbacks, block_hash);
-    Longtail_AtomicAdd32(&shared_stored_block->m_RefCount, (int32_t)arrlen(list));
-    Longtail_UnlockSpinLock(api->m_Lock);
     size_t wait_count = arrlen(list);
+    Longtail_AtomicAdd32(&shared_stored_block->m_RefCount, (int32_t)wait_count);
+
+    Longtail_UnlockSpinLock(api->m_Lock);
+
+    if (dispose_block && dispose_block->Dispose)
+    {
+        dispose_block->Dispose(dispose_block);
+    }
+
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount);
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*shared_stored_block->m_StoredBlock.m_BlockIndex->m_ChunkCount) + shared_stored_block->m_StoredBlock.m_BlockChunksDataSize);
     for (size_t i = 0; i < wait_count; ++i)
@@ -401,6 +399,7 @@ static int LRUBlockStore_GetStoredBlock(
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         // We shortcut here since the logic to get from backing store is in OnComplete
         LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(&share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI, 0, err);
+        LRUBlockStore_CompleteRequest(api);
     }
     return 0;
 }
@@ -481,9 +480,12 @@ static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
     }
     while (api->m_LRU->m_AllocatedCount > 0)
     {
-        struct LRUStoredBlock* lru_block = LRU_Evict(api->m_LRU);
-        hmdel(api->m_BlockHashToLRUStoredBlock, *lru_block->m_OriginalStoredBlock->m_BlockIndex->m_BlockHash);
-        lru_block->m_StoredBlock.Dispose(&lru_block->m_StoredBlock);
+        struct Longtail_StoredBlock* lru_block = &LRU_Evict(api->m_LRU)->m_StoredBlock;
+        hmdel(api->m_BlockHashToLRUStoredBlock, *lru_block->m_BlockIndex->m_BlockHash);
+        if (lru_block->Dispose)
+        {
+            lru_block->Dispose(lru_block);
+        }
     }
     hmfree(api->m_BlockHashToCompleteCallbacks);
     hmfree(api->m_BlockHashToLRUStoredBlock);

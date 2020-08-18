@@ -115,6 +115,8 @@ static int Win32ErrorToErrno(DWORD err)
         return EBUSY;
         case WAIT_TIMEOUT:
         return ETIME;
+        case ERROR_DIR_NOT_EMPTY:
+        return ENOTEMPTY;
         default:
         return EINVAL;
     }
@@ -373,7 +375,8 @@ int Longtail_IsDir(const char* path)
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
-        if (e == ENOENT){
+        if (e == ENOENT)
+        {
             return 0;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
@@ -388,7 +391,8 @@ int Longtail_IsFile(const char* path)
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
-        if (e == ENOENT){
+        if (e == ENOENT)
+        {
             return 0;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
@@ -606,7 +610,8 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
-        if (e == ENOENT){
+        if (e == ENOENT)
+        {
             return 0;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
@@ -620,7 +625,8 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
             if (FALSE == SetFileAttributesA(path, attrs))
             {
                 int e = Win32ErrorToErrno(GetLastError());
-                if (e == ENOENT){
+                if (e == ENOENT)
+                {
                     return 0;
                 }
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
@@ -637,8 +643,9 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
-        if (e == ENOENT){
-            return 0;
+        if (e == ENOENT)
+        {
+            return e;
         }
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
         return e;
@@ -829,7 +836,8 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
 
     pthread_attr_t attr;
     attr_err = pthread_attr_init(&attr);
-    if (attr_err != 0) {
+    if (attr_err != 0)
+    {
         err = attr_err;
         goto error;
     }
@@ -872,13 +880,15 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     }
 
     exit_lock_err = pthread_mutex_init(&thread->m_ExitLock, 0);
-    if (exit_lock_err != 0) {
+    if (exit_lock_err != 0)
+    {
         err = exit_lock_err;
         goto error;
     }
 
     exit_cont_err = pthread_cond_init(&thread->m_ExitConditionalVariable, 0);
-    if (exit_cont_err != 0) {
+    if (exit_cont_err != 0)
+    {
         err = exit_cont_err;
         goto error;
     }
@@ -886,7 +896,8 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     if (stack_size != 0)
     {
         err = pthread_attr_setstacksize(&attr, stack_size);
-        if (err != 0) {
+        if (err != 0)
+        {
             goto error;
         }
     }
@@ -903,13 +914,16 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
     return 0;
 
 error:
-    if (exit_cont_err == 0) {
+    if (exit_cont_err == 0)
+    {
         pthread_cond_destroy(&thread->m_ExitConditionalVariable);
     }
-    if (exit_lock_err == 0) {
+    if (exit_lock_err == 0)
+    {
         pthread_mutex_destroy(&thread->m_ExitLock);
     }
-    if (attr_err == 0) {
+    if (attr_err == 0)
+    {
         pthread_attr_destroy(&attr);
     }
     return err;
@@ -945,11 +959,13 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
     }
     struct timespec ts;
     int err = GetTimeSpec(&ts, timeout_us);
-    if (err != 0){
+    if (err != 0)
+    {
         return err;
     }
     err = pthread_mutex_lock(&thread->m_ExitLock);
-    if (err != 0){
+    if (err != 0)
+    {
         return err;
     }
     while (!thread->m_Exited)
@@ -1116,7 +1132,8 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
 {
     HLongtail_Sema semaphore = (HLongtail_Sema)mem;
     int err = sem_init(&semaphore->m_Semaphore, 0, (unsigned int)initial_count);
-    if (err != 0){
+    if (err != 0)
+    {
         return err;
     }
     *out_sema = semaphore;
@@ -1190,7 +1207,8 @@ int Longtail_CreateSpinLock(void* mem, HLongtail_SpinLock* out_spin_lock)
 {
     HLongtail_SpinLock spin_lock = (HLongtail_SpinLock)mem;
     int err = pthread_spin_init(&spin_lock->m_Lock, 0);
-    if (err != 0) {
+    if (err != 0)
+    {
         return err;
     }
     *out_spin_lock = spin_lock;
@@ -1236,10 +1254,6 @@ int Longtail_CreateDirectory(const char* path)
         return 0;
     }
     int e = errno;
-    if (e == EEXIST)
-    {
-        return 0;
-    }
     return e;
 }
 

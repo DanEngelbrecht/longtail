@@ -46,7 +46,7 @@ static int FSStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, co
     int err = Longtail_OpenReadFile(tmp_path, &r);
     if (err != 0)
     {
-        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
             storage_api, path, out_open_file,
             err)
         return err;
@@ -63,7 +63,7 @@ static int FSStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Longtai
     int err = Longtail_GetFileSize((HLongtail_OpenFile)f, out_size);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_GetSize(%p, %p, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_GetSize(%p, %p, %p) failed with %d",
             storage_api, f, out_size,
             err)
         return err;
@@ -79,7 +79,7 @@ static int FSStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtail_S
     int err = Longtail_Read((HLongtail_OpenFile)f, offset,length, output);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
             storage_api, f, offset, length, output,
             err)
         return err;
@@ -98,7 +98,7 @@ static int FSStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, c
     int err = Longtail_OpenWriteFile(tmp_path, initial_size, &r);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_OpenWriteFile(%p, %s, %" PRIu64 ", %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_OpenWriteFile(%p, %s, %" PRIu64 ", %p) failed with %d",
             storage_api, path, initial_size, out_open_file,
             err)
         return err;
@@ -115,7 +115,7 @@ static int FSStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longtail_
     int err = Longtail_Write((HLongtail_OpenFile)f, offset,length, input);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_Write(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_Write(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
             storage_api, f, offset, length, input,
             err)
         return 0;
@@ -130,7 +130,7 @@ static int FSStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtai
     int err = Longtail_SetFileSize((HLongtail_OpenFile)f, length);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_SetSize(%p, %p, %" PRIu64 ") failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_SetSize(%p, %p, %" PRIu64 ") failed with %d",
             storage_api, f, length,
             err)
         return err;
@@ -147,7 +147,7 @@ static int FSStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_api, 
     int err = Longtail_SetFilePermissions(tmp_path, permissions);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_SetPermissions(%p, %p, %u) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_SetPermissions(%p, %p, %u) failed with %d",
             storage_api, path, permissions,
             err)
         return err;
@@ -168,7 +168,7 @@ static int FSStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, 
     }
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_GetPermissions(%p, %p, %u) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_GetPermissions(%p, %p, %u) failed with %d",
             storage_api, path, out_permissions,
             err)
         return err;
@@ -191,7 +191,7 @@ static int FSStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const
     int err = Longtail_CreateDirectory(tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(err == EEXIST ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_CreateDir(%p, %s) failed with %d",
+        LONGTAIL_LOG(err == EEXIST ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_CreateDir(%p, %s) failed with %d",
             storage_api, path,
             err)
         return err;
@@ -211,7 +211,7 @@ static int FSStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, cons
     int err = Longtail_MoveFile(tmp_source_path, tmp_target_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MoveFile(%p, %s, %s) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_MoveFile(%p, %s, %s) failed with %d",
             storage_api, source_path, target_path,
             err)
         return err;
@@ -231,7 +231,7 @@ static char* FSStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, co
     char* path = (char*)Longtail_ConcatPath(tmp_root_path, tmp_sub_path);
     if (!path)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_ConcatPath(%p, %s, %s) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_ConcatPath(%p, %s, %s) failed with %d",
             storage_api, root_path, sub_path,
             ENOMEM)
         return 0;
@@ -269,7 +269,7 @@ static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const
     int err = Longtail_RemoveDir(tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_RemoveDir(%p, %s) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_RemoveDir(%p, %s) failed with %d",
             storage_api, path,
             err)
         return err;
@@ -286,7 +286,7 @@ static int FSStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, cons
     int err = Longtail_RemoveFile(tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RemoveFile(%p, %s) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_RemoveFile(%p, %s) failed with %d",
             storage_api, path,
             err)
         return err;
@@ -310,7 +310,7 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
     }
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
             storage_api, path, out_iterator,
             err)
         Longtail_Free(iterator);
@@ -327,7 +327,7 @@ static int FSStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longta
     int err = Longtail_FindNext((HLongtail_FSIterator)iterator);
     if (err && (err != ENOENT))
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_FindNext(%p, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_FindNext(%p, %p) failed with %d",
             storage_api, iterator,
             err)
     }
@@ -350,7 +350,7 @@ static int FSStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_a
     int err = Longtail_GetEntryProperties((HLongtail_FSIterator)iterator, &out_properties->m_Size, &out_properties->m_Permissions, &out_properties->m_IsDir);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_GetEntryProperties(%p, %p, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_GetEntryProperties(%p, %p, %p) failed with %d",
             storage_api, iterator, out_properties,
             err)
         return err;

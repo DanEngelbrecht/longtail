@@ -2481,6 +2481,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     Longtail_VersionDiff* version_diff;
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
+        hash_api,
         old_vindex,
         new_vindex,
         &version_diff));
@@ -2527,6 +2528,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     // Make null-diff and see that we handle zero changes
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
+        hash_api,
         new_vindex,
         new_vindex,
         &version_diff));
@@ -4938,6 +4940,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
 
     Longtail_VersionDiff* version_diff;
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
+        hash_api,
         current_vindex,
         vindex,
         &version_diff));
@@ -5377,7 +5380,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     Longtail_Free(file_infos_3);
 
     struct Longtail_VersionDiff* version_diff;
-    ASSERT_EQ(0, Longtail_CreateVersionDiff(version_index_3, version_index_1, &version_diff));
+    ASSERT_EQ(0, Longtail_CreateVersionDiff(hash_api, version_index_3, version_index_1, &version_diff));
 
     // We build a content index for our target version without having access to the remote index
     struct Longtail_ContentIndex* version_1_update_content_index;
@@ -5431,7 +5434,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     Longtail_Free(file_infos_3);
 
     Longtail_Free(version_diff);
-    ASSERT_EQ(0, Longtail_CreateVersionDiff(version_index_3, version_index_1, &version_diff));
+    ASSERT_EQ(0, Longtail_CreateVersionDiff(hash_api, version_index_3, version_index_1, &version_diff));
 
     // We build a content index for our target version without having access to the remote index
     struct Longtail_ContentIndex* version_2_update_content_index;
@@ -5971,6 +5974,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
 
     Longtail_VersionDiff* version_diff;
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
+        hash_api,
         current_vindex,
         vindex,
         &version_diff));
