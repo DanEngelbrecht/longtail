@@ -2107,18 +2107,7 @@ int Longtail_CreateVersionIndex(
 
     uint32_t unique_chunk_count = 0;
     struct Longtail_LookupTable* chunk_hash_to_index = Longtail_LookupTable_Create(&tmp_compact_chunk_tags[assets_chunk_index_count], assets_chunk_index_count, 0);
-    if (!chunk_hash_to_index)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-            ENOMEM)
-        Longtail_Free(work_mem_compact);
-        Longtail_Free(asset_chunk_tags);
-        Longtail_Free(asset_chunk_hashes);
-        Longtail_Free(asset_chunk_sizes);
-        Longtail_Free(work_mem);
-        return ENOMEM;
-    }
+
     for (uint32_t c = 0; c < assets_chunk_index_count; ++c)
     {
         TLongtail_Hash h = asset_chunk_hashes[c];
@@ -4744,15 +4733,6 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     uint32_t* chunk_offsets = &chunk_sizes[block_chunks_count];
     uint32_t* block_indexes = &chunk_offsets[block_chunks_count];
     struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(&block_indexes[block_chunks_count], block_chunks_count, 0);
-    if (!block_chunks_lookup)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
-            context, job_id, is_cancelled,
-            ENOMEM)
-        job->m_Err = ENOMEM;
-        Longtail_Free(lookup_mem);
-        return 0;
-    }
 
     uint32_t block_chunk_index_offset = 0;
     for(uint32_t b = 0; b < block_reader_job_count; ++b)
@@ -6715,39 +6695,39 @@ int Longtail_CreateVersionDiff(
     uint32_t source_asset_count = *source_version->m_AssetCount;
     uint32_t target_asset_count = *target_version->m_AssetCount;
 
-    struct Longtail_LookupTable* source_path_hash_to_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(source_asset_count)), source_asset_count ,0);
-    if (!source_path_hash_to_index)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) failed with %d",
-            source_version, target_version, out_version_diff,
-            ENOMEM)
-        return ENOMEM;
-    }
-    struct Longtail_LookupTable* target_path_hash_to_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(target_asset_count)), target_asset_count ,0);
-    if (!target_path_hash_to_index)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) failed with %d",
-            source_version, target_version, out_version_diff,
-            ENOMEM)
-        Longtail_Free(source_path_hash_to_index);
-        return ENOMEM;
-    }
+    size_t source_asset_lookup_table_size = Longtail_LookupTable_GetSize(source_asset_count);
+    size_t target_asset_lookup_table_size = Longtail_LookupTable_GetSize(target_asset_count);
 
-    uint32_t hashes_count = source_asset_count + target_asset_count;
-    size_t hashes_size = sizeof(TLongtail_Hash) * hashes_count;
-    TLongtail_Hash* hashes = (TLongtail_Hash*)Longtail_Alloc(hashes_size);
-    if (!hashes)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) failed with %d",
-            source_version, target_version, out_version_diff,
-            ENOMEM)
-        Longtail_Free(target_path_hash_to_index);
-        Longtail_Free(source_path_hash_to_index);
-        return ENOMEM;
-    }
+    size_t work_mem_size =
+        source_asset_lookup_table_size +
+        target_asset_lookup_table_size +
+        sizeof(TLongtail_Hash) * source_asset_count +
+        sizeof(TLongtail_Hash) * target_asset_count +
+        sizeof(uint32_t) * source_asset_count +
+        sizeof(uint32_t) * target_asset_count +
+        sizeof(uint32_t) * source_asset_count +
+        sizeof(uint32_t) * target_asset_count +
+        sizeof(uint32_t) * source_asset_count +
+        sizeof(uint32_t) * target_asset_count;
+    void* work_mem = Longtail_Alloc(work_mem_size);
+    uint8_t* p = (uint8_t*)work_mem;
 
-    TLongtail_Hash* source_path_hashes = &hashes[0];
-    TLongtail_Hash* target_path_hashes = &hashes[source_asset_count];
+    struct Longtail_LookupTable* source_path_hash_to_index = Longtail_LookupTable_Create(p, source_asset_count ,0);
+    p += source_asset_lookup_table_size;
+    struct Longtail_LookupTable* target_path_hash_to_index = Longtail_LookupTable_Create(p, target_asset_count ,0);
+    p += target_asset_lookup_table_size;
+
+    TLongtail_Hash* source_path_hashes = (TLongtail_Hash*)p;
+    TLongtail_Hash* target_path_hashes = &source_path_hashes[source_asset_count];
+
+    uint32_t* removed_source_asset_indexes = (uint32_t*)&target_path_hashes[target_asset_count];
+    uint32_t* added_target_asset_indexes = &removed_source_asset_indexes[source_asset_count];
+
+    uint32_t* modified_source_content_indexes = &added_target_asset_indexes[target_asset_count];
+    uint32_t* modified_target_content_indexes = &modified_source_content_indexes[source_asset_count];
+
+    uint32_t* modified_source_permissions_indexes = &modified_target_content_indexes[target_asset_count];
+    uint32_t* modified_target_permissions_indexes = &modified_source_permissions_indexes[source_asset_count];
 
     for (uint32_t i = 0; i < source_asset_count; ++i)
     {
@@ -6756,9 +6736,7 @@ int Longtail_CreateVersionDiff(
         int err = Longtail_GetPathHash(hash_api, path, &source_path_hashes[i]);
         if (err)
         {
-            Longtail_Free(hashes);
-            Longtail_Free(target_path_hash_to_index);
-            Longtail_Free(source_path_hash_to_index);
+            Longtail_Free(work_mem);
             return err;
         }
         Longtail_LookupTable_Put(source_path_hash_to_index, source_path_hashes[i], i);
@@ -6771,9 +6749,7 @@ int Longtail_CreateVersionDiff(
         int err = Longtail_GetPathHash(hash_api, path, &target_path_hashes[i]);
         if (err)
         {
-            Longtail_Free(hashes);
-            Longtail_Free(target_path_hash_to_index);
-            Longtail_Free(source_path_hash_to_index);
+            Longtail_Free(work_mem);
             return err;
         }
         Longtail_LookupTable_Put(target_path_hash_to_index, target_path_hashes[i], i);
@@ -6785,36 +6761,6 @@ int Longtail_CreateVersionDiff(
     const uint32_t max_modified_content_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
     const uint32_t max_modified_permission_count = source_asset_count < target_asset_count ? source_asset_count : target_asset_count;
     const uint32_t indexes_count = source_asset_count + target_asset_count + max_modified_content_count + max_modified_content_count + max_modified_permission_count + max_modified_permission_count;
-
-    size_t indexes_size = sizeof(uint32_t) * indexes_count;
-    uint32_t* indexes = (uint32_t*)Longtail_Alloc(indexes_size);
-    if (!indexes)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) failed with %d",
-            source_version, target_version, out_version_diff,
-            ENOMEM)
-        Longtail_Free(target_path_hash_to_index);
-        Longtail_Free(source_path_hash_to_index);
-        Longtail_Free(hashes);
-        return ENOMEM;
-    }
-
-    uint32_t* indexes_ptr = &indexes[0];
-
-    uint32_t* removed_source_asset_indexes = indexes_ptr;
-    indexes_ptr += source_asset_count;
-    uint32_t* added_target_asset_indexes = indexes_ptr;
-    indexes_ptr += target_asset_count;
-
-    uint32_t* modified_source_content_indexes = indexes_ptr;
-    indexes_ptr += max_modified_content_count;
-    uint32_t* modified_target_content_indexes = indexes_ptr;
-    indexes_ptr += max_modified_content_count;
-
-    uint32_t* modified_source_permissions_indexes = indexes_ptr;
-    indexes_ptr += max_modified_permission_count;
-    uint32_t* modified_target_permissions_indexes = indexes_ptr;
-    indexes_ptr += max_modified_permission_count;
 
     uint32_t source_removed_count = 0;
     uint32_t target_added_count = 0;
@@ -6935,10 +6881,7 @@ int Longtail_CreateVersionDiff(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p) failed with %d",
             source_version, target_version, out_version_diff,
             ENOMEM)
-        Longtail_Free(target_path_hash_to_index);
-        Longtail_Free(source_path_hash_to_index);
-        Longtail_Free(indexes);
-        Longtail_Free(hashes);
+        Longtail_Free(work_mem);
         return ENOMEM;
     }
     uint32_t* counts_ptr = (uint32_t*)(void*)&version_diff[1];
@@ -6958,10 +6901,7 @@ int Longtail_CreateVersionDiff(
     QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
     QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
 
-    Longtail_Free(indexes);
-    Longtail_Free(hashes);
-    Longtail_Free(target_path_hash_to_index);
-    Longtail_Free(source_path_hash_to_index);
+    Longtail_Free(work_mem);
     *out_version_diff = version_diff;
     return 0;
 }
