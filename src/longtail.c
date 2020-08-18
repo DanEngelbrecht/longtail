@@ -6757,7 +6757,7 @@ int Longtail_CreateVersionDiff(
         if (err)
         {
             Longtail_Free(hashes);
-            Longtail_Free(source_path_hash_to_index);
+            Longtail_Free(target_path_hash_to_index);
             Longtail_Free(source_path_hash_to_index);
             return err;
         }
@@ -6772,11 +6772,11 @@ int Longtail_CreateVersionDiff(
         if (err)
         {
             Longtail_Free(hashes);
-            Longtail_Free(source_path_hash_to_index);
+            Longtail_Free(target_path_hash_to_index);
             Longtail_Free(source_path_hash_to_index);
             return err;
         }
-        Longtail_LookupTable_Put(source_path_hash_to_index, target_path_hashes[i], i);
+        Longtail_LookupTable_Put(target_path_hash_to_index, target_path_hashes[i], i);
     }
 
     qsort(source_path_hashes, source_asset_count, sizeof(TLongtail_Hash), CompareHashes);
