@@ -373,6 +373,9 @@ static int UpdateContentIndex(
         &added_content_index);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "UpdateContentIndex(%p, %p, %p) failed with %d",
+            current_content_index, added_block_indexes, out_content_index,
+            err)
         return err;
     }
     struct Longtail_ContentIndex* new_content_index;
@@ -383,6 +386,9 @@ static int UpdateContentIndex(
     Longtail_Free(added_content_index);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "UpdateContentIndex(%p, %p, %p) failed with %d",
+            current_content_index, added_block_indexes, out_content_index,
+            err)
         Longtail_Free(added_content_index);
         return err;
     }
@@ -1029,7 +1035,13 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
                 api->m_ContentIndex,
                 api->m_AddedBlockIndexes,
                 &new_content_index);
-            if (!err)
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_Flush(%p, %p) failed with %d",
+                    block_store_api, async_complete_api,
+                    err)
+            }
+            else
             {
                 Longtail_Free(api->m_ContentIndex);
                 api->m_ContentIndex = new_content_index;
@@ -1037,12 +1049,18 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
         }
         else
         {
-            Longtail_CreateContentIndexFromBlocks(
+            err = Longtail_CreateContentIndexFromBlocks(
                 api->m_DefaultMaxBlockSize,
                 api->m_DefaultMaxChunksPerBlock,
                 (uint64_t)(arrlen(api->m_AddedBlockIndexes)),
                 api->m_AddedBlockIndexes,
                 &api->m_ContentIndex);
+            if (err)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_Flush(%p, %p) failed with %d",
+                    block_store_api, async_complete_api,
+                    err)
+            }
         }
         intptr_t free_block_index = new_block_count;
         while(free_block_index-- > 0)
@@ -1071,6 +1089,9 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
 
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_Flush(%p, %p) failed with %d",
+            block_store_api, async_complete_api,
+            err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_FailCount], 1);
     }
 

@@ -221,6 +221,9 @@ static int CompressBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_
         content_index);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PreflightGet(%p, %p) failed with %d",
+            block_store_api, content_index,
+            err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
     }
     return err;

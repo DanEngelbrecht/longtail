@@ -3807,6 +3807,11 @@ static void BlockWriterJobOnComplete(struct Longtail_AsyncPutStoredBlockAPI* asy
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "BlockWriterJobOnComplete(%p, %d)",
         async_complete_api, err)
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockWriterJobOnComplete(%p, %d)",
+            async_complete_api, err)
+    }
     LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct WriteBlockJob* job = (struct WriteBlockJob*)async_complete_api;
     LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return);
@@ -4258,6 +4263,11 @@ void BlockReaderJobOnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_comp
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "BlockReaderJobOnComplete(%p, %p, %d)",
         async_complete_api, stored_block, err)
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockReaderJobOnComplete(%p, %p, %d)",
+            async_complete_api, stored_block, err)
+    }
     LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
     struct BlockReaderJob* job = (struct BlockReaderJob*)async_complete_api;
     LONGTAIL_FATAL_ASSERT(job->m_AsyncCompleteAPI.OnComplete != 0, return);
@@ -4587,6 +4597,8 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         if (IsDirPath(full_asset_path))
         {
             LONGTAIL_FATAL_ASSERT(block_reader_job_count == 0, job->m_Err = EINVAL; return 0)
+            // Remove trailing forward slash
+            full_asset_path[strlen(full_asset_path) - 1] = '\0';
             err = SafeCreateDir(job->m_VersionStorageAPI, full_asset_path);
             if (err)
             {
@@ -4626,6 +4638,9 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 err = job->m_VersionStorageAPI->SetPermissions(job->m_VersionStorageAPI, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
                 if (err)
                 {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+                        context, job_id, is_cancelled,
+                        err)
                     Longtail_Free(full_asset_path);
                     for (uint32_t d = 0; d < block_reader_job_count; ++d)
                     {
@@ -4714,6 +4729,9 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     void* lookup_mem = Longtail_Alloc(sizeof(uint32_t) * (block_chunks_count * 3) + Longtail_LookupTable_GetSize(block_chunks_count));
     if (!lookup_mem)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %p) failed with %d",
+            context, job_id, is_cancelled,
+            ENOMEM)
         for (uint32_t d = 0; d < block_reader_job_count; ++d)
         {
             stored_block[d]->Dispose(stored_block[d]);
@@ -5298,6 +5316,13 @@ static int WriteAssets(
             uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
             TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
             const uint64_t* block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+            if (!block_index_ptr)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
+                    block_store_api, version_storage_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, version_path, chunk_hash_to_block_index, awl, retain_permssions,
+                    EINVAL)
+                return EINVAL;
+            }
             LONGTAIL_FATAL_ASSERT(block_index_ptr, return EINVAL);
             uint64_t block_index = *block_index_ptr;
             TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
@@ -5308,7 +5333,13 @@ static int WriteAssets(
                 uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
                 TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
                 const uint64_t* next_block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
-                LONGTAIL_FATAL_ASSERT(next_block_index_ptr, return EINVAL);
+                if (!next_block_index_ptr)
+                {
+                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
+                        block_store_api, version_storage_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, version_path, chunk_hash_to_block_index, awl, retain_permssions,
+                        EINVAL)
+                    return EINVAL;
+                }
                 uint64_t next_block_index = *next_block_index_ptr;
                 if (next_block_index != block_index)
                 {
@@ -6122,42 +6153,42 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
 
 int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
-    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_ContentIndex* requested_content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RetargetContent(%p, %p, %p)",
-        reference_content_index, content_index, out_content_index)
+        reference_content_index, requested_content_index, out_content_index)
     LONGTAIL_VALIDATE_INPUT(reference_content_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(requested_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_content_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(((*reference_content_index->m_BlockCount) == 0 || (*content_index->m_BlockCount) == 0) || ((*reference_content_index->m_HashIdentifier) == (*content_index->m_HashIdentifier)), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(((*reference_content_index->m_BlockCount) == 0 || (*requested_content_index->m_BlockCount) == 0) || ((*reference_content_index->m_HashIdentifier) == (*requested_content_index->m_HashIdentifier)), return EINVAL)
 
-    uint32_t hash_identifier = (*reference_content_index->m_BlockCount) != 0 ? (*reference_content_index->m_HashIdentifier) : (*content_index->m_HashIdentifier);
+    uint32_t hash_identifier = (*reference_content_index->m_BlockCount) != 0 ? (*reference_content_index->m_HashIdentifier) : (*requested_content_index->m_HashIdentifier);
 
-    uint64_t requested_chunk_count = *content_index->m_ChunkCount;
+    uint64_t requested_chunk_count = *requested_content_index->m_ChunkCount;
     struct Longtail_LookupTable* chunk_to_requested_block_index_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(requested_chunk_count)), requested_chunk_count, 0);
     if (!chunk_to_requested_block_index_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-            reference_content_index, content_index, out_content_index,
+            reference_content_index, requested_content_index, out_content_index,
             ENOMEM)
         return ENOMEM;
     }
     for (uint64_t i = 0; i < requested_chunk_count; ++i)
     {
-        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
-        uint64_t block_index = content_index->m_ChunkBlockIndexes[i];
+        TLongtail_Hash chunk_hash = requested_content_index->m_ChunkHashes[i];
+        uint64_t block_index = requested_content_index->m_ChunkBlockIndexes[i];
         Longtail_LookupTable_Put(chunk_to_requested_block_index_lookup, chunk_hash, block_index);
     }
 
     uint64_t reference_block_count = *reference_content_index->m_BlockCount;
     uint64_t reference_chunk_count = *reference_content_index->m_ChunkCount;
 
-    struct Longtail_LookupTable* requested_blocks_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(reference_block_count)), reference_block_count, 0);
-    if (!requested_blocks_lookup)
+    struct Longtail_LookupTable* keep_blocks_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(reference_block_count)), reference_block_count, 0);
+    if (!keep_blocks_lookup)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-            reference_content_index, content_index, out_content_index,
+            reference_content_index, requested_content_index, out_content_index,
             ENOMEM)
         Longtail_Free(chunk_to_requested_block_index_lookup);
         return ENOMEM;
@@ -6170,16 +6201,16 @@ int Longtail_RetargetContent(
     if (!work_mem)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-            reference_content_index, content_index, out_content_index,
+            reference_content_index, requested_content_index, out_content_index,
             ENOMEM)
-        Longtail_Free(requested_blocks_lookup);
+        Longtail_Free(keep_blocks_lookup);
         Longtail_Free(chunk_to_requested_block_index_lookup);
         return ENOMEM;
     }
 
-    TLongtail_Hash* tmp_requested_block_hashes = (TLongtail_Hash*)work_mem;
-    TLongtail_Hash* tmp_requested_chunk_hashes = &tmp_requested_block_hashes[reference_block_count];
-    uint64_t* tmp_requested_chunk_block_indexes = (uint64_t*)&tmp_requested_chunk_hashes[reference_chunk_count];
+    TLongtail_Hash* tmp_keep_block_hashes = (TLongtail_Hash*)work_mem;
+    TLongtail_Hash* tmp_keep_chunk_hashes = &tmp_keep_block_hashes[reference_block_count];
+    uint64_t* tmp_keep_chunk_block_indexes = (uint64_t*)&tmp_keep_chunk_hashes[reference_chunk_count];
 
     uint64_t chunk_count = 0;
     uint64_t block_count = 0;
@@ -6190,24 +6221,24 @@ int Longtail_RetargetContent(
         TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[block_index];
         if (Longtail_LookupTable_Get(chunk_to_requested_block_index_lookup, chunk_hash) != 0)
         {
-            uint64_t* find_block_index = Longtail_LookupTable_PutUnique(requested_blocks_lookup, block_hash, block_count);
+            uint64_t* find_block_index = Longtail_LookupTable_PutUnique(keep_blocks_lookup, block_hash, block_count);
             if (find_block_index == 0)
             {
-                tmp_requested_chunk_block_indexes[chunk_count] = block_count;
-                tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
-                tmp_requested_block_hashes[block_count++] = block_hash;
+                tmp_keep_chunk_block_indexes[chunk_count] = block_count;
+                tmp_keep_chunk_hashes[chunk_count++] = chunk_hash;
+                tmp_keep_block_hashes[block_count++] = block_hash;
                 continue;
             }
-            tmp_requested_chunk_block_indexes[chunk_count] = *find_block_index;
-            tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
+            tmp_keep_chunk_block_indexes[chunk_count] = *find_block_index;
+            tmp_keep_chunk_hashes[chunk_count++] = chunk_hash;
             continue;
         }
-        uint64_t* find_block_index = Longtail_LookupTable_Get(requested_blocks_lookup, block_hash);
+/*        uint64_t* find_block_index = Longtail_LookupTable_Get(keep_blocks_lookup, block_hash);
         if (find_block_index != 0)
         {
-            tmp_requested_chunk_block_indexes[chunk_count] = *find_block_index;
-            tmp_requested_chunk_hashes[chunk_count++] = chunk_hash;
-        }
+            tmp_keep_chunk_block_indexes[chunk_count] = *find_block_index;
+            tmp_keep_chunk_hashes[chunk_count++] = chunk_hash;
+        }*/
     }
 
     size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
@@ -6215,10 +6246,10 @@ int Longtail_RetargetContent(
     if (!resulting_content_index)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-            reference_content_index, content_index, out_content_index,
+            reference_content_index, requested_content_index, out_content_index,
             ENOMEM)
         Longtail_Free(work_mem);
-        Longtail_Free(requested_blocks_lookup);
+        Longtail_Free(keep_blocks_lookup);
         Longtail_Free(chunk_to_requested_block_index_lookup);
         return ENOMEM;
     }
@@ -6234,21 +6265,21 @@ int Longtail_RetargetContent(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
-            reference_content_index, content_index, out_content_index,
+            reference_content_index, requested_content_index, out_content_index,
             err)
 
         Longtail_Free(work_mem);
-        Longtail_Free(requested_blocks_lookup);
+        Longtail_Free(keep_blocks_lookup);
         Longtail_Free(chunk_to_requested_block_index_lookup);
         return err;
     }
 
-    memmove(resulting_content_index->m_BlockHashes, tmp_requested_block_hashes, sizeof(TLongtail_Hash) * block_count);
-    memmove(resulting_content_index->m_ChunkHashes, tmp_requested_chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
-    memmove(resulting_content_index->m_ChunkBlockIndexes, tmp_requested_chunk_block_indexes, sizeof(uint64_t) * chunk_count);
+    memmove(resulting_content_index->m_BlockHashes, tmp_keep_block_hashes, sizeof(TLongtail_Hash) * block_count);
+    memmove(resulting_content_index->m_ChunkHashes, tmp_keep_chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    memmove(resulting_content_index->m_ChunkBlockIndexes, tmp_keep_chunk_block_indexes, sizeof(uint64_t) * chunk_count);
 
     Longtail_Free(work_mem);
-    Longtail_Free(requested_blocks_lookup);
+    Longtail_Free(keep_blocks_lookup);
     Longtail_Free(chunk_to_requested_block_index_lookup);
 
     *out_content_index = resulting_content_index;
@@ -6736,6 +6767,9 @@ int Longtail_CreateVersionDiff(
         int err = Longtail_GetPathHash(hash_api, path, &source_path_hashes[i]);
         if (err)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p, %p) failed with %d",
+                hash_api, source_version, target_version, out_version_diff,
+                err)
             Longtail_Free(work_mem);
             return err;
         }
@@ -6749,6 +6783,9 @@ int Longtail_CreateVersionDiff(
         int err = Longtail_GetPathHash(hash_api, path, &target_path_hashes[i]);
         if (err)
         {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionDiff(%p, %p, %p, %p) failed with %d",
+                hash_api, source_version, target_version, out_version_diff,
+                err)
             Longtail_Free(work_mem);
             return err;
         }

@@ -1128,13 +1128,13 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
  * Use Longtail_CreateMissingContent() to create blocks of any chunks not found in @p reference_content_index
  *
  * @param[in] reference_content_index   The known content to check against
- * @param[in] content_index             The content you want to test against @p reference_content_index
- * @param[out] out_content_index        The resulting missing content index will be created and assigned to this pointer reference if successful
+ * @param[in] requested_content_index   The content you want to test against @p reference_content_index
+ * @param[out] out_content_index        The blocks/chunks of requested_content_index found in reference_content_index
  * @return                              Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
-    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_ContentIndex* requested_content_index,
     struct Longtail_ContentIndex** out_content_index);
 
 /*! @brief Merge two content indexes.
