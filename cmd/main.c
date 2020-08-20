@@ -840,29 +840,6 @@ int DownSync(
         return err;
     }
 
-    err = Longtail_ValidateContent(retargetted_version_content_index, source_version_index);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateContent failed with %d", storage_uri_raw, source_path, err);
-        Longtail_Free(retargetted_version_content_index);
-        Longtail_Free(source_version_content_index);
-        Longtail_Free(version_diff);
-        Longtail_Free(target_version_index);
-        Longtail_Free(source_version_index);
-        SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(store_block_cachestore_api);
-        SAFE_DISPOSE_API(store_block_localstore_api);
-        SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(hash_registry);
-        SAFE_DISPOSE_API(job_api);
-        Longtail_Free((void*)storage_path);
-        return err;
-    }
-
     Longtail_Free(source_version_content_index);
     source_version_content_index = retargetted_version_content_index;
 
