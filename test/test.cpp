@@ -1887,7 +1887,6 @@ TEST(Longtail, Longtail_WriteContent)
     ASSERT_EQ(0, Longtail_WriteContent(
         source_storage,
         block_store_api,
-        hash_api,
         job_api,
         0,
         0,
@@ -2490,7 +2489,6 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
         block_store_api,
-        hash_api,
         job_api,
         0,
         0,
@@ -2786,7 +2784,6 @@ TEST(Longtail, Longtail_WriteVersion)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
-        hash_api,
         job_api,
         0,
         0,
@@ -3685,7 +3682,6 @@ TEST(Longtail, AsyncBlockStore)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
-        hash_api,
         job_api,
         0,
         0,
@@ -3918,7 +3914,6 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
-        hash_api,
         job_api,
         0,
         0,
@@ -4482,7 +4477,6 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
         compressed_cached_block_store,
-        hash_api,
         job_api,
         0,
         0,
@@ -5206,7 +5200,6 @@ TEST(Longtail, VersionLocalContent)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store,
-        hash_api,
         job_api,
         0,
         0,
@@ -5275,7 +5268,6 @@ TEST(Longtail, VersionLocalContent)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store,
-        hash_api,
         job_api,
         0,
         0,
@@ -5508,7 +5500,6 @@ TEST(Longtail, TestChangeVersionDiskFull)
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
         remote_compressed_block_store_api,
-        hash_api,
         job_api,
         0,
         0,
@@ -5664,7 +5655,6 @@ TEST(Longtail, TestLongtailBlockFS)
     ASSERT_EQ(0, Longtail_WriteContent(
         mem_storage,
         block_store,
-        hash_api,
         job_api,
         0,
         0,
@@ -5863,7 +5853,6 @@ static int FSBlockStoreSyncWriteContentWorker(
     err = Longtail_WriteContent(
         mem_storage,
         block_store,
-        hash_api,
         job_api,
         0,
         0,
@@ -6110,7 +6099,6 @@ static int UploadFolder(
     err = Longtail_WriteContent(
         storage_api,
         block_store_api,
-        hash_api,
         job_api,
         0,
         0,
