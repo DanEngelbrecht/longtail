@@ -768,6 +768,7 @@ uint64_t Longtail_GetProcessIdentity()
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <pthread.h>
 #include <pwd.h>
 
@@ -1622,6 +1623,47 @@ uint64_t Longtail_GetProcessIdentity()
     gethostname(hostname, sizeof(hostname));
     uint64_t hostname_hash = HostnameFNV1A(hostname, strlen(hostname));
     return ((uint64_t)getpid() << 32) + hostname_hash;
+}
+
+struct Longtail_FileLock_private
+{
+    int fd;
+};
+
+size_t Longtail_GetFileLockSize()
+{
+    return sizeof(struct Longtail_FileLock_private);
+}
+
+int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_lock)
+{
+    *out_file_lock = (HLongtail_FileLock)mem;
+    (*out_file_lock)->fd = -1;
+    int fd = open("lockfile.tmp", O_RDWR | O_CREAT, 0666);
+    if (fd == -1)
+    {
+        return errno;
+    }
+    int err = flock(fd, LOCK_EX);
+    if (err == -1)
+    {
+        close(fd);
+        return errno;
+    }
+    (*out_file_lock)->fd = fd;
+    return 0;
+}
+
+int Longtail_UnlockFile(HLongtail_FileLock file_lock)
+{
+    int err = flock(file_lock->fd, LOCK_UN);
+    if (err == -1)
+    {
+        return errno;
+    }
+    close(file_lock->fd);
+    file_lock->fd = -1;
+    return 0;
 }
 
 #endif

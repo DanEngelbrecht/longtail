@@ -307,6 +307,7 @@ LONGTAIL_EXPORT int Longtail_GetCompressionRegistry_GetCompressionAPI(struct Lon
 
 typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
 typedef struct Longtail_StorageAPI_Iterator* Longtail_StorageAPI_HIterator;
+typedef struct Longtail_StorageAPI_LockFile* Longtail_StorageAPI_HLockFile;
 
 enum
 {
@@ -353,6 +354,8 @@ typedef int (*Longtail_Storage_StartFindFunc)(struct Longtail_StorageAPI* storag
 typedef int (*Longtail_Storage_FindNextFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 typedef void (*Longtail_Storage_CloseFindFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
+typedef int (*Longtail_Storage_LockFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
+typedef int (*Longtail_Storage_UnlockFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile file_lock);
 
 struct Longtail_StorageAPI
 {
@@ -377,6 +380,8 @@ struct Longtail_StorageAPI
     Longtail_Storage_FindNextFunc FindNext;
     Longtail_Storage_CloseFindFunc CloseFind;
     Longtail_Storage_GetEntryPropertiesFunc GetEntryProperties;
+    Longtail_Storage_LockFileFunc LockFile;
+    Longtail_Storage_UnlockFileFunc UnlockFile;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize();
@@ -403,7 +408,9 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_StartFindFunc start_find_func,
     Longtail_Storage_FindNextFunc find_next_func,
     Longtail_Storage_CloseFindFunc close_find_func,
-    Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func);
+    Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
+    Longtail_Storage_LockFileFunc lock_file_func,
+    Longtail_Storage_UnlockFileFunc unlock_file_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 LONGTAIL_EXPORT int Longtail_Storage_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
@@ -425,6 +432,8 @@ LONGTAIL_EXPORT int Longtail_Storage_StartFind(struct Longtail_StorageAPI* stora
 LONGTAIL_EXPORT int Longtail_Storage_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 LONGTAIL_EXPORT void Longtail_Storage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
+LONGTAIL_EXPORT int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
+LONGTAIL_EXPORT int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file);
 
 ////////////// Longtail_ProgressAPI
 

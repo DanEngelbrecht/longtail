@@ -5351,6 +5351,8 @@ struct FailableStorageAPI
     static int FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->FindNext(api->m_BackingAPI, iterator);}
     static void CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->CloseFind(api->m_BackingAPI, iterator);}
     static int GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetEntryProperties(api->m_BackingAPI, iterator, out_properties);}
+    static int LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->LockFile(api->m_BackingAPI, path, out_lock_file);}
+    static int UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnlockFile(api->m_BackingAPI, lock_file);}
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5378,7 +5380,9 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
         FailableStorageAPI::StartFind,
         FailableStorageAPI::FindNext,
         FailableStorageAPI::CloseFind,
-        FailableStorageAPI::GetEntryProperties);
+        FailableStorageAPI::GetEntryProperties,
+        FailableStorageAPI::LockFile,
+        FailableStorageAPI::UnlockFile);
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;
     failable_storage_api->m_PassCount = 0x7fffffff;
@@ -6461,4 +6465,12 @@ TEST(Longtail, TestCacheBlockStoreRetarget)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
+}
+
+TEST(Longtail, TestFileSystemLock)
+{
+    HLongtail_FileLock file_lock;
+    ASSERT_EQ(0, Longtail_LockFile(Longtail_Alloc(Longtail_GetFileLockSize()), "lockfile.tmp", &file_lock));
+    ASSERT_EQ(0, Longtail_UnlockFile(file_lock));
+    Longtail_Free(file_lock);
 }

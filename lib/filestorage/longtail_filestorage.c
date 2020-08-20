@@ -168,7 +168,7 @@ static int FSStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, 
     }
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_GetPermissions(%p, %p, %u) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_GetPermissions(%p, %p, %u) failed with %d",
             storage_api, path, out_permissions,
             err)
         return err;
@@ -269,7 +269,7 @@ static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const
     int err = Longtail_RemoveDir(tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_RemoveDir(%p, %s) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "FSStorageAPI_RemoveDir(%p, %s) failed with %d",
             storage_api, path,
             err)
         return err;
@@ -286,7 +286,7 @@ static int FSStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, cons
     int err = Longtail_RemoveFile(tmp_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Longtail_RemoveFile(%p, %s) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "Longtail_RemoveFile(%p, %s) failed with %d",
             storage_api, path,
             err)
         return err;
@@ -359,43 +359,87 @@ static int FSStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_a
     return 0;
 }
 
-static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
+static int FSStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file)
 {
-    LONGTAIL_FATAL_ASSERT(storage_api != 0, return);
-    storage_api->m_FSStorageAPI.m_API.Dispose = FSStorageAPI_Dispose;
-    storage_api->m_FSStorageAPI.OpenReadFile = FSStorageAPI_OpenReadFile;
-    storage_api->m_FSStorageAPI.GetSize = FSStorageAPI_GetSize;
-    storage_api->m_FSStorageAPI.Read = FSStorageAPI_Read;
-    storage_api->m_FSStorageAPI.OpenWriteFile = FSStorageAPI_OpenWriteFile;
-    storage_api->m_FSStorageAPI.Write = FSStorageAPI_Write;
-    storage_api->m_FSStorageAPI.SetSize = FSStorageAPI_SetSize;
-    storage_api->m_FSStorageAPI.SetPermissions = FSStorageAPI_SetPermissions;
-    storage_api->m_FSStorageAPI.GetPermissions = FSStorageAPI_GetPermissions;
-    storage_api->m_FSStorageAPI.CloseFile = FSStorageAPI_CloseFile;
-    storage_api->m_FSStorageAPI.CreateDir = FSStorageAPI_CreateDir;
-    storage_api->m_FSStorageAPI.RenameFile = FSStorageAPI_RenameFile;
-    storage_api->m_FSStorageAPI.ConcatPath = FSStorageAPI_ConcatPath;
-    storage_api->m_FSStorageAPI.IsDir = FSStorageAPI_IsDir;
-    storage_api->m_FSStorageAPI.IsFile = FSStorageAPI_IsFile;
-    storage_api->m_FSStorageAPI.RemoveDir = FSStorageAPI_RemoveDir;
-    storage_api->m_FSStorageAPI.RemoveFile = FSStorageAPI_RemoveFile;
-    storage_api->m_FSStorageAPI.StartFind = FSStorageAPI_StartFind;
-    storage_api->m_FSStorageAPI.FindNext = FSStorageAPI_FindNext;
-    storage_api->m_FSStorageAPI.CloseFind = FSStorageAPI_CloseFind;
-    storage_api->m_FSStorageAPI.GetEntryProperties = FSStorageAPI_GetEntryProperties;
+    void* mem = Longtail_Alloc(Longtail_GetFileLockSize());
+    if (!mem)
+    {
+        return ENOMEM;
+    }
+    HLongtail_FileLock file_lock;
+    int err = Longtail_LockFile(mem, path, &file_lock);
+    if (err)
+    {
+        Longtail_Free(mem);
+        return err;
+    }
+    *out_lock_file = (Longtail_StorageAPI_HLockFile)file_lock;
+    return 0;
+}
+
+static int FSStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file)
+{
+    int err = Longtail_UnlockFile((HLongtail_FileLock)lock_file);
+    if (err)
+    {
+        return err;
+    }
+    Longtail_Free(lock_file);
+    return 0;
+}
+
+static int FSStorageAPI_Init(
+    void* mem,
+    struct Longtail_StorageAPI** out_storage_api)
+{
+    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0);
+    struct Longtail_StorageAPI* api = Longtail_MakeStorageAPI(
+        mem,
+        FSStorageAPI_Dispose,
+        FSStorageAPI_OpenReadFile,
+        FSStorageAPI_GetSize,
+        FSStorageAPI_Read,
+        FSStorageAPI_OpenWriteFile,
+        FSStorageAPI_Write,
+        FSStorageAPI_SetSize,
+        FSStorageAPI_SetPermissions,
+        FSStorageAPI_GetPermissions,
+        FSStorageAPI_CloseFile,
+        FSStorageAPI_CreateDir,
+        FSStorageAPI_RenameFile,
+        FSStorageAPI_ConcatPath,
+        FSStorageAPI_IsDir,
+        FSStorageAPI_IsFile,
+        FSStorageAPI_RemoveDir,
+        FSStorageAPI_RemoveFile,
+        FSStorageAPI_StartFind,
+        FSStorageAPI_FindNext,
+        FSStorageAPI_CloseFind,
+        FSStorageAPI_GetEntryProperties,
+        FSStorageAPI_LockFile,
+        FSStorageAPI_UnlockFile);
+    *out_storage_api = api;
+    return 0;
 }
 
 
 struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI()
 {
-    struct FSStorageAPI* storage_api = (struct FSStorageAPI*)Longtail_Alloc(sizeof(struct FSStorageAPI));
-    if (!storage_api)
+    void* mem = (struct FSStorageAPI*)Longtail_Alloc(sizeof(struct FSStorageAPI));
+    if (!mem)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateFSStorageAPI() failed with %d",
             ENOMEM)
         return 0;
     }
-    FSStorageAPI_Init(storage_api);
-    return &storage_api->m_FSStorageAPI;
+    struct Longtail_StorageAPI* storage_api;
+    int err = FSStorageAPI_Init(mem, &storage_api);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateFSStorageAPI() failed with %d",
+            err)
+        return 0;
+    }
+    return storage_api;
 }
 

@@ -238,7 +238,9 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_StartFindFunc start_find_func,
     Longtail_Storage_FindNextFunc find_next_func,
     Longtail_Storage_CloseFindFunc close_find_func,
-    Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func)
+    Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
+    Longtail_Storage_LockFileFunc lock_file_func,
+    Longtail_Storage_UnlockFileFunc unlock_file_func)
 {
     LONGTAIL_VALIDATE_INPUT(mem != 0, return 0)
     struct Longtail_StorageAPI* api = (struct Longtail_StorageAPI*)mem;
@@ -263,6 +265,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->FindNext = find_next_func;
     api->CloseFind = close_find_func;
     api->GetEntryProperties = get_entry_properties_func;
+    api->LockFile = lock_file_func;
+    api->UnlockFile = unlock_file_func;
     return api;
 }
 
@@ -286,6 +290,8 @@ int Longtail_Storage_StartFind(struct Longtail_StorageAPI* storage_api, const ch
 int Longtail_Storage_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { return storage_api->FindNext(storage_api, iterator); }
 void Longtail_Storage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { storage_api->CloseFind(storage_api, iterator); }
 int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties) { return storage_api->GetEntryProperties(storage_api, iterator, out_properties); }
+int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { return storage_api->LockFile(storage_api, path, out_lock_file); }
+int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { return storage_api->UnlockFile(storage_api, lock_file); }
 
 uint64_t Longtail_GetProgressAPISize()
 {
