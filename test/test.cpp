@@ -6453,6 +6453,10 @@ TEST(Longtail, TestCacheBlockStoreRetarget)
         }
     }
 
+    SAFE_DISPOSE_API(cache_block_store_api):
+    SAFE_DISPOSE_API(remote_capture_store_api);
+    SAFE_DISPOSE_API(remote_block_store_api);
+    SAFE_DISPOSE_API(local_block_store_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
