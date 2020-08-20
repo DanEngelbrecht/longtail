@@ -307,6 +307,7 @@ LONGTAIL_EXPORT int Longtail_GetCompressionRegistry_GetCompressionAPI(struct Lon
 
 typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
 typedef struct Longtail_StorageAPI_Iterator* Longtail_StorageAPI_HIterator;
+typedef struct Longtail_StorageAPI_LockFile* Longtail_StorageAPI_HLockFile;
 
 enum
 {
@@ -353,6 +354,8 @@ typedef int (*Longtail_Storage_StartFindFunc)(struct Longtail_StorageAPI* storag
 typedef int (*Longtail_Storage_FindNextFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 typedef void (*Longtail_Storage_CloseFindFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
+typedef int (*Longtail_Storage_LockFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
+typedef int (*Longtail_Storage_UnlockFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile file_lock);
 
 struct Longtail_StorageAPI
 {
@@ -377,6 +380,8 @@ struct Longtail_StorageAPI
     Longtail_Storage_FindNextFunc FindNext;
     Longtail_Storage_CloseFindFunc CloseFind;
     Longtail_Storage_GetEntryPropertiesFunc GetEntryProperties;
+    Longtail_Storage_LockFileFunc LockFile;
+    Longtail_Storage_UnlockFileFunc UnlockFile;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize();
@@ -403,7 +408,9 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_StartFindFunc start_find_func,
     Longtail_Storage_FindNextFunc find_next_func,
     Longtail_Storage_CloseFindFunc close_find_func,
-    Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func);
+    Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
+    Longtail_Storage_LockFileFunc lock_file_func,
+    Longtail_Storage_UnlockFileFunc unlock_file_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 LONGTAIL_EXPORT int Longtail_Storage_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
@@ -425,6 +432,8 @@ LONGTAIL_EXPORT int Longtail_Storage_StartFind(struct Longtail_StorageAPI* stora
 LONGTAIL_EXPORT int Longtail_Storage_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 LONGTAIL_EXPORT void Longtail_Storage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
+LONGTAIL_EXPORT int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
+LONGTAIL_EXPORT int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file);
 
 ////////////// Longtail_ProgressAPI
 
@@ -1055,12 +1064,12 @@ LONGTAIL_EXPORT int Longtail_ReadContentIndex(
  *
  * @param[in] source_storage_api        An initialized struct Longtail_StorageAPI
  * @param[in] block_store_api           An initialized struct Longtail_BlockStoreAPI
+ * @param[in] hash_api                  An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both content index index and version index
  * @param[in] job_api                   An initialized struct Longtail_JobAPI
  * @param[in] progress_api              An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
  * @param[in] optional_cancel_api       An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token     A cancel token or null if @p optional_cancel_api is null
- * @param[in] block_store_content_index @p version_content_index retargetted to @p block_store_api (see Longtail_BlockStoreAPI::RetargetContent)
- * @param[in] version_content_index     Data in @p version index and @p assets_folder arranged as content index (see CreateContentIndex and CreateContentIndexFromDiff)
+ * @param[in] content_index             The content index to write, all blocks in content index will be written
  * @param[in] version_index             Version index of data in  @p assets_folder
  * @param[in] assets_folder             Path of version data inside @p source_storage_api
  * @return                  Return code (errno style), zero on success
@@ -1072,8 +1081,7 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
-    struct Longtail_ContentIndex* block_store_content_index,
-    struct Longtail_ContentIndex* version_content_index,
+    struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
@@ -1128,13 +1136,13 @@ LONGTAIL_EXPORT int Longtail_GetMissingContent(
  * Use Longtail_CreateMissingContent() to create blocks of any chunks not found in @p reference_content_index
  *
  * @param[in] reference_content_index   The known content to check against
- * @param[in] content_index             The content you want to test against @p reference_content_index
- * @param[out] out_content_index        The resulting missing content index will be created and assigned to this pointer reference if successful
+ * @param[in] requested_content_index   The content you want to test against @p reference_content_index
+ * @param[out] out_content_index        The blocks/chunks of requested_content_index found in reference_content_index
  * @return                              Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
-    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_ContentIndex* requested_content_index,
     struct Longtail_ContentIndex** out_content_index);
 
 /*! @brief Merge two content indexes.

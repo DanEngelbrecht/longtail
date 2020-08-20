@@ -1874,6 +1874,16 @@ TEST(Longtail, Longtail_WriteContent)
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
     struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
+
     ASSERT_EQ(0, Longtail_WriteContent(
         source_storage,
         block_store_api,
@@ -1881,10 +1891,11 @@ TEST(Longtail, Longtail_WriteContent)
         0,
         0,
         0,
-        block_store_content_index,
-        cindex,
+        content_index,
         vindex,
         "local"));
+    Longtail_Free(content_index);
+    content_index = 0;
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
 
@@ -2107,22 +2118,25 @@ TEST(Longtail, VersionIndexDirectories)
 
 TEST(Longtail, Longtail_MergeContentIndex)
 {
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
     Longtail_ContentIndex* cindex1;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
         hash_api,
         0,
-        0,
-        0,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
         &cindex1));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex1);
     Longtail_ContentIndex* cindex2;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
         hash_api,
         0,
-        0,
-        0,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
         &cindex2));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex2);
     Longtail_ContentIndex* cindex3;
@@ -2460,8 +2474,17 @@ TEST(Longtail, Longtail_VersionDiff)
             MAX_CHUNKS_PER_BLOCK,
             &version_content_index));
 
-    struct Longtail_ContentIndex* content_index = SyncRetargetContent(block_store_api, version_content_index);
-    ASSERT_NE((struct Longtail_ContentIndex*)0, content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, version_content_index);
+    ASSERT_NE((struct Longtail_ContentIndex*)0, block_store_content_index);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        new_vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
 
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
@@ -2471,11 +2494,13 @@ TEST(Longtail, Longtail_VersionDiff)
         0,
         0,
         content_index,
-        version_content_index,
         new_vindex,
         "new"));
+
     Longtail_Free(content_index);
     content_index = 0;
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
     Longtail_Free(version_content_index);
     version_content_index = 0;
 
@@ -2570,7 +2595,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_FileInfos* updated_version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "old", &updated_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, updated_version_paths);
-    const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 10u;
+    const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 9u;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, updated_version_paths->m_Count);
     Longtail_Free(updated_version_paths);
 
@@ -2746,6 +2771,16 @@ TEST(Longtail, Longtail_WriteVersion)
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
     struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
+
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
@@ -2753,10 +2788,11 @@ TEST(Longtail, Longtail_WriteVersion)
         0,
         0,
         0,
-        block_store_content_index,
-        cindex,
+        content_index,
         vindex,
         "local"));
+    Longtail_Free(content_index);
+    content_index = 0;
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
 
@@ -2804,526 +2840,6 @@ TEST(Longtail, Longtail_WriteVersion)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
-}
-
-static void Bench()
-{
-    if ((1)) return;
-
-
-#if 0
-    #define HOME "D:\\Temp\\longtail"
-
-    const uint32_t VERSION_COUNT = 6u;
-    const char* VERSION[VERSION_COUNT] = {
-        "git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor",
-        "git916600e1ecb9da13f75835cd1b2d2e6a67f1a92d_Win64_Editor",
-        "gitfdeb1390885c2f426700ca653433730d1ca78dab_Win64_Editor",
-        "git81cccf054b23a0b5a941612ef0a2a836b6e02fd6_Win64_Editor",
-        "git558af6b2a10d9ab5a267b219af4f795a17cc032f_Win64_Editor",
-        "gitc2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c_Win64_Editor"
-    };
-#else
-    #define HOME "C:\\Temp\\longtail"
-
-    const uint32_t VERSION_COUNT = 2u;
-    const char* VERSION[VERSION_COUNT] = {
-        "git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor",
-        "gitb1d3adb4adce93d0f0aa27665a52be0ab0ee8b59_Win64_Editor"
-    };
-#endif
-
-    const char* SOURCE_VERSION_PREFIX = HOME "\\local\\";
-    const char* VERSION_INDEX_SUFFIX = ".lvi";
-    //const char* CONTENT_INDEX_SUFFIX = ".lci";
-
-    const char* CONTENT_FOLDER = HOME "\\chunks";
-
-    const char* UPLOAD_VERSION_PREFIX = HOME "\\upload\\";
-    const char* UPLOAD_VERSION_SUFFIX = "_chunks";
-
-    const char* TARGET_VERSION_PREFIX = HOME "\\remote\\";
-
-    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
-    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
-
-    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
-    Longtail_ContentIndex* full_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
-            hash_api,
-            0,
-            MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK,
-            &full_content_index));
-    ASSERT_NE((Longtail_ContentIndex*)0, full_content_index);
-    Longtail_VersionIndex* version_indexes[VERSION_COUNT];
-
-    for (uint32_t i = 0; i < VERSION_COUNT; ++i)
-    {
-        char version_source_folder[256];
-        sprintf(version_source_folder, "%s%s", SOURCE_VERSION_PREFIX, VERSION[i]);
-        printf("Indexing `%s`\n", version_source_folder);
-        Longtail_FileInfos* version_source_paths;
-        ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, version_source_folder, &version_source_paths));
-        ASSERT_NE((Longtail_FileInfos*)0, version_source_paths);
-        uint32_t* version_compression_types = GetAssetTags(storage_api, version_source_paths);
-        ASSERT_NE((uint32_t*)0, version_compression_types);
-        Longtail_VersionIndex* version_index;
-        ASSERT_EQ(0, Longtail_CreateVersionIndex(
-            storage_api,
-            hash_api,
-            job_api,
-            0,
-            0,
-            0,
-            version_source_folder,
-            version_source_paths,
-            version_compression_types,
-            16384,
-            &version_index));
-        Longtail_Free(version_compression_types);
-        version_compression_types = 0;
-        Longtail_Free(version_source_paths);
-        version_source_paths = 0;
-        ASSERT_NE((Longtail_VersionIndex*)0, version_index);
-        printf("Indexed %u assets from `%s`\n", (uint32_t)*version_index->m_AssetCount, version_source_folder);
-
-        char version_index_file[256];
-        sprintf(version_index_file, "%s%s%s", SOURCE_VERSION_PREFIX, VERSION[i], VERSION_INDEX_SUFFIX);
-        ASSERT_EQ(0, Longtail_WriteVersionIndex(storage_api, version_index, version_index_file));
-        printf("Wrote version index to `%s`\n", version_index_file);
-
-        Longtail_ContentIndex* missing_content_index;
-        ASSERT_EQ(0, Longtail_CreateMissingContent(
-            hash_api,
-            full_content_index,
-            version_index,
-            MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK,
-            &missing_content_index));
-        ASSERT_NE((Longtail_ContentIndex*)0, missing_content_index);
-
-        char delta_upload_content_folder[256];
-        sprintf(delta_upload_content_folder, "%s%s%s", UPLOAD_VERSION_PREFIX, VERSION[i], UPLOAD_VERSION_SUFFIX);
-        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder);
-        Longtail_BlockStoreAPI* fs_delta_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, delta_upload_content_folder, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-        Longtail_BlockStoreAPI* delta_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_delta_block_store_api, compression_registry);
-        ASSERT_NE((Longtail_BlockStoreAPI*)0, delta_block_store_api);
-        struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(delta_block_store_api, missing_content_index);
-        ASSERT_EQ(0, Longtail_WriteContent(
-            storage_api,
-            delta_block_store_api,
-            job_api,
-            0,
-            0,
-            0,
-            block_store_content_index,
-            missing_content_index,
-            version_index,
-            version_source_folder));
-        Longtail_Free(block_store_content_index);
-        block_store_content_index = 0;
-        SAFE_DISPOSE_API(delta_block_store_api);
-        delta_block_store_api = 0;
-        SAFE_DISPOSE_API(fs_delta_block_store_api);
-        fs_delta_block_store_api = 0;
-
-        printf("Copying %" PRIu64 " blocks from `%s` to `%s`\n", *missing_content_index->m_BlockCount, delta_upload_content_folder, CONTENT_FOLDER);
-        Longtail_StorageAPI_HIterator fs_iterator;
-        int err = storage_api->StartFind(storage_api, delta_upload_content_folder, &fs_iterator);
-        if (!err)
-        {
-            do
-            {
-                struct Longtail_StorageAPI_EntryProperties properties;
-                err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
-                if (err)
-                {
-                    continue;
-                }
-                if (!properties.m_IsDir)
-                {
-                    const char* file_name = properties.m_Name;
-                    char* target_path = storage_api->ConcatPath(storage_api, CONTENT_FOLDER, file_name);
-
-                    Longtail_StorageAPI_HOpenFile v;
-                    if (0 == storage_api->OpenReadFile(storage_api, target_path, &v))
-                    {
-                        storage_api->CloseFile(storage_api, v);
-                        v = 0;
-                        Longtail_Free(target_path);
-                        continue;
-                    }
-
-                    char* source_path = storage_api->ConcatPath(storage_api, delta_upload_content_folder, file_name);
-
-                    Longtail_StorageAPI_HOpenFile s;
-                    ASSERT_EQ(0, storage_api->OpenReadFile(storage_api, source_path, &s));
-                    ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, s);
-
-                    ASSERT_NE(0, MakePath(storage_api, target_path));
-                    Longtail_StorageAPI_HOpenFile t;
-                    ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, target_path, 0, &t));
-                    ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, t);
-
-                    uint64_t block_file_size;
-                    ASSERT_EQ(0, storage_api->GetSize(storage_api, s, &block_file_size));
-                    void* buffer = Longtail_Alloc(block_file_size);
-
-                    ASSERT_EQ(0, storage_api->Read(storage_api, s, 0, block_file_size, buffer));
-                    ASSERT_EQ(0, storage_api->Write(storage_api, t, 0, block_file_size, buffer));
-
-                    Longtail_Free(buffer);
-                    buffer = 0;
-
-                    storage_api->CloseFile(storage_api, s);
-                    storage_api->CloseFile(storage_api, t);
-
-                    Longtail_Free(target_path);
-                    Longtail_Free(source_path);
-                }
-            }while(storage_api->FindNext(storage_api, fs_iterator) == 0);
-        }
-        else
-        {
-            ASSERT_EQ(ENOENT, err);
-        }
-
-        Longtail_ContentIndex* merged_content_index;
-        ASSERT_EQ(0, Longtail_MergeContentIndex(job_api, full_content_index, missing_content_index, &merged_content_index));
-        ASSERT_NE((Longtail_ContentIndex*)0, merged_content_index);
-        Longtail_Free(missing_content_index);
-        missing_content_index = 0;
-        Longtail_Free(full_content_index);
-        full_content_index = merged_content_index;
-        merged_content_index = 0;
-
-        char version_target_folder[256];
-        sprintf(version_target_folder, "%s%s", TARGET_VERSION_PREFIX, VERSION[i]);
-        printf("Reconstructing %u assets from `%s` to `%s`\n", *version_index->m_AssetCount, CONTENT_FOLDER, version_target_folder);
-        Longtail_BlockStoreAPI* fs_content_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, CONTENT_FOLDER, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-        Longtail_BlockStoreAPI* content_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_content_block_store_api, compression_registry);
-        ASSERT_EQ(0, Longtail_WriteVersion(
-            content_block_store_api,
-            storage_api,
-            job_api,
-            0,
-            0,
-            0,
-            full_content_index,
-            version_index,
-            version_target_folder,
-            1));
-        SAFE_DISPOSE_API(content_block_store_api);
-        SAFE_DISPOSE_API(fs_content_block_store_api);
-
-        version_indexes[i] = version_index;
-        version_index = 0;
-    }
-
-    for (uint32_t i = 0; i < VERSION_COUNT; ++i)
-    {
-        Longtail_Free(version_indexes[i]);
-    }
-
-    Longtail_Free(full_content_index);
-
-    SAFE_DISPOSE_API(job_api);
-    SAFE_DISPOSE_API(hash_api);
-    SAFE_DISPOSE_API(compression_registry);
-    SAFE_DISPOSE_API(storage_api);
-
-    #undef HOME
-}
-
-static void LifelikeTest()
-{
-    if ((1)) return;
-
-//    #define HOME "test\\data"
-    #define HOME "D:\\Temp\\longtail"
-
-    #define VERSION1 "75a99408249875e875f8fba52b75ea0f5f12a00e"
-    #define VERSION2 "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"
-
-    #define VERSION1_FOLDER "git" VERSION1 "_Win64_Editor"
-    #define VERSION2_FOLDER "git" VERSION2 "_Win64_Editor"
-
-//    #define VERSION1_FOLDER "version1"
-//    #define VERSION2_FOLDER "version2"
-
-    const char* local_path_1 = HOME "\\local\\" VERSION1_FOLDER;
-    const char* version_index_path_1 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
-
-    const char* local_path_2 = HOME "\\local\\" VERSION2_FOLDER;
-    const char* version_index_path_2 = HOME "\\local\\" VERSION1_FOLDER ".lvi";
-
-    const char* local_content_path = HOME "\\local_content";//HOME "\\local_content";
-    const char* local_content_index_path = HOME "\\local.lci";
-
-    const char* remote_content_path = HOME "\\remote_content";
-    //const char* remote_content_index_path = HOME "\\remote.lci";
-
-    const char* remote_path_1 = HOME "\\remote\\" VERSION1_FOLDER;
-    const char* remote_path_2 = HOME "\\remote\\" VERSION2_FOLDER;
-
-    static const uint32_t MAX_BLOCK_SIZE = 65536u * 2u;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 4096u;
-
-    printf("Indexing `%s`...\n", local_path_1);
-    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
-    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
-    Longtail_BlockStoreAPI* fs_local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, local_content_path, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_local_block_store_api, compression_registry);
-    Longtail_BlockStoreAPI* fs_remote_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, remote_content_path, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_remote_block_store_api, compression_registry);
-
-    Longtail_FileInfos* local_path_1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, local_path_1, &local_path_1_paths));
-    ASSERT_NE((Longtail_FileInfos*)0, local_path_1_paths);
-    uint32_t* local_compression_types = GetAssetTags(storage_api, local_path_1_paths);
-    ASSERT_NE((uint32_t*)0, local_compression_types);
-    Longtail_VersionIndex* version1;
-    ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage_api,
-        hash_api,
-        job_api,
-        0,
-        0,
-        0,
-        local_path_1,
-        local_path_1_paths,
-        local_compression_types,
-        16384,
-        &version1));
-    ASSERT_EQ(0, Longtail_WriteVersionIndex(storage_api, version1, version_index_path_1));
-    Longtail_Free(local_compression_types);
-    local_compression_types = 0;
-    Longtail_Free(local_path_1_paths);
-    local_path_1_paths = 0;
-    printf("%u assets from folder `%s` indexed to `%s`\n", *version1->m_AssetCount, local_path_1, version_index_path_1);
-
-    printf("Creating local content index...\n");
-    Longtail_ContentIndex* local_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
-        hash_api,
-        version1,
-        MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK,
-        &local_content_index));
-
-    printf("Writing local content index...\n");
-    ASSERT_EQ(0, Longtail_WriteContentIndex(storage_api, local_content_index, local_content_index_path));
-    printf("%" PRIu64 " blocks from version `%s` indexed to `%s`\n", *local_content_index->m_BlockCount, local_path_1, local_content_index_path);
-
-    if (1)
-    {
-        printf("Writing %" PRIu64 " block to `%s`\n", *local_content_index->m_BlockCount, local_content_path);
-        struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(local_block_store_api, local_content_index);
-        Longtail_WriteContent(
-            storage_api,
-            local_block_store_api,
-            job_api,
-            0,
-            0,
-            0,
-            block_store_content_index,
-            local_content_index,
-            version1,
-            local_path_1);
-        Longtail_Free(block_store_content_index);
-        block_store_content_index = 0;
-    }
-
-    printf("Reconstructing %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-    ASSERT_EQ(0, Longtail_WriteVersion(
-        local_block_store_api,
-        storage_api,
-        job_api,
-        0,
-        0,
-        0,
-        local_content_index,
-        version1,
-        remote_path_1,
-        1));
-    printf("Reconstructed %u assets to `%s`\n", *version1->m_AssetCount, remote_path_1);
-
-    printf("Indexing `%s`...\n", local_path_2);
-    Longtail_FileInfos* local_path_2_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, local_path_2, &local_path_2_paths));
-    ASSERT_NE((Longtail_FileInfos*)0, local_path_2_paths);
-    uint32_t* local_2_compression_types = GetAssetTags(storage_api, local_path_2_paths);
-    ASSERT_NE((uint32_t*)0, local_2_compression_types);
-    Longtail_VersionIndex* version2;
-    ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage_api,
-        hash_api,
-        job_api,
-        0,
-        0,
-        0,
-        local_path_2,
-        local_path_2_paths,
-        local_2_compression_types,
-        16384,
-        &version2));
-    Longtail_Free(local_2_compression_types);
-    local_2_compression_types = 0;
-    Longtail_Free(local_path_2_paths);
-    local_path_2_paths = 0;
-    ASSERT_NE((Longtail_VersionIndex*)0, version2);
-    ASSERT_EQ(0, Longtail_WriteVersionIndex(storage_api, version2, version_index_path_2));
-    printf("%u assets from folder `%s` indexed to `%s`\n", *version2->m_AssetCount, local_path_2, version_index_path_2);
-    
-    // What is missing in local content that we need from remote version in new blocks with just the missing assets.
-    Longtail_ContentIndex* missing_content;
-    ASSERT_EQ(0, Longtail_CreateMissingContent(
-        hash_api,
-        local_content_index,
-        version2,
-        MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK,
-        &missing_content));
-    ASSERT_NE((Longtail_ContentIndex*)0, missing_content);
-    printf("%" PRIu64 " blocks for version `%s` needed in content index `%s`\n", *missing_content->m_BlockCount, local_path_1, local_content_path);
-
-    if (1)
-    {
-        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, local_content_path);
-        struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(local_block_store_api, missing_content);
-        ASSERT_EQ(0, Longtail_WriteContent(
-            storage_api,
-            local_block_store_api,
-            job_api,
-            0,
-            0,
-            0,
-            block_store_content_index,
-            missing_content,
-            version2,
-            local_path_2));
-        Longtail_Free(block_store_content_index);
-        block_store_content_index = 0;
-    }
-
-    if (1)
-    {
-        // Write this to disk for reference to see how big the diff is...
-        printf("Writing %" PRIu64 " block to `%s`\n", *missing_content->m_BlockCount, remote_content_path);
-        struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(local_block_store_api, missing_content);
-        ASSERT_EQ(0, Longtail_WriteContent(
-            storage_api,
-            remote_block_store_api,
-            job_api,
-            0,
-            0,
-            0,
-            block_store_content_index,
-            missing_content,
-            version2,
-            local_path_2));
-        Longtail_Free(block_store_content_index);
-        block_store_content_index = 0;
-    }
-
-//    Longtail_ContentIndex* remote_content_index;
-//    ASSERT_EQ(0, Longtail_CreateContentIndex(
-//        local_path_2,
-//        version2,
-//        GetContentTag,
-//        &remote_content_index));
-
-//    uint64_t* missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * *version2->m_AssetCount);
-//    uint64_t missing_asset_count = GetMissingAssets(local_content_index, version2, missing_assets);
-//
-//    uint64_t* remaining_missing_assets = (uint64_t*)malloc(sizeof(uint64_t) * missing_asset_count);
-//    uint64_t remaining_missing_asset_count = 0;
-//    Longtail_ContentIndex* existing_blocks = GetBlocksForAssets(remote_content_index, missing_asset_count, missing_assets, &remaining_missing_asset_count, remaining_missing_assets);
-//    printf("%" PRIu64 " blocks for version `%s` available in content index `%s`\n", *existing_blocks->m_BlockCount, local_path_2, remote_content_path);
-
-//    // Copy existing blocks
-//    for (uint64_t block_index = 0; block_index < *missing_content->m_BlockCount; ++block_index)
-//    {
-//        TLongtail_Hash block_hash = missing_content->m_BlockHash[block_index];
-//        char* block_name = GetBlockName(block_hash);
-//        char block_file_name[64];
-//        sprintf(block_file_name, "%s.lrb", block_name);
-//        char* source_path = storage_api.ConcatPath(remote_content_path, block_file_name);
-//        Longtail_StorageAPI_HOpenFile s = storage_api.OpenReadFile(source_path);
-//        char* target_path = storage_api.ConcatPath(local_content_path, block_file_name);
-//        Longtail_StorageAPI_HOpenFile t = storage_api.OpenWriteFile(target_path, 0);
-//        uint64_t size = storage_api.GetSize(s);
-//        char* buffer = (char*)malloc(size);
-//        storage_api.Read(s, 0, size, buffer);
-//        storage_api.Write(t, 0, size, buffer);
-//        Longtail_Free(buffer);
-//        storage_api.CloseFile(t);
-//        storage_api.CloseFile(s);
-//    }
-
-    Longtail_ContentIndex* merged_local_content;
-    ASSERT_EQ(0, Longtail_MergeContentIndex(job_api, local_content_index, missing_content, &merged_local_content));
-    ASSERT_NE((Longtail_ContentIndex*)0, merged_local_content);
-    Longtail_Free(missing_content);
-    missing_content = 0;
-    Longtail_Free(local_content_index);
-    local_content_index = 0;
-
-    printf("Reconstructing %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-    ASSERT_EQ(0, Longtail_WriteVersion(
-        local_block_store_api,
-        storage_api,
-        job_api,
-        0,
-        0,
-        0,
-        merged_local_content,
-        version2,
-        remote_path_2,
-        1));
-    printf("Reconstructed %u assets to `%s`\n", *version2->m_AssetCount, remote_path_2);
-
-//    Longtail_Free(existing_blocks);
-//    existing_blocks = 0;
-//    Longtail_Free(remaining_missing_assets);
-//    remaining_missing_assets = 0;
-//    Longtail_Free(missing_assets);
-//    missing_assets = 0;
-//    Longtail_Free(remote_content_index);
-//    remote_content_index = 0;
-
-    Longtail_Free(merged_local_content);
-    merged_local_content = 0;
-
-    Longtail_Free(version1);
-    version1 = 0;
-
-    SAFE_DISPOSE_API(remote_block_store_api);
-    SAFE_DISPOSE_API(fs_remote_block_store_api);
-    SAFE_DISPOSE_API(local_block_store_api);
-    SAFE_DISPOSE_API(fs_local_block_store_api);
-    SAFE_DISPOSE_API(job_api);
-    SAFE_DISPOSE_API(hash_api);
-    SAFE_DISPOSE_API(compression_registry);
-    SAFE_DISPOSE_API(storage_api);
-
-    return;
-}
-
-TEST(Longtail, Bench)
-{
-    Bench();
-}
-
-TEST(Longtail, LifelikeTest)
-{
-    LifelikeTest();
 }
 
 const uint64_t ChunkSizeAvgDefault    = 64 * 1024;
@@ -3606,6 +3122,9 @@ void TestAsyncBlockStore::CompleteRequest(class TestAsyncBlockStore* block_store
 
 int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api, struct Longtail_JobAPI* job_api)
 {
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+
     struct Longtail_BlockStoreAPI* api = Longtail_MakeBlockStoreAPI(
         &block_store->m_API,
         TestAsyncBlockStore::Dispose,
@@ -3634,8 +3153,8 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
     int err = Longtail_CreateContentIndex(
             block_store->m_HashAPI,
             0,
-            0,
-            0,
+            MAX_BLOCK_SIZE,
+            MAX_CHUNKS_PER_BLOCK,
             &block_store->m_ContentIndex);
     if (err)
     {
@@ -4150,6 +3669,16 @@ TEST(Longtail, AsyncBlockStore)
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
     struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
+
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
@@ -4157,10 +3686,11 @@ TEST(Longtail, AsyncBlockStore)
         0,
         0,
         0,
-        block_store_content_index,
-        cindex,
+        content_index,
         vindex,
         "local"));
+    Longtail_Free(content_index);
+    content_index = 0;
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
 
@@ -4371,6 +3901,16 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
     struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
+
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         block_store_api,
@@ -4378,10 +3918,12 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
         0,
         0,
         0,
-        block_store_content_index,
-        cindex,
+        content_index,
         vindex,
         "local"));
+
+    Longtail_Free(content_index);
+    content_index = 0;
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
 
@@ -4889,13 +4431,13 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     Longtail_Free(version_paths);
     version_paths = 0;
 
-    Longtail_ContentIndex* content_index;
+    Longtail_ContentIndex* version_content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
             hash_api,
             vindex,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK,
-            &content_index));
+            &version_content_index));
 
     Longtail_FileInfos* current_version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "current", &current_version_paths));
@@ -4921,7 +4463,17 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     Longtail_Free(current_version_paths);
     current_version_paths = 0;
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(compressed_cached_block_store, content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(compressed_cached_block_store, version_content_index);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
+
     ASSERT_EQ(0, Longtail_WriteContent(
         storage,
         compressed_cached_block_store,
@@ -4929,14 +4481,15 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         0,
         0,
         0,
-        block_store_content_index,
         content_index,
         vindex,
         "source"));
-    Longtail_Free(block_store_content_index);
-    block_store_content_index = 0;
     Longtail_Free(content_index);
     content_index = 0;
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+    Longtail_Free(version_content_index);
+    version_content_index = 0;
 
     Longtail_VersionDiff* version_diff;
     ASSERT_EQ(0, Longtail_CreateVersionDiff(
@@ -5302,6 +4855,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         remote_block_store_api,
+        hash_api,
         job_api,
         0,
         0,
@@ -5350,6 +4904,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     ASSERT_EQ(0, Longtail_WriteContent(
         storage_api,
         remote_block_store_api,
+        hash_api,
         job_api,
         0,
         0,
@@ -5629,16 +5184,17 @@ TEST(Longtail, VersionLocalContent)
         9,
         &version1_content_index));
 
-    struct Longtail_ContentIndex* version1_aligned_content_index = SyncRetargetContent(
+    struct Longtail_ContentIndex* version1_block_store_content_index = SyncRetargetContent(
         block_store,
         version1_content_index);
+
     struct Longtail_ContentIndex* version1_missing_content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
         hash_api,
-        version1_aligned_content_index,
+        version1_block_store_content_index,
         version1_index,
-        *version1_aligned_content_index->m_MaxBlockSize,
-        *version1_aligned_content_index->m_MaxChunksPerBlock,
+        *version1_block_store_content_index->m_MaxBlockSize,
+        *version1_block_store_content_index->m_MaxChunksPerBlock,
         &version1_missing_content_index));
 
     ASSERT_EQ(0, Longtail_WriteContent(
@@ -5648,8 +5204,7 @@ TEST(Longtail, VersionLocalContent)
         0,
         0,
         0,
-        version1_aligned_content_index,
-        version1_content_index,
+        version1_missing_content_index,
         version1_index,
         "version"));
 
@@ -5657,7 +5212,7 @@ TEST(Longtail, VersionLocalContent)
     ASSERT_EQ(0, Longtail_MergeContentIndex(
         job_api,
         version1_missing_content_index,
-        version1_aligned_content_index,
+        version1_block_store_content_index,
         &block_store_content_index_1));
 
     ASSERT_EQ(0, Longtail_ValidateContent(
@@ -5697,16 +5252,17 @@ TEST(Longtail, VersionLocalContent)
         7,
         &version2_content_index));
 
-    struct Longtail_ContentIndex* version2_aligned_content_index = SyncRetargetContent(
+    struct Longtail_ContentIndex* version2_block_store_content_index = SyncRetargetContent(
         block_store,
         version2_content_index);
+
     struct Longtail_ContentIndex* version2_missing_content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
         hash_api,
-        version2_aligned_content_index,
+        version2_block_store_content_index,
         version2_index,
-        *version2_aligned_content_index->m_MaxBlockSize,
-        *version2_aligned_content_index->m_MaxChunksPerBlock,
+        *version2_block_store_content_index->m_MaxBlockSize,
+        *version2_block_store_content_index->m_MaxChunksPerBlock,
         &version2_missing_content_index));
 
     ASSERT_EQ(0, Longtail_WriteContent(
@@ -5716,8 +5272,7 @@ TEST(Longtail, VersionLocalContent)
         0,
         0,
         0,
-        version2_aligned_content_index,
-        version2_content_index,
+        version2_missing_content_index,
         version2_index,
         "version"));
 
@@ -5725,7 +5280,7 @@ TEST(Longtail, VersionLocalContent)
     ASSERT_EQ(0, Longtail_MergeContentIndex(
         job_api,
         version2_missing_content_index,
-        version2_aligned_content_index,
+        version2_block_store_content_index,
         &block_store_content_index_2));
 
     ASSERT_EQ(0, Longtail_ValidateContent(
@@ -5742,7 +5297,7 @@ TEST(Longtail, VersionLocalContent)
 
     Longtail_Free(version2_missing_content_index);
 
-    Longtail_Free(version2_aligned_content_index);
+    Longtail_Free(version2_block_store_content_index);
 
     Longtail_Free(version2_content_index);
 
@@ -5754,7 +5309,7 @@ TEST(Longtail, VersionLocalContent)
 
     Longtail_Free(version1_missing_content_index);
 
-    Longtail_Free(version1_aligned_content_index);
+    Longtail_Free(version1_block_store_content_index);
 
     Longtail_Free(version1_content_index);
 
@@ -5796,6 +5351,8 @@ struct FailableStorageAPI
     static int FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->FindNext(api->m_BackingAPI, iterator);}
     static void CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->CloseFind(api->m_BackingAPI, iterator);}
     static int GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetEntryProperties(api->m_BackingAPI, iterator, out_properties);}
+    static int LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->LockFile(api->m_BackingAPI, path, out_lock_file);}
+    static int UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnlockFile(api->m_BackingAPI, lock_file);}
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5823,7 +5380,9 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
         FailableStorageAPI::StartFind,
         FailableStorageAPI::FindNext,
         FailableStorageAPI::CloseFind,
-        FailableStorageAPI::GetEntryProperties);
+        FailableStorageAPI::GetEntryProperties,
+        FailableStorageAPI::LockFile,
+        FailableStorageAPI::UnlockFile);
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;
     failable_storage_api->m_PassCount = 0x7fffffff;
@@ -5923,15 +5482,25 @@ TEST(Longtail, TestChangeVersionDiskFull)
     Longtail_Free(version_paths);
     version_paths = 0;
 
-    Longtail_ContentIndex* content_index;
+    Longtail_ContentIndex* version_content_index;
     ASSERT_EQ(0, Longtail_CreateContentIndex(
             hash_api,
             vindex,
             MAX_BLOCK_SIZE,
             MAX_CHUNKS_PER_BLOCK,
-            &content_index));
+            &version_content_index));
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(remote_compressed_block_store_api, content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(remote_compressed_block_store_api, version_content_index);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
+
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
         remote_compressed_block_store_api,
@@ -5939,14 +5508,15 @@ TEST(Longtail, TestChangeVersionDiskFull)
         0,
         0,
         0,
-        block_store_content_index,
         content_index,
         vindex,
         "source"));
-    Longtail_Free(block_store_content_index);
-    block_store_content_index = 0;
     Longtail_Free(content_index);
     content_index = 0;
+    Longtail_Free(block_store_content_index);
+    block_store_content_index = 0;
+    Longtail_Free(version_content_index);
+    version_content_index = 0;
 
     Longtail_FileInfos* current_version_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "current", &current_version_paths));
@@ -6076,6 +5646,16 @@ TEST(Longtail, TestLongtailBlockFS)
             &version_content_index));
 
     struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store, version_content_index);
+
+    struct Longtail_ContentIndex* content_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index));
+
     ASSERT_EQ(0, Longtail_WriteContent(
         mem_storage,
         block_store,
@@ -6083,12 +5663,14 @@ TEST(Longtail, TestLongtailBlockFS)
         0,
         0,
         0,
-        block_store_content_index,
-        version_content_index,
+        content_index,
         vindex,
         "source"));
 
+    Longtail_Free(content_index);
+    content_index = 0;
     Longtail_Free(block_store_content_index);
+
     block_store_content_index = SyncRetargetContent(block_store, version_content_index);
 
 //    printf("\nReading...\n");
@@ -6237,7 +5819,7 @@ struct FSBlockStoreSyncWriteContentWorkerContext {
     Longtail_JobAPI* job_api;
     const char* storage_path;
     Longtail_VersionIndex* vindex;
-    Longtail_ContentIndex* content_index;
+    Longtail_ContentIndex* version_content_index;
     uint32_t MAX_BLOCK_SIZE;
     uint32_t MAX_CHUNKS_PER_BLOCK;
 };
@@ -6248,28 +5830,41 @@ static int FSBlockStoreSyncWriteContentWorker(
     Longtail_JobAPI* job_api,
     const char* storage_path,
     Longtail_VersionIndex* vindex,
-    Longtail_ContentIndex* content_index,
+    Longtail_ContentIndex* version_content_index,
     uint32_t MAX_BLOCK_SIZE,
     uint32_t MAX_CHUNKS_PER_BLOCK)
 {
     Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store, content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store, version_content_index);
     if (!block_store_content_index)
     {
         return EINVAL;
     }
 
-    int err = Longtail_WriteContent(
+    struct Longtail_ContentIndex* missing_content_index;
+    int err = Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        vindex,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &missing_content_index);
+    if (err)
+    {
+        return err;
+    }
+
+    err = Longtail_WriteContent(
         mem_storage,
         block_store,
         job_api,
         0,
         0,
         0,
-        block_store_content_index,
-        content_index,
+        missing_content_index,
         vindex,
         storage_path);
+    Longtail_Free(missing_content_index);
     Longtail_Free(block_store_content_index);
     SAFE_DISPOSE_API(block_store);
     return err;
@@ -6284,7 +5879,7 @@ int TestLongtailFSBlockStoreSyncWorkerCB(void* context_data)
         context->job_api,
         context->storage_path,
         context->vindex,
-        context->content_index,
+        context->version_content_index,
         context->MAX_BLOCK_SIZE,
         context->MAX_CHUNKS_PER_BLOCK);
 }
@@ -6326,16 +5921,16 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
         Longtail_Free(compression_types);
         Longtail_Free(version_paths);
 
-        Longtail_ContentIndex* content_index;
+        Longtail_ContentIndex* version_content_index;
         ASSERT_EQ(0, Longtail_CreateContentIndex(
                 hash_api,
                 vindex,
                 MAX_BLOCK_SIZE,
                 MAX_CHUNKS_PER_BLOCK,
-                &content_index));
+                &version_content_index));
 
         static const uint32_t WORKER_COUNT = 8;
-        struct FSBlockStoreSyncWriteContentWorkerContext ctx = { mem_storage, hash_api, job_api, "source", vindex, content_index, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK};
+        struct FSBlockStoreSyncWriteContentWorkerContext ctx = { mem_storage, hash_api, job_api, "source", vindex, version_content_index, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK};
         HLongtail_Thread workerThreads[WORKER_COUNT];
         for (uint32_t t = 0; t < WORKER_COUNT; ++t)
         {
@@ -6359,11 +5954,523 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
             Longtail_Free(workerThreads[t]);
         }
 
-        Longtail_Free(content_index);
+        Longtail_Free(version_content_index);
         Longtail_Free(vindex);
     }
 
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(mem_storage);
+}
+
+static int IsDirPath(const char* path)
+{
+    LONGTAIL_VALIDATE_INPUT(path != 0, return 0)
+    return path[0] ? path[strlen(path) - 1] == '/' : 0;
+}
+
+static int CopyDir(
+    Longtail_StorageAPI* storage_api,
+    const char* source_path,
+    const char* target_path)
+{
+    int err = 0;
+    struct Longtail_FileInfos* version_file_infos;
+    Longtail_GetFilesRecursively(storage_api, 0, 0, 0, source_path, &version_file_infos);
+    for (uint32_t f = 0; !err && f < version_file_infos->m_Count; ++f)
+    {
+        const char* asset_path = &version_file_infos->m_PathData[version_file_infos->m_PathStartOffsets[f]];
+        char* full_source_path = storage_api->ConcatPath(storage_api, source_path, asset_path);
+        char* full_target_path = storage_api->ConcatPath(storage_api, target_path, asset_path);
+        EnsureParentPathExists(storage_api, full_target_path);
+        if (IsDirPath(asset_path))
+        {
+            full_source_path[strlen(full_source_path) - 1] = '\0';
+            full_target_path[strlen(full_target_path) - 1] = '\0';
+            err = storage_api->CreateDir(storage_api, full_target_path);
+            if (err == EEXIST)
+            {
+                err = 0;
+            }
+            else if (err)
+            {
+                return err;
+            }
+        }
+        else
+        {
+            uint64_t s;
+            void* buffer;
+            {
+                Longtail_StorageAPI_HOpenFile r;
+                err = storage_api->OpenReadFile(storage_api, full_source_path, &r);
+                if (err)
+                {
+                    return err;
+                }
+                err = storage_api->GetSize(storage_api, r, &s);
+                if (err)
+                {
+                    return err;
+                }
+                buffer = Longtail_Alloc(s);
+                err = storage_api->Read(storage_api, r, 0, s, buffer);
+                if (err)
+                {
+                    return err;
+                }
+                storage_api->CloseFile(storage_api, r);
+            }
+
+            {
+                Longtail_StorageAPI_HOpenFile w;
+                err = storage_api->OpenWriteFile(storage_api, full_target_path, s, &w);
+                if (err)
+                {
+                    return err;
+                }
+                err = storage_api->Write(storage_api, w, 0, s, buffer);
+                if (err)
+                {
+                    return err;
+                }
+                storage_api->CloseFile(storage_api, w);
+            }
+            Longtail_Free(buffer);
+        }
+        uint16_t permissions;
+        err = storage_api->GetPermissions(storage_api, full_source_path, &permissions);
+        if (err)
+        {
+            return err;
+        }
+        err = storage_api->SetPermissions(storage_api, full_target_path, permissions);
+        if (err)
+        {
+            return err;
+        }
+        Longtail_Free((void*)full_target_path);
+        Longtail_Free((void*)full_source_path);
+    }
+    Longtail_Free(version_file_infos);
+    return err;
+}
+
+static int UploadFolder(
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    Longtail_BlockStoreAPI* block_store_api,
+    const char* source_path,
+    const char* version_index_path,
+    uint32_t TARGET_CHUNK_SIZE,
+    uint32_t MAX_BLOCK_SIZE,
+    uint32_t MAX_CHUNKS_PER_BLOCK)
+{
+    struct Longtail_FileInfos* version_file_infos;
+    int err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, source_path, &version_file_infos);
+    if (err)
+    {
+        return err;
+    }
+    struct Longtail_VersionIndex* version_index;
+    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, source_path, version_file_infos, 0, TARGET_CHUNK_SIZE, &version_index);
+    if (err)
+    {
+        return err;
+    }
+    struct Longtail_ContentIndex* version_content_index;
+    err = Longtail_CreateContentIndex(hash_api, version_index, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, &version_content_index);
+    if (err)
+    {
+        return err;
+    }
+    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, version_content_index);
+
+    struct Longtail_ContentIndex* content_index;
+    err = Longtail_CreateMissingContent(
+        hash_api,
+        block_store_content_index,
+        version_index,
+        *block_store_content_index->m_MaxBlockSize,
+        *block_store_content_index->m_MaxChunksPerBlock,
+        &content_index);
+    if (err)
+    {
+        return err;
+    }
+
+    err = Longtail_WriteContent(
+        storage_api,
+        block_store_api,
+        job_api,
+        0,
+        0,
+        0,
+        content_index,
+        version_index,
+        source_path);
+    if (err)
+    {
+        return err;
+    }
+    err = Longtail_WriteVersionIndex(storage_api, version_index, version_index_path);
+    if (err)
+    {
+        return err;
+    }
+    Longtail_Free(content_index);
+    Longtail_Free(block_store_content_index);
+    Longtail_Free(version_content_index);
+    Longtail_Free(version_index);
+    Longtail_Free(version_file_infos);
+    return 0;
+}
+
+static int DownloadFolder(
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    Longtail_BlockStoreAPI* block_store_api,
+    const char* version_index_path,
+    const char* target_path,
+    uint32_t TARGET_CHUNK_SIZE,
+    uint32_t MAX_BLOCK_SIZE,
+    uint32_t MAX_CHUNKS_PER_BLOCK)
+{
+    struct Longtail_VersionIndex* version_index;
+    int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_FileInfos* version_file_infos;
+    err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, target_path, &version_file_infos);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_VersionIndex* current_version_index;
+    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, target_path, version_file_infos, 0, TARGET_CHUNK_SIZE, &current_version_index);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_VersionDiff* version_diff;
+    err = Longtail_CreateVersionDiff(hash_api, current_version_index, version_index, &version_diff);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_ContentIndex* version_content_index;
+    err = Longtail_CreateContentIndexFromDiff(hash_api, version_index, version_diff, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, &version_content_index);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_ContentIndex* content_index = SyncRetargetContent(block_store_api, version_content_index);
+    if (!content_index)
+    {
+        return EINVAL;
+    }
+
+    err = Longtail_ChangeVersion(block_store_api, storage_api, hash_api, job_api, 0, 0, 0, content_index, current_version_index, version_index, version_diff, target_path, 1);
+    if (err)
+    {
+        return err;
+    }
+
+    Longtail_Free(content_index);
+    Longtail_Free(version_content_index);
+    Longtail_Free(version_diff);
+    Longtail_Free(current_version_index);
+    Longtail_Free(version_file_infos);
+    Longtail_Free(version_index);
+    return 0;
+}
+
+static int ValidateVersion(
+    Longtail_StorageAPI* storage_api,
+    Longtail_HashAPI* hash_api,
+    Longtail_JobAPI* job_api,
+    const char* expected_content_path,
+    const char* content_path,
+    uint32_t TARGET_CHUNK_SIZE)
+{
+    struct Longtail_FileInfos* expected_file_infos;
+    int err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, expected_content_path, &expected_file_infos);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_FileInfos* file_infos;
+    err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, content_path, &file_infos);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_VersionIndex* expected_version_index;
+    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, expected_content_path, expected_file_infos, 0, TARGET_CHUNK_SIZE, &expected_version_index);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_VersionIndex* version_index;
+    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, content_path, file_infos, 0, TARGET_CHUNK_SIZE, &version_index);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_VersionDiff* version_diff;
+    err = Longtail_CreateVersionDiff(hash_api, version_index, expected_version_index, &version_diff);
+    if (err)
+    {
+        return err;
+    }
+
+    if (*version_diff->m_SourceRemovedCount != 0)
+    {
+        return EINVAL;
+    }
+    if (*version_diff->m_TargetAddedCount != 0)
+    {
+        return EINVAL;
+    }
+    if (*version_diff->m_ModifiedContentCount != 0)
+    {
+        return EINVAL;
+    }
+    if (*version_diff->m_ModifiedPermissionsCount != 0)
+    {
+        return EINVAL;
+    }
+
+    Longtail_Free(version_diff);
+    Longtail_Free(version_index);
+    Longtail_Free(expected_version_index);
+    Longtail_Free(file_infos);
+    Longtail_Free(expected_file_infos);
+    return 0;
+}
+
+struct CaptureBlockStore
+{
+    struct Longtail_BlockStoreAPI m_API;
+    struct Longtail_BlockStoreAPI* m_BackingStore;
+    struct Longtail_ContentIndex* m_PreflightContentIndex;
+    TLongtail_Hash* m_GetStoredBlockHashes;
+};
+
+void CaptureBlockStore_Dispose(struct Longtail_API* block_store_api)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    arrfree(api->m_GetStoredBlockHashes);
+    Longtail_Free(api->m_PreflightContentIndex);
+    api->m_PreflightContentIndex = 0;
+    api->m_BackingStore = 0;
+}
+
+static int CaptureBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    return api->m_BackingStore->PutStoredBlock(api->m_BackingStore, stored_block, async_complete_api);
+}
+
+static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    if (api->m_PreflightContentIndex)
+    {
+        uint64_t preflight_block_count = *api->m_PreflightContentIndex->m_BlockCount;
+        uint64_t get_count = (uint64_t)arrlen(api->m_GetStoredBlockHashes);
+        struct Longtail_LookupTable* lut = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(get_count)), get_count, 0);
+        for (uint64_t b = 0; b < get_count; ++b)
+        {
+            Longtail_LookupTable_PutUnique(lut, api->m_GetStoredBlockHashes[b], b);
+        }
+        for (uint64_t b = 0; b < preflight_block_count; ++b)
+        {
+            TLongtail_Hash block_hash = api->m_PreflightContentIndex->m_BlockHashes[b];
+            if (0 == Longtail_LookupTable_Get(lut, block_hash))
+            {
+                return EINVAL;
+            }
+        }
+        Longtail_Free(lut);
+        arrfree(api->m_GetStoredBlockHashes);
+        Longtail_Free(api->m_PreflightContentIndex);
+        api->m_PreflightContentIndex = 0;
+    }
+    void* buffer;
+    size_t size;
+    int err = Longtail_WriteContentIndexToBuffer(content_index, &buffer, &size);
+    if (err)
+    {
+        return err;
+    }
+    err = Longtail_ReadContentIndexFromBuffer(buffer, size, &api->m_PreflightContentIndex);
+    Longtail_Free(buffer);
+    if (err)
+    {
+        return err;
+    }
+    return api->m_BackingStore->PreflightGet(api->m_BackingStore, content_index);
+}
+
+static int CaptureBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    if (!api->m_PreflightContentIndex)
+    {
+        return EINVAL;
+    }
+    arrput(api->m_GetStoredBlockHashes, block_hash);
+    struct Longtail_ContentIndex* preflight_content_index = api->m_PreflightContentIndex;
+    uint64_t block_hash_count = *preflight_content_index->m_BlockCount;
+    for (uint64_t b = 0; b < block_hash_count; ++b)
+    {
+        if (preflight_content_index->m_BlockHashes[b] == block_hash)
+        {
+            return api->m_BackingStore->GetStoredBlock(api->m_BackingStore, block_hash, async_complete_api);
+        }
+    }
+    return EINVAL;
+}
+
+static int CaptureBlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    return api->m_BackingStore->RetargetContent(api->m_BackingStore, content_index, async_complete_api);
+}
+
+static int CaptureBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    return api->m_BackingStore->GetStats(api->m_BackingStore, out_stats);
+}
+
+static int CaptureBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    return api->m_BackingStore->Flush(api->m_BackingStore, async_complete_api);
+}
+
+struct Longtail_BlockStoreAPI* CaptureBlockStoreInit(struct CaptureBlockStore* store, struct Longtail_BlockStoreAPI* backing_store)
+{
+    struct Longtail_BlockStoreAPI* api = Longtail_MakeBlockStoreAPI(&store->m_API,
+        CaptureBlockStore_Dispose,
+        CaptureBlockStore_PutStoredBlock,
+        CaptureBlockStore_PreflightGet,
+        CaptureBlockStore_GetStoredBlock,
+        CaptureBlockStore_RetargetContent,
+        CaptureBlockStore_GetStats,
+        CaptureBlockStore_Flush);
+    store->m_BackingStore = backing_store;
+    store->m_PreflightContentIndex = 0;
+    store->m_GetStoredBlockHashes = 0;
+    return api;
+}
+
+
+TEST(Longtail, TestCacheBlockStoreRetarget)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 8192;
+    static const uint32_t MAX_BLOCK_SIZE = 26973;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
+
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "cache-store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
+    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "remote-store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
+    CaptureBlockStore remote_capture_store_api_instance;
+    Longtail_BlockStoreAPI* remote_capture_store_api = CaptureBlockStoreInit(&remote_capture_store_api_instance, remote_block_store_api);
+    Longtail_BlockStoreAPI* cache_block_store_api = Longtail_CreateCacheBlockStoreAPI(job_api, local_block_store_api, remote_capture_store_api);
+
+    CreateRandomContent(storage_api, "version1", 3/*MAX_CHUNKS_PER_BLOCK * 3*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+    ASSERT_EQ(0, CopyDir(storage_api, "version1", "version2"));
+    CreateRandomContent(storage_api, "version2", 1/*MAX_CHUNKS_PER_BLOCK*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+    ASSERT_EQ(0, CopyDir(storage_api, "version2", "version3"));
+    CreateRandomContent(storage_api, "version3", 1/*MAX_CHUNKS_PER_BLOCK*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+    ASSERT_EQ(0, CopyDir(storage_api, "version3", "version4"));
+    CreateRandomContent(storage_api, "version4", 1/*MAX_CHUNKS_PER_BLOCK*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+    CreateRandomContent(storage_api, "version5", 1/*MAX_CHUNKS_PER_BLOCK*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+    CreateRandomContent(storage_api, "version6", 1/*MAX_CHUNKS_PER_BLOCK*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+    ASSERT_EQ(0, CopyDir(storage_api, "version6", "version7"));
+    CreateRandomContent(storage_api, "version7", 1/*MAX_CHUNKS_PER_BLOCK*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+    ASSERT_EQ(0, CopyDir(storage_api, "version4", "version8"));
+    ASSERT_EQ(0, CopyDir(storage_api, "version5", "version8"));
+    CreateRandomContent(storage_api, "version8", 1/*MAX_CHUNKS_PER_BLOCK*/, 0, MAX_BLOCK_SIZE / 2 /*(MAX_BLOCK_SIZE * 3) >> 1*/);
+
+    const char* version_names[8] = {"version1", "version2", "version3", "version4", "version5", "version6", "version7", "version8"};
+
+    for (uint32_t v = 0; v < 8; ++v)
+    {
+        char lvi_name[64];
+        sprintf(lvi_name, "%s.lvi", version_names[v]);
+        ASSERT_EQ(0, UploadFolder(storage_api, hash_api, job_api, remote_block_store_api, version_names[v], lvi_name, TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+    }
+
+    for (uint32_t v = 0; v < 8; ++v)
+    {
+        SAFE_DISPOSE_API(cache_block_store_api);
+        SAFE_DISPOSE_API(remote_capture_store_api);
+        SAFE_DISPOSE_API(remote_block_store_api);
+        SAFE_DISPOSE_API(local_block_store_api);
+
+        local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "cache-store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
+        remote_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "remote-store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
+        remote_capture_store_api = CaptureBlockStoreInit(&remote_capture_store_api_instance, remote_block_store_api);
+        cache_block_store_api = Longtail_CreateCacheBlockStoreAPI(job_api, local_block_store_api, remote_capture_store_api);
+
+        for (uint32_t w = v; w < 8; ++w)
+        {
+            char lvi_name[64];
+            sprintf(lvi_name, "%s.lvi", version_names[w]);
+            ASSERT_EQ(0, DownloadFolder(storage_api, hash_api, job_api, cache_block_store_api, lvi_name, "current", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+            {
+                TestAsyncFlushComplete flushCB;
+                ASSERT_EQ(0, cache_block_store_api->Flush(cache_block_store_api, &flushCB.m_API));
+                flushCB.Wait();
+                ASSERT_EQ(0, flushCB.m_Err);
+            }
+            {
+                TestAsyncFlushComplete flushCB;
+                ASSERT_EQ(0, local_block_store_api->Flush(local_block_store_api, &flushCB.m_API));
+                flushCB.Wait();
+                ASSERT_EQ(0, flushCB.m_Err);
+            }
+
+
+            ASSERT_EQ(0, ValidateVersion(storage_api, hash_api, job_api,  version_names[w], "current", TARGET_CHUNK_SIZE));
+        }
+    }
+
+    SAFE_DISPOSE_API(cache_block_store_api);
+    SAFE_DISPOSE_API(remote_capture_store_api);
+    SAFE_DISPOSE_API(remote_block_store_api);
+    SAFE_DISPOSE_API(local_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(storage_api);
+}
+
+TEST(Longtail, TestFileSystemLock)
+{
+    HLongtail_FileLock file_lock;
+    ASSERT_EQ(0, Longtail_LockFile(Longtail_Alloc(Longtail_GetFileLockSize()), "lockfile.tmp", &file_lock));
+    ASSERT_EQ(0, Longtail_UnlockFile(file_lock));
+    Longtail_Free(file_lock);
 }

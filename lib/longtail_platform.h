@@ -80,6 +80,11 @@ char* Longtail_GetTempFolder();
 
 uint64_t Longtail_GetProcessIdentity();
 
+typedef struct Longtail_FileLock_private* HLongtail_FileLock;
+size_t Longtail_GetFileLockSize();
+int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_lock);
+int Longtail_UnlockFile(HLongtail_FileLock file_lock);
+
 #ifdef __cplusplus
 }
 #endif

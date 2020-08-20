@@ -128,8 +128,11 @@ static int ShareBlockStore_PutStoredBlock(
         api->m_BackingBlockStore,
         stored_block,
         async_complete_api);
-    if (!err)
+    if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
+            block_store_api, stored_block, async_complete_api,
+            err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
     }
     return err;
@@ -147,6 +150,9 @@ static int ShareBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
         content_index);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_PreflightGet(%p, %p) failed with %d",
+            block_store_api, content_index,
+            err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
     }
     return err;

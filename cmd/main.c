@@ -46,6 +46,7 @@ struct Progress
 {
     struct Longtail_ProgressAPI m_API;
     const char* m_Task;
+    uint32_t m_UpdateCount;
     uint32_t m_OldPercent;
     uint32_t m_JobsDone;
 };
@@ -55,14 +56,15 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
     struct Progress* p = (struct Progress*)progress_api;
     if (jobs_done < total)
     {
-        if (p->m_JobsDone == 0)
+        if (!p->m_UpdateCount)
         {
             fprintf(stderr, "%s: ", p->m_Task);
         }
+        ++p->m_UpdateCount;
         uint32_t percent_done = (100 * jobs_done) / total;
         if (percent_done - p->m_OldPercent >= 5)
         {
-            fprintf(stderr, "%u%% ", percent_done);
+            fprintf(stderr, "%3u%% ", percent_done);
             p->m_OldPercent = percent_done;
         }
         p->m_JobsDone = jobs_done;
@@ -81,6 +83,7 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
 static void Progress_Init(struct Progress* me, const char* task)
 {
     me->m_Task = task;
+    me->m_UpdateCount = 0;
     me->m_OldPercent = 0;
     me->m_JobsDone = 0;
     me->m_API.m_API.Dispose = 0;
@@ -89,7 +92,7 @@ static void Progress_Init(struct Progress* me, const char* task)
 
 static void Progress_Dispose(struct Progress* me)
 {
-    if (me->m_JobsDone != 0)
+    if (me->m_UpdateCount)
     {
         fprintf(stderr, " Done\n");
     }
@@ -446,16 +449,14 @@ int UpSync(
         return err;
     }
 
-    // Create a new missing content index which only contains the chunks that are not present in the remote store
-    struct Longtail_ContentIndex* version_missing_content_index;
+    struct Longtail_ContentIndex* remote_missing_content_index;
     err = Longtail_CreateMissingContent(
         hash_api,
         existing_remote_content_index,
         source_version_index,
         *existing_remote_content_index->m_MaxBlockSize,
         *existing_remote_content_index->m_MaxChunksPerBlock,
-        &version_missing_content_index);
-
+        &remote_missing_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
@@ -470,6 +471,7 @@ int UpSync(
         Longtail_Free((char*)storage_path);
         return err;
     }
+
     {
         struct Progress write_content_progress;
         Progress_Init(&write_content_progress, "Writing blocks");
@@ -480,8 +482,7 @@ int UpSync(
             &write_content_progress.m_API,
             0,
             0,
-            existing_remote_content_index,
-            version_missing_content_index,
+            remote_missing_content_index,
             source_version_index,
             source_path);
         Progress_Dispose(&write_content_progress);
@@ -490,7 +491,6 @@ int UpSync(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
-        Longtail_Free(version_missing_content_index);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
@@ -509,12 +509,12 @@ int UpSync(
     err = Longtail_MergeContentIndex(
         job_api,
         existing_remote_content_index,
-        version_missing_content_index,
+        remote_missing_content_index,
         &version_local_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version local content index %d", err);
-        Longtail_Free(version_missing_content_index);
+        Longtail_Free(remote_missing_content_index);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
@@ -538,7 +538,7 @@ int UpSync(
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_index_path, err);
             Longtail_Free(version_local_content_index);
-            Longtail_Free(version_missing_content_index);
+            Longtail_Free(remote_missing_content_index);
             Longtail_Free(existing_remote_content_index);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(store_block_store_api);
@@ -560,7 +560,7 @@ int UpSync(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version index for `%s` to `%s`, %d", source_path, target_index_path, err);
         Longtail_Free(version_local_content_index);
-        Longtail_Free(version_missing_content_index);
+        Longtail_Free(remote_missing_content_index);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -574,7 +574,7 @@ int UpSync(
     }
 
     Longtail_Free(version_local_content_index);
-    Longtail_Free(version_missing_content_index);
+    Longtail_Free(remote_missing_content_index);
     Longtail_Free(existing_remote_content_index);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(store_block_store_api);
@@ -825,29 +825,6 @@ int DownSync(
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to retarget the content index to remote store `%s`, %d", storage_uri_raw, err);
-        Longtail_Free(source_version_content_index);
-        Longtail_Free(version_diff);
-        Longtail_Free(target_version_index);
-        Longtail_Free(source_version_index);
-        SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(store_block_cachestore_api);
-        SAFE_DISPOSE_API(store_block_localstore_api);
-        SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(hash_registry);
-        SAFE_DISPOSE_API(job_api);
-        Longtail_Free((void*)storage_path);
-        return err;
-    }
-
-    err = Longtail_ValidateContent(retargetted_version_content_index, source_version_index);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateContent failed with %d", storage_uri_raw, source_path, err);
-        Longtail_Free(retargetted_version_content_index);
         Longtail_Free(source_version_content_index);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);

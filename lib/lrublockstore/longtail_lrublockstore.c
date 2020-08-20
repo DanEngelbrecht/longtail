@@ -215,6 +215,9 @@ static int LRUBlockStore_PutStoredBlock(
         async_complete_api);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
+            block_store_api, stored_block, async_complete_api,
+            err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
     }
     return err;
@@ -234,6 +237,9 @@ static int LRUBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store
         content_index);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_PreflightGet(%p, %p) failed with %d",
+            block_store_api, content_index,
+            err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
     }
     return err;

@@ -324,6 +324,11 @@ static void BlockStoreStorageAPI_ReadBlock_OnComplete(struct Longtail_AsyncGetSt
 {
     struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI* cb = (struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI*)async_complete_api;
     struct Longtail_JobAPI* job_api = cb->m_Data->m_BlockStoreFS->m_JobAPI;
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadBlock_OnComplete(%p, %p, %d)",
+            async_complete_api, stored_block, err)
+    }
     cb->m_Data->m_Err = err;
     cb->m_Data->m_StoredBlock = stored_block;
     job_api->ResumeJob(job_api, cb->m_JobID);
@@ -369,6 +374,12 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         data->m_Size,
         data->m_Buffer,
         data->m_ChunkIndexes);
+    if (data->m_Err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
+            context, job_id, is_cancelled,
+            data->m_Err)
+    }
     if (data->m_StoredBlock->Dispose)
     {
         data->m_StoredBlock->Dispose(data->m_StoredBlock);
