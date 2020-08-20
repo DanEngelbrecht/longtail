@@ -1055,12 +1055,12 @@ LONGTAIL_EXPORT int Longtail_ReadContentIndex(
  *
  * @param[in] source_storage_api        An initialized struct Longtail_StorageAPI
  * @param[in] block_store_api           An initialized struct Longtail_BlockStoreAPI
+ * @param[in] hash_api                  An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both content index index and version index
  * @param[in] job_api                   An initialized struct Longtail_JobAPI
  * @param[in] progress_api              An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
  * @param[in] optional_cancel_api       An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token     A cancel token or null if @p optional_cancel_api is null
- * @param[in] block_store_content_index @p version_content_index retargetted to @p block_store_api (see Longtail_BlockStoreAPI::RetargetContent)
- * @param[in] version_content_index     Data in @p version index and @p assets_folder arranged as content index (see CreateContentIndex and CreateContentIndexFromDiff)
+ * @param[in] content_index             The content index to write, all blocks in content index will be written
  * @param[in] version_index             Version index of data in  @p assets_folder
  * @param[in] assets_folder             Path of version data inside @p source_storage_api
  * @return                  Return code (errno style), zero on success
@@ -1072,8 +1072,7 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
-    struct Longtail_ContentIndex* block_store_content_index,
-    struct Longtail_ContentIndex* version_content_index,
+    struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
