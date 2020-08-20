@@ -46,6 +46,7 @@ struct Progress
 {
     struct Longtail_ProgressAPI m_API;
     const char* m_Task;
+    uint32_t m_UpdateCount;
     uint32_t m_OldPercent;
     uint32_t m_JobsDone;
 };
@@ -55,14 +56,15 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
     struct Progress* p = (struct Progress*)progress_api;
     if (jobs_done < total)
     {
-        if (p->m_JobsDone == 0)
+        if (!p->m_UpdateCount)
         {
             fprintf(stderr, "%s: ", p->m_Task);
         }
+        ++p->m_UpdateCount;
         uint32_t percent_done = (100 * jobs_done) / total;
         if (percent_done - p->m_OldPercent >= 5)
         {
-            fprintf(stderr, "%u%% ", percent_done);
+            fprintf(stderr, "%3u%% ", percent_done);
             p->m_OldPercent = percent_done;
         }
         p->m_JobsDone = jobs_done;
@@ -81,6 +83,7 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
 static void Progress_Init(struct Progress* me, const char* task)
 {
     me->m_Task = task;
+    me->m_UpdateCount = 0;
     me->m_OldPercent = 0;
     me->m_JobsDone = 0;
     me->m_API.m_API.Dispose = 0;
@@ -89,7 +92,7 @@ static void Progress_Init(struct Progress* me, const char* task)
 
 static void Progress_Dispose(struct Progress* me)
 {
-    if (me->m_JobsDone != 0)
+    if (me->m_UpdateCount)
     {
         fprintf(stderr, " Done\n");
     }
