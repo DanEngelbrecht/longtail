@@ -6307,7 +6307,7 @@ static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_s
         api->m_PreflightContentIndex = 0;
     }
     void* buffer;
-    uint64_t size;
+    size_t size;
     int err = Longtail_WriteContentIndexToBuffer(content_index, &buffer, &size);
     if (err)
     {
