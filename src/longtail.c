@@ -2954,7 +2954,7 @@ int Longtail_ReadStoredBlock(
     int err = storage_api->OpenReadFile(storage_api, path, &f);
     if (err)
     {
-        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock(%p, %s, %p) failed with %d",
             storage_api, path, out_stored_block,
             err)
         return err;
