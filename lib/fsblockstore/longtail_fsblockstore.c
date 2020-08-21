@@ -705,7 +705,7 @@ static int FSBlockStore_GetStoredBlock(
     int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p) failed with %d",
             block_store_api, block_hash, async_complete_api,
             err)
         Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
