@@ -413,6 +413,9 @@ static int ReadContent(
     const char* block_extension,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ReadContent(%p, %p, %u, %u, %s, %s, %p)",
+        storage_api, job_api, max_block_size, max_chunks_per_block, content_path, block_extension, out_content_index)
+
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(content_path != 0, return EINVAL)
@@ -702,7 +705,7 @@ static int FSBlockStore_GetStoredBlock(
     int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_GetStoredBlock(%p, 0x" PRIx64 ", %p) failed with %d",
             block_store_api, block_hash, async_complete_api,
             err)
         Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
@@ -722,6 +725,8 @@ int FSBlockStore_GetContentIndexFromStorage(
     struct FSBlockStoreAPI* fsblockstore_api,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetContentIndexFromStorage(%p, %p)",
+        fsblockstore_api, out_content_index)
     struct Longtail_StorageAPI* storage_api = fsblockstore_api->m_StorageAPI;
     struct Longtail_JobAPI* job_api = fsblockstore_api->m_JobAPI;
     const char* content_path = fsblockstore_api->m_ContentPath;
@@ -796,6 +801,8 @@ static int FSBlockStore_GetIndexSync(
     struct FSBlockStoreAPI* fsblockstore_api,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetIndexSync(%p, %p)",
+        fsblockstore_api, out_content_index)
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     if (!fsblockstore_api->m_ContentIndex)
     {

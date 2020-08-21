@@ -299,6 +299,9 @@ static int CacheBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
     int err = Longtail_WriteContentIndexToBuffer(content_index, &buffer, &size);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_PreflightGet(%p, %p) failed with %d",
+            block_store_api, content_index,
+            err)
         return err;
     }
     struct Longtail_ContentIndex* content_index_copy;
@@ -306,6 +309,9 @@ static int CacheBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
     Longtail_Free(buffer);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_PreflightGet(%p, %p) failed with %d",
+            block_store_api, content_index,
+            err)
         return err;
     }
 
@@ -606,6 +612,7 @@ struct RetargetContext_RetargetToRemote_Context
     struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
     struct Longtail_AsyncRetargetContentAPI* m_RetargetAsyncCompleteAPI;
     struct Longtail_ContentIndex* m_LocalRetargettedContentIndex;
+    struct Longtail_ContentIndex* m_LocalMissingContentIndex;
 };
 
 static void RetargetRemoteContent_RetargetContentCompleteAPI_OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
@@ -615,6 +622,7 @@ static void RetargetRemoteContent_RetargetContentCompleteAPI_OnComplete(struct L
     if (err)
     {
         retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
+        Longtail_Free(retarget_context->m_LocalMissingContentIndex);
         Longtail_Free(retarget_context->m_LocalRetargettedContentIndex);
         Longtail_Free(retarget_context);
         return;
@@ -626,6 +634,7 @@ static void RetargetRemoteContent_RetargetContentCompleteAPI_OnComplete(struct L
         content_index,
         &merged_content_index);
     Longtail_Free(content_index);
+    Longtail_Free(retarget_context->m_LocalMissingContentIndex);
     Longtail_Free(retarget_context->m_LocalRetargettedContentIndex);
     if (err)
     {
@@ -683,11 +692,11 @@ static void RetargetLocalContent_RetargetContentCompleteAPI_OnComplete(struct Lo
     retarget_remote_context->m_CacheBlockStoreAPI = api;
     retarget_remote_context->m_RetargetAsyncCompleteAPI = retarget_context->m_RetargetAsyncCompleteAPI;
     retarget_remote_context->m_LocalRetargettedContentIndex = content_index;
+    retarget_remote_context->m_LocalMissingContentIndex = local_missing_content_index;
     err = api->m_RemoteBlockStoreAPI->RetargetContent(
         api->m_RemoteBlockStoreAPI,
         local_missing_content_index,
         &retarget_remote_context->m_AsyncCompleteAPI);
-    Longtail_Free(local_missing_content_index);
     if (err)
     {
         retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
@@ -719,6 +728,9 @@ static int CacheBlockStore_RetargetContent(
     int err = Longtail_WriteContentIndexToBuffer(content_index, &buffer, &size);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_RetargetContent(%p, %p, %p) failed with %d",
+            block_store_api, content_index, async_complete_api,
+            err)
         return err;
     }
     struct Longtail_ContentIndex* content_index_copy;
@@ -726,6 +738,9 @@ static int CacheBlockStore_RetargetContent(
     Longtail_Free(buffer);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_RetargetContent(%p, %p, %p) failed with %d",
+            block_store_api, content_index, async_complete_api,
+            err)
         return err;
     }
 
@@ -741,6 +756,9 @@ static int CacheBlockStore_RetargetContent(
         &retarget_local_context->m_AsyncCompleteAPI);
     if (err)
     {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CacheBlockStore_RetargetContent(%p, %p, %p) failed with %d",
+            block_store_api, content_index, async_complete_api,
+            err)
         Longtail_Free(content_index_copy);
         Longtail_Free(retarget_local_context);
         return err;

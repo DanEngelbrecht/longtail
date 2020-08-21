@@ -2954,7 +2954,7 @@ int Longtail_ReadStoredBlock(
     int err = storage_api->OpenReadFile(storage_api, path, &f);
     if (err)
     {
-        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoredBlock(%p, %s, %p) failed with %d",
             storage_api, path, out_stored_block,
             err)
         return err;
@@ -6187,6 +6187,18 @@ int Longtail_RetargetContent(
         return ENOMEM;
     }
 
+    struct Longtail_LookupTable* added_chunk_hashes = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(requested_chunk_count)), requested_chunk_count, 0);
+    if (!added_chunk_hashes)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RetargetContent(%p, %p, %p) failed with %d",
+            reference_content_index, requested_content_index, out_content_index,
+            ENOMEM)
+        Longtail_Free(work_mem);
+        Longtail_Free(keep_blocks_lookup);
+        Longtail_Free(chunk_to_requested_block_index_lookup);
+        return ENOMEM;
+    }
+
     TLongtail_Hash* tmp_keep_block_hashes = (TLongtail_Hash*)work_mem;
     TLongtail_Hash* tmp_keep_chunk_hashes = &tmp_keep_block_hashes[reference_block_count];
     uint64_t* tmp_keep_chunk_block_indexes = (uint64_t*)&tmp_keep_chunk_hashes[reference_chunk_count];
@@ -6198,12 +6210,9 @@ int Longtail_RetargetContent(
         TLongtail_Hash chunk_hash = reference_content_index->m_ChunkHashes[i];
         if (Longtail_LookupTable_Get(chunk_to_requested_block_index_lookup, chunk_hash) != 0)
         {
-            for (uint32_t c = 0; c < chunk_count; ++c)
+            if (Longtail_LookupTable_PutUnique(added_chunk_hashes, chunk_hash, i) != 0)
             {
-                if (tmp_keep_chunk_hashes[c] == chunk_hash)
-                {
-                    continue;
-                }
+                continue;
             }
             uint64_t block_index = reference_content_index->m_ChunkBlockIndexes[i];
             TLongtail_Hash block_hash = reference_content_index->m_BlockHashes[block_index];
@@ -6221,6 +6230,7 @@ int Longtail_RetargetContent(
             continue;
         }
     }
+    Longtail_Free(added_chunk_hashes);
 
     size_t content_index_size = Longtail_GetContentIndexSize(block_count, chunk_count);
     struct Longtail_ContentIndex* resulting_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
