@@ -5639,7 +5639,7 @@ int Longtail_WriteVersion(
     {
         TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
         uint64_t block_index = content_index->m_ChunkBlockIndexes[i];
-        Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, block_index);
+        Longtail_LookupTable_PutUnique(chunk_hash_to_block_index, chunk_hash, block_index);
     }
 
     uint32_t asset_count = *version_index->m_AssetCount;
@@ -6344,7 +6344,7 @@ static int MergeContentIndex_BuildChunkHashToBlockIndex(void* context, uint32_t 
         c->tmp_compact_chunk_hashes[chunk_index] = chunk_hash;
         c->tmp_compact_chunk_block_indexes[chunk_index] = block_index;
 
-        Longtail_LookupTable_Put(c->chunk_hash_to_block_index, chunk_hash, block_index);
+        Longtail_LookupTable_PutUnique(c->chunk_hash_to_block_index, chunk_hash, block_index);
     }
     return 0;
 }
@@ -7145,7 +7145,7 @@ int Longtail_ChangeVersion(
         {
             TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
             uint64_t block_index = content_index->m_ChunkBlockIndexes[i];
-            Longtail_LookupTable_Put(chunk_hash_to_block_index, chunk_hash, block_index);
+            Longtail_LookupTable_PutUnique(chunk_hash_to_block_index, chunk_hash, block_index);
         }
 
         size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
