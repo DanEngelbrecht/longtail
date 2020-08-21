@@ -12,7 +12,6 @@ struct CacheBlockStoreAPI
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_BlockStoreAPI* m_LocalBlockStoreAPI;
     struct Longtail_BlockStoreAPI* m_RemoteBlockStoreAPI;
-    struct Longtail_JobAPI* m_JobAPI;
 
     TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
 
@@ -552,60 +551,6 @@ static int CacheBlockStore_GetStoredBlock(
     return 0;
 }
 
-struct RetargetContext
-{
-    struct Longtail_AsyncRetargetContentAPI* m_AsyncCompleteAPI;
-    struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
-    struct Longtail_JobAPI* m_JobAPI;
-    struct Longtail_ContentIndex* m_ContentIndex;
-    struct Longtail_ContentIndex* m_LocalIndex;
-    struct Longtail_ContentIndex* m_RemoteIndex;
-    TLongtail_Atomic32 m_PendingCount;
-    int m_LocalErr;
-    int m_RemoteErr;
-};
-
-static void RetargetContent_GetIndexesCompleteAPI_OnComplete(void* context)
-{
-    struct RetargetContext* retarget_context = (struct RetargetContext*)context;
-    int err = retarget_context->m_LocalErr ? retarget_context->m_LocalErr : retarget_context->m_RemoteErr;
-    if (err)
-    {
-        Longtail_AtomicAdd64(&retarget_context->m_CacheBlockStoreAPI->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
-        Longtail_Free(retarget_context->m_LocalIndex);
-        Longtail_Free(retarget_context->m_RemoteIndex);
-        Longtail_Free(retarget_context->m_ContentIndex);
-        retarget_context->m_AsyncCompleteAPI->OnComplete(retarget_context->m_AsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_context);
-        return;
-    }
-    struct Longtail_ContentIndex* full_content_index = 0;
-    err = Longtail_MergeContentIndex(retarget_context->m_JobAPI, retarget_context->m_RemoteIndex, retarget_context->m_LocalIndex, &full_content_index);
-    Longtail_Free(retarget_context->m_LocalIndex);
-    Longtail_Free(retarget_context->m_RemoteIndex);
-    if (err)
-    {
-        Longtail_AtomicAdd64(&retarget_context->m_CacheBlockStoreAPI->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
-        retarget_context->m_AsyncCompleteAPI->OnComplete(retarget_context->m_AsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_context->m_ContentIndex);
-        Longtail_Free(retarget_context);
-        return;
-    }
-    struct Longtail_ContentIndex* retargeted_content_index = 0;
-    err = Longtail_RetargetContent(full_content_index, retarget_context->m_ContentIndex, &retargeted_content_index);
-    Longtail_Free(full_content_index);
-    Longtail_Free(retarget_context->m_ContentIndex);
-    if (err)
-    {
-        Longtail_AtomicAdd64(&retarget_context->m_CacheBlockStoreAPI->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
-        retarget_context->m_AsyncCompleteAPI->OnComplete(retarget_context->m_AsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_context);
-        return;
-    }
-    retarget_context->m_AsyncCompleteAPI->OnComplete(retarget_context->m_AsyncCompleteAPI, retargeted_content_index, 0);
-    Longtail_Free(retarget_context);
-}
-
 struct RetargetContext_RetargetToRemote_Context
 {
     struct Longtail_AsyncRetargetContentAPI m_AsyncCompleteAPI;
@@ -629,7 +574,6 @@ static void RetargetRemoteContent_RetargetContentCompleteAPI_OnComplete(struct L
     }
     struct Longtail_ContentIndex* merged_content_index;
     err = Longtail_AddContentIndex(
-        api->m_JobAPI,
         retarget_context->m_LocalRetargettedContentIndex,
         content_index,
         &merged_content_index);
@@ -850,7 +794,6 @@ static int CacheBlockStore_Init(
 
     api->m_LocalBlockStoreAPI = local_block_store;
     api->m_RemoteBlockStoreAPI = remote_block_store;
-    api->m_JobAPI = job_api;
     api->m_PendingRequestCount = 0;
     api->m_PendingAsyncFlushAPIs = 0;
 
