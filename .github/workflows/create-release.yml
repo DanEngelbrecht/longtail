@@ -122,11 +122,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *CHANGED API* Longtail_WriteContent now takes `content_index` and `version_index` and will write all blocks in `content_index`
-          - *FIXED* `Longtail_RetargetContent` fixed - no longer adds extra blocks/chunks
-          - *FIXED* cacheblockstore RetargetContent now returns the expected result
-          - *FIXED* store.lci syncronization in fsblockstore works correctly on linux
-          - *ADDED* replaced asserts with error logging in some places
+          - *FIXED* Crash in cacheblockstore RetargetContent
+          - *FIXED* Fixed performance bottleneck in RetargetContent
+          - *ADDED* Better error logging in fsblockstore
         draft: false
         prerelease: false
     - name: Download Linux artifacts
