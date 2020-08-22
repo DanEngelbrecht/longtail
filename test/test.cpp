@@ -508,7 +508,7 @@ TEST(Longtail, Longtail_ReadWriteStoredBlockBuffer)
     }
     stored_block->Dispose(stored_block);
 }
-
+/*
 TEST(Longtail, Longtail_VersionIndex)
 {
     const char* asset_paths[5] = {
@@ -550,9 +550,9 @@ TEST(Longtail, Longtail_VersionIndex)
         chunk_sizes,
         asset_content_hashes,
         asset_tags,
-        0u,
+        0u, // Dummy hash identifier
         TARGET_CHUNK_SIZE,
-        &version_index)); // Dummy hash API
+        &version_index));
 
     void* store_buffer = 0;
     size_t store_size = 0;
@@ -566,7 +566,7 @@ TEST(Longtail, Longtail_VersionIndex)
     Longtail_Free(version_index);
     Longtail_Free(file_infos);
 }
-
+*/
 TEST(Longtail, Longtail_ContentIndex)
 {
 //    const char* assets_path = "";
@@ -2047,7 +2047,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
         chunk_sizes,
         asset_content_hashes,
         0,
-        0u,    // Dummy hash API
+        0u,    // Dummy hash identifier
         TARGET_CHUNK_SIZE,
         &version_index));
     Longtail_Free(file_infos);

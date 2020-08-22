@@ -1677,6 +1677,15 @@ struct Longtail_VersionDiff
     uint32_t* m_TargetPermissionsModifiedAssetIndexes;
 };
 
+int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
+
+size_t Longtail_LookupTable_GetSize(size_t capacity);
+struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries);
+int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
+uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
+uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
+uint64_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
+
 ///////////// Test functions
 
 int Longtail_MakeFileInfos(
@@ -1685,12 +1694,6 @@ int Longtail_MakeFileInfos(
     const uint64_t* file_sizes,
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos);
-
-size_t Longtail_GetVersionIndexDataSize(
-    uint32_t asset_count,
-    uint32_t chunk_count,
-    uint32_t asset_chunk_index_count,
-    uint32_t path_data_size);
 
 size_t Longtail_GetVersionIndexSize(
     uint32_t asset_count,
@@ -1715,19 +1718,6 @@ int Longtail_BuildVersionIndex(
     uint32_t hash_api_identifier,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
-
-
-
-
-
-int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
-
-size_t Longtail_LookupTable_GetSize(size_t capacity);
-struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries);
-int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
-uint64_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
 
 #ifdef __cplusplus
 }

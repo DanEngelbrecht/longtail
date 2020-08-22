@@ -1807,7 +1807,7 @@ static int ChunkAssets(
     return err;
 }
 
-size_t Longtail_GetVersionIndexDataSize(
+static size_t Longtail_GetVersionIndexDataSize(
     uint32_t asset_count,
     uint32_t chunk_count,
     uint32_t asset_chunk_index_count,
