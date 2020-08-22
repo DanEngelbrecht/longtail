@@ -506,7 +506,7 @@ static int LRUBlockStore_Init(
     uint32_t max_lru_count,
     struct Longtail_BlockStoreAPI** out_block_store_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Dispose(%p, %p, %p)",
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Init(%p, %p, %p)",
         mem, backing_block_store, out_block_store_api)
     LONGTAIL_FATAL_ASSERT(mem, return EINVAL)
     LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
@@ -558,7 +558,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateLRUBlockStoreAPI(
     uint32_t max_lru_count)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateLRUBlockStoreAPI(%p)", backing_block_store)
-    LONGTAIL_FATAL_ASSERT(backing_block_store, return 0)
+    LONGTAIL_VALIDATE_INPUT(backing_block_store, return 0)
 
     size_t api_size =
         sizeof(struct LRUBlockStoreAPI) +
