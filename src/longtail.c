@@ -1414,7 +1414,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 hash_job->m_Err = ENOMEM;
                 return 0;
             }
-            err = storage_api->Read(storage_api, file_handle, 0, hash_size, buffer);
+            err = storage_api->Read(storage_api, file_handle, hash_job->m_StartRange, hash_size, buffer);
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
