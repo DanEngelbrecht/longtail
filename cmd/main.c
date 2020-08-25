@@ -11,6 +11,7 @@
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
+#include "../lib/hpcdcchunker/longtail_hpcdcchunker.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/hashregistry/longtail_full_hash_registry.h"
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
@@ -349,6 +350,20 @@ int UpSync(
         SAFE_DISPOSE_API(hash_registry);
         return err;
     }
+    struct Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    if (!chunker_api)
+    {
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(store_block_fsstore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((char*)storage_path);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
 
     if (source_version_index == 0)
     {
@@ -363,6 +378,7 @@ int UpSync(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", source_path, err);
+            SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
             SAFE_DISPOSE_API(storage_api);
@@ -383,6 +399,7 @@ int UpSync(
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
+                chunker_api,
                 job_api,
                 &create_version_progress.m_API,
                 0,
@@ -399,6 +416,7 @@ int UpSync(
         if (err)
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", source_path, err);
+            SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
             SAFE_DISPOSE_API(storage_api);
@@ -420,6 +438,7 @@ int UpSync(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for `%s`, %d", source_path, err);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -439,6 +458,7 @@ int UpSync(
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -462,6 +482,7 @@ int UpSync(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -494,6 +515,7 @@ int UpSync(
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -518,6 +540,7 @@ int UpSync(
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(version_content_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -541,6 +564,7 @@ int UpSync(
             Longtail_Free(remote_missing_content_index);
             Longtail_Free(existing_remote_content_index);
             Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
             SAFE_DISPOSE_API(storage_api);
@@ -563,6 +587,7 @@ int UpSync(
         Longtail_Free(remote_missing_content_index);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(store_block_fsstore_api);
         SAFE_DISPOSE_API(storage_api);
@@ -577,6 +602,7 @@ int UpSync(
     Longtail_Free(remote_missing_content_index);
     Longtail_Free(existing_remote_content_index);
     Longtail_Free(source_version_index);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(store_block_store_api);
     SAFE_DISPOSE_API(store_block_fsstore_api);
     SAFE_DISPOSE_API(storage_api);
@@ -660,6 +686,24 @@ int DownSync(
         return err;
     }
 
+    struct Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    if (!chunker_api)
+    {
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return ENOMEM;
+    }
+
     struct Longtail_VersionIndex* target_version_index = 0;
     if (optional_target_index_path)
     {
@@ -686,6 +730,7 @@ int DownSync(
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", target_path, err);
             Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(lru_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
@@ -710,6 +755,7 @@ int DownSync(
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
+                chunker_api,
                 job_api,
                 &create_version_progress.m_API,
                 0,
@@ -727,6 +773,7 @@ int DownSync(
         {
             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
             Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(lru_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
@@ -753,6 +800,7 @@ int DownSync(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create diff between `%s` and `%s`, %d", source_path, target_path, err);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -775,6 +823,7 @@ int DownSync(
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -803,6 +852,7 @@ int DownSync(
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -829,6 +879,7 @@ int DownSync(
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -872,6 +923,7 @@ int DownSync(
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_content_index);
         Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -890,6 +942,7 @@ int DownSync(
     Longtail_Free(target_version_index);
     Longtail_Free(source_version_content_index);
     Longtail_Free(source_version_index);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(store_block_store_api);
     SAFE_DISPOSE_API(lru_block_store_api);
     SAFE_DISPOSE_API(compress_block_store_api);

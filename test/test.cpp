@@ -14,6 +14,7 @@
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
+#include "../lib/hpcdcchunker/longtail_hpcdcchunker.h"
 #include "../lib/hashregistry/longtail_full_hash_registry.h"
 #include "../lib/hashregistry/longtail_blake3_hash_registry.h"
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
@@ -507,7 +508,7 @@ TEST(Longtail, Longtail_ReadWriteStoredBlockBuffer)
     }
     stored_block->Dispose(stored_block);
 }
-
+/*
 TEST(Longtail, Longtail_VersionIndex)
 {
     const char* asset_paths[5] = {
@@ -549,9 +550,9 @@ TEST(Longtail, Longtail_VersionIndex)
         chunk_sizes,
         asset_content_hashes,
         asset_tags,
-        0u,
+        0u, // Dummy hash identifier
         TARGET_CHUNK_SIZE,
-        &version_index)); // Dummy hash API
+        &version_index));
 
     void* store_buffer = 0;
     size_t store_size = 0;
@@ -565,7 +566,7 @@ TEST(Longtail, Longtail_VersionIndex)
     Longtail_Free(version_index);
     Longtail_Free(file_infos);
 }
-
+*/
 TEST(Longtail, Longtail_ContentIndex)
 {
 //    const char* assets_path = "";
@@ -713,6 +714,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_FileInfos* version1_paths;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "data/non-existent", &version1_paths));
@@ -723,6 +725,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         local_storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -737,6 +740,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
     Longtail_Free(compression_types);
     Longtail_Free(version1_paths);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(local_storage);
 }
@@ -745,6 +749,7 @@ TEST(Longtail, ContentIndexSerialization)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
 
     ASSERT_EQ(1, CreateFakeContent(local_storage, "source/version1/two_items", 2));
@@ -758,6 +763,7 @@ TEST(Longtail, ContentIndexSerialization)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         local_storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -809,6 +815,7 @@ TEST(Longtail, ContentIndexSerialization)
     cindex2 = 0;
 
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(local_storage);
 }
@@ -1809,6 +1816,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, target_storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
@@ -1849,6 +1857,7 @@ TEST(Longtail, Longtail_WriteContent)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         source_storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -1931,6 +1940,7 @@ TEST(Longtail, Longtail_WriteContent)
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(target_storage);
@@ -1948,6 +1958,7 @@ TEST(Longtail, TestVeryLargeFile)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -2036,7 +2047,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
         chunk_sizes,
         asset_content_hashes,
         0,
-        0u,    // Dummy hash API
+        0u,    // Dummy hash identifier
         TARGET_CHUNK_SIZE,
         &version_index));
     Longtail_Free(file_infos);
@@ -2078,6 +2089,7 @@ TEST(Longtail, VersionIndexDirectories)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
 
     ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 2));
@@ -2095,6 +2107,7 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         local_storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -2112,6 +2125,7 @@ TEST(Longtail, VersionIndexDirectories)
     Longtail_Free(local_paths);
 
     SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(local_storage);
 }
@@ -2206,6 +2220,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
@@ -2427,6 +2442,7 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -2451,6 +2467,7 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -2624,6 +2641,7 @@ TEST(Longtail, Longtail_VersionDiff)
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage);
@@ -2638,6 +2656,7 @@ TEST(Longtail, Longtail_WriteVersion)
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
@@ -2746,6 +2765,7 @@ TEST(Longtail, Longtail_WriteVersion)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -2837,14 +2857,11 @@ TEST(Longtail, Longtail_WriteVersion)
     SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
 }
-
-const uint64_t ChunkSizeAvgDefault    = 64 * 1024;
-const uint64_t ChunkSizeMinDefault    = ChunkSizeAvgDefault / 4;
-const uint64_t ChunkSizeMaxDefault    = ChunkSizeAvgDefault * 4;
 
 TEST(Longtail, ChunkerLargeFile)
 {
@@ -2861,7 +2878,7 @@ TEST(Longtail, ChunkerLargeFile)
         long size;
         long offset;
 
-        static int FeederFunc(void* context, struct Longtail_Chunker* chunker, uint32_t requested_size, char* buffer, uint32_t* out_size)
+        static int FeederFunc(void* context, Longtail_ChunkerAPI_HChunker chunker, uint32_t requested_size, char* buffer, uint32_t* out_size)
         {
             FeederContext* c = (FeederContext*)context;
             uint32_t read_count = (uint32_t)(c->size - c->offset);
@@ -2890,16 +2907,23 @@ TEST(Longtail, ChunkerLargeFile)
 
     FeederContext feeder_context = {large_file, size, 0};
 
-    struct Longtail_ChunkerParams params = {ChunkSizeMinDefault, ChunkSizeAvgDefault, ChunkSizeMaxDefault};
-    Longtail_Chunker* chunker;
-    ASSERT_EQ(0, Longtail_CreateChunker(
-        &params,
-        FeederContext::FeederFunc,
-        &feeder_context,
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+
+    const uint64_t ChunkSizeAvgDefault    = 64 * 1024;
+    const uint64_t ChunkSizeMinDefault    = ChunkSizeAvgDefault / 4;
+    const uint64_t ChunkSizeMaxDefault    = ChunkSizeAvgDefault * 4;
+
+    Longtail_ChunkerAPI_HChunker chunker;
+    ASSERT_EQ(0, chunker_api->CreateChunker(
+        chunker_api,
+        ChunkSizeMinDefault,
+        ChunkSizeAvgDefault,
+        ChunkSizeMaxDefault,
         &chunker));
+    ASSERT_NE((Longtail_ChunkerAPI_HChunker)0, chunker);
 
     const uint32_t expected_chunk_count = 20u;
-    const struct Longtail_ChunkRange expected_chunks[expected_chunk_count] =
+    const struct Longtail_Chunker_ChunkRange expected_chunks[expected_chunk_count] =
     {
         { (const uint8_t*)0, 0,       81590},
         { (const uint8_t*)0, 81590,   46796},
@@ -2923,23 +2947,24 @@ TEST(Longtail, ChunkerLargeFile)
         { (const uint8_t*)0, 982644,  65932}
     };
 
-    ASSERT_NE((Longtail_Chunker*)0, chunker);
-
+    Longtail_Chunker_ChunkRange r;
     for (uint32_t i = 0; i < expected_chunk_count; ++i)
     {
-        Longtail_ChunkRange r = Longtail_NextChunk(chunker);
+        ASSERT_EQ(0, chunker_api->NextChunk(chunker_api, chunker, FeederContext::FeederFunc, &feeder_context, &r));
         ASSERT_EQ(expected_chunks[i].offset, r.offset);
         ASSERT_EQ(expected_chunks[i].len, r.len);
     }
-    Longtail_ChunkRange r = Longtail_NextChunk(chunker);
+    ASSERT_EQ(ESPIPE, chunker_api->NextChunk(chunker_api, chunker, FeederContext::FeederFunc, &feeder_context, &r));
     ASSERT_EQ((const uint8_t*)0, r.buf);
     ASSERT_EQ(0, r.len);
 
-    Longtail_Free(chunker);
+    chunker_api->DisposeChunker(chunker_api, chunker);
     chunker = 0;
 
     fclose(large_file);
     large_file = 0;
+
+    SAFE_DISPOSE_API(chunker_api);
 }
 
 TEST(Longtail, FileSystemStorage)
@@ -3525,7 +3550,7 @@ TEST(Longtail, AsyncBlockStore)
 
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
-    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
 
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
@@ -3644,6 +3669,7 @@ TEST(Longtail, AsyncBlockStore)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
             0,
@@ -3754,6 +3780,7 @@ TEST(Longtail, AsyncBlockStore)
     SAFE_DISPOSE_API(compressed_block_store_api);
     SAFE_DISPOSE_API(async_block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(cache_block_store);
@@ -3768,6 +3795,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateShareBlockStoreAPI(fs_block_store_api);
@@ -3876,6 +3904,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -3968,6 +3997,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     SAFE_DISPOSE_API(fs_block_store_api);
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
@@ -4057,9 +4087,8 @@ TEST(Longtail, TestCreateVersionCancelOperation)
 {
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
-    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(2, 0);
-    ASSERT_NE((struct Longtail_JobAPI*)0, job_api);
 
     struct Longtail_CancelAPI* cancel_api = Longtail_CreateAtomicCancelAPI();
     ASSERT_NE((struct Longtail_CancelAPI*)0, cancel_api);
@@ -4080,6 +4109,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     {
         Longtail_StorageAPI* storage_api;
         struct Longtail_HashAPI* hash_api;
+        struct Longtail_ChunkerAPI* chunker_api;
         Longtail_JobAPI* job_api;
         struct Longtail_CancelAPI* cancel_api;
         Longtail_CancelAPI_HCancelToken cancel_token;
@@ -4097,6 +4127,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
             job->err = Longtail_CreateVersionIndex(
                 job->storage_api,
                 job->hash_api,
+                job->chunker_api,
                 job->job_api,
                 0,
                 job->cancel_api,
@@ -4111,6 +4142,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     } job_context;
     job_context.storage_api = storage_api;
     job_context.hash_api = hash_api;
+    job_context.chunker_api = chunker_api;
     job_context.job_api = job_api;
     job_context.cancel_api = cancel_api;
     job_context.cancel_token = cancel_token;
@@ -4142,6 +4174,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     ASSERT_EQ(0, cancel_api->DisposeToken(cancel_api, cancel_token));
     SAFE_DISPOSE_API(cancel_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(storage_api);
 }
@@ -4154,6 +4187,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(32, -1);
 
     TestAsyncBlockStore async_block_store;
@@ -4416,6 +4450,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -4448,6 +4483,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -4687,6 +4723,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     SAFE_DISPOSE_API(remote_block_store);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage);
 }
@@ -4698,6 +4735,7 @@ TEST(Longtail, BlockStoreRetargetContent)
 
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "local", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "remote", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
@@ -4826,6 +4864,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -4877,6 +4916,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -4923,6 +4963,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -4977,6 +5018,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -5046,6 +5088,7 @@ TEST(Longtail, BlockStoreRetargetContent)
     SAFE_DISPOSE_API(remote_block_store_api);
     SAFE_DISPOSE_API(local_block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(storage_api);
 }
@@ -5146,6 +5189,7 @@ TEST(Longtail, VersionLocalContent)
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
     struct Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "store", 384, 8, 0);
     struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
 
     CreateRandomContent(
         storage_api,
@@ -5166,6 +5210,7 @@ TEST(Longtail, VersionLocalContent)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -5234,6 +5279,7 @@ TEST(Longtail, VersionLocalContent)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -5321,6 +5367,7 @@ TEST(Longtail, VersionLocalContent)
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(storage_api);
     SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(chunker_api);
 }
 
 struct FailableStorageAPI
@@ -5402,6 +5449,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     Longtail_StorageAPI* remote_storage = &failable_remote_storage_api->m_API;
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, "cache", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, remote_storage, "chunks", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
@@ -5467,6 +5515,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         local_storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -5527,6 +5576,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         local_storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -5591,6 +5641,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     SAFE_DISPOSE_API(remote_block_store_api);
     SAFE_DISPOSE_API(local_block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(&failable_remote_storage_api->m_API);
@@ -5607,6 +5658,7 @@ TEST(Longtail, TestLongtailBlockFS)
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();//Longtail_CreateFSStorageAPI();//
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_BlockStoreAPI* raw_block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
@@ -5626,6 +5678,7 @@ TEST(Longtail, TestLongtailBlockFS)
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         mem_storage,
         hash_api,
+        chunker_api,
         job_api,
         0,
         0,
@@ -5809,6 +5862,7 @@ TEST(Longtail, TestLongtailBlockFS)
     SAFE_DISPOSE_API(raw_block_store);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(mem_storage);
 }
@@ -5892,6 +5946,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
 
     for (uint32_t i = 0; i < 4; ++i)
@@ -5908,6 +5963,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
         ASSERT_EQ(0, Longtail_CreateVersionIndex(
             mem_storage,
             hash_api,
+            chunker_api,
             job_api,
             0,
             0,
@@ -5960,6 +6016,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
 
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(mem_storage);
 }
 
@@ -6059,6 +6116,7 @@ static int CopyDir(
 static int UploadFolder(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
+    Longtail_ChunkerAPI* chunker_api,
     Longtail_JobAPI* job_api,
     Longtail_BlockStoreAPI* block_store_api,
     const char* source_path,
@@ -6074,7 +6132,19 @@ static int UploadFolder(
         return err;
     }
     struct Longtail_VersionIndex* version_index;
-    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, source_path, version_file_infos, 0, TARGET_CHUNK_SIZE, &version_index);
+    err = Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        source_path,
+        version_file_infos,
+        0,
+        TARGET_CHUNK_SIZE,
+        &version_index);
     if (err)
     {
         return err;
@@ -6130,6 +6200,7 @@ static int UploadFolder(
 static int DownloadFolder(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
+    Longtail_ChunkerAPI* chunker_api,
     Longtail_JobAPI* job_api,
     Longtail_BlockStoreAPI* block_store_api,
     const char* version_index_path,
@@ -6153,7 +6224,19 @@ static int DownloadFolder(
     }
 
     struct Longtail_VersionIndex* current_version_index;
-    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, target_path, version_file_infos, 0, TARGET_CHUNK_SIZE, &current_version_index);
+    err = Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        target_path,
+        version_file_infos,
+        0,
+        TARGET_CHUNK_SIZE,
+        &current_version_index);
     if (err)
     {
         return err;
@@ -6197,6 +6280,7 @@ static int DownloadFolder(
 static int ValidateVersion(
     Longtail_StorageAPI* storage_api,
     Longtail_HashAPI* hash_api,
+    Longtail_ChunkerAPI* chunker_api,
     Longtail_JobAPI* job_api,
     const char* expected_content_path,
     const char* content_path,
@@ -6217,14 +6301,38 @@ static int ValidateVersion(
     }
 
     struct Longtail_VersionIndex* expected_version_index;
-    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, expected_content_path, expected_file_infos, 0, TARGET_CHUNK_SIZE, &expected_version_index);
+    err = Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        expected_content_path,
+        expected_file_infos,
+        0,
+        TARGET_CHUNK_SIZE,
+        &expected_version_index);
     if (err)
     {
         return err;
     }
 
     struct Longtail_VersionIndex* version_index;
-    err = Longtail_CreateVersionIndex(storage_api, hash_api, job_api, 0, 0, 0, content_path, file_infos, 0, TARGET_CHUNK_SIZE, &version_index);
+    err = Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        content_path,
+        file_infos,
+        0,
+        TARGET_CHUNK_SIZE,
+        &version_index);
     if (err)
     {
         return err;
@@ -6390,6 +6498,7 @@ TEST(Longtail, TestCacheBlockStoreRetarget)
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "cache-store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
     Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "remote-store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
@@ -6418,7 +6527,7 @@ TEST(Longtail, TestCacheBlockStoreRetarget)
     {
         char lvi_name[64];
         sprintf(lvi_name, "%s.lvi", version_names[v]);
-        ASSERT_EQ(0, UploadFolder(storage_api, hash_api, job_api, remote_block_store_api, version_names[v], lvi_name, TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+        ASSERT_EQ(0, UploadFolder(storage_api, hash_api, chunker_api, job_api, remote_block_store_api, version_names[v], lvi_name, TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
     }
 
     for (uint32_t v = 0; v < 8; ++v)
@@ -6437,7 +6546,7 @@ TEST(Longtail, TestCacheBlockStoreRetarget)
         {
             char lvi_name[64];
             sprintf(lvi_name, "%s.lvi", version_names[w]);
-            ASSERT_EQ(0, DownloadFolder(storage_api, hash_api, job_api, cache_block_store_api, lvi_name, "current", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+            ASSERT_EQ(0, DownloadFolder(storage_api, hash_api, chunker_api, job_api, cache_block_store_api, lvi_name, "current", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
 
             {
                 TestAsyncFlushComplete flushCB;
@@ -6453,7 +6562,7 @@ TEST(Longtail, TestCacheBlockStoreRetarget)
             }
 
 
-            ASSERT_EQ(0, ValidateVersion(storage_api, hash_api, job_api,  version_names[w], "current", TARGET_CHUNK_SIZE));
+            ASSERT_EQ(0, ValidateVersion(storage_api, hash_api, chunker_api, job_api,  version_names[w], "current", TARGET_CHUNK_SIZE));
         }
     }
 
@@ -6462,6 +6571,7 @@ TEST(Longtail, TestCacheBlockStoreRetarget)
     SAFE_DISPOSE_API(remote_block_store_api);
     SAFE_DISPOSE_API(local_block_store_api);
     SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);

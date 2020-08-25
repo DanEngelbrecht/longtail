@@ -122,7 +122,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIXED* When looking up blocks in `WriteVersion`/`ChangeVersion` prioritize early blocks to make prefetch accurate
+          - *ADDED* `struct Longtail_ChunkerAPI` added to make chunking algorithm pluggable
+          - *CHANGED API* `Longtail_CreateVersion` now takes a `struct Longtail_ChunkerAPI` instance
         draft: false
         prerelease: false
     - name: Download Linux artifacts

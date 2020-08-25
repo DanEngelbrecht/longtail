@@ -28,6 +28,7 @@ mkdir dist/include/lib/compressblockstore
 mkdir dist/include/lib/compressionregistry
 mkdir dist/include/lib/filestorage
 mkdir dist/include/lib/fsblockstore
+mkdir dist/include/lib/hpcdcchunker
 mkdir dist/include/lib/lrublockstore
 mkdir dist/include/lib/hashregistry
 mkdir dist/include/lib/lz4
@@ -47,6 +48,7 @@ cp lib/compressblockstore/*.h dist/include/lib/compressblockstore
 cp lib/compressionregistry/*.h dist/include/lib/compressionregistry
 cp lib/filestorage/*.h dist/include/lib/filestorage
 cp lib/fsblockstore/*.h dist/include/lib/fsblockstore
+cp lib/hpcdcchunker/*.h dist/include/lib/hpcdcchunker
 cp lib/lrublockstore/*.h dist/include/lib/lrublockstore
 cp lib/hashregistry/*.h dist/include/lib/hashregistry
 cp lib/lz4/*.h dist/include/lib/lz4

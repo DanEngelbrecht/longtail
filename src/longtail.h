@@ -504,6 +504,50 @@ LONGTAIL_EXPORT int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_api, uint
 LONGTAIL_EXPORT int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token);
 LONGTAIL_EXPORT int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id);
 
+////////////// Longtail_ChunkerAPI
+
+struct Longtail_ChunkerAPI;
+
+typedef struct Longtail_ChunkerAPI_Chunker* Longtail_ChunkerAPI_HChunker;
+
+typedef int (*Longtail_Chunker_Feeder)(void* context, Longtail_ChunkerAPI_HChunker chunker, uint32_t requested_size, char* buffer, uint32_t* out_size);
+
+struct Longtail_Chunker_ChunkRange
+{
+    const uint8_t* buf;
+    uint64_t offset;
+    uint32_t len;
+};
+
+typedef int (*Longtail_Chunker_GetMinChunkSizeFunc)(struct Longtail_ChunkerAPI* chunker_api, uint32_t* out_min_chunk_size);
+typedef int (*Longtail_Chunker_CreateChunkerFunc)(struct Longtail_ChunkerAPI* chunker_api, uint32_t min_chunk_size, uint32_t avg_chunk_size, uint32_t max_chunk_size, Longtail_ChunkerAPI_HChunker* out_chunker);
+typedef int (*Longtail_Chunker_NextChunkFunc)(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, Longtail_Chunker_Feeder feeder, void* feeder_context, struct Longtail_Chunker_ChunkRange* out_chunk_range);
+typedef int (*Longtail_Chunker_DisposeChunkerFunc)(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker);
+
+struct Longtail_ChunkerAPI
+{
+    struct Longtail_API m_API;
+    Longtail_Chunker_GetMinChunkSizeFunc GetMinChunkSize;
+    Longtail_Chunker_CreateChunkerFunc CreateChunker;
+    Longtail_Chunker_NextChunkFunc NextChunk;
+    Longtail_Chunker_DisposeChunkerFunc DisposeChunker;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetChunkerAPISize();
+
+LONGTAIL_EXPORT struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_Chunker_GetMinChunkSizeFunc get_min_chunk_size_func,
+    Longtail_Chunker_CreateChunkerFunc create_chunker_func,
+    Longtail_Chunker_NextChunkFunc next_chunk_func,
+    Longtail_Chunker_DisposeChunkerFunc dispose_chunker_func);
+
+LONGTAIL_EXPORT int Longtail_Chunker_GetMinChunkSize(struct Longtail_ChunkerAPI* chunker_api, uint32_t* out_min_chunk_size);
+LONGTAIL_EXPORT int Longtail_Chunker_CreateChunker(struct Longtail_ChunkerAPI* chunker_api, uint32_t min_chunk_size, uint32_t avg_chunk_size, uint32_t max_chunk_size, Longtail_ChunkerAPI_HChunker* out_chunker);
+LONGTAIL_EXPORT int Longtail_Chunker_NextChunk(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, Longtail_Chunker_Feeder feeder, void* feeder_context, struct Longtail_Chunker_ChunkRange* out_chunk_range);
+LONGTAIL_EXPORT int Longtail_Chunker_DisposeChunker(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker);
+
 ////////////// Longtail_AsyncPutStoredBlockAPI
 
 struct Longtail_AsyncPutStoredBlockAPI;
@@ -769,6 +813,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
  *
  * @param[in] storage_api           An implementation of struct Longtail_StorageAPI interface.
  * @param[in] hash_api              An implementation of struct Longtail_HashAPI interface.
+ * @param[in] chunker_api           An implementation of struct Longtail_ChunkerAPI interface.
  * @param[in] job_api               An implementation of struct Longtail_JobAPI interface
  * @param[in] progress_api          An implementation of struct Longtail_JobAPI interface or null if no progress indication is required
  * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
@@ -782,6 +827,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
 LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
+    struct Longtail_ChunkerAPI* chunker_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CancelAPI* optional_cancel_api,
@@ -1631,6 +1677,15 @@ struct Longtail_VersionDiff
     uint32_t* m_TargetPermissionsModifiedAssetIndexes;
 };
 
+int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
+
+size_t Longtail_LookupTable_GetSize(size_t capacity);
+struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries);
+int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
+uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
+uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
+uint64_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
+
 ///////////// Test functions
 
 int Longtail_MakeFileInfos(
@@ -1639,12 +1694,6 @@ int Longtail_MakeFileInfos(
     const uint64_t* file_sizes,
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos);
-
-size_t Longtail_GetVersionIndexDataSize(
-    uint32_t asset_count,
-    uint32_t chunk_count,
-    uint32_t asset_chunk_index_count,
-    uint32_t path_data_size);
 
 size_t Longtail_GetVersionIndexSize(
     uint32_t asset_count,
@@ -1669,42 +1718,6 @@ int Longtail_BuildVersionIndex(
     uint32_t hash_api_identifier,
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
-
-struct Longtail_Chunker;
-
-struct Longtail_ChunkerParams
-{
-    uint32_t min;
-    uint32_t avg;
-    uint32_t max;
-};
-
-struct Longtail_ChunkRange
-{
-    const uint8_t* buf;
-    uint64_t offset;
-    uint32_t len;
-};
-
-struct Longtail_ChunkRange Longtail_NextChunk(struct Longtail_Chunker* c);
-
-typedef int (*Longtail_Chunker_Feeder)(void* context, struct Longtail_Chunker* chunker, uint32_t requested_size, char* buffer, uint32_t* out_size);
-
- int Longtail_CreateChunker(
-    struct Longtail_ChunkerParams* params,
-    Longtail_Chunker_Feeder feeder,
-    void* context,
-    struct Longtail_Chunker** out_chunker);
-
-void Longtail_ToLowerCase(char* str);
-int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
-
-size_t Longtail_LookupTable_GetSize(size_t capacity);
-struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries);
-int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
-uint64_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
 
 #ifdef __cplusplus
 }

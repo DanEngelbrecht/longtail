@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <ctype.h>
 
 #if defined(__clang__) || defined(__GNUC__)
 #if defined(WIN32)
@@ -75,12 +76,20 @@ static void InMemStorageAPI_Dispose(struct Longtail_API* storage_api)
     Longtail_Free(storage_api);
 }
 
+static void InMemStorageAPI_ToLowerCase(char *str)
+{
+    for ( ; *str; ++str)
+    {
+        *str = tolower(*str);
+    }
+}
+
 static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 {
     uint32_t pathlen = (uint32_t)strlen(path);
     char* buf = (char*)alloca(pathlen + 1);
     memcpy(buf, path, pathlen + 1);
-    Longtail_ToLowerCase(buf);
+    InMemStorageAPI_ToLowerCase(buf);
     return fnv1a((void*)buf, pathlen);
 }
 
