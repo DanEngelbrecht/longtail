@@ -1540,7 +1540,7 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
     int res = stat(path, &stat_buf);
     if (res == 0)
     {
-        *out_permissions = (uint16_t)stat_buf.st_mode;
+        *out_permissions = (uint16_t)(stat_buf.st_mode & 0x1FF);
         if ((stat_buf.st_mode & S_IFDIR) == S_IFDIR)
         {
             *out_is_dir = 1;
@@ -1617,7 +1617,7 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
     int res = stat(path, &stat_buf);
     if (res == 0)
     {
-        *out_permissions = (uint16_t)stat_buf.st_mode;
+        *out_permissions = (uint16_t)(stat_buf.st_mode & 0x1FF);
         return 0;
     }
     res = errno;
