@@ -122,6 +122,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
+          - *FIXED* Only calculate path hash once when indexing a version
           - *FIXED* Permissions bitfield on Linux now only includes rwx bits for user/group/other when fetched from file system
         draft: false
         prerelease: false

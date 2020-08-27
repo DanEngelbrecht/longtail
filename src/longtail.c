@@ -1351,13 +1351,16 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
         return 0;
     }
 
-    hash_job->m_Err = Longtail_GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
-    if (hash_job->m_Err)
+    if (hash_job->m_PathHash)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-            context, job_id, is_cancelled,
-            hash_job->m_Err)
-        return 0;
+        hash_job->m_Err = Longtail_GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
+        if (hash_job->m_Err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
+                context, job_id, is_cancelled,
+                hash_job->m_Err)
+            return 0;
+        }
     }
 
     if (IsDirPath(hash_job->m_Path))
@@ -1665,7 +1668,7 @@ static int ChunkAssets(
             job->m_ChunkerAPI = chunker_api;
             job->m_RootPath = root_path;
             job->m_Path = &file_infos->m_PathData[file_infos->m_PathStartOffsets[asset_index]];
-            job->m_PathHash = &path_hashes[asset_index];
+            job->m_PathHash = (job_part == 0) ? &path_hashes[asset_index] : 0;
             job->m_AssetIndex = asset_index;
             job->m_StartRange = range_start;
             job->m_SizeRange = job_size;
