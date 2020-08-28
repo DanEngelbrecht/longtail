@@ -906,8 +906,8 @@ LONGTAIL_EXPORT int Longtail_ReadVersionIndex(
  * @return                          Number of bytes required to store the content index data
  */
 LONGTAIL_EXPORT size_t Longtail_GetContentIndexDataSize(
-    uint64_t block_count,
-    uint64_t chunk_count);
+    uint32_t block_count,
+    uint32_t chunk_count);
 
 /*! @brief Get size of content index.
  *
@@ -919,8 +919,8 @@ LONGTAIL_EXPORT size_t Longtail_GetContentIndexDataSize(
  * @return                          Number of bytes required to store the content index data
  */
 LONGTAIL_EXPORT size_t Longtail_GetContentIndexSize(
-    uint64_t block_count,
-    uint64_t chunk_count);
+    uint32_t block_count,
+    uint32_t chunk_count);
 
 /*! @brief Initialize content index from raw data.
  *
@@ -957,8 +957,8 @@ LONGTAIL_EXPORT int Longtail_InitContentIndex(
     uint32_t hash_api,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
-    uint64_t block_count,
-    uint64_t chunk_count);
+    uint32_t block_count,
+    uint32_t chunk_count);
 
 /*! @brief Create a struct Longtail_ContentIndex from array of struct Longtail_BlockIndex.
  *
@@ -976,7 +976,7 @@ LONGTAIL_EXPORT int Longtail_InitContentIndex(
 LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
-    uint64_t block_count,
+    uint32_t block_count,
     struct Longtail_BlockIndex** block_indexes,
     struct Longtail_ContentIndex** out_content_index);
 
@@ -1038,7 +1038,7 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexFromDiff(
  */
 LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
     struct Longtail_HashAPI* hash_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     const uint32_t* optional_chunk_tags,
@@ -1368,7 +1368,7 @@ LONGTAIL_EXPORT int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
     uint32_t tag,
     uint32_t chunk_count,
-    const uint64_t* chunk_indexes,
+    const uint32_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     struct Longtail_BlockIndex** out_block_index);
@@ -1617,18 +1617,18 @@ struct Longtail_ContentIndex
     uint32_t* m_HashIdentifier;
     uint32_t* m_MaxBlockSize;
     uint32_t* m_MaxChunksPerBlock;
-    uint64_t* m_BlockCount;
-    uint64_t* m_ChunkCount;
+    uint32_t* m_BlockCount;
+    uint32_t* m_ChunkCount;
 
     TLongtail_Hash* m_BlockHashes;      // []
     TLongtail_Hash* m_ChunkHashes;      // []
-    uint64_t* m_ChunkBlockIndexes;      // []
+    uint32_t* m_ChunkBlockIndexes;      // []
 };
 
 LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetVersion(const struct Longtail_ContentIndex* content_index);
 LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetHashAPI(const struct Longtail_ContentIndex* content_index);
-LONGTAIL_EXPORT uint64_t Longtail_ContentIndex_GetBlockCount(const struct Longtail_ContentIndex* content_index);
-LONGTAIL_EXPORT uint64_t Longtail_ContentIndex_GetChunkCount(const struct Longtail_ContentIndex* content_index);
+LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetBlockCount(const struct Longtail_ContentIndex* content_index);
+LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetChunkCount(const struct Longtail_ContentIndex* content_index);
 LONGTAIL_EXPORT TLongtail_Hash* Longtail_ContentIndex_BlockHashes(const struct Longtail_ContentIndex* content_index);
 
 struct Longtail_VersionIndex

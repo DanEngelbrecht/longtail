@@ -191,15 +191,15 @@ uint64_t TestCreateHashMapSpeed(
 {
     uint64_t start = stm_now();
 
-    uint64_t block_count = *content_index->m_BlockCount;
-    uint64_t chunk_count = *content_index->m_ChunkCount;
+    uint32_t block_count = *content_index->m_BlockCount;
+    uint32_t chunk_count = *content_index->m_ChunkCount;
 
-    for (uint64_t b = 0; b < block_count; ++b)
+    for (uint32_t b = 0; b < block_count; ++b)
     {
         hmput(*block_lookup_table, content_index->m_BlockHashes[b], b);
     }
 
-    for (uint64_t c = 0; c < chunk_count; ++c)
+    for (uint32_t c = 0; c < chunk_count; ++c)
     {
         hmput(*chunk_lookup_table, content_index->m_ChunkHashes[c], c);
     }
@@ -213,10 +213,10 @@ uint64_t TestLookupHashMapSpeed(
 {
     uint64_t start = stm_now();
 
-    uint64_t block_count = *content_index->m_BlockCount;
-    uint64_t chunk_count = *content_index->m_ChunkCount;
+    uint32_t block_count = *content_index->m_BlockCount;
+    uint32_t chunk_count = *content_index->m_ChunkCount;
 
-    for (uint64_t b = 0; b < block_count; ++b)
+    for (uint32_t b = 0; b < block_count; ++b)
     {
         intptr_t i = hmgeti(block_lookup_table, content_index->m_BlockHashes[b]);
         if (i == -1)
@@ -229,7 +229,7 @@ uint64_t TestLookupHashMapSpeed(
         }
     }
 
-    for (uint64_t c = 0; c < chunk_count; ++c)
+    for (uint32_t c = 0; c < chunk_count; ++c)
     {
         intptr_t i = hmgeti(chunk_lookup_table, content_index->m_ChunkHashes[c]);
         if (i == -1)
@@ -248,18 +248,18 @@ uint64_t TestCreateBlockHashTableSpeed(struct Longtail_ContentIndex* content_ind
 {
     uint64_t start = stm_now();
 
-    uint64_t block_count = *content_index->m_BlockCount;
-    uint64_t chunk_count = *content_index->m_ChunkCount;
+    uint32_t block_count = *content_index->m_BlockCount;
+    uint32_t chunk_count = *content_index->m_ChunkCount;
 
     *block_hash_table = Longtail_LookupTable_Create(block_count, 0);
     *chunk_hash_table = Longtail_LookupTable_Create(chunk_count, 0);
 
-    for (uint64_t b = 0; b < block_count; ++b)
+    for (uint32_t b = 0; b < block_count; ++b)
     {
         Longtail_LookupTable_Put(*block_hash_table, content_index->m_BlockHashes[b], b);
     }
 
-    for (uint64_t c = 0; c < chunk_count; ++c)
+    for (uint32_t c = 0; c < chunk_count; ++c)
     {
         Longtail_LookupTable_Put(*chunk_hash_table, content_index->m_ChunkHashes[c], c);
     }
@@ -273,10 +273,10 @@ uint64_t TestLookupBlockHashTableSpeed(
 {
     uint64_t start = stm_now();
 
-    uint64_t block_count = *content_index->m_BlockCount;
-    uint64_t chunk_count = *content_index->m_ChunkCount;
+    uint32_t block_count = *content_index->m_BlockCount;
+    uint32_t chunk_count = *content_index->m_ChunkCount;
 
-    for (uint64_t b = 0; b < block_count; ++b)
+    for (uint32_t b = 0; b < block_count; ++b)
     {
         uint64_t index = Longtail_LookupTable_Get(block_lookup_table, content_index->m_BlockHashes[b]);
         if (index == 0xfffffffffffffffful)
@@ -289,7 +289,7 @@ uint64_t TestLookupBlockHashTableSpeed(
         }
     }
 
-    for (uint64_t c = 0; c < chunk_count; ++c)
+    for (uint32_t c = 0; c < chunk_count; ++c)
     {
         uint64_t index = Longtail_LookupTable_Get(chunk_lookup_table, content_index->m_ChunkHashes[c]);
         if (index == 0xfffffffffffffffful)

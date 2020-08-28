@@ -297,7 +297,7 @@ static int UpdateContentIndex(
     int err = Longtail_CreateContentIndexFromBlocks(
         *current_content_index->m_MaxBlockSize,
         *current_content_index->m_MaxChunksPerBlock,
-        (uint64_t)(arrlen(added_block_indexes)),
+        (uint32_t)(arrlen(added_block_indexes)),
         added_block_indexes,
         &added_content_index);
     if (err)
@@ -532,7 +532,7 @@ static int ReadContent(
         return ENOMEM;
     }
 
-    uint64_t block_count = 0;
+    uint32_t block_count = 0;
     for (uint32_t path_index = 0; path_index < path_count; ++path_index)
     {
         struct ScanBlockJob* job = &scan_jobs[path_index];
@@ -841,10 +841,10 @@ static int FSBlockStore_GetIndexSync(
         }
 
         fsblockstore_api->m_ContentIndex = content_index;
-        uint64_t block_count = *content_index->m_BlockCount;
-        for (uint64_t b = 0; b < block_count; ++b)
+        uint32_t block_count = *content_index->m_BlockCount;
+        for (uint32_t b = 0; b < block_count; ++b)
         {
-            uint64_t block_hash = content_index->m_BlockHashes[b];
+            TLongtail_Hash block_hash = content_index->m_BlockHashes[b];
             hmput(fsblockstore_api->m_BlockState, block_hash, 1);
         }
     }
@@ -994,7 +994,7 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
             err = Longtail_CreateContentIndexFromBlocks(
                 api->m_DefaultMaxBlockSize,
                 api->m_DefaultMaxChunksPerBlock,
-                (uint64_t)(arrlen(api->m_AddedBlockIndexes)),
+                (uint32_t)(arrlen(api->m_AddedBlockIndexes)),
                 api->m_AddedBlockIndexes,
                 &api->m_ContentIndex);
             if (err)

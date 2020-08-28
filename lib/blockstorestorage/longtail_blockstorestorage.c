@@ -517,7 +517,7 @@ static int BlockStoreStorageAPI_ReadFile(
         TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
         const uint64_t* block_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
         LONGTAIL_FATAL_ASSERT(block_index_ptr, EINVAL)
-        uint64_t block_index = *block_index_ptr;
+        uint32_t block_index = (uint32_t)(*block_index_ptr);
         TLongtail_Hash block_hash = block_hashes[block_index];
         uint64_t* chunk_range_index = Longtail_LookupTable_PutUnique(block_range_map, block_hash, arrlen(chunk_ranges));
         if (chunk_range_index)
@@ -540,7 +540,7 @@ static int BlockStoreStorageAPI_ReadFile(
         }
         if (Longtail_LookupTable_GetSpaceLeft(block_range_map) == 0)
         {
-            uint64_t new_capacity = estimated_block_count + (estimated_block_count >> 2) + 2;
+            uint32_t new_capacity = estimated_block_count + (estimated_block_count >> 2) + 2;
             estimated_block_count = new_capacity > max_block_count ? max_block_count : (uint32_t)new_capacity;
             block_range_map_size = Longtail_LookupTable_GetSize(estimated_block_count);
             struct Longtail_LookupTable* new_block_range_map = Longtail_LookupTable_Create(Longtail_Alloc(block_range_map_size), estimated_block_count, block_range_map);
@@ -1124,7 +1124,7 @@ static int BlockStoreStorageAPI_Init(
     LONGTAIL_VALIDATE_INPUT(out_storage_api != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)mem;
-    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
+    uint32_t content_index_chunk_count = *content_index->m_ChunkCount;
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
 
     block_store_fs->m_API.m_API.Dispose = BlockStoreStorageAPI_Dispose;
@@ -1161,11 +1161,11 @@ static int BlockStoreStorageAPI_Init(
     p += GetPathEntriesSize(version_index_asset_count);
     block_store_fs->m_ChunkAssetOffsets = (uint64_t*)p;
 
-    const uint64_t* content_index_chunk_block_indexes = content_index->m_ChunkBlockIndexes;
+    const uint32_t* content_index_chunk_block_indexes = content_index->m_ChunkBlockIndexes;
     const TLongtail_Hash* content_index_chunk_hashes = content_index->m_ChunkHashes;
-    for (uint64_t c = 0; c < content_index_chunk_count; ++c)
+    for (uint32_t c = 0; c < content_index_chunk_count; ++c)
     {
-        uint64_t block_index = content_index_chunk_block_indexes[c];
+        uint32_t block_index = content_index_chunk_block_indexes[c];
         Longtail_LookupTable_Put(block_store_fs->m_ChunkHashToBlockIndexLookup, content_index_chunk_hashes[c], block_index);
     }
     const uint32_t* asset_chunk_index_starts = block_store_fs->m_VersionIndex->m_AssetChunkIndexStarts;

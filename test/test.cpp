@@ -361,7 +361,7 @@ TEST(Longtail, Longtail_CreateBlockIndex)
 {
     struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
-    const uint64_t chunk_indexes[2] = {0, 1};
+    const uint32_t chunk_indexes[2] = {0, 1};
     const TLongtail_Hash chunk_hashes[2] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef};
     const uint32_t chunk_sizes[2] = {4711, 1147};
     struct Longtail_BlockIndex* block_index;
@@ -388,7 +388,7 @@ TEST(Longtail, Longtail_ReadWriteBlockIndexInBuffer)
 {
     struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
-    const uint64_t chunk_indexes[2] = {0, 1};
+    const uint32_t chunk_indexes[2] = {0, 1};
     const TLongtail_Hash chunk_hashes[2] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef};
     const uint32_t chunk_sizes[2] = {4711, 1147};
     struct Longtail_BlockIndex* block_index;
@@ -798,12 +798,12 @@ TEST(Longtail, ContentIndexSerialization)
     ASSERT_NE((Longtail_ContentIndex*)0, cindex2);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
-    for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
+    for (uint32_t i = 0; i < *cindex->m_BlockCount; ++i)
     {
         ASSERT_EQ(cindex->m_BlockHashes[i], cindex2->m_BlockHashes[i]);
     }
     ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
-    for (uint64_t i = 0; i < *cindex->m_ChunkCount; ++i)
+    for (uint32_t i = 0; i < *cindex->m_ChunkCount; ++i)
     {
         ASSERT_EQ(cindex->m_ChunkBlockIndexes[i], cindex2->m_ChunkBlockIndexes[i]);
     }
@@ -1911,9 +1911,9 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_ContentIndex* cindex2 = SyncRetargetContent(block_store_api, cindex);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
-    for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
+    for (uint32_t i = 0; i < *cindex->m_BlockCount; ++i)
     {
-        uint64_t i2 = 0;
+        uint32_t i2 = 0;
         while (cindex->m_BlockHashes[i] != cindex2->m_BlockHashes[i2])
         {
             ++i2;
@@ -1922,9 +1922,9 @@ TEST(Longtail, Longtail_WriteContent)
         ASSERT_EQ(cindex->m_BlockHashes[i], cindex2->m_BlockHashes[i2]);
     }
     ASSERT_EQ(*cindex->m_ChunkCount, *cindex2->m_ChunkCount);
-    for (uint64_t i = 0; i < *cindex->m_ChunkCount; ++i)
+    for (uint32_t i = 0; i < *cindex->m_ChunkCount; ++i)
     {
-        uint64_t i2 = 0;
+        uint32_t i2 = 0;
         while (cindex->m_ChunkHashes[i] != cindex2->m_ChunkHashes[i2])
         {
             ++i2;
@@ -6398,14 +6398,14 @@ static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_s
     struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
     if (api->m_PreflightContentIndex)
     {
-        uint64_t preflight_block_count = *api->m_PreflightContentIndex->m_BlockCount;
-        uint64_t get_count = (uint64_t)arrlen(api->m_GetStoredBlockHashes);
+        uint32_t preflight_block_count = *api->m_PreflightContentIndex->m_BlockCount;
+        uint32_t get_count = (uint32_t)arrlen(api->m_GetStoredBlockHashes);
         struct Longtail_LookupTable* lut = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(get_count)), get_count, 0);
-        for (uint64_t b = 0; b < get_count; ++b)
+        for (uint32_t b = 0; b < get_count; ++b)
         {
             Longtail_LookupTable_PutUnique(lut, api->m_GetStoredBlockHashes[b], b);
         }
-        for (uint64_t b = 0; b < preflight_block_count; ++b)
+        for (uint32_t b = 0; b < preflight_block_count; ++b)
         {
             TLongtail_Hash block_hash = api->m_PreflightContentIndex->m_BlockHashes[b];
             if (0 == Longtail_LookupTable_Get(lut, block_hash))
@@ -6443,8 +6443,8 @@ static int CaptureBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block
     }
     arrput(api->m_GetStoredBlockHashes, block_hash);
     struct Longtail_ContentIndex* preflight_content_index = api->m_PreflightContentIndex;
-    uint64_t block_hash_count = *preflight_content_index->m_BlockCount;
-    for (uint64_t b = 0; b < block_hash_count; ++b)
+    uint32_t block_hash_count = *preflight_content_index->m_BlockCount;
+    for (uint32_t b = 0; b < block_hash_count; ++b)
     {
         if (preflight_content_index->m_BlockHashes[b] == block_hash)
         {
