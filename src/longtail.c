@@ -44,8 +44,10 @@ void Longtail_NukeFree(void* p);
 #define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
 #define LONGTAIL_CONTENT_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
 #define LONGTAIL_CONTENT_INDEX_VERSION_1_0_0  LONGTAIL_VERSION(1,0,0)
+#define LONGTAIL_CONTENT_INDEX_VERSION_2_0_0  LONGTAIL_VERSION(2,0,0)
 
-uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_2;
+uint32_t Longtail_CurrentVersionIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_2;
+uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_CONTENT_INDEX_VERSION_2_0_0;
 
 #if defined(_WIN32)
     #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
@@ -1874,7 +1876,7 @@ static int InitVersionIndexFromData(
 
     if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentContentIndexVersion);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentVersionIndexVersion);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
             (void*)version_index, data, data_size,
             EBADF)
@@ -1996,7 +1998,7 @@ int Longtail_BuildVersionIndex(
     version_index->m_AssetCount = &p[3];
     version_index->m_ChunkCount = &p[4];
     version_index->m_AssetChunkIndexCount = &p[5];
-    *version_index->m_Version = Longtail_CurrentContentIndexVersion;
+    *version_index->m_Version = Longtail_CurrentVersionIndexVersion;
     *version_index->m_HashIdentifier = hash_api_identifier;
     *version_index->m_TargetChunkSize = target_chunk_size;
     *version_index->m_AssetCount = asset_count;
@@ -3097,13 +3099,162 @@ size_t Longtail_GetContentIndexDataSize(uint32_t block_count, uint32_t chunk_cou
     return block_index_data_size;
 }
 
-size_t Longtail_GetContentIndexSize(uint32_t block_count, uint32_t chunk_count)
+static size_t Longtail_GetContentIndexSize(uint32_t block_count, uint32_t chunk_count)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetContentIndexSize(%u, %u)",
         block_count, chunk_count)
     
     return sizeof(struct Longtail_ContentIndex) +
         Longtail_GetContentIndexDataSize(block_count, chunk_count);
+}
+
+struct Longtail_LegacyContentIndex
+{
+    uint32_t* m_Version;
+    uint32_t* m_HashIdentifier;
+    uint32_t* m_MaxBlockSize;
+    uint32_t* m_MaxChunksPerBlock;
+    uint64_t* m_BlockCount;
+    uint64_t* m_ChunkCount;
+
+    TLongtail_Hash* m_BlockHashes;      // []
+    TLongtail_Hash* m_ChunkHashes;      // []
+    uint64_t* m_ChunkBlockIndexes;      // []
+};
+
+static size_t Longtail_GetLegacyContentIndexDataSize(uint32_t block_count, uint32_t chunk_count)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetContentIndexDataSize(%u, %u)",
+        block_count, chunk_count)
+
+    size_t block_index_data_size = (size_t)(
+        sizeof(uint32_t) +                          // m_Version
+        sizeof(uint32_t) +                          // m_HashIdentifier
+        sizeof(uint32_t) +                          // m_MaxBlockSize
+        sizeof(uint32_t) +                          // m_MaxChunksPerBlock
+        sizeof(uint64_t) +                          // m_BlockCount
+        sizeof(uint64_t) +                          // m_ChunkCount
+        (sizeof(TLongtail_Hash) * block_count) +    // m_BlockHashes[]
+        (sizeof(TLongtail_Hash) * chunk_count) +    // m_ChunkHashes[]
+        (sizeof(uint64_t) * chunk_count)            // m_ChunkBlockIndexes[]
+        );
+
+    return block_index_data_size;
+}
+
+static void InitLegacyContentIndexBuffer(
+    const struct Longtail_ContentIndex* content_index,
+    void* buffer)
+{
+    struct Longtail_LegacyContentIndex legacy_index;
+    char* p = (char*)buffer;
+    legacy_index.m_Version = (uint32_t*)p; p += sizeof(uint32_t);
+    legacy_index.m_HashIdentifier = (uint32_t*)p; p += sizeof(uint32_t);
+    legacy_index.m_MaxBlockSize = (uint32_t*)p; p += sizeof(uint32_t);
+    legacy_index.m_MaxChunksPerBlock = (uint32_t*)p; p += sizeof(uint32_t);
+    legacy_index.m_BlockCount = (uint64_t*)p; p += sizeof(uint64_t);
+    legacy_index.m_ChunkCount = (uint64_t*)p; p += sizeof(uint64_t);
+
+    legacy_index.m_BlockHashes = (TLongtail_Hash*)p; p += sizeof(TLongtail_Hash) * *content_index->m_BlockCount;
+    legacy_index.m_ChunkHashes = (TLongtail_Hash*)p; p += sizeof(TLongtail_Hash) * *content_index->m_ChunkCount;
+    legacy_index.m_ChunkBlockIndexes = (uint64_t*)p; p += sizeof(uint64_t) * *content_index->m_ChunkCount;
+
+    *legacy_index.m_Version = LONGTAIL_CONTENT_INDEX_VERSION_1_0_0;
+    *legacy_index.m_HashIdentifier = *content_index->m_HashIdentifier;
+    *legacy_index.m_MaxBlockSize = *content_index->m_MaxBlockSize;
+    *legacy_index.m_MaxChunksPerBlock = *content_index->m_MaxChunksPerBlock;
+    *legacy_index.m_BlockCount = *content_index->m_BlockCount;
+    *legacy_index.m_ChunkCount = *content_index->m_ChunkCount;
+
+    for (uint32_t b = 0; b < *content_index->m_BlockCount; ++b)
+    {
+        legacy_index.m_BlockHashes[b] = content_index->m_BlockHashes[b];
+    }
+    for (uint32_t c = 0; c < *content_index->m_ChunkCount; ++c)
+    {
+        legacy_index.m_ChunkHashes[c] = content_index->m_ChunkHashes[c];
+        legacy_index.m_ChunkBlockIndexes[c] = content_index->m_ChunkBlockIndexes[c];
+    }
+}
+
+static int Longtail_IsContentIndexVersionLegacy(
+    const void* data,
+    uint64_t data_size)
+{
+    const uint32_t* version = (const uint32_t*)data;
+
+    if ((*version) < Longtail_CurrentContentIndexVersion)
+    {
+        // Legacy
+        return 1;
+    }
+    return 0;
+}
+
+static int Longtail_CreateContentIndexFromLegacyData(
+    const void* legacy_data,
+    uint64_t legacy_data_size,
+    struct Longtail_ContentIndex** out_content_index)
+{
+    struct Longtail_LegacyContentIndex legacy_content_index;
+    char* p = (char*)legacy_data;
+    legacy_content_index.m_Version = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    if ((*legacy_content_index.m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_0_0_1 &&
+        (*legacy_content_index.m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_1_0_0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromLegacyData(%p, %p, %p) failed with %d",
+            legacy_data, legacy_data_size, out_content_index,
+            EBADF)
+        return EBADF;
+    }
+    legacy_content_index.m_HashIdentifier = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    legacy_content_index.m_MaxBlockSize = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    legacy_content_index.m_MaxChunksPerBlock = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    legacy_content_index.m_BlockCount = (uint64_t*)(void*)p; p += sizeof(uint64_t);
+    legacy_content_index.m_ChunkCount = (uint64_t*)(void*)p; p += sizeof(uint64_t);
+
+    uint32_t block_count = (uint32_t)(*legacy_content_index.m_BlockCount);
+    uint32_t chunk_count = (uint32_t)(*legacy_content_index.m_ChunkCount);
+
+    legacy_content_index.m_BlockHashes = (TLongtail_Hash*)(void*)p; p += (sizeof(TLongtail_Hash) * block_count);
+    legacy_content_index.m_ChunkHashes = (TLongtail_Hash*)(void*)p; p += (sizeof(TLongtail_Hash) * chunk_count);
+    legacy_content_index.m_ChunkBlockIndexes = (uint64_t*)(void*)p; p += (sizeof(uint64_t) * chunk_count);
+
+    size_t content_index_data_size = Longtail_GetContentIndexDataSize(block_count, chunk_count);
+    size_t content_index_size = sizeof(struct Longtail_ContentIndex) + content_index_data_size;
+    void* data = Longtail_Alloc(content_index_size);
+    if (!data)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromLegacyData(%p, %p, %p) failed with %d",
+            legacy_data, legacy_data_size, out_content_index,
+            ENOMEM)
+        return ENOMEM;
+    }
+    struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)data;
+    p = (char*)&content_index[1];
+
+    content_index->m_Version = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    content_index->m_HashIdentifier = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    content_index->m_MaxBlockSize = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    content_index->m_MaxChunksPerBlock = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    content_index->m_BlockCount = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+    content_index->m_ChunkCount = (uint32_t*)(void*)p; p += sizeof(uint32_t);
+
+    content_index->m_BlockHashes = (TLongtail_Hash*)(void*)p; p += (sizeof(TLongtail_Hash) * block_count);
+    content_index->m_ChunkHashes = (TLongtail_Hash*)(void*)p; p += (sizeof(TLongtail_Hash) * chunk_count);
+    content_index->m_ChunkBlockIndexes = (uint32_t*)(void*)p; p += (sizeof(uint32_t) * chunk_count);
+
+    for (uint32_t b = 0; b < *content_index->m_BlockCount; ++b)
+    {
+        content_index->m_BlockHashes[b] = legacy_content_index.m_BlockHashes[b];
+    }
+    for (uint32_t c = 0; c < *content_index->m_ChunkCount; ++c)
+    {
+        content_index->m_ChunkHashes[c] = legacy_content_index.m_ChunkHashes[c];
+        content_index->m_ChunkBlockIndexes[c] = (uint32_t)legacy_content_index.m_ChunkBlockIndexes[c];
+    }
+    *out_content_index = content_index;
+    return 0;
 }
 
 int Longtail_InitContentIndexFromData(
@@ -3121,8 +3272,7 @@ int Longtail_InitContentIndexFromData(
     content_index->m_Version = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    if (((*content_index->m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_0_0_1) &&
-        ((*content_index->m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_1_0_0))
+    if ((*content_index->m_Version) != LONGTAIL_CONTENT_INDEX_VERSION_2_0_0)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Unsupported version of content data %" PRIu64 "", (void*)content_index->m_Version);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitContentIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
@@ -3198,7 +3348,7 @@ int Longtail_InitContentIndex(
     content_index->m_ChunkCount = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    *content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_1_0_0;
+    *content_index->m_Version = Longtail_CurrentContentIndexVersion;
     *content_index->m_HashIdentifier = hash_api;
     *content_index->m_MaxBlockSize = max_block_size;
     *content_index->m_MaxChunksPerBlock = max_chunks_per_block;
@@ -3653,6 +3803,22 @@ int Longtail_ReadContentIndexFromBuffer(
     LONGTAIL_VALIDATE_INPUT(size != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(out_content_index != 0, return EINVAL)
 
+    if (Longtail_IsContentIndexVersionLegacy(buffer, size))
+    {
+        int err = Longtail_CreateContentIndexFromLegacyData(
+            buffer,
+            size,
+            out_content_index);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndexFromBuffer(%p, %" PRIu64 ", %p) failed with %d",
+                buffer, size, out_content_index,
+                err)
+            return err;
+        }
+        return 0;
+    }
+
     size_t content_index_size = size + sizeof(struct Longtail_ContentIndex);
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     if (!content_index)
@@ -3720,6 +3886,91 @@ int Longtail_WriteContentIndex(
     return 0;
 }
 
+int Longtail_WriteLegacyContentIndexToBuffer(
+    const struct Longtail_ContentIndex* content_index,
+    void** out_buffer,
+    size_t* out_size)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteContentIndexToBuffer(%p, %p, %p)",
+        content_index, out_buffer, out_size)
+    LONGTAIL_VALIDATE_INPUT(content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_buffer != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_size != 0, return EINVAL)
+
+    size_t index_data_size = Longtail_GetLegacyContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
+    *out_buffer = Longtail_Alloc(index_data_size);
+    if (!(*out_buffer))
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteLegacyContentIndexToBuffer(%p, %p, %p) failed with %d",
+            content_index, out_buffer, out_size,
+            ENOMEM)
+        return ENOMEM;
+    }
+
+    InitLegacyContentIndexBuffer(content_index, *out_buffer);
+    *out_size = index_data_size;
+    return 0;
+}
+
+int Longtail_WriteLegacyContentIndex(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_ContentIndex* content_index,
+    const char* path)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_WriteLegacyContentIndex(%p, %p, %s)",
+        storage_api, content_index, path)
+    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL)
+
+    int err = EnsureParentPathExists(storage_api, path);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteLegacyContentIndex(%p, %p, %s) failed with %d",
+            storage_api, content_index, path,
+            err)
+        return err;
+    }
+
+    size_t index_data_size = Longtail_GetLegacyContentIndexDataSize(*content_index->m_BlockCount, *content_index->m_ChunkCount);
+    void* tmp_buffer = Longtail_Alloc(index_data_size);
+    if (!tmp_buffer)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteLegacyContentIndex(%p, %p, %s) failed with %d",
+            storage_api, content_index, path,
+            ENOMEM)
+        return ENOMEM;
+    }
+    InitLegacyContentIndexBuffer(content_index, tmp_buffer);
+
+    Longtail_StorageAPI_HOpenFile file_handle;
+    err = storage_api->OpenWriteFile(storage_api, path, 0, &file_handle);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteLegacyContentIndex(%p, %p, %s) failed with %d",
+            storage_api, content_index, path,
+            err)
+        Longtail_Free(tmp_buffer);
+        return err;
+    }
+
+    err = storage_api->Write(storage_api, file_handle, 0, index_data_size, tmp_buffer);
+    if (err){
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteLegacyContentIndex(%p, %p, %s) failed with %d",
+            storage_api, content_index, path,
+            err)
+        storage_api->CloseFile(storage_api, file_handle);
+        file_handle = 0;
+        Longtail_Free(tmp_buffer);
+        return err;
+    }
+
+    storage_api->CloseFile(storage_api, file_handle);
+    Longtail_Free(tmp_buffer);
+
+    return 0;
+}
+
 int Longtail_ReadContentIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
@@ -3771,6 +4022,26 @@ int Longtail_ReadContentIndex(
         storage_api->CloseFile(storage_api, file_handle);
         return err;
     }
+
+    if (Longtail_IsContentIndexVersionLegacy(&content_index[1], content_index_data_size))
+    {
+        int err = Longtail_CreateContentIndexFromLegacyData(
+            &content_index[1],
+            content_index_data_size,
+            out_content_index);
+        Longtail_Free(content_index);
+        storage_api->CloseFile(storage_api, file_handle);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadContentIndex(%p, %s, %p) failed with %d",
+                storage_api, path, out_content_index,
+                err)
+            *out_content_index = 0;
+            return err;
+        }
+        return 0;
+    }
+
     err = Longtail_InitContentIndexFromData(content_index, &content_index[1], content_index_data_size);
     storage_api->CloseFile(storage_api, file_handle);
     if (err)
