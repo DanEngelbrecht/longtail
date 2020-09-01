@@ -3122,6 +3122,7 @@ struct Longtail_LegacyContentIndex
     uint64_t* m_ChunkBlockIndexes;      // []
 };
 
+/*
 static size_t Longtail_GetLegacyContentIndexDataSize(uint32_t block_count, uint32_t chunk_count)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetContentIndexDataSize(%u, %u)",
@@ -3176,7 +3177,7 @@ static void InitLegacyContentIndexBuffer(
         legacy_index.m_ChunkBlockIndexes[c] = content_index->m_ChunkBlockIndexes[c];
     }
 }
-
+*/
 static int Longtail_IsContentIndexVersionLegacy(
     const void* data,
     uint64_t data_size)
@@ -3886,7 +3887,7 @@ int Longtail_WriteContentIndex(
     return 0;
 }
 
-int Longtail_WriteLegacyContentIndexToBuffer(
+/*int Longtail_WriteLegacyContentIndexToBuffer(
     const struct Longtail_ContentIndex* content_index,
     void** out_buffer,
     size_t* out_size)
@@ -3969,7 +3970,7 @@ int Longtail_WriteLegacyContentIndex(
     Longtail_Free(tmp_buffer);
 
     return 0;
-}
+}*/
 
 int Longtail_ReadContentIndex(
     struct Longtail_StorageAPI* storage_api,

@@ -1089,6 +1089,35 @@ LONGTAIL_EXPORT int Longtail_WriteContentIndex(
     struct Longtail_ContentIndex* content_index,
     const char* path);
 
+///*! @brief Writes a struct Longtail_ContentIndex to a byte buffer using old legacy format.
+// *
+// * Serializes a struct Longtail_ContentIndex to a buffer which is allocated using Longtail_Alloc()
+// *
+// * @param[in] content_index         Pointer to an initialized struct Longtail_ContentIndex
+// * @param[out] out_buffer           Pointer to a buffer pointer intitialized on success
+// * @param[out] out_size             Pointer to a size variable intitialized on success
+// * @return                          Return code (errno style), zero on success
+// */
+//LONGTAIL_EXPORT int Longtail_WriteLegacyContentIndexToBuffer(
+//    const struct Longtail_ContentIndex* content_index,
+//    void** out_buffer,
+//    size_t* out_size);
+//
+///*! @brief Writes a struct Longtail_ContentIndex using old legacy format.
+// *
+// * Serializes a struct Longtail_ContentIndex to a file in a struct Longtail_StorageAPI at the specified path.
+// * The parent folder of the file path must exist.
+// *
+// * @param[in] storage_api   An initialized struct Longtail_StorageAPI
+// * @param[in] content_index Pointer to an initialized struct Longtail_ContentIndex
+// * @param[in] path          A path in the storage api to store the content index to
+// * @return                  Return code (errno style), zero on success
+// */
+//LONGTAIL_EXPORT int Longtail_WriteLegacyContentIndex(
+//    struct Longtail_StorageAPI* storage_api,
+//    struct Longtail_ContentIndex* content_index,
+//    const char* path);
+
 /*! @brief Reads a struct Longtail_ContentIndex.
  *
  * Deserializes a struct Longtail_ContentIndex from a file in a struct Longtail_StorageAPI at the specified path.
