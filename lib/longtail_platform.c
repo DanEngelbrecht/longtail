@@ -617,21 +617,27 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
         return e;
     }
-    if ((permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess)) == 0)
+    int hasWritePermission = (attrs & FILE_ATTRIBUTE_READONLY) == 0;
+    int wantsWritePermission = (permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess)) != 0;
+    if (hasWritePermission != wantsWritePermission)
     {
-        if ((attrs & FILE_ATTRIBUTE_READONLY) == 0)
+        if (wantsWritePermission)
+        {
+            attrs = attrs & (~FILE_ATTRIBUTE_READONLY);
+        }
+        else
         {
             attrs = attrs | FILE_ATTRIBUTE_READONLY;
-            if (FALSE == SetFileAttributesA(path, attrs))
+        }
+        if (FALSE == SetFileAttributesA(path, attrs))
+        {
+            int e = Win32ErrorToErrno(GetLastError());
+            if (e == ENOENT)
             {
-                int e = Win32ErrorToErrno(GetLastError());
-                if (e == ENOENT)
-                {
-                    return 0;
-                }
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
-                return e;
+                return 0;
             }
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
+            return e;
         }
     }
     return 0;
