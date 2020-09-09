@@ -122,8 +122,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *FIXED* Only calculate path hash once when indexing a version
-          - *FIXED* Permissions bitfield on Linux now only includes rwx bits for user/group/other when fetched from file system
+          - *FIXED* FSBlockStore sometimes lost blocks in store.lci when flushing
+          - *FIXED* Removing read-only file on Win32 now works
         draft: false
         prerelease: false
     - name: Download Linux artifacts
