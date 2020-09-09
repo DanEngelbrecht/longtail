@@ -970,48 +970,26 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
     intptr_t new_block_count = arrlen(api->m_AddedBlockIndexes);
     if (new_block_count > 0)
     {
-        if (api->m_ContentIndex)
+        if (!api->m_ContentIndex)
         {
-            struct Longtail_ContentIndex* new_content_index;
-            err = UpdateContentIndex(
-                api->m_ContentIndex,
-                api->m_AddedBlockIndexes,
-                &new_content_index);
+            struct Longtail_ContentIndex* content_index_copy;
+            err = FSBlockStore_GetIndexSync(api, &content_index_copy);
             if (err)
             {
                 LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_Flush(%p, %p) failed with %d",
                     block_store_api, async_complete_api,
                     err)
+                Longtail_UnlockSpinLock(api->m_Lock);
+                if (async_complete_api)
+                {
+                    async_complete_api->OnComplete(async_complete_api, err);
+                    return 0;
+                }
+                return err;
             }
-            else
-            {
-                Longtail_Free(api->m_ContentIndex);
-                api->m_ContentIndex = new_content_index;
-            }
-        }
-        else
-        {
-            err = Longtail_CreateContentIndexFromBlocks(
-                api->m_DefaultMaxBlockSize,
-                api->m_DefaultMaxChunksPerBlock,
-                (uint64_t)(arrlen(api->m_AddedBlockIndexes)),
-                api->m_AddedBlockIndexes,
-                &api->m_ContentIndex);
-            if (err)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_Flush(%p, %p) failed with %d",
-                    block_store_api, async_complete_api,
-                    err)
-            }
-        }
-        intptr_t free_block_index = new_block_count;
-        while(free_block_index-- > 0)
-        {
-            struct Longtail_BlockIndex* block_index = api->m_AddedBlockIndexes[free_block_index];
-            Longtail_Free(block_index);
+            Longtail_Free(content_index_copy);
         }
     }
-    arrfree(api->m_AddedBlockIndexes);
 
     if (api->m_ContentIndex)
     {
