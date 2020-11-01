@@ -1046,6 +1046,10 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
+LONGTAIL_EXPORT int Longtail_CreateContentIndexFromStoreIndex(
+    const struct Longtail_StoreIndex* store_index,
+    struct Longtail_ContentIndex** out_content_index);
+
 /*! @brief Writes a struct Longtail_ContentIndex to a byte buffer.
  *
  * Serializes a struct Longtail_ContentIndex to a buffer which is allocated using Longtail_Alloc()
@@ -1656,15 +1660,15 @@ LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockChunkCounts(const st
 LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockTags(const struct Longtail_StoreIndex* store_index);
 LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetChunkSizes(const struct Longtail_StoreIndex* store_index);
 
-LONGTAIL_EXPORT int Longtail_CreateStoreIndex(
+LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromBlocks(
     uint32_t block_count,
-    struct Longtail_BlockIndex** block_indexes,
+    const struct Longtail_BlockIndex** block_indexes,
     struct Longtail_StoreIndex** out_store_index);
 
-LONGTAIL_EXPORT int Longtail_MakeBlockIndex(
-    struct Longtail_StoreIndex* store_index,
-    uint32_t block_index,
-    struct Longtail_BlockIndex* out_block_index);
+LONGTAIL_EXPORT int Longtail_MergeStoreIndex(
+    const struct Longtail_StoreIndex* local_store_index,
+    const struct Longtail_StoreIndex* remote_store_index,
+    struct Longtail_StoreIndex** out_store_index);
 
 /*! @brief Writes a struct Longtail_StoreIndex to a byte buffer.
  *
