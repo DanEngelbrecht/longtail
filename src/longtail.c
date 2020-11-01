@@ -46,7 +46,9 @@ void Longtail_NukeFree(void* p);
 #define LONGTAIL_CONTENT_INDEX_VERSION_1_0_0  LONGTAIL_VERSION(1,0,0)
 #define LONGTAIL_STORE_INDEX_VERSION_1_0_0    LONGTAIL_VERSION(1,0,0)
 
-uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_2;
+uint32_t Longtail_CurrentContentIndexVersion = LONGTAIL_CONTENT_INDEX_VERSION_1_0_0;
+uint32_t Longtail_CurrentVersionIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_0_2;
+uint32_t Longtail_CurrentStoreIndexVersion = LONGTAIL_STORE_INDEX_VERSION_1_0_0;
 
 #if defined(_WIN32)
     #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
@@ -1875,7 +1877,7 @@ static int InitVersionIndexFromData(
 
     if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentContentIndexVersion);
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentVersionIndexVersion);
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
             (void*)version_index, data, data_size,
             EBADF)
@@ -1997,7 +1999,7 @@ int Longtail_BuildVersionIndex(
     version_index->m_AssetCount = &p[3];
     version_index->m_ChunkCount = &p[4];
     version_index->m_AssetChunkIndexCount = &p[5];
-    *version_index->m_Version = Longtail_CurrentContentIndexVersion;
+    *version_index->m_Version = Longtail_CurrentVersionIndexVersion;
     *version_index->m_HashIdentifier = hash_api_identifier;
     *version_index->m_TargetChunkSize = target_chunk_size;
     *version_index->m_AssetCount = asset_count;
@@ -3199,7 +3201,7 @@ int Longtail_InitContentIndex(
     content_index->m_ChunkCount = (uint64_t*)(void*)p;
     p += sizeof(uint64_t);
 
-    *content_index->m_Version = LONGTAIL_CONTENT_INDEX_VERSION_1_0_0;
+    *content_index->m_Version = Longtail_CurrentContentIndexVersion;
     *content_index->m_HashIdentifier = hash_api;
     *content_index->m_MaxBlockSize = max_block_size;
     *content_index->m_MaxChunksPerBlock = max_chunks_per_block;
@@ -7587,6 +7589,10 @@ static int InitStoreIndexFromData(
     {
         return EBADF;
     }
+    if (*store_index->m_Version != LONGTAIL_STORE_INDEX_VERSION_1_0_0)
+    {
+        return EBADF;
+    }
 
     store_index->m_BlockHashes = (TLongtail_Hash*)(void*)p;
     p += sizeof(TLongtail_Hash) * block_count;
@@ -7658,7 +7664,7 @@ LONGTAIL_EXPORT int Longtail_CreateStoreIndex(
         return ENOMEM;
     }
 
-    *store_index->m_Version = LONGTAIL_STORE_INDEX_VERSION_1_0_0;
+    *store_index->m_Version = Longtail_CurrentStoreIndexVersion;
     *store_index->m_HashIdentifier = hash_identifier;
     uint32_t c = 0;
 
