@@ -1629,7 +1629,100 @@ LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetVersion(const struct Longtail_
 LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetHashAPI(const struct Longtail_ContentIndex* content_index);
 LONGTAIL_EXPORT uint64_t Longtail_ContentIndex_GetBlockCount(const struct Longtail_ContentIndex* content_index);
 LONGTAIL_EXPORT uint64_t Longtail_ContentIndex_GetChunkCount(const struct Longtail_ContentIndex* content_index);
-LONGTAIL_EXPORT TLongtail_Hash* Longtail_ContentIndex_BlockHashes(const struct Longtail_ContentIndex* content_index);
+LONGTAIL_EXPORT const TLongtail_Hash* Longtail_ContentIndex_BlockHashes(const struct Longtail_ContentIndex* content_index);
+
+struct Longtail_StoreIndex
+{
+    uint32_t* m_Version;
+    uint32_t* m_HashIdentifier;
+    uint32_t* m_BlockCount;             // Total number of blocks
+    uint32_t* m_ChunkCount;             // Total number of chunks across all blocks - chunk hashes may occur more than once
+    TLongtail_Hash* m_BlockHashes;      // [] m_BlockHashes is the hash of each block
+    TLongtail_Hash* m_ChunkHashes;      // [] For each m_BlockChunkCount[n] there are n consecutive chunk hashes in m_ChunkHashes[]
+    uint32_t* m_BlockChunksOffsets;     // [] m_BlockChunksOffsets[n] is the offset in m_ChunkBlockCount[] and m_ChunkHashes[]
+    uint32_t* m_BlockChunkCounts;       // [] m_BlockChunkCounts[n] is number of chunks in block m_BlockHash[n]
+    uint32_t* m_BlockTags;              // [] m_BlockTags is the tag for each block
+    uint32_t* m_ChunkSizes;             // [] m_ChunkSizes is the size of each chunk
+};
+
+LONGTAIL_EXPORT uint32_t Longtail_StoreIndex_GetVersion(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT uint32_t Longtail_StoreIndex_GetHashIdentifier(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT uint32_t Longtail_StoreIndex_GetBlockCount(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT uint32_t Longtail_StoreIndex_GetChunkCount(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT const TLongtail_Hash* Longtail_StoreIndex_GetBlockHashes(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT const TLongtail_Hash* Longtail_StoreIndex_GetChunkHashes(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockChunksOffsets(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockChunkCounts(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockTags(const struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetChunkSizes(const struct Longtail_StoreIndex* store_index);
+
+LONGTAIL_EXPORT int Longtail_CreateStoreIndex(
+    uint32_t block_count,
+    struct Longtail_BlockIndex** block_indexes,
+    struct Longtail_StoreIndex** out_store_index);
+
+LONGTAIL_EXPORT int Longtail_MakeBlockIndex(
+    struct Longtail_StoreIndex* store_index,
+    uint32_t block_index,
+    struct Longtail_BlockIndex* out_block_index);
+
+/*! @brief Writes a struct Longtail_StoreIndex to a byte buffer.
+ *
+ * Serializes a struct Longtail_StoreIndex to a buffer which is allocated using Longtail_Alloc()
+ *
+ * @param[in] store_index   Pointer to an initialized struct Longtail_StoreIndex
+ * @param[out] out_buffer   Pointer to a buffer pointer intitialized on success
+ * @param[out] out_size     Pointer to a size variable intitialized on success
+ * @return                  Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_WriteStoreIndexToBuffer(
+    const struct Longtail_StoreIndex* store_index,
+    void** out_buffer,
+    size_t* out_size);
+
+/*! @brief Reads a struct Longtail_StoreIndex from a byte buffer.
+ *
+ * Deserializes a struct Longtail_StoreIndex from a buffer, the struct Longtail_StoreIndex is allocated using Longtail_Alloc()
+ *
+ * @param[in] buffer            Buffer containing the serialized struct Longtail_StoreIndex
+ * @param[in] size              Size of the buffer
+ * @param[out] out_store_index  Pointer to an struct Longtail_StoreIndex pointer
+ * @return                      Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_ReadStoreIndexFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_StoreIndex** out_store_index);
+
+/*! @brief Writes a struct Longtail_StoreIndex.
+ *
+ * Serializes a struct Longtail_StoreIndex to a file in a struct Longtail_StorageAPI at the specified path.
+ * The parent folder of the file path must exist.
+ *
+ * @param[in] storage_api   An initialized struct Longtail_StorageAPI
+ * @param[in] store_index   Pointer to an initialized struct Longtail_BlockIndex
+ * @param[in] path          A path in the storage api to store the stored block to
+ * @return                  Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_WriteStoreIndex(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_StoreIndex* store_index,
+    const char* path);
+
+/*! @brief Reads a struct Longtail_StoreIndex.
+ *
+ * Deserializes a struct Longtail_StoreIndex from a file in a struct Longtail_StorageAPI at the specified path.
+ * The file must exist.
+ *
+ * @param[in] storage_api       An initialized struct Longtail_StoreIndex
+ * @param[in] path              A path in the storage api to read the stored block from
+ * @param[out] out_store_index  Pointer to an struct Longtail_StoreIndex pointer
+ * @return                      Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_ReadStoreIndex(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    struct Longtail_StoreIndex** out_store_index);
 
 struct Longtail_VersionIndex
 {
