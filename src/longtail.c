@@ -3622,9 +3622,54 @@ int Longtail_CreateContentIndexFromDiff(
 
 LONGTAIL_EXPORT int Longtail_CreateContentIndexFromStoreIndex(
     const struct Longtail_StoreIndex* store_index,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index)
 {
-    // TODO
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateContentIndexFromStoreIndex(%p, %u, %u, %p)",
+        store_index, max_block_size, max_chunks_per_block, out_content_index)
+    LONGTAIL_VALIDATE_INPUT(store_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(max_block_size != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(max_chunks_per_block != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(out_content_index != 0, return EINVAL)
+
+    uint32_t max_block_count = *store_index->m_BlockCount;
+
+    struct Longtail_BlockIndex* block_indexes = (struct Longtail_BlockIndex*)Longtail_Alloc(sizeof(struct Longtail_BlockIndex) * max_block_count);
+    struct Longtail_BlockIndex** block_index_ptrs = (struct Longtail_BlockIndex**)Longtail_Alloc(sizeof(struct Longtail_BlockIndex*) * max_block_count);
+    for (uint32_t b = 0; b < max_block_count; ++b)
+    {
+        int err = Longtail_MakeBlockIndex(
+            store_index,
+            b,
+            &block_indexes[b]);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromStoreIndex(%p, %u, %u, %p) failed with %d",
+                store_index, max_block_size, max_chunks_per_block, out_content_index,
+                err)
+            Longtail_Free(block_index_ptrs);
+            Longtail_Free(block_indexes);
+            return err;
+        }
+        block_index_ptrs[b] = &block_indexes[b];
+    }
+
+    int err = Longtail_CreateContentIndexFromBlocks(
+        max_block_size,
+        max_chunks_per_block,
+        max_block_count,
+        block_index_ptrs,
+        out_content_index);
+    Longtail_Free(block_index_ptrs);
+    Longtail_Free(block_indexes);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromStoreIndex(%p, %u, %u, %p) failed with %d",
+            store_index, max_block_size, max_chunks_per_block, out_content_index,
+            err)
+        return err;
+    }
     return 0;
 }
 
@@ -7674,6 +7719,8 @@ LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromBlocks(
 
     *store_index->m_Version = Longtail_CurrentStoreIndexVersion;
     *store_index->m_HashIdentifier = hash_identifier;
+    *store_index->m_BlockCount = block_count;
+    *store_index->m_ChunkCount = chunk_count;
     uint32_t c = 0;
 
     for (uint32_t b = 0; b < block_count; ++b)
@@ -7697,8 +7744,8 @@ LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromBlocks(
     return 0;
 }
 
-LONGTAIL_EXPORT int Longtail_MakeBlockIndex(
-    struct Longtail_StoreIndex* store_index,
+int Longtail_MakeBlockIndex(
+    const struct Longtail_StoreIndex* store_index,
     uint32_t block_index,
     struct Longtail_BlockIndex* out_block_index)
 {
@@ -7746,7 +7793,7 @@ LONGTAIL_EXPORT int Longtail_MergeStoreIndex(
     struct Longtail_LookupTable* block_hash_to_index = Longtail_LookupTable_Create(block_hash_to_index_mem, max_block_count, 0);
     for (uint32_t local_block = 0; local_block < local_block_count; ++local_block)
     {
-        if (!Longtail_LookupTable_PutUnique(block_hash_to_index, local_store_index->m_BlockHashes[local_block], unique_block_count))
+        if (Longtail_LookupTable_PutUnique(block_hash_to_index, local_store_index->m_BlockHashes[local_block], unique_block_count))
         {
             continue;
         }
@@ -7755,7 +7802,7 @@ LONGTAIL_EXPORT int Longtail_MergeStoreIndex(
     }
     for (uint32_t remote_block = 0; remote_block < remote_block_count; ++remote_block)
     {
-        if (!Longtail_LookupTable_PutUnique(block_hash_to_index, remote_store_index->m_BlockHashes[remote_block], unique_block_count))
+        if (Longtail_LookupTable_PutUnique(block_hash_to_index, remote_store_index->m_BlockHashes[remote_block], unique_block_count))
         {
             continue;
         }

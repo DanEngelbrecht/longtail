@@ -933,9 +933,12 @@ static int FSBlockStore_RetargetContent(
         Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
         return err;
     }
+
     struct Longtail_ContentIndex* store_content_index;
     err = Longtail_CreateContentIndexFromStoreIndex(
         store_index,
+        fsblockstore_api->m_DefaultMaxBlockSize,
+        fsblockstore_api->m_DefaultMaxChunksPerBlock,
         &store_content_index);
     if (err)
     {

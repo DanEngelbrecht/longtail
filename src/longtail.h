@@ -1048,6 +1048,8 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
 
 LONGTAIL_EXPORT int Longtail_CreateContentIndexFromStoreIndex(
     const struct Longtail_StoreIndex* store_index,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
 /*! @brief Writes a struct Longtail_ContentIndex to a byte buffer.
@@ -1669,6 +1671,11 @@ LONGTAIL_EXPORT int Longtail_MergeStoreIndex(
     const struct Longtail_StoreIndex* local_store_index,
     const struct Longtail_StoreIndex* remote_store_index,
     struct Longtail_StoreIndex** out_store_index);
+
+LONGTAIL_EXPORT int Longtail_MakeBlockIndex(
+    const struct Longtail_StoreIndex* store_index,
+    uint32_t block_index,
+    struct Longtail_BlockIndex* out_block_index);
 
 /*! @brief Writes a struct Longtail_StoreIndex to a byte buffer.
  *
