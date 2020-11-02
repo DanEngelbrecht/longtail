@@ -121,9 +121,20 @@ jobs:
         tag_name: ${{ github.ref }}
         release_name: Release ${{ github.ref }}
         body: |
-          Changes in this Release
-          - *FIXED* FSBlockStore sometimes lost blocks in store.lci when flushing
-          - *FIXED* Removing read-only file on Win32 now works
+          # Changes in this Release
+          - **API CHANGE** `Longtail_ContentIndex_BlockHashes` now returns `const TLongtail_Hash*`
+          - **ADDED** `struct Longtail_StoreIndex` contaning all info in a set of block indexes - chunk duplicates allowed. Accessor functions
+          - **ADDED** Functions for `struct Longtail_StoreIndex`
+            - `Longtail_GetStoreIndexSize`
+            - `Longtail_CreateStoreIndexFromBlocks`
+            - `Longtail_MergeStoreIndex`
+            - `Longtail_MakeBlockIndex`
+            - `Longtail_GetExistingContentIndex`
+            - `Longtail_WriteStoreIndexToBuffer`
+            - `Longtail_ReadStoreIndexFromBuffer`
+            - `Longtail_WriteStoreIndex`
+            - `Longtail_ReadStoreIndex`
+          - **CHANGED** FSBlockStore now uses `struct Longtail_StoreIndex` instead of `struct Longtail_ContentIndex`
         draft: false
         prerelease: false
     - name: Download Linux artifacts
