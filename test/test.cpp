@@ -763,6 +763,7 @@ TEST(Longtail, Longtail_MergeStoreIndex)
     Longtail_Free(store_index_local);
     Longtail_Free(block_index2);
     Longtail_Free(block_index1);
+    SAFE_DISPOSE_API(hash_api);
 }
 
 TEST(Longtail, Longtail_RetargetContentIndex)
