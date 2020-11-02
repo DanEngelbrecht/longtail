@@ -151,8 +151,8 @@ static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api)
         }
         struct Longtail_StoreIndex* merged_store_index = 0;
         err = Longtail_MergeStoreIndex(
+            store_index, // Our opinion of the store index has precedence
             existing_store_index,
-            store_index,
             &merged_store_index);
         if (err)
         {
@@ -308,8 +308,8 @@ static int UpdateStoreIndex(
     }
     struct Longtail_StoreIndex* new_store_index;
     err = Longtail_MergeStoreIndex(
+        added_store_index,  // Added first as it has precedence
         current_store_index,
-        added_store_index,
         &new_store_index);
     Longtail_Free(added_store_index);
     if (err)
@@ -809,8 +809,8 @@ static int FSBlockStore_UpdateStoreIndex(
         {
             struct Longtail_StoreIndex* merged_store_index;
             err = Longtail_MergeStoreIndex(
+                fsblockstore_api->m_StoreIndex, // Our opinion of the store index has precedence
                 store_index,
-                fsblockstore_api->m_StoreIndex,
                 &merged_store_index);
             if (err)
             {
@@ -934,34 +934,24 @@ static int FSBlockStore_RetargetContent(
         return err;
     }
 
-    struct Longtail_ContentIndex* store_content_index;
-    err = Longtail_CreateContentIndexFromStoreIndex(
+    struct Longtail_ContentIndex* existing_content_index;
+    err = Longtail_GetExistingContentIndex(
         store_index,
+        (uint32_t)*content_index->m_ChunkCount,
+        content_index->m_ChunkHashes,
         fsblockstore_api->m_DefaultMaxBlockSize,
         fsblockstore_api->m_DefaultMaxChunksPerBlock,
-        &store_content_index);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromStoreIndex(%p, %p, %p) failed with %d",
-            block_store_api, content_index, async_complete_api,
-            err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
-        Longtail_Free(store_index);
-        return err;
-    }
-    struct Longtail_ContentIndex* retargeted_content_index;
-    err = Longtail_RetargetContent(store_content_index, content_index, &retargeted_content_index);
-    Longtail_Free(store_content_index);
-    Longtail_Free(store_index);
+        &existing_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_RetargetContent(%p, %p, %p) failed with %d",
             block_store_api, content_index, async_complete_api,
             err)
         Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
+        Longtail_Free(store_index);
         return err;
     }
-    async_complete_api->OnComplete(async_complete_api, retargeted_content_index, 0);
+    async_complete_api->OnComplete(async_complete_api, existing_content_index, 0);
     return 0;
 }
 

@@ -766,7 +766,7 @@ TEST(Longtail, Longtail_MergeStoreIndex)
     SAFE_DISPOSE_API(hash_api);
 }
 
-TEST(Longtail, Longtail_RetargetContentIndex)
+TEST(Longtail, Longtail_RetargetContent)
 {
 //    const char* assets_path = "";
     const uint64_t asset_count = 5;
