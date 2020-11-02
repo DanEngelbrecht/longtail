@@ -696,6 +696,75 @@ TEST(Longtail, Longtail_CreateStoreIndexFromBlocks)
     SAFE_DISPOSE_API(hash_api);
 }
 
+TEST(Longtail, Longtail_MergeStoreIndex)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    const uint64_t chunk_indexes[5] = {0, 1, 2, 3, 4};
+    const TLongtail_Hash chunk_hashes[5] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedbeeffeed5a57, 0xfeed5a17deadbeef};
+    const uint32_t chunk_sizes[5] = {4711, 1147, 1137, 3219, 1147};
+    struct Longtail_BlockIndex* block_index1;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        2,
+        &chunk_indexes[0],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index1));
+
+    struct Longtail_BlockIndex* block_index2;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        3,
+        &chunk_indexes[2],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index2));
+
+    struct Longtail_StoreIndex* store_index_local;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        1,
+        (const struct Longtail_BlockIndex** )&block_index1,
+        &store_index_local));
+
+    struct Longtail_StoreIndex* store_index_remote;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        1,
+        (const struct Longtail_BlockIndex** )&block_index2,
+        &store_index_remote));
+
+    struct Longtail_StoreIndex* store_index;
+    ASSERT_EQ(0, Longtail_MergeStoreIndex(
+        store_index_local,
+        store_index_remote,
+        &store_index));
+
+    ASSERT_EQ(hash_api->GetIdentifier(hash_api), *store_index->m_HashIdentifier);
+    ASSERT_EQ(2, *store_index->m_BlockCount);
+    ASSERT_EQ(5, *store_index->m_ChunkCount);
+    ASSERT_EQ(*block_index1->m_BlockHash, store_index->m_BlockHashes[0]);
+    ASSERT_EQ(*block_index1->m_Tag, store_index->m_BlockTags[0]);
+    ASSERT_EQ(0, store_index->m_BlockChunksOffsets[0]);
+    ASSERT_EQ(2, store_index->m_BlockChunkCounts[0]);
+    ASSERT_EQ(*block_index2->m_BlockHash, store_index->m_BlockHashes[1]);
+    ASSERT_EQ(*block_index2->m_Tag, store_index->m_BlockTags[1]);
+    ASSERT_EQ(2, store_index->m_BlockChunksOffsets[1]);
+    ASSERT_EQ(3, store_index->m_BlockChunkCounts[1]);
+    ASSERT_EQ(chunk_hashes[0], store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[1], store_index->m_ChunkHashes[1]);
+    ASSERT_EQ(chunk_hashes[2], store_index->m_ChunkHashes[2]);
+    ASSERT_EQ(chunk_hashes[3], store_index->m_ChunkHashes[3]);
+    ASSERT_EQ(chunk_hashes[4], store_index->m_ChunkHashes[1]);
+
+    Longtail_Free(store_index);
+    Longtail_Free(store_index_remote);
+    Longtail_Free(store_index_local);
+    Longtail_Free(block_index2);
+    Longtail_Free(block_index1);
+}
+
 TEST(Longtail, Longtail_RetargetContentIndex)
 {
 //    const char* assets_path = "";
