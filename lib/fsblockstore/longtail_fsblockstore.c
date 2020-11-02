@@ -297,7 +297,7 @@ static int UpdateStoreIndex(
     struct Longtail_StoreIndex* added_store_index;
     int err = Longtail_CreateStoreIndexFromBlocks(
         (uint32_t)(arrlen(added_block_indexes)),
-        added_block_indexes,
+        (const struct Longtail_BlockIndex** )added_block_indexes,
         &added_store_index);
     if (err)
     {
@@ -546,7 +546,7 @@ static int ReadContent(
 
     err = Longtail_CreateStoreIndexFromBlocks(
         block_count,
-        block_indexes,
+        (const struct Longtail_BlockIndex**)block_indexes,
         out_store_index);
 
     for (uint32_t b = 0; b < block_count; ++b)
