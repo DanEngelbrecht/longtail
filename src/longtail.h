@@ -27,6 +27,7 @@ struct Longtail_VersionIndex;
 struct Longtail_StoredBlock;
 struct Longtail_ContentIndex;
 struct Longtail_VersionDiff;
+struct Longtail_StoreIndex;
 
 ////////////// Longtail_API
 
