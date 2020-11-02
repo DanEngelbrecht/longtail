@@ -951,6 +951,7 @@ static int FSBlockStore_RetargetContent(
         Longtail_Free(store_index);
         return err;
     }
+    Longtail_Free(store_index);
     async_complete_api->OnComplete(async_complete_api, existing_content_index, 0);
     return 0;
 }
