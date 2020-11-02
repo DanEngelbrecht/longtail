@@ -139,11 +139,11 @@ static int CreateFakeContent(Longtail_StorageAPI* storage_api, const char* paren
     return 1;
 }
 
-struct TestAsyncRetargetContentComplete
+struct TestAsyncGetExistingContentComplete
 {
-    struct Longtail_AsyncRetargetContentAPI m_API;
+    struct Longtail_AsyncGetExistingContentAPI m_API;
     HLongtail_Sema m_NotifySema;
-    TestAsyncRetargetContentComplete()
+    TestAsyncGetExistingContentComplete()
         : m_Err(EINVAL)
     {
         m_API.m_API.Dispose = 0;
@@ -151,15 +151,15 @@ struct TestAsyncRetargetContentComplete
         m_ContentIndex = 0;
         Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
     }
-    ~TestAsyncRetargetContentComplete()
+    ~TestAsyncGetExistingContentComplete()
     {
         Longtail_DeleteSema(m_NotifySema);
         Longtail_Free(m_NotifySema);
     }
 
-    static void OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, Longtail_ContentIndex* content_index, int err)
+    static void OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, Longtail_ContentIndex* content_index, int err)
     {
-        struct TestAsyncRetargetContentComplete* cb = (struct TestAsyncRetargetContentComplete*)async_complete_api;
+        struct TestAsyncGetExistingContentComplete* cb = (struct TestAsyncGetExistingContentComplete*)async_complete_api;
         cb->m_Err = err;
         cb->m_ContentIndex = content_index;
         Longtail_PostSema(cb->m_NotifySema, 1);
@@ -174,10 +174,10 @@ struct TestAsyncRetargetContentComplete
     Longtail_ContentIndex* m_ContentIndex;
 };
 
-static struct Longtail_ContentIndex* SyncRetargetContent(Longtail_BlockStoreAPI* block_store, struct Longtail_ContentIndex* version_content_index)
+static struct Longtail_ContentIndex* SyncGetExistingContent(Longtail_BlockStoreAPI* block_store, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes)
 {
-    TestAsyncRetargetContentComplete retarget_content_index_complete;
-    if (block_store->RetargetContent(block_store, version_content_index, &retarget_content_index_complete.m_API))
+    TestAsyncGetExistingContentComplete retarget_content_index_complete;
+    if (block_store->GetExistingContent(block_store, chunk_count, chunk_hashes, &retarget_content_index_complete.m_API))
     {
         return 0;
     }
@@ -766,7 +766,7 @@ TEST(Longtail, Longtail_MergeStoreIndex)
     SAFE_DISPOSE_API(hash_api);
 }
 
-TEST(Longtail, Longtail_RetargetContent)
+TEST(Longtail, Longtail_GetExistingContent)
 {
 //    const char* assets_path = "";
     const uint64_t asset_count = 5;
@@ -818,7 +818,7 @@ TEST(Longtail, Longtail_RetargetContent)
         &other_content_index));
 
     Longtail_ContentIndex* retargetted_content_index;
-    ASSERT_EQ(0, Longtail_RetargetContent(
+    ASSERT_EQ(0, Longtail_GetExistingContent(
         content_index,
         other_content_index,
         &retargetted_content_index));
@@ -2028,7 +2028,7 @@ TEST(Longtail, Longtail_WriteContent)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store_api, cindex);
 
     struct Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -2054,7 +2054,7 @@ TEST(Longtail, Longtail_WriteContent)
     Longtail_Free(block_store_content_index);
     block_store_content_index = 0;
 
-    Longtail_ContentIndex* cindex2 = SyncRetargetContent(block_store_api, cindex);
+    Longtail_ContentIndex* cindex2 = SyncGetExistingContent(block_store_api, cindex);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
     for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
@@ -2637,7 +2637,7 @@ TEST(Longtail, Longtail_VersionDiff)
             MAX_CHUNKS_PER_BLOCK,
             &version_content_index));
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, version_content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store_api, version_content_index);
     ASSERT_NE((struct Longtail_ContentIndex*)0, block_store_content_index);
 
     struct Longtail_ContentIndex* content_index;
@@ -2688,7 +2688,7 @@ TEST(Longtail, Longtail_VersionDiff)
             MAX_CHUNKS_PER_BLOCK,
             &version_content_index));
 
-    content_index = SyncRetargetContent(block_store_api, version_content_index);
+    content_index = SyncGetExistingContent(block_store_api, version_content_index);
     ASSERT_NE((struct Longtail_ContentIndex*)0, content_index);
 
     Longtail_Free(version_content_index);
@@ -2730,7 +2730,7 @@ TEST(Longtail, Longtail_VersionDiff)
             MAX_CHUNKS_PER_BLOCK,
             &version_content_index));
 
-    content_index = SyncRetargetContent(block_store_api, version_content_index);
+    content_index = SyncGetExistingContent(block_store_api, version_content_index);
 
     ASSERT_EQ(0, Longtail_ChangeVersion(
         block_store_api,
@@ -2936,7 +2936,7 @@ TEST(Longtail, Longtail_WriteVersion)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store_api, cindex);
 
     struct Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -3223,9 +3223,9 @@ struct TestGetBlockRequest
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api;
 };
 
-struct TestRetargetContentRequest
+struct TestGetExistingContentRequest
 {
-    struct Longtail_AsyncRetargetContentAPI* async_complete_api;
+    struct Longtail_AsyncGetExistingContentAPI* async_complete_api;
     struct Longtail_ContentIndex* content_index;
 };
 
@@ -3247,7 +3247,7 @@ public:
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
     static int Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
-    static int RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
+    static int GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
     static void CompleteRequest(class TestAsyncBlockStore* block_store);
 private:
     struct Longtail_HashAPI* m_HashAPI;
@@ -3264,8 +3264,8 @@ private:
     struct TestPutBlockRequest* m_PutRequests;
     intptr_t m_GetRequestOffset;
     struct TestGetBlockRequest* m_GetRequests;
-    intptr_t m_RetargetContentRequestOffset;
-    struct TestRetargetContentRequest* m_RetargetContentRequests;
+    intptr_t m_GetExistingContentRequestOffset;
+    struct TestGetExistingContentRequest* m_GetExistingContentRequests;
     struct Longtail_ContentIndex* m_ContentIndex;
     struct TestStoredBlockLookup* m_StoredBlockLookup;
 
@@ -3302,7 +3302,7 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
         TestAsyncBlockStore::PutStoredBlock,
         TestAsyncBlockStore::PreflightGet,
         TestAsyncBlockStore::GetStoredBlock,
-        TestAsyncBlockStore::RetargetContent,
+        TestAsyncBlockStore::GetExistingContent,
         TestAsyncBlockStore::GetStats,
         TestAsyncBlockStore::Flush);
     if (!api)
@@ -3316,8 +3316,8 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
     block_store->m_PutRequests = 0;
     block_store->m_GetRequestOffset = 0;
     block_store->m_GetRequests = 0;
-    block_store->m_RetargetContentRequestOffset = 0;
-    block_store->m_RetargetContentRequests = 0;
+    block_store->m_GetExistingContentRequestOffset = 0;
+    block_store->m_GetExistingContentRequests = 0;
     block_store->m_StoredBlockLookup = 0;
     block_store->m_PendingRequestCount = 0;
     block_store->m_PendingAsyncFlushAPIs = 0;
@@ -3409,7 +3409,7 @@ void TestAsyncBlockStore::Dispose(struct Longtail_API* api)
     hmfree(block_store->m_StoredBlockLookup);
     arrfree(block_store->m_PutRequests);
     arrfree(block_store->m_GetRequests);
-    arrfree(block_store->m_RetargetContentRequests);
+    arrfree(block_store->m_GetExistingContentRequests);
     Longtail_Free(block_store->m_ContentIndex);
 }
 
@@ -3558,19 +3558,19 @@ int TestAsyncBlockStore::Worker(void* context_data)
                 continue;
             }
         }
-        ptrdiff_t retarget_content_request_count = arrlen(block_store->m_RetargetContentRequests);
-        ptrdiff_t retarget_content_request_offset = block_store->m_RetargetContentRequestOffset;
+        ptrdiff_t retarget_content_request_count = arrlen(block_store->m_GetExistingContentRequests);
+        ptrdiff_t retarget_content_request_offset = block_store->m_GetExistingContentRequestOffset;
         if (retarget_content_request_count > retarget_content_request_offset)
         {
-            ptrdiff_t retarget_content_request_index = block_store->m_RetargetContentRequestOffset++;
-            struct TestRetargetContentRequest* retarget_content_request = &block_store->m_RetargetContentRequests[retarget_content_request_index];
-            struct Longtail_AsyncRetargetContentAPI* async_complete_api = retarget_content_request->async_complete_api;
+            ptrdiff_t retarget_content_request_index = block_store->m_GetExistingContentRequestOffset++;
+            struct TestGetExistingContentRequest* retarget_content_request = &block_store->m_GetExistingContentRequests[retarget_content_request_index];
+            struct Longtail_AsyncGetExistingContentAPI* async_complete_api = retarget_content_request->async_complete_api;
             Longtail_UnlockSpinLock(block_store->m_IOLock);
 
             Longtail_LockSpinLock(block_store->m_IndexLock);
 
             struct Longtail_ContentIndex* content_index;
-            int err = Longtail_RetargetContent(block_store->m_ContentIndex, retarget_content_request->content_index, &content_index);
+            int err = Longtail_GetExistingContent(block_store->m_ContentIndex, retarget_content_request->content_index, &content_index);
             Longtail_UnlockSpinLock(block_store->m_IndexLock);
             Longtail_Free(retarget_content_request->content_index);
 
@@ -3636,13 +3636,13 @@ int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_sto
     return 0;
 }
 
-int TestAsyncBlockStore::RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api)
+int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
 
-    struct TestRetargetContentRequest retarget_content_request;
+    struct TestGetExistingContentRequest retarget_content_request;
     retarget_content_request.async_complete_api = async_complete_api;
     void* buffer;
     size_t size;
@@ -3662,7 +3662,7 @@ int TestAsyncBlockStore::RetargetContent(struct Longtail_BlockStoreAPI* block_st
 
     Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, 1);
     Longtail_LockSpinLock(block_store->m_IOLock);
-    arrput(block_store->m_RetargetContentRequests, retarget_content_request);
+    arrput(block_store->m_GetExistingContentRequests, retarget_content_request);
     Longtail_UnlockSpinLock(block_store->m_IOLock);
     Longtail_PostSema(block_store->m_RequestSema, 1);
     return 0;
@@ -3840,7 +3840,7 @@ TEST(Longtail, AsyncBlockStore)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store_api, cindex);
 
     struct Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -4075,7 +4075,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
         &cindex));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex);
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, cindex);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store_api, cindex);
 
     struct Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -4645,7 +4645,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     Longtail_Free(current_version_paths);
     current_version_paths = 0;
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(compressed_cached_block_store, version_content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(compressed_cached_block_store, version_content_index);
 
     struct Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -4689,7 +4689,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         MAX_CHUNKS_PER_BLOCK,
         &content_index));
     
-    block_store_content_index = SyncRetargetContent(compressed_cached_block_store, content_index);
+    block_store_content_index = SyncGetExistingContent(compressed_cached_block_store, content_index);
     Longtail_Free(content_index);
     content_index = 0;
 
@@ -4721,15 +4721,15 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             }
             return api->m_Base->GetStoredBlock(api->m_Base, block_hash, async_complete_api);
         }
-        static int RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api)
+        static int GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_RetargetContent(%p, %p, %p)",
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %p, %p)",
                 block_store_api, content_index, async_complete_api)
             LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
             LONGTAIL_VALIDATE_INPUT(content_index, return EINVAL)
             LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
             struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
-            return api->m_Base->RetargetContent(api->m_Base, content_index, async_complete_api);
+            return api->m_Base->GetExistingContent(api->m_Base, content_index, async_complete_api);
         }
         static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
         {
@@ -4750,7 +4750,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         BlockStoreProxy::PutStoredBlock,
         BlockStoreProxy::PreflightGet,
         BlockStoreProxy::GetStoredBlock,
-        BlockStoreProxy::RetargetContent,
+        BlockStoreProxy::GetExistingContent,
         BlockStoreProxy::GetStats,
         BlockStoreProxy::Flush);
 
@@ -4873,372 +4873,6 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage);
 }
-#if 0
-TEST(Longtail, BlockStoreRetargetContent)
-{
-    static const uint32_t MAX_BLOCK_SIZE = 32u;
-    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
-
-    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
-    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
-    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
-    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
-    Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "local", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-    Longtail_BlockStoreAPI* remote_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "remote", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-    Longtail_BlockStoreAPI* cached_block_store_api = Longtail_CreateCacheBlockStoreAPI(job_api, local_block_store_api, remote_block_store_api);
-
-    const uint32_t ASSET_COUNT = 4u;
-
-    const char* TEST_FILENAMES[] = {
-        "junk1.txt",
-        "junk2.txt",
-        "junk3.txt",
-        "junk4.txt"
-    };
-
-    const char* TEST_STRINGS[] = {
-        "A very long file that should be able to be recreated"
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
-            "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
-            "And in the end it is not the same, it is different, just because why not",
-        "A VERY LONG FILE THAT SHOULD BE ABLE TO BE RECREATED"
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 2 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 3 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 4 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 5 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 6 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 7 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 8 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 9 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 10 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 11 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 12 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 13 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 14 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 15 IN A LONG SEQUENCE OF STUFF."
-            "LOTS OF REPEATING STUFF, SOME GOOD, SOME BAD BUT STILL IT IS REPEATING. THIS IS THE NUMBER 16 IN A LONG SEQUENCE OF STUFF."
-            "AND IN THE END IT IS NOT THE SAME, IT IS DIFFERENT, JUST BECAUSE WHY NOT",
-        "A very long file that should be able to be recreated"
-            "Another big file but this does not contain the data as the one above, however it does start out the same as the other file,right?"
-            "Yet we also repeat this line, this is the first time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the second time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the third time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the fourth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the fifth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the sixth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the eigth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the ninth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the tenth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the elevth time you see this, but it will also show up again and again with only small changes"
-            "Yet we also repeat this line, this is the twelth time you see this, but it will also show up again and again with only small changes"
-            "I realize I'm not very good at writing out the numbering with the 'th stuff at the end. Not much reason to use that before."
-            "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
-            "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
-            "That will look like garbage, will that really be a good idea?"
-            "This is the end tough...",
-        "A VERY LONG FILE THAT SHOULD BE ABLE TO BE RECREATED"
-            "ANOTHER BIG FILE BUT THIS DOES NOT CONTAIN THE DATA AS THE ONE ABOVE, HOWEVER IT DOES START OUT THE SAME AS THE OTHER FILE,RIGHT?"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE FIRST TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE SECOND TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE THIRD TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE FOURTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE FIFTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE SIXTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE EIGTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE NINTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE TENTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE ELEVTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "YET WE ALSO REPEAT THIS LINE, THIS IS THE TWELTH TIME YOU SEE THIS, BUT IT WILL ALSO SHOW UP AGAIN AND AGAIN WITH ONLY SMALL CHANGES"
-            "I REALIZE I'M NOT VERY GOOD AT WRITING OUT THE NUMBERING WITH THE 'TH STUFF AT THE END. NOT MUCH REASON TO USE THAT BEFORE."
-            "0123456789876543213241247632464358091345+2438568736283249873298NTYVNTRNDWOIY78N43CTYERMDR498XRNHSE78TNLS43TC49MJRX3HCNTHV4T"
-            "LIURHE NGVH43OECGCLRI8FHSO7R8AB3GWC409NU3P9T757NVV74OE8NFYIECFFÖMOCSRHF ,JSYVBLSE4TMOXW3UMRC9SEN8TYN8ÖOERUCDLC4IGTCOV8EVRNOCS8LHRF"
-            "THAT WILL LOOK LIKE GARBAGE, WILL THAT REALLY BE A GOOD IDEA?"
-            "THIS IS THE END TOUGH..."
-    };
-
-    const char* root_path_1 = "testdata1";
-    for (uint32_t i = 0; i < ASSET_COUNT / 2; ++i)
-    {
-        const char* file_name = storage_api->ConcatPath(storage_api, root_path_1, TEST_FILENAMES[i]);
-        ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
-        Longtail_StorageAPI_HOpenFile w;
-        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
-        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
-        ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, strlen(TEST_STRINGS[i]), TEST_STRINGS[i]));
-        storage_api->CloseFile(storage_api, w);
-        w = 0;
-        Longtail_Free((void*)file_name);
-    }
-
-    const char* root_path_2 = "testdata2";
-    for (uint32_t i = 0; i < ASSET_COUNT; ++i)
-    {
-        const char* file_name = storage_api->ConcatPath(storage_api, root_path_2, TEST_FILENAMES[i]);
-        ASSERT_EQ(0, EnsureParentPathExists(storage_api, file_name));
-        Longtail_StorageAPI_HOpenFile w;
-        ASSERT_EQ(0, storage_api->OpenWriteFile(storage_api, file_name, 0, &w));
-        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
-        ASSERT_EQ(0, storage_api->Write(storage_api, w, 0, strlen(TEST_STRINGS[i]), TEST_STRINGS[i]));
-        storage_api->CloseFile(storage_api, w);
-        w = 0;
-        Longtail_Free((void*)file_name);
-    }
-
-    const char* root_path_3 = "testdata3";
-
-/*    struct Longtail_ContentIndex* cache_store_index = SyncGetContentIndex(cached_block_store_api);
-    struct Longtail_ContentIndex* remote_store_index = SyncGetContentIndex(remote_block_store_api);
-    struct Longtail_ContentIndex* local_store_index = SyncGetContentIndex(local_block_store_api);*/
-
-    struct Longtail_FileInfos* file_infos_1;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path_1, &file_infos_1));
-
-    struct Longtail_VersionIndex* version_index_1;
-    ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage_api,
-        hash_api,
-        chunker_api,
-        job_api,
-        0,
-        0,
-        0,
-        root_path_1,
-        file_infos_1,
-        0,
-        128,
-        &version_index_1));
-    Longtail_Free(file_infos_1);
-
-    struct Longtail_ContentIndex* version_1_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
-        hash_api,
-        version_index_1,
-        *cache_store_index->m_MaxBlockSize,
-        *cache_store_index->m_MaxChunksPerBlock,
-        &version_1_content_index));
-
-    struct Longtail_ContentIndex* retarget_cache_content_index = SyncRetargetContent(
-        cached_block_store_api,
-        version_1_content_index);
-    ASSERT_EQ(0, *retarget_cache_content_index->m_BlockCount);
-    ASSERT_EQ(0, *retarget_cache_content_index->m_ChunkCount);
-
-    // Fill remote
-    ASSERT_EQ(0, Longtail_WriteContent(
-        storage_api,
-        remote_block_store_api,
-        hash_api,
-        job_api,
-        0,
-        0,
-        0,
-        remote_store_index,
-        version_1_content_index,
-        version_index_1,
-        root_path_1));
-
-    Longtail_Free(retarget_cache_content_index);
-    retarget_cache_content_index = SyncRetargetContent(cached_block_store_api, version_1_content_index);
-    ASSERT_EQ(*version_1_content_index->m_BlockCount, *retarget_cache_content_index->m_BlockCount);
-    ASSERT_EQ(*version_1_content_index->m_ChunkCount, *retarget_cache_content_index->m_ChunkCount);
-
-    struct Longtail_FileInfos* file_infos_2;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path_2, &file_infos_2));
-
-    struct Longtail_VersionIndex* version_index_2;
-    ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage_api,
-        hash_api,
-        chunker_api,
-        job_api,
-        0,
-        0,
-        0,
-        root_path_2,
-        file_infos_2,
-        0,
-        *version_index_1->m_TargetChunkSize,
-        &version_index_2));
-    Longtail_Free(file_infos_2);
-
-    struct Longtail_ContentIndex* version_2_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
-        hash_api,
-        version_index_2,
-        *cache_store_index->m_MaxBlockSize * 16,
-        *cache_store_index->m_MaxChunksPerBlock * 8,
-        &version_2_content_index));
-    ASSERT_NE(*retarget_cache_content_index->m_BlockCount, *version_2_content_index->m_BlockCount);
-    ASSERT_LT(*retarget_cache_content_index->m_ChunkCount, *version_2_content_index->m_ChunkCount);
-
-    Longtail_Free(remote_store_index);
-    remote_store_index = SyncRetargetContent(remote_block_store_api, version_2_content_index);
-    // Fill remote
-    ASSERT_EQ(0, Longtail_WriteContent(
-        storage_api,
-        remote_block_store_api,
-        hash_api,
-        job_api,
-        0,
-        0,
-        0,
-        remote_store_index,
-        version_2_content_index,
-        version_index_2,
-        root_path_2));
-    Longtail_Free(remote_store_index);
-    remote_store_index = 0;
-
-    struct Longtail_FileInfos* file_infos_3;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path_3, &file_infos_3));
-
-    struct Longtail_VersionIndex* version_index_3;
-    ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage_api,
-        hash_api,
-        chunker_api,
-        job_api,
-        0,
-        0,
-        0,
-        root_path_3,
-        file_infos_3,
-        0,
-        *version_index_1->m_TargetChunkSize,
-        &version_index_3));
-    Longtail_Free(file_infos_3);
-
-    struct Longtail_VersionDiff* version_diff;
-    ASSERT_EQ(0, Longtail_CreateVersionDiff(hash_api, version_index_3, version_index_1, &version_diff));
-
-    // We build a content index for our target version without having access to the remote index
-    struct Longtail_ContentIndex* version_1_update_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
-        hash_api,
-        version_index_1,
-        48, // Can be arbitrary - we use blockstoreapi->RetargetContent to make it fall in line
-        7, // Can be arbitrary - we use blockstoreapi->RetargetContent to make it fall in line
-        &version_1_update_content_index));
-    struct Longtail_ContentIndex* update_content_index_3 = SyncRetargetContent(cached_block_store_api, version_1_update_content_index);
-
-/*    Longtail_Free(local_store_index);
-    local_store_index = SyncGetContentIndex(local_block_store_api);
-    struct Longtail_ContentIndex* cache_missing_content_index;
-    ASSERT_EQ(0, Longtail_GetMissingContent(hash_api, local_store_index, update_content_index_3, &cache_missing_content_index));
-
-    struct Longtail_ContentIndex* missing_update_content_index_3 = SyncRetargetContent(cached_block_store_api, cache_missing_content_index);
-    // Everything is missing so we should get all we got from the retarget operation
-    ASSERT_EQ(*update_content_index_3->m_BlockCount, *cache_missing_content_index->m_BlockCount);
-    ASSERT_EQ(*update_content_index_3->m_ChunkCount, *cache_missing_content_index->m_ChunkCount);*/
-
-    ASSERT_EQ(0, Longtail_ChangeVersion(
-        cached_block_store_api,
-        storage_api,
-        hash_api,
-        job_api,
-        0,
-        0,
-        0,
-        update_content_index_3,
-        version_index_3,
-        version_index_1,
-        version_diff,
-        root_path_3,
-        0));
-
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path_3, &file_infos_3));
-    Longtail_Free(version_index_3);
-    ASSERT_EQ(0, Longtail_CreateVersionIndex(
-        storage_api,
-        hash_api,
-        chunker_api,
-        job_api,
-        0,
-        0,
-        0,
-        root_path_3,
-        file_infos_3,
-        0,
-        *version_index_2->m_TargetChunkSize,
-        &version_index_3));
-    Longtail_Free(file_infos_3);
-
-    Longtail_Free(version_diff);
-    ASSERT_EQ(0, Longtail_CreateVersionDiff(hash_api, version_index_3, version_index_1, &version_diff));
-
-    // We build a content index for our target version without having access to the remote index
-    struct Longtail_ContentIndex* version_2_update_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndex(
-        hash_api,
-        version_index_2,
-        42, // Can be arbitrary - we use blockstoreapi->RetargetContent to make it fall in line
-        9, // Can be arbitrary - we use blockstoreapi->RetargetContent to make it fall in line
-        &version_2_update_content_index));
-    Longtail_Free(update_content_index_3);
-    update_content_index_3 = SyncRetargetContent(cached_block_store_api, version_2_update_content_index);
-
-/*    Longtail_Free(local_store_index);
-    local_store_index = SyncGetContentIndex(local_block_store_api);
-    Longtail_Free(cache_missing_content_index);
-    ASSERT_EQ(0, Longtail_GetMissingContent(hash_api, local_store_index, update_content_index_3, &cache_missing_content_index));
-
-    Longtail_Free(missing_update_content_index_3);*/
-    missing_update_content_index_3 = SyncRetargetContent(cached_block_store_api, cache_missing_content_index);
-    ASSERT_GT(*update_content_index_3->m_BlockCount, *cache_missing_content_index->m_BlockCount);
-    ASSERT_GT(*update_content_index_3->m_ChunkCount, *cache_missing_content_index->m_ChunkCount);
-    Longtail_Free(cache_missing_content_index);
-    Longtail_Free(missing_update_content_index_3);
-
-    ASSERT_EQ(0, Longtail_ChangeVersion(
-        cached_block_store_api,
-        storage_api,
-        hash_api,
-        job_api,
-        0,
-        0,
-        0,
-        update_content_index_3,
-        version_index_3,
-        version_index_2,
-        version_diff,
-        root_path_3,
-        0));
-    Longtail_Free(version_index_3);
-    Longtail_Free(update_content_index_3);
-
-    Longtail_Free(version_2_update_content_index);
-    Longtail_Free(version_1_update_content_index);
-    Longtail_Free(version_diff);
-    Longtail_Free(version_index_2);
-    Longtail_Free(version_2_content_index);
-    Longtail_Free(retarget_cache_content_index);
-    Longtail_Free(version_1_content_index);
-    Longtail_Free(version_index_1);
-//    Longtail_Free(local_store_index);
-//    Longtail_Free(remote_store_index);
-//    Longtail_Free(cache_store_index);
-    SAFE_DISPOSE_API(cached_block_store_api);
-    SAFE_DISPOSE_API(remote_block_store_api);
-    SAFE_DISPOSE_API(local_block_store_api);
-    SAFE_DISPOSE_API(job_api);
-    SAFE_DISPOSE_API(chunker_api);
-    SAFE_DISPOSE_API(hash_api);
-    SAFE_DISPOSE_API(storage_api);
-}
-#endif
 
 static char* GenerateRandomPath(char *str, size_t size)
 {
@@ -5375,7 +5009,7 @@ TEST(Longtail, VersionLocalContent)
         9,
         &version1_content_index));
 
-    struct Longtail_ContentIndex* version1_block_store_content_index = SyncRetargetContent(
+    struct Longtail_ContentIndex* version1_block_store_content_index = SyncGetExistingContent(
         block_store,
         version1_content_index);
 
@@ -5444,7 +5078,7 @@ TEST(Longtail, VersionLocalContent)
         7,
         &version2_content_index));
 
-    struct Longtail_ContentIndex* version2_block_store_content_index = SyncRetargetContent(
+    struct Longtail_ContentIndex* version2_block_store_content_index = SyncGetExistingContent(
         block_store,
         version2_content_index);
 
@@ -5685,7 +5319,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
             MAX_CHUNKS_PER_BLOCK,
             &version_content_index));
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(remote_compressed_block_store_api, version_content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(remote_compressed_block_store_api, version_content_index);
 
     struct Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -5754,7 +5388,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
         MAX_CHUNKS_PER_BLOCK,
         &content_index));
 
-    block_store_content_index = SyncRetargetContent(remote_compressed_block_store_api, content_index);
+    block_store_content_index = SyncGetExistingContent(remote_compressed_block_store_api, content_index);
     Longtail_Free(content_index);
 
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_OFF);
@@ -5844,7 +5478,7 @@ TEST(Longtail, TestLongtailBlockFS)
             MAX_CHUNKS_PER_BLOCK / 2,
             &version_content_index));
 
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store, version_content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store, version_content_index);
 
     struct Longtail_ContentIndex* content_index;
     ASSERT_EQ(0, Longtail_CreateMissingContent(
@@ -5870,7 +5504,7 @@ TEST(Longtail, TestLongtailBlockFS)
     content_index = 0;
     Longtail_Free(block_store_content_index);
 
-    block_store_content_index = SyncRetargetContent(block_store, version_content_index);
+    block_store_content_index = SyncGetExistingContent(block_store, version_content_index);
 
 //    printf("\nReading...\n");
 
@@ -6035,7 +5669,7 @@ static int FSBlockStoreSyncWriteContentWorker(
     uint32_t MAX_CHUNKS_PER_BLOCK)
 {
     Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(job_api, mem_storage, "store", MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK, 0);
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store, version_content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store, version_content_index);
     if (!block_store_content_index)
     {
         return EINVAL;
@@ -6301,7 +5935,7 @@ static int UploadFolder(
     {
         return err;
     }
-    struct Longtail_ContentIndex* block_store_content_index = SyncRetargetContent(block_store_api, version_content_index);
+    struct Longtail_ContentIndex* block_store_content_index = SyncGetExistingContent(block_store_api, version_content_index);
 
     struct Longtail_ContentIndex* content_index;
     err = Longtail_CreateMissingContent(
@@ -6402,7 +6036,7 @@ static int DownloadFolder(
         return err;
     }
 
-    struct Longtail_ContentIndex* content_index = SyncRetargetContent(block_store_api, version_content_index);
+    struct Longtail_ContentIndex* content_index = SyncGetExistingContent(block_store_api, version_content_index);
     if (!content_index)
     {
         return EINVAL;
@@ -6539,7 +6173,7 @@ static int CaptureBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block
     return api->m_BackingStore->PutStoredBlock(api->m_BackingStore, stored_block, async_complete_api);
 }
 
-static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index)
+static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes)
 {
     struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
     if (api->m_PreflightContentIndex)
@@ -6600,10 +6234,10 @@ static int CaptureBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block
     return EINVAL;
 }
 
-static int CaptureBlockStore_RetargetContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api)
+static int CaptureBlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index, struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
     struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
-    return api->m_BackingStore->RetargetContent(api->m_BackingStore, content_index, async_complete_api);
+    return api->m_BackingStore->GetExistingContent(api->m_BackingStore, content_index, async_complete_api);
 }
 
 static int CaptureBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
@@ -6625,7 +6259,7 @@ struct Longtail_BlockStoreAPI* CaptureBlockStoreInit(struct CaptureBlockStore* s
         CaptureBlockStore_PutStoredBlock,
         CaptureBlockStore_PreflightGet,
         CaptureBlockStore_GetStoredBlock,
-        CaptureBlockStore_RetargetContent,
+        CaptureBlockStore_GetExistingContent,
         CaptureBlockStore_GetStats,
         CaptureBlockStore_Flush);
     store->m_BackingStore = backing_store;
