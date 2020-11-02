@@ -7731,12 +7731,8 @@ LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromBlocks(
         store_index->m_BlockTags[b] = *block_index->m_Tag;
         store_index->m_BlockChunkCounts[b] = block_chunk_count;
         store_index->m_BlockChunksOffsets[b] = c;
-        for (uint32_t block_chunk = 0; block_chunk < block_chunk_count; ++block_chunk)
-        {
-            uint32_t stored_chunk_index = c + b;
-            store_index->m_ChunkHashes[stored_chunk_index] = block_index->m_ChunkHashes[block_chunk];
-            store_index->m_ChunkSizes[stored_chunk_index] = block_index->m_ChunkSizes[block_chunk];
-        }
+        memcpy(&store_index->m_ChunkHashes[c], block_index->m_ChunkHashes, sizeof(TLongtail_Hash) * block_chunk_count);
+        memcpy(&store_index->m_ChunkSizes[c], block_index->m_ChunkSizes, sizeof(uint32_t) * block_chunk_count);
         c += block_chunk_count;
     }
 
@@ -7755,10 +7751,10 @@ int Longtail_MakeBlockIndex(
     LONGTAIL_VALIDATE_INPUT(block_index < (*store_index->m_BlockCount), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(store_index != 0, return EINVAL)
     uint32_t block_chunks_offset = store_index->m_BlockChunksOffsets[block_index];
-    *out_block_index->m_BlockHash = store_index->m_BlockHashes[block_index];
-    *out_block_index->m_HashIdentifier = *store_index->m_HashIdentifier;
-    *out_block_index->m_ChunkCount = store_index->m_BlockChunkCounts[block_chunks_offset];
-    *out_block_index->m_Tag = store_index->m_BlockTags[block_index];
+    out_block_index->m_BlockHash = &store_index->m_BlockHashes[block_index];
+    out_block_index->m_HashIdentifier = store_index->m_HashIdentifier;
+    out_block_index->m_ChunkCount = &store_index->m_BlockChunkCounts[block_index];
+    out_block_index->m_Tag = &store_index->m_BlockTags[block_index];
     out_block_index->m_ChunkHashes = &store_index->m_ChunkHashes[block_chunks_offset];
     out_block_index->m_ChunkSizes = &store_index->m_ChunkSizes[block_chunks_offset];
     return 0;
