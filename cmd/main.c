@@ -842,7 +842,7 @@ int DownSync(
     struct Longtail_ContentIndex* required_version_content_index;
     err = Longtail_CreateContentIndexFromDiff(
         hash_api,
-        target_version_index,
+        source_version_index,
         version_diff,
         target_block_size,
         max_chunks_per_block,
