@@ -839,45 +839,45 @@ int DownSync(
         return 0;
     }
 
+    uint64_t required_chunk_count;
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*source_version_index->m_ChunkCount));
+    err = Longtail_GetRequiredChunkHashes(
+            source_version_index,
+            version_diff,
+            &required_chunk_count,
+            required_chunk_hashes);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create get required chunks for source `%s`, %d", source_path, err);
+        Longtail_Free(required_chunk_hashes);
+        Longtail_Free(version_diff);
+        Longtail_Free(target_version_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(store_block_cachestore_api);
+        SAFE_DISPOSE_API(store_block_localstore_api);
+        SAFE_DISPOSE_API(store_block_remotestore_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(hash_registry);
+        SAFE_DISPOSE_API(job_api);
+        Longtail_Free((void*)storage_path);
+        return err;
+    }
+
     struct Longtail_ContentIndex* required_version_content_index;
-    err = Longtail_CreateContentIndexFromDiff(
-        hash_api,
-        source_version_index,
-        version_diff,
-        target_block_size,
-        max_chunks_per_block,
+    err = SyncGetExistingContent(
+        store_block_store_api,
+        required_chunk_count,
+        required_chunk_hashes,
         &required_version_content_index);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for source `%s`, %d", source_path, err);
-        Longtail_Free(version_diff);
-        Longtail_Free(target_version_index);
-        Longtail_Free(source_version_index);
-        SAFE_DISPOSE_API(chunker_api);
-        SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(store_block_cachestore_api);
-        SAFE_DISPOSE_API(store_block_localstore_api);
-        SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(hash_registry);
-        SAFE_DISPOSE_API(job_api);
-        Longtail_Free((void*)storage_path);
-        return err;
-    }
-
-    struct Longtail_ContentIndex* retargetted_version_content_index;
-    err = SyncGetExistingContent(
-        store_block_store_api,
-        *source_version_index->m_ChunkCount,
-        source_version_index->m_ChunkHashes,
-        &retargetted_version_content_index);
-    if (err)
-    {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to retarget the content index to remote store `%s`, %d", storage_uri_raw, err);
-        Longtail_Free(required_version_content_index);
+        Longtail_Free(required_chunk_hashes);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
@@ -896,9 +896,7 @@ int DownSync(
         return err;
     }
 
-    Longtail_Free(required_version_content_index);
-    required_version_content_index = retargetted_version_content_index;
-    retargetted_version_content_index = 0;
+    Longtail_Free(required_chunk_hashes);
 
     {
         struct Progress change_version_progress;

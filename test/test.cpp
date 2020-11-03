@@ -2648,20 +2648,19 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(6u, *version_diff->m_ModifiedContentCount);
     ASSERT_EQ(1u, *version_diff->m_ModifiedPermissionsCount);
 
-    Longtail_ContentIndex* version_content_index;
-    ASSERT_EQ(0, Longtail_CreateContentIndexFromDiff(
-            hash_api,
+    uint64_t required_chunk_count;
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*new_vindex->m_ChunkCount));
+    ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
             new_vindex,
             version_diff,
-            MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK,
-            &version_content_index));
+            &required_chunk_count,
+            required_chunk_hashes));
 
-    content_index = SyncGetExistingContent(block_store_api, *version_content_index->m_ChunkCount, version_content_index->m_ChunkHashes);
+    content_index = SyncGetExistingContent(block_store_api, required_chunk_count, required_chunk_hashes);
     ASSERT_NE((struct Longtail_ContentIndex*)0, content_index);
 
-    Longtail_Free(version_content_index);
-    version_content_index = 0;
+    Longtail_Free(required_chunk_hashes);
+    required_chunk_hashes = 0;
 
     ASSERT_EQ(0, Longtail_ChangeVersion(
         block_store_api,
@@ -2691,15 +2690,15 @@ TEST(Longtail, Longtail_VersionDiff)
         &version_diff));
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
-    ASSERT_EQ(0, Longtail_CreateContentIndexFromDiff(
-            hash_api,
-            old_vindex,
+    required_chunk_count = 0;
+    required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*new_vindex->m_ChunkCount));
+    ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
+            new_vindex,
             version_diff,
-            MAX_BLOCK_SIZE,
-            MAX_CHUNKS_PER_BLOCK,
-            &version_content_index));
+            &required_chunk_count,
+            required_chunk_hashes));
 
-    content_index = SyncGetExistingContent(block_store_api, *version_content_index->m_ChunkCount, version_content_index->m_ChunkHashes);
+    content_index = SyncGetExistingContent(block_store_api, required_chunk_count, required_chunk_hashes);
 
     ASSERT_EQ(0, Longtail_ChangeVersion(
         block_store_api,
@@ -2716,7 +2715,7 @@ TEST(Longtail, Longtail_VersionDiff)
         "old",
         1));
 
-    Longtail_Free(version_content_index);
+    Longtail_Free(required_chunk_hashes);
     Longtail_Free(content_index);
     Longtail_Free(version_diff);
 
@@ -4627,17 +4626,17 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         &version_diff));
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
-    ASSERT_EQ(0, Longtail_CreateContentIndexFromDiff(
-        hash_api,
-        vindex,
-        version_diff,
-        MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK,
-        &content_index));
-    
-    block_store_content_index = SyncGetExistingContent(compressed_cached_block_store, *content_index->m_ChunkCount, content_index->m_ChunkHashes);
-    Longtail_Free(content_index);
-    content_index = 0;
+    uint64_t required_chunk_count;
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*vindex->m_ChunkCount));
+    ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
+            vindex,
+            version_diff,
+            &required_chunk_count,
+            required_chunk_hashes));
+
+    block_store_content_index = SyncGetExistingContent(compressed_cached_block_store, required_chunk_count, required_chunk_hashes);
+    Longtail_Free(required_chunk_hashes);
+    required_chunk_hashes = 0;
 
     struct Longtail_CancelAPI* cancel_api = Longtail_CreateAtomicCancelAPI();
     ASSERT_NE((struct Longtail_CancelAPI*)0, cancel_api);
@@ -5328,16 +5327,16 @@ TEST(Longtail, TestChangeVersionDiskFull)
         &version_diff));
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
-    ASSERT_EQ(0, Longtail_CreateContentIndexFromDiff(
-        hash_api,
-        vindex,
-        version_diff,
-        MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK,
-        &content_index));
+    uint64_t required_chunk_count;
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*vindex->m_ChunkCount));
+    ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
+            vindex,
+            version_diff,
+            &required_chunk_count,
+            required_chunk_hashes));
 
-    block_store_content_index = SyncGetExistingContent(remote_compressed_block_store_api, *content_index->m_ChunkCount, content_index->m_ChunkHashes);
-    Longtail_Free(content_index);
+    block_store_content_index = SyncGetExistingContent(remote_compressed_block_store_api, required_chunk_count, required_chunk_hashes);
+    Longtail_Free(required_chunk_hashes);
 
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_OFF);
     failable_local_storage_api->m_PassCount = 3;
@@ -5958,25 +5957,24 @@ static int DownloadFolder(
         return err;
     }
 
-    struct Longtail_ContentIndex* diff_content_index;
-    err = Longtail_CreateContentIndexFromDiff(
-        hash_api,
-        version_index,
-        version_diff,
-        MAX_BLOCK_SIZE,
-        MAX_CHUNKS_PER_BLOCK,
-        &diff_content_index);
+    uint64_t required_chunk_count;
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*version_index->m_ChunkCount));
+    err = Longtail_GetRequiredChunkHashes(
+            version_index,
+            version_diff,
+            &required_chunk_count,
+            required_chunk_hashes);
     if (err)
     {
         return err;
     }
 
-    struct Longtail_ContentIndex* content_index = SyncGetExistingContent(block_store_api, *diff_content_index->m_ChunkCount, diff_content_index->m_ChunkHashes);
+    struct Longtail_ContentIndex* content_index = SyncGetExistingContent(block_store_api, required_chunk_count, required_chunk_hashes);
     if (!content_index)
     {
         return EINVAL;
     }
-    Longtail_Free(diff_content_index);
+    Longtail_Free(required_chunk_hashes);
 
     err = Longtail_ChangeVersion(block_store_api, storage_api, hash_api, job_api, 0, 0, 0, content_index, current_version_index, version_index, version_diff, target_path, 1);
     if (err)

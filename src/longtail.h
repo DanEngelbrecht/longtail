@@ -1000,27 +1000,21 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndex(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
-/*! @brief Create a struct Longtail_ContentIndex from an struct Longtail_VersionIndex.
+/*! @brief Get the chunks required to go to @p version_index by applying @p version_diff.
  *
- * Creates a struct Longtail_ContentIndex from a struct Longtail_VersionIndex by bundling
- * chunks into blocks according to @p max_block_size and @p max_chunks_per_block.
- * It only includes data that is listed in the version_diff's modified and target added assets.
+ * Gets all the chunks required to apply @p version_diff which is a subset of all chunks in @p version_index
  *
- * @param[in] hash_api              Hash API identifier
- * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex (the version we will have after applying version_diff)
- * @param[in] version_diff          Pointer to an initialized struct Longtail_VersionDiff
- * @param[in] max_block_size        Max block size
- * @param[in] max_chunks_per_block  Max chunks per block
- * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
+ * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex - the version we will have after applying @p version_diff
+ * @param[in] version_diff          Pointer to an initialized struct Longtail_VersionDiff - the version diff to be applied to get to @p version_index
+ * @param[out] out_chunk_count      Pointer to a uint64_t which will be set to the number of chunks required
+ * @param[out] out_chunk_hashes     Pointer to a pre-allocated array where chunk indexes with be written - will add at most *version_index->m_ChunkCount chunks to array
  * @return                          Return code (errno style), zero on success
  */
-LONGTAIL_EXPORT int Longtail_CreateContentIndexFromDiff(
-    struct Longtail_HashAPI* hash_api,
-    struct Longtail_VersionIndex* version_index,
-    struct Longtail_VersionDiff* version_diff,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
-    struct Longtail_ContentIndex** out_content_index);
+LONGTAIL_EXPORT int Longtail_GetRequiredChunkHashes(
+    const struct Longtail_VersionIndex* version_index,
+    const struct Longtail_VersionDiff* version_diff,
+    uint64_t* out_chunk_count,
+    TLongtail_Hash* out_chunk_hashes);
 
 /*! @brief Create a struct Longtail_ContentIndex from discreet data.
  *
