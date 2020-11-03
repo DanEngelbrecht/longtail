@@ -839,14 +839,14 @@ int DownSync(
         return 0;
     }
 
-    struct Longtail_ContentIndex* source_version_content_index;
-/*    err = Longtail_CreateContentIndexFromDiff(
+    struct Longtail_ContentIndex* required_version_content_index;
+    err = Longtail_CreateContentIndexFromDiff(
         hash_api,
-        source_version_index,
+        target_version_index,
         version_diff,
         target_block_size,
         max_chunks_per_block,
-        &source_version_content_index);
+        &required_version_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content index for source `%s`, %d", source_path, err);
@@ -868,16 +868,16 @@ int DownSync(
         return err;
     }
 
-    struct Longtail_ContentIndex* retargetted_version_content_index;*/
+    struct Longtail_ContentIndex* retargetted_version_content_index;
     err = SyncGetExistingContent(
         store_block_store_api,
         *source_version_index->m_ChunkCount,
         source_version_index->m_ChunkHashes,
-        &source_version_content_index);
+        &retargetted_version_content_index);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to retarget the content index to remote store `%s`, %d", storage_uri_raw, err);
-//        Longtail_Free(source_version_content_index);
+        Longtail_Free(required_version_content_index);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
@@ -896,8 +896,9 @@ int DownSync(
         return err;
     }
 
-//    Longtail_Free(source_version_content_index);
-//    source_version_content_index = retargetted_version_content_index;
+    Longtail_Free(required_version_content_index);
+    required_version_content_index = retargetted_version_content_index;
+    retargetted_version_content_index = 0;
 
     {
         struct Progress change_version_progress;
@@ -910,7 +911,7 @@ int DownSync(
             &change_version_progress.m_API,
             0,
             0,
-            source_version_content_index,
+            required_version_content_index,
             target_version_index,
             source_version_index,
             version_diff,
@@ -923,7 +924,7 @@ int DownSync(
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
-        Longtail_Free(source_version_content_index);
+        Longtail_Free(required_version_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -942,7 +943,7 @@ int DownSync(
 
     Longtail_Free(version_diff);
     Longtail_Free(target_version_index);
-    Longtail_Free(source_version_content_index);
+    Longtail_Free(required_version_content_index);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(store_block_store_api);
