@@ -223,22 +223,27 @@ static int LRUBlockStore_PutStoredBlock(
     return err;
 }
 
-static int LRUBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, const struct Longtail_ContentIndex* content_index)
+static int LRUBlockStore_PreflightGet(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint64_t chunk_count,
+    const TLongtail_Hash* chunk_hashes)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_PreflightGet(%p, %p)", block_store_api, content_index)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_PreflightGet(%p, %" PRIu64 ", %p)",
+        block_store_api, chunk_count, chunk_hashes)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(content_index, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
 
     int err = api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
-        content_index);
+        chunk_count,
+        chunk_hashes);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_PreflightGet(%p, %p) failed with %d",
-            block_store_api, content_index,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_PreflightGet(%p, %" PRIu64 ", %p) failed with %d",
+            block_store_api, chunk_count, chunk_hashes,
             err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
     }
@@ -410,29 +415,31 @@ static int LRUBlockStore_GetStoredBlock(
     return 0;
 }
 
-static int LRUBlockStore_RetargetContent(
+static int LRUBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
-    const struct Longtail_ContentIndex* content_index,
-    struct Longtail_AsyncRetargetContentAPI* async_complete_api)
+    uint64_t chunk_count,
+    const TLongtail_Hash* chunk_hashes,
+    struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_RetargetContent(%p, %p, %p)",
-        block_store_api, content_index, async_complete_api)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
+        block_store_api, chunk_count, chunk_hashes, async_complete_api)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(content_index, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_Count], 1);
-    int err = api->m_BackingBlockStore->RetargetContent(
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
+    int err = api->m_BackingBlockStore->GetExistingContent(
         api->m_BackingBlockStore,
-        content_index,
+        chunk_count,
+        chunk_hashes,
         async_complete_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_RetargetContent(%p, %p, %p) failed with %d",
-            block_store_api, content_index, async_complete_api,
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p) failed with %d",
+            block_store_api, chunk_count, chunk_hashes, async_complete_api,
             err)
-        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount], 1);
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         return err;
     }
     return 0;
@@ -518,7 +525,7 @@ static int LRUBlockStore_Init(
         LRUBlockStore_PutStoredBlock,
         LRUBlockStore_PreflightGet,
         LRUBlockStore_GetStoredBlock,
-        LRUBlockStore_RetargetContent,
+        LRUBlockStore_GetExistingContent,
         LRUBlockStore_GetStats,
         LRUBlockStore_Flush);
     if (!block_store_api)
