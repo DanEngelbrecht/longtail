@@ -1007,7 +1007,7 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndex(
  * It only includes data that is listed in the version_diff's modified and target added assets.
  *
  * @param[in] hash_api              Hash API identifier
- * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex
+ * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex (the version we will have after applying version_diff)
  * @param[in] version_diff          Pointer to an initialized struct Longtail_VersionDiff
  * @param[in] max_block_size        Max block size
  * @param[in] max_chunks_per_block  Max chunks per block
