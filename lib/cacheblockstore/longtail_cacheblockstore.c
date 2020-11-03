@@ -593,7 +593,7 @@ struct RetargetContext_RetargetToLocal_Context
     struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
     struct Longtail_AsyncGetExistingContentAPI* m_RetargetAsyncCompleteAPI;
     uint64_t m_ChunkCount;
-    TLongtail_Hash* m_hunkHashes;
+    TLongtail_Hash* m_ChunkHashes;
 };
 
 static void RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
@@ -611,7 +611,7 @@ static void RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete(struct
     err = Longtail_GetMissingChunks(
         content_index,
         retarget_context->m_ChunkCount,
-        retarget_context->m_hunkHashes,
+        retarget_context->m_ChunkHashes,
         &retarget_remote_context->m_ChunkCount,
         retarget_remote_context->m_ChunkHashes);
     if (err)
@@ -671,8 +671,8 @@ static int CacheBlockStore_GetExistingContent(
     retarget_local_context->m_CacheBlockStoreAPI = api;
     retarget_local_context->m_RetargetAsyncCompleteAPI = async_complete_api;
     retarget_local_context->m_ChunkCount = chunk_count;
-    retarget_local_context->m_hunkHashes = (TLongtail_Hash*)&retarget_local_context[1];
-    memcpy(retarget_local_context->m_hunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    retarget_local_context->m_ChunkHashes = (TLongtail_Hash*)&retarget_local_context[1];
+    memcpy(retarget_local_context->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
 
     int err = api->m_LocalBlockStoreAPI->GetExistingContent(
         api->m_LocalBlockStoreAPI,
