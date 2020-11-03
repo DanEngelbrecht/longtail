@@ -123,6 +123,21 @@ jobs:
         body: |
           # Changes in this Release
           - **API CHANGE** `Longtail_ContentIndex_BlockHashes` now returns `const TLongtail_Hash*`
+          - **API CHANGE** RetargetContent related functions have been replaced with GetMissingContent functions which only works with chunk hashes
+            - `Longtail_AsyncRetargetContentAPI` -> `Longtail_AsyncGetExistingContentAPI`
+            - `Longtail_AsyncRetargetContent_OnCompleteFunc` -> `Longtail_AsyncGetExistingContent_OnCompleteFunc`
+            - `Longtail_GetAsyncRetargetContentAPISize` -> `Longtail_GetAsyncGetExistingContentAPISize`
+            - `Longtail_MakeAsyncRetargetContentAPI` -> `Longtail_MakeAsyncGetExistingContentAPI`
+            - `Longtail_AsyncRetargetContent_OnComplete` -> `Longtail_AsyncGetExistingContent_OnComplete`
+            - `Longtail_BlockStoreAPI_StatU64_RetargetContent_Count` -> `Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count`
+            - `Longtail_BlockStoreAPI_StatU64_RetargetContent_RetryCount` -> `Longtail_BlockStoreAPI_StatU64_GetExistingContent_RetryCount`
+            - `Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount` -> `Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount`
+            - `Longtail_BlockStoreAPI::RetargetContent` -> `Longtail_BlockStoreAPI::GetExistingContent`
+            - `Longtail_BlockStore_RetargetContent` -> `Longtail_BlockStore_GetExistingContent`
+          - **API CHANGE** `Longtail_BlockStore_PreflightGetFunc` now takes number of chunks and array of chunk hashes instead of content index
+          - **API CHANGE** `Longtail_CreateContentIndexFromDiff` has been removed and replaced with `Longtail_GetRequiredChunkHashes`
+          - **API CHANGE** `Longtail_GetMissingContent` has been removed and replaced with `Longtail_GetMissingChunks`
+          - **API CHANGE** `Longtail_RetargetContent` has been removed
           - **ADDED** `struct Longtail_StoreIndex` contaning all info in a set of block indexes - chunk duplicates allowed. Accessor functions
           - **ADDED** Functions for `struct Longtail_StoreIndex`
             - `Longtail_GetStoreIndexSize`
