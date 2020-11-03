@@ -6133,7 +6133,7 @@ LONGTAIL_EXPORT int Longtail_GetMissingChunks(
         {
             continue;
         }
-        out_missing_chunk_hashes[missing_chunk_count++] = c;
+        out_missing_chunk_hashes[missing_chunk_count++] = chunk_hash;
     }
     Longtail_Free(chunk_to_reference_block_index_lookup);
     *out_chunk_count = missing_chunk_count;
@@ -6299,8 +6299,8 @@ int Longtail_GetExistingContentIndex(
 
     size_t tmp_mem_size = chunk_to_index_lookup_size +
         block_to_index_lookup_size +
-        found_store_block_hashes_size +
         chunk_to_store_index_lookup_size +
+        found_store_block_hashes_size +
         found_store_chunk_per_block_size +
         found_store_chunk_hashes_size;
 
