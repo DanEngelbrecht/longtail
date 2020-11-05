@@ -298,7 +298,10 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
     Longtail_Free(retarget_context);
 }
 
-static int CacheBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes)
+static int CacheBlockStore_PreflightGet(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint64_t chunk_count,
+    const TLongtail_Hash* chunk_hashes)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_PreflightGet(%p, %" PRIu64 ", %p)", block_store_api, chunk_count, chunk_hashes)
     LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
@@ -319,6 +322,7 @@ static int CacheBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_sto
         api->m_LocalBlockStoreAPI,
         chunk_count,
         chunk_hashes,
+        0,
         &context->m_AsyncCompleteAPI);
     if (err)
     {
@@ -594,6 +598,7 @@ struct RetargetContext_RetargetToLocal_Context
     struct Longtail_AsyncGetExistingContentAPI* m_RetargetAsyncCompleteAPI;
     uint64_t m_ChunkCount;
     TLongtail_Hash* m_ChunkHashes;
+    uint32_t m_MinBlockUsagePercent;
 };
 
 static void RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
@@ -637,6 +642,7 @@ static void RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete(struct
         api->m_RemoteBlockStoreAPI,
         retarget_remote_context->m_ChunkCount,
         retarget_remote_context->m_ChunkHashes,
+        retarget_context->m_MinBlockUsagePercent,
         &retarget_remote_context->m_AsyncCompleteAPI);
     if (err)
     {
@@ -653,6 +659,7 @@ static int CacheBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
+    uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CacheBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
@@ -672,12 +679,14 @@ static int CacheBlockStore_GetExistingContent(
     retarget_local_context->m_RetargetAsyncCompleteAPI = async_complete_api;
     retarget_local_context->m_ChunkCount = chunk_count;
     retarget_local_context->m_ChunkHashes = (TLongtail_Hash*)&retarget_local_context[1];
+    retarget_local_context->m_MinBlockUsagePercent = min_block_usage_percent;
     memcpy(retarget_local_context->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
 
     int err = api->m_LocalBlockStoreAPI->GetExistingContent(
         api->m_LocalBlockStoreAPI,
         chunk_count,
         chunk_hashes,
+        min_block_usage_percent,
         &retarget_local_context->m_AsyncCompleteAPI);
     if (err)
     {
