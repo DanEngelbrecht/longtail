@@ -6112,6 +6112,18 @@ LONGTAIL_EXPORT int Longtail_GetMissingChunks(
     return 0;
 }
 
+static SORTFUNC(SortBlockUsageLargeToSmall)
+{
+    LONGTAIL_FATAL_ASSERT(context != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(a_ptr != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(b_ptr != 0, return 0)
+
+    const uint32_t* block_usages = (const uint32_t*)context;
+    uint32_t a_index = *(const uint32_t*)a_ptr;
+    uint32_t b_index = *(const uint32_t*)b_ptr;
+    return (a_index < b_index) ? 1 : (a_index > b_index) ? -1 : 0;
+}
+
 int Longtail_GetExistingContentIndex(
     const struct Longtail_StoreIndex* store_index,
     uint32_t chunk_count,
@@ -6139,6 +6151,8 @@ int Longtail_GetExistingContentIndex(
     size_t found_store_chunk_per_block_size = sizeof(uint32_t) * store_block_count;
     size_t block_use_size = sizeof(uint32_t) * store_block_count;
     size_t block_size_size = sizeof(uint32_t) * store_block_count;
+    size_t block_order_size = sizeof(uint32_t) * store_block_count;
+    size_t chunk_index_offsets_size = sizeof(uint32_t) * store_block_count;
 
     size_t tmp_mem_size = chunk_to_index_lookup_size +
         block_to_index_lookup_size +
@@ -6147,7 +6161,9 @@ int Longtail_GetExistingContentIndex(
         found_store_block_hashes_size +
         found_store_chunk_hashes_size +
         block_use_size +
-        block_size_size;
+        block_size_size +
+        block_order_size +
+        chunk_index_offsets_size;
 
     void* tmp_mem = Longtail_Alloc(tmp_mem_size);
     if (!tmp_mem)
@@ -6183,6 +6199,12 @@ int Longtail_GetExistingContentIndex(
     uint32_t* block_size = (uint32_t*)p;
     p += block_size_size;
 
+    uint32_t* block_order = (uint32_t*)p;
+    p += block_order_size;
+
+    uint32_t* chunk_index_offsets = (uint32_t*)p;
+    p += chunk_index_offsets_size;
+
     for (uint32_t i = 0; i < chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = chunks[i];
@@ -6191,82 +6213,89 @@ int Longtail_GetExistingContentIndex(
 
     uint32_t found_block_count = 0;
     uint32_t found_chunk_count = 0;
-    if (min_block_usage_percent > 0) {
+    if (min_block_usage_percent <= 100)
+    {
         uint32_t store_chunk_index_offset = 0;
         for (uint32_t b = 0; b < store_block_count; ++b)
         {
-            block_use[b] = 0;
-            block_size[b] = 0;
-            TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
+            block_order[b] = b;
+            chunk_index_offsets[b] = store_chunk_index_offset;
             uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-            for (uint32_t c = 0; c < block_chunk_count; ++c)
+            store_chunk_index_offset += block_chunk_count;
+        }
+
+        if (min_block_usage_percent > 0) {
+            uint32_t store_chunk_index_offset = 0;
+            for (uint32_t b = 0; b < store_block_count; ++b)
             {
-                uint32_t chunk_size = store_index->m_ChunkSizes[store_chunk_index_offset];
-                block_size[b] += chunk_size;
-                TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset];
-                if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
+                block_use[b] = 0;
+                block_size[b] = 0;
+                TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
+                uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+                for (uint32_t c = 0; c < block_chunk_count; ++c)
                 {
+                    uint32_t chunk_size = store_index->m_ChunkSizes[store_chunk_index_offset];
+                    block_size[b] += chunk_size;
+                    TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset];
+                    if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
+                    {
+                        ++store_chunk_index_offset;
+                        continue;
+                    }
+                    block_use[b] += chunk_size;
                     ++store_chunk_index_offset;
+                }
+            }
+            // Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
+            // the blocks that has the most requested chunk data
+            QSORT(block_order, store_block_count, sizeof(uint32_t), SortBlockUsageLargeToSmall, (void*)block_use);
+        }
+
+        for (uint32_t bo = 0; bo < store_block_count; ++bo)
+        {
+            uint32_t b = block_order[bo];
+            if (min_block_usage_percent > 0) {
+                if (block_use[b] == 0)
+                {
                     continue;
                 }
-                block_use[b] += chunk_size;
-                ++store_chunk_index_offset;
+                uint32_t block_usage_percent = (uint32_t)(((uint64_t)block_use[b] * 100) / block_size[b]);
+                if (block_usage_percent < min_block_usage_percent)
+                {
+                    continue;
+                }
             }
-        }
-    }
-
-    uint32_t store_chunk_index_offset = 0;
-    for (uint32_t b = 0; b < store_block_count; ++b)
-    {
-        if (min_block_usage_percent > 0) {
-            if (block_use[b] == 0)
+            TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
+            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+            uint32_t store_chunk_index_offset = chunk_index_offsets[b];
+            for (uint32_t c = 0; c < block_chunk_count; ++c)
             {
-                continue;
+                // Take the first chunk we find for now
+                TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset++];
+                if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
+                {
+                    continue;
+                }
+                if (Longtail_LookupTable_PutUnique(chunk_to_store_index_lookup, chunk_hash, store_chunk_index_offset - 1))
+                {
+                    continue;
+                }
+                uint64_t* block_index_ptr = Longtail_LookupTable_PutUnique(block_to_index_lookup, block_hash, found_block_count);
+                if (block_index_ptr == 0)
+                {
+                    found_store_block_hashes[found_block_count] = block_hash;
+                    found_store_chunk_per_block[found_block_count] = 0;
+                    ++found_block_count;
+                }
+                found_store_chunk_hashes[found_chunk_count] = chunk_hash;
+                ++found_store_chunk_per_block[found_block_count - 1];
+                ++found_chunk_count;
             }
-            uint32_t block_usage_percent = (uint32_t)(((uint64_t)block_use[b] * 100) / block_size[b]);
-            if (block_usage_percent < min_block_usage_percent)
-            {
-                continue;
-            }
-        }
-        // If we were to be *really* picky we could start with the blocks with the highest usage percent and pick
-        // those first and fill out the found chunk hashes, that way if a chunk is in multiple places we would
-        // be sure to pick the optimal blocks for our set.
-        // Need to figure out an efficient way to do that first - perhaps sort the blocks with any block use
-        // in order of usage percent?
-        TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
-        uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-        for (uint32_t c = 0; c < block_chunk_count; ++c)
-        {
-            // Take the first chunk we find for now
-            TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset];
-            if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
-            {
-                ++store_chunk_index_offset;
-                continue;
-            }
-            if (Longtail_LookupTable_PutUnique(chunk_to_store_index_lookup, chunk_hash, store_chunk_index_offset))
-            {
-                ++store_chunk_index_offset;
-                continue;
-            }
-            uint64_t* block_index_ptr = Longtail_LookupTable_PutUnique(block_to_index_lookup, block_hash, found_block_count);
-            if (block_index_ptr == 0)
-            {
-                found_store_block_hashes[found_block_count] = block_hash;
-                found_store_chunk_per_block[found_block_count] = 0;
-                ++found_block_count;
-            }
-            found_store_chunk_hashes[found_chunk_count] = chunk_hash;
-            ++found_store_chunk_per_block[found_block_count - 1];
-            ++found_chunk_count;
-            ++store_chunk_index_offset;
         }
     }
 
     // We have a list of indexes into chunks of the chunks we found in the store
     // We have a list of indexes into store_index->m_BlockHashes of the blocks we need
-
     size_t content_index_size = Longtail_GetContentIndexSize(found_block_count, found_chunk_count);
     struct Longtail_ContentIndex* content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
     if (!content_index)
@@ -6297,16 +6326,16 @@ int Longtail_GetExistingContentIndex(
         return err;
     }
 
-    uint32_t chunk_offset = 0;
+    uint32_t content_chunk_offset = 0;
     for (uint32_t b = 0; b < found_block_count; ++b)
     {
         content_index->m_BlockHashes[b] = found_store_block_hashes[b];
         uint32_t chunks_per_block = found_store_chunk_per_block[b];
         for (uint32_t c = 0; c < chunks_per_block; ++c)
         {
-            content_index->m_ChunkHashes[chunk_offset] = found_store_chunk_hashes[chunk_offset];
-            content_index->m_ChunkBlockIndexes[chunk_offset] = b;
-            ++chunk_offset;
+            content_index->m_ChunkHashes[content_chunk_offset] = found_store_chunk_hashes[content_chunk_offset];
+            content_index->m_ChunkBlockIndexes[content_chunk_offset] = b;
+            ++content_chunk_offset;
         }
     }
 
