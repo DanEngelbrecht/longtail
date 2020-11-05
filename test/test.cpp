@@ -803,6 +803,7 @@ static struct Longtail_StoredBlock* TestCreateStoredBlock(
         block_data_size,
         &stored_block);
     memmove(stored_block->m_BlockData, chunk_data, block_data_size);
+    arrfree(chunk_sizes);
     arrfree(chunk_hashes);
     Longtail_Free(chunk_data);
 
