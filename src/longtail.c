@@ -6110,144 +6110,13 @@ LONGTAIL_EXPORT int Longtail_GetMissingChunks(
     Longtail_Free(chunk_to_reference_block_index_lookup);
     *out_chunk_count = missing_chunk_count;
     return 0;
-/*
-
-
-    size_t missing_blocks_indexes_size = sizeof(uint64_t) * (*content_index->m_BlockCount);
-    uint64_t* missing_blocks_indexes = (uint64_t*)Longtail_Alloc(missing_blocks_indexes_size);
-    if (!missing_blocks_indexes)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetMissingContent(%p, %u, %p, %p) failed with %d",
-            hash_identifier, content_index, content_index, out_content_index,
-            ENOMEM)
-        Longtail_Free(chunk_to_reference_block_index_lookup);
-        return ENOMEM;
-    }
-
-    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
-    struct Longtail_LookupTable* block_hash_to_missing_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(content_index_chunk_count)), content_index_chunk_count ,0);
-    if (!block_hash_to_missing_index)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetMissingContent(%p, %u, %p, %p) failed with %d",
-            hash_identifier, reference_content_index, content_index, out_content_index,
-            ENOMEM)
-        Longtail_Free(missing_blocks_indexes);
-        Longtail_Free(chunk_to_reference_block_index_lookup);
-        return ENOMEM;
-    }
-    uint64_t missing_block_count = 0;
-    uint64_t missing_chunk_count = 0;
-
-    for (uint64_t c = 0; c < content_index_chunk_count; ++c)
-    {
-        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[c];
-        if (Longtail_LookupTable_Get(chunk_to_reference_block_index_lookup, chunk_hash) != 0)
-        {
-            continue;
-        }
-        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
-        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        if (Longtail_LookupTable_PutUnique(block_hash_to_missing_index, block_hash, missing_block_count) != 0)
-        {
-            continue;
-        }
-        missing_blocks_indexes[missing_block_count++] = block_index;
-    }
-
-    size_t missing_chunk_indexes_size = sizeof(uint64_t) * (*content_index->m_ChunkCount);
-    uint64_t* missing_chunk_indexes = (uint64_t*)Longtail_Alloc(missing_chunk_indexes_size);
-    if (!missing_chunk_indexes)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetMissingContent(%p, %u, %p, %p) failed with %d",
-            hash_identifier, reference_content_index, content_index, out_content_index,
-            ENOMEM)
-        Longtail_Free(missing_blocks_indexes);
-        Longtail_Free(block_hash_to_missing_index);
-        Longtail_Free(chunk_to_reference_block_index_lookup);
-        return ENOMEM;
-    }
-
-    for (uint64_t c = 0; c < *content_index->m_ChunkCount; ++c)
-    {
-        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[c];
-        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
-        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        if (Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash) == 0)
-        {
-            continue;
-        }
-        missing_chunk_indexes[missing_chunk_count++] = c;
-    }
-
-    size_t content_index_size = Longtail_GetContentIndexSize(missing_block_count, missing_chunk_count);
-    struct Longtail_ContentIndex* resulting_content_index = (struct Longtail_ContentIndex*)Longtail_Alloc(content_index_size);
-    if (!resulting_content_index)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetMissingContent(%p, %u, %p, %p) failed with %d",
-            hash_identifier, reference_content_index, content_index, out_content_index,
-            ENOMEM)
-        Longtail_Free(missing_chunk_indexes);
-        Longtail_Free(missing_blocks_indexes);
-        Longtail_Free(block_hash_to_missing_index);
-        Longtail_Free(chunk_to_reference_block_index_lookup);
-        return ENOMEM;
-    }
-
-    int err = Longtail_InitContentIndex(
-        resulting_content_index,
-        &resulting_content_index[1],
-        content_index_size - sizeof(struct Longtail_ContentIndex),
-        hash_identifier,
-        *reference_content_index->m_MaxBlockSize,
-        *reference_content_index->m_MaxChunksPerBlock,
-        missing_block_count,
-        missing_chunk_count);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetMissingContent(%p, %u, %p, %p) failed with %d",
-            hash_identifier, reference_content_index, content_index, out_content_index,
-            err)
-        Longtail_Free(resulting_content_index);
-        Longtail_Free(missing_chunk_indexes);
-        Longtail_Free(missing_blocks_indexes);
-        Longtail_Free(block_hash_to_missing_index);
-        Longtail_Free(chunk_to_reference_block_index_lookup);
-        return err;
-    }
-
-    for (uint64_t b = 0; b < missing_block_count; ++b)
-    {
-        uint64_t block_index = missing_blocks_indexes[b];
-        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        resulting_content_index->m_BlockHashes[b] = block_hash;
-    }
-
-    for (uint64_t c = 0; c < missing_chunk_count; ++c)
-    {
-        uint64_t chunk_index = missing_chunk_indexes[c];
-        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[chunk_index];
-        uint64_t block_index = content_index->m_ChunkBlockIndexes[chunk_index];
-        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
-        const uint64_t* missing_block_index_ptr = Longtail_LookupTable_Get(block_hash_to_missing_index, block_hash);
-        LONGTAIL_FATAL_ASSERT(missing_block_index_ptr, return EINVAL)
-        uint64_t missing_block_index = *missing_block_index_ptr;
-        resulting_content_index->m_ChunkHashes[c] = chunk_hash;
-        resulting_content_index->m_ChunkBlockIndexes[c] = missing_block_index;
-    }
-
-    Longtail_Free(missing_chunk_indexes);
-    Longtail_Free(missing_blocks_indexes);
-    Longtail_Free(block_hash_to_missing_index);
-    Longtail_Free(chunk_to_reference_block_index_lookup);
-    *out_content_index = resulting_content_index;
-    return 0;
-*/
 }
 
 int Longtail_GetExistingContentIndex(
     const struct Longtail_StoreIndex* store_index,
     uint32_t chunk_count,
     const TLongtail_Hash* chunks,
+    uint32_t min_block_usage_percent,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index)
@@ -6266,15 +6135,19 @@ int Longtail_GetExistingContentIndex(
     size_t block_to_index_lookup_size = Longtail_LookupTable_GetSize(store_block_count);
     size_t chunk_to_store_index_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
     size_t found_store_block_hashes_size = sizeof(TLongtail_Hash) * store_block_count;
-    size_t found_store_chunk_per_block_size = sizeof(uint32_t) * store_block_count;
     size_t found_store_chunk_hashes_size = sizeof(TLongtail_Hash) * chunk_count;
+    size_t found_store_chunk_per_block_size = sizeof(uint32_t) * store_block_count;
+    size_t block_use_size = sizeof(uint32_t) * store_block_count;
+    size_t block_size_size = sizeof(uint32_t) * store_block_count;
 
     size_t tmp_mem_size = chunk_to_index_lookup_size +
         block_to_index_lookup_size +
         chunk_to_store_index_lookup_size +
-        found_store_block_hashes_size +
         found_store_chunk_per_block_size +
-        found_store_chunk_hashes_size;
+        found_store_block_hashes_size +
+        found_store_chunk_hashes_size +
+        block_use_size +
+        block_size_size;
 
     void* tmp_mem = Longtail_Alloc(tmp_mem_size);
     if (!tmp_mem)
@@ -6298,11 +6171,17 @@ int Longtail_GetExistingContentIndex(
     TLongtail_Hash* found_store_block_hashes = (TLongtail_Hash*)p;
     p += found_store_block_hashes_size;
 
+    TLongtail_Hash* found_store_chunk_hashes = (TLongtail_Hash*)p;
+    p += found_store_chunk_hashes_size;
+
     uint32_t* found_store_chunk_per_block = (uint32_t*)p;
     p += found_store_chunk_per_block_size;
 
-    TLongtail_Hash* found_store_chunk_hashes = (TLongtail_Hash*)p;
-    p += found_store_chunk_hashes_size;
+    uint32_t* block_use = (uint32_t*)p;
+    p += block_use_size;
+
+    uint32_t* block_size = (uint32_t*)p;
+    p += block_size_size;
 
     for (uint32_t i = 0; i < chunk_count; ++i)
     {
@@ -6310,22 +6189,62 @@ int Longtail_GetExistingContentIndex(
         Longtail_LookupTable_Put(chunk_to_index_lookup, chunk_hash, i);
     }
 
-    uint32_t store_chunk_index_offset = 0;
     uint32_t found_block_count = 0;
     uint32_t found_chunk_count = 0;
+    if (min_block_usage_percent > 0) {
+        uint32_t store_chunk_index_offset = 0;
+        for (uint32_t b = 0; b < store_block_count; ++b)
+        {
+            block_use[b] = 0;
+            block_size[b] = 0;
+            TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
+            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+            for (uint32_t c = 0; c < block_chunk_count; ++c)
+            {
+                uint32_t chunk_size = store_index->m_ChunkSizes[store_chunk_index_offset];
+                block_size[b] += chunk_size;
+                TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset];
+                if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
+                {
+                    ++store_chunk_index_offset;
+                    continue;
+                }
+                block_use[b] += chunk_size;
+                ++store_chunk_index_offset;
+            }
+        }
+    }
+
+    uint32_t store_chunk_index_offset = 0;
     for (uint32_t b = 0; b < store_block_count; ++b)
     {
+        if (min_block_usage_percent > 0) {
+            if (block_use[b] == 0)
+            {
+                continue;
+            }
+            uint32_t block_usage_percent = (uint32_t)(((uint64_t)block_use[b] * 100) / block_size[b]);
+            if (block_usage_percent < min_block_usage_percent)
+            {
+                continue;
+            }
+        }
+        // If we were to be *really* picky we could start with the blocks with the highest usage percent and pick
+        // those first and fill out the found chunk hashes, that way if a chunk is in multiple places we would
+        // be sure to pick the optimal blocks for our set.
+        // Need to figure out an efficient way to do that first - perhaps sort the blocks with any block use
+        // in order of usage percent?
         TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
         uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
         for (uint32_t c = 0; c < block_chunk_count; ++c)
         {
+            // Take the first chunk we find for now
             TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset];
             if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
             {
                 ++store_chunk_index_offset;
                 continue;
             }
-            // Take the first chunk we find for now
             if (Longtail_LookupTable_PutUnique(chunk_to_store_index_lookup, chunk_hash, store_chunk_index_offset))
             {
                 ++store_chunk_index_offset;

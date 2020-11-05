@@ -1679,6 +1679,7 @@ LONGTAIL_EXPORT int Longtail_GetExistingContentIndex(
     const struct Longtail_StoreIndex* store_index,
     uint32_t chunk_count,
     const TLongtail_Hash* chunks,
+    uint32_t min_block_usage_percent,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);

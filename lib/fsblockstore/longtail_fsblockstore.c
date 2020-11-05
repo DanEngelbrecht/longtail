@@ -943,6 +943,7 @@ static int FSBlockStore_GetExistingContent(
         store_index,
         (uint32_t)chunk_count,
         chunk_hashes,
+        0,
         fsblockstore_api->m_DefaultMaxBlockSize,
         fsblockstore_api->m_DefaultMaxChunksPerBlock,
         &existing_content_index);
