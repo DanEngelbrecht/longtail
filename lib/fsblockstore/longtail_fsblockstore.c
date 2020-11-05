@@ -917,6 +917,7 @@ static int FSBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
+    uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "FSBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
@@ -943,7 +944,7 @@ static int FSBlockStore_GetExistingContent(
         store_index,
         (uint32_t)chunk_count,
         chunk_hashes,
-        0,
+        min_block_usage_percent,
         fsblockstore_api->m_DefaultMaxBlockSize,
         fsblockstore_api->m_DefaultMaxChunksPerBlock,
         &existing_content_index);

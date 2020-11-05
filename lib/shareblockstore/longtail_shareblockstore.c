@@ -334,6 +334,7 @@ static int ShareBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
+    uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
@@ -348,6 +349,7 @@ static int ShareBlockStore_GetExistingContent(
         api->m_BackingBlockStore,
         chunk_count,
         chunk_hashes,
+        min_block_usage_percent,
         async_complete_api);
     if (err)
     {

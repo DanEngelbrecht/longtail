@@ -123,6 +123,8 @@ jobs:
         body: |
           # Changes in this Release
           - **API CHANGE** `Longtail_GetExistingContentIndex` now takes a min_block_usage_percent to control which blocks are used
+          - **API CHANGE** `Longtail_BlockStoreAPI::GetExistingContent` now takes a min_block_usage_percent to control which blocks are used
+          - **CHANGE** Added optional `--min-block-usage-percent` switch for `upsync` command
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -284,11 +284,11 @@ static void AsyncGetExistingContentComplete_Dispose(struct AsyncGetExistingConte
     Longtail_Free(api->m_NotifySema);
 }
 
-static int SyncGetExistingContent(struct Longtail_BlockStoreAPI* block_store, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes, struct Longtail_ContentIndex** out_content_index)
+static int SyncGetExistingContent(struct Longtail_BlockStoreAPI* block_store, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_ContentIndex** out_content_index)
 {
     struct AsyncGetExistingContentComplete retarget_content_index_complete;
     AsyncGetExistingContentComplete_Init(&retarget_content_index_complete);
-    int err = block_store->GetExistingContent(block_store, chunk_count, chunk_hashes, &retarget_content_index_complete.m_API);
+    int err = block_store->GetExistingContent(block_store, chunk_count, chunk_hashes, min_block_usage_percent, &retarget_content_index_complete.m_API);
     if (err)
     {
         return err;
@@ -314,6 +314,7 @@ int UpSync(
     uint32_t target_chunk_size,
     uint32_t target_block_size,
     uint32_t max_chunks_per_block,
+    uint32_t min_block_usage_percent,
     uint32_t hashing_type,
     uint32_t compression_type)
 {
@@ -433,6 +434,7 @@ int UpSync(
         store_block_store_api,
         *source_version_index->m_ChunkCount,
         source_version_index->m_ChunkHashes,
+        min_block_usage_percent,
         &existing_remote_content_index);
     if (err)
     {
@@ -849,6 +851,7 @@ int DownSync(
         store_block_store_api,
         required_chunk_count,
         required_chunk_hashes,
+        0,
         &required_version_content_index);
     if (err)
     {
@@ -990,6 +993,7 @@ int ValidateVersionIndex(
         store_block_api,
         *version_index->m_ChunkCount,
         version_index->m_ChunkHashes,
+        0,
         &block_store_content_index);
     if (err)
     {
@@ -1224,6 +1228,7 @@ int VersionIndex_cp(
         store_block_store_api,
         *version_index->m_ChunkCount,
         version_index->m_ChunkHashes,
+        0,
         &block_store_content_index);
     if (err)
     {
@@ -1481,7 +1486,10 @@ int main(int argc, char** argv)
         kgflags_string("version-content-index-path", 0, "Optional path to store minimal content index for version", false, &optional_version_content_index_path_raw);
 
         const char* compression_raw = 0;
-        kgflags_string("compression-algorithm", "zstd", "Comression algorithm: none, brotli, brotli_min, brotli_max, brotli_text, brotli_text_min, brotli_text_max, lz4, zstd, zstd_min, zstd_max", false, &compression_raw);
+        kgflags_string("compression-algorithm", "zstd", "Compression algorithm: none, brotli, brotli_min, brotli_max, brotli_text, brotli_text_min, brotli_text_max, lz4, zstd, zstd_min, zstd_max", false, &compression_raw);
+
+        int32_t min_block_usage_percent = 8;
+        kgflags_int("min-block-usage-percent", 0, "Minimum percent of block content than must match for it to be considered \"existing\"", false, &min_block_usage_percent);
 
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
@@ -1522,6 +1530,7 @@ int main(int argc, char** argv)
             target_chunk_size,
             target_block_size,
             max_chunks_per_block,
+            min_block_usage_percent,
             hashing,
             compression);
 
