@@ -6112,16 +6112,22 @@ LONGTAIL_EXPORT int Longtail_GetMissingChunks(
     return 0;
 }
 
-static SORTFUNC(SortBlockUsageLargeToSmall)
+static SORTFUNC(SortBlockUsageHighToLow)
 {
     LONGTAIL_FATAL_ASSERT(context != 0, return 0)
     LONGTAIL_FATAL_ASSERT(a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(b_ptr != 0, return 0)
 
     const uint32_t* block_usages = (const uint32_t*)context;
-    uint32_t a_index = *(const uint32_t*)a_ptr;
-    uint32_t b_index = *(const uint32_t*)b_ptr;
-    return (a_index < b_index) ? 1 : (a_index > b_index) ? -1 : 0;
+    const uint32_t a_index = *(const uint32_t*)a_ptr;
+    const uint32_t b_index = *(const uint32_t*)b_ptr;
+    const uint32_t a_usage = block_usages[a_index];
+    const uint32_t b_usage = block_usages[b_index];
+    return (a_usage < b_usage) ?
+        1 : ((a_usage > b_usage) ?
+            -1 : ((a_index < b_index) ?
+                -1 : ((a_index == b_index) ?
+                    0 : -1)));
 }
 
 int Longtail_GetExistingContentIndex(
@@ -6248,7 +6254,7 @@ int Longtail_GetExistingContentIndex(
             }
             // Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
             // the blocks that has the most requested chunk data
-            QSORT(block_order, store_block_count, sizeof(uint32_t), SortBlockUsageLargeToSmall, (void*)block_use);
+            QSORT(block_order, store_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_use);
         }
 
         for (uint32_t bo = 0; bo < store_block_count; ++bo)

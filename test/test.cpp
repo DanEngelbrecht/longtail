@@ -814,7 +814,7 @@ static struct Longtail_StoredBlock* TestCreateStoredBlock(
 TEST(Longtail, Longtail_GetExistingContentIndex)
 {
     Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
-    const uint8_t block_count = 5;
+    const uint8_t block_count = 6;
     struct Longtail_StoredBlock* blocks[block_count];
     struct Longtail_BlockIndex* block_indexes[block_count];
     for (uint8_t b = 0; b < block_count; ++b)
@@ -829,11 +829,25 @@ TEST(Longtail, Longtail_GetExistingContentIndex)
 
     struct Longtail_StoreIndex* store_index;
     ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
-        5,
+        block_count,
         (const Longtail_BlockIndex **)block_indexes,
         &store_index));
 
     TLongtail_Hash* chunk_hashes = 0;
+
+    arrput(chunk_hashes, blocks[0]->m_BlockIndex->m_ChunkHashes[0]);
+
+    arrput(chunk_hashes, blocks[1]->m_BlockIndex->m_ChunkHashes[0]);
+    arrput(chunk_hashes, blocks[1]->m_BlockIndex->m_ChunkHashes[1]);
+
+    arrput(chunk_hashes, blocks[2]->m_BlockIndex->m_ChunkHashes[0]);
+    arrput(chunk_hashes, blocks[2]->m_BlockIndex->m_ChunkHashes[1]);
+    arrput(chunk_hashes, blocks[2]->m_BlockIndex->m_ChunkHashes[2]);
+    arrput(chunk_hashes, blocks[2]->m_BlockIndex->m_ChunkHashes[3]);
+
+    arrput(chunk_hashes, blocks[3]->m_BlockIndex->m_ChunkHashes[0]);
+    arrput(chunk_hashes, blocks[3]->m_BlockIndex->m_ChunkHashes[1]);
+    arrput(chunk_hashes, blocks[3]->m_BlockIndex->m_ChunkHashes[2]);
 
     arrput(chunk_hashes, blocks[4]->m_BlockIndex->m_ChunkHashes[0]);
     arrput(chunk_hashes, blocks[4]->m_BlockIndex->m_ChunkHashes[1]);
@@ -841,19 +855,8 @@ TEST(Longtail, Longtail_GetExistingContentIndex)
     arrput(chunk_hashes, blocks[4]->m_BlockIndex->m_ChunkHashes[3]);
     arrput(chunk_hashes, blocks[4]->m_BlockIndex->m_ChunkHashes[4]);
 
-    arrput(chunk_hashes, blocks[3]->m_BlockIndex->m_ChunkHashes[0]);
-    arrput(chunk_hashes, blocks[3]->m_BlockIndex->m_ChunkHashes[1]);
-    arrput(chunk_hashes, blocks[3]->m_BlockIndex->m_ChunkHashes[2]);
-    arrput(chunk_hashes, blocks[3]->m_BlockIndex->m_ChunkHashes[3]);
-
-    arrput(chunk_hashes, blocks[2]->m_BlockIndex->m_ChunkHashes[0]);
-    arrput(chunk_hashes, blocks[2]->m_BlockIndex->m_ChunkHashes[1]);
-    arrput(chunk_hashes, blocks[2]->m_BlockIndex->m_ChunkHashes[2]);
-
-    arrput(chunk_hashes, blocks[1]->m_BlockIndex->m_ChunkHashes[0]);
-    arrput(chunk_hashes, blocks[1]->m_BlockIndex->m_ChunkHashes[1]);
-
-    arrput(chunk_hashes, blocks[0]->m_BlockIndex->m_ChunkHashes[0]);
+    arrput(chunk_hashes, blocks[5]->m_BlockIndex->m_ChunkHashes[0]);
+    arrput(chunk_hashes, blocks[5]->m_BlockIndex->m_ChunkHashes[1]);
 
     struct Longtail_ContentIndex* all_blocks;
     ASSERT_EQ(0, Longtail_GetExistingContentIndex(
@@ -861,15 +864,16 @@ TEST(Longtail, Longtail_GetExistingContentIndex)
         (uint32_t)arrlen(chunk_hashes),
         chunk_hashes,
         0,
-        32 * 5,
+        32 * block_count,
         5,
         &all_blocks));
-    ASSERT_EQ(5, *all_blocks->m_BlockCount);
+    ASSERT_EQ(6, *all_blocks->m_BlockCount);
     ASSERT_EQ(*block_indexes[0]->m_BlockHash, all_blocks->m_BlockHashes[0]);
     ASSERT_EQ(*block_indexes[1]->m_BlockHash, all_blocks->m_BlockHashes[1]);
     ASSERT_EQ(*block_indexes[2]->m_BlockHash, all_blocks->m_BlockHashes[2]);
     ASSERT_EQ(*block_indexes[3]->m_BlockHash, all_blocks->m_BlockHashes[3]);
     ASSERT_EQ(*block_indexes[4]->m_BlockHash, all_blocks->m_BlockHashes[4]);
+    ASSERT_EQ(*block_indexes[5]->m_BlockHash, all_blocks->m_BlockHashes[5]);
     Longtail_Free(all_blocks);
 
     struct Longtail_ContentIndex* all_full_blocks;
@@ -896,9 +900,26 @@ TEST(Longtail, Longtail_GetExistingContentIndex)
         &half_full_blocks));
     ASSERT_EQ(3, *half_full_blocks->m_BlockCount);
     ASSERT_EQ(*block_indexes[4]->m_BlockHash, half_full_blocks->m_BlockHashes[0]);
-    ASSERT_EQ(*block_indexes[3]->m_BlockHash, half_full_blocks->m_BlockHashes[1]);
-    ASSERT_EQ(*block_indexes[2]->m_BlockHash, half_full_blocks->m_BlockHashes[2]);
+    ASSERT_EQ(*block_indexes[2]->m_BlockHash, half_full_blocks->m_BlockHashes[1]);
+    ASSERT_EQ(*block_indexes[3]->m_BlockHash, half_full_blocks->m_BlockHashes[2]);
     Longtail_Free(half_full_blocks);
+
+    struct Longtail_ContentIndex* less_full_blocks;
+    ASSERT_EQ(0, Longtail_GetExistingContentIndex(
+        store_index,
+        (uint32_t)arrlen(chunk_hashes),
+        chunk_hashes,
+        2 * (100 / 5),
+        32 * 5,
+        5,
+        &less_full_blocks));
+    ASSERT_EQ(5, *less_full_blocks->m_BlockCount);
+    ASSERT_EQ(*block_indexes[4]->m_BlockHash, less_full_blocks->m_BlockHashes[0]);
+    ASSERT_EQ(*block_indexes[2]->m_BlockHash, less_full_blocks->m_BlockHashes[1]);
+    ASSERT_EQ(*block_indexes[3]->m_BlockHash, less_full_blocks->m_BlockHashes[2]);
+    ASSERT_EQ(*block_indexes[1]->m_BlockHash, less_full_blocks->m_BlockHashes[3]);
+    ASSERT_EQ(*block_indexes[5]->m_BlockHash, less_full_blocks->m_BlockHashes[4]);
+    Longtail_Free(less_full_blocks);
 
     struct Longtail_ContentIndex* no_blocks;
     ASSERT_EQ(0, Longtail_GetExistingContentIndex(
