@@ -913,7 +913,7 @@ TEST(Longtail, Longtail_GetExistingContentIndex)
         32 * 5,
         5,
         &less_full_blocks));
-    ASSERT_EQ(5, *half_full_blocks->m_BlockCount);
+    ASSERT_EQ(5, *less_full_blocks->m_BlockCount);
     ASSERT_EQ(*block_indexes[4]->m_BlockHash, less_full_blocks->m_BlockHashes[0]);
     ASSERT_EQ(*block_indexes[2]->m_BlockHash, less_full_blocks->m_BlockHashes[1]);
     ASSERT_EQ(*block_indexes[3]->m_BlockHash, less_full_blocks->m_BlockHashes[2]);
