@@ -122,7 +122,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** `Longtail_GetExistingContentIndex` now correctly sorts blocks and keeps order of blocks when usage is equal
+          - **FIX** `Longtail_GetExistingContentIndex` always sorts blocks based on usage
+          - **FIX** `LRUBlockStoreAPI` safely handles refresh of blocks on dispose
         draft: false
         prerelease: false
     - name: Download Linux artifacts
