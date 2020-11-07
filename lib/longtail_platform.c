@@ -777,7 +777,7 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
     *out_file_lock = (HLongtail_FileLock)mem;
     (*out_file_lock)->handle = INVALID_HANDLE_VALUE;
 
-    int try_count = 500;
+    int try_count = 140;
     uint64_t retry_delay = 1000;
 
     HANDLE handle = CreateFileA(
