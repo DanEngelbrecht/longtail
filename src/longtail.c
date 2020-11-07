@@ -6230,34 +6230,30 @@ int Longtail_GetExistingContentIndex(
             store_chunk_index_offset += block_chunk_count;
         }
 
-        if (min_block_usage_percent > 0) {
-            uint32_t store_chunk_index_offset = 0;
-            for (uint32_t b = 0; b < store_block_count; ++b)
+        for (uint32_t b = 0; b < store_block_count; ++b)
+        {
+            block_use[b] = 0;
+            block_size[b] = 0;
+            TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
+            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+            uint32_t chunk_offset = chunk_index_offsets[b];
+            for (uint32_t c = 0; c < block_chunk_count; ++c)
             {
-                block_use[b] = 0;
-                block_size[b] = 0;
-                TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
-                uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-                for (uint32_t c = 0; c < block_chunk_count; ++c)
+                uint32_t chunk_size = store_index->m_ChunkSizes[chunk_offset];
+                block_size[b] += chunk_size;
+                TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_offset];
+                if (Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
                 {
-                    uint32_t chunk_size = store_index->m_ChunkSizes[store_chunk_index_offset];
-                    block_size[b] += chunk_size;
-                    TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset];
-                    if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
-                    {
-                        ++store_chunk_index_offset;
-                        continue;
-                    }
                     block_use[b] += chunk_size;
-                    ++store_chunk_index_offset;
                 }
+                ++chunk_offset;
             }
-            // Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
-            // the blocks that has the most requested chunk data
-            QSORT(block_order, store_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_use);
         }
+        // Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
+        // the blocks that has the most requested chunk data
+        QSORT(block_order, store_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_use);
 
-        for (uint32_t bo = 0; bo < store_block_count; ++bo)
+        for (uint32_t bo = 0; (bo < store_block_count) && (found_chunk_count < chunk_count); ++bo)
         {
             uint32_t b = block_order[bo];
             if (min_block_usage_percent > 0) {
@@ -7052,6 +7048,7 @@ int Longtail_ChangeVersion(
     }
 
     uint32_t remove_count = *version_diff->m_SourceRemovedCount;
+    LONGTAIL_FATAL_ASSERT(remove_count <= *source_version->m_AssetCount, return EINVAL);
     if (remove_count > 0)
     {
         uint32_t* remove_indexes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * remove_count);
@@ -7203,6 +7200,7 @@ int Longtail_ChangeVersion(
     uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
     uint32_t write_asset_count = added_count + modified_content_count;
 
+    LONGTAIL_FATAL_ASSERT(write_asset_count <= *target_version->m_AssetCount, return EINVAL);
     if (write_asset_count > 0)
     {
         uint64_t chunk_count = *content_index->m_ChunkCount;
