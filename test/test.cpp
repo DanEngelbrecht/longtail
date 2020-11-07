@@ -868,12 +868,12 @@ TEST(Longtail, Longtail_GetExistingContentIndex)
         5,
         &all_blocks));
     ASSERT_EQ(6, *all_blocks->m_BlockCount);
-    ASSERT_EQ(*block_indexes[0]->m_BlockHash, all_blocks->m_BlockHashes[0]);
-    ASSERT_EQ(*block_indexes[1]->m_BlockHash, all_blocks->m_BlockHashes[1]);
-    ASSERT_EQ(*block_indexes[2]->m_BlockHash, all_blocks->m_BlockHashes[2]);
-    ASSERT_EQ(*block_indexes[3]->m_BlockHash, all_blocks->m_BlockHashes[3]);
-    ASSERT_EQ(*block_indexes[4]->m_BlockHash, all_blocks->m_BlockHashes[4]);
-    ASSERT_EQ(*block_indexes[5]->m_BlockHash, all_blocks->m_BlockHashes[5]);
+    ASSERT_EQ(*block_indexes[4]->m_BlockHash, all_blocks->m_BlockHashes[0]);
+    ASSERT_EQ(*block_indexes[2]->m_BlockHash, all_blocks->m_BlockHashes[1]);
+    ASSERT_EQ(*block_indexes[3]->m_BlockHash, all_blocks->m_BlockHashes[2]);
+    ASSERT_EQ(*block_indexes[1]->m_BlockHash, all_blocks->m_BlockHashes[3]);
+    ASSERT_EQ(*block_indexes[5]->m_BlockHash, all_blocks->m_BlockHashes[4]);
+    ASSERT_EQ(*block_indexes[0]->m_BlockHash, all_blocks->m_BlockHashes[5]);
     Longtail_Free(all_blocks);
 
     struct Longtail_ContentIndex* all_full_blocks;
