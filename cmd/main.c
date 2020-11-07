@@ -38,9 +38,9 @@ static void AssertFailure(const char* expression, const char* file, int line)
 
 static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-static void LogStdErr(void* context, int level, const char* log)
+static void LogStdErr(const char* file, const char* function, int line, void* context, int level, const char* log)
 {
-    fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
+    fprintf(stderr, "%s(%d) [%s] %s: %s\n", file, line, function, ERROR_LEVEL[level], log);
 }
 
 struct Progress

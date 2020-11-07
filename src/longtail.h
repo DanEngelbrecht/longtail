@@ -711,7 +711,7 @@ LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* blo
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);
-typedef void (*Longtail_Log)(void* context, int level, const char* str);
+typedef void (*Longtail_Log)(const char* file, const char* function, int line, void* context, int level, const char* str);
 LONGTAIL_EXPORT void Longtail_SetLog(Longtail_Log log_func, void* context);
 LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 
@@ -722,9 +722,9 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #define LONGTAIL_LOG_LEVEL_OFF      4
 
 #ifndef LONGTAIL_LOG
-    void Longtail_CallLogger(int level, const char* fmt, ...);
+    void Longtail_CallLogger(const char* file, const char* function, int line, int level, const char* fmt, ...);
     #define LONGTAIL_LOG(level, fmt, ...) \
-        Longtail_CallLogger(level, fmt, __VA_ARGS__);
+        Longtail_CallLogger(__FILE__, __func__, __LINE__, level, fmt, __VA_ARGS__);
 #endif
 
 #if defined(LONGTAIL_ASSERTS)

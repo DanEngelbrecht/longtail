@@ -17,9 +17,9 @@ static void TestAssert(const char* expression, const char* file, int line)
 
 static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-static void LogStdErr(void* , int level, const char* log)
+static void LogStdErr(const char* file, const char* function, int line, void* , int level, const char* log)
 {
-    fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
+    fprintf(stderr, "%s(%d) [%s] %s: %s\n", file, line, function, ERROR_LEVEL[level], log);
 }
 
 int main(int argc, char** argv)
@@ -29,6 +29,7 @@ int main(int argc, char** argv)
 #endif
     jc_test_init(&argc, argv);
     Longtail_SetAssert(TestAssert);
+    Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_INFO);
     Longtail_SetLog(LogStdErr, 0);
     int result = jc_test_run_all();
     Longtail_SetAssert(0);

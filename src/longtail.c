@@ -575,7 +575,7 @@ void Longtail_SetLogLevel(int level)
     Longtail_LogLevel_private = level;
 }
 
-void Longtail_CallLogger(int level, const char* fmt, ...)
+void Longtail_CallLogger(const char* file, const char* function, int line, int level, const char* fmt, ...)
 {
     LONGTAIL_FATAL_ASSERT(fmt != 0, return)
     if (!Longtail_Log_private || (level < Longtail_LogLevel_private))
@@ -587,7 +587,7 @@ void Longtail_CallLogger(int level, const char* fmt, ...)
     char buffer[2048];
     vsprintf(buffer, fmt, argptr);
     va_end(argptr);
-    Longtail_Log_private(Longtail_LogContext, level, buffer);
+    Longtail_Log_private(file, function, line, Longtail_LogContext, level, buffer);
 }
 
 char* Longtail_Strdup(const char* path)
