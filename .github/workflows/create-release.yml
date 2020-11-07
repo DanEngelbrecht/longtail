@@ -122,8 +122,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** `Longtail_GetExistingContentIndex` always sorts blocks based on usage
-          - **FIX** `LRUBlockStoreAPI` safely handles refresh of blocks on dispose
+          - **FIX** `Longtail_LockFile` changed windows timeout to 10 sec and make more errors worth retry
         draft: false
         prerelease: false
     - name: Download Linux artifacts
