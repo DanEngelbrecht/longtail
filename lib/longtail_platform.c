@@ -788,34 +788,42 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
         CREATE_ALWAYS,
         FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
         0);
-    if (handle == INVALID_HANDLE_VALUE)
+    while (handle == INVALID_HANDLE_VALUE)
     {
-        while (handle == INVALID_HANDLE_VALUE)
+        if (--try_count == 0)
         {
-            if (--try_count == 0)
-            {
-                return EACCES;
-            }
-            Longtail_Sleep(retry_delay);
-            handle = CreateFileA(
-                path,
-                GENERIC_READ | GENERIC_WRITE,
-                0,
-                0,
-                CREATE_ALWAYS,
-                FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
-                0);
-            if (handle != INVALID_HANDLE_VALUE)
-            {
-                break;
-            }
-            DWORD error = GetLastError();
-            if (error != ERROR_SHARING_VIOLATION)
-            {
-                return Win32ErrorToErrno(error);
-            }
-            retry_delay += 2000;
+            return EACCES;
         }
+        Longtail_Sleep(retry_delay);
+        handle = CreateFileA(
+            path,
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            0,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
+            0);
+        if (handle != INVALID_HANDLE_VALUE)
+        {
+            break;
+        }
+        DWORD error = GetLastError();
+        switch (error)
+        {
+            case ERROR_SHARING_VIOLATION:
+            case ERROR_ACCESS_DENIED:
+            case ERROR_INVALID_ACCESS:
+            case ERROR_WRITE_PROTECT:
+            case ERROR_LOCK_VIOLATION:
+            case ERROR_NETWORK_ACCESS_DENIED:
+            case ERROR_EXCL_SEM_ALREADY_OWNED:
+            case ERROR_NOT_OWNER:
+            case ERROR_OPLOCK_NOT_GRANTED:
+                break;
+            default:
+                return Win32ErrorToErrno(error);
+        }
+        retry_delay += 2000;
     }
     (*out_file_lock)->handle = handle;
     return 0;
