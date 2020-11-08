@@ -1630,23 +1630,43 @@ static int ChunkAssets(
     uint32_t target_chunk_size,
     uint32_t* chunk_count)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p)",
-        storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count)
-    LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(hash_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(job_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(root_path != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(file_infos != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(path_hashes != 0, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(hash_api, "%p"),
+        LONGTAIL_LOGFIELD(chunker_api, "%p"),
+        LONGTAIL_LOGFIELD(job_api, "%p"),
+        LONGTAIL_LOGFIELD(progress_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
+        LONGTAIL_LOGFIELD(root_path, "%s"),
+        LONGTAIL_LOGFIELD(file_infos, "%p"),
+        LONGTAIL_LOGFIELD(path_hashes, "%p"),
+        LONGTAIL_LOGFIELD(content_hashes, "%p"),
+        LONGTAIL_LOGFIELD(optional_asset_tags, "%p"),
+        LONGTAIL_LOGFIELD(asset_chunk_start_index, "%p"),
+        LONGTAIL_LOGFIELD(asset_chunk_counts, "%p"),
+        LONGTAIL_LOGFIELD(chunk_sizes, "%p"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
+        LONGTAIL_LOGFIELD(chunk_tags, "%p"),
+        LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
+        LONGTAIL_LOGFIELD(chunk_count, "%p")
+    MAKE_LOG_CONTEXT(ctx, 0)
 
-    LONGTAIL_FATAL_ASSERT(content_hashes != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(asset_chunk_start_index != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(asset_chunk_counts != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(chunk_sizes != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(chunk_hashes != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(chunk_tags != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(target_chunk_size != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(chunk_count != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, hash_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, job_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, root_path != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, file_infos != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path_hashes != 0, return EINVAL)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, content_hashes != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, asset_chunk_start_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, asset_chunk_counts != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, chunk_sizes != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, chunk_hashes != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, chunk_tags != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, target_chunk_size != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, chunk_count != 0, return EINVAL)
 
     uint32_t asset_count = file_infos->m_Count;
 
@@ -1682,9 +1702,7 @@ static int ChunkAssets(
     err = job_api->ReserveJobs(job_api, job_count, &job_group);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
         return err;
     }
 
@@ -1696,9 +1714,7 @@ static int ChunkAssets(
     void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
 
@@ -1720,7 +1736,7 @@ static int ChunkAssets(
 
         for (uint64_t job_part = 0; job_part < asset_part_count; ++job_part)
         {
-            LONGTAIL_FATAL_ASSERT(jobs_started < job_count, return EINVAL)
+            LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, jobs_started < job_count, return EINVAL)
 
             uint64_t range_start = job_part * max_hash_size;
             uint64_t job_size = (asset_size - range_start) > max_hash_size ? max_hash_size : (asset_size - range_start);
@@ -1752,12 +1768,12 @@ static int ChunkAssets(
         }
     }
     // TODO: Add logic here if we end up creating more jobs than can be held in a uint32_t
-    LONGTAIL_FATAL_ASSERT(jobs_started < 0xffffffff, return ENOMEM);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, jobs_started < 0xffffffff, return ENOMEM);
     Longtail_JobAPI_Jobs jobs;
     err = job_api->CreateJobs(job_api, job_group, (uint32_t)jobs_started, funcs, ctxs, &jobs);
-    LONGTAIL_FATAL_ASSERT(!err, return err)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, !err, return err)
     err = job_api->ReadyJobs(job_api, (uint32_t)jobs_started, jobs);
-    LONGTAIL_FATAL_ASSERT(!err, return err)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, !err, return err)
 
     Longtail_Free(ctxs);
     Longtail_Free(funcs);
@@ -1765,9 +1781,7 @@ static int ChunkAssets(
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
     {
-        LONGTAIL_LOG(err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
         Longtail_Free(work_mem);
         return err;
     }
@@ -1777,9 +1791,7 @@ static int ChunkAssets(
     {
         if (tmp_hash_jobs[i].m_Err)
         {
-            LONGTAIL_LOG((tmp_hash_jobs[i].m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-                storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-                tmp_hash_jobs[i].m_Err)
+            LONGTAIL_LOG_WITH_CTX(ctx, (tmp_hash_jobs[i].m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "tmp_hash_jobs[i].m_Err failed with %d", tmp_hash_jobs[i].m_Err)
             err = err ? err : tmp_hash_jobs[i].m_Err;
         }
     }
@@ -1789,7 +1801,7 @@ static int ChunkAssets(
         uint32_t built_chunk_count = 0;
         for (uint32_t i = 0; i < jobs_started; ++i)
         {
-            LONGTAIL_FATAL_ASSERT(*tmp_hash_jobs[i].m_AssetChunkCount <= tmp_hash_jobs[i].m_MaxChunkCount, return EINVAL)
+            LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, *tmp_hash_jobs[i].m_AssetChunkCount <= tmp_hash_jobs[i].m_MaxChunkCount, return EINVAL)
             built_chunk_count += *tmp_hash_jobs[i].m_AssetChunkCount;
         }
         *chunk_count = built_chunk_count;
@@ -1797,9 +1809,7 @@ static int ChunkAssets(
         *chunk_sizes = (uint32_t*)Longtail_Alloc(chunk_sizes_size);
         if (!*chunk_sizes)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-                storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-                ENOMEM)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
             Longtail_Free(work_mem);
             return ENOMEM;
         }
@@ -1807,9 +1817,7 @@ static int ChunkAssets(
         *chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(chunk_hashes_size);
         if (!*chunk_hashes)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-                storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-                ENOMEM)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
             Longtail_Free(*chunk_sizes);
             *chunk_sizes = 0;
             Longtail_Free(work_mem);
@@ -1819,9 +1827,7 @@ static int ChunkAssets(
         *chunk_tags = (uint32_t*)Longtail_Alloc(chunk_tags_size);
         if (!*chunk_tags)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-                storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-                ENOMEM)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
             Longtail_Free(*chunk_hashes);
             *chunk_hashes = 0;
             Longtail_Free(*chunk_sizes);
@@ -1856,9 +1862,7 @@ static int ChunkAssets(
             err = hash_api->HashBuffer(hash_api, hash_size, &(*chunk_hashes)[chunk_start_index], &content_hashes[a]);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets(%p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %p, %p, %p, %p, %p, %p, %p, %u, %p) failed with %d",
-                    storage_api, hash_api, chunker_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, path_hashes, content_hashes, optional_asset_tags, asset_chunk_start_index, asset_chunk_counts, chunk_sizes, chunk_hashes, chunk_tags, target_chunk_size, chunk_count,
-                    err)
+                LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer() failed with %d", err)
                 Longtail_Free(*chunk_tags);
                 *chunk_tags = 0;
                 Longtail_Free(*chunk_hashes);
@@ -1881,9 +1885,13 @@ static size_t Longtail_GetVersionIndexDataSize(
     uint32_t asset_chunk_index_count,
     uint32_t path_data_size)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetVersionIndexDataSize(%u, %u, %u, %u)",
-        asset_count, chunk_count, asset_chunk_index_count, path_data_size)
-    LONGTAIL_VALIDATE_INPUT(asset_chunk_index_count >= chunk_count, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(asset_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(asset_chunk_index_count, "%u"),
+        LONGTAIL_LOGFIELD(path_data_size, "%u"),
+    MAKE_LOG_CONTEXT(ctx, 0)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, asset_chunk_index_count >= chunk_count, return EINVAL)
 
     size_t version_index_data_size =
         sizeof(uint32_t) +                              // m_Version
@@ -1914,9 +1922,13 @@ size_t Longtail_GetVersionIndexSize(
     uint32_t asset_chunk_index_count,
     uint32_t path_data_size)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_GetVersionIndexSize(%u, %u, %u, %u)",
-        asset_count, chunk_count, asset_chunk_index_count, path_data_size)
-
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(asset_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(asset_chunk_index_count, "%u"),
+        LONGTAIL_LOGFIELD(path_data_size, "%u"),
+    MAKE_LOG_CONTEXT(ctx, 0)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, asset_chunk_index_count >= chunk_count, return EINVAL)
     return sizeof(struct Longtail_VersionIndex) +
             Longtail_GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, path_data_size);
 }
@@ -1926,9 +1938,14 @@ static int InitVersionIndexFromData(
     void* data,
     size_t data_size)
 {
-    LONGTAIL_FATAL_ASSERT(version_index != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(data != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(data_size >= sizeof(uint32_t), return EBADF)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(version_index, "%p"),
+        LONGTAIL_LOGFIELD(data, "%p"),
+        LONGTAIL_LOGFIELD(data_size, "%" PRIu64),
+    MAKE_LOG_CONTEXT(ctx, 0)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, version_index != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, data != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, data_size >= sizeof(uint32_t), return EBADF)
 
     char* p = (char*)data;
 
@@ -1939,10 +1956,7 @@ static int InitVersionIndexFromData(
 
     if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentVersionIndexVersion);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
-            (void*)version_index, data, data_size,
-            EBADF)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentVersionIndexVersion);
         return EBADF;
     }
 
@@ -1970,10 +1984,7 @@ static int InitVersionIndexFromData(
     size_t versiom_index_data_size = Longtail_GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, 0);
     if (versiom_index_data_size > data_size)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Version index data is truncated: %" PRIu64 " <= %" PRIu64, data_size, versiom_index_data_size)
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData(%p, %p, %" PRIu64 ") failed with %d",
-            (void*)version_index, data, data_size,
-            EBADF)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Version index data is truncated: %" PRIu64 " <= %" PRIu64, data_size, versiom_index_data_size)
         return EBADF;
     }
 
@@ -2037,20 +2048,36 @@ int Longtail_BuildVersionIndex(
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_BuildVersionIndex(%p, %" PRIu64 ", %p, %p, %p, %p, %p, %u, %p, %u,%p ,%p, %p, %u, %p)",
-        mem, mem_size, file_infos, path_hashes, content_hashes, asset_chunk_index_starts, asset_chunk_counts, asset_chunk_index_count, asset_chunk_indexes, chunk_count, chunk_sizes, chunk_hashes, optional_chunk_tags, hash_api_identifier, out_version_index);
-    LONGTAIL_VALIDATE_INPUT(mem != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(mem_size != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(file_infos != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || path_hashes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || content_hashes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(asset_chunk_counts == 0 || asset_chunk_index_starts != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(file_infos->m_Count == 0 || asset_chunk_counts != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(asset_chunk_index_count >= chunk_count, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || asset_chunk_indexes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_sizes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(chunk_count == 0 || chunk_hashes != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(out_version_index != 0, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(mem_size, "%p"),
+        LONGTAIL_LOGFIELD(file_infos, "%p"),
+        LONGTAIL_LOGFIELD(path_hashes, "%p"),
+        LONGTAIL_LOGFIELD(content_hashes, "%p"),
+        LONGTAIL_LOGFIELD(asset_chunk_index_starts, "%p"),
+        LONGTAIL_LOGFIELD(asset_chunk_counts, "%p"),
+        LONGTAIL_LOGFIELD(asset_chunk_index_count, "%u"),
+        LONGTAIL_LOGFIELD(asset_chunk_indexes, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_sizes, "%p"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
+        LONGTAIL_LOGFIELD(optional_chunk_tags, "%p"),
+        LONGTAIL_LOGFIELD(hash_api_identifier, "%u"),
+        LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
+        LONGTAIL_LOGFIELD(out_version_index, "%p")
+    MAKE_LOG_CONTEXT(ctx, 0)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, mem != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, mem_size != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, file_infos != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunk_count == 0 || path_hashes != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunk_count == 0 || content_hashes != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, asset_chunk_counts == 0 || asset_chunk_index_starts != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, file_infos->m_Count == 0 || asset_chunk_counts != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, asset_chunk_index_count >= chunk_count, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunk_count == 0 || asset_chunk_indexes != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunk_count == 0 || chunk_sizes != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunk_count == 0 || chunk_hashes != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_version_index != 0, return EINVAL)
 
     uint32_t asset_count = file_infos->m_Count;
     struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)mem;
@@ -2072,9 +2099,7 @@ int Longtail_BuildVersionIndex(
     int err = InitVersionIndexFromData(version_index, &version_index[1], index_data_size);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex(%p, %" PRIu64 ", %p, %p, %p, %p, %p, %u, %p, %u,%p ,%p, %p, %u, %p) failed with %d",
-            mem, mem_size, file_infos, path_hashes, content_hashes, asset_chunk_index_starts, asset_chunk_counts, asset_chunk_index_count, asset_chunk_indexes, chunk_count, chunk_sizes, chunk_hashes, optional_chunk_tags, hash_api_identifier, out_version_index,
-            err);
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData() failed with %d", err);
         return err;
     }
 
@@ -2116,14 +2141,27 @@ int Longtail_CreateVersionIndex(
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p)",
-        storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index)
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(hash_api != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(job_api != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((file_infos == 0 || file_infos->m_Count == 0) || root_path != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((file_infos == 0 || file_infos->m_Count == 0) || target_chunk_size > 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((file_infos == 0 || file_infos->m_Count == 0) || out_version_index != 0, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(hash_api, "%p"),
+        LONGTAIL_LOGFIELD(chunker_api, "%p"),
+        LONGTAIL_LOGFIELD(job_api, "%p"),
+        LONGTAIL_LOGFIELD(progress_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
+        LONGTAIL_LOGFIELD(root_path, "%s"),
+        LONGTAIL_LOGFIELD(file_infos, "%p"),
+        LONGTAIL_LOGFIELD(optional_asset_tags, "%u"),
+        LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
+        LONGTAIL_LOGFIELD(out_version_index, "%p")
+    MAKE_LOG_CONTEXT(ctx, 0)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, hash_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, job_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (file_infos == 0 || file_infos->m_Count == 0) || root_path != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (file_infos == 0 || file_infos->m_Count == 0) || target_chunk_size > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (file_infos == 0 || file_infos->m_Count == 0) || out_version_index != 0, return EINVAL)
 
     uint32_t path_count = file_infos->m_Count;
 
@@ -2133,9 +2171,7 @@ int Longtail_CreateVersionIndex(
         void* version_index_mem = Longtail_Alloc(version_index_size);
         if (!version_index_mem)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-                storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-                ENOMEM)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
             return ENOMEM;
         }
 
@@ -2159,9 +2195,7 @@ int Longtail_CreateVersionIndex(
             &version_index);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-                storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-                err)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex() failed with %d", err)
             return err;
         }
         *out_version_index = version_index;
@@ -2175,9 +2209,7 @@ int Longtail_CreateVersionIndex(
     void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
 
@@ -2213,9 +2245,7 @@ int Longtail_CreateVersionIndex(
         &assets_chunk_index_count);
     if (err)
     {
-        LONGTAIL_LOG((err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets() failed with %d", err)
         Longtail_Free(work_mem);
         return err;
     }
@@ -2228,9 +2258,7 @@ int Longtail_CreateVersionIndex(
     void* work_mem_compact = Longtail_Alloc(work_mem_compact_size);
     if (!work_mem_compact)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_Free(asset_chunk_tags);
         Longtail_Free(asset_chunk_hashes);
         Longtail_Free(asset_chunk_sizes);
@@ -2268,9 +2296,7 @@ int Longtail_CreateVersionIndex(
     void* version_index_mem = Longtail_Alloc(version_index_size);
     if (!version_index_mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_Free(work_mem_compact);
         Longtail_Free(asset_chunk_tags);
         Longtail_Free(asset_chunk_hashes);
@@ -2299,9 +2325,7 @@ int Longtail_CreateVersionIndex(
         &version_index);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %s, %p, %p, %u, %p) failed with %d",
-            storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, root_path, file_infos, optional_asset_tags, target_chunk_size, out_version_index,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex() failed with %d", err)
         Longtail_Free(work_mem_compact);
         Longtail_Free(version_index_mem);
         Longtail_Free(asset_chunk_tags);
