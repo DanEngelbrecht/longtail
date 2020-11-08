@@ -575,7 +575,7 @@ void Longtail_SetLogLevel(int level)
     Longtail_LogLevel_private = level;
 }
 
-void Longtail_CallLogger(const char* file, const char* function, int line, int level, const char* fmt, ...)
+void Longtail_CallLogger(const char* file, const char* function, int line, struct Longtail_LogContext* log_context, int level, const char* fmt, ...)
 {
     LONGTAIL_FATAL_ASSERT(fmt != 0, return)
     if (!Longtail_Log_private || (level < Longtail_LogLevel_private))
@@ -587,7 +587,7 @@ void Longtail_CallLogger(const char* file, const char* function, int line, int l
     char buffer[2048];
     vsprintf(buffer, fmt, argptr);
     va_end(argptr);
-    Longtail_Log_private(file, function, line, Longtail_LogContext, level, buffer);
+    Longtail_Log_private(file, function, line, Longtail_LogContext, log_context, level, buffer);
 }
 
 char* Longtail_Strdup(const char* path)
@@ -784,9 +784,15 @@ static int IsDirPath(const char* path)
 
 int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
 {
-    LONGTAIL_FATAL_ASSERT(hash_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_hash != 0, return EINVAL)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(hash_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_hash, "%p")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, hash_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_hash != 0, return EINVAL)
     uint32_t pathlen = (uint32_t)strlen(path);
     char* buf = (char*)alloca(pathlen + 1);
     memcpy(buf, path, pathlen + 1);
@@ -795,7 +801,7 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
     int err = hash_api->HashBuffer(hash_api, pathlen, (void*)buf, &hash);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash(%p, %s, %p) hash_api->HashBuffer() failed with %d", (void*)hash_api, path, (void*)out_hash, err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer(%p, %s, %p) failed with %d", (void*)hash_api, path, (void*)out_hash, err)
         return err;
     }
     *out_hash = (TLongtail_Hash)hash;
@@ -804,8 +810,13 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
 
 static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path != 0, return EINVAL)
     int err = storage_api->CreateDir(storage_api, path);
     if (err)
     {
@@ -813,7 +824,7 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
         {
             return 0;
         }
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir(%p, %s) failed with %d", (void*)storage_api, path, err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->CreateDir() failed with %d", err)
         return err;
     }
     return 0;
@@ -821,8 +832,13 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
 
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path != 0, return EINVAL)
 
     size_t delim_pos = 0;
     size_t path_len = 0;
@@ -852,13 +868,13 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     int err = EnsureParentPathExists(storage_api, dir_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
         return err;
     }
     err = SafeCreateDir(storage_api, dir_path);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
         return err;
     }
     return 0;
@@ -886,17 +902,24 @@ static int RecurseTree(
     ProcessEntry entry_processor,
     void* context)
 {
-    LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(root_folder != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(entry_processor != 0, return EINVAL)
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %p, %p, %p, %s, %p, %p)",
-        (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_path_filter_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
+        LONGTAIL_LOGFIELD(root_folder, "%s"),
+        LONGTAIL_LOGFIELD(entry_processor, "%p"),
+        LONGTAIL_LOGFIELD(context, "%p")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, root_folder != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, entry_processor != 0, return EINVAL)
 
     char* root_folder_copy = Longtail_Strdup(root_folder);
     if (!root_folder_copy)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) failed with %d",
-            (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Strdup(p) failed with %d",
             ENOMEM)
         return ENOMEM;
     }
@@ -923,6 +946,12 @@ static int RecurseTree(
         char* relative_parent_path = relative_parent_paths[folder_index++];
 
         Longtail_StorageAPI_HIterator fs_iterator = 0;
+        struct Longtail_LogField ctx_fields_2[] = {
+            LONGTAIL_LOGFIELD(storage_api, "%p"),
+            LONGTAIL_LOGFIELD(full_search_path, "%s"),
+            LONGTAIL_LOGFIELD_REF(fs_iterator, "%p")
+        };
+        LOG_CONTEXT(ctx2, ctx_fields_2, 0);
         err = storage_api->StartFind(storage_api, full_search_path, &fs_iterator);
         if (err == ENOENT)
         {
@@ -935,24 +964,21 @@ static int RecurseTree(
         }
         else if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) storage_api->StartFind(%p, %s, %p) failed with %d",
-                (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
-                storage_api, full_search_path, &fs_iterator,
-                err)
+            LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "storage_api->StartFind() failed with %d", err)
             Longtail_Free((void*)full_search_path);
             full_search_path = 0;
             Longtail_Free((void*)relative_parent_path);
             relative_parent_path = 0;
             break;
         }
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) ", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, full_search_path, &fs_iterator)
+        LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) ", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, full_search_path, &fs_iterator)
         while(err == 0)
         {
             struct Longtail_StorageAPI_EntryProperties properties;
             err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) storage_api->GetEntryProperties(%p, %p, %p) failed with %d",
+                LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) storage_api->GetEntryProperties(%p, %p, %p) failed with %d",
                     (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
                     storage_api, fs_iterator, &properties,
                     err)
@@ -971,9 +997,7 @@ static int RecurseTree(
                     asset_path = (char*)Longtail_Alloc(new_parent_path_length + 1);
                     if (!asset_path)
                     {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) Longtail_Alloc() failed with %d",
-                            (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
-                            ENOMEM)
+                        LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
                         break;
                     }
                     strcpy(asset_path, relative_parent_path);
@@ -992,12 +1016,17 @@ static int RecurseTree(
                         properties.m_Permissions)
                     )
                 {
+                    struct Longtail_LogField ctx_fields_3[] = {
+                        LONGTAIL_LOGFIELD(context, "%p"),
+                        LONGTAIL_LOGFIELD(full_search_path, "%s"),
+                        LONGTAIL_LOGFIELD(asset_path, "%s"),
+                        LONGTAIL_LOGFIELD_REF(properties, "%p")
+                    };
+                    LOG_CONTEXT(ctx3, ctx_fields_3, 0);
                     err = entry_processor(context, full_search_path, asset_path, &properties);
                     if (err)
                     {
-                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) entry_processor(%p, %s, %p) failed with %d",
-                            (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
-                            context, full_search_path, &properties,
+                        LONGTAIL_LOG_WITH_CTX(ctx3, LONGTAIL_LOG_LEVEL_WARNING, "entry_processor() failed with %d",
                             err)
                         Longtail_Free(asset_path);
                         asset_path = 0;
@@ -1058,12 +1087,17 @@ static size_t GetFileInfosSize(uint32_t path_count, uint32_t path_data_size)
 
 static struct Longtail_FileInfos* CreateFileInfos(uint32_t path_count, uint32_t path_data_size)
 {
-    LONGTAIL_FATAL_ASSERT((path_count == 0 && path_data_size == 0) || (path_count > 0 && path_data_size > path_count), return 0)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(path_count, "%u"),
+        LONGTAIL_LOGFIELD(path_data_size, "%u")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, (path_count == 0 && path_data_size == 0) || (path_count > 0 && path_data_size > path_count), return 0)
     size_t file_infos_size = GetFileInfosSize(path_count, path_data_size);
     struct Longtail_FileInfos* file_infos = (struct Longtail_FileInfos*)Longtail_Alloc(file_infos_size);
     if (!file_infos)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CreatePaths(`%u`, `%u`) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreatePaths(`%u`, `%u`) failed with %d",
             path_count, path_data_size,
             ENOMEM)
         return 0;
@@ -1088,12 +1122,18 @@ int Longtail_MakeFileInfos(
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_MakeFileInfos(%u, %p, %p, %p, %p)",
-        path_count, (void*)path_names, file_sizes, file_permissions, (void*)out_file_infos)
-    LONGTAIL_VALIDATE_INPUT((path_count == 0 && path_names == 0) || (path_count > 0 && path_names != 0), return 0)
-    LONGTAIL_VALIDATE_INPUT((path_count == 0 && file_sizes == 0) || (path_count > 0 && file_sizes != 0), return 0)
-    LONGTAIL_VALIDATE_INPUT((path_count == 0 && file_permissions == 0) || (path_count > 0 && file_permissions != 0), return 0)
-    LONGTAIL_VALIDATE_INPUT(out_file_infos != 0, return 0)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(path_count, "%u"),
+        LONGTAIL_LOGFIELD(path_names, "%p"),
+        LONGTAIL_LOGFIELD(file_sizes, "%p"),
+        LONGTAIL_LOGFIELD(file_permissions, "%p"),
+        LONGTAIL_LOGFIELD(out_file_infos, "%p")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (path_count == 0 && path_names == 0) || (path_count > 0 && path_names != 0), return 0)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (path_count == 0 && file_sizes == 0) || (path_count > 0 && file_sizes != 0), return 0)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (path_count == 0 && file_permissions == 0) || (path_count > 0 && file_permissions != 0), return 0)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_file_infos != 0, return 0)
 
     uint32_t name_data_size = 0;
     for (uint32_t i = 0; i < path_count; ++i)
@@ -1103,8 +1143,7 @@ int Longtail_MakeFileInfos(
     struct Longtail_FileInfos* file_infos = CreateFileInfos(path_count, name_data_size);
     if (file_infos == 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MakeFileInfos(%u, %p, %p, %p, %p) failed with %d",
-            path_count, (void*)path_names, file_sizes, file_permissions, (void*)out_file_infos,
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateFileInfos(%u, %p, %p, %p, %p) failed with %d",
             ENOMEM)
         return ENOMEM;
     }
@@ -1134,11 +1173,21 @@ static int AppendPath(
     uint32_t path_count_increment,
     uint32_t data_size_increment)
 {
-    LONGTAIL_FATAL_ASSERT((*file_infos) != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(max_path_count != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(max_data_size != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(path_count_increment > 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(data_size_increment > 0, return EINVAL)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(file_infos, "%p"),
+        LONGTAIL_LOGFIELD(file_size, "%" PRIu64),
+        LONGTAIL_LOGFIELD(file_permissions, "%u"),
+        LONGTAIL_LOGFIELD(max_path_count, "%p"),
+        LONGTAIL_LOGFIELD(max_data_size, "%p"),
+        LONGTAIL_LOGFIELD(path_count_increment, "%u"),
+        LONGTAIL_LOGFIELD(data_size_increment, "%u")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, (*file_infos) != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, max_path_count != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, max_data_size != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path_count_increment > 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, data_size_increment > 0, return EINVAL)
     uint32_t path_size = (uint32_t)(strlen(path) + 1);
 
     int out_of_path_data = (*file_infos)->m_PathDataSize + path_size > *max_data_size;
@@ -1153,9 +1202,7 @@ static int AppendPath(
         struct Longtail_FileInfos* new_file_infos = CreateFileInfos(new_path_count, new_path_data_size);
         if (new_file_infos == 0)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AppendPath(%p, %s, %p, %p, %u, %u) failed with %d",
-                (void*)file_infos, path, (void*)max_path_count, (void*)max_data_size, path_count_increment, data_size_increment,
-                ENOMEM)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateFileInfos() failed with %d", ENOMEM)
             return ENOMEM;
         }
         *max_path_count = new_path_count;
@@ -1192,9 +1239,16 @@ struct AddFile_Context {
 
 static int AddFile(void* context, const char* root_path, const char* asset_path, const struct Longtail_StorageAPI_EntryProperties* properties)
 {
-    LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(properties != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(properties->m_Name != 0, return EINVAL)
+    struct Longtail_LogField ctx_fields[] = {
+        LONGTAIL_LOGFIELD(context, "%p"),
+        LONGTAIL_LOGFIELD(root_path, "%s"),
+        LONGTAIL_LOGFIELD(asset_path, "%s"),
+        LONGTAIL_LOGFIELD(properties, "%p")
+    };
+    LOG_CONTEXT(ctx, ctx_fields, 0);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, context != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, properties != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, properties->m_Name != 0, return EINVAL)
     struct AddFile_Context* paths_context = (struct AddFile_Context*)context;
     struct Longtail_StorageAPI* storage_api = paths_context->m_StorageAPI;
 
@@ -1211,9 +1265,7 @@ static int AddFile(void* context, const char* root_path, const char* asset_path,
     int err = AppendPath(&paths_context->m_FileInfos, full_path, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 512, 128);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "AddFile(%p, %s, %s, %s, %d, %" PRIu64 ", %u) failed with %d",
-            context, root_path, asset_path, properties->m_Name, properties->m_IsDir, properties->m_Size, properties->m_Permissions,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AppendPath() failed with %d", err)
         if (full_path != asset_path)
         {
             Longtail_Free(full_path);

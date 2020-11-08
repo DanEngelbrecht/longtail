@@ -17,9 +17,30 @@ static void TestAssert(const char* expression, const char* file, int line)
 
 static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-static void LogStdErr(const char* file, const char* function, int line, void* , int level, const char* log)
+static void LogContext(struct Longtail_LogContext* log_context)
 {
-    fprintf(stderr, "%s(%d) [%s] %s: %s\n", file, line, function, ERROR_LEVEL[level], log);
+    if (log_context == 0)
+    {
+        return;
+    }
+    LogContext(log_context->parent_context);
+    fprintf(stderr, " { ");
+    size_t log_field_count = log_context->field_count;
+    for (size_t f = 0; f < log_field_count; ++f)
+    {
+        struct Longtail_LogField* log_field = &log_context->fields[f];
+        fprintf(stderr, "\"%s\": ", log_field->name);
+        fprintf(stderr, log_field->fmt, log_field->value);
+        fprintf(stderr, "%s", ((f + 1) < log_field_count) ? "," : "");
+    }
+    fprintf(stderr, " }");
+}
+
+static void LogStdErr(const char* file, const char* function, int line, void* context, struct Longtail_LogContext* log_context, int level, const char* log)
+{
+    fprintf(stderr, "%s(%d) [%s] %s", file, line, function, ERROR_LEVEL[level]);
+    LogContext(log_context);
+    fprintf(stderr, " : %s\n", log);
 }
 
 int main(int argc, char** argv)
