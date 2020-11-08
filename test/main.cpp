@@ -15,7 +15,7 @@ static void TestAssert(const char* expression, const char* file, int line)
     exit(-1);
 }
 
-static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
+static const char* ERROR_LEVEL[5] = {"DEBUG", "INFO", "WARNING", "ERROR", "OFF"};
 
 static void LogContext(struct Longtail_LogContext* log_context)
 {

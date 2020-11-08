@@ -742,10 +742,15 @@ struct Longtail_LogContextFmt_Private {
 #define LONGTAIL_STR1(x) #x
 #define LONGTAIL_STR(x) LONGTAIL_STR1(x)
 
-#define LOG_CONTEXT_PRIVATE(name, fields, parent) \
-    struct Longtail_LogContextFmt_Private name##_fields_private[1] = { { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogFieldFmt_Private) } }; \
-    struct Longtail_LogContextFmt_Private* name = name##_fields_private; \
-    LONGTAIL_LOG_WITH_CTX(##name, LONGTAIL_LOG_LEVEL_DEBUG, LONGTAIL_STR(name))
+#define LOG_CONTEXT_WITH_FIELDS_PRIVATE(name, fields, parent, log_level) \
+    struct Longtail_LogContextFmt_Private name##_fields_private = { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogFieldFmt_Private) }; \
+    struct Longtail_LogContextFmt_Private* name = &name##_fields_private; \
+    LONGTAIL_LOG_WITH_CTX(##name, log_level, LONGTAIL_STR(name))
+
+#define LOG_CONTEXT_PRIVATE(name, parent, log_level) \
+    struct Longtail_LogContextFmt_Private name##_fields_private = { parent, 0, 0 }; \
+    struct Longtail_LogContextFmt_Private* name = &name##_fields_private; \
+    LONGTAIL_LOG_WITH_CTX(##name, log_level, LONGTAIL_STR(name))
 
 #define LONGTAIL_LOGFIELD(f, type) \
     { LONGTAIL_STR(f), type, (const void*)(uintptr_t)f }
@@ -753,7 +758,8 @@ struct Longtail_LogContextFmt_Private {
     { "&" ## LONGTAIL_STR(f), type, (const void*)&f }
 
 #define MAKE_LOG_CONTEXT_FIELDS(name) struct Longtail_LogFieldFmt_Private name##_fields[] = {
-#define MAKE_LOG_CONTEXT(name, parent) }; LOG_CONTEXT_PRIVATE(name, name##_fields, parent);
+#define MAKE_LOG_CONTEXT_WITH_FIELDS(name, parent, log_level) }; LOG_CONTEXT_WITH_FIELDS_PRIVATE(name, name##_fields, parent, log_level);
+#define MAKE_LOG_CONTEXT(name, parent, log_level) LOG_CONTEXT_PRIVATE(name, parent, log_level);
 
 typedef void (*Longtail_Log)(struct Longtail_LogContext* log_context, const char* str);
 LONGTAIL_EXPORT void Longtail_SetLog(Longtail_Log log_func, void* context);

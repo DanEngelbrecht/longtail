@@ -80,8 +80,18 @@ int BrotliCompressionAPI_Compress(
     size_t max_compressed_size,
     size_t* out_compressed_size)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compression_api, "%p"),
+        LONGTAIL_LOGFIELD(settings_id, "%u"),
+        LONGTAIL_LOGFIELD(uncompressed, "%u"),
+        LONGTAIL_LOGFIELD(compressed, "%u"),
+        LONGTAIL_LOGFIELD(uncompressed_size, "%" PRIu64),
+        LONGTAIL_LOGFIELD(max_compressed_size, "%" PRIu64),
+        LONGTAIL_LOGFIELD(out_compressed_size, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
     struct BrotliSettings* brotli_settings = SettingsIDToCompressionSetting(settings_id);
-    LONGTAIL_VALIDATE_INPUT(brotli_settings != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, brotli_settings != 0, return EINVAL)
 
     *out_compressed_size = max_compressed_size;
     if (BROTLI_FALSE == BrotliEncoderCompress(brotli_settings->m_Quality, brotli_settings->m_WindowBits, brotli_settings->m_Mode, uncompressed_size, (const uint8_t*)uncompressed, out_compressed_size, (uint8_t*)compressed))
@@ -91,8 +101,22 @@ int BrotliCompressionAPI_Compress(
     return 0;
 }
 
-int BrotliCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size)
+int BrotliCompressionAPI_Decompress(
+    struct Longtail_CompressionAPI* compression_api,
+    const char* compressed,
+    char* uncompressed,
+    size_t compressed_size,
+    size_t max_uncompressed_size,
+    size_t* out_uncompressed_size)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compression_api, "%p"),
+        LONGTAIL_LOGFIELD(compressed, "%u"),
+        LONGTAIL_LOGFIELD(uncompressed, "%u"),
+        LONGTAIL_LOGFIELD(max_uncompressed_size, "%" PRIu64),
+        LONGTAIL_LOGFIELD(out_uncompressed_size, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
     *out_uncompressed_size = max_uncompressed_size;
     BrotliDecoderResult result = BrotliDecoderDecompress(
         compressed_size,
@@ -112,6 +136,10 @@ int BrotliCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_
 
 static void BrotliCompressionAPI_Init(struct BrotliCompressionAPI* compression_api)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compression_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
     compression_api->m_BrotliCompressionAPI.m_API.Dispose = BrotliCompressionAPI_Dispose;
     compression_api->m_BrotliCompressionAPI.GetMaxCompressedSize = BrotliCompressionAPI_GetMaxCompressedSize;
     compression_api->m_BrotliCompressionAPI.Compress = BrotliCompressionAPI_Compress;
@@ -120,11 +148,12 @@ static void BrotliCompressionAPI_Init(struct BrotliCompressionAPI* compression_a
 
 struct Longtail_CompressionAPI* Longtail_CreateBrotliCompressionAPI()
 {
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
     struct BrotliCompressionAPI* compression_api = (struct BrotliCompressionAPI*)Longtail_Alloc(sizeof(struct BrotliCompressionAPI));
     if (!compression_api)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBrotliCompressionAPI() failed with %d",
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     BrotliCompressionAPI_Init(compression_api);
