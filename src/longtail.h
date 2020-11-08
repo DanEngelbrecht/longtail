@@ -714,30 +714,48 @@ LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);
 
 struct Longtail_LogField {
     const char* name;
+    const char* value;
+};
+
+struct Longtail_LogContext {
+    void* context;
+    const char* file;
+    const char* function;
+    struct Longtail_LogField* fields;
+    int field_count;
+    int line;
+    int level;
+};
+
+struct Longtail_LogFieldFmt_Private {
+    const char* name;
     const char* fmt;
     const void* value;
 };
 
-struct Longtail_LogContext {
-    struct Longtail_LogContext* parent_context;
-    struct Longtail_LogField* fields;
+struct Longtail_LogContextFmt_Private {
+    struct Longtail_LogContextFmt_Private* parent_context;
+    struct Longtail_LogFieldFmt_Private* fields;
     size_t field_count;
 };
 
 #define LONGTAIL_STR1(x) #x
 #define LONGTAIL_STR(x) LONGTAIL_STR1(x)
 
-#define LONGTAIL_LOGFIELD(f, type) \
-    { LONGTAIL_STR(f), type, (const void*)(uintptr_t)f }
-#define LONGTAIL_LOGFIELD_REF(f, type) \
-    { "&" ## LONGTAIL_STR(f), type, (const void*)&f }
-
-#define LOG_CONTEXT(name, fields, parent) \
-    struct Longtail_LogContext ctx##__LINE__[1] = { { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogField) } }; \
-    struct Longtail_LogContext* ##name = ctx##__LINE__; \
+#define LOG_CONTEXT_PRIVATE(name, fields, parent) \
+    struct Longtail_LogContextFmt_Private name##_fields_private[1] = { { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogFieldFmt_Private) } }; \
+    struct Longtail_LogContextFmt_Private* name = name##_fields_private; \
     LONGTAIL_LOG_WITH_CTX(##name, LONGTAIL_LOG_LEVEL_DEBUG, LONGTAIL_STR(name))
 
-typedef void (*Longtail_Log)(const char* file, const char* function, int line, void* context, struct Longtail_LogContext* log_context, int level, const char* str);
+#define LONGTAIL_LOGFIELD(f, type) \
+    { LONGTAIL_STR(f), type, (const void*)(uintptr_t)f }
+#define LONGTAIL_LOGFIELDFMT_REF(f, type) \
+    { "&" ## LONGTAIL_STR(f), type, (const void*)&f }
+
+#define MAKE_LOG_CONTEXT_FIELDS(name) struct Longtail_LogFieldFmt_Private name##_fields[] = {
+#define MAKE_LOG_CONTEXT(name, parent) }; LOG_CONTEXT_PRIVATE(name, name##_fields, parent);
+
+typedef void (*Longtail_Log)(struct Longtail_LogContext* log_context, const char* str);
 LONGTAIL_EXPORT void Longtail_SetLog(Longtail_Log log_func, void* context);
 LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 
@@ -748,7 +766,7 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #define LONGTAIL_LOG_LEVEL_OFF      4
 
 #ifndef LONGTAIL_LOG
-    void Longtail_CallLogger(const char* file, const char* function, int line, struct Longtail_LogContext* log_context, int level, const char* fmt, ...);
+    void Longtail_CallLogger(const char* file, const char* function, int line, struct Longtail_LogContextFmt_Private* log_context, int level, const char* fmt, ...);
     #define LONGTAIL_LOG(level, fmt, ...) \
         Longtail_CallLogger(__FILE__, __func__, __LINE__, 0, level, fmt, __VA_ARGS__);
     #define LONGTAIL_LOG_WITH_CTX(log_context, level, fmt, ...) \
@@ -780,6 +798,7 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
     }
 #   define LONGTAIL_VALIDATE_INPUT(x, bail) LONGTAIL_VALIDATE_INPUT_WITH_CTX(0, x, bail)
 #else // defined(LONGTAIL_ASSERTS)
+#   define LONGTAIL_FATAL_ASSERT_WITH_CTX(c, x, y)
 #   define LONGTAIL_FATAL_ASSERT(x, y)
 #   define LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, x, bail) \
     if (!(x)) \

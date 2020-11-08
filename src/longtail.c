@@ -575,19 +575,69 @@ void Longtail_SetLogLevel(int level)
     Longtail_LogLevel_private = level;
 }
 
-void Longtail_CallLogger(const char* file, const char* function, int line, struct Longtail_LogContext* log_context, int level, const char* fmt, ...)
+static uint32_t Longtail_MakeLogFields(struct Longtail_LogContextFmt_Private* log_context, struct Longtail_LogField** fields_ptr, uint32_t* fields_left_ptr, char** char_buffer_ptr, uint32_t* chars_left_ptr)
+{
+    if (log_context == 0)
+    {
+        return 0;
+    }
+    uint32_t count = Longtail_MakeLogFields(log_context->parent_context, fields_ptr, fields_left_ptr, char_buffer_ptr, chars_left_ptr);
+    struct Longtail_LogField* field = *fields_ptr;
+    uint32_t fields_left = *fields_left_ptr;
+    char* char_buffer = *char_buffer_ptr;
+    uint32_t chars_left = *chars_left_ptr;
+    for (size_t f = 0; (f < log_context->field_count) && (f < fields_left > 0) && (chars_left > 1); ++f)
+    {
+        struct Longtail_LogFieldFmt_Private* log_field_fmt = &log_context->fields[f];
+        field->name = log_field_fmt->name;
+        char_buffer[0] = '\0';
+        int chars_used = snprintf(char_buffer, chars_left, log_field_fmt->fmt, log_field_fmt->value) + 1;
+        if (chars_used == chars_left)
+        {
+            char_buffer[chars_used] = 0;
+        }
+        chars_left -= chars_used;
+        field->value = char_buffer;
+        char_buffer += chars_used + 1;
+        --fields_left;
+        ++count;
+        ++field;
+    }
+    *fields_ptr = field;
+    *fields_left_ptr = fields_left;
+    *char_buffer_ptr = char_buffer;
+    *chars_left_ptr = chars_left;
+    return count;
+}
+
+void Longtail_CallLogger(const char* file, const char* function, int line, struct Longtail_LogContextFmt_Private* log_context_fmt, int level, const char* fmt, ...)
 {
     LONGTAIL_FATAL_ASSERT(fmt != 0, return)
     if (!Longtail_Log_private || (level < Longtail_LogLevel_private))
     {
         return;
     }
+    char buffer[2048];
+    struct Longtail_LogField tmp_fields[32];
+    struct Longtail_LogField* fields = &tmp_fields[0];
+    char* char_buffer = &buffer[0];
+    uint32_t fields_left = 32;
+    uint32_t chars_left = 2048;
+    uint32_t field_count = Longtail_MakeLogFields(log_context_fmt, &fields, &fields_left, &char_buffer, &chars_left);
+    struct Longtail_LogContext log_context;
+    log_context.context = Longtail_LogContext;
+    log_context.field_count = field_count;
+    log_context.file = file;
+    log_context.function = function;
+    log_context.fields = &tmp_fields[0];
+    log_context.field_count = (int)field_count;
+    log_context.line = level;
+    log_context.level = level;
     va_list argptr;
     va_start(argptr, fmt);
-    char buffer[2048];
-    vsprintf(buffer, fmt, argptr);
+    vsnprintf(char_buffer, chars_left, fmt, argptr);
     va_end(argptr);
-    Longtail_Log_private(file, function, line, Longtail_LogContext, log_context, level, buffer);
+    Longtail_Log_private(&log_context, char_buffer);
 }
 
 char* Longtail_Strdup(const char* path)
@@ -784,12 +834,11 @@ static int IsDirPath(const char* path)
 
 int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(hash_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_hash, "%p")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, hash_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_hash != 0, return EINVAL)
@@ -801,7 +850,7 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
     int err = hash_api->HashBuffer(hash_api, pathlen, (void*)buf, &hash);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer(%p, %s, %p) failed with %d", (void*)hash_api, path, (void*)out_hash, err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer() failed with %d", err)
         return err;
     }
     *out_hash = (TLongtail_Hash)hash;
@@ -810,11 +859,10 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
 
 static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path != 0, return EINVAL)
     int err = storage_api->CreateDir(storage_api, path);
@@ -832,11 +880,10 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
 
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, path != 0, return EINVAL)
 
@@ -868,13 +915,13 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     int err = EnsureParentPathExists(storage_api, dir_path);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
         return err;
     }
     err = SafeCreateDir(storage_api, dir_path);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists(%p ,%s) failed with %d", (void*)storage_api, path, err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
         return err;
     }
     return 0;
@@ -902,7 +949,7 @@ static int RecurseTree(
     ProcessEntry entry_processor,
     void* context)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(optional_path_filter_api, "%p"),
         LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
@@ -910,8 +957,7 @@ static int RecurseTree(
         LONGTAIL_LOGFIELD(root_folder, "%s"),
         LONGTAIL_LOGFIELD(entry_processor, "%p"),
         LONGTAIL_LOGFIELD(context, "%p")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, root_folder != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, entry_processor != 0, return EINVAL)
@@ -946,12 +992,11 @@ static int RecurseTree(
         char* relative_parent_path = relative_parent_paths[folder_index++];
 
         Longtail_StorageAPI_HIterator fs_iterator = 0;
-        struct Longtail_LogField ctx_fields_2[] = {
+        MAKE_LOG_CONTEXT_FIELDS(ctx2)
             LONGTAIL_LOGFIELD(storage_api, "%p"),
             LONGTAIL_LOGFIELD(full_search_path, "%s"),
-            LONGTAIL_LOGFIELD_REF(fs_iterator, "%p")
-        };
-        LOG_CONTEXT(ctx2, ctx_fields_2, 0);
+            LONGTAIL_LOGFIELDFMT_REF(fs_iterator, "%p")
+        MAKE_LOG_CONTEXT(ctx2, ctx)
         err = storage_api->StartFind(storage_api, full_search_path, &fs_iterator);
         if (err == ENOENT)
         {
@@ -971,17 +1016,14 @@ static int RecurseTree(
             relative_parent_path = 0;
             break;
         }
-        LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_DEBUG, "RecurseTree(%p, %s, %p, %p) ", (void*)storage_api, root_folder, (void*)entry_processor, context, storage_api, full_search_path, &fs_iterator)
+        LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_DEBUG, "Scanning `%s`", full_search_path)
         while(err == 0)
         {
             struct Longtail_StorageAPI_EntryProperties properties;
             err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
             if (err)
             {
-                LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree(%p, %p, %p, %p, %s, %p, %p) storage_api->GetEntryProperties(%p, %p, %p) failed with %d",
-                    (void*)storage_api, (void*)optional_path_filter_api, (void*)optional_cancel_api, (void*)optional_cancel_token, root_folder, (void*)entry_processor, context,
-                    storage_api, fs_iterator, &properties,
-                    err)
+                LONGTAIL_LOG_WITH_CTX(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "storage_api->GetEntryProperties() failed with %d", err)
             }
             else
             {
@@ -1016,13 +1058,12 @@ static int RecurseTree(
                         properties.m_Permissions)
                     )
                 {
-                    struct Longtail_LogField ctx_fields_3[] = {
+                    MAKE_LOG_CONTEXT_FIELDS(ctx3)
                         LONGTAIL_LOGFIELD(context, "%p"),
                         LONGTAIL_LOGFIELD(full_search_path, "%s"),
                         LONGTAIL_LOGFIELD(asset_path, "%s"),
-                        LONGTAIL_LOGFIELD_REF(properties, "%p")
-                    };
-                    LOG_CONTEXT(ctx3, ctx_fields_3, 0);
+                        LONGTAIL_LOGFIELDFMT_REF(properties, "%p")
+                    MAKE_LOG_CONTEXT(ctx3, ctx2)
                     err = entry_processor(context, full_search_path, asset_path, &properties);
                     if (err)
                     {
@@ -1087,19 +1128,16 @@ static size_t GetFileInfosSize(uint32_t path_count, uint32_t path_data_size)
 
 static struct Longtail_FileInfos* CreateFileInfos(uint32_t path_count, uint32_t path_data_size)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(path_count, "%u"),
         LONGTAIL_LOGFIELD(path_data_size, "%u")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, (path_count == 0 && path_data_size == 0) || (path_count > 0 && path_data_size > path_count), return 0)
     size_t file_infos_size = GetFileInfosSize(path_count, path_data_size);
     struct Longtail_FileInfos* file_infos = (struct Longtail_FileInfos*)Longtail_Alloc(file_infos_size);
     if (!file_infos)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreatePaths(`%u`, `%u`) failed with %d",
-            path_count, path_data_size,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     char* p = (char*)&file_infos[1];
@@ -1122,14 +1160,13 @@ int Longtail_MakeFileInfos(
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(path_count, "%u"),
         LONGTAIL_LOGFIELD(path_names, "%p"),
         LONGTAIL_LOGFIELD(file_sizes, "%p"),
         LONGTAIL_LOGFIELD(file_permissions, "%p"),
         LONGTAIL_LOGFIELD(out_file_infos, "%p")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (path_count == 0 && path_names == 0) || (path_count > 0 && path_names != 0), return 0)
     LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (path_count == 0 && file_sizes == 0) || (path_count > 0 && file_sizes != 0), return 0)
     LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (path_count == 0 && file_permissions == 0) || (path_count > 0 && file_permissions != 0), return 0)
@@ -1143,8 +1180,7 @@ int Longtail_MakeFileInfos(
     struct Longtail_FileInfos* file_infos = CreateFileInfos(path_count, name_data_size);
     if (file_infos == 0)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateFileInfos(%u, %p, %p, %p, %p) failed with %d",
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateFileInfos() failed with %d", ENOMEM)
         return ENOMEM;
     }
     uint32_t offset = 0;
@@ -1173,7 +1209,7 @@ static int AppendPath(
     uint32_t path_count_increment,
     uint32_t data_size_increment)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(file_infos, "%p"),
         LONGTAIL_LOGFIELD(file_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(file_permissions, "%u"),
@@ -1181,8 +1217,7 @@ static int AppendPath(
         LONGTAIL_LOGFIELD(max_data_size, "%p"),
         LONGTAIL_LOGFIELD(path_count_increment, "%u"),
         LONGTAIL_LOGFIELD(data_size_increment, "%u")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, (*file_infos) != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, max_path_count != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, max_data_size != 0, return EINVAL)
@@ -1239,13 +1274,12 @@ struct AddFile_Context {
 
 static int AddFile(void* context, const char* root_path, const char* asset_path, const struct Longtail_StorageAPI_EntryProperties* properties)
 {
-    struct Longtail_LogField ctx_fields[] = {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(root_path, "%s"),
         LONGTAIL_LOGFIELD(asset_path, "%s"),
         LONGTAIL_LOGFIELD(properties, "%p")
-    };
-    LOG_CONTEXT(ctx, ctx_fields, 0);
+    MAKE_LOG_CONTEXT(ctx, 0)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, context != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, properties != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, properties->m_Name != 0, return EINVAL)
@@ -1288,11 +1322,17 @@ int Longtail_GetFilesRecursively(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_GetFilesRecursively(%p, %p, %p, %p, %s, %p)",
-        storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, out_file_infos)
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(root_path != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(out_file_infos != 0, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_path_filter_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
+        LONGTAIL_LOGFIELD(root_path, "%s"),
+        LONGTAIL_LOGFIELD(out_file_infos, "%p")
+    MAKE_LOG_CONTEXT(ctx, 0)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, root_path != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_file_infos != 0, return EINVAL)
 
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
@@ -1300,9 +1340,7 @@ int Longtail_GetFilesRecursively(
     struct Longtail_FileInfos* file_infos = CreateFileInfos(default_path_count, default_path_data_size);
     if (!file_infos)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilesRecursively(%p, %p, %p, %p, %s, %p) failed with %d",
-            storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, out_file_infos,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateFileInfos() failed with %d", ENOMEM)
         return ENOMEM;
     }
     struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), file_infos};
@@ -1311,9 +1349,7 @@ int Longtail_GetFilesRecursively(
     int err = RecurseTree(storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, AddFile, &context);
     if(err)
     {
-        LONGTAIL_LOG((err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetFilesRecursively(%p, %p, %p, %p, %s, %p) failed with %d",
-            storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, out_file_infos,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "RecurseTree() failed with %d", err)
         Longtail_Free(context.m_FileInfos);
         context.m_FileInfos = 0;
         return err;
@@ -1336,13 +1372,17 @@ struct StorageChunkFeederContext
 
 static int StorageChunkFeederFunc(void* context, Longtail_ChunkerAPI_HChunker chunker, uint32_t requested_size, char* buffer, uint32_t* out_size)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "StorageChunkFeederFunc(%p, %p, %u, %p, %p)",
-        context, (void*)chunker, requested_size, (void*)buffer, (void*)out_size)
-    LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(chunker != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(requested_size > 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(buffer != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_size != 0, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(chunker, "%p"),
+        LONGTAIL_LOGFIELD(requested_size, "%u"),
+        LONGTAIL_LOGFIELD(buffer, "%p"),
+        LONGTAIL_LOGFIELD(out_size, "%p")
+    MAKE_LOG_CONTEXT(ctx, 0)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, context != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, chunker != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, requested_size > 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, buffer != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_size != 0, return EINVAL)
     struct StorageChunkFeederContext* c = (struct StorageChunkFeederContext*)context;
     uint64_t read_count = c->m_Size - c->m_Offset;
     if (read_count > 0)
@@ -1354,9 +1394,7 @@ static int StorageChunkFeederFunc(void* context, Longtail_ChunkerAPI_HChunker ch
         int err = c->m_StorageAPI->Read(c->m_StorageAPI, c->m_AssetFile, c->m_StartRange + c->m_Offset, (uint32_t)read_count, buffer);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "StorageChunkFeederFunc(%p, %p, %u, %p, %p) failed with %d",
-                context, (void*)chunker, requested_size, (void*)buffer, (void*)out_size,
-                err)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "m_StorageAPI->Read() failed with %d", err)
             return err;
         }
         c->m_Offset += read_count;
@@ -1392,16 +1430,17 @@ struct HashJob
 
 static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "DynamicChunking(%p, %u)",
-        context, job_id)
-    LONGTAIL_FATAL_ASSERT(context != 0, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(context, "%p"),
+        LONGTAIL_LOGFIELD(job_id, "%u"),
+        LONGTAIL_LOGFIELD(is_cancelled, "%d")
+    MAKE_LOG_CONTEXT(ctx, 0)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, context != 0, return EINVAL)
     struct HashJob* hash_job = (struct HashJob*)context;
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "DynamicChunking(%p, %u, %d) failed with %d",
-            context, job_id, is_cancelled,
-            ECANCELED)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "Cancelled with errno %d", ECANCELED)
         hash_job->m_Err = ECANCELED;
         return 0;
     }
@@ -1411,9 +1450,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
         hash_job->m_Err = Longtail_GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
         if (hash_job->m_Err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-                context, job_id, is_cancelled,
-                hash_job->m_Err)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", hash_job->m_Err)
             return 0;
         }
     }
@@ -1432,9 +1469,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-            context, job_id, is_cancelled,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->OpenReadFile() failed with %d", err)
         Longtail_Free(path);
         path = 0;
         hash_job->m_Err = err;
@@ -1449,9 +1484,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
         err = hash_job->m_ChunkerAPI->GetMinChunkSize(hash_job->m_ChunkerAPI, &chunker_min_size);
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-                context, job_id, is_cancelled,
-                err)
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_ChunkerAPI->GetMinChunkSize() failed with %d", err)
             Longtail_Free(path);
             path = 0;
             hash_job->m_Err = err;
@@ -1462,9 +1495,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             char* buffer = (char*)Longtail_Alloc((size_t)hash_size);
             if (!buffer)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-                    context, job_id, is_cancelled,
-                    ENOMEM)
+                LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
                 storage_api->CloseFile(storage_api, file_handle);
                 file_handle = 0;
                 Longtail_Free(path);
@@ -1475,9 +1506,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             err = storage_api->Read(storage_api, file_handle, hash_job->m_StartRange, hash_size, buffer);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-                    context, job_id, is_cancelled,
-                    err)
+                LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Read() failed with %d", err)
                 Longtail_Free(buffer);
                 buffer = 0;
                 storage_api->CloseFile(storage_api, file_handle);
@@ -1491,9 +1520,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, (uint32_t)hash_size, buffer, &hash_job->m_ChunkHashes[chunk_count]);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with ",
-                    context, job_id, is_cancelled,
-                    err)
+                LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_HashAPI->HashBuffer() failed with ", err)
                 Longtail_Free(buffer);
                 buffer = 0;
                 storage_api->CloseFile(storage_api, file_handle);
@@ -1521,9 +1548,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             err = hash_job->m_ChunkerAPI->CreateChunker(hash_job->m_ChunkerAPI, min_chunk_size, avg_chunk_size, max_chunk_size, &chunker);
             if (err)
             {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-                    context, job_id, is_cancelled,
-                    err)
+                LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_ChunkerAPI->CreateChunker() failed with %d", err)
                 storage_api->CloseFile(storage_api, file_handle);
                 file_handle = 0;
                 Longtail_Free(path);
@@ -1542,19 +1567,6 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 0
             };
 
-            if (err)
-            {
-                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-                    context, job_id, is_cancelled,
-                    err)
-                storage_api->CloseFile(storage_api, file_handle);
-                file_handle = 0;
-                Longtail_Free(path);
-                path = 0;
-                hash_job->m_Err = err;
-                return 0;
-            }
-
             struct Longtail_Chunker_ChunkRange chunk_range;
             err = hash_job->m_ChunkerAPI->NextChunk(hash_job->m_ChunkerAPI, chunker, StorageChunkFeederFunc, &feeder_context, &chunk_range);
             while (err == 0)
@@ -1562,9 +1574,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, chunk_range.len, (void*)chunk_range.buf, &hash_job->m_ChunkHashes[chunk_count]);
                 if (err != 0)
                 {
-                    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DynamicChunking(%p, %u, %d) failed with %d",
-                        context, job_id, is_cancelled,
-                        err)
+                    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_HashAPI->HashBuffer() failed with %d", err)
                     hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
                     chunker = 0;
                     storage_api->CloseFile(storage_api, file_handle);
@@ -1589,7 +1599,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
     storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
     
-    LONGTAIL_FATAL_ASSERT(chunk_count <= hash_job->m_MaxChunkCount, hash_job->m_Err = EINVAL; return 0)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, chunk_count <= hash_job->m_MaxChunkCount, hash_job->m_Err = EINVAL; return 0)
     *hash_job->m_AssetChunkCount = chunk_count;
 
     Longtail_Free((char*)path);

@@ -19,26 +19,23 @@ static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
 static void LogContext(struct Longtail_LogContext* log_context)
 {
-    if (log_context == 0)
+    if (log_context == 0 || log_context->field_count == 0)
     {
         return;
     }
-    LogContext(log_context->parent_context);
     fprintf(stderr, " { ");
     size_t log_field_count = log_context->field_count;
     for (size_t f = 0; f < log_field_count; ++f)
     {
         struct Longtail_LogField* log_field = &log_context->fields[f];
-        fprintf(stderr, "\"%s\": ", log_field->name);
-        fprintf(stderr, log_field->fmt, log_field->value);
-        fprintf(stderr, "%s", ((f + 1) < log_field_count) ? "," : "");
+        fprintf(stderr, "\"%s\": %s%s", log_field->name, log_field->value, ((f + 1) < log_field_count) ? ", " : "");
     }
     fprintf(stderr, " }");
 }
 
-static void LogStdErr(const char* file, const char* function, int line, void* context, struct Longtail_LogContext* log_context, int level, const char* log)
+static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
 {
-    fprintf(stderr, "%s(%d) [%s] %s", file, line, function, ERROR_LEVEL[level]);
+    fprintf(stderr, "%s(%d) [%s] %s", log_context->file, log_context->line, log_context->function, ERROR_LEVEL[log_context->level]);
     LogContext(log_context);
     fprintf(stderr, " : %s\n", log);
 }
