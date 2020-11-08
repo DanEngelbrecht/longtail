@@ -778,7 +778,7 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #    define LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, x, bail) \
         if (!(x)) \
         { \
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Assert failed in %s(): failed on condition: `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Assert failed on condition: `%s`", #x); \
             if (Longtail_Assert_private) \
             { \
                 Longtail_Assert_private(#x, __FILE__, __LINE__); \
@@ -789,7 +789,7 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #   define LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, x, bail) \
     if (!(x)) \
     { \
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation for `%s()`: failed on condition `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
         if (Longtail_Assert_private) \
         { \
             Longtail_Assert_private(#x, __FILE__, __LINE__); \
@@ -803,15 +803,10 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #   define LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, x, bail) \
     if (!(x)) \
     { \
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation for `%s()`: failed on condition `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
         bail; \
     }
-#   define LONGTAIL_VALIDATE_INPUT(x, bail) \
-    if (!(x)) \
-    { \
-        LONGTAIL_LOG_WITH_CTX(0, LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation for `%s()`: failed on condition `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
-        bail; \
-    }
+#   define LONGTAIL_VALIDATE_INPUT(x, bail) LONGTAIL_VALIDATE_INPUT_WITH_CTX(0, x, bail)
 #endif // defined(LONGTAIL_ASSERTS)
 
 
