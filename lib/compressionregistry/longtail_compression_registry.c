@@ -15,8 +15,11 @@ struct Default_CompressionRegistry
 
 static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "DefaultCompressionRegistry_Dispose(%p)", api)
-    LONGTAIL_VALIDATE_INPUT(api, return);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, api, return);
     struct Longtail_CompressionAPI* last_api = 0;
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
     for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
@@ -31,11 +34,22 @@ static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
     Longtail_Free(default_compression_registry);
 }
 
-static int Default_GetCompressionAPI(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, uint32_t* out_settings)
+static int Default_GetCompressionAPI(
+    struct Longtail_CompressionRegistryAPI* compression_registry,
+    uint32_t compression_type,
+    struct Longtail_CompressionAPI** out_compression_api,
+    uint32_t* out_settings)
 {
-    LONGTAIL_FATAL_ASSERT(compression_registry, return EINVAL);
-    LONGTAIL_FATAL_ASSERT(out_compression_api, return EINVAL);
-    LONGTAIL_FATAL_ASSERT(out_settings, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compression_registry, "%p"),
+        LONGTAIL_LOGFIELD(compression_type, "%u"),
+        LONGTAIL_LOGFIELD(out_compression_api, "%p"),
+        LONGTAIL_LOGFIELD(out_settings, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, compression_registry, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_compression_api, return EINVAL);
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_settings, return EINVAL);
     
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
     for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
@@ -47,7 +61,7 @@ static int Default_GetCompressionAPI(struct Longtail_CompressionRegistryAPI* com
             return 0;
         }
     }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "Default_GetCompressionAPI(%p, %u, %p, %p) failed with %d", compression_registry, compression_type, out_compression_api, out_settings, ENOENT)
+    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Unknown compression type %u", compression_type)
     return ENOENT;
 }
 
@@ -57,10 +71,16 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
     const struct Longtail_CompressionAPI** compression_apis,
     const uint32_t* compression_settings)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateDefaultCompressionRegistry(%u, %p, %p, %p)", compression_type_count, compression_types, compression_apis, compression_settings)
-    LONGTAIL_VALIDATE_INPUT(compression_types, return 0);
-    LONGTAIL_VALIDATE_INPUT(compression_apis, return 0);
-    LONGTAIL_VALIDATE_INPUT(compression_settings, return 0);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compression_type_count, "%u"),
+        LONGTAIL_LOGFIELD(compression_types, "%p"),
+        LONGTAIL_LOGFIELD(compression_apis, "%p"),
+        LONGTAIL_LOGFIELD(compression_settings, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, compression_types, return 0);
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, compression_apis, return 0);
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, compression_settings, return 0);
     size_t registry_size = sizeof(struct Default_CompressionRegistry) +
         sizeof(uint32_t) * compression_type_count +
         sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
@@ -68,9 +88,7 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
     void* mem = Longtail_Alloc(registry_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateDefaultCompressionRegistry(%u, %p, %p, %p) failed with %d",
-            compression_type_count, compression_types, compression_apis, compression_settings,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
 
