@@ -45,7 +45,11 @@ struct ShareBlockStoreAPI
 
 static void SharedBlockStore_CompleteRequest(struct ShareBlockStoreAPI* sharedblockstore_api)
 {
-    LONGTAIL_FATAL_ASSERT(sharedblockstore_api->m_PendingRequestCount > 0, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(sharedblockstore_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, sharedblockstore_api->m_PendingRequestCount > 0, return)
     struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(sharedblockstore_api->m_Lock);
     if (0 == Longtail_AtomicAdd32(&sharedblockstore_api->m_PendingRequestCount, -1))
@@ -64,6 +68,10 @@ static void SharedBlockStore_CompleteRequest(struct ShareBlockStoreAPI* sharedbl
 
 int SharedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct SharedStoredBlock* b = (struct SharedStoredBlock*)stored_block;
     int32_t ref_count = Longtail_AtomicAdd32(&b->m_RefCount, -1);
     if (ref_count > 0)
@@ -89,13 +97,16 @@ int SharedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
 struct SharedStoredBlock* SharedStoredBlock_CreateBlock(struct ShareBlockStoreAPI* sharing_block_store_api, struct Longtail_StoredBlock* original_stored_block)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(sharing_block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(original_stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     size_t shared_stored_block_size = sizeof(struct SharedStoredBlock);
     struct SharedStoredBlock* shared_stored_block = (struct SharedStoredBlock*)Longtail_Alloc(shared_stored_block_size);
     if (!shared_stored_block)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SharedStoredBlock_CreateBlock(%p, %p) failed with %d",
-            sharing_block_store_api, original_stored_block,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     shared_stored_block->m_StoredBlock.Dispose = SharedStoredBlock_Dispose;
@@ -113,11 +124,16 @@ static int ShareBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, stored_block, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api->OnComplete, return EINVAL)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1);
@@ -130,9 +146,7 @@ static int ShareBlockStore_PutStoredBlock(
         async_complete_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->PutStoredBlock() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
     }
     return err;
@@ -143,10 +157,14 @@ static int ShareBlockStore_PreflightGet(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, %" PRIu64 ", %p)",
-        block_store_api, chunk_count, chunk_hashes)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
     int err = api->m_BackingBlockStore->PreflightGet(
@@ -155,9 +173,7 @@ static int ShareBlockStore_PreflightGet(
         chunk_hashes);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_PreflightGet(%p, %" PRIu64 ", %p) failed with %d",
-            block_store_api, chunk_count, chunk_hashes,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "api->m_BackingBlockStore->PreflightGet() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
     }
     return err;
@@ -172,9 +188,15 @@ struct ShareBlockStore_AsyncGetStoredBlockAPI
 
 static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%u"),
+        LONGTAIL_LOGFIELD(err, "%d")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api != 0, return)
     struct ShareBlockStore_AsyncGetStoredBlockAPI* async_api = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(async_api->m_ShareBlockStoreAPI != 0, return)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_api->m_ShareBlockStoreAPI != 0, return)
     TLongtail_Hash block_hash = async_api->m_BlockHash;
 
     struct ShareBlockStoreAPI* api = async_api->m_ShareBlockStoreAPI;
@@ -247,11 +269,15 @@ static int ShareBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)",
-        block_store_api, block_hash, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api->OnComplete, return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
@@ -288,9 +314,7 @@ static int ShareBlockStore_GetStoredBlock(
     struct ShareBlockStore_AsyncGetStoredBlockAPI* share_lock_store_async_get_stored_block_API = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(share_lock_store_async_get_stored_block_API_size);
     if (!share_lock_store_async_get_stored_block_API)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
-            block_store_api, block_hash, async_complete_api,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         return ENOMEM;
     }
@@ -307,9 +331,7 @@ static int ShareBlockStore_GetStoredBlock(
         &share_lock_store_async_get_stored_block_API->m_AsyncGetStoredBlockAPI);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
-            block_store_api, block_hash, async_complete_api,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->GetStoredBlock() failed with %d", err)
 
         struct Longtail_AsyncGetStoredBlockAPI** list;
         Longtail_LockSpinLock(api->m_Lock);
@@ -337,11 +359,17 @@ static int ShareBlockStore_GetExistingContent(
     uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
-        block_store_api, chunk_count, chunk_hashes, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
+        LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
@@ -353,9 +381,7 @@ static int ShareBlockStore_GetExistingContent(
         async_complete_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p) failed with %d",
-            block_store_api, chunk_count, chunk_hashes, async_complete_api,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->GetExistingContent() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         return err;
     }
@@ -364,9 +390,13 @@ static int ShareBlockStore_GetExistingContent(
 
 static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(out_stats, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_stats, return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
@@ -379,7 +409,11 @@ static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_a
 
 static int ShareBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
     Longtail_LockSpinLock(api->m_Lock);
@@ -396,8 +430,11 @@ static int ShareBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api,
 
 static void ShareBlockStore_Dispose(struct Longtail_API* base_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p)", base_api)
-    LONGTAIL_FATAL_ASSERT(base_api, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(base_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, base_api, return)
 
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)base_api;
     while (api->m_PendingRequestCount > 0)
@@ -405,7 +442,7 @@ static void ShareBlockStore_Dispose(struct Longtail_API* base_api)
         Longtail_Sleep(1000);
         if (api->m_PendingRequestCount > 0)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p) waiting for %d pending requests", api, (int32_t)api->m_PendingRequestCount);
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Waiting for %d pending requests", (int32_t)api->m_PendingRequestCount);
         }
     }
     hmfree(api->m_BlockHashToCompleteCallbacks);
@@ -420,11 +457,15 @@ static int ShareBlockStore_Init(
     struct Longtail_BlockStoreAPI* backing_block_store,
     struct Longtail_BlockStoreAPI** out_block_store_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "ShareBlockStore_Dispose(%p, %p, %p)",
-        mem, backing_block_store, out_block_store_api)
-    LONGTAIL_FATAL_ASSERT(mem, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_block_store_api, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(backing_block_store, "%p"),
+        LONGTAIL_LOGFIELD(out_block_store_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, mem, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, backing_block_store, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_block_store_api, return EINVAL)
 
     struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
         mem,
@@ -453,9 +494,7 @@ static int ShareBlockStore_Init(
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p, %p) failed with %d",
-            api, backing_block_store,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateSpinLock() failed with %d", ENOMEM)
         return err;
     }
     *out_block_store_api = block_store_api;
@@ -465,16 +504,17 @@ static int ShareBlockStore_Init(
 struct Longtail_BlockStoreAPI* Longtail_CreateShareBlockStoreAPI(
     struct Longtail_BlockStoreAPI* backing_block_store)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateShareBlockStoreAPI(%p)", backing_block_store)
-    LONGTAIL_FATAL_ASSERT(backing_block_store, return 0)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(backing_block_store, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, backing_block_store, return 0)
 
     size_t api_size = sizeof(struct ShareBlockStoreAPI);
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p) failed with %d",
-            backing_block_store,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     struct Longtail_BlockStoreAPI* block_store_api;
@@ -484,9 +524,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateShareBlockStoreAPI(
         &block_store_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateShareBlockStoreAPI(%p) failed with %d",
-            backing_block_store,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ShareBlockStore_Init() failed with %d", err)
         Longtail_Free(mem);
         return 0;
     }
