@@ -260,9 +260,7 @@ static int BlockStoreStorageAPI_ReadFromBlock(
     void* work_mem = Longtail_Alloc(block_chunk_lookup_size);
     if (work_mem == 0)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock(%p, %p, %p, %p, %" PRIu64 ", %" PRIu64 ", %p, %p) failed with %d",
-            stored_block, range, block_store_fs, block_store_file, start, size, buffer, chunk_indexes,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     const TLongtail_Hash* block_chunk_hashes = stored_block->m_BlockIndex->m_ChunkHashes;
@@ -371,9 +369,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
     {
         if (data->m_Err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
-                context, job_id, is_cancelled,
-                data->m_Err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "read from block failed with %d", data->m_Err)
             return 0;
         }
         // Don't need dynamic alloc, could be part of struct BlockStoreStorageAPI_ReadFromBlockJobData since it covers the lifetime of struct BlockStoreStorageAPI_ReadBlock_OnComplete
@@ -385,7 +381,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         int err = data->m_BlockStoreFS->m_BlockStore->GetStoredBlock(data->m_BlockStoreFS->m_BlockStore, data->m_Range->m_BlockHash, &complete_cb->m_API);
         if (err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "data->m_BlockStoreFS->m_BlockStore->GetStoredBlock() failed with %d",
                 context, job_id, is_cancelled,
                 err)
             data->m_Err = err;
@@ -405,9 +401,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         data->m_ChunkIndexes);
     if (data->m_Err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
-            context, job_id, is_cancelled,
-            data->m_Err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock() failed with %d", data->m_Err)
     }
     if (data->m_StoredBlock->Dispose)
     {

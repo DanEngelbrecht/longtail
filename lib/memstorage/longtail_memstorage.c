@@ -378,9 +378,7 @@ static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_ap
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_SetPermissions(%p, %s, %u) failed with %d",
-            storage_api, path, permissions,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "file not found, failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];

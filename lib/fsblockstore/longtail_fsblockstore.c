@@ -157,9 +157,7 @@ static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api)
     int err = EnsureParentPathExists(storage_api, store_index_path_tmp);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteStoreIndex(%p) EnsureParentPathExists() failed with %d",
-            api,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
         Longtail_Free((char*)store_index_path_tmp);
         return err;
     }
@@ -173,7 +171,7 @@ static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api)
         err = Longtail_ReadStoreIndex(storage_api, store_index_path, &existing_store_index);
         if (err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoreIndex() Longtail_ReadStoreIndex() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoreIndex() failed with %d", err)
             Longtail_Free((void*)store_index_path);
             Longtail_Free((void*)store_index_path_tmp);
             return err;
