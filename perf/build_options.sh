@@ -3,7 +3,7 @@
 export TARGET=perf
 export TARGET_TYPE=EXECUTABLE
 
-. ../all_sources.sh
-. ../default_build_options.sh
+. ${BASE_DIR}all_sources.sh
+. ${BASE_DIR}default_build_options.sh
 
-export MAIN_SRC="$BASE_DIR/perf/main.cpp
+export MAIN_SRC="$BASE_DIR/perf/main.cpp"

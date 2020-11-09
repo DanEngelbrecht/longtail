@@ -15,22 +15,16 @@ jobs:
     - uses: actions/checkout@v2
     - name: build cmd
       run: |
-        pushd ./cmd
-        ./build.sh
-        ./build.sh release
-        popd
+        cmd/build.sh
+        cmd/build.sh release
     - name: build shared_lib
       run: |
-        cd ./shared_lib
-        ./build.sh
-        ./build.sh release
-        cd ..
+        shared_lib/build.sh
+        shared_lib/build.sh release
     - name: build static_lib
       run: |
-        cd ./static_lib
-        ./build.sh
-        ./build.sh release
-        cd ..
+        static_lib/build.sh
+        static_lib/build.sh release
     - name: build dist
       run: |
         ./dist.sh
@@ -47,22 +41,16 @@ jobs:
     - uses: actions/checkout@v2
     - name: build cmd
       run: |
-        pushd ./cmd
-        ./build.sh
-        ./build.sh release
-        popd
+        cmd/build.sh
+        cmd/build.sh release
     - name: build shared_lib
       run: |
-        cd ./shared_lib
-        ./build.sh
-        ./build.sh release
-        cd ..
+        shared_lib/build.sh
+        shared_lib/build.sh release
     - name: build static_lib
       run: |
-        cd ./static_lib
-        ./build.sh
-        ./build.sh release
-        cd ..
+        static_lib/build.sh
+        static_lib/build.sh release
     - name: build dist
       run: |
         ./dist.sh
@@ -79,22 +67,16 @@ jobs:
     - uses: actions/checkout@v2
     - name: build cmd
       run: |
-        cd ./cmd
-        ./build.bat
-        ./build.bat release
-        cd ..
+        cmd/build.bat
+        cmd/build.bat release
     - name: build shared_lib
       run: |
-        cd ./shared_lib
-        ./build.bat
-        ./build.bat release
-        cd ..
+        shared_lib/build.bat
+        shared_lib/build.bat release
     - name: build static_lib
       run: |
-        cd ./static_lib
-        ./build.bat
-        ./build.bat release
-        cd ..
+        static_lib/build.bat
+        static_lib/build.bat release
     - name: build dist
       run: |
         ./dist.bat
@@ -122,7 +104,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** Fixed line number in log messages
+          - **FIX** Build script can be run from anywhere
+          - **ADDED** Build script for executables now have extra option `run` to run the executable after build
         draft: false
         prerelease: false
     - name: Download Linux artifacts

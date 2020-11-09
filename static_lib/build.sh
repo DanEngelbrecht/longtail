@@ -11,8 +11,8 @@ fi
 
 ARCH=x64
 
-BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-BASE_DIR="$(dirname "$BASE_DIR")/"
+BUILD_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
+BASE_DIR="$(dirname "$BUILD_DIR")/"
 
 PLATFORM="${OS}_${ARCH}"
 CXXFLAGS="-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread"
@@ -20,16 +20,16 @@ LIB_TARGET_FOLDER=${BASE_DIR}build/static/
 
 mkdir -p $LIB_TARGET_FOLDER
 
-. ../all_sources.sh
+. $BASE_DIR/all_sources.sh
 
 if [ "$1" == "release" ]; then
     LIB_FILENAME="longtail_${PLATFORM}"
     OPT="-O3"
-    OBJDIR="${BASE_DIR}build/static-lib-release"
+    OBJDIR="${BASE_DIR}build/static-lib-release/"
 else
     LIB_FILENAME="longtail_${PLATFORM}_debug"
     OPT=
-    OBJDIR="${BASE_DIR}build/static-lib-debug"
+    OBJDIR="${BASE_DIR}build/static-lib-debug/"
     CXXFLAGS="${CXXFLAGS} -DLONGTAIL_ASSERTS -DBIKESHED_ASSERTS"
 fi
 
@@ -68,9 +68,9 @@ popd
 
 TEST_EXECUTABLEPATH="${BASE_DIR}build/static_lib_test"
 
-ar cru -v ${LIB_TARGET} ${OBJDIR}/*.o
+ar cru -v ${LIB_TARGET} ${OBJDIR}*.o
 ls -la ${LIB_TARGET}
 
 echo Validating ${LIB_TARGET}
-${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} test.c -lm -L${LIB_TARGET_FOLDER} -l${LIB_FILENAME} --verbose
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BUILD_DIR}test.c -lm -L${LIB_TARGET_FOLDER} -l${LIB_FILENAME} --verbose
 ${TEST_EXECUTABLEPATH}
