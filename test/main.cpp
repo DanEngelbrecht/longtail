@@ -47,7 +47,7 @@ int main(int argc, char** argv)
 #endif
     jc_test_init(&argc, argv);
     Longtail_SetAssert(TestAssert);
-    Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_INFO);
+    Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_ERROR);
     Longtail_SetLog(LogStdErr, 0);
     int result = jc_test_run_all();
     Longtail_SetAssert(0);
