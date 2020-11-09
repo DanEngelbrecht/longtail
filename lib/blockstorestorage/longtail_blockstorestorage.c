@@ -1,5 +1,9 @@
 #include "longtail_blockstorestorage.h"
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE) && !defined(__USE_GNU)
+#define __USE_GNU
+#endif
+
 #include "../../src/ext/stb_ds.h"
 
 #include <errno.h>
