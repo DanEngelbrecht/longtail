@@ -16,7 +16,7 @@ else
     RELEASE_MODE="debug"
 fi
 
-if [ "$2" = "run" ] || [ "$3" = "run" ] [ "$4" = "run" ] ; then
+if [ "$2" = "run" ] || [ "$3" = "run" ] || [ "$4" = "run" ] ; then
     RUN="run"
 else
     RUN=""
