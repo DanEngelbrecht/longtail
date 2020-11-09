@@ -104,7 +104,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** Fixed line number in log messages
+          - **FIX** Build script can be run from anywhere
+          - **ADDED** Build script for executables now have extra option `run` to run the executable after build
         draft: false
         prerelease: false
     - name: Download Linux artifacts
