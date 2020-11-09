@@ -5,12 +5,33 @@ set BASE_DIR=%~dp0
 set THIRDPARTY_DIR=!BASE_DIR!third-party\
 set BUILD_FOLDER=%1%
 
+:run_arg
+
+if "%2%" == "run" (
+    goto run
+)
+if "%3%" == "run" (
+    goto run
+)
+if "%4%" == "run" (
+    goto run
+)
+
+set RUN=
+goto build_third_party_arg
+
+:run
+set RUN=run
+
 :build_third_party_arg
 
 if "%2%" == "build-third-party" (
     goto build_third_party
 )
 if "%3%" == "build-third-party" (
+    goto build_third_party
+)
+if "%4%" == "build-third-party" (
     goto build_third_party
 )
 
@@ -26,6 +47,9 @@ if "%2%" == "release" (
     goto build_release_mode
 )
 if "%3%" == "release" (
+    goto build_release_mode
+)
+if "%4%" == "release" (
     goto build_release_mode
 )
 
@@ -165,9 +189,11 @@ echo Building %OUTPUT_TARGET%
 if "!TARGET_TYPE!" == "EXECUTABLE" (
     cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
 )
+
 if "!TARGET_TYPE!" == "SHAREDLIB" (
     cl.exe /D_USRDLL /D_WINDLL %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link /pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
 )
+
 if "!TARGET_TYPE!" == "STATICLIB" (
     IF NOT EXIST static-lib-!RELEASE_MODE! (
         mkdir static-lib-!RELEASE_MODE!
@@ -183,5 +209,13 @@ set BUILD_ERROR=%ERRORLEVEL%
 cd !BASE_DIR!
 
 if !BUILD_ERROR! neq 0 exit /b !BUILD_ERROR!
+
+if "!TARGET_TYPE!" == "EXECUTABLE" (
+    if "!RUN!" == "run" (
+        cd !BUILD_FOLDER!
+        !BASE_DIR!\build\!OUTPUT_TARGET!
+        cd ..
+    )
+)
 
 :end
