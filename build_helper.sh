@@ -103,7 +103,7 @@ if [ $TARGET_TYPE == "STATICLIB" ]; then
     cd ..
 fi
 
-if [[ $TARGET_TYPE == "EXECUTABLE" ] && [ "$RUN" = "run" ]]; then
+if [ $TARGET_TYPE == "EXECUTABLE" ] && [ "$RUN" = "run" ]; then
     pushd ${BUILD_DIR}
     ${BASE_DIR}build/$OUTPUT
     popd
