@@ -3015,7 +3015,7 @@ int Longtail_ReadBlockIndex(
 
     if (blockIndexHeader.m_ChunkCount == 0)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "blockIndexHeader.m_ChunkCount must be larger than zero")
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "blockIndexHeader.m_ChunkCount (%u) must be larger than zero", blockIndexHeader.m_ChunkCount)
         storage_api->CloseFile(storage_api, f);
         return EBADF;
     }

@@ -739,23 +739,25 @@ struct Longtail_LogContextFmt_Private {
     size_t field_count;
 };
 
-#define LONGTAIL_STR1(x) #x
-#define LONGTAIL_STR(x) LONGTAIL_STR1(x)
+#define LONGTAIL_PREPROCESSOR_STR1_PRIVATE(x) #x
+#define LONGTAIL_PREPROCESSOR_STR_PRIVATE(x) LONGTAIL_PREPROCESSOR_STR1_PRIVATE(x)
+#define LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name) name##_context_private
+#define LONGTAIL_LOG_REF_FIELD_NAME_PRIVATE(name) "&" LONGTAIL_PREPROCESSOR_STR_PRIVATE(name)
 
 #define LOG_CONTEXT_WITH_FIELDS_PRIVATE(name, fields, parent, log_level) \
-    struct Longtail_LogContextFmt_Private name##_fields_private = { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogFieldFmt_Private) }; \
-    struct Longtail_LogContextFmt_Private* name = &name##_fields_private; \
-    LONGTAIL_LOG(##name, log_level, LONGTAIL_STR(name))
+    struct Longtail_LogContextFmt_Private LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name) = { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogFieldFmt_Private) }; \
+    struct Longtail_LogContextFmt_Private* name = &LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name); \
+    LONGTAIL_LOG(name, log_level, "[%s]", LONGTAIL_PREPROCESSOR_STR_PRIVATE(name))
 
 #define LOG_CONTEXT_PRIVATE(name, parent, log_level) \
-    struct Longtail_LogContextFmt_Private name##_fields_private = { parent, 0, 0 }; \
-    struct Longtail_LogContextFmt_Private* name = &name##_fields_private; \
-    LONGTAIL_LOG(##name, log_level, LONGTAIL_STR(name))
+    struct Longtail_LogContextFmt_Private LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name) = { parent, 0, 0 }; \
+    struct Longtail_LogContextFmt_Private* name = &LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name); \
+    LONGTAIL_LOG(name, log_level, "[%s]", LONGTAIL_PREPROCESSOR_STR_PRIVATE(name))
 
 #define LONGTAIL_LOGFIELD(f, type) \
-    { LONGTAIL_STR(f), type, (const void*)(uintptr_t)f }
+    { LONGTAIL_PREPROCESSOR_STR_PRIVATE(f), type, (const void*)(uintptr_t)f }
 #define LONGTAIL_LOGFIELDFMT_REF(f, type) \
-    { "&" ## LONGTAIL_STR(f), type, (const void*)&f }
+    { LONGTAIL_LOG_REF_FIELD_NAME_PRIVATE(f), type, (const void*)&f }
 
 #define MAKE_LOG_CONTEXT_FIELDS(name) struct Longtail_LogFieldFmt_Private name##_fields[] = {
 #define MAKE_LOG_CONTEXT_WITH_FIELDS(name, parent, log_level) }; LOG_CONTEXT_WITH_FIELDS_PRIVATE(name, name##_fields, parent, log_level);
