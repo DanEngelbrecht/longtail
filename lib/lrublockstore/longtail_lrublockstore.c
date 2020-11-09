@@ -22,7 +22,12 @@ size_t LRU_GetSize(uint32_t max_count)
 
 struct LRU* LRU_Create(void* mem, uint32_t max_count)
 {
-    LONGTAIL_FATAL_ASSERT(mem, return 0)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(max_count, "%u")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, mem, return 0)
     struct LRU* lru = (struct LRU*)mem;
     lru->m_StoredBlocks = (struct LRUStoredBlock**)&lru[1];
     lru->m_MaxCount = max_count;
@@ -32,8 +37,12 @@ struct LRU* LRU_Create(void* mem, uint32_t max_count)
 
 struct LRUStoredBlock* LRU_Evict(struct LRU* lru)
 {
-    LONGTAIL_FATAL_ASSERT(lru, return 0)
-    LONGTAIL_FATAL_ASSERT(lru->m_AllocatedCount > 0, return 0)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(lru, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, lru, return 0)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, lru->m_AllocatedCount > 0, return 0)
     struct LRUStoredBlock* stored_block = lru->m_StoredBlocks[0];
     --lru->m_AllocatedCount;
     for(uint32_t scan = 0; scan < lru->m_AllocatedCount; ++scan)
@@ -45,8 +54,12 @@ struct LRUStoredBlock* LRU_Evict(struct LRU* lru)
 
 struct LRUStoredBlock** LRU_Put(struct LRU* lru)
 {
-    LONGTAIL_FATAL_ASSERT(lru, return 0)
-    LONGTAIL_FATAL_ASSERT(lru->m_AllocatedCount != lru->m_MaxCount, return 0)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(lru, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, lru, return 0)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, lru->m_AllocatedCount != lru->m_MaxCount, return 0)
     struct LRUStoredBlock** slot = &lru->m_StoredBlocks[lru->m_AllocatedCount];
     ++lru->m_AllocatedCount;
     return slot;
@@ -54,7 +67,12 @@ struct LRUStoredBlock** LRU_Put(struct LRU* lru)
 
 void LRU_Refresh(struct LRU* lru, struct LRUStoredBlock* stored_block)
 {
-    LONGTAIL_FATAL_ASSERT(lru, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(lru, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, lru, return)
     for (uint32_t i = 0; i < lru->m_AllocatedCount; ++i)
     {
         if (lru->m_StoredBlocks[i] == stored_block)
@@ -67,7 +85,7 @@ void LRU_Refresh(struct LRU* lru, struct LRUStoredBlock* stored_block)
             return;
         }
     }
-    LONGTAIL_FATAL_ASSERT(0, return)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, 0, return)
 }
 
 struct LRUBlockStoreAPI;
@@ -109,7 +127,11 @@ struct LRUBlockStoreAPI
 
 static void LRUBlockStore_CompleteRequest(struct LRUBlockStoreAPI* lrublockstore_api)
 {
-    LONGTAIL_FATAL_ASSERT(lrublockstore_api->m_PendingRequestCount > 0, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(lrublockstore_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, lrublockstore_api->m_PendingRequestCount > 0, return)
     struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(lrublockstore_api->m_Lock);
     if (0 == Longtail_AtomicAdd32(&lrublockstore_api->m_PendingRequestCount, -1))
@@ -128,7 +150,11 @@ static void LRUBlockStore_CompleteRequest(struct LRUBlockStoreAPI* lrublockstore
 
 int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
-    LONGTAIL_FATAL_ASSERT(stored_block != 0, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, stored_block != 0, return EINVAL)
     struct LRUStoredBlock* b = (struct LRUStoredBlock*)stored_block;
     TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
     int32_t ref_count = Longtail_AtomicAdd32(&b->m_RefCount, -1);
@@ -167,6 +193,11 @@ int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
 struct LRUStoredBlock* CreateLRUBlock(struct LRUBlockStoreAPI* api, struct Longtail_StoredBlock* original_stored_block)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(api, "%p"),
+        LONGTAIL_LOGFIELD(original_stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     TLongtail_Hash block_hash = *original_stored_block->m_BlockIndex->m_BlockHash;
     struct LRUStoredBlock* allocated_block = (struct LRUStoredBlock*)Longtail_Alloc(sizeof(struct LRUStoredBlock));
     allocated_block->m_OriginalStoredBlock = original_stored_block;
@@ -181,6 +212,11 @@ struct LRUStoredBlock* CreateLRUBlock(struct LRUBlockStoreAPI* api, struct Longt
 
 struct LRUStoredBlock* GetLRUBlock(struct LRUBlockStoreAPI* api, TLongtail_Hash block_hash)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(api, "%p"),
+        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
     intptr_t tmp;
     intptr_t find_ptr = hmgeti_ts(api->m_BlockHashToLRUStoredBlock, block_hash, tmp);
     if (find_ptr == -1)
@@ -189,7 +225,7 @@ struct LRUStoredBlock* GetLRUBlock(struct LRUBlockStoreAPI* api, TLongtail_Hash 
     }
     struct LRUStoredBlock* stored_block = api->m_BlockHashToLRUStoredBlock[find_ptr].value;
 //    LRU_Refresh(api->m_LRU, block_index);
-    LONGTAIL_FATAL_ASSERT(stored_block->m_RefCount > 0, return 0)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, stored_block->m_RefCount > 0, return 0)
     Longtail_AtomicAdd32(&stored_block->m_RefCount, 1);
     return stored_block;
 }
@@ -199,11 +235,16 @@ static int LRUBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, stored_block, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api->OnComplete, return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
 
@@ -217,9 +258,7 @@ static int LRUBlockStore_PutStoredBlock(
         async_complete_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->PutStoredBlock() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
     }
     return err;
@@ -230,10 +269,14 @@ static int LRUBlockStore_PreflightGet(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_PreflightGet(%p, %" PRIu64 ", %p)",
-        block_store_api, chunk_count, chunk_hashes)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%" PRIx64),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
@@ -244,9 +287,7 @@ static int LRUBlockStore_PreflightGet(
         chunk_hashes);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_PreflightGet(%p, %" PRIu64 ", %p) failed with %d",
-            block_store_api, chunk_count, chunk_hashes,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->PreflightGet() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
     }
     return err;
@@ -261,9 +302,15 @@ struct LRUBlockStore_AsyncGetStoredBlockAPI
 
 static void LRUBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_FATAL_ASSERT(async_complete_api != 0, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p"),
+        LONGTAIL_LOGFIELD(err, "%d")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api != 0, return)
     struct LRUBlockStore_AsyncGetStoredBlockAPI* async_api = (struct LRUBlockStore_AsyncGetStoredBlockAPI*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT(async_api->m_LRUBlockStoreAPI != 0, return)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_api->m_LRUBlockStoreAPI != 0, return)
     TLongtail_Hash block_hash = async_api->m_BlockHash;
 
     struct LRUBlockStoreAPI* api = async_api->m_LRUBlockStoreAPI;
@@ -351,11 +398,15 @@ static int LRUBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)",
-        block_store_api, block_hash, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api->OnComplete, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api->OnComplete, return EINVAL)
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
@@ -390,9 +441,7 @@ static int LRUBlockStore_GetStoredBlock(
     struct LRUBlockStore_AsyncGetStoredBlockAPI* share_lock_store_async_get_stored_block_API = (struct LRUBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(share_lock_store_async_get_stored_block_API_size);
     if (!share_lock_store_async_get_stored_block_API)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
-            block_store_api, block_hash, async_complete_api,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         return ENOMEM;
     }
@@ -424,11 +473,17 @@ static int LRUBlockStore_GetExistingContent(
     uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
-        block_store_api, chunk_count, chunk_hashes, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
+        LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
@@ -440,9 +495,7 @@ static int LRUBlockStore_GetExistingContent(
         async_complete_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p) failed with %d",
-            block_store_api, chunk_count, chunk_hashes, async_complete_api,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->GetExistingContent() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         return err;
     }
@@ -451,9 +504,13 @@ static int LRUBlockStore_GetExistingContent(
 
 static int LRUBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(out_stats, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_stats, return EINVAL)
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
@@ -466,7 +523,11 @@ static int LRUBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api
 
 static int LRUBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
     Longtail_LockSpinLock(api->m_Lock);
@@ -483,8 +544,11 @@ static int LRUBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, s
 
 static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Dispose(%p)", base_api)
-    LONGTAIL_FATAL_ASSERT(base_api, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(base_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, base_api, return)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)base_api;
     while (api->m_PendingRequestCount > 0)
@@ -492,7 +556,7 @@ static void LRUBlockStore_Dispose(struct Longtail_API* base_api)
         Longtail_Sleep(1000);
         if (api->m_PendingRequestCount > 0)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Dispose(%p) waiting for %d pending requests", api, (int32_t)api->m_PendingRequestCount);
+            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Waiting for %d pending requests", (int32_t)api->m_PendingRequestCount);
         }
     }
     while (api->m_LRU->m_AllocatedCount > 0)
@@ -517,11 +581,16 @@ static int LRUBlockStore_Init(
     uint32_t max_lru_count,
     struct Longtail_BlockStoreAPI** out_block_store_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "LRUBlockStore_Init(%p, %p, %p)",
-        mem, backing_block_store, out_block_store_api)
-    LONGTAIL_FATAL_ASSERT(mem, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_block_store_api, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(backing_block_store, "%p"),
+        LONGTAIL_LOGFIELD(max_lru_count, "%u"),
+        LONGTAIL_LOGFIELD(out_block_store_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, mem, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, backing_block_store, return EINVAL)
+    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_block_store_api, return EINVAL)
 
     struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
         mem,
@@ -549,9 +618,7 @@ static int LRUBlockStore_Init(
     int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateLRUBlockStoreAPI(%p, %p) failed with %d",
-            api, backing_block_store,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateSpinLock() failed with %d", ENOMEM)
         return err;
     }
 
@@ -568,8 +635,12 @@ struct Longtail_BlockStoreAPI* Longtail_CreateLRUBlockStoreAPI(
     struct Longtail_BlockStoreAPI* backing_block_store,
     uint32_t max_lru_count)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateLRUBlockStoreAPI(%p)", backing_block_store)
-    LONGTAIL_VALIDATE_INPUT(backing_block_store, return 0)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(backing_block_store, "%p"),
+        LONGTAIL_LOGFIELD(max_lru_count, "%u")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, backing_block_store, return 0)
 
     size_t api_size =
         sizeof(struct LRUBlockStoreAPI) +
@@ -579,9 +650,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateLRUBlockStoreAPI(
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateLRUBlockStoreAPI(%p) failed with %d",
-            backing_block_store,
-            ENOMEM)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     struct Longtail_BlockStoreAPI* block_store_api;
@@ -592,9 +661,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateLRUBlockStoreAPI(
         &block_store_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateLRUBlockStoreAPI(%p) failed with %d",
-            backing_block_store,
-            err)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LRUBlockStore_Init() failed with %d", err)
         Longtail_Free(mem);
         return 0;
     }
