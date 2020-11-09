@@ -383,7 +383,7 @@ int Longtail_IsDir(const char* path)
         {
             return 0;
         }
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
         return 0;
     }
     return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
@@ -403,7 +403,7 @@ int Longtail_IsFile(const char* path)
         {
             return 0;
         }
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
         return 0;
     }
     return (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0 ? 1 : 0;
@@ -627,7 +627,7 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
         {
             return 0;
         }
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
         return e;
     }
     int hasWritePermission = (attrs & FILE_ATTRIBUTE_READONLY) == 0;
@@ -649,7 +649,7 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
             {
                 return 0;
             }
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
             return e;
         }
     }
@@ -671,7 +671,7 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
         {
             return e;
         }
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e);
         return e;
     }
     uint16_t permissions = Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_GroupReadAccess | Longtail_StorageAPI_OtherReadAccess;
@@ -1378,7 +1378,7 @@ int Longtail_IsDir(const char* path)
     {
         return 0;
     }
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
     return 0;
 }
 
@@ -1399,7 +1399,7 @@ int Longtail_IsFile(const char* path)
     {
         return 0;
     }
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't determine type of `%s`: %d\n", path, e)
     return 0;
 }
 

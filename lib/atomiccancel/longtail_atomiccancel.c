@@ -15,13 +15,13 @@ static int AtomicCancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Lo
         LONGTAIL_LOGFIELD(out_token, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, cancel_api, return EINVAL )
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_token, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, out_token, return EINVAL )
     struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)cancel_api;
     TLongtail_Atomic32* atomic_counter = (TLongtail_Atomic32*)Longtail_Alloc(sizeof(TLongtail_Atomic32));
     if (!atomic_counter)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d",ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d",ENOMEM)
         return ENOMEM;
     }
     *atomic_counter = 0;
@@ -36,8 +36,8 @@ static int AtomicCancelAPI_Cancel(struct Longtail_CancelAPI* cancel_api, Longtai
         LONGTAIL_LOGFIELD(token, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, cancel_api, return EINVAL )
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, token, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, token, return EINVAL )
     struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)cancel_api;
     TLongtail_Atomic32* atomic_counter = (TLongtail_Atomic32*)token;
     if (*atomic_counter == 0)
@@ -53,8 +53,8 @@ static int AtomicCancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, L
         LONGTAIL_LOGFIELD(token, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, cancel_api, return EINVAL )
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, token, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, token, return EINVAL )
     struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)cancel_api;
     TLongtail_Atomic32* atomic_counter = (TLongtail_Atomic32*)token;
     Longtail_Free((void*)atomic_counter);
@@ -68,8 +68,8 @@ static int AtomicCancelAPI_IsCancelled(struct Longtail_CancelAPI* cancel_api, Lo
         LONGTAIL_LOGFIELD(token, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, cancel_api, return EINVAL )
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, token, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
+    LONGTAIL_VALIDATE_INPUT(ctx, token, return EINVAL )
     struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)cancel_api;
     TLongtail_Atomic32* atomic_counter = (TLongtail_Atomic32*)token;
     int32_t current_value = *atomic_counter;
@@ -86,7 +86,7 @@ static void AtomicCancelAPI_Dispose(struct Longtail_API* cancel_api)
         LONGTAIL_LOGFIELD(cancel_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, cancel_api, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return)
     Longtail_Free(cancel_api);
 }
 
@@ -96,7 +96,7 @@ static void AtomicCancelAPI_Init(struct AtomicCancelAPI* api)
         LONGTAIL_LOGFIELD(api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, api, return)
     api->m_CancelAPI.m_API.Dispose = AtomicCancelAPI_Dispose;
     api->m_CancelAPI.CreateToken = AtomicCancelAPI_CreateToken;
     api->m_CancelAPI.Cancel = AtomicCancelAPI_Cancel;
@@ -111,7 +111,7 @@ struct Longtail_CancelAPI* Longtail_CreateAtomicCancelAPI()
     struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)Longtail_Alloc(sizeof(struct AtomicCancelAPI));
     if (!api)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     AtomicCancelAPI_Init(api);

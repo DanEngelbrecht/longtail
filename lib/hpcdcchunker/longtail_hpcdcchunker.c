@@ -125,11 +125,11 @@ int Longtail_HPCDCCreateChunker(
         LONGTAIL_LOGFIELD(out_chunker, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, params != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, params->min >= ChunkerWindowSize, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, params->min <= params->max, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, params->min <= params->avg, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, params->avg <= params->max, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, params != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, params->min >= ChunkerWindowSize, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, params->min <= params->max, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, params->min <= params->avg, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, params->avg <= params->max, return EINVAL)
 
     size_t max_feed = params->max * 4;
     if (max_feed >= 0xffffffffu)
@@ -141,7 +141,7 @@ int Longtail_HPCDCCreateChunker(
     struct Longtail_HPCDCChunker* c = (struct Longtail_HPCDCChunker*)Longtail_Alloc(chunker_size);
     if (!c)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     c->params = *params;
@@ -167,7 +167,7 @@ static int FeedChunker(
         LONGTAIL_LOGFIELD(context, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, c != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, c != 0, return EINVAL)
 
     if (c->off != 0)
     {
@@ -182,7 +182,7 @@ static int FeedChunker(
     c->buf.len += feed_count;
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "feeder() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "feeder() failed with %d", err)
     }
     return err;
 }
@@ -206,13 +206,13 @@ struct Longtail_Chunker_ChunkRange Longtail_HPCDCNextChunk(
         LONGTAIL_LOGFIELD(context, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, c != 0, return EmptyChunkRange)
+    LONGTAIL_FATAL_ASSERT(ctx, c != 0, return EmptyChunkRange)
     if (c->buf.len - c->off < c->params.max)
     {
         int err = FeedChunker(c, feeder, context);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FeedChunker() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FeedChunker() failed with %d", err)
             return EmptyChunkRange;
         }
     }
@@ -290,7 +290,7 @@ void HPCDCChunker_Dispose(struct Longtail_API* base_api)
         LONGTAIL_LOGFIELD(base_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, base_api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, base_api, return)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)base_api;
 	Longtail_Free(api);
 }
@@ -302,8 +302,8 @@ int HPCDCChunker_GetMinChunkSize(struct Longtail_ChunkerAPI* chunker_api, uint32
         LONGTAIL_LOGFIELD(out_min_chunk_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunker_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_min_chunk_size, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_min_chunk_size, return EINVAL)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
 
 	*out_min_chunk_size = ChunkerWindowSize;
@@ -326,8 +326,8 @@ int HPCDCChunker_CreateChunker(
         LONGTAIL_LOGFIELD(out_chunker, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunker_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_chunker, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_chunker, return EINVAL)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
 
 
@@ -359,10 +359,10 @@ int HPCDCChunker_NextChunk(
         LONGTAIL_LOGFIELD(out_chunk_range, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunker_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunker, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, feeder_context, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_chunk_range, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, feeder_context, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_chunk_range, return EINVAL)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
 
 	struct Longtail_HPCDCChunker* c = (struct Longtail_HPCDCChunker*)chunker;
@@ -384,8 +384,8 @@ int HPCDCChunker_DisposeChunker(struct Longtail_ChunkerAPI* chunker_api, Longtai
         LONGTAIL_LOGFIELD(chunker, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunker_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, chunker, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker, return EINVAL)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
 	Longtail_Free(chunker);
 	return 0;
@@ -400,8 +400,8 @@ static int HPCDCChunker_Init(
         LONGTAIL_LOGFIELD(out_chunker_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, mem != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_chunker_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_chunker_api != 0, return EINVAL)
 
 	struct Longtail_ChunkerAPI* chunker_api = Longtail_MakeChunkerAPI(
 		mem,
@@ -431,7 +431,7 @@ struct Longtail_ChunkerAPI* Longtail_CreateHPCDCChunkerAPI()
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     struct Longtail_ChunkerAPI* chunker_api;
@@ -440,7 +440,7 @@ struct Longtail_ChunkerAPI* Longtail_CreateHPCDCChunkerAPI()
         &chunker_api);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "HPCDCChunker_Init() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "HPCDCChunker_Init() failed with %d", err)
         Longtail_Free(mem);
         return 0;
     }

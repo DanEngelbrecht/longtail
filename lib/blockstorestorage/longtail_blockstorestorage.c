@@ -184,7 +184,7 @@ static struct BlockStoreStorageAPI_PathLookup* BlockStoreStorageAPI_CreatePathLo
     {
         TLongtail_Hash parent_hash = path_lookup->m_PathEntries[p + 1].m_ParentHash;
         const uint64_t* parent_index_ptr = Longtail_LookupTable_Get(path_lookup->m_LookupTable, parent_hash);
-        LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, parent_index_ptr, return 0)
+        LONGTAIL_FATAL_ASSERT(ctx, parent_index_ptr, return 0)
         uint32_t parent_index = (uint32_t)*parent_index_ptr;
         if (0 == Longtail_LookupTable_PutUnique(find_first_lookup, parent_hash, p))
         {
@@ -260,7 +260,7 @@ static int BlockStoreStorageAPI_ReadFromBlock(
     void* work_mem = Longtail_Alloc(block_chunk_lookup_size);
     if (work_mem == 0)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock(%p, %p, %p, %p, %" PRIu64 ", %" PRIu64 ", %p, %p) failed with %d",
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock(%p, %p, %p, %p, %" PRIu64 ", %" PRIu64 ", %p, %p) failed with %d",
             stored_block, range, block_store_fs, block_store_file, start, size, buffer, chunk_indexes,
             ENOMEM)
         return ENOMEM;
@@ -284,7 +284,7 @@ static int BlockStoreStorageAPI_ReadFromBlock(
         TLongtail_Hash chunk_hash = version_chunk_hashes[chunk_index];
         uint32_t chunk_size = version_chunk_sizes[chunk_index];
         uint64_t asset_offset_chunk_end = asset_offset + chunk_size;
-        LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, asset_offset_chunk_end >= start, return EINVAL)
+        LONGTAIL_FATAL_ASSERT(ctx, asset_offset_chunk_end >= start, return EINVAL)
 
         uint64_t* chunk_block_offset_ptr = Longtail_LookupTable_Get(block_chunk_lookup, chunk_hash);
         if (chunk_block_offset_ptr == 0)
@@ -349,7 +349,7 @@ static void BlockStoreStorageAPI_ReadBlock_OnComplete(struct Longtail_AsyncGetSt
     struct Longtail_JobAPI* job_api = cb->m_Data->m_BlockStoreFS->m_JobAPI;
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadBlock_OnComplete(%p, %p, %d)",
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadBlock_OnComplete(%p, %p, %d)",
             async_complete_api, stored_block, err)
     }
     cb->m_Data->m_Err = err;
@@ -371,7 +371,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
     {
         if (data->m_Err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
                 context, job_id, is_cancelled,
                 data->m_Err)
             return 0;
@@ -385,7 +385,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         int err = data->m_BlockStoreFS->m_BlockStore->GetStoredBlock(data->m_BlockStoreFS->m_BlockStore, data->m_Range->m_BlockHash, &complete_cb->m_API);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
                 context, job_id, is_cancelled,
                 err)
             data->m_Err = err;
@@ -405,7 +405,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         data->m_ChunkIndexes);
     if (data->m_Err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlockJob(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             data->m_Err)
     }
@@ -518,7 +518,7 @@ static int BlockStoreStorageAPI_ReadFile(
     uint64_t asset_size = version_index->m_AssetSizes[asset_index];
     if (read_end > asset_size)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed trying to read past end of file", EIO)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed trying to read past end of file", EIO)
         return EIO;
     }
 
@@ -531,7 +531,7 @@ static int BlockStoreStorageAPI_ReadFile(
     int err = BlockStoreStorageAPI_SeekFile(block_store_fs, block_store_file, start);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_SeekFile() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_SeekFile() failed with %d", err)
         return err;
     }
 
@@ -554,7 +554,7 @@ static int BlockStoreStorageAPI_ReadFile(
         uint32_t chunk_index = chunk_indexes[c];
         TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
         const uint64_t* block_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
-        LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, block_index_ptr, EINVAL)
+        LONGTAIL_FATAL_ASSERT(ctx, block_index_ptr, EINVAL)
         uint64_t block_index = *block_index_ptr;
         TLongtail_Hash block_hash = block_hashes[block_index];
         uint64_t* chunk_range_index = Longtail_LookupTable_PutUnique(block_range_map, block_hash, arrlen(chunk_ranges));
@@ -588,7 +588,7 @@ static int BlockStoreStorageAPI_ReadFile(
     }
 
     uint32_t block_count = (uint32_t)arrlen(chunk_ranges);
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, block_count > 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, block_count > 0, return EINVAL);
 
     struct Longtail_JobAPI* job_api = block_store_fs->m_JobAPI;
 
@@ -598,7 +598,7 @@ static int BlockStoreStorageAPI_ReadFile(
 	void* work_mem = Longtail_Alloc(work_mem_size);
 	if (!work_mem)
 	{
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
 		return ENOMEM;
 	}
     struct BlockStoreStorageAPI_ReadFromBlockJobData* job_datas = (struct BlockStoreStorageAPI_ReadFromBlockJobData*)work_mem;
@@ -607,7 +607,7 @@ static int BlockStoreStorageAPI_ReadFile(
 
     Longtail_JobAPI_Group job_group;
     err = job_api->ReserveJobs(job_api, block_count, &job_group);
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, err == 0, return err)
+    LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
 
     for (uint32_t b = 0; b < block_count; ++b)
     {
@@ -628,11 +628,11 @@ static int BlockStoreStorageAPI_ReadFile(
     }
     Longtail_JobAPI_Jobs jobs;
     err = job_api->CreateJobs(job_api, job_group, block_count, funcs, ctxs, &jobs);
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, err == 0, return err)
+    LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
     err = job_api->ReadyJobs(job_api, block_count, jobs);
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, err == 0, return err)
+    LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
     err = job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, err == 0, return err)
+    LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
     Longtail_Free(work_mem);
 
     Longtail_Free(block_range_map);
@@ -651,9 +651,9 @@ static int BlockStoreStorageAPI_OpenReadFile(
         LONGTAIL_LOGFIELD(out_open_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_open_file != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
 
@@ -661,14 +661,14 @@ static int BlockStoreStorageAPI_OpenReadFile(
     int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
         return err;
     }
 
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_LookupTable_Get() failed with %d", ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_LookupTable_Get() failed with %d", ENOENT)
         return ENOENT;
     }
     uint32_t asset_index = block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index].m_AssetIndex;
@@ -691,9 +691,9 @@ static int BlockStoreStorageAPI_GetSize(
         LONGTAIL_LOGFIELD(out_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, f != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_size != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_size != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)f;
@@ -716,16 +716,16 @@ static int BlockStoreStorageAPI_Read(
         LONGTAIL_LOGFIELD(output, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, f != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, output != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, output != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)f;
     int err = BlockStoreStorageAPI_ReadFile(block_store_fs, block_store_file, offset, length, output);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFile() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFile() failed with %d", err)
         return err;
     }
     return 0;
@@ -744,11 +744,11 @@ static int BlockStoreStorageAPI_OpenWriteFile(
         LONGTAIL_LOGFIELD(out_open_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_open_file != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return 0)
 
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -767,10 +767,10 @@ static int BlockStoreStorageAPI_Write(
         LONGTAIL_LOGFIELD(input, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, f != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, input != 0, return 0)
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, input != 0, return 0)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -785,9 +785,9 @@ static int BlockStoreStorageAPI_SetSize(
         LONGTAIL_LOGFIELD(length, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, f != 0, return 0)
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return 0)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -802,9 +802,9 @@ static int BlockStoreStorageAPI_SetPermissions(
         LONGTAIL_LOGFIELD(permissions, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -819,23 +819,23 @@ static int BlockStoreStorageAPI_GetPermissions(
         LONGTAIL_LOGFIELD(out_permissions, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_permissions != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_permissions != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     uint64_t path_hash = 0;
     int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
         return err;
     }
 
     uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_LookupTable_Get() failed with %d", ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_LookupTable_Get() failed with %d", ENOENT)
         return ENOENT;
     }
     uint32_t asset_index = block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index].m_AssetIndex;
@@ -852,8 +852,8 @@ static void BlockStoreStorageAPI_CloseFile(
         LONGTAIL_LOGFIELD(f, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, f != 0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)f;
@@ -869,9 +869,9 @@ static int BlockStoreStorageAPI_CreateDir(
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -886,11 +886,11 @@ static int BlockStoreStorageAPI_RenameFile(
         LONGTAIL_LOGFIELD(target_path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, source_path != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, target_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, source_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, target_path != 0, return 0)
 
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -905,9 +905,9 @@ static char* BlockStoreStorageAPI_ConcatPath(
         LONGTAIL_LOGFIELD(sub_path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, root_path != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, sub_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, root_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, sub_path != 0, return 0)
 
     size_t root_len = strlen(root_path);
     if (root_len == 0)
@@ -923,7 +923,7 @@ static char* BlockStoreStorageAPI_ConcatPath(
     char* path = (char*)Longtail_Alloc(path_len + 1);
     if (!path)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     memcpy(path, root_path, root_len);
@@ -941,8 +941,8 @@ static int BlockStoreStorageAPI_IsDir(
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
 
     size_t path_len = strlen(path);
     if (path_len == 0)
@@ -958,7 +958,7 @@ static int BlockStoreStorageAPI_IsDir(
     int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
         return err;
     }
 
@@ -977,7 +977,7 @@ static int BlockStoreStorageAPI_IsDir(
     err = Longtail_GetPathHash(block_store_fs->m_HashAPI, tmp_path, &path_hash);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
         return err;
     }
 
@@ -998,8 +998,8 @@ static int BlockStoreStorageAPI_IsFile(
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
 
     size_t path_len = strlen(path);
     if (path_len == 0)
@@ -1015,7 +1015,7 @@ static int BlockStoreStorageAPI_IsFile(
     int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
         return err;
     }
 
@@ -1036,9 +1036,9 @@ static int BlockStoreStorageAPI_RemoveDir(
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -1051,9 +1051,9 @@ static int BlockStoreStorageAPI_RemoveFile(
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
     return ENOTSUP;
 }
 
@@ -1075,9 +1075,9 @@ static int BlockStoreStorageAPI_StartFind(
         LONGTAIL_LOGFIELD(out_iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_iterator != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_iterator != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     size_t path_len = strlen(path);
@@ -1089,7 +1089,7 @@ static int BlockStoreStorageAPI_StartFind(
             int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, path, &path_hash);
             if (err)
             {
-                LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
                 return err;
             }
         }
@@ -1102,7 +1102,7 @@ static int BlockStoreStorageAPI_StartFind(
             int err = Longtail_GetPathHash(block_store_fs->m_HashAPI, tmp_path, &path_hash);
             if (err)
             {
-                LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetPathHash() failed with %d", err)
                 return err;
             }
         }
@@ -1120,7 +1120,7 @@ static int BlockStoreStorageAPI_StartFind(
     struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)Longtail_Alloc(sizeof(struct BlockStoreStorageAPI_Iterator));
     if (path_iterator == 0)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     path_iterator->m_TempPath = 0;
@@ -1139,8 +1139,8 @@ static int BlockStoreStorageAPI_FindNext(
         LONGTAIL_LOGFIELD(iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, iterator != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return 0)
 
     struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)iterator;
     if (path_iterator->m_TempPath)
@@ -1169,8 +1169,8 @@ static void BlockStoreStorageAPI_CloseFind(
         LONGTAIL_LOGFIELD(iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, iterator != 0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return)
     struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)iterator;
     Longtail_Free(path_iterator);
 }
@@ -1186,9 +1186,9 @@ static int BlockStoreStorageAPI_GetEntryProperties(
         LONGTAIL_LOGFIELD(out_properties, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, storage_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, iterator != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_properties != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_properties != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)storage_api;
     struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)iterator;
@@ -1237,13 +1237,13 @@ static int BlockStoreStorageAPI_Init(
         LONGTAIL_LOGFIELD(out_storage_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, mem != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, hash_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, job_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, content_index != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, version_index != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, job_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_storage_api != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)mem;
     uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
@@ -1333,11 +1333,11 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
         LONGTAIL_LOGFIELD(version_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, hash_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, job_api != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, content_index != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, version_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, job_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return 0)
 
     size_t api_size = sizeof(struct BlockStoreStorageAPI) + 
         Longtail_LookupTable_GetSize(*content_index->m_ChunkCount) +
@@ -1346,7 +1346,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     struct Longtail_StorageAPI* storage_api;
@@ -1361,7 +1361,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
 
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_Init() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_Init() failed with %d", err)
         Longtail_Free(mem);
         return 0;
     }

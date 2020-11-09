@@ -364,7 +364,7 @@ int UpSync(
         int err = Longtail_ReadVersionIndex(storage_api, optional_source_index_path, &source_version_index);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_source_index_path, err);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_source_index_path, err);
         }
     }
 
@@ -410,7 +410,7 @@ int UpSync(
             &file_infos);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", source_path, err);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", source_path, err);
             SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
@@ -448,7 +448,7 @@ int UpSync(
         Longtail_Free(file_infos);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", source_path, err);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", source_path, err);
             SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
             SAFE_DISPOSE_API(store_block_fsstore_api);
@@ -470,7 +470,7 @@ int UpSync(
         &existing_remote_content_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -493,7 +493,7 @@ int UpSync(
         &remote_missing_content_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing content index %d", err);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
@@ -525,7 +525,7 @@ int UpSync(
 
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create content blocks for `%s` to `%s`, %d", source_path, storage_uri_raw, err);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
@@ -547,7 +547,7 @@ int UpSync(
         &version_local_content_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version local content index %d", err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version local content index %d", err);
         Longtail_Free(remote_missing_content_index);
         Longtail_Free(existing_remote_content_index);
         Longtail_Free(source_version_index);
@@ -570,7 +570,7 @@ int UpSync(
             optional_target_version_content_index_path);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_index_path, err);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_index_path, err);
             Longtail_Free(version_local_content_index);
             Longtail_Free(remote_missing_content_index);
             Longtail_Free(existing_remote_content_index);
@@ -593,7 +593,7 @@ int UpSync(
         target_index_path);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version index for `%s` to `%s`, %d", source_path, target_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version index for `%s` to `%s`, %d", source_path, target_index_path, err);
         Longtail_Free(version_local_content_index);
         Longtail_Free(remote_missing_content_index);
         Longtail_Free(existing_remote_content_index);
@@ -674,7 +674,7 @@ int DownSync(
     int err = Longtail_ReadVersionIndex(storage_api, source_path, &source_version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -733,7 +733,7 @@ int DownSync(
         err = Longtail_ReadVersionIndex(storage_api, optional_target_index_path, &target_version_index);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_target_index_path, err);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_target_index_path, err);
         }
     }
 
@@ -751,7 +751,7 @@ int DownSync(
             &file_infos);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", target_path, err);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", target_path, err);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
@@ -794,7 +794,7 @@ int DownSync(
         Longtail_Free(file_infos);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
@@ -820,7 +820,7 @@ int DownSync(
         &version_diff);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create diff between `%s` and `%s`, %d", source_path, target_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create diff between `%s` and `%s`, %d", source_path, target_path, err);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
@@ -870,7 +870,7 @@ int DownSync(
             required_chunk_hashes);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create get required chunks for source `%s`, %d", source_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create get required chunks for source `%s`, %d", source_path, err);
         Longtail_Free(required_chunk_hashes);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
@@ -899,7 +899,7 @@ int DownSync(
         &required_version_content_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to retarget the content index to remote store `%s`, %d", storage_uri_raw, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to retarget the content index to remote store `%s`, %d", storage_uri_raw, err);
         Longtail_Free(required_chunk_hashes);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
@@ -942,7 +942,7 @@ int DownSync(
     }
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
         Longtail_Free(required_version_content_index);
@@ -1016,7 +1016,7 @@ int ValidateVersionIndex(
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(hash_registry);
@@ -1029,7 +1029,7 @@ int ValidateVersionIndex(
     err = hash_registry->GetHashAPI(hash_registry, *version_index->m_HashIdentifier, &hash_api);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
         Longtail_Free(version_index);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
@@ -1048,7 +1048,7 @@ int ValidateVersionIndex(
         &block_store_content_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget content index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget content index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
         Longtail_Free(version_index);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
@@ -1061,7 +1061,7 @@ int ValidateVersionIndex(
     err = Longtail_ValidateContent(block_store_content_index, version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not have all the required chunks for %s, failed with %d", storage_uri_raw, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not have all the required chunks for %s, failed with %d", storage_uri_raw, version_index_path, err);
         Longtail_Free(version_index);
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_api);
@@ -1107,7 +1107,7 @@ int VersionIndex_ls(
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
         SAFE_DISPOSE_API(fake_block_store);
         SAFE_DISPOSE_API(fake_block_store_fs);
         SAFE_DISPOSE_API(storage_api);
@@ -1121,7 +1121,7 @@ int VersionIndex_ls(
     err = hash_registry->GetHashAPI(hash_registry, *version_index->m_HashIdentifier, &hash_api);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
         SAFE_DISPOSE_API(fake_block_store);
         SAFE_DISPOSE_API(fake_block_store_fs);
         SAFE_DISPOSE_API(storage_api);
@@ -1148,7 +1148,7 @@ int VersionIndex_ls(
         version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file system for version index `%s`, failed with %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file system for version index `%s`, failed with %d", version_index_path, err);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(fake_block_store);
         SAFE_DISPOSE_API(fake_block_store_fs);
@@ -1162,7 +1162,7 @@ int VersionIndex_ls(
     err = block_store_fs->StartFind(block_store_fs, ls_dir[0] == '.' ? &ls_dir[1] : ls_dir, &fs_iterator);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file iteration for version index `%s`, failed with %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file iteration for version index `%s`, failed with %d", version_index_path, err);
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(content_index);
         SAFE_DISPOSE_API(fake_block_store);
@@ -1255,7 +1255,7 @@ int VersionIndex_cp(
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -1274,7 +1274,7 @@ int VersionIndex_cp(
     err = hash_registry->GetHashAPI(hash_registry, *version_index->m_HashIdentifier, &hash_api);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -1298,7 +1298,7 @@ int VersionIndex_cp(
         &block_store_content_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget content index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget content index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
@@ -1316,7 +1316,7 @@ int VersionIndex_cp(
     err = Longtail_ValidateContent(block_store_content_index, version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateContent failed with %d", storage_uri_raw, source_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateContent failed with %d", storage_uri_raw, source_path, err);
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
@@ -1340,7 +1340,7 @@ int VersionIndex_cp(
         version_index);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file system for version index `%s`, failed with %d", version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file system for version index `%s`, failed with %d", version_index_path, err);
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
@@ -1360,7 +1360,7 @@ int VersionIndex_cp(
     err = block_store_fs->OpenReadFile(block_store_fs, source_path[0] == '.' ? &source_path[1] : source_path, &f);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to open file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to open file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -1380,7 +1380,7 @@ int VersionIndex_cp(
     err = block_store_fs->GetSize(block_store_fs, f, &size);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to get size of file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to get size of file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
         block_store_fs->CloseFile(block_store_fs, f);
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_content_index);
@@ -1401,7 +1401,7 @@ int VersionIndex_cp(
     err = storage_api->OpenWriteFile(storage_api, target_path, size, &outf);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to open file `%s`, failed with %d", target_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to open file `%s`, failed with %d", target_path, err);
         block_store_fs->CloseFile(block_store_fs, f);
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_content_index);
@@ -1438,7 +1438,7 @@ int VersionIndex_cp(
     err = block_store_fs->GetPermissions(block_store_fs, source_path[0] == '.' ? &source_path[1] : source_path, &permissions);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to get permissions of file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to get permissions of file `%s` in version index `%s`, failed with %d", source_path, version_index_path, err);
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);
@@ -1458,7 +1458,7 @@ int VersionIndex_cp(
     err = storage_api->SetPermissions(storage_api, target_path, permissions);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to set permissions of file `%s`, failed with %d", target_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to set permissions of file `%s`, failed with %d", target_path, err);
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_content_index);
         SAFE_DISPOSE_API(store_block_store_api);

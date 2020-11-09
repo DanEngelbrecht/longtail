@@ -745,12 +745,12 @@ struct Longtail_LogContextFmt_Private {
 #define LOG_CONTEXT_WITH_FIELDS_PRIVATE(name, fields, parent, log_level) \
     struct Longtail_LogContextFmt_Private name##_fields_private = { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogFieldFmt_Private) }; \
     struct Longtail_LogContextFmt_Private* name = &name##_fields_private; \
-    LONGTAIL_LOG_WITH_CTX(##name, log_level, LONGTAIL_STR(name))
+    LONGTAIL_LOG(##name, log_level, LONGTAIL_STR(name))
 
 #define LOG_CONTEXT_PRIVATE(name, parent, log_level) \
     struct Longtail_LogContextFmt_Private name##_fields_private = { parent, 0, 0 }; \
     struct Longtail_LogContextFmt_Private* name = &name##_fields_private; \
-    LONGTAIL_LOG_WITH_CTX(##name, log_level, LONGTAIL_STR(name))
+    LONGTAIL_LOG(##name, log_level, LONGTAIL_STR(name))
 
 #define LONGTAIL_LOGFIELD(f, type) \
     { LONGTAIL_STR(f), type, (const void*)(uintptr_t)f }
@@ -773,46 +773,40 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 
 #ifndef LONGTAIL_LOG
     void Longtail_CallLogger(const char* file, const char* function, int line, struct Longtail_LogContextFmt_Private* log_context, int level, const char* fmt, ...);
-    #define LONGTAIL_LOG(level, fmt, ...) \
-        Longtail_CallLogger(__FILE__, __func__, __LINE__, 0, level, fmt, __VA_ARGS__);
-    #define LONGTAIL_LOG_WITH_CTX(log_context, level, fmt, ...) \
+    #define LONGTAIL_LOG(log_context, level, fmt, ...) \
         Longtail_CallLogger(__FILE__, __func__, __LINE__, log_context, level, fmt, __VA_ARGS__);
 #endif
 
 #if defined(LONGTAIL_ASSERTS)
     extern Longtail_Assert Longtail_Assert_private;
-#    define LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, x, bail) \
+#    define LONGTAIL_FATAL_ASSERT(ctx, x, bail) \
         if (!(x)) \
         { \
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Assert failed on condition: `%s`", #x); \
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Assert failed on condition: `%s`", #x); \
             if (Longtail_Assert_private) \
             { \
                 Longtail_Assert_private(#x, __FILE__, __LINE__); \
             } \
             bail; \
         }
-#   define LONGTAIL_FATAL_ASSERT(x, bail) LONGTAIL_FATAL_ASSERT_WITH_CTX(0, x, bail)
-#   define LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, x, bail) \
+#   define LONGTAIL_VALIDATE_INPUT(ctx, x, bail) \
     if (!(x)) \
     { \
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
         if (Longtail_Assert_private) \
         { \
             Longtail_Assert_private(#x, __FILE__, __LINE__); \
         } \
         bail; \
     }
-#   define LONGTAIL_VALIDATE_INPUT(x, bail) LONGTAIL_VALIDATE_INPUT_WITH_CTX(0, x, bail)
 #else // defined(LONGTAIL_ASSERTS)
-#   define LONGTAIL_FATAL_ASSERT_WITH_CTX(c, x, y)
-#   define LONGTAIL_FATAL_ASSERT(x, y)
-#   define LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, x, bail) \
+#   define LONGTAIL_FATAL_ASSERT(c, x, y)
+#   define LONGTAIL_VALIDATE_INPUT(ctx, x, bail) \
     if (!(x)) \
     { \
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
         bail; \
     }
-#   define LONGTAIL_VALIDATE_INPUT(x, bail) LONGTAIL_VALIDATE_INPUT_WITH_CTX(0, x, bail)
 #endif // defined(LONGTAIL_ASSERTS)
 
 

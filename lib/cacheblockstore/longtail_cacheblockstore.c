@@ -27,7 +27,7 @@ static void CacheBlockStore_CompleteRequest(struct CacheBlockStoreAPI* cachebloc
         LONGTAIL_LOGFIELD(cacheblockstore_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, cacheblockstore_api->m_PendingRequestCount > 0, return)
+    LONGTAIL_FATAL_ASSERT(ctx, cacheblockstore_api->m_PendingRequestCount > 0, return)
     struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(cacheblockstore_api->m_Lock);
     if (0 == Longtail_AtomicAdd32(&cacheblockstore_api->m_PendingRequestCount, -1))
@@ -79,7 +79,7 @@ struct Longtail_StoredBlock* CachedStoredBlock_CreateBlock(struct Longtail_Store
     struct CachedStoredBlock* cached_stored_block = (struct CachedStoredBlock*)Longtail_Alloc(cached_stored_block_size);
     if (!cached_stored_block)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     cached_stored_block->m_StoredBlock.Dispose = CachedStoredBlock_Dispose;
@@ -114,12 +114,12 @@ static void PutStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlockAP
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct PutStoredBlockPutLocalComplete_API* api = (struct PutStoredBlockPutLocalComplete_API*)async_complete_api;
     struct CacheBlockStoreAPI* cacheblockstore_api = api->m_CacheBlockStoreAPI;
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "PutStoredBlockPutLocalComplete called with with error %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "PutStoredBlockPutLocalComplete called with with error %d", err)
     }
     struct PutStoredBlockPutRemoteComplete_API* remote_put_api = api->m_PutStoredBlockPutRemoteComplete_API;
     Longtail_Free(api);
@@ -139,12 +139,12 @@ static void PutStoredBlockPutRemoteComplete(struct Longtail_AsyncPutStoredBlockA
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct PutStoredBlockPutRemoteComplete_API* api = (struct PutStoredBlockPutRemoteComplete_API*)async_complete_api;
     struct CacheBlockStoreAPI* cacheblockstore_api = api->m_CacheBlockStoreAPI;
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "PutStoredBlockPutRemoteComplete called with error %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "PutStoredBlockPutRemoteComplete called with error %d", err)
     }
     api->m_RemoteErr = err;
     int remain = Longtail_AtomicAdd32(&api->m_PendingCount, -1);
@@ -171,9 +171,9 @@ static int CacheBlockStore_PutStoredBlock(
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, stored_block, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, stored_block, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
 
@@ -185,7 +185,7 @@ static int CacheBlockStore_PutStoredBlock(
     struct PutStoredBlockPutRemoteComplete_API* put_stored_block_put_remote_complete_api = (struct PutStoredBlockPutRemoteComplete_API*)Longtail_Alloc(put_stored_block_put_remote_complete_api_size);
     if (!put_stored_block_put_remote_complete_api)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         return ENOMEM;
     }
@@ -199,7 +199,7 @@ static int CacheBlockStore_PutStoredBlock(
     int err = cacheblockstore_api->m_RemoteBlockStoreAPI->PutStoredBlock(cacheblockstore_api->m_RemoteBlockStoreAPI, stored_block, &put_stored_block_put_remote_complete_api->m_API);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "cacheblockstore_api->m_RemoteBlockStoreAPI->PutStoredBlock() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "cacheblockstore_api->m_RemoteBlockStoreAPI->PutStoredBlock() failed with %d", err)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         CacheBlockStore_CompleteRequest(cacheblockstore_api);
         Longtail_Free(put_stored_block_put_remote_complete_api);
@@ -210,7 +210,7 @@ static int CacheBlockStore_PutStoredBlock(
     struct PutStoredBlockPutLocalComplete_API* put_stored_block_put_local_complete_api = (struct PutStoredBlockPutLocalComplete_API*)Longtail_Alloc(put_stored_block_put_local_complete_api_size);
     if (!put_stored_block_put_local_complete_api)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         return ENOMEM;
     }
@@ -222,7 +222,7 @@ static int CacheBlockStore_PutStoredBlock(
     err = cacheblockstore_api->m_LocalBlockStoreAPI->PutStoredBlock(cacheblockstore_api->m_LocalBlockStoreAPI, stored_block, &put_stored_block_put_local_complete_api->m_API);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "cacheblockstore_api->m_LocalBlockStoreAPI->PutStoredBlock() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "cacheblockstore_api->m_LocalBlockStoreAPI->PutStoredBlock() failed with %d", err)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         PutStoredBlockPutLocalComplete(&put_stored_block_put_local_complete_api->m_API, err);
         return 0;
@@ -250,7 +250,7 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
     struct CacheBlockStoreAPI* api = retarget_context->m_CacheBlockStoreAPI;
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "PreflightGet_GetExistingContentCompleteAPI_OnComplete called with error %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "PreflightGet_GetExistingContentCompleteAPI_OnComplete called with error %d", err)
         Longtail_Free(retarget_context);
         return;
     }
@@ -259,7 +259,7 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
         err = api->m_LocalBlockStoreAPI->PreflightGet(api->m_LocalBlockStoreAPI, *content_index->m_ChunkCount, content_index->m_ChunkHashes);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_LocalBlockStoreAPI->PreflightGet() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_LocalBlockStoreAPI->PreflightGet() failed with %d", err)
             Longtail_Free(content_index);
             Longtail_Free(retarget_context);
             return;
@@ -270,7 +270,7 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
     TLongtail_Hash* missing_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * retarget_context->m_ChunkCount);
     if (!missing_chunk_hashes)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_Free(content_index);
         Longtail_Free(retarget_context);
         return;
@@ -283,7 +283,7 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
         missing_chunk_hashes);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_GetMissingChunks() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_GetMissingChunks() failed with %d", err)
         Longtail_Free(missing_chunk_hashes);
         Longtail_Free(content_index);
         Longtail_Free(retarget_context);
@@ -294,7 +294,7 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
         err = api->m_RemoteBlockStoreAPI->PreflightGet(api->m_RemoteBlockStoreAPI, missing_chunk_count, missing_chunk_hashes);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_RemoteBlockStoreAPI->PreflightGet() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_RemoteBlockStoreAPI->PreflightGet() failed with %d", err)
             Longtail_Free(missing_chunk_hashes);
             Longtail_Free(content_index);
             Longtail_Free(retarget_context);
@@ -317,8 +317,8 @@ static int CacheBlockStore_PreflightGet(
         LONGTAIL_LOGFIELD(chunk_hashes, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
     struct CacheBlockStoreAPI* api = (struct CacheBlockStoreAPI*)block_store_api;
 
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
@@ -339,7 +339,7 @@ static int CacheBlockStore_PreflightGet(
         &context->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_LocalBlockStoreAPI->GetExistingContent() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_LocalBlockStoreAPI->GetExistingContent() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
         Longtail_Free(context);
         return err;
@@ -361,12 +361,12 @@ static void OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlock
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnGetStoredBlockPutLocalComplete_API* api = (struct OnGetStoredBlockPutLocalComplete_API*)async_complete_api;
     struct CacheBlockStoreAPI* cacheblockstore_api = api->m_CacheBlockStoreAPI;
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockPutLocalComplete called with error", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockPutLocalComplete called with error", err)
     }
     api->m_StoredBlock->Dispose(api->m_StoredBlock);
     Longtail_Free(api);
@@ -392,7 +392,7 @@ static int StoreBlockCopyToLocalCache(struct CacheBlockStoreAPI* cacheblockstore
     struct OnGetStoredBlockPutLocalComplete_API* put_local = (struct OnGetStoredBlockPutLocalComplete_API*)Longtail_Alloc(put_local_size);
     if (!put_local)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     put_local->m_API.m_API.Dispose = 0;
@@ -404,7 +404,7 @@ static int StoreBlockCopyToLocalCache(struct CacheBlockStoreAPI* cacheblockstore
     int err = local_block_store->PutStoredBlock(local_block_store, cached_stored_block, &put_local->m_API);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "local_block_store->PutStoredBlock() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "local_block_store->PutStoredBlock() failed with %d", err)
         Longtail_Free(put_local);
         CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return err;
@@ -420,19 +420,19 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnGetStoredBlockGetRemoteComplete_API* api = (struct OnGetStoredBlockGetRemoteComplete_API*)async_complete_api;
     struct CacheBlockStoreAPI* cacheblockstore_api = api->m_CacheBlockStoreAPI;
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete called with error %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockGetRemoteComplete called with error %d", err)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         api->async_complete_api->OnComplete(api->async_complete_api, stored_block, err);
         Longtail_Free(api);
         CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return;
     }
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, stored_block, return)
+    LONGTAIL_FATAL_ASSERT(ctx, stored_block, return)
 
     Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
     Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
@@ -440,7 +440,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
     struct Longtail_StoredBlock* cached_stored_block = CachedStoredBlock_CreateBlock(stored_block, 2);
     if (!cached_stored_block)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "CachedStoredBlock_CreateBlock() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "CachedStoredBlock_CreateBlock() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         stored_block->Dispose(stored_block);
         api->async_complete_api->OnComplete(api->async_complete_api, 0, ENOMEM);
@@ -454,7 +454,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
     int store_err = StoreBlockCopyToLocalCache(cacheblockstore_api, cacheblockstore_api->m_LocalBlockStoreAPI, cached_stored_block);
     if (store_err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache() StoreBlockCopyToLocalCache() failed with %d", store_err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache() StoreBlockCopyToLocalCache() failed with %d", store_err)
         cached_stored_block->Dispose(cached_stored_block);
     }
     Longtail_Free(api);
@@ -477,9 +477,9 @@ static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlock
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnGetStoredBlockGetLocalComplete_API* api = (struct OnGetStoredBlockGetLocalComplete_API*)async_complete_api;
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, api->async_complete_api, return)
+    LONGTAIL_FATAL_ASSERT(ctx, api->async_complete_api, return)
     struct CacheBlockStoreAPI* cacheblockstore_api = api->m_CacheBlockStoreAPI;
     if (err == ENOENT || err == EACCES)
     {
@@ -487,7 +487,7 @@ static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlock
         struct OnGetStoredBlockGetRemoteComplete_API* on_get_stored_block_get_remote_complete = (struct OnGetStoredBlockGetRemoteComplete_API*)Longtail_Alloc(on_get_stored_block_get_remote_complete_size);
         if (!on_get_stored_block_get_remote_complete)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
             api->async_complete_api->OnComplete(api->async_complete_api, 0, ENOMEM);
             return;
         }
@@ -502,7 +502,7 @@ static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlock
             &on_get_stored_block_get_remote_complete->m_API);
         if (err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "cacheblockstore_api->m_RemoteBlockStoreAPI->GetStoredBlock() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "cacheblockstore_api->m_RemoteBlockStoreAPI->GetStoredBlock() failed with %d", err)
             Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             Longtail_Free(on_get_stored_block_get_remote_complete);
             api->async_complete_api->OnComplete(api->async_complete_api, 0, err);
@@ -514,14 +514,14 @@ static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlock
     }
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "OnGetStoredBlockGetLocalComplete called with error %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "OnGetStoredBlockGetLocalComplete called with error %d", err)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         api->async_complete_api->OnComplete(api->async_complete_api, 0, err);
         Longtail_Free(api);
         CacheBlockStore_CompleteRequest(cacheblockstore_api);
         return;
     }
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, stored_block, return)
+    LONGTAIL_FATAL_ASSERT(ctx, stored_block, return)
     Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
     Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
     api->async_complete_api->OnComplete(api->async_complete_api, stored_block, err);
@@ -540,8 +540,8 @@ static int CacheBlockStore_GetStoredBlock(
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
 
@@ -551,7 +551,7 @@ static int CacheBlockStore_GetStoredBlock(
     struct OnGetStoredBlockGetLocalComplete_API* on_get_stored_block_get_local_complete_api = (struct OnGetStoredBlockGetLocalComplete_API*)Longtail_Alloc(on_get_stored_block_get_local_complete_api_size);
     if (!on_get_stored_block_get_local_complete_api)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         return ENOMEM;
     }
@@ -699,9 +699,9 @@ static int CacheBlockStore_GetExistingContent(
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
     struct CacheBlockStoreAPI* api = (struct CacheBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
@@ -725,7 +725,7 @@ static int CacheBlockStore_GetExistingContent(
         &retarget_local_context->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_LocalBlockStoreAPI->GetExistingContent() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_LocalBlockStoreAPI->GetExistingContent() failed with %d", err)
         Longtail_Free(retarget_local_context);
         return err;
     }
@@ -739,7 +739,7 @@ static int CacheBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_a
         LONGTAIL_LOGFIELD(out_stats, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, out_stats, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)LONGTAIL_VALIDATE_INPUT(ctx, out_stats, return EINVAL)
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
@@ -777,7 +777,7 @@ static void CacheBlockStore_Dispose(struct Longtail_API* api)
         LONGTAIL_LOGFIELD(api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, api, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, api, return)
 
     struct CacheBlockStoreAPI* cacheblockstore_api = (struct CacheBlockStoreAPI*)api;
     while (cacheblockstore_api->m_PendingRequestCount > 0)
@@ -785,7 +785,7 @@ static void CacheBlockStore_Dispose(struct Longtail_API* api)
         Longtail_Sleep(1000);
         if (cacheblockstore_api->m_PendingRequestCount > 0)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Waiting for %d pending requests",
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Waiting for %d pending requests",
                 (int32_t)cacheblockstore_api->m_PendingRequestCount);
         }
     }
@@ -809,10 +809,10 @@ static int CacheBlockStore_Init(
         LONGTAIL_LOGFIELD(out_block_store_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, mem, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, local_block_store, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, remote_block_store, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, mem, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, local_block_store, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, remote_block_store, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, out_block_store_api, return EINVAL)
 
     struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
         mem,
@@ -861,14 +861,14 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCacheBlockStoreAPI(
         LONGTAIL_LOGFIELD(remote_block_store, "%p"),
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, local_block_store, return 0)
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, remote_block_store, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, local_block_store, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, remote_block_store, return 0)
 
     size_t api_size = sizeof(struct CacheBlockStoreAPI);
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     struct Longtail_BlockStoreAPI* block_store_api;

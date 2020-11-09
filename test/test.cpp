@@ -3362,7 +3362,7 @@ void TestAsyncBlockStore::CompleteRequest(class TestAsyncBlockStore* block_store
         LONGTAIL_LOGFIELD(block_store, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, block_store->m_PendingRequestCount > 0, return)
+    LONGTAIL_FATAL_ASSERT(ctx, block_store->m_PendingRequestCount > 0, return)
     struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(block_store->m_IOLock);
     if (0 == Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, -1))
@@ -3505,7 +3505,7 @@ static int TestStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
         LONGTAIL_LOGFIELD(stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, stored_block, return EINVAL)
     Longtail_Free(stored_block);
     return 0;
 }
@@ -3561,7 +3561,7 @@ int TestAsyncBlockStore::Worker(void* context_data)
     while (1)
     {
         int err = Longtail_WaitSema(block_store->m_RequestSema, LONGTAIL_TIMEOUT_INFINITE);
-        LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, err == 0, continue)
+        LONGTAIL_FATAL_ASSERT(ctx, err == 0, continue)
 
         Longtail_LockSpinLock(block_store->m_IOLock);
         ptrdiff_t put_request_count = arrlen(block_store->m_PutRequests);
@@ -3687,9 +3687,9 @@ int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_sto
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, stored_block, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
 
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
     struct TestPutBlockRequest put_request;
@@ -3718,8 +3718,8 @@ int TestAsyncBlockStore::GetStoredBlock(struct Longtail_BlockStoreAPI* block_sto
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
     struct TestGetBlockRequest get_request;
     get_request.block_hash = block_hash;
@@ -3743,8 +3743,8 @@ int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, block_store_api, return EINVAL)
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
     TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
 
     struct TestGetExistingContentRequest get_existing_content_content_request;
@@ -4824,11 +4824,11 @@ TEST(Longtail, TestChangeVersionCancelOperation)
                 LONGTAIL_LOGFIELD(async_complete_api, "%p")
             MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-            LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
                 block_store_api, chunk_count, chunk_hashes, async_complete_api)
-            LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, block_store_api, return EINVAL)
-            LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
-            LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, async_complete_api, return EINVAL)
+            LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+            LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+            LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
             struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
             return api->m_Base->GetExistingContent(api->m_Base, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api);
         }
@@ -5899,7 +5899,7 @@ static int IsDirPath(const char* path)
         LONGTAIL_LOGFIELD(path, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 

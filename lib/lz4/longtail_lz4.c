@@ -17,7 +17,7 @@ static int SettingsIDToCompressionSetting(uint32_t settings_id)
         LONGTAIL_LOGFIELD(settings_id, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, settings_id == LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE, return -1)
+    LONGTAIL_FATAL_ASSERT(ctx, settings_id == LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE, return -1)
     return LZ4CompressionAPI_DefaultCompressionSetting;
 }
 
@@ -52,7 +52,7 @@ int LZ4CompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, 
     int compressed_size = LZ4_compress_fast(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
     if (compressed_size == 0)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LZ4_compress_fast() failed with %d", ENOMEM);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LZ4_compress_fast() failed with %d", ENOMEM);
         return ENOMEM;
     }
     *out_compressed_size = (size_t)compressed_size;
@@ -73,7 +73,7 @@ static int LZ4CompressionAPI_Decompress(struct Longtail_CompressionAPI* compress
     int result = LZ4_decompress_safe(compressed, uncompressed, (int)compressed_size, (int)max_uncompressed_size);
     if (result < 0)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LZ4_decompress_safe() failed with %d", EBADF);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LZ4_decompress_safe() failed with %d", EBADF);
         return EBADF;
     }
     *out_uncompressed_size = (size_t)(result);
@@ -94,7 +94,7 @@ struct Longtail_CompressionAPI* Longtail_CreateLZ4CompressionAPI()
     struct LZ4CompressionAPI* compression_api = (struct LZ4CompressionAPI*)Longtail_Alloc(sizeof(struct LZ4CompressionAPI));
     if (!compression_api)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     LZ4CompressionAPI_Init(compression_api);

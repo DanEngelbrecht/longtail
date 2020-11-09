@@ -66,7 +66,7 @@ int ZStdCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api,
     if (ZSTD_isError(size))
     {
         int err = ZSTD_getErrorCode(size);
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_compress() failed with %d", err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_compress() failed with %d", err);
         return EINVAL;
     }
     *out_compressed_size = size;
@@ -89,7 +89,7 @@ int ZStdCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_ap
     if (ZSTD_isError(size))
     {
         int err = ZSTD_getErrorCode(size);
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_decompress() failed with %d", err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_decompress() failed with %d", err);
         return EINVAL;
     }
     *out_uncompressed_size = size;
@@ -110,7 +110,7 @@ struct Longtail_CompressionAPI* Longtail_CreateZStdCompressionAPI()
     struct ZStdCompressionAPI* compression_api = (struct ZStdCompressionAPI*)Longtail_Alloc(sizeof(struct ZStdCompressionAPI));
     if (!compression_api)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     ZStdCompressionAPI_Init(compression_api);

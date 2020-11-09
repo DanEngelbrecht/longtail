@@ -91,7 +91,7 @@ int BrotliCompressionAPI_Compress(
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     struct BrotliSettings* brotli_settings = SettingsIDToCompressionSetting(settings_id);
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, brotli_settings != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, brotli_settings != 0, return EINVAL)
 
     *out_compressed_size = max_compressed_size;
     if (BROTLI_FALSE == BrotliEncoderCompress(brotli_settings->m_Quality, brotli_settings->m_WindowBits, brotli_settings->m_Mode, uncompressed_size, (const uint8_t*)uncompressed, out_compressed_size, (uint8_t*)compressed))
@@ -153,7 +153,7 @@ struct Longtail_CompressionAPI* Longtail_CreateBrotliCompressionAPI()
     struct BrotliCompressionAPI* compression_api = (struct BrotliCompressionAPI*)Longtail_Alloc(sizeof(struct BrotliCompressionAPI));
     if (!compression_api)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     BrotliCompressionAPI_Init(compression_api);

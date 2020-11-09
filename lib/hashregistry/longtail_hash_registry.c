@@ -19,7 +19,7 @@ static void DefaultHashRegistry_Dispose(struct Longtail_API* api)
         LONGTAIL_LOGFIELD(api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, api, return);
+    LONGTAIL_VALIDATE_INPUT(ctx, api, return);
     struct Longtail_HashAPI* last_api = 0;
     struct Default_HashRegistry* default_hash_registry = (struct Default_HashRegistry*)api;
     for (uint32_t c = 0; c < default_hash_registry->m_Count; ++c)
@@ -42,8 +42,8 @@ static int Default_GetHashAPI(struct Longtail_HashRegistryAPI* hash_registry, ui
         LONGTAIL_LOGFIELD(out_hash_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, hash_registry, return EINVAL);
-    LONGTAIL_FATAL_ASSERT_WITH_CTX(ctx, out_hash_api, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, hash_registry, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, out_hash_api, return EINVAL);
     
     struct Default_HashRegistry* default_hash_registry = (struct Default_HashRegistry*)hash_registry;
     for (uint32_t i = 0; i < default_hash_registry->m_Count; ++i)
@@ -54,7 +54,7 @@ static int Default_GetHashAPI(struct Longtail_HashRegistryAPI* hash_registry, ui
             return 0;
         }
     }
-    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Failed to find api identifier %u", hash_type)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Failed to find api identifier %u", hash_type)
     return ENOENT;
 }
 
@@ -69,15 +69,15 @@ struct Longtail_HashRegistryAPI* Longtail_CreateDefaultHashRegistry(
         LONGTAIL_LOGFIELD(hash_apis, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, hash_types, return 0);
-    LONGTAIL_VALIDATE_INPUT_WITH_CTX(ctx, hash_apis, return 0);
+    LONGTAIL_VALIDATE_INPUT(ctx, hash_types, return 0);
+    LONGTAIL_VALIDATE_INPUT(ctx, hash_apis, return 0);
     size_t registry_size = sizeof(struct Default_HashRegistry) +
         sizeof(uint32_t) * hash_type_count +
         sizeof(struct Longtail_HashAPI*) * hash_type_count;
     void* mem = Longtail_Alloc(registry_size);
     if (!mem)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
 
