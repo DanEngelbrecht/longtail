@@ -20,7 +20,7 @@ LIB_TARGET_FOLDER=${BASE_DIR}build/static/
 
 mkdir -p $LIB_TARGET_FOLDER
 
-. ../all_sources.sh
+. $BASE_DIR/all_sources.sh
 
 if [ "$1" == "release" ]; then
     LIB_FILENAME="longtail_${PLATFORM}"

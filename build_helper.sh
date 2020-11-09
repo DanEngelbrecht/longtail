@@ -1,16 +1,17 @@
 #!/bin/bash
 set -e
 
+export BUILD_DIR=$1
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
 export THIRDPARTY_DIR=${BASE_DIR}third-party/
 
-if [ "$1" = "build-third-party" ] || [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] ; then
+if [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] ; then
     BUILD_THIRD_PARTY="build-third-party"
 else
     BUILD_THIRD_PARTY=""
 fi
 
-if [ "$1" = "release" ] || [ "$2" = "release" ] || [ "$3" = "release" ] ; then
+if [ "$2" = "release" ] || [ "$3" = "release" ] ; then
     RELEASE_MODE="release"
 else
     RELEASE_MODE="debug"
@@ -28,7 +29,7 @@ if [ "$RELEASE_MODE" = "release" ]; then
     export ASAN=""
     export ARCH="-m64 -maes -mssse3 -msse4.1"
 
-    . ./build_options.sh
+    . $BUILD_DIR/build_options.sh
     export OUTPUT=$TARGET
     export THIRD_PARTY_LIB="$TARGET-third-party.a"
     export CXXFLAGS="$BASE_CXXFLAGS $CXXFLAGS"
@@ -38,7 +39,7 @@ else
     BASE_CXXFLAGS="$BASE_CXXFLAGS" # -Wall -Weverything"
     export ARCH="-m64 -maes -mssse3 -msse4.1"
 
-    . ./build_options.sh
+    . $BUILD_DIR/build_options.sh
     export OUTPUT=${TARGET}_debug
     export THIRD_PARTY_LIB="$TARGET-third-party-debug.a"
 
