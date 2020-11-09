@@ -1534,7 +1534,7 @@ int Longtail_GetFilesRecursively(
     int err = RecurseTree(storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, AddFile, &context);
     if(err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "RecurseTree() failed with %d", err)
+        LONGTAIL_LOG_WITH_CTX(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "RecurseTree() failed with %d", err)
         Longtail_Free(context.m_FileInfos);
         context.m_FileInfos = 0;
         return err;
@@ -1628,7 +1628,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "Cancelled with errno %d", ECANCELED)
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Cancelled with errno %d", ECANCELED)
         hash_job->m_Err = ECANCELED;
         return 0;
     }
@@ -1969,7 +1969,7 @@ static int ChunkAssets(
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
+        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
         Longtail_Free(work_mem);
         return err;
     }
@@ -1979,7 +1979,7 @@ static int ChunkAssets(
     {
         if (tmp_hash_jobs[i].m_Err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, (tmp_hash_jobs[i].m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "tmp_hash_jobs[i].m_Err failed with %d", tmp_hash_jobs[i].m_Err)
+            LONGTAIL_LOG_WITH_CTX(ctx, (tmp_hash_jobs[i].m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "tmp_hash_jobs[i].m_Err failed with %d", tmp_hash_jobs[i].m_Err)
             err = err ? err : tmp_hash_jobs[i].m_Err;
         }
     }
@@ -2433,7 +2433,7 @@ int Longtail_CreateVersionIndex(
         &assets_chunk_index_count);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets() failed with %d", err)
+        LONGTAIL_LOG_WITH_CTX(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets() failed with %d", err)
         Longtail_Free(work_mem);
         return err;
     }
@@ -4268,7 +4268,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "WriteContentBlockJob(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteContentBlockJob(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             ECANCELED)
         job->m_Err = ECANCELED;
@@ -4611,7 +4611,7 @@ int Longtail_WriteContent(
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteContent(%p, %p, %p, %p, %p, %p, %p, %p, %s) failed with %d",
             source_storage_api, block_store_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, assets_folder,
             err)
         Longtail_Free(asset_part_lookup);
@@ -4699,7 +4699,7 @@ static int BlockReader(void* context, uint32_t job_id, int is_cancelled)
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "BlockReader(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockReader(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             ECANCELED)
         job->m_Err = ECANCELED;
@@ -4713,7 +4713,7 @@ static int BlockReader(void* context, uint32_t job_id, int is_cancelled)
     int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockHash, &job->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "BlockReader(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "BlockReader(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             err)
         job->m_Err = err;
@@ -4933,7 +4933,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             ECANCELED)
 
@@ -4974,7 +4974,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
     if (block_reader_errors)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, (block_reader_errors == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, (block_reader_errors == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "WritePartialAssetFromBlocks(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             block_reader_errors)
         for (uint32_t d = 0; d < block_reader_job_count; ++d)
@@ -5333,7 +5333,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
 
     if (job->m_BlockReadJob.m_Err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, (job->m_BlockReadJob.m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, (job->m_BlockReadJob.m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             job->m_BlockReadJob.m_Err)
         job->m_Err = job->m_BlockReadJob.m_Err;
@@ -5342,7 +5342,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteAssetsFromBlock(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             job->m_BlockReadJob.m_Err)
        job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
@@ -5872,7 +5872,7 @@ static int WriteAssets(
 
     if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
             block_store_api, version_storage_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, version_path, chunk_hash_to_block_index, awl, retain_permssions,
             ECANCELED)
         return ECANCELED;
@@ -6035,7 +6035,7 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
     {
-        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
+        LONGTAIL_LOG_WITH_CTX(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
             block_store_api, version_storage_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, version_path, chunk_hash_to_block_index, awl, retain_permssions,
             err)
         Longtail_Free(asset_jobs);
@@ -6049,7 +6049,7 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
         struct WriteAssetsFromBlockJob* job = &block_jobs[b];
         if (job->m_Err)
         {
-            LONGTAIL_LOG_WITH_CTX(ctx, (job->m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
+            LONGTAIL_LOG_WITH_CTX(ctx, (job->m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
                 block_store_api, version_storage_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, version_path, chunk_hash_to_block_index, awl, retain_permssions,
                 job->m_Err)
             err = err ? err : job->m_Err;
@@ -6061,7 +6061,7 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
         if (job->m_Err)
         {
             const char* asset_path = &version_index->m_NameData[version_index->m_NameOffsets[job->m_AssetIndex]];
-            LONGTAIL_LOG_WITH_CTX(ctx, (job->m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
+            LONGTAIL_LOG_WITH_CTX(ctx, (job->m_Err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %s, %p, %p, %d) failed with %d",
                 block_store_api, version_storage_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, version_index, version_path, chunk_hash_to_block_index, awl, retain_permssions,
                 job->m_Err)
             if (err == 0)
@@ -7570,7 +7570,7 @@ int Longtail_ChangeVersion(
             if ((successful_remove_count & 0x7f) == 0x7f) {
                 if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
                 {
-                    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
                         block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
                         ECANCELED)
                     return ECANCELED;
@@ -7798,7 +7798,7 @@ int Longtail_ChangeVersion(
             if ((i & 0x7f) == 0x7f) {
                 if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
                 {
-                    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+                    LONGTAIL_LOG_WITH_CTX(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
                         block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
                         ECANCELED)
                     return ECANCELED;
