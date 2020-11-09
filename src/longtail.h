@@ -766,6 +766,7 @@ struct Longtail_LogContextFmt_Private {
 typedef void (*Longtail_Log)(struct Longtail_LogContext* log_context, const char* str);
 LONGTAIL_EXPORT void Longtail_SetLog(Longtail_Log log_func, void* context);
 LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
+LONGTAIL_EXPORT int Longtail_GetLogLevel();
 
 #define LONGTAIL_LOG_LEVEL_DEBUG    0
 #define LONGTAIL_LOG_LEVEL_INFO     1

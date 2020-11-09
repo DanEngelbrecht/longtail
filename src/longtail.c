@@ -718,6 +718,11 @@ void Longtail_SetLogLevel(int level)
     Longtail_LogLevel_private = level;
 }
 
+int Longtail_GetLogLevel()
+{
+    return Longtail_LogLevel_private;
+}
+
 static uint32_t Longtail_MakeLogFields(struct Longtail_LogContextFmt_Private* log_context, struct Longtail_LogField** fields_ptr, uint32_t* fields_left_ptr, char** char_buffer_ptr, uint32_t* chars_left_ptr)
 {
     if (log_context == 0)
