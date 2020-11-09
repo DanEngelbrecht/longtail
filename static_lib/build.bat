@@ -1,6 +1,9 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
+SET BUILDFOLDER=%~dp0
+FOR %%a IN ("%BUILDFOLDER:~0,-1%") DO SET BASE_DIR=%%~dpa
+
 If %PROCESSOR_ARCHITECTURE% == AMD64 (
     set ARCH=x64
 ) Else (
@@ -10,10 +13,9 @@ set OS=win32
 
 set PLATFORM=%OS%_%ARCH%
 set CXXFLAGS=-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread  -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
-set BASE_DIR=%~dp0..\
 set LIB_TARGET_FOLDER=!BASE_DIR!build\static\
 
-call ..\all_sources.bat
+call !BASE_DIR!all_sources.bat
 
 if "%1%" == "release" (
     goto build_release_mode
@@ -72,5 +74,5 @@ ar cru -v !LIB_TARGET! !OBJDIR!\*.o
 ls -la ${LIB_TARGET}
 
 echo Validating !LIB_TARGET!
-gcc -o %TEST_EXECUTABLEPATH% !CXXFLAGS! test.c -lm -L%LIB_TARGET_FOLDER% -l!LIB_FILENAME! --verbose
+gcc -o %TEST_EXECUTABLEPATH% !CXXFLAGS! !BUILDFOLDER!test.c -lm -L%LIB_TARGET_FOLDER% -l!LIB_FILENAME! --verbose
 %TEST_EXECUTABLEPATH%

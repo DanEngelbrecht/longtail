@@ -3,12 +3,10 @@ SetLocal EnableDelayedExpansion
 
 set BASE_DIR=%~dp0
 set THIRDPARTY_DIR=!BASE_DIR!third-party\
+set BUILD_FOLDER=%1%
 
 :build_third_party_arg
 
-if "%1%" == "build-third-party" (
-    goto build_third_party
-)
 if "%2%" == "build-third-party" (
     goto build_third_party
 )
@@ -24,9 +22,6 @@ goto release_arg
 set BUILD_THIRD_PARTY=build-third-party
 
 :release_arg
-if "%1%" == "release" (
-    goto build_release_mode
-)
 if "%2%" == "release" (
     goto build_release_mode
 )
@@ -49,7 +44,7 @@ set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHs
 if "!RELEASE_MODE!" == "release" (
     set OPT=/O2 /Oi /Oy /GS- /Gs- /MT /GL /GS- /GF
 
-    call build_options.bat
+    call !BUILD_FOLDER!build_options.bat
     set OUTPUT=!TARGET!
     set THIRD_PARTY_LIB=!TARGET!-third-party.lib
     if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
@@ -58,7 +53,7 @@ if "!RELEASE_MODE!" == "release" (
 ) else (
     set OPT=/MTd
 
-    call build_options.bat
+    call !BUILD_FOLDER!build_options.bat
     set OUTPUT=!TARGET!_debug
     set THIRD_PARTY_LIB=!TARGET!-third-party-debug.lib
 
