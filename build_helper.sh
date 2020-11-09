@@ -87,7 +87,9 @@ if [ $TARGET_TYPE == "EXECUTABLE" ]; then
     echo Building ${BASE_DIR}build/$OUTPUT
     clang++ -o ${BASE_DIR}build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${BASE_DIR}build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
     if [ "$RUN" = "run" ]; then
+        pushd ${BUILD_DIR}
         ${BASE_DIR}build/$OUTPUT
+        popd
     fi
 fi
 
