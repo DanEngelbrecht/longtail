@@ -4,16 +4,22 @@ set -e
 export BUILD_DIR=$1
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
 
-if [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] ; then
+if [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] || [ "$4" = "build-third-party" ] ; then
     BUILD_THIRD_PARTY="build-third-party"
 else
     BUILD_THIRD_PARTY=""
 fi
 
-if [ "$2" = "release" ] || [ "$3" = "release" ] ; then
+if [ "$2" = "release" ] || [ "$3" = "release" ] || [ "$4" = "release" ] ; then
     RELEASE_MODE="release"
 else
     RELEASE_MODE="debug"
+fi
+
+if [ "$2" = "run" ] || [ "$3" = "run" ] [ "$4" = "run" ] ; then
+    RUN="run"
+else
+    RUN=""
 fi
 
 export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
@@ -80,6 +86,9 @@ fi
 if [ $TARGET_TYPE == "EXECUTABLE" ]; then
     echo Building ${BASE_DIR}build/$OUTPUT
     clang++ -o ${BASE_DIR}build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${BASE_DIR}build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+    if [ "$RUN" = "run" ]; then
+        ${BASE_DIR}build/$OUTPUT
+    fi
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ]; then
