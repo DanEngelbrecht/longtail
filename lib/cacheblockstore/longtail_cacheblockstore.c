@@ -454,7 +454,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
     int store_err = StoreBlockCopyToLocalCache(cacheblockstore_api, cacheblockstore_api->m_LocalBlockStoreAPI, cached_stored_block);
     if (store_err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache() StoreBlockCopyToLocalCache() failed with %d", store_err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache() failed with %d", store_err)
         cached_stored_block->Dispose(cached_stored_block);
     }
     Longtail_Free(api);
