@@ -61,7 +61,7 @@ static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
     int len = snprintf(buffer, 2048, "%s(%d) [%s] %s", log_context->file, log_context->line, log_context->function, ERROR_LEVEL[log_context->level]);
     len += LogContext(log_context, &buffer[len], 2048 - len);
     snprintf(&buffer[len], 2048 - len, " : %s\n", log);
-    fprintf(stderr, buffer);
+    fprintf(stderr, "%s", buffer);
 }
 
 struct Progress

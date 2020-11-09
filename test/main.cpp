@@ -40,7 +40,7 @@ static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
     int len = snprintf(buffer, 2048, "%s(%d) [%s] %s", log_context->file, log_context->line, log_context->function, ERROR_LEVEL[log_context->level]);
     len += LogContext(log_context, &buffer[len], 2048 - len);
     snprintf(&buffer[len], 2048 - len, " : %s\n", log);
-    fprintf(stderr, buffer);
+    fprintf(stderr, "%s", buffer);
 }
 
 int main(int argc, char** argv)
@@ -50,7 +50,7 @@ int main(int argc, char** argv)
 #endif
     jc_test_init(&argc, argv);
     Longtail_SetAssert(TestAssert);
-    Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_INFO);
+    Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_ERROR);
     Longtail_SetLog(LogStdErr, 0);
     int result = jc_test_run_all();
     Longtail_SetAssert(0);
