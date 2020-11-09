@@ -17,27 +17,30 @@ static void TestAssert(const char* expression, const char* file, int line)
 
 static const char* ERROR_LEVEL[5] = {"DEBUG", "INFO", "WARNING", "ERROR", "OFF"};
 
-static void LogContext(struct Longtail_LogContext* log_context)
+static int LogContext(struct Longtail_LogContext* log_context, char* buffer, int buffer_size)
 {
     if (log_context == 0 || log_context->field_count == 0)
     {
-        return;
+        return 0;
     }
-    fprintf(stderr, " { ");
+    int len = sprintf(buffer, " { ");
     size_t log_field_count = log_context->field_count;
     for (size_t f = 0; f < log_field_count; ++f)
     {
         struct Longtail_LogField* log_field = &log_context->fields[f];
-        fprintf(stderr, "\"%s\": %s%s", log_field->name, log_field->value, ((f + 1) < log_field_count) ? ", " : "");
+        len += snprintf(&buffer[len], buffer_size - len, "\"%s\": %s%s", log_field->name, log_field->value, ((f + 1) < log_field_count) ? ", " : "");
     }
-    fprintf(stderr, " }");
+    len += snprintf(&buffer[len], buffer_size - len, " }");
+    return len;
 }
 
 static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
 {
-    fprintf(stderr, "%s(%d) [%s] %s", log_context->file, log_context->line, log_context->function, ERROR_LEVEL[log_context->level]);
-    LogContext(log_context);
-    fprintf(stderr, " : %s\n", log);
+    char buffer[2048];
+    int len = snprintf(buffer, 2048, "%s(%d) [%s] %s", log_context->file, log_context->line, log_context->function, ERROR_LEVEL[log_context->level]);
+    len += LogContext(log_context, &buffer[len], 2048 - len);
+    snprintf(&buffer[len], 2048 - len, " : %s\n", log);
+    fprintf(stderr, buffer);
 }
 
 int main(int argc, char** argv)
