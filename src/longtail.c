@@ -783,7 +783,7 @@ void Longtail_CallLogger(const char* file, const char* function, int line, struc
     log_context.function = function;
     log_context.fields = &tmp_fields[0];
     log_context.field_count = (int)field_count;
-    log_context.line = level;
+    log_context.line = line;
     log_context.level = level;
     va_list argptr;
     va_start(argptr, fmt);

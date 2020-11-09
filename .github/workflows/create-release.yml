@@ -122,7 +122,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** Fixed logging to leverage log context
+          - **FIX** Fixed line number in log messages
         draft: false
         prerelease: false
     - name: Download Linux artifacts
