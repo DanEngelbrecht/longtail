@@ -122,6 +122,11 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
+          - **API CHANGED** `LONGTAIL_LOG`, `LONGTAIL_FATAL_ASSERT`, `LONGTAIL_VALIDATE_INPUT` now takes a log context parameter
+          - **API CHANGED** `Longtail_Log` callback now takes a `struct Longtail_LogContext` parameter with structured log information
+          - **ADDED**  `MAKE_LOG_CONTEXT_FIELDS`, `MAKE_LOG_CONTEXT_WITH_FIELDS`, `MAKE_LOG_CONTEXT`, `LONGTAIL_LOGFIELD`, `LONGTAIL_LOGFIELDFMT_REF`
+          - **ADDED** `Longtail_GetLogLevel()`
+          - **CHANGED** Added log context and better logging throughout
           - **FIX** `Longtail_LockFile` changed windows timeout to 10 sec and make more errors worth retry
         draft: false
         prerelease: false

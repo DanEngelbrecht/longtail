@@ -711,9 +711,62 @@ LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* blo
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);
-typedef void (*Longtail_Log)(void* context, int level, const char* str);
+
+struct Longtail_LogField {
+    const char* name;
+    const char* value;
+};
+
+struct Longtail_LogContext {
+    void* context;
+    const char* file;
+    const char* function;
+    struct Longtail_LogField* fields;
+    int field_count;
+    int line;
+    int level;
+};
+
+struct Longtail_LogFieldFmt_Private {
+    const char* name;
+    const char* fmt;
+    const void* value;
+};
+
+struct Longtail_LogContextFmt_Private {
+    struct Longtail_LogContextFmt_Private* parent_context;
+    struct Longtail_LogFieldFmt_Private* fields;
+    size_t field_count;
+};
+
+#define LONGTAIL_PREPROCESSOR_STR1_PRIVATE(x) #x
+#define LONGTAIL_PREPROCESSOR_STR_PRIVATE(x) LONGTAIL_PREPROCESSOR_STR1_PRIVATE(x)
+#define LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name) name##_context_private
+#define LONGTAIL_LOG_REF_FIELD_NAME_PRIVATE(name) "&" LONGTAIL_PREPROCESSOR_STR_PRIVATE(name)
+
+#define LOG_CONTEXT_WITH_FIELDS_PRIVATE(name, fields, parent, log_level) \
+    struct Longtail_LogContextFmt_Private LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name) = { parent, fields, sizeof(fields) / sizeof(struct Longtail_LogFieldFmt_Private) }; \
+    struct Longtail_LogContextFmt_Private* name = &LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name); \
+    LONGTAIL_LOG(name, log_level, "[%s]", LONGTAIL_PREPROCESSOR_STR_PRIVATE(name))
+
+#define LOG_CONTEXT_PRIVATE(name, parent, log_level) \
+    struct Longtail_LogContextFmt_Private LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name) = { parent, 0, 0 }; \
+    struct Longtail_LogContextFmt_Private* name = &LONGTAIL_LOG_CONTEXT_NAME_PRIVATE(name); \
+    LONGTAIL_LOG(name, log_level, "[%s]", LONGTAIL_PREPROCESSOR_STR_PRIVATE(name))
+
+#define LONGTAIL_LOGFIELD(f, type) \
+    { LONGTAIL_PREPROCESSOR_STR_PRIVATE(f), type, (const void*)(uintptr_t)f }
+#define LONGTAIL_LOGFIELDFMT_REF(f, type) \
+    { LONGTAIL_LOG_REF_FIELD_NAME_PRIVATE(f), type, (const void*)&f }
+
+#define MAKE_LOG_CONTEXT_FIELDS(name) struct Longtail_LogFieldFmt_Private name##_fields[] = {
+#define MAKE_LOG_CONTEXT_WITH_FIELDS(name, parent, log_level) }; LOG_CONTEXT_WITH_FIELDS_PRIVATE(name, name##_fields, parent, log_level);
+#define MAKE_LOG_CONTEXT(name, parent, log_level) LOG_CONTEXT_PRIVATE(name, parent, log_level);
+
+typedef void (*Longtail_Log)(struct Longtail_LogContext* log_context, const char* str);
 LONGTAIL_EXPORT void Longtail_SetLog(Longtail_Log log_func, void* context);
 LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
+LONGTAIL_EXPORT int Longtail_GetLogLevel();
 
 #define LONGTAIL_LOG_LEVEL_DEBUG    0
 #define LONGTAIL_LOG_LEVEL_INFO     1
@@ -722,27 +775,27 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
 #define LONGTAIL_LOG_LEVEL_OFF      4
 
 #ifndef LONGTAIL_LOG
-    void Longtail_CallLogger(int level, const char* fmt, ...);
-    #define LONGTAIL_LOG(level, fmt, ...) \
-        Longtail_CallLogger(level, fmt, __VA_ARGS__);
+    void Longtail_CallLogger(const char* file, const char* function, int line, struct Longtail_LogContextFmt_Private* log_context, int level, const char* fmt, ...);
+    #define LONGTAIL_LOG(log_context, level, fmt, ...) \
+        Longtail_CallLogger(__FILE__, __func__, __LINE__, log_context, level, fmt, __VA_ARGS__);
 #endif
 
 #if defined(LONGTAIL_ASSERTS)
     extern Longtail_Assert Longtail_Assert_private;
-#    define LONGTAIL_FATAL_ASSERT(x, bail) \
+#    define LONGTAIL_FATAL_ASSERT(ctx, x, bail) \
         if (!(x)) \
         { \
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Assert failed in %s(): failed on condition: `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Assert failed on condition: `%s`", #x); \
             if (Longtail_Assert_private) \
             { \
                 Longtail_Assert_private(#x, __FILE__, __LINE__); \
             } \
             bail; \
         }
-#   define LONGTAIL_VALIDATE_INPUT(x, bail) \
+#   define LONGTAIL_VALIDATE_INPUT(ctx, x, bail) \
     if (!(x)) \
     { \
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation for `%s()`: failed on condition `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
         if (Longtail_Assert_private) \
         { \
             Longtail_Assert_private(#x, __FILE__, __LINE__); \
@@ -750,11 +803,11 @@ LONGTAIL_EXPORT void Longtail_SetLogLevel(int level);
         bail; \
     }
 #else // defined(LONGTAIL_ASSERTS)
-#   define LONGTAIL_FATAL_ASSERT(x, y)
-#   define LONGTAIL_VALIDATE_INPUT(x, bail) \
+#   define LONGTAIL_FATAL_ASSERT(c, x, y)
+#   define LONGTAIL_VALIDATE_INPUT(ctx, x, bail) \
     if (!(x)) \
     { \
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "%s(%d): Input validation for `%s()`: failed on condition `%s`\n", __FILE__, __LINE__, __FUNCTION__, #x); \
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Input validation failed for condition `%s`", #x); \
         bail; \
     }
 #endif // defined(LONGTAIL_ASSERTS)

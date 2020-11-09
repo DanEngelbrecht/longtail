@@ -58,6 +58,10 @@ struct InMemStorageAPI
 
 static void InMemStorageAPI_Dispose(struct Longtail_API* storage_api)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct InMemStorageAPI* in_mem_storage_api = (struct InMemStorageAPI*)storage_api;
     size_t c = (size_t)arrlen(in_mem_storage_api->m_PathEntries);
     while(c--)
@@ -95,9 +99,15 @@ static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 
 static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(out_open_file != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_open_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -108,17 +118,13 @@ static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api,
         if ((path_entry->m_Permissions & (Longtail_StorageAPI_OtherReadAccess | Longtail_StorageAPI_GroupReadAccess | Longtail_StorageAPI_UserReadAccess)) == 0)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
-                storage_api, path, out_open_file,
-                EACCES)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "No permission to read, failed with %d", EACCES)
             return EACCES;
         }
         if (path_entry->m_IsOpenWrite)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
-                storage_api, path, out_open_file,
-                EPERM)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File already open for write, failed with %d", EPERM)
             return EPERM;
         }
         ++path_entry->m_IsOpenRead;
@@ -127,26 +133,28 @@ static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api,
         return 0;
     }
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
-        storage_api, path, out_open_file,
-        ENOENT)
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File not found, failed with %d", ENOENT)
     return ENOENT;
 }
 
 static int InMemStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(f != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(out_size != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(f, "%p"),
+        LONGTAIL_LOGFIELD(out_size, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, out_size != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it == -1) {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_GetSize(%p, %p, %p) failed with %d",
-            storage_api, f, out_size,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "File not found, failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
@@ -158,26 +166,30 @@ static int InMemStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Long
 
 static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(f != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(output != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(f, "%p"),
+        LONGTAIL_LOGFIELD(offset, "%" PRIu64),
+        LONGTAIL_LOGFIELD(length, "%" PRIu64),
+        LONGTAIL_LOGFIELD(output, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, output != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it == -1) {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
-            storage_api, f, offset, length, output,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "File not found, failed with %d", EINVAL)
         return EINVAL;
     }
     struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     if ((ptrdiff_t)(offset + length) > arrlen(path_entry->m_Content))
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
-            storage_api, f, offset, length, output,
-            EIO)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Read out of bounds, failed with %d", EIO)
         Longtail_UnlockSpinLock(instance->m_SpinLock);
         return EIO;
     }
@@ -215,9 +227,16 @@ static const char* InMemStorageAPI_GetFileNamePart(const char* path)
 
 static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(out_open_file != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(initial_size, "%" PRIu64),
+        LONGTAIL_LOGFIELD(out_open_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(path);
@@ -225,9 +244,7 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_OpenWriteFile(%p, %s, %" PRIu64 ", %p) failed with %d",
-            storage_api, path, initial_size, out_open_file,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File not found, failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* path_entry = 0;
@@ -238,26 +255,20 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
         if ((path_entry->m_Permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess)) == 0)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_OpenWriteFile(%p, %s, %" PRIu64 ", %p) failed with %d",
-                storage_api, path, initial_size, out_open_file,
-                EACCES)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "No permission to write, failed with %d", EACCES)
             return EACCES;
         }
         if (path_entry->m_IsOpenWrite)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_OpenWriteFile(%p, %s, %p) failed with %d",
-                storage_api, path, out_open_file,
-                EPERM)
-                return EPERM;
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File already open for write, failed with %d", EPERM)
+            return EPERM;
         }
 
         if (path_entry->m_IsOpenRead)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_OpenReadFile(%p, %s, %p) failed with %d",
-                storage_api, path, out_open_file,
-                EPERM)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File already open for read, failed with %d", EPERM)
             return EPERM;
         }
         path_entry->m_IsOpenWrite = 1;
@@ -284,9 +295,17 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
 
 static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(f != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(input != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(f, "%p"),
+        LONGTAIL_LOGFIELD(offset, "%" PRIu64),
+        LONGTAIL_LOGFIELD(length, "%" PRIu64),
+        LONGTAIL_LOGFIELD(input, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, input != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
@@ -294,9 +313,7 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Write(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
-            storage_api, f, offset, length, input,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "File not found, failed with %d", EINVAL)
         return EINVAL;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
@@ -304,9 +321,7 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
     if ((ptrdiff_t)offset > size)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Write(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d",
-            storage_api, f, offset, length, input,
-            EIO)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write out of bounds, failed with %d", EIO)
         return EIO;
     }
     if ((ptrdiff_t)(offset + length) > size)
@@ -322,8 +337,14 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
 
 static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(f != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(f, "%p"),
+        LONGTAIL_LOGFIELD(length, "%" PRIu64)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
@@ -331,9 +352,7 @@ static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Long
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_SetSize(%p, %p, %" PRIu64 ") failed with %d",
-            storage_api, f, length,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "File not found, failed with %d", EINVAL)
         return EINVAL;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
@@ -344,8 +363,14 @@ static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Long
 
 static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(permissions, "%u")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -353,7 +378,7 @@ static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_ap
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_SetPermissions(%p, %s, %u) failed with %d",
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_SetPermissions(%p, %s, %u) failed with %d",
             storage_api, path, permissions,
             ENOENT)
         return ENOENT;
@@ -366,8 +391,14 @@ static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_ap
 
 static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_permissions, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -375,9 +406,7 @@ static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_ap
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_GetPermissions(%p, %s, %u) failed with %d",
-            storage_api, path, out_permissions,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File not found, failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
@@ -388,6 +417,11 @@ static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_ap
 
 static void InMemStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(f, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
     uint32_t path_hash = (uint32_t)(uintptr_t)f;
@@ -395,20 +429,18 @@ static void InMemStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, L
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_CloseFile(%p, %p) failed with %d",
-            storage_api, f,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Invalid file handle, failed with %d", EINVAL)
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     if (path_entry->m_IsOpenRead > 0)
     {
-        LONGTAIL_FATAL_ASSERT(path_entry->m_IsOpenWrite == 0, return);
+        LONGTAIL_FATAL_ASSERT(ctx, path_entry->m_IsOpenWrite == 0, return);
         --path_entry->m_IsOpenRead;
     }
     else
     {
-        LONGTAIL_FATAL_ASSERT(path_entry->m_IsOpenRead == 0, return);
-        LONGTAIL_FATAL_ASSERT(path_entry->m_IsOpenWrite == 1, return);
+        LONGTAIL_FATAL_ASSERT(ctx, path_entry->m_IsOpenRead == 0, return);
+        LONGTAIL_FATAL_ASSERT(ctx, path_entry->m_IsOpenWrite == 1, return);
         path_entry->m_IsOpenWrite = 0;
     }
 
@@ -417,8 +449,13 @@ static void InMemStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, L
 
 static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(path);
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
@@ -426,9 +463,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_CreateDir(%p, %s) failed with %d",
-            storage_api, path,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Invalid path, failed with %d", EINVAL)
         return EINVAL;
     }
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
@@ -438,9 +473,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
         if ((path_entry->m_Permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess)) == 0)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_CreateDir(%p, %s) failed with %d",
-                storage_api, path,
-                EACCES)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "No permission to create dir, failed with %d", EACCES)
             return EACCES;
         }
         if (path_entry->m_Content == 0)
@@ -449,9 +482,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
             return EEXIST;
         }
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_CreateDir(%p, %s) failed with %d",
-            storage_api, path,
-            EIO)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Directory already exists failed with %d", EIO)
         return EIO;
     }
 
@@ -469,9 +500,15 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
 
 static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(source_path != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(target_path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(source_path, "%s"),
+        LONGTAIL_LOGFIELD(target_path, "%s")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, source_path != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, target_path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t source_path_hash = InMemStorageAPI_GetPathHash(source_path);
     uint32_t target_path_hash = InMemStorageAPI_GetPathHash(target_path);
@@ -481,9 +518,7 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
     if (source_path_ptr == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_RenameFile(%p, %s, %s) failed with %d",
-            storage_api, source_path, target_path,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File not found failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* source_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
@@ -492,9 +527,7 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
     if (target_path_ptr != -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_RenameFile(%p, %s, %s) failed with %d",
-            storage_api, source_path, target_path,
-            EEXIST)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File already exists, failed with %d", EEXIST)
         return EEXIST;
     }
     source_entry->m_ParentHash = target_parent_path_hash;
@@ -508,9 +541,15 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
 
 static char* InMemStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0);
-    LONGTAIL_VALIDATE_INPUT(root_path != 0, return 0);
-    LONGTAIL_VALIDATE_INPUT(sub_path != 0, return 0);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(root_path, "%s"),
+        LONGTAIL_LOGFIELD(sub_path, "%s")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
+    LONGTAIL_VALIDATE_INPUT(ctx, root_path != 0, return 0);
+    LONGTAIL_VALIDATE_INPUT(ctx, sub_path != 0, return 0);
     if (root_path[0] == 0)
     {
         return Longtail_Strdup(sub_path);
@@ -519,9 +558,7 @@ static char* InMemStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api,
     char* path = (char*)Longtail_Alloc(path_len);
     if (path == 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_ConcatPath(%p, %s, %s) failed with %d",
-            storage_api, root_path, sub_path,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     strcpy(path, root_path);
@@ -532,8 +569,13 @@ static char* InMemStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api,
 
 static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t source_path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -550,8 +592,13 @@ static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const 
 }
 static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -569,8 +616,13 @@ static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const
 
 static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -578,9 +630,7 @@ static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, co
     if (source_path_ptr == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_RemoveDir(%p, %s) failed with %d",
-            storage_api, path,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Directory does not exist, failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
@@ -588,9 +638,7 @@ static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, co
     {
         // Not a directory
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_RemoveDir(%p, %s) failed with %d",
-            storage_api, path,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Path is not a directory, failed with %d", EINVAL)
         return EINVAL;
     }
     Longtail_Free(path_entry->m_FileName);
@@ -605,8 +653,13 @@ static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, co
 
 static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -614,9 +667,7 @@ static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, c
     if (source_path_ptr == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_RemoveFile(%p, %s) failed with %d",
-            storage_api, path,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File does not exist, failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
@@ -624,17 +675,13 @@ static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, c
     {
         // Not a file
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_RemoveFile(%p, %s) failed with %d",
-            storage_api, path,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Path is not a file, failed with %d", EINVAL)
         return EINVAL;
     }
     if (path_entry->m_IsOpenRead || path_entry->m_IsOpenWrite)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_RemoveFile(%p, %s) failed with %d",
-            storage_api, path,
-            EPERM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File is open, failed with %d", EPERM)
         return EPERM;
     }
     Longtail_Free(path_entry->m_FileName);
@@ -649,18 +696,22 @@ static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, c
 
 static int InMemStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(path != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(out_iterator != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_iterator, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, out_iterator != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = path[0] ? InMemStorageAPI_GetPathHash(path) : 0;
     Longtail_LockSpinLock(instance->m_SpinLock);
     ptrdiff_t* i = (ptrdiff_t*)Longtail_Alloc(sizeof(ptrdiff_t));
     if (!i)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_StartFind(%p, %s, %p) failed with %d",
-            storage_api, path, out_iterator,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     *i = 0;
@@ -680,8 +731,13 @@ static int InMemStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, co
 
 static int InMemStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(iterator != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(iterator, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     ptrdiff_t* i = (ptrdiff_t*)iterator;
     uint32_t path_hash = instance->m_PathEntries[*i].m_ParentHash;
@@ -698,8 +754,13 @@ static int InMemStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Lon
 }
 static void InMemStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return);
-    LONGTAIL_VALIDATE_INPUT(iterator != 0, return);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(iterator, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return);
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     ptrdiff_t* i = (ptrdiff_t*)iterator;
     Longtail_Free(i);
@@ -708,8 +769,13 @@ static void InMemStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, L
 
 static const char* InMemStorageAPI_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0);
-    LONGTAIL_VALIDATE_INPUT(iterator != 0, return 0);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(iterator, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return 0);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     ptrdiff_t* i = (ptrdiff_t*)iterator;
     if (instance->m_PathEntries[*i].m_Content == 0)
@@ -722,8 +788,13 @@ static const char* InMemStorageAPI_GetFileName(struct Longtail_StorageAPI* stora
 
 static const char* InMemStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return 0);
-    LONGTAIL_VALIDATE_INPUT(iterator != 0, return 0);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(iterator, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return 0);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t* i = (uint32_t*)iterator;
     if (instance->m_PathEntries[*i].m_Content != 0)
@@ -735,9 +806,15 @@ static const char* InMemStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* 
 
 static int InMemStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)
 {
-    LONGTAIL_VALIDATE_INPUT(storage_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(iterator != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(out_properties != 0, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(iterator, "%p"),
+        LONGTAIL_LOGFIELD(out_properties, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, out_properties != 0, return EINVAL);
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t* i = (uint32_t*)iterator;
     if (instance->m_PathEntries[*i].m_Content == 0)
@@ -757,6 +834,12 @@ static int InMemStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storag
 
 static int InMemStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_lock_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(path);
@@ -764,9 +847,7 @@ static int InMemStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, con
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_LockFile(%p, %s, %p) failed with %d",
-            storage_api, path, out_lock_file,
-            ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Parent directory does not exist, failed with %d", ENOENT)
         return ENOENT;
     }
     struct PathEntry* path_entry = 0;
@@ -781,8 +862,7 @@ static int InMemStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, con
         Longtail_UnlockSpinLock(instance->m_SpinLock);
         if (--try_count == 0)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "InMemStorageAPI_LockFile(%p, %s, %p) failed with %d, waited %f seconds",
-                storage_api, path, out_lock_file,
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Failed with %d, waited %f seconds",
                 EACCES,
                 (total_delay / 1000) / 1000.f)
             return EACCES;
@@ -813,6 +893,11 @@ static int InMemStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, con
 
 static int InMemStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(lock_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = (uint32_t)(uintptr_t)lock_file;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -820,25 +905,19 @@ static int InMemStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, L
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_UnlockFile(%p, %p) failed with %d",
-            storage_api, lock_file,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Invalid file handle, failed with %d", EINVAL)
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     if (path_entry->m_IsOpenRead > 0)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_UnlockFile(%p, %p) failed with %d",
-            storage_api, lock_file,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Invalid file handle, failed with %d", EINVAL)
         return EINVAL;
     }
     if (path_entry->m_IsOpenWrite != 2)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_UnlockFile(%p, %p) failed with %d",
-            storage_api, lock_file,
-            EINVAL)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Invalid file handle, failed with %d", EINVAL)
         return EINVAL;
     }
     Longtail_Free(path_entry->m_FileName);
@@ -856,7 +935,12 @@ static int InMemStorageAPI_Init(
     void* mem,
     struct Longtail_StorageAPI** out_storage_api)
 {
-    LONGTAIL_VALIDATE_INPUT(mem != 0, return 0);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(out_storage_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0);
     struct Longtail_StorageAPI* api = Longtail_MakeStorageAPI(
         mem,
         InMemStorageAPI_Dispose,
@@ -890,9 +974,7 @@ static int InMemStorageAPI_Init(
     int err = Longtail_CreateSpinLock(&storage_api[1], &storage_api->m_SpinLock);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Init(%p) failed with %d",
-            storage_api,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateSpinLock() failed with %d", err)
         return err;
     }
     *out_storage_api = api;
@@ -901,19 +983,19 @@ static int InMemStorageAPI_Init(
 
 struct Longtail_StorageAPI* Longtail_CreateInMemStorageAPI()
 {
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
     void* mem = (struct InMemStorageAPI*)Longtail_Alloc(sizeof(struct InMemStorageAPI) + Longtail_GetSpinLockSize());
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateInMemStorageAPI() failed with %d",
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     struct Longtail_StorageAPI* storage_api;
     int err = InMemStorageAPI_Init(mem, &storage_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateInMemStorageAPI() failed with %d",
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_Init() failed with %d", err)
         Longtail_Free(storage_api);
         return 0;
     }

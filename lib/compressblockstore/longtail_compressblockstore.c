@@ -24,7 +24,11 @@ struct CompressBlockStoreAPI
 
 static void CompressBlockStore_CompleteRequest(struct CompressBlockStoreAPI* compressblockstore_api)
 {
-    LONGTAIL_FATAL_ASSERT(compressblockstore_api->m_PendingRequestCount > 0, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compressblockstore_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_FATAL_ASSERT(ctx, compressblockstore_api->m_PendingRequestCount > 0, return)
     struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
     Longtail_LockSpinLock(compressblockstore_api->m_Lock);
     if (0 == Longtail_AtomicAdd32(&compressblockstore_api->m_PendingRequestCount, -1))
@@ -43,8 +47,11 @@ static void CompressBlockStore_CompleteRequest(struct CompressBlockStoreAPI* com
 
 static int CompressedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressedStoredBlock_Dispose(%p)", stored_block)
-    LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, stored_block, return EINVAL)
     Longtail_Free(stored_block);
     return 0;
 }
@@ -54,10 +61,15 @@ static int CompressBlock(
     struct Longtail_StoredBlock* uncompressed_stored_block,
     struct Longtail_StoredBlock** out_compressed_stored_block)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlock(%p, %p, %p)", compression_registry, uncompressed_stored_block, out_compressed_stored_block)
-    LONGTAIL_FATAL_ASSERT(compression_registry, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(uncompressed_stored_block, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_compressed_stored_block, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compression_registry, "%p"),
+        LONGTAIL_LOGFIELD(uncompressed_stored_block, "%p"),
+        LONGTAIL_LOGFIELD(out_compressed_stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, compression_registry, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, uncompressed_stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, out_compressed_stored_block, return EINVAL)
     uint32_t compressionType = *uncompressed_stored_block->m_BlockIndex->m_Tag;
     if (compressionType == 0)
     {
@@ -73,9 +85,7 @@ static int CompressBlock(
         &compression_settings);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlock(%p, %p, %p) failed with %d",
-            compression_registry, uncompressed_stored_block, out_compressed_stored_block,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "compression_registry->GetCompressionAPI() failed with %d", err)
         return err;
     }
     uint32_t block_chunk_data_size = uncompressed_stored_block->m_BlockChunksDataSize;
@@ -86,13 +96,11 @@ static int CompressBlock(
     struct Longtail_StoredBlock* compressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(compressed_stored_block_size);
     if (!compressed_stored_block)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlock(%p, %p, %p) failed with %d",
-            compression_registry, uncompressed_stored_block, out_compressed_stored_block,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     compressed_stored_block->m_BlockIndex = Longtail_InitBlockIndex(&compressed_stored_block[1], chunk_count);
-    LONGTAIL_FATAL_ASSERT(compressed_stored_block->m_BlockIndex != 0, return EINVAL; )
+    LONGTAIL_FATAL_ASSERT(ctx, compressed_stored_block->m_BlockIndex != 0, return EINVAL; )
 
     uint32_t* header_ptr = (uint32_t*)(&((uint8_t*)compressed_stored_block->m_BlockIndex)[block_index_size]);
     compressed_stored_block->m_BlockData = header_ptr;
@@ -108,9 +116,7 @@ static int CompressBlock(
         &compressed_chunk_data_size);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlock(%p, %p, %p) failed with %d",
-            compression_registry, uncompressed_stored_block, out_compressed_stored_block,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "compression_api->Compress() failed with %d", err)
         Longtail_Free(compressed_stored_block);
         return err;
     }
@@ -132,8 +138,12 @@ struct OnPutBackingStoreAsync_API
 
 static void OnPutBackingStoreComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnPuttBackingStoreComplete(%p, %d)", async_complete_api, err)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(err, "%d")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnPutBackingStoreAsync_API* async_block_store = (struct OnPutBackingStoreAsync_API*)async_complete_api;
     struct CompressBlockStoreAPI* compressblockstore_api = async_block_store->m_CompressBlockStoreAPI;
     if (err)
@@ -154,10 +164,15 @@ static int CompressBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(stored_block, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL);
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, stored_block, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL);
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
 
@@ -170,9 +185,7 @@ static int CompressBlockStore_PutStoredBlock(
     int err = CompressBlock(block_store->m_CompressionRegistryAPI, stored_block, &compressed_stored_block);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CompressBlock() failed with %d", err)
         Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         return err;
     }
@@ -182,9 +195,7 @@ static int CompressBlockStore_PutStoredBlock(
     struct OnPutBackingStoreAsync_API* on_put_backing_store_async_api = (struct OnPutBackingStoreAsync_API*)Longtail_Alloc(on_put_backing_store_async_api_size);
     if (!on_put_backing_store_async_api)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         Longtail_Free(compressed_stored_block);
         return ENOMEM;
@@ -198,9 +209,7 @@ static int CompressBlockStore_PutStoredBlock(
     err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, &on_put_backing_store_async_api->m_API);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_PutStoredBlock(%p, %p, %p) failed with %d",
-            block_store_api, stored_block, async_complete_api,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "block_store->m_BackingBlockStore->PutStoredBlock() failed with %d", err)
         Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         Longtail_Free(on_put_backing_store_async_api);
         compressed_stored_block->Dispose(compressed_stored_block);
@@ -214,10 +223,14 @@ static int CompressBlockStore_PreflightGet(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PreflightGet(%p, %" PRIu64 ", %p)",
-        block_store_api, chunk_count, chunk_hashes)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
     struct CompressBlockStoreAPI* api = (struct CompressBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
     int err = api->m_BackingBlockStore->PreflightGet(
@@ -226,9 +239,7 @@ static int CompressBlockStore_PreflightGet(
         chunk_hashes);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PreflightGet(%p, %" PRIu64 ", %p) failed with %d",
-            block_store_api, chunk_count, chunk_hashes,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "api->m_BackingBlockStore->PreflightGet() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount], 1);
     }
     return err;
@@ -239,10 +250,15 @@ static int DecompressBlock(
     struct Longtail_StoredBlock* compressed_stored_block,
     struct Longtail_StoredBlock** out_stored_block)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "DecompressBlock(%p, %p, %p)", compression_registry, compressed_stored_block, out_stored_block)
-    LONGTAIL_FATAL_ASSERT(compression_registry, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(compressed_stored_block, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_stored_block, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(compression_registry, "%p"),
+        LONGTAIL_LOGFIELD(compressed_stored_block, "%p"),
+        LONGTAIL_LOGFIELD(out_stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, compression_registry, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, compressed_stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, out_stored_block, return EINVAL)
     uint32_t compressionType = *compressed_stored_block->m_BlockIndex->m_Tag;
     struct Longtail_CompressionAPI* compression_api;
     uint32_t compression_settings;
@@ -253,9 +269,7 @@ static int DecompressBlock(
         &compression_settings);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DecompressBlock(%p, %p, %p) failed with %d",
-            compression_registry, compressed_stored_block, out_stored_block,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "compression_registry->GetCompressionAPI() failed with %d", err)
         return err;
     }
 
@@ -271,13 +285,11 @@ static int DecompressBlock(
     struct Longtail_StoredBlock* uncompressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(uncompressed_stored_block_size);
     if (!uncompressed_stored_block)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DecompressBlock(%p, %p, %p) failed with %d",
-            compression_registry, compressed_stored_block, out_stored_block,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     uncompressed_stored_block->m_BlockIndex = Longtail_InitBlockIndex(&uncompressed_stored_block[1], chunk_count);
-    LONGTAIL_FATAL_ASSERT(uncompressed_stored_block->m_BlockIndex, return EINVAL; )
+    LONGTAIL_FATAL_ASSERT(ctx, uncompressed_stored_block->m_BlockIndex, return EINVAL; )
     uncompressed_stored_block->m_BlockData = &((uint8_t*)(&uncompressed_stored_block->m_BlockIndex[1]))[block_index_data_size];
     uncompressed_stored_block->m_BlockChunksDataSize = uncompressed_size;
     memmove(&uncompressed_stored_block->m_BlockIndex[1], &compressed_stored_block->m_BlockIndex[1], block_index_data_size);
@@ -292,9 +304,7 @@ static int DecompressBlock(
         &real_uncompressed_size);
     if (real_uncompressed_size != uncompressed_size)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "DecompressBlock(%p, %p, %p) failed with %d",
-            compression_registry, compressed_stored_block, out_stored_block,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "compression_api->Decompress() failed with %d", ENOMEM)
         Longtail_Free(uncompressed_stored_block);
         return EBADF;
     }
@@ -313,17 +323,20 @@ struct OnGetBackingStoreAsync_API
 
 static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnGetBackingStoreComplete(%p, %p, %d)", async_complete_api, stored_block, err)
-    LONGTAIL_FATAL_ASSERT(async_complete_api, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p"),
+        LONGTAIL_LOGFIELD(err, "%d")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnGetBackingStoreAsync_API* async_block_store = (struct OnGetBackingStoreAsync_API*)async_complete_api;
     struct CompressBlockStoreAPI* blockstore = async_block_store->m_BlockStore;
     if (err)
     {
         if (err != ENOENT)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "OnGetBackingStoreComplete(%p, %p, %d) failed with %d",
-                async_complete_api, stored_block, err,
-                err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetBackingStoreComplete called with error %d", err)
             Longtail_AtomicAdd64(&blockstore->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         }
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, stored_block, err);
@@ -350,9 +363,7 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
         &stored_block);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "OnGetBackingStoreComplete(%p, %p, %d) failed with %d",
-            async_complete_api, stored_block, err,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "DecompressBlock() failed with %d", err)
         Longtail_AtomicAdd64(&blockstore->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         stored_block->Dispose(stored_block);
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0, err);
@@ -370,9 +381,14 @@ static int CompressBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p)", block_store_api, block_hash, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
 
@@ -382,9 +398,7 @@ static int CompressBlockStore_GetStoredBlock(
     struct OnGetBackingStoreAsync_API* on_fetch_backing_store_async_api = (struct OnGetBackingStoreAsync_API*)Longtail_Alloc(on_fetch_backing_store_async_api_size);
     if (!on_fetch_backing_store_async_api)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
-            block_store_api, block_hash, async_complete_api,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
 
@@ -399,9 +413,7 @@ static int CompressBlockStore_GetStoredBlock(
     {
         if (err != ENOENT)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_GetStoredBlock(%p, 0x%" PRIx64 ", %p) failed with %d",
-                block_store_api, block_hash, async_complete_api,
-                err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "block_store->m_BackingBlockStore->GetStoredBlock() failed with %d", err)
             Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         }
         Longtail_Free(on_fetch_backing_store_async_api);
@@ -418,11 +430,17 @@ static int CompressBlockStore_GetExistingContent(
     uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
-        block_store_api, chunk_count, chunk_hashes, async_complete_api)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT((chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(async_complete_api, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
+        LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
     struct CompressBlockStoreAPI* api = (struct CompressBlockStoreAPI*)block_store_api;
 
@@ -436,9 +454,7 @@ static int CompressBlockStore_GetExistingContent(
         async_complete_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p) failed with %d",
-            block_store_api, chunk_count, chunk_hashes, async_complete_api,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->GetExistingContent() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         return err;
     }
@@ -447,9 +463,13 @@ static int CompressBlockStore_GetExistingContent(
 
 static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetStats(%p, %p)", block_store_api, out_stats)
-    LONGTAIL_VALIDATE_INPUT(block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(out_stats, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(out_stats, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_stats, return EINVAL)
     struct CompressBlockStoreAPI* compressblockstore_api = (struct CompressBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&compressblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
@@ -462,7 +482,11 @@ static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_stor
 
 static int CompressBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Flush(%p, %p)", block_store_api, async_complete_api)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
     struct CompressBlockStoreAPI* compressblockstore_api = (struct CompressBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&compressblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
     Longtail_LockSpinLock(compressblockstore_api->m_Lock);
@@ -479,8 +503,11 @@ static int CompressBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_a
 
 static void CompressBlockStore_Dispose(struct Longtail_API* api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p)", api)
-    LONGTAIL_VALIDATE_INPUT(api, return)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, api, return)
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)api;
     while (block_store->m_PendingRequestCount > 0)
@@ -488,7 +515,7 @@ static void CompressBlockStore_Dispose(struct Longtail_API* api)
         Longtail_Sleep(1000);
         if (block_store->m_PendingRequestCount > 0)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Dispose(%p) waiting for %d pending requests", block_store, (int32_t)block_store->m_PendingRequestCount);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Waiting for %d pending requests", (int32_t)block_store->m_PendingRequestCount);
         }
     }
     Longtail_DeleteSpinLock(block_store->m_Lock);
@@ -502,12 +529,17 @@ static int CompressBlockStore_Init(
     struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_BlockStoreAPI** out_block_store_api)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_Init(%p, %p, %p, %p)",
-        mem, backing_block_store, compression_registry, out_block_store_api)
-    LONGTAIL_FATAL_ASSERT(mem, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(backing_block_store, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(compression_registry, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(out_block_store_api, return EINVAL)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(backing_block_store, "%p"),
+        LONGTAIL_LOGFIELD(compression_registry, "%p"),
+        LONGTAIL_LOGFIELD(out_block_store_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, mem, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, backing_block_store, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, compression_registry, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, out_block_store_api, return EINVAL)
 
     struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
         mem,
@@ -549,17 +581,19 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
     struct Longtail_BlockStoreAPI* backing_block_store,
     struct Longtail_CompressionRegistryAPI* compression_registry)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateCompressBlockStoreAPI(%p, %p)", backing_block_store, compression_registry)
-    LONGTAIL_VALIDATE_INPUT(backing_block_store, return 0)
-    LONGTAIL_VALIDATE_INPUT(compression_registry, return 0)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(backing_block_store, "%p"),
+        LONGTAIL_LOGFIELD(compression_registry, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, backing_block_store, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, compression_registry, return 0)
 
     size_t api_size = sizeof(struct CompressBlockStoreAPI);
     void* mem = Longtail_Alloc(api_size);
     if (!mem)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateCompressBlockStoreAPI(%p, %p) failed with %d",
-            backing_block_store, compression_registry,
-            ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return 0;
     }
     struct Longtail_BlockStoreAPI* block_store_api;
@@ -570,9 +604,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
         &block_store_api);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateCompressBlockStoreAPI(%p, %p) failed with %d",
-            backing_block_store, compression_registry,
-            err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CompressBlockStore_Init() failed with %d", err)
         Longtail_Free(mem);
         return 0;
     }
