@@ -58,7 +58,7 @@ jobs:
     - name: build shared_lib
       run: |
         shared_lib/build.sh
-        shared_libbuild.sh release
+        shared_lib/build.sh release
     - name: build cmd
       run: |
         cmd/build.sh
