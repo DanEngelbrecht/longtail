@@ -992,22 +992,18 @@ LONGTAIL_EXPORT int Longtail_InitContentIndexFromData(
 
 /*! @brief Initialize content index.
  *
- * Initialize a struct Longtail_ContentIndex.
+ * Initialize a chunk of memory to a struct Longtail_ContentIndex.
  *
- * @param[in] content_index         Pointer to an uninitialized struct Longtail_VersionIndex
- * @param[in] data                  Pointer to a uninitialized contend index data
- * @param[in] data_size             Size of uninitialized contend index data
+ * @param[in] mem                   Pointer to memory to initialize, must be of at least Longtail_GetContentIndexSize(@p block_count, @ chunk_count) size
  * @param[in] hash_api              Hash API identifier
  * @param[in] max_block_size        Max block size
  * @param[in] max_chunks_per_block  Max chunks per block
  * @param[in] block_count           Block count
  * @param[in] chunk_count           Chunk count
- * @return                          Return code (errno style), zero on success
+ * @return                          An initialized struct Longtail_ContentIndex*, zero of failure
  */
-LONGTAIL_EXPORT int Longtail_InitContentIndex(
-    struct Longtail_ContentIndex* content_index,
-    void* data,
-    uint64_t data_size,
+LONGTAIL_EXPORT struct Longtail_ContentIndex* Longtail_InitContentIndex(
+    void* mem,
     uint32_t hash_api,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
