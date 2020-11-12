@@ -2451,6 +2451,67 @@ TEST(Longtail, Longtail_MergeContentIndex)
     SAFE_DISPOSE_API(hash_api);
 }
 
+TEST(Longtail, EmptyFolderGetRequiredChunkHashes)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    struct Longtail_FileInfos* file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(
+        storage_api,
+        0,
+        0,
+        0,
+        "",
+        &file_infos));
+    struct Longtail_VersionIndex* version_index;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        storage_api,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        "",
+        file_infos,
+        0,
+        64,
+        &version_index));
+
+    uint32_t zero = 0;
+    struct Longtail_VersionDiff version_diff =
+        {
+            &zero,
+            &zero,
+            &zero,
+            &zero,
+            &zero,
+            &zero,
+            &zero,
+            &zero,
+            &zero,
+            &zero
+        };
+
+    uint64_t required_chunk_count = 4711;
+    TLongtail_Hash* required_chunk_hashes = 0;
+    ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
+            version_index,
+            &version_diff,
+            &required_chunk_count,
+            required_chunk_hashes));
+    ASSERT_EQ((uint64_t)0, required_chunk_count);
+
+    Longtail_Free(version_index);
+    Longtail_Free(file_infos);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(storage_api);
+}
+
 TEST(Longtail, Longtail_VersionDiff)
 {
     static const uint32_t MAX_BLOCK_SIZE = 32u;
