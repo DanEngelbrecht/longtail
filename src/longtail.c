@@ -3807,7 +3807,7 @@ int Longtail_GetRequiredChunkHashes(
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_chunk_count != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, (version_index->m_ChunkCount == 0) ||  out_chunk_hashes != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (*version_index->m_ChunkCount == 0) ||  out_chunk_hashes != 0, return EINVAL)
 
     uint32_t max_chunk_count = *version_index->m_ChunkCount;
     void* work_mem = Longtail_Alloc(Longtail_LookupTable_GetSize(max_chunk_count));
