@@ -675,9 +675,13 @@ void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func Long
 
 void* Longtail_Alloc(size_t s)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(s, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
     void* mem = Longtail_Alloc_private ? Longtail_Alloc_private(s) : malloc(s);
     if (!mem)
     {
@@ -794,9 +798,13 @@ void Longtail_CallLogger(const char* file, const char* function, int line, struc
 
 char* Longtail_Strdup(const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
     char* r = (char*)Longtail_Alloc(strlen(path) + 1);
     if (!r)
     {
@@ -828,12 +836,16 @@ struct Longtail_LookupTable
 
 int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(lut, "%p"),
         LONGTAIL_LOGFIELD(key, "%" PRIu64),
         LONGTAIL_LOGFIELD(value, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
     LONGTAIL_FATAL_ASSERT(ctx, lut->m_Count < lut->m_Capacity, return ENOMEM)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     uint64_t entry_index = lut->m_Count++;
     lut->m_Keys[entry_index] = key;
@@ -861,11 +873,15 @@ int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uin
 
 uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(lut, "%p"),
         LONGTAIL_LOGFIELD(key, "%" PRIu64),
         LONGTAIL_LOGFIELD(value, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
     uint64_t* buckets = lut->m_Buckets;
@@ -906,10 +922,14 @@ uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint6
 
 uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(lut, "%p"),
         LONGTAIL_LOGFIELD(key, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
     uint64_t index = lut->m_Buckets[bucket_index];
@@ -1014,11 +1034,15 @@ static int IsDirPath(const char* path)
 
 int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(hash_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_hash, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, hash_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
@@ -1395,6 +1419,7 @@ static int AppendPath(
     uint32_t path_count_increment,
     uint32_t data_size_increment)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(file_infos, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
@@ -1405,7 +1430,9 @@ static int AppendPath(
         LONGTAIL_LOGFIELD(path_count_increment, "%u"),
         LONGTAIL_LOGFIELD(data_size_increment, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
     LONGTAIL_FATAL_ASSERT(ctx, (*file_infos) != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, max_path_count != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, max_data_size != 0, return EINVAL)
@@ -1462,12 +1489,16 @@ struct AddFile_Context {
 
 static int AddFile(void* context, const char* root_path, const char* asset_path, const struct Longtail_StorageAPI_EntryProperties* properties)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(root_path, "%s"),
         LONGTAIL_LOGFIELD(asset_path, "%s"),
         LONGTAIL_LOGFIELD(properties, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, properties != 0, return EINVAL)
@@ -1562,6 +1593,7 @@ struct StorageChunkFeederContext
 
 static int StorageChunkFeederFunc(void* context, Longtail_ChunkerAPI_HChunker chunker, uint32_t requested_size, char* buffer, uint32_t* out_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(chunker, "%p"),
@@ -1569,6 +1601,9 @@ static int StorageChunkFeederFunc(void* context, Longtail_ChunkerAPI_HChunker ch
         LONGTAIL_LOGFIELD(buffer, "%p"),
         LONGTAIL_LOGFIELD(out_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, chunker != 0, return EINVAL)
@@ -5434,11 +5469,15 @@ struct BlockJobCompareContext
 
 static SORTFUNC(BlockJobCompare)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(a_ptr, "%p"),
         LONGTAIL_LOGFIELD(b_ptr, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
@@ -6033,10 +6072,14 @@ int Longtail_WriteVersion(
 
 static int CompareHash(const void* a_ptr, const void* b_ptr) 
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(a_ptr, "%p"),
         LONGTAIL_LOGFIELD(b_ptr, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
@@ -6367,11 +6410,15 @@ int Longtail_GetMissingChunks(
 
 static SORTFUNC(SortBlockUsageHighToLow)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(a_ptr, "%p"),
         LONGTAIL_LOGFIELD(b_ptr, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
@@ -6909,10 +6956,14 @@ int Longtail_AddContentIndex(
 
 static int CompareHashes(const void* a_ptr, const void* b_ptr)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(a_ptr, "%p"),
         LONGTAIL_LOGFIELD(b_ptr, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
@@ -6924,11 +6975,15 @@ static int CompareHashes(const void* a_ptr, const void* b_ptr)
 
 static SORTFUNC(SortPathShortToLong)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(a_ptr, "%p"),
         LONGTAIL_LOGFIELD(b_ptr, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
@@ -6946,11 +7001,15 @@ static SORTFUNC(SortPathShortToLong)
 
 static SORTFUNC(SortPathLongToShort)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(a_ptr, "%p"),
         LONGTAIL_LOGFIELD(b_ptr, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)

@@ -63,10 +63,14 @@ static int AtomicCancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, L
 
 static int AtomicCancelAPI_IsCancelled(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(cancel_api, "%p"),
         LONGTAIL_LOGFIELD(token, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
     LONGTAIL_VALIDATE_INPUT(ctx, token, return EINVAL )
