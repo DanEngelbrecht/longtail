@@ -80,6 +80,7 @@ int BrotliCompressionAPI_Compress(
     size_t max_compressed_size,
     size_t* out_compressed_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(compression_api, "%p"),
         LONGTAIL_LOGFIELD(settings_id, "%u"),
@@ -89,6 +90,9 @@ int BrotliCompressionAPI_Compress(
         LONGTAIL_LOGFIELD(max_compressed_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_compressed_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     struct BrotliSettings* brotli_settings = SettingsIDToCompressionSetting(settings_id);
     LONGTAIL_VALIDATE_INPUT(ctx, brotli_settings != 0, return EINVAL)
@@ -109,6 +113,7 @@ int BrotliCompressionAPI_Decompress(
     size_t max_uncompressed_size,
     size_t* out_uncompressed_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(compression_api, "%p"),
         LONGTAIL_LOGFIELD(compressed, "%u"),
@@ -116,6 +121,9 @@ int BrotliCompressionAPI_Decompress(
         LONGTAIL_LOGFIELD(max_uncompressed_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_uncompressed_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     *out_uncompressed_size = max_uncompressed_size;
     BrotliDecoderResult result = BrotliDecoderDecompress(

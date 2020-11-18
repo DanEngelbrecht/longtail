@@ -66,12 +66,7 @@ static void GetUniqueExtension(uint64_t id, char* extension)
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
-        LONGTAIL_LOGFIELD(out_name, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-
-    LONGTAIL_FATAL_ASSERT(ctx, out_name, return)
+    LONGTAIL_FATAL_ASSERT(0, out_name, return)
     out_name[7] = HashLUT[(block_hash >> 60) & 0xf];
     out_name[8] = HashLUT[(block_hash >> 56) & 0xf];
     out_name[9] = HashLUT[(block_hash >> 52) & 0xf];
@@ -103,12 +98,16 @@ static char* GetBlockPath(
     const char* block_extension,
     TLongtail_Hash block_hash)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(store_path, "%s"),
         LONGTAIL_LOGFIELD(block_extension, "%s"),
         LONGTAIL_LOGFIELD(block_hash, "%" PRIx64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, store_path, return 0)
@@ -125,12 +124,16 @@ static char* GetTempBlockPath(
     TLongtail_Hash block_hash,
     const char* tmp_extension)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(store_path, "%s"),
         LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
         LONGTAIL_LOGFIELD(tmp_extension, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, store_path, return 0)
@@ -245,6 +248,7 @@ static int SafeWriteStoredBlock(
     const char* block_extension,
     struct Longtail_StoredBlock* stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(api, "%p"),
         LONGTAIL_LOGFIELD(storage_api, "%p"),
@@ -252,6 +256,9 @@ static int SafeWriteStoredBlock(
         LONGTAIL_LOGFIELD(block_extension, "%s"),
         LONGTAIL_LOGFIELD(stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     TLongtail_Hash block_hash = *stored_block->m_BlockIndex->m_BlockHash;
     char* block_path = GetBlockPath(storage_api, store_path, block_extension, block_hash);
@@ -598,11 +605,15 @@ static int FSBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, stored_block, return EINVAL)
@@ -693,11 +704,15 @@ static int FSBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)

@@ -359,6 +359,7 @@ int HPCDCChunker_NextChunk(
     void* feeder_context,
     struct Longtail_Chunker_ChunkRange* out_chunk_range)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(chunker_api, "%p"),
         LONGTAIL_LOGFIELD(chunker, "%p"),
@@ -366,6 +367,9 @@ int HPCDCChunker_NextChunk(
         LONGTAIL_LOGFIELD(feeder_context, "%p"),
         LONGTAIL_LOGFIELD(out_chunk_range, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, chunker_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunker, return EINVAL)

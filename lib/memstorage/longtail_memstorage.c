@@ -99,11 +99,15 @@ static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 
 static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_open_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -139,11 +143,15 @@ static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api,
 
 static int InMemStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(f, "%p"),
         LONGTAIL_LOGFIELD(out_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
@@ -166,6 +174,7 @@ static int InMemStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Long
 
 static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(f, "%p"),
@@ -173,6 +182,9 @@ static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtai
         LONGTAIL_LOGFIELD(length, "%" PRIu64),
         LONGTAIL_LOGFIELD(output, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
@@ -227,12 +239,16 @@ static const char* InMemStorageAPI_GetFileNamePart(const char* path)
 
 static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(initial_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_open_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -295,6 +311,7 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
 
 static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(f, "%p"),
@@ -302,6 +319,9 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
         LONGTAIL_LOGFIELD(length, "%" PRIu64),
         LONGTAIL_LOGFIELD(input, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
@@ -337,11 +357,15 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
 
 static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(f, "%p"),
         LONGTAIL_LOGFIELD(length, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL);
@@ -363,11 +387,15 @@ static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Long
 
 static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(permissions, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -389,11 +417,15 @@ static int InMemStorageAPI_SetPermissions(struct Longtail_StorageAPI* storage_ap
 
 static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_permissions, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -415,10 +447,14 @@ static int InMemStorageAPI_GetPermissions(struct Longtail_StorageAPI* storage_ap
 
 static void InMemStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(f, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -447,10 +483,14 @@ static void InMemStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, L
 
 static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -498,11 +538,15 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
 
 static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(source_path, "%s"),
         LONGTAIL_LOGFIELD(target_path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, source_path != 0, return EINVAL);
@@ -539,11 +583,15 @@ static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, c
 
 static char* InMemStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(root_path, "%s"),
         LONGTAIL_LOGFIELD(sub_path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
     LONGTAIL_VALIDATE_INPUT(ctx, root_path != 0, return 0);
@@ -567,10 +615,14 @@ static char* InMemStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api,
 
 static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -590,10 +642,14 @@ static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const 
 }
 static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -614,10 +670,14 @@ static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const
 
 static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -651,10 +711,14 @@ static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, co
 
 static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -694,11 +758,15 @@ static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, c
 
 static int InMemStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
@@ -729,10 +797,14 @@ static int InMemStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, co
 
 static int InMemStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return EINVAL);
@@ -752,10 +824,14 @@ static int InMemStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Lon
 }
 static void InMemStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return);
     LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return);
@@ -767,10 +843,14 @@ static void InMemStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, L
 
 static const char* InMemStorageAPI_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
     LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return 0);
@@ -786,10 +866,14 @@ static const char* InMemStorageAPI_GetFileName(struct Longtail_StorageAPI* stora
 
 static const char* InMemStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(iterator, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
     LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return 0);
@@ -804,11 +888,15 @@ static const char* InMemStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* 
 
 static int InMemStorageAPI_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(iterator, "%p"),
         LONGTAIL_LOGFIELD(out_properties, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, iterator != 0, return EINVAL);

@@ -23,9 +23,13 @@ struct CacheBlockStoreAPI
 
 static void CacheBlockStore_CompleteRequest(struct CacheBlockStoreAPI* cacheblockstore_api)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(cacheblockstore_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, cacheblockstore_api->m_PendingRequestCount > 0, return)
     struct Longtail_AsyncFlushAPI** pendingAsyncFlushAPIs = 0;
@@ -52,9 +56,13 @@ struct CachedStoredBlock {
 
 int CachedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     struct CachedStoredBlock* b = (struct CachedStoredBlock*)stored_block;
     int32_t ref_count = Longtail_AtomicAdd32(&b->m_RefCount, -1);
@@ -70,10 +78,14 @@ int CachedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
 struct Longtail_StoredBlock* CachedStoredBlock_CreateBlock(struct Longtail_StoredBlock* original_stored_block, int32_t refCount)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(original_stored_block, "%p"),
         LONGTAIL_LOGFIELD(refCount, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     size_t cached_stored_block_size = sizeof(struct CachedStoredBlock);
     struct CachedStoredBlock* cached_stored_block = (struct CachedStoredBlock*)Longtail_Alloc(cached_stored_block_size);
@@ -109,10 +121,14 @@ struct PutStoredBlockPutLocalComplete_API
 
 static void PutStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct PutStoredBlockPutLocalComplete_API* api = (struct PutStoredBlockPutLocalComplete_API*)async_complete_api;
@@ -165,11 +181,15 @@ static int CacheBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, stored_block, return EINVAL)
@@ -356,10 +376,14 @@ struct OnGetStoredBlockPutLocalComplete_API
 
 static void OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnGetStoredBlockPutLocalComplete_API* api = (struct OnGetStoredBlockPutLocalComplete_API*)async_complete_api;
@@ -382,11 +406,15 @@ struct OnGetStoredBlockGetRemoteComplete_API
 
 static int StoreBlockCopyToLocalCache(struct CacheBlockStoreAPI* cacheblockstore_api, struct Longtail_BlockStoreAPI* local_block_store, struct Longtail_StoredBlock* cached_stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(cacheblockstore_api, "%p"),
         LONGTAIL_LOGFIELD(local_block_store, "%p"),
         LONGTAIL_LOGFIELD(cached_stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     size_t put_local_size = sizeof(struct OnGetStoredBlockPutLocalComplete_API);
     struct OnGetStoredBlockPutLocalComplete_API* put_local = (struct OnGetStoredBlockPutLocalComplete_API*)Longtail_Alloc(put_local_size);
@@ -414,11 +442,15 @@ static int StoreBlockCopyToLocalCache(struct CacheBlockStoreAPI* cacheblockstore
 
 static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnGetStoredBlockGetRemoteComplete_API* api = (struct OnGetStoredBlockGetRemoteComplete_API*)async_complete_api;
@@ -471,11 +503,15 @@ struct OnGetStoredBlockGetLocalComplete_API
 
 static void OnGetStoredBlockGetLocalComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return)
     struct OnGetStoredBlockGetLocalComplete_API* api = (struct OnGetStoredBlockGetLocalComplete_API*)async_complete_api;
@@ -534,11 +570,15 @@ static int CacheBlockStore_GetStoredBlock(
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)

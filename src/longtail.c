@@ -1024,9 +1024,13 @@ static void Longtail_ToLowerCase(char *str)
 
 static int IsDirPath(const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
@@ -1064,10 +1068,14 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
 
 static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
@@ -1086,10 +1094,14 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
 
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
@@ -2740,9 +2752,13 @@ int Longtail_ReadVersionIndex(
 
 size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(chunk_count, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
     return
         sizeof(TLongtail_Hash) +                    // m_BlockHash
         sizeof(uint32_t) +                          // m_HashIdentifier
@@ -2754,11 +2770,15 @@ size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count)
 
 struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(chunk_count, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     struct Longtail_BlockIndex* block_index = (struct Longtail_BlockIndex*)mem;
     char* p = (char*)&block_index[1];
@@ -2789,6 +2809,7 @@ int Longtail_InitBlockIndexFromData(
     void* data,
     uint64_t data_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_index, "%p"),
         LONGTAIL_LOGFIELD(data, "%p"),
@@ -2796,6 +2817,9 @@ int Longtail_InitBlockIndexFromData(
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
     LONGTAIL_VALIDATE_INPUT(ctx, block_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, data != 0, return EINVAL)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     char* p = (char*)data;
 
@@ -2847,6 +2871,7 @@ int Longtail_CreateBlockIndex(
     const uint32_t* chunk_sizes,
     struct Longtail_BlockIndex** out_block_index)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(hash_api, "%p"),
         LONGTAIL_LOGFIELD(tag, "%u"),
@@ -2855,6 +2880,10 @@ int Longtail_CreateBlockIndex(
         LONGTAIL_LOGFIELD(chunk_sizes, "%p"),
         LONGTAIL_LOGFIELD(out_block_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_indexes != 0, return EINVAL)
@@ -2898,11 +2927,16 @@ int Longtail_WriteBlockIndexToBuffer(
     void** out_buffer,
     size_t* out_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_index, "%p"),
         LONGTAIL_LOGFIELD(out_buffer, "%p"),
         LONGTAIL_LOGFIELD(out_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_VALIDATE_INPUT(ctx, block_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_buffer != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_size != 0, return EINVAL)
@@ -2924,11 +2958,16 @@ int Longtail_ReadBlockIndexFromBuffer(
     size_t size,
     struct Longtail_BlockIndex** out_block_index)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(buffer, "%p"),
         LONGTAIL_LOGFIELD(size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_block_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_VALIDATE_INPUT(ctx, buffer != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, size != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_block_index != 0, return EINVAL)
@@ -2957,11 +2996,16 @@ int Longtail_WriteBlockIndex(
     struct Longtail_BlockIndex* block_index,
     const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(block_index, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, block_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL)
@@ -3005,11 +3049,16 @@ int Longtail_ReadBlockIndex(
     const char* path,
     struct Longtail_BlockIndex** out_block_index)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_block_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_block_index != 0, return EINVAL)
@@ -3105,11 +3154,16 @@ int Longtail_InitStoredBlockFromData(
     void* block_data,
     size_t block_data_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(block_data, "%p"),
         LONGTAIL_LOGFIELD(block_data_size, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_VALIDATE_INPUT(ctx, stored_block != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, block_data != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, block_data_size > 0, return EINVAL)
@@ -3140,6 +3194,7 @@ int Longtail_CreateStoredBlock(
     uint32_t block_data_size,
     struct Longtail_StoredBlock** out_stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
         LONGTAIL_LOGFIELD(hash_identifier, "%u"),
@@ -3150,6 +3205,10 @@ int Longtail_CreateStoredBlock(
         LONGTAIL_LOGFIELD(block_data_size, "%u"),
         LONGTAIL_LOGFIELD(out_stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || chunk_hashes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || chunk_sizes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_stored_block != 0, return EINVAL)
@@ -3181,9 +3240,14 @@ int Longtail_CreateStoredBlock(
 
 static int ReadStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
     LONGTAIL_FATAL_ASSERT(ctx, stored_block, return EINVAL)
 
     Longtail_Free(stored_block);
@@ -3195,11 +3259,15 @@ int Longtail_WriteStoredBlockToBuffer(
     void** out_buffer,
     size_t* out_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(out_buffer, "%p"),
         LONGTAIL_LOGFIELD(out_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, stored_block != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_buffer != 0, return EINVAL)
@@ -3232,11 +3300,15 @@ int Longtail_ReadStoredBlockFromBuffer(
     size_t size,
     struct Longtail_StoredBlock** out_stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(buffer, "%p"),
         LONGTAIL_LOGFIELD(size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, buffer != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_stored_block != 0, return EINVAL)
@@ -3270,11 +3342,15 @@ int Longtail_WriteStoredBlock(
     struct Longtail_StoredBlock* stored_block,
     const char* path)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, stored_block != 0, return EINVAL)
@@ -3314,11 +3390,15 @@ int Longtail_ReadStoredBlock(
     const char* path,
     struct Longtail_StoredBlock** out_stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL)
@@ -4209,10 +4289,14 @@ struct WriteBlockJob
 
 static void BlockWriterJobOnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     if (err)
     {
@@ -4234,9 +4318,13 @@ static void BlockWriterJobOnComplete(struct Longtail_AsyncPutStoredBlockAPI* asy
 
 static int DisposePutBlock(struct Longtail_StoredBlock* stored_block)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(stored_block, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     Longtail_Free(stored_block->m_BlockIndex);
     Longtail_Free(stored_block->m_BlockData);
@@ -4246,11 +4334,15 @@ static int DisposePutBlock(struct Longtail_StoredBlock* stored_block)
 
 static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(job_id, "%u"),
         LONGTAIL_LOGFIELD(is_cancelled, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
 
@@ -4626,11 +4718,15 @@ struct BlockReaderJob
 
 void BlockReaderJobOnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
         LONGTAIL_LOGFIELD(stored_block, "%p"),
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     if (err)
     {
@@ -4647,11 +4743,15 @@ void BlockReaderJobOnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_comp
 
 static int BlockReader(void* context, uint32_t job_id, int is_cancelled)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(job_id, "%u"),
         LONGTAIL_LOGFIELD(is_cancelled, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
 

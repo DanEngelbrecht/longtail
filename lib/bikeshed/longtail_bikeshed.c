@@ -26,25 +26,19 @@ static void ReadyCallback_Dispose(struct ReadyCallback* ready_callback)
 
 static void ReadyCallback_Ready(struct Bikeshed_ReadyCallback* ready_callback, uint8_t channel, uint32_t ready_count)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(ready_callback, "%p"),
         LONGTAIL_LOGFIELD(channel, "%u"),
         LONGTAIL_LOGFIELD(ready_count, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, ready_callback, return)
     struct ReadyCallback* cb = (struct ReadyCallback*)ready_callback;
     Longtail_PostSema(cb->m_Semaphore, ready_count);
-}
-
-static void ReadyCallback_Wait(struct ReadyCallback* ready_callback)
-{
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(ready_callback, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-
-    LONGTAIL_FATAL_ASSERT(ctx, ready_callback, return)
-    Longtail_WaitSema(ready_callback->m_Semaphore, LONGTAIL_TIMEOUT_INFINITE);
 }
 
 static int ReadyCallback_Init(struct ReadyCallback* ready_callback)
@@ -299,6 +293,7 @@ static int Bikeshed_CreateJobs(
     void* job_contexts[],
     Longtail_JobAPI_Jobs* out_jobs)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(job_group, "%p"),
@@ -307,6 +302,9 @@ static int Bikeshed_CreateJobs(
         LONGTAIL_LOGFIELD(job_contexts, "%p"),
         LONGTAIL_LOGFIELD(out_jobs, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, job_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, job_funcs, return EINVAL)
@@ -375,6 +373,7 @@ on_error:
 
 static int Bikeshed_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(job_count, "%u"),
@@ -382,6 +381,9 @@ static int Bikeshed_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job
         LONGTAIL_LOGFIELD(dependency_job_count, "%u"),
         LONGTAIL_LOGFIELD(dependency_jobs, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, job_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, dependency_jobs, return EINVAL)
@@ -397,11 +399,15 @@ static int Bikeshed_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job
 
 static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(job_count, "%u"),
         LONGTAIL_LOGFIELD(jobs, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, job_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, job_count > 0, return EINVAL)
@@ -467,10 +473,14 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
 
 static int Bikeshed_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(job_id, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, job_api, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
