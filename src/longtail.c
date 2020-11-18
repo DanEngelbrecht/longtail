@@ -6433,7 +6433,7 @@ static SORTFUNC(SortBlockUsageHighToLow)
         1 : ((a_usage > b_usage) ?
             -1 : ((a_index < b_index) ?
                 -1 : ((a_index == b_index) ?
-                    0 : -1)));
+                    0 : 1)));
 }
 
 int Longtail_GetExistingContentIndex(
