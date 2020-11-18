@@ -26,15 +26,11 @@ static void ReadyCallback_Dispose(struct ReadyCallback* ready_callback)
 
 static void ReadyCallback_Ready(struct Bikeshed_ReadyCallback* ready_callback, uint8_t channel, uint32_t ready_count)
 {
-#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(ready_callback, "%p"),
         LONGTAIL_LOGFIELD(channel, "%u"),
         LONGTAIL_LOGFIELD(ready_count, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, ready_callback, return)
     struct ReadyCallback* cb = (struct ReadyCallback*)ready_callback;
@@ -43,13 +39,9 @@ static void ReadyCallback_Ready(struct Bikeshed_ReadyCallback* ready_callback, u
 
 static void ReadyCallback_Wait(struct ReadyCallback* ready_callback)
 {
-#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(ready_callback, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, ready_callback, return)
     Longtail_WaitSema(ready_callback->m_Semaphore, LONGTAIL_TIMEOUT_INFINITE);
@@ -230,12 +222,16 @@ on_error:
 
 static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task_id, uint8_t channel, void* context)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(shed, "%p"),
         LONGTAIL_LOGFIELD(task_id, "%u"),
         LONGTAIL_LOGFIELD(channel, "%u"),
         LONGTAIL_LOGFIELD(context, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, shed, return (enum Bikeshed_TaskResult)-1)
     LONGTAIL_FATAL_ASSERT(ctx, context, return (enum Bikeshed_TaskResult)-1)
