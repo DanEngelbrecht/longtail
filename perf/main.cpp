@@ -308,21 +308,16 @@ uint64_t TestLookupBlockHashTableSpeed(
 uint64_t TestGetExistingContentSpeed(struct Longtail_StorageAPI* storage_api)
 {
     struct Longtail_StoreIndex* store_index;
-    Longtail_ReadStoreIndex(storage_api, "testdata/big_index.lsi", &store_index);
-
-    uint32_t chunk_count = (*store_index->m_ChunkCount) / 10;
-    TLongtail_Hash* chunk_hashes = new TLongtail_Hash[chunk_count];
-    for (uint32_t c = 0; c < chunk_count; c++)
-    {
-        chunk_hashes[c] = store_index->m_ChunkHashes[c * 9];
-    }
+    Longtail_ReadStoreIndex(storage_api, "testdata/store.lsi", &store_index);
+    struct Longtail_VersionIndex* version_index;
+    Longtail_ReadVersionIndex(storage_api, "testdata/version.lvi", &version_index);
 
     uint64_t start = stm_now();
     struct Longtail_ContentIndex* content_index;
     Longtail_GetExistingContentIndex(
         store_index,
-        chunk_count,
-        chunk_hashes,
+        *version_index->m_ChunkCount,
+        version_index->m_ChunkHashes,
         0,
         8388608,
         1024,
@@ -330,8 +325,7 @@ uint64_t TestGetExistingContentSpeed(struct Longtail_StorageAPI* storage_api)
     uint64_t elapsed = stm_now() - start;
     Longtail_Free(content_index);
 
-    delete [] chunk_hashes;
-
+    Longtail_Free(version_index);
     Longtail_Free(store_index);
     return elapsed;
 }
@@ -350,7 +344,7 @@ int main(int argc, char** argv)
 
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
 
-    struct Longtail_ContentIndex* content_index = 0;
+/*    struct Longtail_ContentIndex* content_index = 0;
     uint64_t read_ticks = TestReadSpeed(storage_api, "D:\\Temp\\Pioneer_Client_store_store.lci", &content_index);
 
     printf("TestReadSpeed: %.3lf ms\n", stm_ms(read_ticks));
@@ -379,7 +373,7 @@ int main(int argc, char** argv)
     hmfree(block_lookup_table);
 
     Longtail_Free(content_index);
-
+*/
     uint64_t get_existing_content_ticks = TestGetExistingContentSpeed(storage_api);
     printf("TestGetExistingContentSpeed: %.3lf ms\n", stm_ms(get_existing_content_ticks));
 
