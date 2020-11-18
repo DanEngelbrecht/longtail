@@ -6533,22 +6533,15 @@ int Longtail_GetExistingContentIndex(
     uint32_t found_chunk_count = 0;
     if (min_block_usage_percent <= 100)
     {
-        uint32_t store_chunk_index_offset = 0;
+        uint32_t chunk_offset = 0;
         for (uint32_t b = 0; b < store_block_count; ++b)
         {
             block_order[b] = b;
-            chunk_index_offsets[b] = store_chunk_index_offset;
-            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-            store_chunk_index_offset += block_chunk_count;
-        }
-
-        for (uint32_t b = 0; b < store_block_count; ++b)
-        {
             block_use[b] = 0;
             block_size[b] = 0;
+            chunk_index_offsets[b] = chunk_offset;
             TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
             uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-            uint32_t chunk_offset = chunk_index_offsets[b];
             for (uint32_t c = 0; c < block_chunk_count; ++c)
             {
                 uint32_t chunk_size = store_index->m_ChunkSizes[chunk_offset];
