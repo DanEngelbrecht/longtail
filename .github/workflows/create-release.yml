@@ -104,7 +104,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** Removed some logging contexts affecting performance in release mode
+          - **FIX** Made block useage sort order stable in `Longtail_GetExistingContentIndex`
+          - **FIX** Optimized `Longtail_GetExistingContentIndex`
+          - **FIX** Removed log context creation in release mode for functions that are called many times
         draft: false
         prerelease: false
     - name: Download Linux artifacts
