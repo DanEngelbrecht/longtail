@@ -6568,7 +6568,7 @@ int Longtail_GetExistingContentIndex(
     size_t chunk_to_store_index_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
     size_t found_store_block_hashes_size = sizeof(TLongtail_Hash) * store_block_count;
     size_t found_store_chunk_hashes_size = sizeof(TLongtail_Hash) * chunk_count;
-    size_t found_store_chunk_per_block_sizes = sizeof(uint32_t) * store_block_count;
+    size_t found_store_chunk_per_block_size = sizeof(uint32_t) * store_block_count;
     size_t block_uses_size = sizeof(uint32_t) * store_block_count;
     size_t block_sizes_size = sizeof(uint32_t) * store_block_count;
     size_t block_order_size = sizeof(uint32_t) * store_block_count;
@@ -6577,7 +6577,7 @@ int Longtail_GetExistingContentIndex(
     size_t tmp_mem_size = chunk_to_index_lookup_size +
         block_to_index_lookup_size +
         chunk_to_store_index_lookup_size +
-        found_store_chunk_per_block_sizes +
+        found_store_chunk_per_block_size +
         found_store_block_hashes_size +
         found_store_chunk_hashes_size +
         block_uses_size +
@@ -6609,7 +6609,7 @@ int Longtail_GetExistingContentIndex(
     p += found_store_chunk_hashes_size;
 
     uint32_t* found_store_chunk_per_block = (uint32_t*)p;
-    p += found_store_chunk_per_block_sizes;
+    p += found_store_chunk_per_block_size;
 
     uint32_t* block_uses = (uint32_t*)p;
     p += block_uses_size;
