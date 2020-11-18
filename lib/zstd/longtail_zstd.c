@@ -51,6 +51,7 @@ static size_t ZStdCompressionAPI_GetMaxCompressedSize(struct Longtail_Compressio
 
 int ZStdCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(compression_api, "%p"),
         LONGTAIL_LOGFIELD(settings_id, "%u"),
@@ -60,6 +61,9 @@ int ZStdCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api,
         LONGTAIL_LOGFIELD(max_compressed_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_compressed_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     int compression_setting = SettingsIDToCompressionSetting(settings_id);
     size_t size = ZSTD_compress(compressed, max_compressed_size, uncompressed, uncompressed_size, compression_setting);
@@ -76,6 +80,7 @@ int ZStdCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api,
 
 int ZStdCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(compression_api, "%p"),
         LONGTAIL_LOGFIELD(compressed, "%p"),
@@ -84,6 +89,9 @@ int ZStdCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_ap
         LONGTAIL_LOGFIELD(max_uncompressed_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_uncompressed_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     size_t size = ZSTD_decompress(uncompressed, max_uncompressed_size, compressed, compressed_size);
     if (ZSTD_isError(size))

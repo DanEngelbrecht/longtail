@@ -38,6 +38,7 @@ static size_t LZ4CompressionAPI_GetMaxCompressedSize(struct Longtail_Compression
 
 int LZ4CompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(compression_api, "%p"),
         LONGTAIL_LOGFIELD(settings_id, "%u"),
@@ -47,6 +48,9 @@ int LZ4CompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, 
         LONGTAIL_LOGFIELD(max_compressed_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_compressed_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     int compression_setting = SettingsIDToCompressionSetting(settings_id);
     int compressed_size = LZ4_compress_fast(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
@@ -61,6 +65,7 @@ int LZ4CompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, 
 
 static int LZ4CompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(compression_api, "%p"),
         LONGTAIL_LOGFIELD(compressed, "%p"),
@@ -69,6 +74,9 @@ static int LZ4CompressionAPI_Decompress(struct Longtail_CompressionAPI* compress
         LONGTAIL_LOGFIELD(max_uncompressed_size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_uncompressed_size, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     int result = LZ4_decompress_safe(compressed, uncompressed, (int)compressed_size, (int)max_uncompressed_size);
     if (result < 0)

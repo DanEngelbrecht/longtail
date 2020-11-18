@@ -49,12 +49,16 @@ static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_H
 
 static void Blake2Hash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, const void* data)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(hash_api, "%p"),
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(length, "%u"),
         LONGTAIL_LOGFIELD(data, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api, return)
     LONGTAIL_VALIDATE_INPUT(ctx, context, return)
@@ -86,12 +90,16 @@ static uint64_t Blake2Hash_EndContext(struct Longtail_HashAPI* hash_api, Longtai
 
 static int Blake2Hash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, const void* data, uint64_t* out_hash)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(hash_api, "%p"),
         LONGTAIL_LOGFIELD(length, "%u"),
         LONGTAIL_LOGFIELD(data, "%p"),
         LONGTAIL_LOGFIELD(out_hash, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, data, return EINVAL)
