@@ -15,6 +15,7 @@
 
 #include "../src/longtail.h"
 #include "../lib/filestorage/longtail_filestorage.h"
+#include "../lib/bikeshed/longtail_bikeshed.h"
 
 
 struct Longtail_LookupTable
@@ -161,9 +162,9 @@ static void TestAssert(const char* expression, const char* file, int line)
 
 static const char* ERROR_LEVEL[4] = {"DEBUG", "INFO", "WARNING", "ERROR"};
 
-static void LogStdErr(void* , int level, const char* log)
+static void LogStdErr(struct Longtail_LogContext* log_context, const char* str)
 {
-    fprintf(stderr, "%s: %s\n", ERROR_LEVEL[level], log);
+    fprintf(stderr, "%s: %s\n", ERROR_LEVEL[log_context->level], str);
 }
 
 uint64_t TestReadSpeed(
@@ -304,7 +305,36 @@ uint64_t TestLookupBlockHashTableSpeed(
     return stm_now() - start;
 }
 
+uint64_t TestGetExistingContentSpeed(struct Longtail_StorageAPI* storage_api)
+{
+    struct Longtail_StoreIndex* store_index;
+    Longtail_ReadStoreIndex(storage_api, "testdata/big_index.lsi", &store_index);
 
+    uint32_t chunk_count = (*store_index->m_ChunkCount) / 10;
+    TLongtail_Hash* chunk_hashes = new TLongtail_Hash[chunk_count];
+    for (uint32_t c = 0; c < chunk_count; c++)
+    {
+        chunk_hashes[c] = store_index->m_ChunkHashes[c * 9];
+    }
+
+    uint64_t start = stm_now();
+    struct Longtail_ContentIndex* content_index;
+    Longtail_GetExistingContentIndex(
+        store_index,
+        chunk_count,
+        chunk_hashes,
+        0,
+        8388608,
+        1024,
+        &content_index);
+    uint64_t elapsed = stm_now() - start;
+    Longtail_Free(content_index);
+
+    delete [] chunk_hashes;
+
+    Longtail_Free(store_index);
+    return elapsed;
+}
 
 int main(int argc, char** argv)
 {
@@ -349,6 +379,9 @@ int main(int argc, char** argv)
     hmfree(block_lookup_table);
 
     Longtail_Free(content_index);
+
+    uint64_t get_existing_content_ticks = TestGetExistingContentSpeed(storage_api);
+    printf("TestGetExistingContentSpeed: %.3lf ms\n", stm_ms(get_existing_content_ticks));
 
     SAFE_DISPOSE_API(storage_api);
 

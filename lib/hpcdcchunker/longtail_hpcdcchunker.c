@@ -161,11 +161,15 @@ static int FeedChunker(
 	Longtail_Chunker_Feeder feeder,
 	void* context)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(c, "%p"),
         LONGTAIL_LOGFIELD(feeder, "%p"),
         LONGTAIL_LOGFIELD(context, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, c != 0, return EINVAL)
 
@@ -200,11 +204,15 @@ struct Longtail_Chunker_ChunkRange Longtail_HPCDCNextChunk(
 	Longtail_Chunker_Feeder feeder,
 	void* context)
 {
+#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(c, "%p"),
         LONGTAIL_LOGFIELD(feeder, "%p"),
         LONGTAIL_LOGFIELD(context, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, c != 0, return EmptyChunkRange)
     if (c->buf.len - c->off < c->params.max)
