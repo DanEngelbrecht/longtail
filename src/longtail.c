@@ -8115,6 +8115,86 @@ int Longtail_CreateStoreIndexFromBlocks(
     return 0;
 }
 
+int Longtail_CreateStoreIndexFromContentIndex(
+    const struct Longtail_ContentIndex* content_index,
+    uint32_t blocks_tag,
+    struct Longtail_StoreIndex** out_store_index)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(content_index, "%p"),
+        LONGTAIL_LOGFIELD(out_store_index, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_store_index != 0, return EINVAL)
+
+    uint32_t block_count = (uint32_t)*content_index->m_BlockCount;
+    uint32_t chunk_count = (uint32_t)*content_index->m_ChunkCount;
+    size_t store_index_size = Longtail_GetStoreIndexSize(block_count, chunk_count);
+    void* store_index_mem = Longtail_Alloc(store_index_size);
+    if (!store_index_mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return ENOMEM;
+    }
+    struct Longtail_StoreIndex* store_index = Longtail_InitStoreIndex(store_index_mem, block_count, chunk_count);
+
+    size_t block_hash_to_block_index_size = Longtail_LookupTable_GetSize(block_count);
+    void* block_hash_to_block_index_mem = Longtail_Alloc(block_hash_to_block_index_size);
+    if (!block_hash_to_block_index_mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_Free(store_index_mem);
+        return ENOMEM;
+    }
+    struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(block_hash_to_block_index_mem, block_count, 0);
+
+    *store_index->m_Version = Longtail_CurrentStoreIndexVersion;
+    *store_index->m_HashIdentifier = *content_index->m_HashIdentifier;
+    *store_index->m_BlockCount = block_count;
+    *store_index->m_ChunkCount = chunk_count;
+
+    uint32_t current_block_index = 0;
+    uint32_t block_write_index = 0;
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[c];
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        uint64_t* block_index_ptr = Longtail_LookupTable_PutUnique(block_hash_to_block_index, block_hash, block_write_index);
+        if (block_index_ptr)
+        {
+            current_block_index = (uint32_t)*block_index_ptr;
+        }
+        else
+        {
+            current_block_index = block_write_index++;
+            store_index->m_BlockHashes[current_block_index] = block_hash;
+            store_index->m_BlockTags[current_block_index] = blocks_tag;
+            store_index->m_BlockChunksOffsets[current_block_index] = c;
+            store_index->m_BlockChunkCounts[current_block_index] = 0;
+        }
+        store_index->m_ChunkHashes[c] = chunk_hash;
+        store_index->m_ChunkSizes[c] = 0;
+        store_index->m_BlockChunkCounts[current_block_index]++;
+    }
+
+    // Fake the chunk sizes
+    for (uint32_t c = 0; c < chunk_count; ++c)
+    {
+        uint64_t block_index = content_index->m_ChunkBlockIndexes[c];
+        TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
+        uint64_t write_block_index = *Longtail_LookupTable_Get(block_hash_to_block_index, block_hash);
+        uint32_t chunks_in_block = store_index->m_BlockChunkCounts[write_block_index];
+        store_index->m_ChunkSizes[c] = *content_index->m_MaxBlockSize / chunks_in_block;
+    }
+
+    Longtail_Free(block_hash_to_block_index);
+    *out_store_index = store_index;
+    return 0;
+}
+
+
 int Longtail_MakeBlockIndex(
     const struct Longtail_StoreIndex* store_index,
     uint32_t block_index,

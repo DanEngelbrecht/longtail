@@ -1714,6 +1714,11 @@ LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromBlocks(
     const struct Longtail_BlockIndex** block_indexes,
     struct Longtail_StoreIndex** out_store_index);
 
+LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromContentIndex(
+    const struct Longtail_ContentIndex* content_index,
+    uint32_t blocks_tag,
+    struct Longtail_StoreIndex** out_store_index);
+
 LONGTAIL_EXPORT int Longtail_MergeStoreIndex(
     const struct Longtail_StoreIndex* local_store_index,
     const struct Longtail_StoreIndex* remote_store_index,
