@@ -4891,7 +4891,7 @@ static int CreatePartialAssetWriteJob(
     const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
     const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
-    while (chunk_index_offset != chunk_index_end && job->m_BlockReaderJobCount < max_parallell_block_read_jobs)
+    while (chunk_index_offset != chunk_index_end && job->m_BlockReaderJobCount <= max_parallell_block_read_jobs)
     {
         uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
         TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
@@ -4910,6 +4910,10 @@ static int CreatePartialAssetWriteJob(
         }
         if (!has_block)
         {
+            if (job->m_BlockReaderJobCount == max_parallell_block_read_jobs)
+            {
+                break;
+            }
             struct BlockReaderJob* block_job = &job->m_BlockReaderJobs[job->m_BlockReaderJobCount];
             block_job->m_BlockStoreAPI = block_store_api;
             block_job->m_BlockHash = block_hash;
@@ -5241,7 +5245,8 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
     while (chunk_index_offset < write_chunk_index_offset + write_chunk_count)
     {
-        uint32_t chunk_index = job->m_VersionIndex->m_AssetChunkIndexes[chunk_index_start + chunk_index_offset];
+        uint32_t asset_chunk_index = chunk_index_start + chunk_index_offset;
+        uint32_t chunk_index = job->m_VersionIndex->m_AssetChunkIndexes[asset_chunk_index];
         TLongtail_Hash chunk_hash = job->m_VersionIndex->m_ChunkHashes[chunk_index];
 
         uint64_t* chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, chunk_hash);
@@ -5264,10 +5269,49 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             return 0;
         }
 
+        uint32_t block_index = block_indexes[*chunk_block_index];
         uint32_t chunk_block_offset = chunk_offsets[*chunk_block_index];
         uint32_t chunk_size = chunk_sizes[*chunk_block_index];
-        uint32_t block_index = block_indexes[*chunk_block_index];
         const char* block_data = (char*)stored_block[block_index]->m_BlockData;
+
+        while(chunk_index_offset < (write_chunk_index_offset + write_chunk_count - 1))
+        {
+            uint32_t next_chunk_index = job->m_VersionIndex->m_AssetChunkIndexes[asset_chunk_index + 1];
+            TLongtail_Hash next_chunk_hash = job->m_VersionIndex->m_ChunkHashes[next_chunk_index];
+
+            uint64_t* next_chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, next_chunk_hash);
+            if (next_chunk_block_index == 0)
+            {
+                for (uint32_t d = 0; d < block_reader_job_count; ++d)
+                {
+                    stored_block[d]->Dispose(stored_block[d]);
+                    stored_block[d] = 0;
+                }
+                job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+                job->m_AssetOutputFile = 0;
+                if (sync_write_job)
+                {
+                    int err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+                    LONGTAIL_FATAL_ASSERT(ctx, err == 0, job->m_Err = EINVAL; return 0)
+                }
+                job->m_Err = EINVAL;
+                Longtail_Free(lookup_mem);
+                return 0;
+            }
+            uint32_t next_block_index = block_indexes[*next_chunk_block_index];
+            if (next_block_index != block_index)
+            {
+                break;
+            }
+            uint32_t next_chunk_block_offset = chunk_offsets[*next_chunk_block_index];
+            if (next_chunk_block_offset != chunk_block_offset + chunk_size)
+            {
+                break;
+            }
+            uint32_t next_chunk_size = chunk_sizes[*next_chunk_block_index];
+            chunk_size += next_chunk_size;
+            ++chunk_index_offset;
+        }
 
         int err = job->m_VersionStorageAPI->Write(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset, chunk_size, &block_data[chunk_block_offset]);
         if (err)
@@ -5492,7 +5536,8 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
 
         uint64_t asset_write_offset = 0;
         uint32_t asset_chunk_index_start = version_index->m_AssetChunkIndexStarts[asset_index];
-        for (uint32_t asset_chunk_index = 0; asset_chunk_index < version_index->m_AssetChunkCounts[asset_index]; ++asset_chunk_index)
+        uint32_t asset_chunk_count = version_index->m_AssetChunkCounts[asset_index];
+        for (uint32_t asset_chunk_index = 0; asset_chunk_index < asset_chunk_count; ++asset_chunk_index)
         {
             uint32_t chunk_index = version_index->m_AssetChunkIndexes[asset_chunk_index_start + asset_chunk_index];
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
@@ -5502,6 +5547,22 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
 
             uint32_t chunk_block_offset = chunk_offsets[*chunk_block_index];
             uint32_t chunk_size = chunk_sizes[*chunk_block_index];
+
+            while(asset_chunk_index < (asset_chunk_count - 1))
+            {
+                uint32_t next_chunk_index = version_index->m_AssetChunkIndexes[asset_chunk_index_start + asset_chunk_index + 1];
+                TLongtail_Hash next_chunk_hash = version_index->m_ChunkHashes[next_chunk_index];
+                uint64_t* next_chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, next_chunk_hash);
+                LONGTAIL_FATAL_ASSERT(ctx, next_chunk_block_index != 0, job->m_Err = EINVAL; return 0)
+                uint32_t next_chunk_block_offset = chunk_offsets[*next_chunk_block_index];
+                if (next_chunk_block_offset != chunk_block_offset + chunk_size)
+                {
+                    break;
+                }
+                uint32_t next_chunk_size = chunk_sizes[*next_chunk_block_index];
+                chunk_size += next_chunk_size;
+                ++asset_chunk_index;
+            }
 
             err = version_storage_api->Write(version_storage_api, asset_file, asset_write_offset, chunk_size, &block_data[chunk_block_offset]);
             if (err)
