@@ -4891,7 +4891,7 @@ static int CreatePartialAssetWriteJob(
     const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
     const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
 
-    while (chunk_index_offset != chunk_index_end && job->m_BlockReaderJobCount < max_parallell_block_read_jobs)
+    while (chunk_index_offset != chunk_index_end && job->m_BlockReaderJobCount <= max_parallell_block_read_jobs)
     {
         uint32_t chunk_index = version_index->m_AssetChunkIndexes[chunk_index_offset];
         TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
@@ -4910,6 +4910,10 @@ static int CreatePartialAssetWriteJob(
         }
         if (!has_block)
         {
+            if (job->m_BlockReaderJobCount == max_parallell_block_read_jobs)
+            {
+                break;
+            }
             struct BlockReaderJob* block_job = &job->m_BlockReaderJobs[job->m_BlockReaderJobCount];
             block_job->m_BlockStoreAPI = block_store_api;
             block_job->m_BlockHash = block_hash;
