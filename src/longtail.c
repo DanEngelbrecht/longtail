@@ -6494,6 +6494,7 @@ int Longtail_CreateMissingContent(
     if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_Free(added_hashes);
         return ENOMEM;
     }
     char* p = (char*)work_mem;
@@ -6532,6 +6533,7 @@ int Longtail_CreateMissingContent(
     }
 
     Longtail_Free(work_mem);
+    Longtail_Free(added_hashes);
 
     return err;
 }
