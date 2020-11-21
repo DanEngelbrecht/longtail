@@ -104,7 +104,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **ADDED** Longtail_CreateStoreIndexFromContentIndex for working with legacy st
+          - **FIX** Chunks per block should add up to and including max_parallell_block_read_jobs
+          - **FIX** Collapse consecutive chunks when writing from blocks
         draft: false
         prerelease: false
     - name: Download Linux artifacts
