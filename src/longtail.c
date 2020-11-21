@@ -6490,15 +6490,18 @@ int Longtail_CreateMissingContent(
         chunk_index_lookup_size +
         tmp_diff_chunk_sizes_size +
         tmp_diff_chunk_tags_size;
-    char* work_mem = Longtail_Alloc(work_mem_size);
+    void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    struct Longtail_LookupTable* chunk_index_lookup = Longtail_LookupTable_Create(work_mem, chunk_count, 0);
-    uint32_t* tmp_diff_chunk_sizes = (uint32_t*)&work_mem[chunk_index_lookup_size];
-    uint32_t* tmp_diff_chunk_tags = &tmp_diff_chunk_sizes[added_hash_count];
+    char* p = (char*)work_mem;
+    struct Longtail_LookupTable* chunk_index_lookup = Longtail_LookupTable_Create(p, chunk_count, 0);
+    p += chunk_index_lookup_size;
+    uint32_t* tmp_diff_chunk_sizes = (uint32_t*)p;
+    p += tmp_diff_chunk_sizes_size;
+    uint32_t* tmp_diff_chunk_tags = (uint32_t*)p;
 
     for (uint64_t i = 0; i < chunk_count; ++i)
     {
