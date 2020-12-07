@@ -1950,7 +1950,9 @@ static int ChunkAssets(
         (sizeof(TLongtail_Hash) * max_chunk_count) +
         (sizeof(uint32_t) * max_chunk_count) +
         (sizeof(uint32_t) * max_chunk_count) +
-        (sizeof(struct HashJob) * job_count);
+        (sizeof(struct HashJob) * job_count) +
+        (sizeof(Longtail_JobAPI_JobFunc) * job_count) +
+        (sizeof(void*) * job_count);
     void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
     {
@@ -1963,9 +1965,8 @@ static int ChunkAssets(
     uint32_t* tmp_sizes = (uint32_t*)&tmp_hashes[max_chunk_count];
     uint32_t* tmp_tags = (uint32_t*)&tmp_sizes[max_chunk_count];
     struct HashJob* tmp_hash_jobs = (struct HashJob*)&tmp_tags[max_chunk_count];
-
-    Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc) * job_count);
-    void** ctxs = (void**)Longtail_Alloc(sizeof(void*) * job_count);
+    Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)&tmp_hash_jobs[job_count];
+    void** ctxs = (void**)&funcs[job_count];
 
     uint64_t jobs_started = 0;
     uint64_t chunks_offset = 0;
@@ -2014,9 +2015,6 @@ static int ChunkAssets(
     LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
     err = job_api->ReadyJobs(job_api, (uint32_t)jobs_started, jobs);
     LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
-
-    Longtail_Free(ctxs);
-    Longtail_Free(funcs);
 
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
@@ -3997,8 +3995,21 @@ int Longtail_CreateContentIndexFromStoreIndex(
 
     uint32_t max_block_count = *store_index->m_BlockCount;
 
-    struct Longtail_BlockIndex* block_indexes = (struct Longtail_BlockIndex*)Longtail_Alloc(sizeof(struct Longtail_BlockIndex) * max_block_count);
-    struct Longtail_BlockIndex** block_index_ptrs = (struct Longtail_BlockIndex**)Longtail_Alloc(sizeof(struct Longtail_BlockIndex*) * max_block_count);
+    size_t block_indexes_size = sizeof(struct Longtail_BlockIndex) * max_block_count;
+    size_t block_index_ptrs_size = sizeof(struct Longtail_BlockIndex*) * max_block_count;
+    size_t work_mem_size = block_indexes_size + block_index_ptrs_size;
+    void* work_mem = Longtail_Alloc(work_mem_size);
+    if (!work_mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return ENOMEM;
+    }
+
+    char* p = (char*)work_mem;
+
+    struct Longtail_BlockIndex* block_indexes = (struct Longtail_BlockIndex*)p;
+    p += block_indexes_size;
+    struct Longtail_BlockIndex** block_index_ptrs = (struct Longtail_BlockIndex**)p;
     for (uint32_t b = 0; b < max_block_count; ++b)
     {
         int err = Longtail_MakeBlockIndex(
@@ -4008,8 +4019,7 @@ int Longtail_CreateContentIndexFromStoreIndex(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MakeBlockIndex() failed with %d", err)
-            Longtail_Free(block_index_ptrs);
-            Longtail_Free(block_indexes);
+            Longtail_Free(work_mem);
             return err;
         }
         block_index_ptrs[b] = &block_indexes[b];
@@ -4021,8 +4031,7 @@ int Longtail_CreateContentIndexFromStoreIndex(
         max_block_count,
         block_index_ptrs,
         out_content_index);
-    Longtail_Free(block_index_ptrs);
-    Longtail_Free(block_indexes);
+    Longtail_Free(work_mem);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks() failed with %d", err)
@@ -4326,8 +4335,6 @@ static int DisposePutBlock(struct Longtail_StoredBlock* stored_block)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    Longtail_Free(stored_block->m_BlockIndex);
-    Longtail_Free(stored_block->m_BlockData);
     Longtail_Free(stored_block);
     return 0;
 }
@@ -4380,13 +4387,28 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         block_data_size += chunk_size;
     }
 
-    char* block_data_buffer = (char*)Longtail_Alloc(block_data_size);
-    if (!block_data_buffer)
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    size_t stored_block_size = sizeof(struct Longtail_StoredBlock);
+    size_t put_block_mem_size =
+        stored_block_size +
+        block_index_size +
+        block_data_size;
+
+    void* put_block_mem = Longtail_Alloc(put_block_mem_size);
+    if (!put_block_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM);
         job->m_Err = ENOMEM;
         return 0;
     }
+
+    char* p = (char*)put_block_mem;
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)p;
+    p += stored_block_size;
+    struct Longtail_BlockIndex* block_index_ptr = (struct Longtail_BlockIndex*)p;
+    p += block_index_size;
+    char* block_data_buffer = p;
+
     char* write_buffer = block_data_buffer;
     char* write_ptr = write_buffer;
 
@@ -4431,7 +4453,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "source_storage_api->OpenReadFile() failed with %d", err);
-                Longtail_Free(block_data_buffer);
+                Longtail_Free(put_block_mem);
                 job->m_Err = err;
                 return 0;
             }
@@ -4440,7 +4462,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "source_storage_api->GetSize() failed with %d", err);
-                Longtail_Free(block_data_buffer);
+                Longtail_Free(put_block_mem);
                 job->m_Err = err;
                 return 0;
             }
@@ -4453,7 +4475,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Source asset file does not match indexed size %" PRIu64 " < %" PRIu64,
                 asset_file_size, (asset_offset + chunk_size))
-            Longtail_Free(block_data_buffer);
+            Longtail_Free(put_block_mem);
             source_storage_api->CloseFile(source_storage_api, file_handle);
             job->m_Err = EBADF;
             return 0;
@@ -4462,7 +4484,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "source_storage_api->Read() failed with %d", err);
-            Longtail_Free(block_data_buffer);
+            Longtail_Free(put_block_mem);
             source_storage_api->CloseFile(source_storage_api, file_handle);
             job->m_Err = err;
             return 0;
@@ -4476,15 +4498,6 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         file_handle = 0;
     }
 
-    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
-    struct Longtail_BlockIndex* block_index_ptr = (struct Longtail_BlockIndex*)Longtail_Alloc(block_index_size);
-    if (!block_index_ptr)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM);
-        job->m_Err = ENOMEM;
-        return 0;
-    }
-
     Longtail_InitBlockIndex(block_index_ptr, chunk_count);
     memmove(block_index_ptr->m_ChunkHashes, &content_index->m_ChunkHashes[first_chunk_index], sizeof(TLongtail_Hash) * chunk_count);
     memmove(block_index_ptr->m_ChunkSizes, &job->m_ChunkSizes[first_chunk_index], sizeof(uint32_t) * chunk_count);
@@ -4492,8 +4505,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
     *block_index_ptr->m_HashIdentifier = *content_index->m_HashIdentifier;
     *block_index_ptr->m_Tag = tag;
     *block_index_ptr->m_ChunkCount = chunk_count;
-
-    job->m_StoredBlock = (struct Longtail_StoredBlock*)Longtail_Alloc(sizeof(struct Longtail_StoredBlock));
+    job->m_StoredBlock = stored_block;
     job->m_StoredBlock->Dispose = DisposePutBlock;
     job->m_StoredBlock->m_BlockIndex = block_index_ptr;
     job->m_StoredBlock->m_BlockData = block_data_buffer;
@@ -4553,61 +4565,67 @@ int Longtail_WriteContent(
     }
 
     uint32_t version_chunk_count = *version_index->m_ChunkCount;
-    struct Longtail_LookupTable* chunk_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(version_chunk_count)), version_chunk_count, 0);
-    if (!chunk_lookup)
+    uint64_t version_content_index_chunk_count = *content_index->m_ChunkCount;
+
+    size_t chunk_lookup_size = Longtail_LookupTable_GetSize(version_chunk_count);
+    size_t chunk_sizes_size = sizeof(uint32_t) * version_content_index_chunk_count;
+    size_t write_block_jobs_size = sizeof(struct WriteBlockJob) * block_count;
+    size_t funcs_size = sizeof(Longtail_JobAPI_JobFunc*) * block_count;
+    size_t ctxs_size = sizeof(void*) * block_count;
+
+    size_t work_mem_size =
+        chunk_lookup_size +
+        chunk_sizes_size +
+        write_block_jobs_size +
+        funcs_size +
+        ctxs_size;
+
+    void* work_mem = Longtail_Alloc(work_mem_size);
+    if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
+
+    char* p = (char*)work_mem;
+
+    struct Longtail_LookupTable* chunk_lookup = Longtail_LookupTable_Create(p, version_chunk_count, 0);
+    p += chunk_lookup_size;
+    uint32_t* chunk_sizes = (uint32_t*)p;
+    p += chunk_sizes_size;
+    struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)p;
+    p += write_block_jobs_size;
+    Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)p;
+    p += funcs_size;
+    void** ctxs = (void**)p;
+
     for (uint32_t c = 0; c < version_chunk_count; ++c)
     {
         Longtail_LookupTable_Put(chunk_lookup, version_index->m_ChunkHashes[c], c);
     }
 
-    uint64_t version_content_index_chunk_count = *content_index->m_ChunkCount;
-    uint32_t* chunk_sizes = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * version_content_index_chunk_count);
-    if (!chunk_sizes)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(chunk_lookup);
-        return ENOMEM;
-    }
     for (uint64_t c = 0; c < version_content_index_chunk_count; ++c)
     {
         uint64_t* version_chunk_index = Longtail_LookupTable_Get(chunk_lookup, content_index->m_ChunkHashes[c]);
         if (version_chunk_index == 0)
         {
-            Longtail_Free(chunk_sizes);
-            Longtail_Free(chunk_lookup);
+            Longtail_Free(work_mem);
             return EINVAL;
         }
         chunk_sizes[c] = version_index->m_ChunkSizes[*version_chunk_index];
     }
-    Longtail_Free(chunk_lookup);
-    chunk_lookup = 0;
 
     struct AssetPartLookup* asset_part_lookup;
     int err = CreateAssetPartLookup(version_index, &asset_part_lookup);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateAssetPartLookup() failed with %d", err)
-        Longtail_Free(chunk_sizes);
+        Longtail_Free(work_mem);
         return err;
     }
 
-    struct WriteBlockJob* write_block_jobs = (struct WriteBlockJob*)Longtail_Alloc((size_t)(sizeof(struct WriteBlockJob) * block_count));
-    if (!write_block_jobs)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(asset_part_lookup);
-        Longtail_Free(chunk_sizes);
-        return ENOMEM;
-    }
-    LONGTAIL_FATAL_ASSERT(ctx, write_block_jobs != 0, return ENOMEM)
     uint32_t block_start_chunk_index = 0;
     uint32_t job_count = 0;
-    Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc*) * block_count);
-    void** ctxs = (void**)Longtail_Alloc(sizeof(void*) * block_count);
     for (uint64_t block_index = 0; block_index < block_count; ++block_index)
     {
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
@@ -4645,11 +4663,8 @@ int Longtail_WriteContent(
 
     if (job_count == 0)
     {
-        Longtail_Free(ctxs);
-        Longtail_Free(funcs);
         Longtail_Free(asset_part_lookup);
-        Longtail_Free(write_block_jobs);
-        Longtail_Free(chunk_sizes);
+        Longtail_Free(work_mem);
         return 0;
     }
 
@@ -4658,7 +4673,8 @@ int Longtail_WriteContent(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-        Longtail_Free(chunk_sizes);
+        Longtail_Free(asset_part_lookup);
+        Longtail_Free(work_mem);
         return err;
     }
 
@@ -4668,16 +4684,12 @@ int Longtail_WriteContent(
     err = job_api->ReadyJobs(job_api, job_count, jobs);
     LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
 
-    Longtail_Free(ctxs);
-    Longtail_Free(funcs);
-
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
     if (err)
     {
         LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
         Longtail_Free(asset_part_lookup);
-        Longtail_Free(write_block_jobs);
-        Longtail_Free(chunk_sizes);
+        Longtail_Free(work_mem);
         return err;
     }
 
@@ -4692,16 +4704,16 @@ int Longtail_WriteContent(
     }
 
     Longtail_Free(asset_part_lookup);
-    Longtail_Free(write_block_jobs);
+    asset_part_lookup = 0;
 
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "WriteBlockJob() failed with %d", err)
-        Longtail_Free(chunk_sizes);
+        Longtail_Free(work_mem);
         return err;
     }
 
-    Longtail_Free(chunk_sizes);
+    Longtail_Free(work_mem);
     return 0;
 }
 
@@ -5199,8 +5211,18 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         block_chunks_count += *block_index->m_ChunkCount;
     }
 
-    void* lookup_mem = Longtail_Alloc(sizeof(uint32_t) * (block_chunks_count * 3) + Longtail_LookupTable_GetSize(block_chunks_count));
-    if (!lookup_mem)
+    size_t block_chunks_lookup_size = Longtail_LookupTable_GetSize(block_chunks_count);
+    size_t chunk_sizes_size = sizeof(uint32_t) * block_chunks_count;
+    size_t chunk_offsets_size = sizeof(uint32_t) * block_chunks_count;
+    size_t block_indexes_size = sizeof(uint32_t) * block_chunks_count;
+
+    size_t work_mem_size =
+        block_chunks_lookup_size +
+        chunk_sizes_size +
+        chunk_offsets_size +
+        block_indexes_size;
+    void* work_mem = Longtail_Alloc(work_mem_size);
+    if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         for (uint32_t d = 0; d < block_reader_job_count; ++d)
@@ -5218,10 +5240,14 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         job->m_Err = ENOMEM;
         return 0;
     }
-    uint32_t* chunk_sizes = (uint32_t*)lookup_mem;
-    uint32_t* chunk_offsets = &chunk_sizes[block_chunks_count];
-    uint32_t* block_indexes = &chunk_offsets[block_chunks_count];
-    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(&block_indexes[block_chunks_count], block_chunks_count, 0);
+    char* p = (char*)work_mem;
+    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(p, block_chunks_count, 0);
+    p += block_chunks_lookup_size;
+    uint32_t* chunk_sizes = (uint32_t*)p;
+    p += chunk_sizes_size;
+    uint32_t* chunk_offsets = (uint32_t*)p;
+    p += chunk_offsets_size;
+    uint32_t* block_indexes = (uint32_t*)p;
 
     uint32_t block_chunk_index_offset = 0;
     for(uint32_t b = 0; b < block_reader_job_count; ++b)
@@ -5265,7 +5291,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 LONGTAIL_FATAL_ASSERT(ctx, err == 0, job->m_Err = EINVAL; return 0)
             }
             job->m_Err = EINVAL;
-            Longtail_Free(lookup_mem);
+            Longtail_Free(work_mem);
             return 0;
         }
 
@@ -5295,7 +5321,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                     LONGTAIL_FATAL_ASSERT(ctx, err == 0, job->m_Err = EINVAL; return 0)
                 }
                 job->m_Err = EINVAL;
-                Longtail_Free(lookup_mem);
+                Longtail_Free(work_mem);
                 return 0;
             }
             uint32_t next_block_index = block_indexes[*next_chunk_block_index];
@@ -5331,14 +5357,14 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
                 int sync_err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
                 LONGTAIL_FATAL_ASSERT(ctx, sync_err == 0, return 0)
             }
-            Longtail_Free(lookup_mem);
+            Longtail_Free(work_mem);
             return 0;
         }
         write_offset += chunk_size;
 
         ++chunk_index_offset;
     }
-    Longtail_Free(lookup_mem);
+    Longtail_Free(work_mem);
 
     for (uint32_t d = 0; d < block_reader_job_count; ++d)
     {
@@ -5432,8 +5458,15 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
     struct Longtail_BlockIndex* block_index = job->m_BlockReadJob.m_StoredBlock->m_BlockIndex;
 
     uint32_t block_chunks_count = *block_index->m_ChunkCount;
-    uint32_t* lookup_mem = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * (block_chunks_count * 2));
-    if (!lookup_mem)
+
+    size_t chuck_offsets_size = sizeof(uint32_t) * block_chunks_count;
+    size_t block_chunks_lookup_size = Longtail_LookupTable_GetSize(block_chunks_count);
+    size_t tmp_mem_size =
+        chuck_offsets_size +
+        block_chunks_lookup_size;
+
+    char* tmp_mem = (char*)Longtail_Alloc(tmp_mem_size);
+    if (!tmp_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
@@ -5441,25 +5474,16 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
         job->m_Err = ENOMEM;
         return 0;
     }
-    uint32_t* chunk_sizes = lookup_mem;
-    uint32_t* chunk_offsets = &lookup_mem[block_chunks_count];
-    uint64_t chunk_count = *block_index->m_ChunkCount;
-    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(chunk_count)), chunk_count, 0);
-    if (!block_chunks_lookup)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-        job->m_BlockReadJob.m_StoredBlock = 0;
-        job->m_Err = ENOMEM;
-        return 0;
-    }
+    struct Longtail_LookupTable* block_chunks_lookup = Longtail_LookupTable_Create(tmp_mem, block_chunks_count, 0);
+    uint32_t* chunk_offsets = (uint32_t*)(&tmp_mem[block_chunks_lookup_size]);
+    const uint32_t* chunk_sizes = block_index->m_ChunkSizes;
+
     uint32_t block_chunk_index_offset = 0;
     uint32_t chunk_offset = 0;
-    for (uint32_t c = 0; c < chunk_count; ++c)
+    for (uint32_t c = 0; c < block_chunks_count; ++c)
     {
         TLongtail_Hash chunk_hash = block_index->m_ChunkHashes[c];
         uint32_t chunk_size = block_index->m_ChunkSizes[c];
-        chunk_sizes[block_chunk_index_offset] = chunk_size;
         chunk_offsets[block_chunk_index_offset] = chunk_offset;
         chunk_offset += chunk_size;
 
@@ -5481,8 +5505,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
             job->m_BlockReadJob.m_StoredBlock = 0;
             job->m_Err = err;
-            Longtail_Free(block_chunks_lookup);
-            Longtail_Free(lookup_mem);
+            Longtail_Free(tmp_mem);
             return 0;
         }
 
@@ -5495,8 +5518,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
             job->m_BlockReadJob.m_StoredBlock = 0;
             job->m_Err = err;
-            Longtail_Free(block_chunks_lookup);
-            Longtail_Free(lookup_mem);
+            Longtail_Free(tmp_mem);
             return 0;
         }
 
@@ -5512,8 +5534,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                     job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
                     job->m_BlockReadJob.m_StoredBlock = 0;
                     job->m_Err = err;
-                    Longtail_Free(block_chunks_lookup);
-                    Longtail_Free(lookup_mem);
+                    Longtail_Free(tmp_mem);
                     return 0;
                 }
             }
@@ -5529,8 +5550,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
             job->m_BlockReadJob.m_StoredBlock = 0;
             job->m_Err = err;
-            Longtail_Free(block_chunks_lookup);
-            Longtail_Free(lookup_mem);
+            Longtail_Free(tmp_mem);
             return 0;
         }
 
@@ -5575,8 +5595,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
                 job->m_BlockReadJob.m_StoredBlock = 0;
                 job->m_Err = err;
-                Longtail_Free(block_chunks_lookup);
-                Longtail_Free(lookup_mem);
+                Longtail_Free(tmp_mem);
                 return 0;
             }
             asset_write_offset += chunk_size;
@@ -5596,14 +5615,12 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
                 job->m_BlockReadJob.m_StoredBlock = 0;
                 job->m_Err = err;
-                Longtail_Free(block_chunks_lookup);
-                Longtail_Free(lookup_mem);
+                Longtail_Free(tmp_mem);
                 return 0;
             }
         }
     }
-    Longtail_Free(block_chunks_lookup);
-    Longtail_Free(lookup_mem);
+    Longtail_Free(tmp_mem);
 
     job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
     job->m_BlockReadJob.m_StoredBlock = 0;
@@ -6466,24 +6483,27 @@ int Longtail_CreateMissingContent(
         return err;
     }
 
-    size_t work_mem_size = (sizeof(uint32_t) * added_hash_count) +
-        (sizeof(uint32_t) * added_hash_count);
+    size_t chunk_index_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
+    size_t tmp_diff_chunk_sizes_size = sizeof(uint32_t) * added_hash_count;
+    size_t tmp_diff_chunk_tags_size = sizeof(uint32_t) * added_hash_count;
+    size_t work_mem_size =
+        chunk_index_lookup_size +
+        tmp_diff_chunk_sizes_size +
+        tmp_diff_chunk_tags_size;
     void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_Free(added_hashes);
         return ENOMEM;
     }
-    uint32_t* tmp_diff_chunk_sizes = (uint32_t*)work_mem;
-    uint32_t* tmp_diff_chunk_tags = &tmp_diff_chunk_sizes[added_hash_count];
+    char* p = (char*)work_mem;
+    struct Longtail_LookupTable* chunk_index_lookup = Longtail_LookupTable_Create(p, chunk_count, 0);
+    p += chunk_index_lookup_size;
+    uint32_t* tmp_diff_chunk_sizes = (uint32_t*)p;
+    p += tmp_diff_chunk_sizes_size;
+    uint32_t* tmp_diff_chunk_tags = (uint32_t*)p;
 
-    struct Longtail_LookupTable* chunk_index_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(chunk_count)), chunk_count, 0);
-    if (!chunk_index_lookup)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(work_mem);
-        return ENOMEM;
-    }
     for (uint64_t i = 0; i < chunk_count; ++i)
     {
         Longtail_LookupTable_Put(chunk_index_lookup, version_index->m_ChunkHashes[i], i);
@@ -6497,8 +6517,6 @@ int Longtail_CreateMissingContent(
         tmp_diff_chunk_sizes[j] = version_index->m_ChunkSizes[chunk_index];
         tmp_diff_chunk_tags[j] = version_index->m_ChunkTags[chunk_index];
     }
-    Longtail_Free(chunk_index_lookup);
-    chunk_index_lookup = 0;
 
     err = Longtail_CreateContentIndexRaw(
         hash_api,
@@ -6913,23 +6931,35 @@ int Longtail_MergeContentIndex(
 
     uint64_t max_block_count = *local_content_index->m_BlockCount + *new_content_index->m_BlockCount;
     uint64_t max_chunk_count = *local_content_index->m_ChunkCount + *new_content_index->m_ChunkCount;
-    size_t work_mem_size = (sizeof(TLongtail_Hash) * max_block_count) +
-        (sizeof(TLongtail_Hash) * max_chunk_count) +
-        (sizeof(TLongtail_Hash) * max_chunk_count);
+    size_t block_hash_to_block_index_size = Longtail_LookupTable_GetSize(max_block_count);
+    size_t chunk_hash_to_block_index_size = Longtail_LookupTable_GetSize(max_chunk_count);
+    size_t tmp_compact_block_hashes_size = sizeof(TLongtail_Hash) * max_block_count;
+    size_t tmp_compact_chunk_hashes_size = sizeof(TLongtail_Hash) * max_chunk_count;
+    size_t tmp_compact_chunk_block_indexes_size = sizeof(TLongtail_Hash) * max_chunk_count;
+    size_t work_mem_size =
+        block_hash_to_block_index_size +
+        chunk_hash_to_block_index_size +
+        tmp_compact_block_hashes_size +
+        tmp_compact_chunk_hashes_size +
+        tmp_compact_chunk_block_indexes_size;
     void* work_mem = Longtail_Alloc(work_mem_size);
     if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    TLongtail_Hash* tmp_compact_block_hashes = (TLongtail_Hash*)work_mem;
-    TLongtail_Hash* tmp_compact_chunk_hashes = (TLongtail_Hash*)&tmp_compact_block_hashes[max_block_count];
-    TLongtail_Hash* tmp_compact_chunk_block_indexes = (TLongtail_Hash*)&tmp_compact_chunk_hashes[max_chunk_count];
+    char* p = (char*)work_mem;
+    struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(p, max_block_count, 0);
+    p += block_hash_to_block_index_size;
+    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(p, max_chunk_count, 0);
+    p += chunk_hash_to_block_index_size;
+    TLongtail_Hash* tmp_compact_block_hashes = (TLongtail_Hash*)p;
+    p += tmp_compact_block_hashes_size;
+    TLongtail_Hash* tmp_compact_chunk_hashes = (TLongtail_Hash*)p;
+    p += tmp_compact_chunk_hashes_size;
+    TLongtail_Hash* tmp_compact_chunk_block_indexes = (TLongtail_Hash*)p;
 
-    struct Longtail_LookupTable* block_hash_to_block_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(max_block_count)), max_block_count, 0);
     uint64_t compact_chunk_count = *new_content_index->m_ChunkCount;
-
-    struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(max_chunk_count)), max_chunk_count, 0);
     uint64_t compact_block_count = *new_content_index->m_BlockCount;
 
     {
@@ -6955,13 +6985,10 @@ int Longtail_MergeContentIndex(
         job_api->ReadyJobs(job_api, 2, jobs);
         job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
     }
-
     uint64_t local_content_chunk_count = *local_content_index->m_ChunkCount;
     if (local_content_chunk_count > 0)
     {
         uint32_t worker_count = job_api->GetWorkerCount(job_api);
-
-        uint64_t* chunk_block_indexes = (uint64_t*)Longtail_Alloc(sizeof(uint64_t) * local_content_chunk_count);
         const uint32_t min_chunks_per_job = 65536;
         uint64_t chunks_per_job = worker_count > 0 ? local_content_chunk_count / worker_count : local_content_chunk_count;
         if (chunks_per_job < min_chunks_per_job)
@@ -6970,12 +6997,34 @@ int Longtail_MergeContentIndex(
         }
         uint32_t job_count = (uint32_t)((local_content_chunk_count + chunks_per_job  - 1)/ chunks_per_job);
 
-        struct FindNewChunksJob* jobs = (struct FindNewChunksJob*)Longtail_Alloc(sizeof(struct FindNewChunksJob) * job_count);
+        size_t chunk_block_indexes_size = sizeof(uint64_t) * local_content_chunk_count;
+        size_t jobs_size = sizeof(struct FindNewChunksJob) * job_count;
+        size_t funcs_size = sizeof(Longtail_JobAPI_JobFunc) * job_count;
+        size_t ctxs_size = sizeof(void*) * job_count;
+        size_t job_mem_size = chunk_block_indexes_size + jobs_size + funcs_size + ctxs_size;
+
+        void* job_mem = Longtail_Alloc(job_mem_size);
+        if (!job_mem)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            Longtail_Free(work_mem);
+            return ENOMEM;
+        }
+
+        char* p = (char*)job_mem;
+        uint64_t* chunk_block_indexes = (uint64_t*)p;
+        p += chunk_block_indexes_size;
+
+        struct FindNewChunksJob* jobs = (struct FindNewChunksJob*)p;
+        p += jobs_size;
+
+        Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)p;
+        p += funcs_size;
+
+        void** ctxs = (void**)p;
+
         Longtail_JobAPI_Group job_group = 0;
         job_api->ReserveJobs(job_api, job_count, &job_group);
-
-        Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)Longtail_Alloc(sizeof(Longtail_JobAPI_JobFunc) * job_count);
-        void** ctxs = (void**)Longtail_Alloc(sizeof(void*) * job_count);
 
         uint64_t chunk_job_start = 0;
         for (uint32_t j = 0; j < job_count; ++j)
@@ -7000,10 +7049,6 @@ int Longtail_MergeContentIndex(
 
         job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
 
-        Longtail_Free(ctxs);
-        Longtail_Free(funcs);
-        Longtail_Free(jobs);
-
         for (uint64_t c = 0; c < local_content_chunk_count; ++c)
         {
             TLongtail_Hash chunk_hash = local_content_index->m_ChunkHashes[c];
@@ -7024,7 +7069,7 @@ int Longtail_MergeContentIndex(
             }
             tmp_compact_chunk_block_indexes[compact_chunk_count++] = *compact_block_index_ptr;
         }
-        Longtail_Free(chunk_block_indexes);
+        Longtail_Free(job_mem);
     }
 
 
@@ -7049,8 +7094,6 @@ int Longtail_MergeContentIndex(
     memcpy(compact_content_index->m_ChunkBlockIndexes, tmp_compact_chunk_block_indexes, sizeof(uint64_t) * compact_chunk_count);
 
     *out_content_index = compact_content_index;
-    Longtail_Free(block_hash_to_block_index);
-    Longtail_Free(chunk_hash_to_block_index);
     Longtail_Free(work_mem);
     return 0;
 }
@@ -7683,14 +7726,24 @@ int Longtail_ChangeVersion(
     if (write_asset_count > 0)
     {
         uint64_t chunk_count = *content_index->m_ChunkCount;
-        struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(chunk_count)), chunk_count, 0);
-        if (!chunk_hash_to_block_index)
+        size_t chunk_hash_to_block_index_size = Longtail_LookupTable_GetSize(chunk_count);
+        size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
+        size_t work_mem_size = chunk_hash_to_block_index_size + asset_indexes_size;
+
+        void* work_mem = Longtail_Alloc(work_mem_size);
+        if (!work_mem)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
                 block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
                 ENOMEM)
             return ENOMEM;
         }
+
+        char* p = (char*)work_mem;
+        struct Longtail_LookupTable* chunk_hash_to_block_index = Longtail_LookupTable_Create(p, chunk_count, 0);
+        p += chunk_hash_to_block_index_size;
+        uint32_t* asset_indexes = (uint32_t*)p;
+
         for (uint64_t i = 0; i < chunk_count; ++i)
         {
             TLongtail_Hash chunk_hash = content_index->m_ChunkHashes[i];
@@ -7698,14 +7751,6 @@ int Longtail_ChangeVersion(
             Longtail_LookupTable_PutUnique(chunk_hash_to_block_index, chunk_hash, block_index);
         }
 
-        size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
-        uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(asset_indexes_size);
-        if (!asset_indexes)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            Longtail_Free(chunk_hash_to_block_index);
-            return ENOMEM;
-        }
         for (uint32_t i = 0; i < added_count; ++i)
         {
             asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
@@ -7731,12 +7776,9 @@ int Longtail_ChangeVersion(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BuildAssetWriteList() failed with %d", err)
-            Longtail_Free(asset_indexes);
-            Longtail_Free(chunk_hash_to_block_index);
+            Longtail_Free(work_mem);
             return err;
         }
-        Longtail_Free(asset_indexes);
-        asset_indexes = 0;
 
         err = WriteAssets(
             block_store_api,
@@ -7758,12 +7800,12 @@ int Longtail_ChangeVersion(
         if (err)
         {
             LONGTAIL_LOG(ctx, err == ECANCELED ?  LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "WriteAssets() failed with %d", err)
-            Longtail_Free(chunk_hash_to_block_index);
+            Longtail_Free(work_mem);
             return err;
         }
 
-        Longtail_Free(chunk_hash_to_block_index);
-        chunk_hash_to_block_index = 0;
+        Longtail_Free(work_mem);
+        work_mem = 0;
     }
 
     if (retain_permissions)
@@ -8300,22 +8342,20 @@ int Longtail_MergeStoreIndex(
     uint32_t local_block_count = *local_store_index->m_BlockCount;
     uint32_t remote_block_count = *remote_store_index->m_BlockCount;
     size_t local_block_hash_to_index_size = Longtail_LookupTable_GetSize(local_block_count);
-    void* local_block_hash_to_index_mem = Longtail_Alloc(local_block_hash_to_index_size);
-    if (!local_block_hash_to_index_mem)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        return ENOMEM;
-    }
-    struct Longtail_LookupTable* local_block_hash_to_index = Longtail_LookupTable_Create(local_block_hash_to_index_mem, local_block_count, 0);
-
     size_t remote_block_hash_to_index_size = Longtail_LookupTable_GetSize(remote_block_count);
-    void* remote_block_hash_to_index_mem = Longtail_Alloc(remote_block_hash_to_index_size);
-    if (!remote_block_hash_to_index_mem)
+    size_t work_mem_size = local_block_hash_to_index_size + remote_block_hash_to_index_size;
+
+    void* work_mem = Longtail_Alloc(work_mem_size);
+    if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    struct Longtail_LookupTable* remote_block_hash_to_index = Longtail_LookupTable_Create(remote_block_hash_to_index_mem, remote_block_count, 0);
+
+    char* p = (char*)work_mem;
+    struct Longtail_LookupTable* local_block_hash_to_index = Longtail_LookupTable_Create(p, local_block_count, 0);
+    p += local_block_hash_to_index_size;
+    struct Longtail_LookupTable* remote_block_hash_to_index = Longtail_LookupTable_Create(p, remote_block_count, 0);
 
     uint32_t unique_block_count = 0;
     uint32_t chunk_count = 0;
@@ -8351,7 +8391,7 @@ int Longtail_MergeStoreIndex(
     if (!merged_block_store_index_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(local_block_hash_to_index_mem);
+        Longtail_Free(work_mem);
         return ENOMEM;
     }
     struct Longtail_StoreIndex* merged_store_index = Longtail_InitStoreIndex(merged_block_store_index_mem, unique_block_count, chunk_count);
@@ -8413,8 +8453,7 @@ int Longtail_MergeStoreIndex(
         ++block_index_offset;
         chunk_index_offset += block_chunk_count;
     }
-    Longtail_Free(remote_block_hash_to_index_mem);
-    Longtail_Free(local_block_hash_to_index_mem);
+    Longtail_Free(work_mem);
     *out_store_index = merged_store_index;
     return 0;
 }
