@@ -6,7 +6,7 @@
 Incremental asset delivery format - closely related to the casync project by Lennart Poettering (https://github.com/systemd/casync). When I started tinkering with this I did not know of that project but has since learned from it but choosen different approaches to a few things. If casync does what you need there is no point in diving into this besides curiousity. If there are aspects of casync that does not work for you (you need in-place updating of folders, or you need all the performance using threading) then it might be interesting.
 
 # Current state
-Fairly stable and have been tested on large data sets. Used by the go command line front end https://github.com/DanEngelbrecht/golongtail.git and the C# LongtailLib https://github.com/DanEngelbrecht/LongtailLib.git for a couple of pre-production tools.
+Stable and have been tested on large data sets. Used by the go command line front end https://github.com/DanEngelbrecht/golongtail.git and the C# LongtailLib https://github.com/DanEngelbrecht/LongtailLib.git both of which are used on a daily basis in CI system and an internal Windows launcher.
 
 It is *very* fast though, most functions that takes time are very multithreaded and fairly efficient and care has been taken to handle really large files (such as multi-gigabyte PAK files for games) efficiently.
 
