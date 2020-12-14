@@ -115,8 +115,6 @@ It is *very* fast, it is significantly faster att all the stages than desync (by
 Modifying an existing folder is something desync can't (currently) do and is crucial to achive reasonable speed when working with large amount of data (multi-gigabyte folders).
 
 # What can't it do?
-I would not rely on it for any serious production settings at this moment as the primary work has so far been in the proof of concept state.
-
-Also, it only has two forms of storage - disk and memory, it does not have http, S3, GCS or any other fancy stuff in it.
+The C99 version in this repo has intentionally been restricted to not add any big complicated dependencies but intead provide interfaces where you can extend it, for example - it has two forms of storage - disk and memory, it does not have http, S3, GCS or any other fancy stuff in it, for that kind of storge, use the golang version https://github.com/DanEngelbrecht/golongtail.git.
 
 This has been an active choice, as the library is writting in C99 for ultimate portability some sacrifices had to be done. It has minimal dependencies and no complicated build system but it is written so adding other storage mechanisms or exchanging hashing or other parts are reasonably easy. 
