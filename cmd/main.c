@@ -108,10 +108,14 @@ struct Longtail_ProgressAPI* MakeProgressAPI(const char* task)
     void* mem = Longtail_Alloc(sizeof(struct Progress));
     if (!mem)
     {
-        // error
         return 0;
     }
     struct Longtail_ProgressAPI* progress_api = Longtail_MakeProgressAPI(mem, Progress_Dispose, Progress_OnProgress);
+    if (!progress_api)
+    {
+        Longtail_Free(mem);
+        return 0;
+    }
     struct Progress* me = (struct Progress*)progress_api;
     me->m_RateLimitedProgressAPI = Longtail_CreateRateLimitedProgress(progress_api, 5);
     me->m_Task = task;
@@ -428,8 +432,10 @@ int UpSync(
         {
             tags[i] = compression_type;
         }
+
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        if (progress)
         {
-            struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
@@ -445,6 +451,11 @@ int UpSync(
                 &source_version_index);
             SAFE_DISPOSE_API(progress);
         }
+        else
+        {
+            err = ENOMEM;
+        }
+
         Longtail_Free(tags);
         Longtail_Free(file_infos);
         if (err)
@@ -508,8 +519,9 @@ int UpSync(
         return err;
     }
 
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks");
+    if (progress)
     {
-        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks");
         err = Longtail_WriteContent(
             storage_api,
             store_block_store_api,
@@ -521,6 +533,10 @@ int UpSync(
             source_version_index,
             source_path);
         SAFE_DISPOSE_API(progress);
+    }
+    else
+    {
+        err = ENOMEM;
     }
 
     if (err)
@@ -772,8 +788,10 @@ int DownSync(
         {
             tags[i] = 0;
         }
+
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        if (progress)
         {
-            struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
@@ -789,6 +807,11 @@ int DownSync(
                 &target_version_index);
             SAFE_DISPOSE_API(progress);
         }
+        else
+        {
+            err = ENOMEM;
+        }
+
         Longtail_Free(tags);
         Longtail_Free(file_infos);
         if (err)
@@ -920,8 +943,9 @@ int DownSync(
 
     Longtail_Free(required_chunk_hashes);
 
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
+    if (progress)
     {
-        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
         err = Longtail_ChangeVersion(
             store_block_store_api,
             storage_api,
@@ -938,6 +962,11 @@ int DownSync(
             retain_permissions ? 1 : 0);
         SAFE_DISPOSE_API(progress);
     }
+    else
+    {
+        err = ENOMEM;
+    }
+
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
