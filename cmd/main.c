@@ -17,6 +17,7 @@
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
+#include "../lib/ratelimitedprogress/longtail_ratelimitedprogress.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
 #include "../lib/brotli/longtail_brotli.h"
 #include "../lib/lz4/longtail_lz4.h"
@@ -67,10 +68,9 @@ static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
 struct Progress
 {
     struct Longtail_ProgressAPI m_API;
+    struct Longtail_ProgressAPI* m_RateLimitedProgressAPI;
     const char* m_Task;
     uint32_t m_UpdateCount;
-    uint32_t m_OldPercent;
-    uint32_t m_JobsDone;
 };
 
 static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
@@ -82,42 +82,45 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
         {
             fprintf(stderr, "%s: ", p->m_Task);
         }
-        ++p->m_UpdateCount;
         uint32_t percent_done = (100 * jobs_done) / total;
-        if (percent_done - p->m_OldPercent >= 5)
-        {
-            fprintf(stderr, "%3u%% ", percent_done);
-            p->m_OldPercent = percent_done;
-        }
-        p->m_JobsDone = jobs_done;
+        fprintf(stderr, "%u%% ", percent_done);
+        ++p->m_UpdateCount;
         return;
     }
-    if (p->m_OldPercent != 0)
+    if (p->m_UpdateCount)
     {
-        if (p->m_OldPercent != 100)
-        {
-            fprintf(stderr, "100%%");
-        }
+        fprintf(stderr, "100%%");
     }
-    p->m_JobsDone = jobs_done;
 }
 
-static void Progress_Init(struct Progress* me, const char* task)
+static void Progress_Dispose(struct Longtail_API* api)
 {
-    me->m_Task = task;
-    me->m_UpdateCount = 0;
-    me->m_OldPercent = 0;
-    me->m_JobsDone = 0;
-    me->m_API.m_API.Dispose = 0;
-    me->m_API.OnProgress = Progress_OnProgress;
-}
-
-static void Progress_Dispose(struct Progress* me)
-{
+    struct Progress* me = (struct Progress*)api;
     if (me->m_UpdateCount)
     {
         fprintf(stderr, " Done\n");
     }
+    Longtail_Free(me);
+}
+
+struct Longtail_ProgressAPI* MakeProgressAPI(const char* task)
+{
+    void* mem = Longtail_Alloc(sizeof(struct Progress));
+    if (!mem)
+    {
+        return 0;
+    }
+    struct Longtail_ProgressAPI* progress_api = Longtail_MakeProgressAPI(mem, Progress_Dispose, Progress_OnProgress);
+    if (!progress_api)
+    {
+        Longtail_Free(mem);
+        return 0;
+    }
+    struct Progress* me = (struct Progress*)progress_api;
+    me->m_RateLimitedProgressAPI = Longtail_CreateRateLimitedProgress(progress_api, 5);
+    me->m_Task = task;
+    me->m_UpdateCount = 0;
+    return me->m_RateLimitedProgressAPI;
 }
 
 int ParseLogLevel(const char* log_level_raw) {
@@ -429,15 +432,16 @@ int UpSync(
         {
             tags[i] = compression_type;
         }
+
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        if (progress)
         {
-            struct Progress create_version_progress;
-            Progress_Init(&create_version_progress, "Indexing version");
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
                 chunker_api,
                 job_api,
-                &create_version_progress.m_API,
+                progress,
                 0,
                 0,
                 source_path,
@@ -445,8 +449,13 @@ int UpSync(
                 tags,
                 target_chunk_size,
                 &source_version_index);
-            Progress_Dispose(&create_version_progress);
+            SAFE_DISPOSE_API(progress);
         }
+        else
+        {
+            err = ENOMEM;
+        }
+
         Longtail_Free(tags);
         Longtail_Free(file_infos);
         if (err)
@@ -510,20 +519,24 @@ int UpSync(
         return err;
     }
 
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks");
+    if (progress)
     {
-        struct Progress write_content_progress;
-        Progress_Init(&write_content_progress, "Writing blocks");
         err = Longtail_WriteContent(
             storage_api,
             store_block_store_api,
             job_api,
-            &write_content_progress.m_API,
+            progress,
             0,
             0,
             remote_missing_content_index,
             source_version_index,
             source_path);
-        Progress_Dispose(&write_content_progress);
+        SAFE_DISPOSE_API(progress);
+    }
+    else
+    {
+        err = ENOMEM;
     }
 
     if (err)
@@ -775,15 +788,16 @@ int DownSync(
         {
             tags[i] = 0;
         }
+
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        if (progress)
         {
-            struct Progress create_version_progress;
-            Progress_Init(&create_version_progress, "Indexing version");
             err = Longtail_CreateVersionIndex(
                 storage_api,
                 hash_api,
                 chunker_api,
                 job_api,
-                &create_version_progress.m_API,
+                progress,
                 0,
                 0,
                 target_path,
@@ -791,8 +805,13 @@ int DownSync(
                 tags,
                 target_chunk_size,
                 &target_version_index);
-            Progress_Dispose(&create_version_progress);
+            SAFE_DISPOSE_API(progress);
         }
+        else
+        {
+            err = ENOMEM;
+        }
+
         Longtail_Free(tags);
         Longtail_Free(file_infos);
         if (err)
@@ -924,15 +943,15 @@ int DownSync(
 
     Longtail_Free(required_chunk_hashes);
 
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
+    if (progress)
     {
-        struct Progress change_version_progress;
-        Progress_Init(&change_version_progress, "Updating version");
         err = Longtail_ChangeVersion(
             store_block_store_api,
             storage_api,
             hash_api,
             job_api,
-            &change_version_progress.m_API,
+            progress,
             0,
             0,
             required_version_content_index,
@@ -941,8 +960,13 @@ int DownSync(
             version_diff,
             target_path,
             retain_permissions ? 1 : 0);
-        Progress_Dispose(&change_version_progress);
+        SAFE_DISPOSE_API(progress);
     }
+    else
+    {
+        err = ENOMEM;
+    }
+
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
