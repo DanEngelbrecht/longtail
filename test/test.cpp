@@ -2127,15 +2127,15 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
 
         static int IncludeFunc(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_path, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
         {
-            // Exclude all assets that start with "a/file"
-            size_t lenpre = strlen("a/file"),
-            lenstr = strlen(asset_path);
-            if (lenstr < lenpre ? 0 : memcmp("a/file", asset_path, lenpre) == 0) {
+            if(!is_dir)
+            {
+                return 1;
+            }
+            if (strcmp(asset_path, "a/file") == 0)
+            {
                 return 0;
             }
-
-            // Include all files regardless of where in hierarchy, but skip dirs
-            return is_dir ? 0 : 1;
+            return 1;
         }
     } test_filter;
 
@@ -2145,7 +2145,7 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     Longtail_FileInfos* filtered_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, &test_filter.m_API, 0, 0, "", &filtered_file_infos));
     ASSERT_NE((Longtail_FileInfos*)0, filtered_file_infos);
-    ASSERT_EQ(8u, filtered_file_infos->m_Count);
+    ASSERT_EQ(12u, filtered_file_infos->m_Count);
     Longtail_Free(filtered_file_infos);
 
     SAFE_DISPOSE_API(storage);

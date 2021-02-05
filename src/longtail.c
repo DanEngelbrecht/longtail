@@ -1293,24 +1293,24 @@ static int RecurseTree(
                         asset_path = 0;
                         break;
                     }
-                }
-                if (properties.m_IsDir)
-                {
-                    if ((size_t)arrlen(full_search_paths) == arrcap(full_search_paths))
+                    if (properties.m_IsDir)
                     {
-                        if (folder_index > 0)
+                        if ((size_t)arrlen(full_search_paths) == arrcap(full_search_paths))
                         {
-                            uint32_t unprocessed_count = (uint32_t)(arrlen(full_search_paths) - folder_index);
-                            memmove(full_search_paths, &full_search_paths[folder_index], sizeof(const char*) * unprocessed_count);
-                            arrsetlen(full_search_paths, unprocessed_count);
-                            memmove(relative_parent_paths, &relative_parent_paths[folder_index], sizeof(const char*) * unprocessed_count);
-                            arrsetlen(relative_parent_paths, unprocessed_count);
-                            folder_index = 0;
+                            if (folder_index > 0)
+                            {
+                                uint32_t unprocessed_count = (uint32_t)(arrlen(full_search_paths) - folder_index);
+                                memmove(full_search_paths, &full_search_paths[folder_index], sizeof(const char*) * unprocessed_count);
+                                arrsetlen(full_search_paths, unprocessed_count);
+                                memmove(relative_parent_paths, &relative_parent_paths[folder_index], sizeof(const char*) * unprocessed_count);
+                                arrsetlen(relative_parent_paths, unprocessed_count);
+                                folder_index = 0;
+                            }
                         }
+                        arrput(full_search_paths, storage_api->ConcatPath(storage_api, full_search_path, properties.m_Name));
+                        arrput(relative_parent_paths, asset_path);
+                        asset_path = 0;
                     }
-                    arrput(full_search_paths, storage_api->ConcatPath(storage_api, full_search_path, properties.m_Name));
-                    arrput(relative_parent_paths, asset_path);
-                    asset_path = 0;
                 }
                 Longtail_Free(asset_path);
             }
