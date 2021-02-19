@@ -16,6 +16,7 @@
 #include "../lib/hashregistry/longtail_full_hash_registry.h"
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
 #include "../lib/memstorage/longtail_memstorage.h"
+#include "../lib/memtracer/longtail_memtracer.h"
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/ratelimitedprogress/longtail_ratelimitedprogress.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
@@ -1539,6 +1540,9 @@ int main(int argc, char** argv)
     int32_t max_chunks_per_block = 0;
     kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
 
+    bool enable_mem_tracer_raw = 0;
+    kgflags_bool("mem-tracer", true, "Enable tracing of memory usage", false, &enable_mem_tracer_raw);
+
     if (argc < 2)
     {
         kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls` or `cp`");
@@ -1556,6 +1560,11 @@ int main(int argc, char** argv)
         kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls` or `cp`");
         kgflags_print_usage();
         return 1;
+    }
+
+    if (enable_mem_tracer_raw) {
+        Longtail_MemTracer_Init();
+        Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
     }
 
     int err = 0;
@@ -1788,5 +1797,8 @@ int main(int argc, char** argv)
 #if defined(_CRTDBG_MAP_ALLOC)
     _CrtDumpMemoryLeaks();
 #endif
+    if (enable_mem_tracer_raw) {
+        Longtail_MemTracer_Dispose();
+    }
     return err;
 }
