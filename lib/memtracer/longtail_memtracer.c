@@ -50,17 +50,39 @@ void Longtail_MemTracer_Init() {
     Longtail_CreateSpinLock(malloc(Longtail_GetSpinLockSize()), &MemTracer_Spinlock);
 }
 
+static const char* Denoms[] = {
+    "b",
+    "kb",
+    "mb",
+    "gb",
+    "tb"
+};
+
+static void PrintSize(size_t size) {
+    if (size < 1024 * 100) {
+        printf("%" PRIu64, size);
+        return;
+    }
+    int denom = 0;
+    size_t factor = 1;
+    while ((size / factor) > 1024) {
+        factor *= 1024;
+        denom++;
+    }
+    printf("%.2f %s (%" PRIu64 ")", (float)size / (float)factor, Denoms[denom], size);
+}
+
 void Longtail_MemTracer_Dispose() {
     uint64_t allocation_count = 0;
     for (uint32_t c = 0; c < MemTracer_ContextCount; ++c) {
         struct MemTracer_ContextStats* stats = &MemTracer_contextStats[c];
         printf("MemTracer: %s\n", stats->context_name);
-        printf("  total_mem %" PRIu64 "\n", stats->total_mem);
-        printf("  current_mem %" PRIu64 "\n", stats->current_mem);
-        printf("  peak_mem %" PRIu64 "\n", stats->peak_mem);
-        printf("  total_count %" PRIu64 "\n", stats->total_count);
-        printf("  current_count %" PRIu64 "\n", stats->current_count);
-        printf("  peak_count %" PRIu64 "\n", stats->peak_count);
+        printf("  total_mem:     "); PrintSize(stats->total_mem); printf("\n");
+        printf("  current_mem:   "); PrintSize(stats->current_mem); printf("\n");
+        printf("  peak_mem:      "); PrintSize(stats->peak_mem); printf("\n");
+        printf("  total_count:   "); PrintSize(stats->total_count); printf("\n");
+        printf("  current_count: "); PrintSize(stats->current_count); printf("\n");
+        printf("  peak_count:    "); PrintSize(stats->peak_count); printf("\n");
         allocation_count += stats->total_count;
     }
     printf("MemTracer: Total allocation count %" PRIu64 "\n", allocation_count);

@@ -1541,7 +1541,7 @@ int main(int argc, char** argv)
     kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
 
     bool enable_mem_tracer_raw = 0;
-    kgflags_bool("mem-tracer", true, "Enable tracing of memory usage", false, &enable_mem_tracer_raw);
+    kgflags_bool("mem-tracer", false, "Enable tracing of memory usage", false, &enable_mem_tracer_raw);
 
     if (argc < 2)
     {
@@ -1560,11 +1560,6 @@ int main(int argc, char** argv)
         kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls` or `cp`");
         kgflags_print_usage();
         return 1;
-    }
-
-    if (enable_mem_tracer_raw) {
-        Longtail_MemTracer_Init();
-        Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
     }
 
     int err = 0;
@@ -1602,6 +1597,11 @@ int main(int argc, char** argv)
         if (SetLogLevel(log_level_raw))
         {
             return 1;
+        }
+
+        if (enable_mem_tracer_raw) {
+            Longtail_MemTracer_Init();
+            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
         }
 
         uint32_t compression = ParseCompressionType(compression_raw);
@@ -1671,6 +1671,11 @@ int main(int argc, char** argv)
             return 1;
         }
 
+        if (enable_mem_tracer_raw) {
+            Longtail_MemTracer_Init();
+            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+        }
+
         const char* cache_path = cache_path_raw ? NormalizePath(cache_path_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
         const char* target_index = target_index_raw ? NormalizePath(target_index_raw) : 0;
@@ -1712,6 +1717,11 @@ int main(int argc, char** argv)
             return 1;
         }
 
+        if (enable_mem_tracer_raw) {
+            Longtail_MemTracer_Init();
+            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+        }
+
         const char* version_index_path = NormalizePath(version_index_path_raw);
 
         err = ValidateVersionIndex(
@@ -1731,6 +1741,11 @@ int main(int argc, char** argv)
             kgflags_print_errors();
             kgflags_print_usage();
             return 1;
+        }
+
+        if (enable_mem_tracer_raw) {
+            Longtail_MemTracer_Init();
+            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
         }
 
         if (kgflags_get_non_flag_args_count() < 2)
@@ -1777,6 +1792,12 @@ int main(int argc, char** argv)
             kgflags_print_usage();
             return 1;
         }
+
+        if (enable_mem_tracer_raw) {
+            Longtail_MemTracer_Init();
+            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+        }
+
         const char* source_path_raw = kgflags_get_non_flag_arg(1);
         const char* target_path_raw = kgflags_get_non_flag_arg(2);
 
