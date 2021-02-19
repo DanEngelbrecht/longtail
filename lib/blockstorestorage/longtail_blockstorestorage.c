@@ -187,9 +187,9 @@ static struct BlockStoreStorageAPI_PathLookup* BlockStoreStorageAPI_CreatePathLo
     for (uint32_t p = 0; p < asset_count; ++p)
     {
         TLongtail_Hash parent_hash = path_lookup->m_PathEntries[p + 1].m_ParentHash;
-        const uint64_t* parent_index_ptr = Longtail_LookupTable_Get(path_lookup->m_LookupTable, parent_hash);
+        const uint32_t* parent_index_ptr = Longtail_LookupTable_Get(path_lookup->m_LookupTable, parent_hash);
         LONGTAIL_FATAL_ASSERT(ctx, parent_index_ptr, return 0)
-        uint32_t parent_index = (uint32_t)*parent_index_ptr;
+        uint32_t parent_index = *parent_index_ptr;
         if (0 == Longtail_LookupTable_PutUnique(find_first_lookup, parent_hash, p))
         {
             path_lookup->m_PathEntries[parent_index].m_ChildStartIndex = p + 1;
@@ -288,7 +288,7 @@ static int BlockStoreStorageAPI_ReadFromBlock(
         uint64_t asset_offset_chunk_end = asset_offset + chunk_size;
         LONGTAIL_FATAL_ASSERT(ctx, asset_offset_chunk_end >= start, return EINVAL)
 
-        uint64_t* chunk_block_offset_ptr = Longtail_LookupTable_Get(block_chunk_lookup, chunk_hash);
+        uint32_t* chunk_block_offset_ptr = Longtail_LookupTable_Get(block_chunk_lookup, chunk_hash);
         if (chunk_block_offset_ptr == 0)
         {
             asset_offset += chunk_size;
@@ -307,7 +307,7 @@ static int BlockStoreStorageAPI_ReadFromBlock(
             read_length = (uint32_t)(read_end - asset_offset);
         }
 
-        uint32_t chunk_block_offset = (uint32_t)*chunk_block_offset_ptr;
+        uint32_t chunk_block_offset = *chunk_block_offset_ptr;
         memcpy(&buffer[asset_offset - start], &block_data[chunk_block_offset + chunk_offset], read_length);
         asset_offset += read_length;
     }
@@ -551,11 +551,11 @@ static int BlockStoreStorageAPI_ReadFile(
     {
         uint32_t chunk_index = chunk_indexes[c];
         TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
-        const uint64_t* block_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
+        const uint32_t* block_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash);
         LONGTAIL_FATAL_ASSERT(ctx, block_index_ptr, EINVAL)
-        uint64_t block_index = *block_index_ptr;
+        uint32_t block_index = *block_index_ptr;
         TLongtail_Hash block_hash = block_hashes[block_index];
-        uint64_t* chunk_range_index = Longtail_LookupTable_PutUnique(block_range_map, block_hash, arrlen(chunk_ranges));
+        uint32_t* chunk_range_index = Longtail_LookupTable_PutUnique(block_range_map, block_hash, (uint32_t)arrlen(chunk_ranges));
         if (chunk_range_index)
         {
             chunk_ranges[*chunk_range_index].m_ChunkEnd = c + 1;
@@ -663,7 +663,7 @@ static int BlockStoreStorageAPI_OpenReadFile(
         return err;
     }
 
-    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    uint32_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_LookupTable_Get() failed with %d", ENOENT)
@@ -830,7 +830,7 @@ static int BlockStoreStorageAPI_GetPermissions(
         return err;
     }
 
-    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    uint32_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_LookupTable_Get() failed with %d", ENOENT)
@@ -960,7 +960,7 @@ static int BlockStoreStorageAPI_IsDir(
         return err;
     }
 
-    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    uint32_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
         // Its a file since all paths in version index ends with forward-slash
@@ -1017,7 +1017,7 @@ static int BlockStoreStorageAPI_IsFile(
         return err;
     }
 
-    uint64_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    uint32_t* path_entry_index = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (path_entry_index == 0)
     {
         return 0;
@@ -1105,7 +1105,7 @@ static int BlockStoreStorageAPI_StartFind(
             }
         }
     }
-    uint64_t* path_entry_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
+    uint32_t* path_entry_index_ptr = Longtail_LookupTable_Get(block_store_fs->m_PathLookup->m_LookupTable, path_hash);
     if (!path_entry_index_ptr)
     {
         return ENOENT;
@@ -1275,8 +1275,8 @@ static int BlockStoreStorageAPI_Init(
     block_store_fs->m_VersionIndex = version_index;
 
     char* p = (char*)&block_store_fs[1];
-    block_store_fs->m_ChunkHashToBlockIndexLookup = Longtail_LookupTable_Create(p, content_index_chunk_count, 0);
-    p += Longtail_LookupTable_GetSize(content_index_chunk_count);
+    block_store_fs->m_ChunkHashToBlockIndexLookup = Longtail_LookupTable_Create(p, (uint32_t)content_index_chunk_count, 0);
+    p += Longtail_LookupTable_GetSize((uint32_t)content_index_chunk_count);
     block_store_fs->m_PathLookup = BlockStoreStorageAPI_CreatePathLookup(p, hash_api, version_index);
     p += GetPathEntriesSize(version_index_asset_count);
     block_store_fs->m_ChunkAssetOffsets = (uint64_t*)p;
@@ -1285,7 +1285,7 @@ static int BlockStoreStorageAPI_Init(
     const TLongtail_Hash* content_index_chunk_hashes = content_index->m_ChunkHashes;
     for (uint64_t c = 0; c < content_index_chunk_count; ++c)
     {
-        uint64_t block_index = content_index_chunk_block_indexes[c];
+        uint32_t block_index = (uint32_t)content_index_chunk_block_indexes[c];
         Longtail_LookupTable_Put(block_store_fs->m_ChunkHashToBlockIndexLookup, content_index_chunk_hashes[c], block_index);
     }
     const uint32_t* asset_chunk_index_starts = block_store_fs->m_VersionIndex->m_AssetChunkIndexStarts;
@@ -1338,7 +1338,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return 0)
 
     size_t api_size = sizeof(struct BlockStoreStorageAPI) + 
-        Longtail_LookupTable_GetSize(*content_index->m_ChunkCount) +
+        Longtail_LookupTable_GetSize((uint32_t)*content_index->m_ChunkCount) +
         GetPathEntriesSize(*version_index->m_AssetCount) +
         sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount);
     void* mem = Longtail_Alloc("BlockStoreStorageAPI", api_size);
