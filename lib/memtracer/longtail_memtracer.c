@@ -42,6 +42,12 @@ static uint32_t MemTracer_ContextCount = 0;
 static struct MemTracer_ContextStats MemTracer_contextStats[MemTracer_MaxContextCount];
 struct Longtail_LookupTable* MemTracer_ContextLookup = 0;
 HLongtail_SpinLock MemTracer_Spinlock = 0;
+size_t MemTracer_AllocationTotalCount = 0;
+size_t MemTracer_AllocationCurrentCount = 0;
+size_t MemTracer_PeakAllocationCount = 0;
+size_t MemTracer_AllocationTotalMem = 0;
+size_t MemTracer_AllocationCurrentMem = 0;
+size_t MemTracer_PeakAllocationMem = 0;
 
 void Longtail_MemTracer_Init() {
     size_t lookupSize = Longtail_LookupTable_GetSize(MemTracer_MaxContextCount);
@@ -73,7 +79,6 @@ static void PrintSize(size_t size) {
 }
 
 void Longtail_MemTracer_Dispose() {
-    uint64_t allocation_count = 0;
     for (uint32_t c = 0; c < MemTracer_ContextCount; ++c) {
         struct MemTracer_ContextStats* stats = &MemTracer_contextStats[c];
         printf("MemTracer: %s\n", stats->context_name);
@@ -83,9 +88,13 @@ void Longtail_MemTracer_Dispose() {
         printf("  total_count:   "); PrintSize(stats->total_count); printf("\n");
         printf("  current_count: "); PrintSize(stats->current_count); printf("\n");
         printf("  peak_count:    "); PrintSize(stats->peak_count); printf("\n");
-        allocation_count += stats->total_count;
     }
-    printf("MemTracer: Total allocation count %" PRIu64 "\n", allocation_count);
+    printf("total_mem:     "); PrintSize(MemTracer_AllocationTotalMem); printf("\n");
+    printf("current_mem:   "); PrintSize(MemTracer_AllocationCurrentMem); printf("\n");
+    printf("peak_mem:      "); PrintSize(MemTracer_PeakAllocationMem); printf("\n");
+    printf("total_count:   "); PrintSize(MemTracer_AllocationTotalCount); printf("\n");
+    printf("current_count: "); PrintSize(MemTracer_AllocationCurrentCount); printf("\n");
+    printf("peak_count:    "); PrintSize(MemTracer_PeakAllocationCount); printf("\n");
     Longtail_DeleteSpinLock(MemTracer_Spinlock);
     free(MemTracer_Spinlock);
     free(MemTracer_ContextLookup);
@@ -117,6 +126,20 @@ void* Longtail_MemTracer_Alloc(const char* context, size_t s)
     {
         contextStats = &MemTracer_contextStats[*context_index_ptr];
     }
+
+    MemTracer_AllocationTotalCount++;
+    MemTracer_AllocationCurrentCount++;
+    MemTracer_AllocationTotalMem += s;
+    MemTracer_AllocationCurrentMem += s;
+    if (MemTracer_AllocationCurrentMem > MemTracer_PeakAllocationMem)
+    {
+        MemTracer_PeakAllocationMem = MemTracer_AllocationCurrentMem;
+    }
+    if (MemTracer_AllocationCurrentCount > MemTracer_PeakAllocationCount)
+    {
+        MemTracer_PeakAllocationCount = MemTracer_AllocationCurrentCount;
+    }
+
     contextStats->total_count++;
     contextStats->current_count++;
     contextStats->total_mem += s;
@@ -162,6 +185,8 @@ void Longtail_MemTracer_Free(void* p)
     Longtail_LockSpinLock(MemTracer_Spinlock);
     uint64_t* context_index_ptr = Longtail_LookupTable_Get(MemTracer_ContextLookup, context_id);
     struct MemTracer_ContextStats* contextStats = &MemTracer_contextStats[*context_index_ptr];
+    MemTracer_AllocationCurrentMem -= s;
+    MemTracer_AllocationCurrentCount--;
     contextStats->current_mem -= s;
     contextStats->current_count--;
     Longtail_UnlockSpinLock(MemTracer_Spinlock);
