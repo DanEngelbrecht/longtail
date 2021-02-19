@@ -5785,7 +5785,7 @@ TEST(Longtail, TestLongtailBlockFS)
         const char* path = &block_store_storage_paths->m_PathData[block_store_storage_paths->m_PathStartOffsets[f]];
         Longtail_GetPathHash(hash_api, path, &hash);
         Longtail_LookupTable_Put(block_store_storage_paths_lookup, hash, f);
-        ASSERT_NE((uint64_t*)0, Longtail_LookupTable_Get(version_paths_lookup, hash));
+        ASSERT_NE((uint32_t*)0, Longtail_LookupTable_Get(version_paths_lookup, hash));
     }
 
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)
