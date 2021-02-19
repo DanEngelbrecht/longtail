@@ -183,7 +183,7 @@ static struct BlockStoreStorageAPI_PathLookup* BlockStoreStorageAPI_CreatePathLo
         }
         Longtail_LookupTable_Put(path_lookup->m_LookupTable, path_hash, a + 1);
     }
-    struct Longtail_LookupTable* find_first_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(asset_count + 1)), asset_count, 0);
+    struct Longtail_LookupTable* find_first_lookup = Longtail_LookupTable_Create(Longtail_Alloc("BlockStoreStorageAPI", Longtail_LookupTable_GetSize(asset_count + 1)), asset_count, 0);
     for (uint32_t p = 0; p < asset_count; ++p)
     {
         TLongtail_Hash parent_hash = path_lookup->m_PathEntries[p + 1].m_ParentHash;
@@ -261,7 +261,7 @@ static int BlockStoreStorageAPI_ReadFromBlock(
     uint32_t chunk_block_offset = 0;
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
     size_t block_chunk_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
-    void* work_mem = Longtail_Alloc(block_chunk_lookup_size);
+    void* work_mem = Longtail_Alloc("BlockStoreStorageAPI", block_chunk_lookup_size);
     if (work_mem == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -542,7 +542,7 @@ static int BlockStoreStorageAPI_ReadFile(
     estimated_block_count = estimated_block_count > max_block_count ? max_block_count : estimated_block_count;
 
     size_t block_range_map_size = Longtail_LookupTable_GetSize(estimated_block_count);
-    struct Longtail_LookupTable* block_range_map = Longtail_LookupTable_Create(Longtail_Alloc(block_range_map_size), estimated_block_count, 0);
+    struct Longtail_LookupTable* block_range_map = Longtail_LookupTable_Create(Longtail_Alloc("BlockStoreStorageAPI", block_range_map_size), estimated_block_count, 0);
     struct BlockStoreStorageAPI_ChunkRange* chunk_ranges = 0;
     arrsetcap(chunk_ranges, estimated_block_count);
     const TLongtail_Hash* block_hashes = block_store_fs->m_ContentIndex->m_BlockHashes;
@@ -579,7 +579,7 @@ static int BlockStoreStorageAPI_ReadFile(
             uint64_t new_capacity = estimated_block_count + (estimated_block_count >> 2) + 2;
             estimated_block_count = new_capacity > max_block_count ? max_block_count : (uint32_t)new_capacity;
             block_range_map_size = Longtail_LookupTable_GetSize(estimated_block_count);
-            struct Longtail_LookupTable* new_block_range_map = Longtail_LookupTable_Create(Longtail_Alloc(block_range_map_size), estimated_block_count, block_range_map);
+            struct Longtail_LookupTable* new_block_range_map = Longtail_LookupTable_Create(Longtail_Alloc("BlockStoreStorageAPI", block_range_map_size), estimated_block_count, block_range_map);
             Longtail_Free(block_range_map);
             block_range_map = new_block_range_map;
         }
@@ -593,7 +593,7 @@ static int BlockStoreStorageAPI_ReadFile(
 	size_t work_mem_size = sizeof(struct BlockStoreStorageAPI_ReadFromBlockJobData) * block_count +
 		sizeof(Longtail_JobAPI_JobFunc) * block_count +
 		sizeof(void*) * block_count;
-	void* work_mem = Longtail_Alloc(work_mem_size);
+	void* work_mem = Longtail_Alloc("BlockStoreStorageAPI", work_mem_size);
 	if (!work_mem)
 	{
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -670,7 +670,7 @@ static int BlockStoreStorageAPI_OpenReadFile(
         return ENOENT;
     }
     uint32_t asset_index = block_store_fs->m_PathLookup->m_PathEntries[*path_entry_index].m_AssetIndex;
-    struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)Longtail_Alloc(sizeof(struct BlockStoreStorageAPI_OpenFile));
+    struct BlockStoreStorageAPI_OpenFile* block_store_file = (struct BlockStoreStorageAPI_OpenFile*)Longtail_Alloc("BlockStoreStorageAPI", sizeof(struct BlockStoreStorageAPI_OpenFile));
     block_store_file->m_AssetIndex = asset_index;
     block_store_file->m_SeekChunkOffset = 0;
     block_store_file->m_SeekAssetPos = 0;
@@ -918,7 +918,7 @@ static char* BlockStoreStorageAPI_ConcatPath(
     }
     size_t sub_len = strlen(sub_path);
     size_t path_len = root_len + 1 + sub_len;
-    char* path = (char*)Longtail_Alloc(path_len + 1);
+    char* path = (char*)Longtail_Alloc("BlockStoreStorageAPI", path_len + 1);
     if (!path)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1115,7 +1115,7 @@ static int BlockStoreStorageAPI_StartFind(
     {
         return ENOENT;
     }
-    struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)Longtail_Alloc(sizeof(struct BlockStoreStorageAPI_Iterator));
+    struct BlockStoreStorageAPI_Iterator* path_iterator = (struct BlockStoreStorageAPI_Iterator*)Longtail_Alloc("BlockStoreStorageAPI", sizeof(struct BlockStoreStorageAPI_Iterator));
     if (path_iterator == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1341,7 +1341,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
         Longtail_LookupTable_GetSize(*content_index->m_ChunkCount) +
         GetPathEntriesSize(*version_index->m_AssetCount) +
         sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount);
-    void* mem = Longtail_Alloc(api_size);
+    void* mem = Longtail_Alloc("BlockStoreStorageAPI", api_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

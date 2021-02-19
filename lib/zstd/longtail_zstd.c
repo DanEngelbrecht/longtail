@@ -115,7 +115,7 @@ static void ZStdCompressionAPI_Init(struct ZStdCompressionAPI* compression_api)
 struct Longtail_CompressionAPI* Longtail_CreateZStdCompressionAPI()
 {
     MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
-    struct ZStdCompressionAPI* compression_api = (struct ZStdCompressionAPI*)Longtail_Alloc(sizeof(struct ZStdCompressionAPI));
+    struct ZStdCompressionAPI* compression_api = (struct ZStdCompressionAPI*)Longtail_Alloc("ZStdCompressionAPI", sizeof(struct ZStdCompressionAPI));
     if (!compression_api)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

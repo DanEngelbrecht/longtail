@@ -126,7 +126,7 @@ static int CreateFakeContent(Longtail_StorageAPI* storage_api, const char* paren
             return 0;
         }
         uint64_t content_size = 64000 + 1 + i;
-        char* data = (char*)Longtail_Alloc(sizeof(char) * content_size);
+        char* data = (char*)Longtail_Alloc(0, sizeof(char) * content_size);
         memset(data, (int)i, content_size);
         int err = storage_api->Write(storage_api, content_file, 0, content_size, data);
         Longtail_Free(data);
@@ -149,7 +149,7 @@ struct TestAsyncGetExistingContentComplete
         m_API.m_API.Dispose = 0;
         m_API.OnComplete = OnComplete;
         m_ContentIndex = 0;
-        Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
+        Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &m_NotifySema);
     }
     ~TestAsyncGetExistingContentComplete()
     {
@@ -187,7 +187,7 @@ static struct Longtail_ContentIndex* SyncGetExistingContent(Longtail_BlockStoreA
 
 TEST(Longtail, Longtail_Malloc)
 {
-    void* p = Longtail_Alloc(77);
+    void* p = Longtail_Alloc(0, 77);
     ASSERT_NE((void*)0, p);
     Longtail_Free(p);
 }
@@ -220,11 +220,11 @@ TEST(Longtail, Longtail_LZ4)
     size_t data_len = strlen(raw_data) + 1;
     size_t compressed_size = 0;
     size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
-    char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
+    char* compressed_buffer = (char*)Longtail_Alloc(0, max_compressed_size);
     ASSERT_NE((char*)0, compressed_buffer);
     ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
 
-    char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
+    char* decompressed_buffer = (char*)Longtail_Alloc(0, data_len);
     ASSERT_NE((char*)0, decompressed_buffer);
     size_t uncompressed_size;
     ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
@@ -264,11 +264,11 @@ TEST(Longtail, Longtail_Brotli)
     size_t data_len = strlen(raw_data) + 1;
     size_t compressed_size = 0;
     size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
-    char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
+    char* compressed_buffer = (char*)Longtail_Alloc(0, max_compressed_size);
     ASSERT_NE((char*)0, compressed_buffer);
     ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
 
-    char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
+    char* decompressed_buffer = (char*)Longtail_Alloc(0, data_len);
     ASSERT_NE((char*)0, decompressed_buffer);
     size_t uncompressed_size;
     ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
@@ -308,11 +308,11 @@ TEST(Longtail, Longtail_ZStd)
     size_t data_len = strlen(raw_data) + 1;
     size_t compressed_size = 0;
     size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
-    char* compressed_buffer = (char*)Longtail_Alloc(max_compressed_size);
+    char* compressed_buffer = (char*)Longtail_Alloc(0, max_compressed_size);
     ASSERT_NE((char*)0, compressed_buffer);
     ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
 
-    char* decompressed_buffer = (char*)Longtail_Alloc(data_len);
+    char* decompressed_buffer = (char*)Longtail_Alloc(0, data_len);
     ASSERT_NE((char*)0, decompressed_buffer);
     size_t uncompressed_size;
     ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
@@ -467,7 +467,7 @@ TEST(Longtail, Longtail_ReadWriteStoredBlockBuffer)
         &block_index_buffer_size));
 
     size_t stored_block_data_size = block_index_buffer_size + stored_block->m_BlockChunksDataSize;
-    void* stored_block_data_buffer = Longtail_Alloc(stored_block_data_size);
+    void* stored_block_data_buffer = Longtail_Alloc(0, stored_block_data_size);
     memcpy(stored_block_data_buffer, block_index_buffer, block_index_buffer_size);
     memcpy(&((uint8_t*)stored_block_data_buffer)[block_index_buffer_size], stored_block->m_BlockData, stored_block->m_BlockChunksDataSize);
 
@@ -477,7 +477,7 @@ TEST(Longtail, Longtail_ReadWriteStoredBlockBuffer)
     stored_block = 0;
 
     size_t stored_block_size = Longtail_GetStoredBlockSize(stored_block_data_size);
-    stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(stored_block_size);
+    stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(0, stored_block_size);
     void* block_data = &((uint8_t*)stored_block)[stored_block_size - stored_block_data_size];
     memcpy(block_data, stored_block_data_buffer, stored_block_data_size);
     Longtail_Free(stored_block_data_buffer);
@@ -531,7 +531,7 @@ TEST(Longtail, Longtail_VersionIndex)
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
-    void* version_index_mem = Longtail_Alloc(version_index_size);
+    void* version_index_mem = Longtail_Alloc(0, version_index_size);
 
     static const uint32_t TARGET_CHUNK_SIZE = 32768u;
 
@@ -691,6 +691,74 @@ TEST(Longtail, Longtail_CreateStoreIndexFromBlocks)
     ASSERT_EQ(chunk_hashes[3], restored_block_indexes[1].m_ChunkHashes[1]);
 
     Longtail_Free(store_index);
+    Longtail_Free(block_index2);
+    Longtail_Free(block_index1);
+    SAFE_DISPOSE_API(hash_api);
+}
+
+TEST(Longtail, Longtail_MergeStoreIndexWithEmpty)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    const uint64_t chunk_indexes[5] = {0, 1, 2, 3, 4};
+    const TLongtail_Hash chunk_hashes[5] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedbeeffeed5a57, 0xfeed5a17deadbeef};
+    const uint32_t chunk_sizes[5] = {4711, 1147, 1137, 3219, 1147};
+    struct Longtail_BlockIndex* block_index1;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        2,
+        &chunk_indexes[0],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index1));
+
+    struct Longtail_BlockIndex* block_index2;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        3,
+        &chunk_indexes[2],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index2));
+
+    const struct Longtail_BlockIndex* blockIndexes[2] = {block_index1, block_index2};
+
+    struct Longtail_StoreIndex* store_index_local;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        2,
+        blockIndexes,
+        &store_index_local));
+
+    struct Longtail_StoreIndex* empty_index;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        0,
+        0,
+        &empty_index));
+
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        2,
+        blockIndexes,
+        &store_index_local));
+
+    struct Longtail_StoreIndex* merged_index;
+    ASSERT_EQ(0, Longtail_MergeStoreIndex(empty_index, store_index_local, &merged_index));
+
+    ASSERT_EQ(2, *merged_index->m_BlockCount);
+    ASSERT_EQ(*block_index1->m_BlockHash, merged_index->m_BlockHashes[0]);
+    ASSERT_EQ(*block_index2->m_BlockHash, merged_index->m_BlockHashes[1]);
+    Longtail_Free(merged_index);
+
+    ASSERT_EQ(0, Longtail_MergeStoreIndex(store_index_local, empty_index, &merged_index));
+
+    ASSERT_EQ(2, *merged_index->m_BlockCount);
+    ASSERT_EQ(*block_index1->m_BlockHash, merged_index->m_BlockHashes[0]);
+    ASSERT_EQ(*block_index2->m_BlockHash, merged_index->m_BlockHashes[1]);
+    Longtail_Free(merged_index);
+
+    Longtail_Free(empty_index);
+    Longtail_Free(store_index_local);
     Longtail_Free(block_index2);
     Longtail_Free(block_index1);
     SAFE_DISPOSE_API(hash_api);
@@ -856,7 +924,7 @@ static struct Longtail_StoredBlock* TestCreateStoredBlock(
     uint32_t chunk_size)
 {
     uint32_t block_data_size = chunk_count * chunk_size;
-    uint8_t* chunk_data = (uint8_t*)Longtail_Alloc(block_data_size);
+    uint8_t* chunk_data = (uint8_t*)Longtail_Alloc(0, block_data_size);
     TLongtail_Hash* chunk_hashes = 0;
     uint32_t* chunk_sizes = 0;
     arrsetlen(chunk_hashes, chunk_count);
@@ -1030,7 +1098,7 @@ TEST(Longtail, Longtail_GetExistingContentIndex)
 static uint32_t* GetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos)
 {
     uint32_t count = file_infos->m_Count;
-    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
+    uint32_t* result = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * count);
     const uint32_t compression_types[4] = {
         0,
         Longtail_GetBrotliGenericDefaultQuality(),
@@ -1046,7 +1114,7 @@ static uint32_t* GetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* f
 static uint32_t* SetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* file_infos, uint32_t compression_type)
 {
     uint32_t count = file_infos->m_Count;
-    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
+    uint32_t* result = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * count);
     for (uint32_t i = 0; i < count; ++i)
     {
         result[i] = compression_type;
@@ -1223,7 +1291,7 @@ struct TestAsyncPutBlockComplete
     {
         m_API.m_API.Dispose = 0;
         m_API.OnComplete = OnComplete;
-        Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
+        Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &m_NotifySema);
     }
     ~TestAsyncPutBlockComplete()
     {
@@ -1257,7 +1325,7 @@ struct TestAsyncGetBlockComplete
         m_API.m_API.Dispose = 0;
         m_API.OnComplete = OnComplete;
         m_StoredBlock = 0;
-        Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
+        Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &m_NotifySema);
     }
     ~TestAsyncGetBlockComplete()
     {
@@ -1292,7 +1360,7 @@ struct TestAsyncFlushComplete
     {
         m_API.m_API.Dispose = 0;
         m_API.OnComplete = OnComplete;
-        Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &m_NotifySema);
+        Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &m_NotifySema);
     }
     ~TestAsyncFlushComplete()
     {
@@ -1333,7 +1401,7 @@ TEST(Longtail, Longtail_FSBlockStore)
     struct Longtail_StoredBlock* get_block = getCB.m_StoredBlock;
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
-    void* block_index_mem = Longtail_Alloc(block_index_size);
+    void* block_index_mem = Longtail_Alloc(0, block_index_size);
     put_block.m_BlockIndex = Longtail_InitBlockIndex(block_index_mem, 2);
     *put_block.m_BlockIndex->m_BlockHash = 0xdeadbeef;
     *put_block.m_BlockIndex->m_HashIdentifier = hash_api->GetIdentifier(hash_api);
@@ -1345,7 +1413,7 @@ TEST(Longtail, Longtail_FSBlockStore)
     *put_block.m_BlockIndex->m_ChunkCount = 2;
     put_block.m_BlockChunksDataSize = 4711 + 1147;
 
-    put_block.m_BlockData = Longtail_Alloc(put_block.m_BlockChunksDataSize);
+    put_block.m_BlockData = Longtail_Alloc(0, put_block.m_BlockChunksDataSize);
     memset(put_block.m_BlockData, 77, 4711);
     memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
 
@@ -1414,7 +1482,7 @@ TEST(Longtail, Longtail_FSBlockStoreReadContent)
     struct Longtail_StoredBlock* get_block = getCB.m_StoredBlock;
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
-    void* block_index_mem = Longtail_Alloc(block_index_size);
+    void* block_index_mem = Longtail_Alloc(0, block_index_size);
     put_block.m_BlockIndex = Longtail_InitBlockIndex(block_index_mem, 2);
     *put_block.m_BlockIndex->m_BlockHash = 0xdeadbeef;
     *put_block.m_BlockIndex->m_HashIdentifier = hash_api->GetIdentifier(hash_api);
@@ -1426,7 +1494,7 @@ TEST(Longtail, Longtail_FSBlockStoreReadContent)
     *put_block.m_BlockIndex->m_ChunkCount = 2;
     put_block.m_BlockChunksDataSize = 4711 + 1147;
 
-    put_block.m_BlockData = Longtail_Alloc(put_block.m_BlockChunksDataSize);
+    put_block.m_BlockData = Longtail_Alloc(0, put_block.m_BlockChunksDataSize);
     memset(put_block.m_BlockData, 77, 4711);
     memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
 
@@ -1538,7 +1606,7 @@ static Longtail_StoredBlock* GenerateStoredBlock(struct Longtail_HashAPI* hash_a
     size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
     size_t block_size = sizeof(struct Longtail_StoredBlock) + block_index_size + block_chunks_data_size;
 
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_size);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(0, block_size);
     if (!stored_block)
     {
         return 0;
@@ -1781,7 +1849,7 @@ TEST(Longtail, Longtail_CacheBlockStore)
     ASSERT_EQ(ENOENT, getCB1.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
-    void* block_index_mem = Longtail_Alloc(block_index_size);
+    void* block_index_mem = Longtail_Alloc(0, block_index_size);
     put_block.m_BlockIndex = Longtail_InitBlockIndex(block_index_mem, 2);
     *put_block.m_BlockIndex->m_BlockHash = 0xdeadbeef;
     *put_block.m_BlockIndex->m_HashIdentifier = hash_api->GetIdentifier(hash_api);
@@ -1793,7 +1861,7 @@ TEST(Longtail, Longtail_CacheBlockStore)
     *put_block.m_BlockIndex->m_ChunkCount = 2;
     put_block.m_BlockChunksDataSize = 4711 + 1147;
 
-    put_block.m_BlockData = Longtail_Alloc(put_block.m_BlockChunksDataSize);
+    put_block.m_BlockData = Longtail_Alloc(0, put_block.m_BlockChunksDataSize);
     memset(put_block.m_BlockData, 77, 4711);
     memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
 
@@ -1880,7 +1948,7 @@ TEST(Longtail, Longtail_CompressBlockStore)
         size_t block_index_size = Longtail_GetBlockIndexSize(2);
         size_t block_chunks_data_size = 4711 + 1147;
         size_t put_block_size = Longtail_GetStoredBlockSize(block_index_size + block_chunks_data_size);
-        put_block = (struct Longtail_StoredBlock*)Longtail_Alloc(put_block_size);
+        put_block = (struct Longtail_StoredBlock*)Longtail_Alloc(0, put_block_size);
         put_block->Dispose = 0;
         put_block->m_BlockIndex = Longtail_InitBlockIndex(&put_block[1], 2);
         *put_block->m_BlockIndex->m_BlockHash = 0xdeadbeef;
@@ -1902,7 +1970,7 @@ TEST(Longtail, Longtail_CompressBlockStore)
         size_t block_index_size = Longtail_GetBlockIndexSize(2);
         size_t block_chunks_data_size = 1147 + 4711;
         size_t put_block_size = Longtail_GetStoredBlockSize(block_index_size + block_chunks_data_size);
-        put_block2 = (struct Longtail_StoredBlock*)Longtail_Alloc(put_block_size);
+        put_block2 = (struct Longtail_StoredBlock*)Longtail_Alloc(0, put_block_size);
         put_block2->Dispose = 0;
         put_block2->m_BlockIndex = Longtail_InitBlockIndex(&put_block2[1], 2);
         *put_block2->m_BlockIndex->m_BlockHash = 0xbeaddeef;
@@ -2352,7 +2420,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
-    void* version_index_mem = Longtail_Alloc(version_index_size);
+    void* version_index_mem = Longtail_Alloc(0, version_index_size);
 
     Longtail_VersionIndex* version_index;
     ASSERT_EQ(0, Longtail_BuildVersionIndex(
@@ -2908,7 +2976,7 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_EQ(1u, *version_diff->m_ModifiedPermissionsCount);
 
     uint64_t required_chunk_count;
-    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*new_vindex->m_ChunkCount));
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * (*new_vindex->m_ChunkCount));
     ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
             new_vindex,
             version_diff,
@@ -2950,7 +3018,7 @@ TEST(Longtail, Longtail_VersionDiff)
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
     required_chunk_count = 0;
-    required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*new_vindex->m_ChunkCount));
+    required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * (*new_vindex->m_ChunkCount));
     ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
             new_vindex,
             version_diff,
@@ -2999,7 +3067,7 @@ TEST(Longtail, Longtail_VersionDiff)
         uint64_t size;
         ASSERT_EQ(0, storage->GetSize(storage, r, &size));
         ASSERT_EQ(NEW_TEST_SIZES[i], size);
-        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
+        char* test_data = (char*)Longtail_Alloc(0, sizeof(char) * size);
         if (size)
         {
             ASSERT_EQ(0, storage->Read(storage, r, 0, size, test_data));
@@ -3211,7 +3279,7 @@ TEST(Longtail, Longtail_WriteVersion)
         uint64_t size;
         ASSERT_EQ(0, storage_api->GetSize(storage_api, r, &size));
         ASSERT_EQ(TEST_SIZES[i], size);
-        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
+        char* test_data = (char*)Longtail_Alloc(0, sizeof(char) * size);
         if (size)
         {
             ASSERT_EQ(0, storage_api->Read(storage_api, r, 0, size, test_data));
@@ -3422,7 +3490,7 @@ TEST(Longtail, FileSystemStorage)
         ASSERT_EQ(expected_size, size);
         if (size > 0)
         {
-            char* data = (char*)Longtail_Alloc(size);
+            char* data = (char*)Longtail_Alloc(0, size);
             ASSERT_EQ(0, storage_api->Read(storage_api, f, 0, size, data));
             for (uint64_t b = 0; b < size; ++b)
             {
@@ -3561,20 +3629,20 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
     {
         return err;
     }
-    err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &block_store->m_IOLock);
+    err = Longtail_CreateSpinLock(Longtail_Alloc(0, Longtail_GetSpinLockSize()), &block_store->m_IOLock);
     if (err)
     {
         Longtail_Free(block_store->m_StoreIndex);
         return err;
     }
-    err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &block_store->m_IndexLock);
+    err = Longtail_CreateSpinLock(Longtail_Alloc(0, Longtail_GetSpinLockSize()), &block_store->m_IndexLock);
     if (err)
     {
         Longtail_DeleteSpinLock(block_store->m_IOLock);
         Longtail_Free(block_store->m_StoreIndex);
         return err;
     }
-    err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &block_store->m_RequestSema);
+    err = Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &block_store->m_RequestSema);
     if (err)
     {
         Longtail_DeleteSpinLock(block_store->m_IndexLock);
@@ -3586,7 +3654,7 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
     }
     for (uint32_t t = 0; t < 8; ++t)
     {
-        err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, -1, &block_store->m_IOThread[t]);
+        err = Longtail_CreateThread(Longtail_Alloc(0, Longtail_GetThreadSize()), TestAsyncBlockStore::Worker, 0, block_store, -1, &block_store->m_IOThread[t]);
         if (err)
         {
             while (t--)
@@ -3671,7 +3739,7 @@ static int WorkerGetRequest(uint8_t* serialized_block_data, struct Longtail_Stor
 {
     size_t serialized_block_data_size = size_t(arrlen(serialized_block_data));
     size_t block_mem_size = Longtail_GetStoredBlockSize(serialized_block_data_size);
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(block_mem_size);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(0, block_mem_size);
     if (!stored_block)
     {
         return ENOMEM;
@@ -3894,7 +3962,7 @@ int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block
     struct TestGetExistingContentRequest get_existing_content_content_request;
     get_existing_content_content_request.async_complete_api = async_complete_api;
     get_existing_content_content_request.chunk_count = chunk_count;
-    get_existing_content_content_request.chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * chunk_count);
+    get_existing_content_content_request.chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * chunk_count);
     memcpy(get_existing_content_content_request.chunk_hashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
 
     Longtail_AtomicAdd32(&block_store->m_PendingRequestCount, 1);
@@ -4141,7 +4209,7 @@ TEST(Longtail, AsyncBlockStore)
         uint64_t size;
         ASSERT_EQ(0, storage_api->GetSize(storage_api, r, &size));
         ASSERT_EQ(TEST_SIZES[i], size);
-        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
+        char* test_data = (char*)Longtail_Alloc(0, sizeof(char) * size);
         if (size)
         {
             ASSERT_EQ(0, storage_api->Read(storage_api, r, 0, size, test_data));
@@ -4361,7 +4429,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
         uint64_t size;
         ASSERT_EQ(0, storage_api->GetSize(storage_api, r, &size));
         ASSERT_EQ(TEST_SIZES[i], size);
-        char* test_data = (char*)Longtail_Alloc(sizeof(char) * size);
+        char* test_data = (char*)Longtail_Alloc(0, sizeof(char) * size);
         if (size)
         {
             ASSERT_EQ(0, storage_api->Read(storage_api, r, 0, size, test_data));
@@ -4486,7 +4554,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     Longtail_VersionIndex* vindex = 0;
 
     HLongtail_Sema sema;
-    ASSERT_EQ(0, Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()),0 ,&sema));
+    ASSERT_EQ(0, Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()),0 ,&sema));
 
     struct JobContext
     {
@@ -4919,7 +4987,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
     uint64_t required_chunk_count;
-    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*vindex->m_ChunkCount));
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * (*vindex->m_ChunkCount));
     ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
             vindex,
             version_diff,
@@ -5433,7 +5501,7 @@ struct FailableStorageAPI
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
 {
-    void* mem = Longtail_Alloc(sizeof(struct FailableStorageAPI));
+    void* mem = Longtail_Alloc(0, sizeof(struct FailableStorageAPI));
     struct Longtail_StorageAPI* api = Longtail_MakeStorageAPI(
         mem,
         FailableStorageAPI::Dispose,
@@ -5630,7 +5698,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     ASSERT_NE((Longtail_VersionDiff*)0, version_diff);
 
     uint64_t required_chunk_count;
-    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*vindex->m_ChunkCount));
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * (*vindex->m_ChunkCount));
     ASSERT_EQ(0, Longtail_GetRequiredChunkHashes(
             vindex,
             version_diff,
@@ -5770,7 +5838,7 @@ TEST(Longtail, TestLongtailBlockFS)
     ASSERT_NE((Longtail_FileInfos*)0, block_store_storage_paths);
     ASSERT_EQ(version_paths->m_Count, block_store_storage_paths->m_Count);
 
-    struct Longtail_LookupTable* version_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(version_paths->m_Count)), version_paths->m_Count, 0);
+    struct Longtail_LookupTable* version_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(0, Longtail_LookupTable_GetSize(version_paths->m_Count)), version_paths->m_Count, 0);
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)
     {
         uint64_t hash;
@@ -5778,7 +5846,7 @@ TEST(Longtail, TestLongtailBlockFS)
         Longtail_GetPathHash(hash_api, path, &hash);
         Longtail_LookupTable_Put(version_paths_lookup, hash, f);
     }
-    struct Longtail_LookupTable* block_store_storage_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(block_store_storage_paths->m_Count)), block_store_storage_paths->m_Count, 0);
+    struct Longtail_LookupTable* block_store_storage_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(0, Longtail_LookupTable_GetSize(block_store_storage_paths->m_Count)), block_store_storage_paths->m_Count, 0);
     for (uint32_t f = 0; f <  block_store_storage_paths->m_Count; ++f)
     {
         uint64_t hash;
@@ -5815,7 +5883,7 @@ TEST(Longtail, TestLongtailBlockFS)
             ASSERT_EQ(0, block_store_fs->OpenReadFile(block_store_fs, path, &block_store_file));
             uint64_t size;
             ASSERT_EQ(0, block_store_fs->GetSize(block_store_fs, block_store_file, &size));
-            char* buf = (char*)Longtail_Alloc(size);
+            char* buf = (char*)Longtail_Alloc(0, size);
             if (size >= (256 + 32))
             {
                 ASSERT_EQ(0, block_store_fs->Read(block_store_fs, block_store_file, 0, 32, buf));
@@ -5845,7 +5913,7 @@ TEST(Longtail, TestLongtailBlockFS)
             ASSERT_EQ(0, mem_storage->OpenReadFile(mem_storage, full_path, &open_file));
             uint64_t validate_size;
             ASSERT_EQ(0, mem_storage->GetSize(mem_storage, open_file, &validate_size));
-            char* validate_buf = (char*)Longtail_Alloc(validate_size);
+            char* validate_buf = (char*)Longtail_Alloc(0, validate_size);
             ASSERT_EQ(0, mem_storage->Read(mem_storage, open_file, 0, validate_size, validate_buf));
             mem_storage->CloseFile(mem_storage, open_file);
 
@@ -6008,7 +6076,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
         HLongtail_Thread workerThreads[WORKER_COUNT];
         for (uint32_t t = 0; t < WORKER_COUNT; ++t)
         {
-            int err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), TestLongtailFSBlockStoreSyncWorkerCB, 0, &ctx, -1, &workerThreads[t]);
+            int err = Longtail_CreateThread(Longtail_Alloc(0, Longtail_GetThreadSize()), TestLongtailFSBlockStoreSyncWorkerCB, 0, &ctx, -1, &workerThreads[t]);
             if (err)
             {
                 while (t--)
@@ -6091,7 +6159,7 @@ static int CopyDir(
                 {
                     return err;
                 }
-                buffer = Longtail_Alloc(s);
+                buffer = Longtail_Alloc(0, s);
                 err = storage_api->Read(storage_api, r, 0, s, buffer);
                 if (err)
                 {
@@ -6264,7 +6332,7 @@ static int DownloadFolder(
     }
 
     uint64_t required_chunk_count;
-    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*version_index->m_ChunkCount));
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * (*version_index->m_ChunkCount));
     err = Longtail_GetRequiredChunkHashes(
             version_index,
             version_diff,
@@ -6421,7 +6489,7 @@ static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_s
         Longtail_Free(api->m_PreflightLUT);
         api->m_PreflightLUT = 0;
     }
-    api->m_PreflightLUT = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(65536)), 65536, 0);
+    api->m_PreflightLUT = Longtail_LookupTable_Create(Longtail_Alloc(0, Longtail_LookupTable_GetSize(65536)), 65536, 0);
     return api->m_BackingStore->PreflightGet(api->m_BackingStore, chunk_count, chunk_hashes);
 }
 
@@ -6562,7 +6630,7 @@ TEST(Longtail, TestCacheBlockStoreGetExistingContent)
 TEST(Longtail, TestFileSystemLock)
 {
     HLongtail_FileLock file_lock;
-    ASSERT_EQ(0, Longtail_LockFile(Longtail_Alloc(Longtail_GetFileLockSize()), "lockfile.tmp", &file_lock));
+    ASSERT_EQ(0, Longtail_LockFile(Longtail_Alloc(0, Longtail_GetFileLockSize()), "lockfile.tmp", &file_lock));
     ASSERT_EQ(0, Longtail_UnlockFile(file_lock));
     Longtail_Free(file_lock);
 }

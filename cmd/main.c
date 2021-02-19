@@ -105,7 +105,7 @@ static void Progress_Dispose(struct Longtail_API* api)
 
 struct Longtail_ProgressAPI* MakeProgressAPI(const char* task)
 {
-    void* mem = Longtail_Alloc(sizeof(struct Progress));
+    void* mem = Longtail_Alloc(0, sizeof(struct Progress));
     if (!mem)
     {
         return 0;
@@ -146,7 +146,7 @@ int ParseLogLevel(const char* log_level_raw) {
 static uint32_t* GetCompressionTypes(struct Longtail_StorageAPI* api, const struct Longtail_FileInfos* file_infos)
 {
     uint32_t count = file_infos->m_Count;
-    uint32_t* result = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * count);
+    uint32_t* result = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * count);
     for (uint32_t i = 0; i < count; ++i)
     {
         const char* path = Longtail_FileInfos_GetPath(file_infos, i);
@@ -300,7 +300,7 @@ static void AsyncGetExistingContentComplete_Init(struct AsyncGetExistingContentC
     api->m_API.m_API.Dispose = 0;
     api->m_API.OnComplete = AsyncGetExistingContentComplete_OnComplete;
     api->m_ContentIndex = 0;
-    Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &api->m_NotifySema);
+    Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &api->m_NotifySema);
 }
 static void AsyncGetExistingContentComplete_Dispose(struct AsyncGetExistingContentComplete* api)
 {
@@ -427,7 +427,7 @@ int UpSync(
             Longtail_Free((char*)storage_path);
             return err;
         }
-        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * file_infos->m_Count);
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * file_infos->m_Count);
         for (uint32_t i = 0; i < file_infos->m_Count; ++i)
         {
             tags[i] = compression_type;
@@ -783,7 +783,7 @@ int DownSync(
             Longtail_Free((void*)storage_path);
             return err;
         }
-        uint32_t* tags = (uint32_t*)Longtail_Alloc(sizeof(uint32_t) * file_infos->m_Count);
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * file_infos->m_Count);
         for (uint32_t i = 0; i < file_infos->m_Count; ++i)
         {
             tags[i] = 0;
@@ -884,7 +884,7 @@ int DownSync(
     }
 
     uint64_t required_chunk_count;
-    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * (*source_version_index->m_ChunkCount));
+    TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * (*source_version_index->m_ChunkCount));
     err = Longtail_GetRequiredChunkHashes(
             source_version_index,
             version_diff,
@@ -1447,7 +1447,7 @@ int VersionIndex_cp(
     }
 
     const size_t BUFFER_SIZE=128*1024*1024;
-    char* buffer = (char*)Longtail_Alloc(size > BUFFER_SIZE ? BUFFER_SIZE : size);
+    char* buffer = (char*)Longtail_Alloc(0, size > BUFFER_SIZE ? BUFFER_SIZE : size);
     uint64_t off = 0;
     while (size > off)
     {

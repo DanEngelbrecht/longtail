@@ -74,7 +74,7 @@ struct Longtail_HashRegistryAPI* Longtail_CreateDefaultHashRegistry(
     size_t registry_size = sizeof(struct Default_HashRegistry) +
         sizeof(uint32_t) * hash_type_count +
         sizeof(struct Longtail_HashAPI*) * hash_type_count;
-    void* mem = Longtail_Alloc(registry_size);
+    void* mem = Longtail_Alloc("DefaultHashRegistry", registry_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

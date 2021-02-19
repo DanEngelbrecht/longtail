@@ -475,7 +475,7 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, out_iterator != 0, return EINVAL);
-    Longtail_StorageAPI_HIterator iterator = (Longtail_StorageAPI_HIterator)Longtail_Alloc(Longtail_GetFSIteratorSize());
+    Longtail_StorageAPI_HIterator iterator = (Longtail_StorageAPI_HIterator)Longtail_Alloc("FSStorageAPI", Longtail_GetFSIteratorSize());
     TMP_STR(path)
     Longtail_DenormalizePath(tmp_path);
     int err = Longtail_StartFind((HLongtail_FSIterator)iterator, tmp_path);
@@ -567,7 +567,7 @@ static int FSStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, const 
         LONGTAIL_LOGFIELD(out_lock_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    void* mem = Longtail_Alloc(Longtail_GetFileLockSize());
+    void* mem = Longtail_Alloc("FSStorageAPI", Longtail_GetFileLockSize());
     if (!mem)
     {
         return ENOMEM;
@@ -643,7 +643,7 @@ struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI()
 {
     MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    void* mem = (struct FSStorageAPI*)Longtail_Alloc(sizeof(struct FSStorageAPI));
+    void* mem = (struct FSStorageAPI*)Longtail_Alloc("FSStorageAPI", sizeof(struct FSStorageAPI));
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

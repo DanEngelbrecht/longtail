@@ -115,7 +115,7 @@ struct SharedStoredBlock* SharedStoredBlock_CreateBlock(struct ShareBlockStoreAP
 #endif // defined(LONGTAIL_ASSERTS)
 
     size_t shared_stored_block_size = sizeof(struct SharedStoredBlock);
-    struct SharedStoredBlock* shared_stored_block = (struct SharedStoredBlock*)Longtail_Alloc(shared_stored_block_size);
+    struct SharedStoredBlock* shared_stored_block = (struct SharedStoredBlock*)Longtail_Alloc("ShareBlockStoreAPI", shared_stored_block_size);
     if (!shared_stored_block)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -335,7 +335,7 @@ static int ShareBlockStore_GetStoredBlock(
     Longtail_UnlockSpinLock(api->m_Lock);
 
     size_t share_lock_store_async_get_stored_block_API_size = sizeof(struct ShareBlockStore_AsyncGetStoredBlockAPI);
-    struct ShareBlockStore_AsyncGetStoredBlockAPI* share_lock_store_async_get_stored_block_API = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(share_lock_store_async_get_stored_block_API_size);
+    struct ShareBlockStore_AsyncGetStoredBlockAPI* share_lock_store_async_get_stored_block_API = (struct ShareBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc("ShareBlockStoreAPI", share_lock_store_async_get_stored_block_API_size);
     if (!share_lock_store_async_get_stored_block_API)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -515,7 +515,7 @@ static int ShareBlockStore_Init(
     {
         api->m_StatU64[s] = 0;
     }
-    int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
+    int err =Longtail_CreateSpinLock(Longtail_Alloc("ShareBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateSpinLock() failed with %d", ENOMEM)
@@ -535,7 +535,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateShareBlockStoreAPI(
     LONGTAIL_FATAL_ASSERT(ctx, backing_block_store, return 0)
 
     size_t api_size = sizeof(struct ShareBlockStoreAPI);
-    void* mem = Longtail_Alloc(api_size);
+    void* mem = Longtail_Alloc("ShareBlockStoreAPI", api_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

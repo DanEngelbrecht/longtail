@@ -30,7 +30,7 @@ static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_H
 
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_context, return EINVAL)
-    blake2s_state* state = (blake2s_state*)Longtail_Alloc(sizeof(blake2s_state));
+    blake2s_state* state = (blake2s_state*)Longtail_Alloc("Blake2", sizeof(blake2s_state));
     if (!state)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -136,7 +136,7 @@ struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
 {
     MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    struct Blake2HashAPI* blake2_hash = (struct Blake2HashAPI*)Longtail_Alloc(sizeof(struct Blake2HashAPI));
+    struct Blake2HashAPI* blake2_hash = (struct Blake2HashAPI*)Longtail_Alloc("Blake2", sizeof(struct Blake2HashAPI));
     if (!blake2_hash)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

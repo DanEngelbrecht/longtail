@@ -17,7 +17,7 @@ static uint32_t MeowHash_GetIdentifier(struct Longtail_HashAPI* hash_api)
 
 static int MeowHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
-    meow_state* state = (meow_state*)Longtail_Alloc(sizeof(meow_state));
+    meow_state* state = (meow_state*)Longtail_Alloc("MeowHashAPI", sizeof(meow_state));
     MeowBegin(state, MeowDefaultSeed);
     *out_context = (Longtail_HashAPI_HContext)state;
     return 0;
@@ -63,7 +63,7 @@ static void MeowHash_Init(struct MeowHashAPI* hash_api)
 
 struct Longtail_HashAPI* Longtail_CreateMeowHashAPI()
 {
-    struct MeowHashAPI* meow_hash = (struct MeowHashAPI*)Longtail_Alloc(sizeof(struct MeowHashAPI));
+    struct MeowHashAPI* meow_hash = (struct MeowHashAPI*)Longtail_Alloc("MeowHashAPI", sizeof(struct MeowHashAPI));
     MeowHash_Init(meow_hash);
     return &meow_hash->m_MeowHashAPI;
 }

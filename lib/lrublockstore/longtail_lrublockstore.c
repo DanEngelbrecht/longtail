@@ -223,7 +223,7 @@ struct LRUStoredBlock* CreateLRUBlock(struct LRUBlockStoreAPI* api, struct Longt
 #endif // defined(LONGTAIL_ASSERTS)
 
     TLongtail_Hash block_hash = *original_stored_block->m_BlockIndex->m_BlockHash;
-    struct LRUStoredBlock* allocated_block = (struct LRUStoredBlock*)Longtail_Alloc(sizeof(struct LRUStoredBlock));
+    struct LRUStoredBlock* allocated_block = (struct LRUStoredBlock*)Longtail_Alloc("LRUBlockStoreAPI", sizeof(struct LRUStoredBlock));
     allocated_block->m_OriginalStoredBlock = original_stored_block;
     allocated_block->m_LRUBlockStoreAPI = api;
     allocated_block->m_StoredBlock.Dispose = LRUStoredBlock_Dispose;
@@ -478,7 +478,7 @@ static int LRUBlockStore_GetStoredBlock(
     Longtail_UnlockSpinLock(api->m_Lock);
 
     size_t share_lock_store_async_get_stored_block_API_size = sizeof(struct LRUBlockStore_AsyncGetStoredBlockAPI);
-    struct LRUBlockStore_AsyncGetStoredBlockAPI* share_lock_store_async_get_stored_block_API = (struct LRUBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc(share_lock_store_async_get_stored_block_API_size);
+    struct LRUBlockStore_AsyncGetStoredBlockAPI* share_lock_store_async_get_stored_block_API = (struct LRUBlockStore_AsyncGetStoredBlockAPI*)Longtail_Alloc("LRUBlockStoreAPI", share_lock_store_async_get_stored_block_API_size);
     if (!share_lock_store_async_get_stored_block_API)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -655,7 +655,7 @@ static int LRUBlockStore_Init(
 
     api->m_LRU = LRU_Create(&api[1], max_lru_count);
 
-    int err =Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
+    int err =Longtail_CreateSpinLock(Longtail_Alloc("LRUBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateSpinLock() failed with %d", ENOMEM)
@@ -687,7 +687,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateLRUBlockStoreAPI(
         sizeof(struct LRUStoredBlock) * max_lru_count +
         LRU_GetSize(max_lru_count);
 
-    void* mem = Longtail_Alloc(api_size);
+    void* mem = Longtail_Alloc("LRUBlockStoreAPI", api_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
