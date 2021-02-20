@@ -104,6 +104,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
+          - **CHANGE** `Longtail_LookupTabke` now uses uint32_t for indexes/values
           - **ADDED** `Longtail_CopyStoreIndex` and `Longtail_CopyBlockIndex`
           - **FIX** Removed redundant tag array in `ChunkAssets`
         draft: false

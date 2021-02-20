@@ -1862,12 +1862,12 @@ struct Longtail_VersionDiff
 
 int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
 
-size_t Longtail_LookupTable_GetSize(size_t capacity);
-struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries);
-int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
-uint64_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
+size_t Longtail_LookupTable_GetSize(uint32_t capacity);
+struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, uint32_t capacity, struct Longtail_LookupTable* optional_source_entries);
+int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
+uint32_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
+uint32_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
+uint32_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
 
 ///////////// Test functions
 
