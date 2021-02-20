@@ -1649,7 +1649,6 @@ struct HashJob
     struct Longtail_ChunkerAPI* m_ChunkerAPI;
     TLongtail_Hash* m_PathHash;
     uint64_t m_AssetIndex;
-    uint32_t m_ContentTag;
     const char* m_RootPath;
     const char* m_Path;
     uint32_t m_MaxChunkCount;
@@ -1657,7 +1656,6 @@ struct HashJob
     uint64_t m_SizeRange;
     uint32_t* m_AssetChunkCount;
     TLongtail_Hash* m_ChunkHashes;
-    uint32_t* m_ChunkTags;
     uint32_t* m_ChunkSizes;
     uint32_t m_TargetChunkSize;
     int m_Err;
@@ -1775,7 +1773,6 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             buffer = 0;
 
             hash_job->m_ChunkSizes[chunk_count] = (uint32_t)hash_size;
-            hash_job->m_ChunkTags[chunk_count] = hash_job->m_ContentTag;
 
             ++chunk_count;
         }
@@ -1825,7 +1822,6 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                     return 0;
                 }
                 hash_job->m_ChunkSizes[chunk_count] = chunk_range.len;
-                hash_job->m_ChunkTags[chunk_count] = hash_job->m_ContentTag;
 
                 ++chunk_count;
 
@@ -1949,7 +1945,6 @@ static int ChunkAssets(
     size_t work_mem_size = (sizeof(uint32_t) * job_count) +
         (sizeof(TLongtail_Hash) * max_chunk_count) +
         (sizeof(uint32_t) * max_chunk_count) +
-        (sizeof(uint32_t) * max_chunk_count) +
         (sizeof(struct HashJob) * job_count) +
         (sizeof(Longtail_JobAPI_JobFunc) * job_count) +
         (sizeof(void*) * job_count);
@@ -1963,8 +1958,7 @@ static int ChunkAssets(
     uint32_t* tmp_job_chunk_counts = (uint32_t*)work_mem;
     TLongtail_Hash* tmp_hashes = (TLongtail_Hash*)&tmp_job_chunk_counts[job_count];
     uint32_t* tmp_sizes = (uint32_t*)&tmp_hashes[max_chunk_count];
-    uint32_t* tmp_tags = (uint32_t*)&tmp_sizes[max_chunk_count];
-    struct HashJob* tmp_hash_jobs = (struct HashJob*)&tmp_tags[max_chunk_count];
+    struct HashJob* tmp_hash_jobs = (struct HashJob*)&tmp_sizes[max_chunk_count];
     Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)&tmp_hash_jobs[job_count];
     void** ctxs = (void**)&funcs[job_count];
 
@@ -1994,12 +1988,10 @@ static int ChunkAssets(
             job->m_AssetIndex = asset_index;
             job->m_StartRange = range_start;
             job->m_SizeRange = job_size;
-            job->m_ContentTag = optional_asset_tags ? optional_asset_tags[asset_index] : 0;
             job->m_MaxChunkCount = asset_max_chunk_count;
             job->m_AssetChunkCount = &tmp_job_chunk_counts[jobs_started];
             job->m_ChunkHashes = &tmp_hashes[chunks_offset];
             job->m_ChunkSizes = &tmp_sizes[chunks_offset];
-            job->m_ChunkTags = &tmp_tags[chunks_offset];
             job->m_TargetChunkSize = target_chunk_size;
             job->m_Err = EINVAL;
             funcs[jobs_started] = DynamicChunking;
@@ -2090,7 +2082,7 @@ static int ChunkAssets(
             {
                 (*chunk_sizes)[chunk_offset] = tmp_hash_jobs[i].m_ChunkSizes[chunk_index];
                 (*chunk_hashes)[chunk_offset] = tmp_hash_jobs[i].m_ChunkHashes[chunk_index];
-                (*chunk_tags)[chunk_offset] = tmp_hash_jobs[i].m_ChunkTags[chunk_index];
+                (*chunk_tags)[chunk_offset] = optional_asset_tags ? optional_asset_tags[asset_index] : 0;
                 ++chunk_offset;
             }
         }
@@ -2801,6 +2793,17 @@ struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_co
     p += sizeof(uint32_t) * chunk_count;
 
     return block_index;
+}
+
+struct Longtail_BlockIndex* Longtail_CopyBlockIndex(struct Longtail_BlockIndex* block_index)
+{
+    uint32_t chunk_count = *block_index->m_ChunkCount;
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    void* mem = Longtail_Alloc(block_index_size);
+    struct Longtail_BlockIndex* copy_block_index = Longtail_InitBlockIndex(mem, chunk_count);
+    size_t data_size = Longtail_GetBlockIndexDataSize(chunk_count);
+    memcpy(&copy_block_index[1], &block_index[1], data_size);
+    return copy_block_index;
 }
 
 int Longtail_InitBlockIndexFromData(
@@ -8481,7 +8484,17 @@ int Longtail_MergeStoreIndex(
     return 0;
 }
 
-
+struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* store_index)
+{
+    uint32_t block_count = *store_index->m_BlockCount;
+    uint32_t chunk_count = *store_index->m_ChunkCount;
+    size_t store_index_size = Longtail_GetStoreIndexSize(block_count, chunk_count);
+    void* mem = Longtail_Alloc(store_index_size);
+    struct Longtail_StoreIndex* copy_store_index = Longtail_InitStoreIndex(mem, block_count, chunk_count);
+    size_t data_size = Longtail_GetStoreIndexDataSize(block_count, chunk_count);
+    memcpy(&copy_store_index[1], &store_index[1], data_size);
+    return copy_store_index;
+}
 
 int Longtail_WriteStoreIndexToBuffer(
     const struct Longtail_StoreIndex* store_index,

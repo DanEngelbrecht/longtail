@@ -1388,6 +1388,15 @@ LONGTAIL_EXPORT size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
  */
 LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count);
 
+/*! @brief Copies a struct Longtail_BlockIndex.
+ *
+ * Allocates a chunk of memory and copies the data from an existing block_index
+ *
+ * @param[in] block_index   The source index to copy from
+ * @return                  An initialized struct Longtail_BlockIndex copied from @p block_index, or 0 on bad parameters / out of memory
+ */
+LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_CopyBlockIndex(struct Longtail_BlockIndex* block_index);
+
 /*! @brief Initialize a struct Longtail_BlockIndex from block index data.
  *
  * Initialized a struct Longtail_BlockIndex from block index data
@@ -1737,6 +1746,15 @@ LONGTAIL_EXPORT int Longtail_GetExistingContentIndex(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
+
+/*! @brief Copies a struct Longtail_StoreIndex.
+ *
+ * Allocates a chunk of memory and copies the data from an existing store_index
+ *
+ * @param[in] store_index   The source index to copy from
+ * @return                  An initialized struct Longtail_StoreIndex copied from @p store_index, or 0 on bad parameters / out of memory
+ */
+LONGTAIL_EXPORT struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* store_index);
 
 /*! @brief Writes a struct Longtail_StoreIndex to a byte buffer.
  *
