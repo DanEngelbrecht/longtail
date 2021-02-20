@@ -954,7 +954,7 @@ uint32_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lu
 static uint32_t GetLookupTableSize(uint32_t capacity)
 {
     uint32_t table_size = 1;
-    while (table_size < (capacity / 8))
+    while (table_size < (capacity / 4))
     {
         table_size <<= 1;
     }
