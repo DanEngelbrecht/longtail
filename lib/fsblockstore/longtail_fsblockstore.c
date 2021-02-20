@@ -651,24 +651,13 @@ static int FSBlockStore_PutStoredBlock(
         return 0;
     }
 
-    void* block_index_buffer;
-    size_t block_index_buffer_size;
-    err = Longtail_WriteBlockIndexToBuffer(stored_block->m_BlockIndex, &block_index_buffer, &block_index_buffer_size);
-    if (err)
+
+    struct Longtail_BlockIndex* block_index_copy = Longtail_CopyBlockIndex(stored_block->m_BlockIndex);
+    if (!block_index_copy)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteBlockIndexToBuffer() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
-        async_complete_api->OnComplete(async_complete_api, err);
-        return 0;
-    }
-    struct Longtail_BlockIndex* block_index_copy;
-    err = Longtail_ReadBlockIndexFromBuffer(block_index_buffer, block_index_buffer_size, &block_index_copy);
-    Longtail_Free(block_index_buffer);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndexFromBuffer() failed with %d", err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
-        async_complete_api->OnComplete(async_complete_api, err);
+        async_complete_api->OnComplete(async_complete_api, ENOMEM);
         return 0;
     }
 
@@ -930,24 +919,16 @@ static int FSBlockStore_GetIndexSync(
         return err;
     }
 
-    size_t store_index_size;
-    void* tmp_store_buffer;
-    err = Longtail_WriteStoreIndexToBuffer(fsblockstore_api->m_StoreIndex, &tmp_store_buffer, &store_index_size);
+    struct Longtail_StoreIndex* store_index = Longtail_CopyStoreIndex(fsblockstore_api->m_StoreIndex);
+    if (!store_index)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CopyStoreIndex() failed with %d", ENOMEM)
+        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        return ENOMEM;
+    }
+
     Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_WriteStoreIndexToBuffer() failed with %d", err)
-        Longtail_Free(tmp_store_buffer);
-        return err;
-    }
-    struct Longtail_StoreIndex* store_index;
-    err = Longtail_ReadStoreIndexFromBuffer(tmp_store_buffer, store_index_size, &store_index);
-    Longtail_Free(tmp_store_buffer);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadStoreIndexFromBuffer() failed with %d", err)
-        return err;
-    }
+
     *out_store_index = store_index;
     return 0;
 }

@@ -249,8 +249,8 @@ uint64_t TestCreateBlockHashTableSpeed(struct Longtail_ContentIndex* content_ind
 {
     uint64_t start = stm_now();
 
-    uint64_t block_count = *content_index->m_BlockCount;
-    uint64_t chunk_count = *content_index->m_ChunkCount;
+    uint32_t block_count = (uint32_t)*content_index->m_BlockCount;
+    uint32_t chunk_count = (uint32_t)*content_index->m_ChunkCount;
 
     *block_hash_table = Longtail_LookupTable_Create(block_count, 0);
     *chunk_hash_table = Longtail_LookupTable_Create(chunk_count, 0);

@@ -1388,6 +1388,15 @@ LONGTAIL_EXPORT size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
  */
 LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count);
 
+/*! @brief Copies a struct Longtail_BlockIndex.
+ *
+ * Allocates a chunk of memory and copies the data from an existing block_index
+ *
+ * @param[in] block_index   The source index to copy from
+ * @return                  An initialized struct Longtail_BlockIndex copied from @p block_index, or 0 on bad parameters / out of memory
+ */
+LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_CopyBlockIndex(struct Longtail_BlockIndex* block_index);
+
 /*! @brief Initialize a struct Longtail_BlockIndex from block index data.
  *
  * Initialized a struct Longtail_BlockIndex from block index data
@@ -1738,6 +1747,15 @@ LONGTAIL_EXPORT int Longtail_GetExistingContentIndex(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
+/*! @brief Copies a struct Longtail_StoreIndex.
+ *
+ * Allocates a chunk of memory and copies the data from an existing store_index
+ *
+ * @param[in] store_index   The source index to copy from
+ * @return                  An initialized struct Longtail_StoreIndex copied from @p store_index, or 0 on bad parameters / out of memory
+ */
+LONGTAIL_EXPORT struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* store_index);
+
 /*! @brief Writes a struct Longtail_StoreIndex to a byte buffer.
  *
  * Serializes a struct Longtail_StoreIndex to a buffer which is allocated using Longtail_Alloc()
@@ -1844,12 +1862,12 @@ struct Longtail_VersionDiff
 
 int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
 
-size_t Longtail_LookupTable_GetSize(size_t capacity);
-struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, size_t capacity, struct Longtail_LookupTable* optional_source_entries);
-int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value);
-uint64_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
-uint64_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
+size_t Longtail_LookupTable_GetSize(uint32_t capacity);
+struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, uint32_t capacity, struct Longtail_LookupTable* optional_source_entries);
+int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
+uint32_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
+uint32_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
+uint32_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
 
 ///////////// Test functions
 
