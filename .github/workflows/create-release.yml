@@ -104,7 +104,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **REVERTED** `Longtail_PathFilter_IncludeFunc` gets called for the entire structure and will not skip directories that are excluded in the filter callback
+          - **ADDED** `Longtail_CopyStoreIndex` and `Longtail_CopyBlockIndex`
         draft: false
         prerelease: false
     - name: Download Linux artifacts
