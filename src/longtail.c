@@ -2794,6 +2794,17 @@ struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_co
     return block_index;
 }
 
+struct Longtail_BlockIndex* Longtail_CopyBlockIndex(struct Longtail_BlockIndex* block_index)
+{
+    uint32_t chunk_count = *block_index->m_ChunkCount;
+    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
+    void* mem = Longtail_Alloc(block_index_size);
+    struct Longtail_BlockIndex* copy_block_index = Longtail_InitBlockIndex(mem, chunk_count);
+    size_t data_size = Longtail_GetBlockIndexDataSize(chunk_count);
+    memcpy(&copy_block_index[1], &block_index[1], data_size);
+    return copy_block_index;
+}
+
 int Longtail_InitBlockIndexFromData(
     struct Longtail_BlockIndex* block_index,
     void* data,
@@ -8450,7 +8461,17 @@ int Longtail_MergeStoreIndex(
     return 0;
 }
 
-
+struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* store_index)
+{
+    uint32_t block_count = *store_index->m_BlockCount;
+    uint32_t chunk_count = *store_index->m_ChunkCount;
+    size_t store_index_size = Longtail_GetStoreIndexSize(block_count, chunk_count);
+    void* mem = Longtail_Alloc(store_index_size);
+    struct Longtail_StoreIndex* copy_store_index = Longtail_InitStoreIndex(mem, block_count, chunk_count);
+    size_t data_size = Longtail_GetStoreIndexDataSize(block_count, chunk_count);
+    memcpy(&copy_store_index[1], &store_index[1], data_size);
+    return copy_store_index;
+}
 
 int Longtail_WriteStoreIndexToBuffer(
     const struct Longtail_StoreIndex* store_index,
