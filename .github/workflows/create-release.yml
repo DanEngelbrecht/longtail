@@ -105,6 +105,8 @@ jobs:
         body: |
           # Changes in this Release
           - **ADDED** `lib/memtracer` to track memory usage
+          - **CHANGED** `Longtail_LookupTable` uses uint32_t for values to save space (no real need for 64-bit values)
+          - **CHANGED** Remove redundant content tag array in ChunkAssets
         draft: false
         prerelease: false
     - name: Download Linux artifacts
