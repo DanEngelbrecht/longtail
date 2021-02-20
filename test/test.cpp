@@ -737,11 +737,6 @@ TEST(Longtail, Longtail_MergeStoreIndexWithEmpty)
         0,
         &empty_index));
 
-    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
-        2,
-        blockIndexes,
-        &store_index_local));
-
     struct Longtail_StoreIndex* merged_index;
     ASSERT_EQ(0, Longtail_MergeStoreIndex(empty_index, store_index_local, &merged_index));
 
