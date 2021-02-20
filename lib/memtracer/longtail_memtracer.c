@@ -128,7 +128,7 @@ void* Longtail_MemTracer_Alloc(const char* context, size_t s)
 
     struct MemTracer_ContextStats* contextStats = 0;
     Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
-    uint32_t* context_index_ptr = Longtail_LookupTable_PutUnique(gMemTracer_Context->m_ContextLookup, context_id, gMemTracer_Context->m_ContextCount);
+    uint64_t* context_index_ptr = Longtail_LookupTable_PutUnique(gMemTracer_Context->m_ContextLookup, context_id, gMemTracer_Context->m_ContextCount);
     if (context_index_ptr == 0) {
         contextStats = &gMemTracer_Context->m_ContextStats[gMemTracer_Context->m_ContextCount];
         memset(contextStats, 0, sizeof(struct MemTracer_ContextStats));
@@ -196,7 +196,7 @@ void Longtail_MemTracer_Free(void* p)
     LONGTAIL_VALIDATE_INPUT(ctx, s != (uint32_t)-1, return)
     memset(header_ptr, 255, sizeof(struct MemTracer_Header));
     Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
-    uint32_t* context_index_ptr = Longtail_LookupTable_Get(gMemTracer_Context->m_ContextLookup, context_id);
+    uint64_t* context_index_ptr = Longtail_LookupTable_Get(gMemTracer_Context->m_ContextLookup, context_id);
     struct MemTracer_ContextStats* contextStats = &gMemTracer_Context->m_ContextStats[*context_index_ptr];
     gMemTracer_Context->m_AllocationCurrentMem -= s;
     gMemTracer_Context->m_AllocationCurrentCount--;
