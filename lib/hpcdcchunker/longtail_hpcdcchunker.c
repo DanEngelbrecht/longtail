@@ -138,7 +138,7 @@ int Longtail_HPCDCCreateChunker(
     }
 
     size_t chunker_size = sizeof(struct Longtail_HPCDCChunker) + max_feed;
-    struct Longtail_HPCDCChunker* c = (struct Longtail_HPCDCChunker*)Longtail_Alloc(chunker_size);
+    struct Longtail_HPCDCChunker* c = (struct Longtail_HPCDCChunker*)Longtail_Alloc("HPCDCCreateChunker", chunker_size);
     if (!c)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -440,7 +440,7 @@ struct Longtail_ChunkerAPI* Longtail_CreateHPCDCChunkerAPI()
     size_t api_size =
         sizeof(struct Longtail_HPCDCChunkerAPI);
 
-    void* mem = Longtail_Alloc(api_size);
+    void* mem = Longtail_Alloc("HPCDCCreateChunker", api_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

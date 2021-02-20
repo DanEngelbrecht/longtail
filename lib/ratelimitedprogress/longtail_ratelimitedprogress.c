@@ -82,7 +82,7 @@ struct Longtail_ProgressAPI* Longtail_CreateRateLimitedProgress(
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     LONGTAIL_VALIDATE_INPUT(ctx, progress_api != 0, return 0);
 
-    void* mem = (struct RateLimitedProgress*)Longtail_Alloc(sizeof(struct RateLimitedProgress));
+    void* mem = (struct RateLimitedProgress*)Longtail_Alloc("RateLimitedProgress", sizeof(struct RateLimitedProgress));
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

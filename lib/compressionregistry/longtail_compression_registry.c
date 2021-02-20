@@ -85,7 +85,7 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
         sizeof(uint32_t) * compression_type_count +
         sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
         sizeof(uint32_t) * compression_type_count;
-    void* mem = Longtail_Alloc(registry_size);
+    void* mem = Longtail_Alloc("CompressionRegistry", registry_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

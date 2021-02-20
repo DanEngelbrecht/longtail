@@ -8,6 +8,7 @@
 #include "ext/jc_test.h"
 
 #include "../src/longtail.h"
+#include "../lib/memtracer/longtail_memtracer.h"
 
 static void TestAssert(const char* expression, const char* file, int line)
 {
@@ -49,11 +50,14 @@ int main(int argc, char** argv)
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
     jc_test_init(&argc, argv);
+    Longtail_MemTracer_Init();
+    Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
     Longtail_SetAssert(TestAssert);
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_ERROR);
     Longtail_SetLog(LogStdErr, 0);
     int result = jc_test_run_all();
     Longtail_SetAssert(0);
+    Longtail_MemTracer_Dispose(Longtail_GetMemTracerSummary());
 #ifdef _MSC_VER
     if (0 == result)
     {

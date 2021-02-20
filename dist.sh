@@ -33,6 +33,7 @@ mkdir dist/include/lib/lrublockstore
 mkdir dist/include/lib/hashregistry
 mkdir dist/include/lib/lz4
 mkdir dist/include/lib/memstorage
+mkdir dist/include/lib/memtracer
 mkdir dist/include/lib/meowhash
 mkdir dist/include/lib/ratelimitedprogress
 mkdir dist/include/lib/shareblockstore
@@ -54,6 +55,7 @@ cp lib/lrublockstore/*.h dist/include/lib/lrublockstore
 cp lib/hashregistry/*.h dist/include/lib/hashregistry
 cp lib/lz4/*.h dist/include/lib/lz4
 cp lib/memstorage/*.h dist/include/lib/memstorage
+cp lib/memtracer/*.h dist/include/lib/memtracer
 cp lib/meowhash/*.h dist/include/lib/meowhash
 cp lib/ratelimitedprogress/*.h dist/include/lib/ratelimitedprogress
 cp lib/shareblockstore/*.h dist/include/lib/shareblockstore

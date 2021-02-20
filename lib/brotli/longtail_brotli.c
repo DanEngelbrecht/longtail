@@ -158,7 +158,7 @@ struct Longtail_CompressionAPI* Longtail_CreateBrotliCompressionAPI()
 {
     MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    struct BrotliCompressionAPI* compression_api = (struct BrotliCompressionAPI*)Longtail_Alloc(sizeof(struct BrotliCompressionAPI));
+    struct BrotliCompressionAPI* compression_api = (struct BrotliCompressionAPI*)Longtail_Alloc("Brotli", sizeof(struct BrotliCompressionAPI));
     if (!compression_api)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

@@ -601,7 +601,7 @@ static char* InMemStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api,
         return Longtail_Strdup(sub_path);
     }
     size_t path_len = strlen(root_path) + 1 + strlen(sub_path) + 1;
-    char* path = (char*)Longtail_Alloc(path_len);
+    char* path = (char*)Longtail_Alloc("InMemStorageAPI", path_len);
     if (path == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -774,7 +774,7 @@ static int InMemStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, co
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = path[0] ? InMemStorageAPI_GetPathHash(path) : 0;
     Longtail_LockSpinLock(instance->m_SpinLock);
-    ptrdiff_t* i = (ptrdiff_t*)Longtail_Alloc(sizeof(ptrdiff_t));
+    ptrdiff_t* i = (ptrdiff_t*)Longtail_Alloc("InMemStorageAPI", sizeof(ptrdiff_t));
     if (!i)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1071,7 +1071,7 @@ struct Longtail_StorageAPI* Longtail_CreateInMemStorageAPI()
 {
     MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    void* mem = (struct InMemStorageAPI*)Longtail_Alloc(sizeof(struct InMemStorageAPI) + Longtail_GetSpinLockSize());
+    void* mem = (struct InMemStorageAPI*)Longtail_Alloc("InMemStorageAPI", sizeof(struct InMemStorageAPI) + Longtail_GetSpinLockSize());
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

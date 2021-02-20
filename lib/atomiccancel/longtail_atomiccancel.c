@@ -18,7 +18,7 @@ static int AtomicCancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Lo
     LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
     LONGTAIL_VALIDATE_INPUT(ctx, out_token, return EINVAL )
     struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)cancel_api;
-    TLongtail_Atomic32* atomic_counter = (TLongtail_Atomic32*)Longtail_Alloc(sizeof(TLongtail_Atomic32));
+    TLongtail_Atomic32* atomic_counter = (TLongtail_Atomic32*)Longtail_Alloc("AtomicCancel", sizeof(TLongtail_Atomic32));
     if (!atomic_counter)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d",ENOMEM)
@@ -112,7 +112,7 @@ struct Longtail_CancelAPI* Longtail_CreateAtomicCancelAPI()
 {
     MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)Longtail_Alloc(sizeof(struct AtomicCancelAPI));
+    struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)Longtail_Alloc("AtomicCancel", sizeof(struct AtomicCancelAPI));
     if (!api)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

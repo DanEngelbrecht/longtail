@@ -5,7 +5,7 @@
 
 int main()
 {
-    void* p = Longtail_Alloc(16);
+    void* p = Longtail_Alloc("Context", 16);
     struct Longtail_StorageAPI* fs = Longtail_CreateFSStorageAPI();
     Longtail_DisposeAPI(&fs->m_API);
 	Longtail_Free(p);

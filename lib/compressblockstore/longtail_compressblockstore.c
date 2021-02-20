@@ -105,7 +105,7 @@ static int CompressBlock(
     size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
     size_t max_compressed_chunk_data_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, block_chunk_data_size);
     size_t compressed_stored_block_size = sizeof(struct Longtail_StoredBlock) + block_index_size + sizeof(uint32_t) + sizeof(uint32_t) + max_compressed_chunk_data_size;
-    struct Longtail_StoredBlock* compressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(compressed_stored_block_size);
+    struct Longtail_StoredBlock* compressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc("CompressBlockStore", compressed_stored_block_size);
     if (!compressed_stored_block)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -212,7 +212,7 @@ static int CompressBlockStore_PutStoredBlock(
     struct Longtail_StoredBlock* to_store = compressed_stored_block ? compressed_stored_block : stored_block;
 
     size_t on_put_backing_store_async_api_size = sizeof(struct OnPutBackingStoreAsync_API);
-    struct OnPutBackingStoreAsync_API* on_put_backing_store_async_api = (struct OnPutBackingStoreAsync_API*)Longtail_Alloc(on_put_backing_store_async_api_size);
+    struct OnPutBackingStoreAsync_API* on_put_backing_store_async_api = (struct OnPutBackingStoreAsync_API*)Longtail_Alloc("CompressBlockStore", on_put_backing_store_async_api_size);
     if (!on_put_backing_store_async_api)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -302,7 +302,7 @@ static int DecompressBlock(
 
     uint32_t uncompressed_block_data_size = block_index_data_size + uncompressed_size;
     size_t uncompressed_stored_block_size = Longtail_GetStoredBlockSize(uncompressed_block_data_size);
-    struct Longtail_StoredBlock* uncompressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc(uncompressed_stored_block_size);
+    struct Longtail_StoredBlock* uncompressed_stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc("CompressBlockStore", uncompressed_stored_block_size);
     if (!uncompressed_stored_block)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -423,7 +423,7 @@ static int CompressBlockStore_GetStoredBlock(
     Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
     size_t on_fetch_backing_store_async_api_size = sizeof(struct OnGetBackingStoreAsync_API);
-    struct OnGetBackingStoreAsync_API* on_fetch_backing_store_async_api = (struct OnGetBackingStoreAsync_API*)Longtail_Alloc(on_fetch_backing_store_async_api_size);
+    struct OnGetBackingStoreAsync_API* on_fetch_backing_store_async_api = (struct OnGetBackingStoreAsync_API*)Longtail_Alloc("CompressBlockStore", on_fetch_backing_store_async_api_size);
     if (!on_fetch_backing_store_async_api)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -595,7 +595,7 @@ static int CompressBlockStore_Init(
         api->m_StatU64[s] = 0;
     }
 
-    int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
+    int err = Longtail_CreateSpinLock(Longtail_Alloc("CompressBlockStore", Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
         return err;
@@ -618,7 +618,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateCompressBlockStoreAPI(
     LONGTAIL_VALIDATE_INPUT(ctx, compression_registry, return 0)
 
     size_t api_size = sizeof(struct CompressBlockStoreAPI);
-    void* mem = Longtail_Alloc(api_size);
+    void* mem = Longtail_Alloc("CompressBlockStore", api_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

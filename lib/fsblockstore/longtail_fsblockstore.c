@@ -511,7 +511,7 @@ static int ReadContent(
     }
 
     size_t scan_jobs_size = sizeof(struct ScanBlockJob) * path_count;
-    struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc(scan_jobs_size);
+    struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc("FSBlockStoreAPI", scan_jobs_size);
     if (!scan_jobs)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -554,7 +554,7 @@ static int ReadContent(
     }
 
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (path_count);
-    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(block_indexes_size);
+    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc("FSBlockStoreAPI", block_indexes_size);
     if (!block_indexes)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1157,7 +1157,7 @@ static int FSBlockStore_Init(
         api->m_StatU64[s] = 0;
     }
 
-    int err = Longtail_CreateSpinLock(Longtail_Alloc(Longtail_GetSpinLockSize()), &api->m_Lock);
+    int err = Longtail_CreateSpinLock(Longtail_Alloc("FSBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
         hmfree(api->m_BlockState);
@@ -1193,7 +1193,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     LONGTAIL_VALIDATE_INPUT(ctx, default_max_chunks_per_block != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, optional_extension == 0 || strlen(optional_extension) < 15, return 0)
     size_t api_size = sizeof(struct FSBlockStoreAPI);
-    void* mem = Longtail_Alloc(api_size);
+    void* mem = Longtail_Alloc("FSBlockStoreAPI", api_size);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)

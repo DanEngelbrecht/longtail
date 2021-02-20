@@ -762,7 +762,7 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
         --folder_length;
     }
     size_t path_len = folder_length + 1 + strlen(file) + 1;
-    char* path = (char*)Longtail_Alloc(path_len);
+    char* path = (char*)Longtail_Alloc("ConcatPath", path_len);
 
     memmove(path, folder, folder_length);
     path[folder_length] = '\\';
@@ -1513,7 +1513,7 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     {
         struct passwd *pw = getpwuid(getuid());
         const char *homedir = pw->pw_dir;
-        fs_iterator->m_DirPath = (char*)Longtail_Alloc(strlen(homedir) + strlen(path));
+        fs_iterator->m_DirPath = (char*)Longtail_Alloc("FSIterator", strlen(homedir) + strlen(path));
         strcpy(fs_iterator->m_DirPath, homedir);
         strcpy(&fs_iterator->m_DirPath[strlen(homedir)], &path[1]);
     }
@@ -1595,7 +1595,7 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
 {
     size_t dir_len = strlen(fs_iterator->m_DirPath);
     size_t file_len = strlen(fs_iterator->m_DirEntry->d_name);
-    char* path = (char*)Longtail_Alloc(dir_len + 1 + file_len + 1);
+    char* path = (char*)Longtail_Alloc("FSIterator", dir_len + 1 + file_len + 1);
     memcpy(&path[0], fs_iterator->m_DirPath, dir_len);
     path[dir_len] = '/';
     memcpy(&path[dir_len + 1], fs_iterator->m_DirEntry->d_name, file_len);
@@ -1738,7 +1738,7 @@ void Longtail_CloseFile(HLongtail_OpenFile handle)
 const char* Longtail_ConcatPath(const char* folder, const char* file)
 {
     size_t path_len = strlen(folder) + 1 + strlen(file) + 1;
-    char* path = (char*)Longtail_Alloc(path_len);
+    char* path = (char*)Longtail_Alloc("ConcatPath", path_len);
     strcpy(path, folder);
     strcat(path, "/");
     strcat(path, file);
