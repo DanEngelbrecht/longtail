@@ -34,6 +34,8 @@ struct MemTracer_ContextStats {
     size_t total_count;
     size_t current_count;
     size_t peak_count;
+    size_t global_peak_count;
+    size_t global_peak_mem;
     const char* context_name;
 };
 
@@ -45,10 +47,10 @@ struct MemTracer_Context {
     HLongtail_SpinLock m_Spinlock;
     size_t m_AllocationTotalCount;
     size_t m_AllocationCurrentCount;
-    size_t m_PeakAllocationCount;
+    size_t m_AllocationPeakCount;
     size_t m_AllocationTotalMem;
     size_t m_AllocationCurrentMem;
-    size_t m_PeakAllocationMem;
+    size_t m_AllocationPeakMem;
     uint32_t m_ContextCount;
 };
 
@@ -94,20 +96,22 @@ static void MemTracer_PrintSize(size_t size) {
 void Longtail_MemTracer_Dispose() {
     for (uint32_t c = 0; c < gMemTracer_Context->m_ContextCount; ++c) {
         struct MemTracer_ContextStats* stats = &gMemTracer_Context->m_ContextStats[c];
-        printf("gMemTracer_Context: %s\n", stats->context_name);
-        printf("  total_mem:     "); MemTracer_PrintSize(stats->total_mem); printf("\n");
-        printf("  current_mem:   "); MemTracer_PrintSize(stats->current_mem); printf("\n");
-        printf("  peak_mem:      "); MemTracer_PrintSize(stats->peak_mem); printf("\n");
-        printf("  total_count:   "); MemTracer_PrintSize(stats->total_count); printf("\n");
-        printf("  current_count: "); MemTracer_PrintSize(stats->current_count); printf("\n");
-        printf("  peak_count:    "); MemTracer_PrintSize(stats->peak_count); printf("\n");
+        printf("gMemTracer_Context:  %s\n", stats->context_name);
+        printf("  total_mem:         "); MemTracer_PrintSize(stats->total_mem); printf("\n");
+        printf("  current_mem:       "); MemTracer_PrintSize(stats->current_mem); printf("\n");
+        printf("  peak_mem:          "); MemTracer_PrintSize(stats->peak_mem); printf("\n");
+        printf("  total_count:       "); MemTracer_PrintSize(stats->total_count); printf("\n");
+        printf("  current_count:     "); MemTracer_PrintSize(stats->current_count); printf("\n");
+        printf("  peak_count:        "); MemTracer_PrintSize(stats->peak_count); printf("\n");
+        printf("  global_peak_count: "); MemTracer_PrintSize(stats->global_peak_count); printf("\n");
+        printf("  global_peak_mem:   "); MemTracer_PrintSize(stats->global_peak_mem); printf("\n");
     }
     printf("total_mem:     "); MemTracer_PrintSize(gMemTracer_Context->m_AllocationTotalMem); printf("\n");
     printf("current_mem:   "); MemTracer_PrintSize(gMemTracer_Context->m_AllocationCurrentMem); printf("\n");
-    printf("peak_mem:      "); MemTracer_PrintSize(gMemTracer_Context->m_PeakAllocationMem); printf("\n");
+    printf("peak_mem:      "); MemTracer_PrintSize(gMemTracer_Context->m_AllocationPeakMem); printf("\n");
     printf("total_count:   "); MemTracer_PrintSize(gMemTracer_Context->m_AllocationTotalCount); printf("\n");
     printf("current_count: "); MemTracer_PrintSize(gMemTracer_Context->m_AllocationCurrentCount); printf("\n");
-    printf("peak_count:    "); MemTracer_PrintSize(gMemTracer_Context->m_PeakAllocationCount); printf("\n");
+    printf("peak_count:    "); MemTracer_PrintSize(gMemTracer_Context->m_AllocationPeakCount); printf("\n");
     Longtail_DeleteSpinLock(gMemTracer_Context->m_Spinlock);
     free(gMemTracer_Context);
     gMemTracer_Context = 0;
@@ -130,6 +134,7 @@ void* Longtail_MemTracer_Alloc(const char* context, size_t s)
     Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
     uint64_t* context_index_ptr = Longtail_LookupTable_PutUnique(gMemTracer_Context->m_ContextLookup, context_id, gMemTracer_Context->m_ContextCount);
     if (context_index_ptr == 0) {
+        LONGTAIL_FATAL_ASSERT(ctx, gMemTracer_Context->m_ContextCount < MEMTRACER_MAXCONTEXTCOUNT, return 0)
         contextStats = &gMemTracer_Context->m_ContextStats[gMemTracer_Context->m_ContextCount];
         memset(contextStats, 0, sizeof(struct MemTracer_ContextStats));
         contextStats->context_name = context;
@@ -138,19 +143,6 @@ void* Longtail_MemTracer_Alloc(const char* context, size_t s)
     else
     {
         contextStats = &gMemTracer_Context->m_ContextStats[*context_index_ptr];
-    }
-
-    gMemTracer_Context->m_AllocationTotalCount++;
-    gMemTracer_Context->m_AllocationCurrentCount++;
-    gMemTracer_Context->m_AllocationTotalMem += s;
-    gMemTracer_Context->m_AllocationCurrentMem += s;
-    if (gMemTracer_Context->m_AllocationCurrentMem > gMemTracer_Context->m_PeakAllocationMem)
-    {
-        gMemTracer_Context->m_PeakAllocationMem = gMemTracer_Context->m_AllocationCurrentMem;
-    }
-    if (gMemTracer_Context->m_AllocationCurrentCount > gMemTracer_Context->m_PeakAllocationCount)
-    {
-        gMemTracer_Context->m_PeakAllocationCount = gMemTracer_Context->m_AllocationCurrentCount;
     }
 
     contextStats->total_count++;
@@ -166,6 +158,29 @@ void* Longtail_MemTracer_Alloc(const char* context, size_t s)
         contextStats->peak_count = contextStats->current_count;
     }
     
+    gMemTracer_Context->m_AllocationTotalCount++;
+    gMemTracer_Context->m_AllocationCurrentCount++;
+    gMemTracer_Context->m_AllocationTotalMem += s;
+    gMemTracer_Context->m_AllocationCurrentMem += s;
+    if (gMemTracer_Context->m_AllocationCurrentMem > gMemTracer_Context->m_AllocationPeakMem)
+    {
+        gMemTracer_Context->m_AllocationPeakMem = gMemTracer_Context->m_AllocationCurrentMem;
+        for (size_t i = 0; i < gMemTracer_Context->m_ContextCount; i++)
+        {
+            contextStats = &gMemTracer_Context->m_ContextStats[i];
+            contextStats->global_peak_mem = contextStats->current_mem;
+        }
+    }
+    if (gMemTracer_Context->m_AllocationCurrentCount > gMemTracer_Context->m_AllocationPeakCount)
+    {
+        gMemTracer_Context->m_AllocationPeakCount = gMemTracer_Context->m_AllocationCurrentCount;
+        for (size_t i = 0; i < gMemTracer_Context->m_ContextCount; i++)
+        {
+            contextStats = &gMemTracer_Context->m_ContextStats[i];
+            contextStats->global_peak_count = contextStats->current_count;
+        }
+    }
+
     Longtail_UnlockSpinLock(gMemTracer_Context->m_Spinlock);
 
     size_t padded_size = sizeof(struct MemTracer_Header) + s;
