@@ -1819,7 +1819,7 @@ int main(int argc, char** argv)
     _CrtDumpMemoryLeaks();
 #endif
     if (enable_mem_tracer_raw) {
-        Longtail_MemTracer_Dispose();
+        Longtail_MemTracer_Dispose(Longtail_GetMemTracerDetailed());
     }
     return err;
 }
