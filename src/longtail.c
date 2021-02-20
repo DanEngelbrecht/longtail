@@ -1630,7 +1630,7 @@ static int StorageChunkFeederFunc(void* context, Longtail_ChunkerAPI_HChunker ch
         {
             read_count = requested_size;
         }
-        int err = c->m_StorageAPI->Read(c->m_StorageAPI, c->m_AssetFile, c->m_StartRange + c->m_Offset, (uint32_t)read_count, buffer);
+        int err = c->m_StorageAPI->Read(c->m_StorageAPI, c->m_AssetFile, c->m_StartRange + c->m_Offset, read_count, buffer);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "m_StorageAPI->Read() failed with %d", err)
@@ -2527,7 +2527,7 @@ int Longtail_CreateVersionIndex(
         }
         else
         {
-            tmp_asset_chunk_indexes[c] = (uint32_t)*chunk_index;
+            tmp_asset_chunk_indexes[c] = *chunk_index;
         }
     }
 
@@ -3748,6 +3748,7 @@ int Longtail_CreateContentIndexRaw(
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || max_block_size != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || max_chunks_per_block != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_content_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunk_count <= 0xffffffffu, return EINVAL)
 
     if (chunk_count == 0)
     {
@@ -4631,12 +4632,12 @@ int Longtail_WriteContent(
     {
         TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
         LONGTAIL_FATAL_ASSERT(ctx, content_index->m_ChunkBlockIndexes[block_start_chunk_index] == block_index, return EINVAL);
-        uint64_t chunk_offset_index = block_start_chunk_index + 1;
+        uint32_t chunk_offset_index = block_start_chunk_index + 1;
         while((chunk_offset_index < version_content_index_chunk_count) && content_index->m_ChunkBlockIndexes[chunk_offset_index] == block_index)
         {
             ++chunk_offset_index;
         }
-        uint32_t block_chunk_count = (uint32_t)(chunk_offset_index - block_start_chunk_index);
+        uint32_t block_chunk_count = chunk_offset_index - block_start_chunk_index;
 
         struct WriteBlockJob* job = &write_block_jobs[job_count];
         job->m_AsyncCompleteAPI.m_API.Dispose = 0;
@@ -4670,7 +4671,7 @@ int Longtail_WriteContent(
     }
 
     Longtail_JobAPI_Group job_group = 0;
-    err = job_api->ReserveJobs(job_api, (uint32_t)job_count, &job_group);
+    err = job_api->ReserveJobs(job_api, job_count, &job_group);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
@@ -6183,6 +6184,7 @@ int Longtail_WriteVersion(
     LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *content_index->m_ChunkCount <= 0xffffffffu, return EINVAL)
 
     if (*version_index->m_AssetCount == 0)
     {
@@ -6441,6 +6443,7 @@ int Longtail_CreateMissingContent(
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, max_block_size != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, max_chunks_per_block != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *content_index->m_ChunkCount <= 0xffffffffu, return EINVAL)
 
     uint32_t chunk_count = *version_index->m_ChunkCount;
     size_t added_hashes_size = sizeof(TLongtail_Hash) * chunk_count;
@@ -6558,6 +6561,8 @@ int Longtail_GetMissingChunks(
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_chunk_count != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (out_missing_chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunk_count <= 0xffffffffu, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *content_index->m_ChunkCount <= 0xffffffffu, return EINVAL)
 
     uint32_t reference_chunk_count = (uint32_t)*content_index->m_ChunkCount;
     struct Longtail_LookupTable* chunk_to_reference_block_index_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(reference_chunk_count)), reference_chunk_count, 0);
@@ -6875,6 +6880,8 @@ static int MergeContentIndex_BuildBlockHashToBlockIndex(void* context, uint32_t 
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     struct MergeContentIndex_BuildBlockHashToBlockIndex_Context* c = (struct MergeContentIndex_BuildBlockHashToBlockIndex_Context*)context;
+    LONGTAIL_VALIDATE_INPUT(ctx, *c->new_content_index->m_BlockCount <= 0xffffffffu, return EINVAL)
+
     const uint32_t compact_block_count = (uint32_t)*c->new_content_index->m_BlockCount;
     for (uint32_t block_index = 0; block_index < compact_block_count; ++block_index)
     {
@@ -6895,7 +6902,15 @@ struct MergeContentIndex_BuildChunkHashToBlockIndex_Context
 
 static int MergeContentIndex_BuildChunkHashToBlockIndex(void* context, uint32_t job_id, int is_cancelled)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(context, "%p"),
+        LONGTAIL_LOGFIELD(job_id, "%u"),
+        LONGTAIL_LOGFIELD(is_cancelled, "%d")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
     struct MergeContentIndex_BuildChunkHashToBlockIndex_Context* c = (struct MergeContentIndex_BuildChunkHashToBlockIndex_Context*)context;
+    LONGTAIL_VALIDATE_INPUT(ctx, *c->new_content_index->m_ChunkCount <= 0xffffffffu, return EINVAL)
+
     const uint64_t compact_chunk_count = *c->new_content_index->m_ChunkCount;
     for (uint64_t chunk_index = 0; chunk_index < compact_chunk_count; ++chunk_index)
     {
@@ -6927,11 +6942,15 @@ int Longtail_MergeContentIndex(
     LONGTAIL_VALIDATE_INPUT(ctx, local_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, new_content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, ((*local_content_index->m_BlockCount) == 0 || (*new_content_index->m_BlockCount) == 0) || ((*local_content_index->m_HashIdentifier) == (*new_content_index->m_HashIdentifier)), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *local_content_index->m_BlockCount <= 0xffffffffu, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *new_content_index->m_BlockCount <= 0xffffffffu, return EINVAL)
 
     uint32_t hash_identifier = (*local_content_index->m_BlockCount) != 0 ? (*local_content_index->m_HashIdentifier) : (*new_content_index->m_HashIdentifier);
 
-    uint32_t max_block_count = (uint32_t)(*local_content_index->m_BlockCount + *new_content_index->m_BlockCount);
-    uint32_t max_chunk_count = (uint32_t)(*local_content_index->m_ChunkCount + *new_content_index->m_ChunkCount);
+    uint64_t total_block_count = (*local_content_index->m_BlockCount + *new_content_index->m_BlockCount);
+    uint32_t max_block_count = total_block_count > 0xffffffffu ? 0xffffffff : (uint32_t)total_block_count;
+    uint64_t total_chunk_count = (*local_content_index->m_ChunkCount + *new_content_index->m_ChunkCount);
+    uint32_t max_chunk_count = total_chunk_count > 0xffffffffu ? 0xffffffff : (uint32_t)total_chunk_count;
     size_t block_hash_to_block_index_size = Longtail_LookupTable_GetSize(max_block_count);
     size_t chunk_hash_to_block_index_size = Longtail_LookupTable_GetSize(max_chunk_count);
     size_t tmp_compact_block_hashes_size = sizeof(TLongtail_Hash) * max_block_count;
@@ -7571,7 +7590,7 @@ int Longtail_ChangeVersion(
     LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *content_index->m_ChunkCount <= 0xffffffffu, return EINVAL)
 
     int err = EnsureParentPathExists(version_storage_api, version_path);
     if (err)
@@ -7850,6 +7869,7 @@ int Longtail_ValidateContent(
 
     LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *content_index->m_ChunkCount <= 0xffffffffu, return EINVAL)
 
     uint32_t content_index_chunk_count = (uint32_t)*content_index->m_ChunkCount;
     struct Longtail_LookupTable* content_chunk_lookup = Longtail_LookupTable_Create(Longtail_Alloc(Longtail_LookupTable_GetSize(content_index_chunk_count)), content_index_chunk_count ,0);
@@ -8231,6 +8251,8 @@ int Longtail_CreateStoreIndexFromContentIndex(
 
     LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_store_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *content_index->m_BlockCount <= 0xffffffffu, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, *content_index->m_ChunkCount <= 0xffffffffu, return EINVAL)
 
     uint32_t block_count = (uint32_t)*content_index->m_BlockCount;
     uint32_t chunk_count = (uint32_t)*content_index->m_ChunkCount;
@@ -8268,7 +8290,7 @@ int Longtail_CreateStoreIndexFromContentIndex(
         uint32_t* block_index_ptr = Longtail_LookupTable_PutUnique(block_hash_to_block_index, block_hash, block_write_index);
         if (block_index_ptr)
         {
-            current_block_index = (uint32_t)*block_index_ptr;
+            current_block_index = *block_index_ptr;
         }
         else
         {
