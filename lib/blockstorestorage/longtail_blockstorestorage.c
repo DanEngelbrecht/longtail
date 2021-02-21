@@ -208,7 +208,7 @@ struct BlockStoreStorageAPI
     struct Longtail_HashAPI* m_HashAPI;
     struct Longtail_JobAPI* m_JobAPI;
     struct Longtail_BlockStoreAPI* m_BlockStore;
-    struct Longtail_ContentIndex* m_ContentIndex;
+    struct Longtail_StoreIndex* m_StoreIndex;
     struct Longtail_VersionIndex* m_VersionIndex;
     struct Longtail_LookupTable* m_ChunkHashToBlockIndexLookup;
     struct BlockStoreStorageAPI_PathLookup* m_PathLookup;
@@ -545,7 +545,7 @@ static int BlockStoreStorageAPI_ReadFile(
     struct Longtail_LookupTable* block_range_map = Longtail_LookupTable_Create(Longtail_Alloc("BlockStoreStorageAPI", block_range_map_size), estimated_block_count, 0);
     struct BlockStoreStorageAPI_ChunkRange* chunk_ranges = 0;
     arrsetcap(chunk_ranges, estimated_block_count);
-    const TLongtail_Hash* block_hashes = block_store_fs->m_ContentIndex->m_BlockHashes;
+    const TLongtail_Hash* block_hashes = block_store_fs->m_StoreIndex->m_BlockHashes;
 
     for (uint32_t c = seek_chunk_offset; c < chunk_count; ++c)
     {
@@ -1222,7 +1222,7 @@ static int BlockStoreStorageAPI_Init(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_BlockStoreAPI* block_store,
-    struct Longtail_ContentIndex* content_index,
+    struct Longtail_StoreIndex* store_index,
     struct Longtail_VersionIndex* version_index,
     struct Longtail_StorageAPI** out_storage_api)
 {
@@ -1230,7 +1230,7 @@ static int BlockStoreStorageAPI_Init(
         LONGTAIL_LOGFIELD(hash_api, "%p"),
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(block_store, "%p"),
-        LONGTAIL_LOGFIELD(content_index, "%p"),
+        LONGTAIL_LOGFIELD(store_index, "%p"),
         LONGTAIL_LOGFIELD(version_index, "%p"),
         LONGTAIL_LOGFIELD(out_storage_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
@@ -1239,12 +1239,12 @@ static int BlockStoreStorageAPI_Init(
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, job_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, block_store != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, out_storage_api != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)mem;
-    uint64_t content_index_chunk_count = *content_index->m_ChunkCount;
+    uint64_t content_index_chunk_count = *store_index->m_ChunkCount;
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
 
     block_store_fs->m_API.m_API.Dispose = BlockStoreStorageAPI_Dispose;
@@ -1271,7 +1271,7 @@ static int BlockStoreStorageAPI_Init(
     block_store_fs->m_HashAPI = hash_api;
     block_store_fs->m_JobAPI = job_api;
     block_store_fs->m_BlockStore = block_store;
-    block_store_fs->m_ContentIndex = content_index;
+    block_store_fs->m_StoreIndex = store_index;
     block_store_fs->m_VersionIndex = version_index;
 
     char* p = (char*)&block_store_fs[1];
@@ -1281,13 +1281,20 @@ static int BlockStoreStorageAPI_Init(
     p += GetPathEntriesSize(version_index_asset_count);
     block_store_fs->m_ChunkAssetOffsets = (uint64_t*)p;
 
-    const uint64_t* content_index_chunk_block_indexes = content_index->m_ChunkBlockIndexes;
-    const TLongtail_Hash* content_index_chunk_hashes = content_index->m_ChunkHashes;
-    for (uint64_t c = 0; c < content_index_chunk_count; ++c)
+    const TLongtail_Hash* content_index_chunk_hashes = store_index->m_ChunkHashes;
+    uint32_t block_count = *store_index->m_BlockCount;
+    for (uint32_t b = 0; b < block_count; ++b)
     {
-        uint32_t block_index = (uint32_t)content_index_chunk_block_indexes[c];
-        Longtail_LookupTable_Put(block_store_fs->m_ChunkHashToBlockIndexLookup, content_index_chunk_hashes[c], block_index);
+        uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+        uint32_t chunk_index_offset = store_index->m_BlockChunksOffsets[b];
+        for (uint32_t c = 0; c < block_chunk_count; ++c)
+        {
+            uint32_t chunk_index = chunk_index_offset + c;
+            TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_index];
+            Longtail_LookupTable_Put(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash, b);
+        }
     }
+
     const uint32_t* asset_chunk_index_starts = block_store_fs->m_VersionIndex->m_AssetChunkIndexStarts;
     const uint32_t* asset_chunk_indexes = block_store_fs->m_VersionIndex->m_AssetChunkIndexes;
     const uint32_t* version_chunk_sizes = block_store_fs->m_VersionIndex->m_ChunkSizes;
@@ -1320,25 +1327,25 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_BlockStoreAPI* block_store,
-    struct Longtail_ContentIndex* content_index,
+    struct Longtail_StoreIndex* store_index,
     struct Longtail_VersionIndex* version_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(hash_api, "%p"),
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(block_store, "%p"),
-        LONGTAIL_LOGFIELD(content_index, "%p"),
+        LONGTAIL_LOGFIELD(store_index, "%p"),
         LONGTAIL_LOGFIELD(version_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, job_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, block_store != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT(ctx, content_index != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return 0)
 
     size_t api_size = sizeof(struct BlockStoreStorageAPI) + 
-        Longtail_LookupTable_GetSize((uint32_t)*content_index->m_ChunkCount) +
+        Longtail_LookupTable_GetSize((uint32_t)*store_index->m_ChunkCount) +
         GetPathEntriesSize(*version_index->m_AssetCount) +
         sizeof(uint64_t) * (*version_index->m_AssetChunkIndexCount);
     void* mem = Longtail_Alloc("BlockStoreStorageAPI", api_size);
@@ -1353,7 +1360,7 @@ struct Longtail_StorageAPI* Longtail_CreateBlockStoreStorageAPI(
         hash_api,
         job_api,
         block_store,
-        content_index,
+        store_index,
         version_index,
         &storage_api);
 

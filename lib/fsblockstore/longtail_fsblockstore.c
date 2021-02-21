@@ -963,24 +963,24 @@ static int FSBlockStore_GetExistingContent(
         return err;
     }
 
-    struct Longtail_ContentIndex* existing_content_index;
-    err = Longtail_GetExistingContentIndex(
+    struct Longtail_StoreIndex* existing_store_index;
+    err = Longtail_GetExistingStoreIndex(
         store_index,
         (uint32_t)chunk_count,
         chunk_hashes,
         min_block_usage_percent,
         fsblockstore_api->m_DefaultMaxBlockSize,
         fsblockstore_api->m_DefaultMaxChunksPerBlock,
-        &existing_content_index);
+        &existing_store_index);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetExistingContentIndex() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetExistingStoreIndex() failed with %d", err)
         Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         Longtail_Free(store_index);
         return err;
     }
     Longtail_Free(store_index);
-    async_complete_api->OnComplete(async_complete_api, existing_content_index, 0);
+    async_complete_api->OnComplete(async_complete_api, existing_store_index, 0);
     return 0;
 }
 

@@ -1359,19 +1359,6 @@ LONGTAIL_EXPORT int Longtail_ReadStoredBlock(
     const char* path,
     struct Longtail_StoredBlock** out_stored_block);
 
-/*! @brief Validate that content_index contains all of version_index.
- *
- * Validates that all chunks required for @p version_index are present in @p store_index
- * Validates that reconstructing an asset via chunks results in the same size as recorded in @p version_index
- *
- * @param[in] store_index           The store index to validate
- * @param[in] version_index         The version index used to validate the content of @p store_index
- * @return                          Return code (errno style), zero on success. Success is when all content required is present
- */
-LONGTAIL_EXPORT int Longtail_ValidateStore(
-    const struct Longtail_StoreIndex* store_index,
-    const struct Longtail_VersionIndex* version_index);
-
 struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
@@ -1445,6 +1432,16 @@ LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetChunkSizes(const struct L
 
 LONGTAIL_EXPORT size_t Longtail_GetStoreIndexSize(uint32_t block_count, uint32_t chunk_count);
 
+LONGTAIL_EXPORT int Longtail_CreateStoreIndex(
+    struct Longtail_HashAPI* hash_api,
+    uint64_t chunk_count,
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* chunk_sizes,
+    const uint32_t* optional_chunk_tags,
+    uint32_t max_block_size,
+    uint32_t max_chunks_per_block,
+    struct Longtail_StoreIndex** out_store_index);
+
 LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromBlocks(
     uint32_t block_count,
     const struct Longtail_BlockIndex** block_indexes,
@@ -1468,6 +1465,19 @@ LONGTAIL_EXPORT int Longtail_GetExistingStoreIndex(
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_StoreIndex** out_store_index);
+
+/*! @brief Validate that content_index contains all of version_index.
+ *
+ * Validates that all chunks required for @p version_index are present in @p store_index
+ * Validates that reconstructing an asset via chunks results in the same size as recorded in @p version_index
+ *
+ * @param[in] store_index           The store index to validate
+ * @param[in] version_index         The version index used to validate the content of @p store_index
+ * @return                          Return code (errno style), zero on success. Success is when all content required is present
+ */
+LONGTAIL_EXPORT int Longtail_ValidateStore(
+    const struct Longtail_StoreIndex* store_index,
+    const struct Longtail_VersionIndex* version_index);
 
 /*! @brief Copies a struct Longtail_StoreIndex.
  *
