@@ -1099,6 +1099,9 @@ LONGTAIL_EXPORT int Longtail_CreateContentIndexFromStoreIndex(
 /*! @brief Writes a struct Longtail_ContentIndex to a byte buffer.
  *
  * Serializes a struct Longtail_ContentIndex to a buffer which is allocated using Longtail_Alloc()
+ * 
+ * NOTE: This should only be used to transport a content index - never to storage
+ * TODO: Replace this with Longtail_PackContentIndex() ?
  *
  * @param[in] content_index         Pointer to an initialized struct Longtail_ContentIndex
  * @param[out] out_buffer           Pointer to a buffer pointer intitialized on success
@@ -1113,6 +1116,9 @@ LONGTAIL_EXPORT int Longtail_WriteContentIndexToBuffer(
 /*! @brief Reads a struct Longtail_ContentIndex from a byte buffer.
  *
  * Deserializes a struct Longtail_ContentIndex from a buffer, the struct Longtail_ContentIndex is allocated using Longtail_Alloc()
+ * 
+ * NOTE: This should only be used to transport a content index - never to storage
+ * TODO: Replace this with Longtail_UnpackContentIndex() ?
  *
  * @param[in] buffer                Buffer containing the serialized struct Longtail_ContentIndex
  * @param[in] size                  Size of the buffer
@@ -1122,36 +1128,6 @@ LONGTAIL_EXPORT int Longtail_WriteContentIndexToBuffer(
 LONGTAIL_EXPORT int Longtail_ReadContentIndexFromBuffer(
     const void* buffer,
     size_t size,
-    struct Longtail_ContentIndex** out_content_index);
-
-/*! @brief Writes a struct Longtail_ContentIndex.
- *
- * Serializes a struct Longtail_ContentIndex to a file in a struct Longtail_StorageAPI at the specified path.
- * The parent folder of the file path must exist.
- *
- * @param[in] storage_api   An initialized struct Longtail_StorageAPI
- * @param[in] content_index Pointer to an initialized struct Longtail_ContentIndex
- * @param[in] path          A path in the storage api to store the content index to
- * @return                  Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_WriteContentIndex(
-    struct Longtail_StorageAPI* storage_api,
-    struct Longtail_ContentIndex* content_index,
-    const char* path);
-
-/*! @brief Reads a struct Longtail_ContentIndex.
- *
- * Deserializes a struct Longtail_ContentIndex from a file in a struct Longtail_StorageAPI at the specified path.
- * The file must exist.
- *
- * @param[in] storage_api           An initialized struct Longtail_StorageAPI
- * @param[in] path                  A path in the storage api to read the Content index from
- * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
- * @return                          Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_ReadContentIndex(
-    struct Longtail_StorageAPI* storage_api,
-    const char* path,
     struct Longtail_ContentIndex** out_content_index);
 
 /*! @brief Write content blocks from version data
