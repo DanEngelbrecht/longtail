@@ -335,7 +335,6 @@ int UpSync(
     const char* source_path,
     const char* optional_source_index_path,
     const char* target_index_path,
-    const char* optional_target_version_content_index_path,
     uint32_t target_chunk_size,
     uint32_t target_block_size,
     uint32_t max_chunks_per_block,
@@ -348,7 +347,6 @@ int UpSync(
         LONGTAIL_LOGFIELD(source_path, "%s"),
         LONGTAIL_LOGFIELD(optional_source_index_path, "%p"),
         LONGTAIL_LOGFIELD(target_index_path, "%s"),
-        LONGTAIL_LOGFIELD(optional_target_version_content_index_path, "%p"),
         LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
         LONGTAIL_LOGFIELD(target_block_size, "%u"),
         LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
@@ -577,31 +575,6 @@ int UpSync(
         SAFE_DISPOSE_API(job_api);
         Longtail_Free((char*)storage_path);
         return err;
-    }
-
-    if (optional_target_version_content_index_path)
-    {
-        err = Longtail_WriteContentIndex(
-            storage_api,
-            version_local_content_index,
-            optional_target_version_content_index_path);
-        if (err)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to write version content index for `%s` to `%s`, %d", source_path, optional_target_version_content_index_path, err);
-            Longtail_Free(version_local_content_index);
-            Longtail_Free(remote_missing_content_index);
-            Longtail_Free(existing_remote_content_index);
-            Longtail_Free(source_version_index);
-            SAFE_DISPOSE_API(chunker_api);
-            SAFE_DISPOSE_API(store_block_store_api);
-            SAFE_DISPOSE_API(store_block_fsstore_api);
-            SAFE_DISPOSE_API(storage_api);
-            SAFE_DISPOSE_API(compression_registry);
-            SAFE_DISPOSE_API(hash_registry);
-            SAFE_DISPOSE_API(job_api);
-            Longtail_Free((char*)storage_path);
-            return err;
-        }
     }
 
     err = Longtail_WriteVersionIndex(
@@ -1621,14 +1594,12 @@ int main(int argc, char** argv)
         const char* source_path = NormalizePath(source_path_raw);
         const char* source_index = source_index_raw ? NormalizePath(source_index_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
-        const char* optional_target_version_content_index_path = optional_version_content_index_path_raw ? NormalizePath(optional_version_content_index_path_raw) : 0;
 
         err = UpSync(
             storage_uri_raw,
             source_path,
             source_index,
             target_path,
-            optional_target_version_content_index_path,
             target_chunk_size,
             target_block_size,
             max_chunks_per_block,
