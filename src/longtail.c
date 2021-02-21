@@ -5887,7 +5887,7 @@ int Longtail_CreateStoreIndex(
 
     int err = Longtail_CreateStoreIndexFromBlocks(
         block_count,
-        tmp_block_indexes,
+        (const struct Longtail_BlockIndex**)tmp_block_indexes,
         out_store_index);
     if (err)
     {
@@ -6329,7 +6329,10 @@ int Longtail_GetExistingStoreIndex(
     }
     Longtail_Free(tmp_mem);
 
-    int err = Longtail_CreateStoreIndexFromBlocks(found_block_count, block_index_header_ptrs, out_store_index);
+    int err = Longtail_CreateStoreIndexFromBlocks(
+        found_block_count,
+        (const struct Longtail_BlockIndex**)block_index_header_ptrs,
+        out_store_index);
     Longtail_Free(tmp_mem_2);
     if (err)
     {
