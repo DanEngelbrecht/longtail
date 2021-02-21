@@ -1198,11 +1198,14 @@ TEST(Longtail, ContentIndexSerialization)
     Longtail_Free(vindex);
     vindex = 0;
 
-    ASSERT_EQ(0, Longtail_WriteContentIndex(local_storage, cindex, "cindex.lci"));
+    size_t buf_size;
+    void* buf;
+    ASSERT_EQ(0, Longtail_WriteContentIndexToBuffer(cindex, &buf, &buf_size));
 
     Longtail_ContentIndex* cindex2;
-    ASSERT_EQ(0, Longtail_ReadContentIndex(local_storage, "cindex.lci", &cindex2));
+    ASSERT_EQ(0, Longtail_ReadContentIndexFromBuffer(buf, buf_size, &cindex2));
     ASSERT_NE((Longtail_ContentIndex*)0, cindex2);
+    Longtail_Free(buf);
 
     ASSERT_EQ(*cindex->m_BlockCount, *cindex2->m_BlockCount);
     for (uint64_t i = 0; i < *cindex->m_BlockCount; ++i)
