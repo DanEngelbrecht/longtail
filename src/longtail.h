@@ -25,7 +25,6 @@ struct Longtail_Paths;
 struct Longtail_FileInfos;
 struct Longtail_VersionIndex;
 struct Longtail_StoredBlock;
-struct Longtail_ContentIndex;
 struct Longtail_VersionDiff;
 struct Longtail_StoreIndex;
 
@@ -595,7 +594,7 @@ LONGTAIL_EXPORT void Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_Asy
 
 struct Longtail_AsyncGetExistingContentAPI;
 
-typedef void (*Longtail_AsyncGetExistingContent_OnCompleteFunc)(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+typedef void (*Longtail_AsyncGetExistingContent_OnCompleteFunc)(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err);
 
 struct Longtail_AsyncGetExistingContentAPI
 {
@@ -610,7 +609,7 @@ LONGTAIL_EXPORT struct Longtail_AsyncGetExistingContentAPI* Longtail_MakeAsyncGe
     Longtail_DisposeFunc dispose_func,
     Longtail_AsyncGetExistingContent_OnCompleteFunc on_complete_func);
 
-LONGTAIL_EXPORT void Longtail_AsyncGetExistingContent_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+LONGTAIL_EXPORT void Longtail_AsyncGetExistingContent_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err);
 
 ////////////// Longtail_AsyncFlushAPI
 
@@ -950,105 +949,6 @@ LONGTAIL_EXPORT int Longtail_ReadVersionIndex(
     const char* path,
     struct Longtail_VersionIndex** out_version_index);
 
-/*! @brief Get size of content index data.
- *
- * Content index data size is the size raw size of the content index excluding the struct Longtail_ContentIndex
- * header structure.
- *
- * @param[in] block_count           Number of blocks
- * @param[in] chunk_count           Number of chunks
- * @return                          Number of bytes required to store the content index data
- */
-LONGTAIL_EXPORT size_t Longtail_GetContentIndexDataSize(
-    uint64_t block_count,
-    uint64_t chunk_count);
-
-/*! @brief Get size of content index.
- *
- * Content index data size is the size size of the content index including the struct Longtail_ContentIndex
- * header structure.
- *
- * @param[in] block_count           Number of blocks
- * @param[in] chunk_count           Number of chunks
- * @return                          Number of bytes required to store the content index data
- */
-LONGTAIL_EXPORT size_t Longtail_GetContentIndexSize(
-    uint64_t block_count,
-    uint64_t chunk_count);
-
-/*! @brief Initialize content index from raw data.
- *
- * Initialize a struct Longtail_ContentIndex from raw data.
- *
- * @param[in] content_index Pointer to an uninitialized struct Longtail_VersionIndex
- * @param[in] data          Pointer to a raw content index data
- * @param[in] data_size     Size of raw content index data
- * @return                  Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_InitContentIndexFromData(
-    struct Longtail_ContentIndex* content_index,
-    void* data,
-    uint64_t data_size);
-
-/*! @brief Initialize content index.
- *
- * Initialize a chunk of memory to a struct Longtail_ContentIndex.
- *
- * @param[in] mem                   Pointer to memory to initialize, must be of at least Longtail_GetContentIndexSize(@p block_count, @ chunk_count) size
- * @param[in] hash_api              Hash API identifier
- * @param[in] max_block_size        Max block size
- * @param[in] max_chunks_per_block  Max chunks per block
- * @param[in] block_count           Block count
- * @param[in] chunk_count           Chunk count
- * @return                          An initialized struct Longtail_ContentIndex*, zero of failure
- */
-LONGTAIL_EXPORT struct Longtail_ContentIndex* Longtail_InitContentIndex(
-    void* mem,
-    uint32_t hash_api,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
-    uint64_t block_count,
-    uint64_t chunk_count);
-
-/*! @brief Create a struct Longtail_ContentIndex from array of struct Longtail_BlockIndex.
- *
- * Allocates and initializes a struct Longtail_ContentIndex structure from an array of
- * struct Longtail_BlockIndex using Longtail_Alloc()
- * The resulting struct Longtail_ContentIndex is freed with Longtail_Free()
- *
- * @param[in] max_block_size        Max block size
- * @param[in] max_chunks_per_block  Max chunks per block
- * @param[in] block_count           Block count - number of struct Longtail_BlockIndex pointers in @p block_indexes
- * @param[in] block_indexes         Array of pointers to initialized struct Longtail_BlockIndex
- * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
- * @return                          Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_CreateContentIndexFromBlocks(
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
-    uint64_t block_count,
-    struct Longtail_BlockIndex** block_indexes,
-    struct Longtail_ContentIndex** out_content_index);
-
-/*! @brief Create a struct Longtail_ContentIndex from an struct Longtail_VersionIndex.
- *
- * Creates a struct Longtail_ContentIndex from a struct Longtail_VersionIndex by bundling
- * chunks into blocks according to @p max_block_size and @p max_chunks_per_block.
- *
- * @param[in] hash_api              Hash API identifier
- * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex
- * @param[in] max_block_size        Max block size
- * @param[in] max_chunks_per_block  Max chunks per block
- * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
- * @return                          Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_CreateContentIndex(
-    struct Longtail_HashAPI* hash_api,
-    struct Longtail_VersionIndex* version_index,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
-    struct Longtail_ContentIndex** out_content_index);
-
 /*! @brief Get the chunks required to go to @p version_index by applying @p version_diff.
  *
  * Gets all the chunks required to apply @p version_diff which is a subset of all chunks in @p version_index
@@ -1064,71 +964,6 @@ LONGTAIL_EXPORT int Longtail_GetRequiredChunkHashes(
     const struct Longtail_VersionDiff* version_diff,
     uint64_t* out_chunk_count,
     TLongtail_Hash* out_chunk_hashes);
-
-/*! @brief Create a struct Longtail_ContentIndex from discreet data.
- *
- * Creates a struct Longtail_ContentIndex from discreet data by bundling
- * chunks into blocks according to @p max_block_size and @p max_chunks_per_block.
- *
- * @param[in] hash_api              Hash API identifier
- * @param[in] chunk_count           Number of chunks
- * @param[in] chunk_hashes          Array of chunk hashes - entry count must match @p chunk_count
- * @param[in] chunk_sizes           Array of chunk sizes - entry count must match @p chunk_count
- * @param[in] optional_chunk_tags   Array of chunk tags - entry count must match @p chunk_count or be set to 0 for no tagging
- * @param[in] max_block_size        Max block size
- * @param[in] max_chunks_per_block  Max chunks per block
- * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
- * @return                          Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_CreateContentIndexRaw(
-    struct Longtail_HashAPI* hash_api,
-    uint64_t chunk_count,
-    const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_sizes,
-    const uint32_t* optional_chunk_tags,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
-    struct Longtail_ContentIndex** out_content_index);
-
-LONGTAIL_EXPORT int Longtail_CreateContentIndexFromStoreIndex(
-    const struct Longtail_StoreIndex* store_index,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
-    struct Longtail_ContentIndex** out_content_index);
-
-/*! @brief Writes a struct Longtail_ContentIndex to a byte buffer.
- *
- * Serializes a struct Longtail_ContentIndex to a buffer which is allocated using Longtail_Alloc()
- * 
- * NOTE: This should only be used to transport a content index - never to storage
- * TODO: Replace this with Longtail_PackContentIndex() ?
- *
- * @param[in] content_index         Pointer to an initialized struct Longtail_ContentIndex
- * @param[out] out_buffer           Pointer to a buffer pointer intitialized on success
- * @param[out] out_size             Pointer to a size variable intitialized on success
- * @return                          Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_WriteContentIndexToBuffer(
-    const struct Longtail_ContentIndex* content_index,
-    void** out_buffer,
-    size_t* out_size);
-
-/*! @brief Reads a struct Longtail_ContentIndex from a byte buffer.
- *
- * Deserializes a struct Longtail_ContentIndex from a buffer, the struct Longtail_ContentIndex is allocated using Longtail_Alloc()
- * 
- * NOTE: This should only be used to transport a content index - never to storage
- * TODO: Replace this with Longtail_UnpackContentIndex() ?
- *
- * @param[in] buffer                Buffer containing the serialized struct Longtail_ContentIndex
- * @param[in] size                  Size of the buffer
- * @param[out] out_content_index    Pointer to an struct Longtail_ContentIndex pointer
- * @return                          Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_ReadContentIndexFromBuffer(
-    const void* buffer,
-    size_t size,
-    struct Longtail_ContentIndex** out_content_index);
 
 /*! @brief Write content blocks from version data
  *
@@ -1153,7 +988,7 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
-    struct Longtail_ContentIndex* content_index,
+    struct Longtail_StoreIndex* store_index,
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
@@ -1163,20 +998,20 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
  * Chunks that are not present in @p content_index will be bundled up in blocks according to @p max_block_size and @p max_chunks_per_block.
  *
  * @param[in] hash_api              An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both content index index and version index
- * @param[in] content_index         The known content to check against
+ * @param[in] store_index           The known content to check against
  * @param[in] version_index         The version index content you test against @p reference_content_index
  * @param[in] max_block_size        The maximum size if bytes one block is allowed to be
  * @param[in] max_chunks_per_block  The maximum number of chunks allowed inside one block
- * @param[out] out_content_index    The resulting missing content index will be created and assigned to this pointer reference if successful
+ * @param[out] out_store_index      The resulting missing store index will be created and assigned to this pointer reference if successful
  * @return                          Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_CreateMissingContent(
     struct Longtail_HashAPI* hash_api,
-    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_StoreIndex* store_index,
     const struct Longtail_VersionIndex* version_index,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
-    struct Longtail_ContentIndex** out_content_index);
+    struct Longtail_StoreIndex** out_store_index);
 
 
 /*! @brief Generate a content index with what is missing.
@@ -1187,68 +1022,19 @@ LONGTAIL_EXPORT int Longtail_CreateMissingContent(
  *
  * The missing blocks are added in complete form so you might get redundant content in @p out_content_index.
  *
- * @param[in] hash_identifier           The hash identifier to use, if any of the content_indexes has any blocks their hash identifier must match @p hash_identifier
- * @param[in] reference_content_index   The known content to check against
- * @param[in] content_index             The content you want to test against @p reference_content_index
- * @param[out] out_content_index        The resulting missing content index will be created and assigned to this pointer reference if successful
+ * @param[in] store_index               ???
+ * @param[in] chunk_count               ???
+ * @param[in] chunk_hashes              ???
+ * @param[out] out_chunk_count          ???
+ * @param[out] out_missing_chunk_hashes ???
  * @return                              Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_GetMissingChunks(
-    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_StoreIndex* store_index,
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     uint64_t* out_chunk_count,
     TLongtail_Hash* out_missing_chunk_hashes);
-
-/*! @brief Retarget a content index to match an existing content index.
- *
- * Create a new struct Longtail_ContentIndex keeping only the blocks in @p reference_content_index
- * that contains chunks found in @content_index.
- *
- * The result is the chunks known in @p reference_content_index arrangend in blocks known to @p reference_content_index.
- * Use Longtail_CreateMissingContent() to create blocks of any chunks not found in @p reference_content_index
- *
- * @param[in] reference_content_index   The known content to check against
- * @param[in] requested_content_index   The content you want to test against @p reference_content_index
- * @param[out] out_content_index        The blocks/chunks of requested_content_index found in reference_content_index
- * @return                              Return code (errno style), zero on success
- */
-/*LONGTAIL_EXPORT int Longtail_RetargetContent(
-    const struct Longtail_ContentIndex* reference_content_index,
-    const struct Longtail_ContentIndex* requested_content_index,
-    struct Longtail_ContentIndex** out_content_index);
-*/
-/*! @brief Merge two content indexes.
- *
- * Create a join of two content indexes, @p local_content_index has precedence, if a chunk is present in @p local_content_index the
- * block containing it is added to @p out_content_index over a block from @p new_content_index.
- *
- * @param[in] job_api                   An initialized struct Longtail_JobAPI
- * @param[in] local_content_index       The known content used a base
- * @param[in] new_content_index         The content you want add - only blocks containing chunks not in @p local_content_index will be added
- * @param[out] out_content_index        The resulting content index will be created and assigned to this pointer reference if successful
- * @return                              Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_MergeContentIndex(
-    struct Longtail_JobAPI* job_api,
-    struct Longtail_ContentIndex* local_content_index,
-    struct Longtail_ContentIndex* new_content_index,
-    struct Longtail_ContentIndex** out_content_index);
-
-/*! @brief Add two content indexes.
- *
- * Create a join of two content indexes, @p local_content_index is added first and @p new_content_index is added to that
- * without any checking of duplicate chunks or blocks.
- *
- * @param[in] local_content_index       The known content used a base
- * @param[in] new_content_index         The content you want add - add chunks and blocks from @p new_content_index will be added
- * @param[out] out_content_index        The resulting content index will be created and assigned to this pointer reference if successful
- * @return                              Return code (errno style), zero on success
- */
-LONGTAIL_EXPORT int Longtail_AddContentIndex(
-    struct Longtail_ContentIndex* local_content_index,
-    struct Longtail_ContentIndex* new_content_index,
-    struct Longtail_ContentIndex** out_content_index);
 
 /*! @brief Unpack and write a version.
  *
@@ -1277,7 +1063,7 @@ LONGTAIL_EXPORT int Longtail_WriteVersion(
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
-    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_StoreIndex* store_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_path,
     int retain_permissions);
@@ -1329,7 +1115,7 @@ LONGTAIL_EXPORT int Longtail_ChangeVersion(
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
-    const struct Longtail_ContentIndex* content_index,
+    const struct Longtail_StoreIndex* store_index,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
     const struct Longtail_VersionDiff* version_diff,
@@ -1575,28 +1361,15 @@ LONGTAIL_EXPORT int Longtail_ReadStoredBlock(
 
 /*! @brief Validate that content_index contains all of version_index.
  *
- * Validates that all chunks required for @p version_index are present in @p content_index
+ * Validates that all chunks required for @p version_index are present in @p store_index
  * Validates that reconstructing an asset via chunks results in the same size as recorded in @p version_index
  *
- * @param[in] content_index         The content index to validate
- * @param[in] version_index         The version index used to validate the content of @p content_index
+ * @param[in] store_index           The store index to validate
+ * @param[in] version_index         The version index used to validate the content of @p store_index
  * @return                          Return code (errno style), zero on success. Success is when all content required is present
  */
-LONGTAIL_EXPORT int Longtail_ValidateContent(
-    const struct Longtail_ContentIndex* content_index,
-    const struct Longtail_VersionIndex* version_index);
-
-/*! @brief Validate that version_index contains all of content_index.
- *
- * Validates that all chunks present in @p content_index are present in @p version_index
- * Validates that reconstructing an asset via chunks results in the same size as recorded in @p version_index
- *
- * @param[in] content_index         The content index to validate
- * @param[in] version_index         The version index used to validate the content of @p content_index
- * @return                          Return code (errno style), zero on success. Success is when all content required is present
- */
-LONGTAIL_EXPORT int Longtail_ValidateVersion(
-    const struct Longtail_ContentIndex* content_index,
+LONGTAIL_EXPORT int Longtail_ValidateStore(
+    const struct Longtail_StoreIndex* store_index,
     const struct Longtail_VersionIndex* version_index);
 
 struct Longtail_BlockIndex
@@ -1645,28 +1418,6 @@ LONGTAIL_EXPORT const struct Longtail_Paths* Longtail_FileInfos_GetPaths(const s
 LONGTAIL_EXPORT uint64_t Longtail_FileInfos_GetSize(const struct Longtail_FileInfos* file_infos, uint32_t index);
 LONGTAIL_EXPORT const uint16_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index);
 
-extern uint32_t Longtail_CurrentContentIndexVersion;
-
-struct Longtail_ContentIndex
-{
-    uint32_t* m_Version;
-    uint32_t* m_HashIdentifier;
-    uint32_t* m_MaxBlockSize;
-    uint32_t* m_MaxChunksPerBlock;
-    uint64_t* m_BlockCount;
-    uint64_t* m_ChunkCount;
-
-    TLongtail_Hash* m_BlockHashes;      // []
-    TLongtail_Hash* m_ChunkHashes;      // []
-    uint64_t* m_ChunkBlockIndexes;      // []
-};
-
-LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetVersion(const struct Longtail_ContentIndex* content_index);
-LONGTAIL_EXPORT uint32_t Longtail_ContentIndex_GetHashAPI(const struct Longtail_ContentIndex* content_index);
-LONGTAIL_EXPORT uint64_t Longtail_ContentIndex_GetBlockCount(const struct Longtail_ContentIndex* content_index);
-LONGTAIL_EXPORT uint64_t Longtail_ContentIndex_GetChunkCount(const struct Longtail_ContentIndex* content_index);
-LONGTAIL_EXPORT const TLongtail_Hash* Longtail_ContentIndex_BlockHashes(const struct Longtail_ContentIndex* content_index);
-
 struct Longtail_StoreIndex
 {
     uint32_t* m_Version;
@@ -1699,11 +1450,6 @@ LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromBlocks(
     const struct Longtail_BlockIndex** block_indexes,
     struct Longtail_StoreIndex** out_store_index);
 
-LONGTAIL_EXPORT int Longtail_CreateStoreIndexFromContentIndex(
-    const struct Longtail_ContentIndex* content_index,
-    uint32_t blocks_tag,
-    struct Longtail_StoreIndex** out_store_index);
-
 LONGTAIL_EXPORT int Longtail_MergeStoreIndex(
     const struct Longtail_StoreIndex* local_store_index,
     const struct Longtail_StoreIndex* remote_store_index,
@@ -1714,14 +1460,14 @@ LONGTAIL_EXPORT int Longtail_MakeBlockIndex(
     uint32_t block_index,
     struct Longtail_BlockIndex* out_block_index);
 
-LONGTAIL_EXPORT int Longtail_GetExistingContentIndex(
+LONGTAIL_EXPORT int Longtail_GetExistingStoreIndex(
     const struct Longtail_StoreIndex* store_index,
     uint32_t chunk_count,
     const TLongtail_Hash* chunks,
     uint32_t min_block_usage_percent,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
-    struct Longtail_ContentIndex** out_content_index);
+    struct Longtail_StoreIndex** out_store_index);
 
 /*! @brief Copies a struct Longtail_StoreIndex.
  *
