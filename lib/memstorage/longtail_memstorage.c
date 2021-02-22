@@ -123,7 +123,7 @@ static uint32_t InMemStorageAPI_GetPathHash(const char* path)
     char* buf = (char*)alloca(pathlen + 1);
     memcpy(buf, path, pathlen + 1);
     InMemStorageAPI_ToLowerCase(buf);
-    return murmur3_32((void*)buf, pathlen, Seed);
+    return murmur3_32((const uint8_t*)buf, pathlen, Seed);
 }
 
 static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
