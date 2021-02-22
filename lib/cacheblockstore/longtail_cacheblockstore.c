@@ -254,7 +254,7 @@ struct PreflightRetargetContext
 {
     struct Longtail_AsyncGetExistingContentAPI m_AsyncCompleteAPI;
     struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
-    uint64_t m_ChunkCount;
+    uint32_t m_ChunkCount;
     TLongtail_Hash* m_ChunkHashes;
 };
 
@@ -286,7 +286,7 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
         }
     }
 
-    uint64_t missing_chunk_count = 0;
+    uint32_t missing_chunk_count = 0;
     TLongtail_Hash* missing_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc("CacheBlockStore", sizeof(TLongtail_Hash) * retarget_context->m_ChunkCount);
     if (!missing_chunk_hashes)
     {
@@ -328,12 +328,12 @@ static void PreflightGet_GetExistingContentCompleteAPI_OnComplete(struct Longtai
 
 static int CacheBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
-        LONGTAIL_LOGFIELD(chunk_count, "%" PRIu64),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(chunk_hashes, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
@@ -617,7 +617,7 @@ struct RetargetContext_RetargetToRemote_Context
     struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
     struct Longtail_AsyncGetExistingContentAPI* m_RetargetAsyncCompleteAPI;
     struct Longtail_StoreIndex* m_LocalRetargettedStoreIndex;
-    uint64_t m_ChunkCount;
+    uint32_t m_ChunkCount;
     TLongtail_Hash* m_ChunkHashes;
 };
 
@@ -659,7 +659,7 @@ struct RetargetContext_RetargetToLocal_Context
     struct Longtail_AsyncGetExistingContentAPI m_AsyncCompleteAPI;
     struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
     struct Longtail_AsyncGetExistingContentAPI* m_RetargetAsyncCompleteAPI;
-    uint64_t m_ChunkCount;
+    uint32_t m_ChunkCount;
     TLongtail_Hash* m_ChunkHashes;
     uint32_t m_MinBlockUsagePercent;
 };
@@ -726,7 +726,7 @@ static void RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete(struct
 
 static int CacheBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)

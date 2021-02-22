@@ -671,9 +671,9 @@ struct Longtail_BlockStore_Stats
 };
 
 typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes);
+typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_GetExistingContentFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent,  struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_GetExistingContentFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent,  struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 typedef int (*Longtail_BlockStore_FlushFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
@@ -702,9 +702,9 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_FlushFunc flush_func);
 
 LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes);
+LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-LONGTAIL_EXPORT int Longtail_BlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
+LONGTAIL_EXPORT int Longtail_BlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
@@ -955,14 +955,14 @@ LONGTAIL_EXPORT int Longtail_ReadVersionIndex(
  *
  * @param[in] version_index         Pointer to an initialized struct Longtail_VersionIndex - the version we will have after applying @p version_diff
  * @param[in] version_diff          Pointer to an initialized struct Longtail_VersionDiff - the version diff to be applied to get to @p version_index
- * @param[out] out_chunk_count      Pointer to a uint64_t which will be set to the number of chunks required
+ * @param[out] out_chunk_count      Pointer to a uint32_t which will be set to the number of chunks required
  * @param[out] out_chunk_hashes     Pointer to a pre-allocated array where chunk indexes with be written - will add at most *version_index->m_ChunkCount chunks to array
  * @return                          Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_GetRequiredChunkHashes(
     const struct Longtail_VersionIndex* version_index,
     const struct Longtail_VersionDiff* version_diff,
-    uint64_t* out_chunk_count,
+    uint32_t* out_chunk_count,
     TLongtail_Hash* out_chunk_hashes);
 
 /*! @brief Write content blocks from version data
@@ -1027,9 +1027,9 @@ LONGTAIL_EXPORT int Longtail_CreateMissingContent(
  */
 LONGTAIL_EXPORT int Longtail_GetMissingChunks(
     const struct Longtail_StoreIndex* store_index,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
-    uint64_t* out_chunk_count,
+    uint32_t* out_chunk_count,
     TLongtail_Hash* out_missing_chunk_hashes);
 
 /*! @brief Unpack and write a version.
@@ -1186,7 +1186,7 @@ LONGTAIL_EXPORT int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
     uint32_t tag,
     uint32_t chunk_count,
-    const uint64_t* chunk_indexes,
+    const uint32_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     struct Longtail_BlockIndex** out_block_index);
@@ -1430,7 +1430,7 @@ LONGTAIL_EXPORT size_t Longtail_GetStoreIndexSize(uint32_t block_count, uint32_t
 
 LONGTAIL_EXPORT int Longtail_CreateStoreIndex(
     struct Longtail_HashAPI* hash_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     const uint32_t* optional_chunk_tags,

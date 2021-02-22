@@ -632,9 +632,9 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
 }
 
 int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api) { return block_store_api->PutStoredBlock(block_store_api, stored_block, async_complete_api); }
-int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes) { return block_store_api->PreflightGet(block_store_api, chunk_count, chunk_hashes); }
+int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes) { return block_store_api->PreflightGet(block_store_api, chunk_count, chunk_hashes); }
 int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api) { return block_store_api->GetStoredBlock(block_store_api, block_hash, async_complete_api); }
-int Longtail_BlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api) { return block_store_api->GetExistingContent(block_store_api, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api); }
+int Longtail_BlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api) { return block_store_api->GetExistingContent(block_store_api, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api); }
 int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats) { return block_store_api->GetStats(block_store_api, out_stats); }
 int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api) {return block_store_api->Flush(block_store_api, async_complete_api); }
 
@@ -1645,7 +1645,7 @@ struct HashJob
     struct Longtail_HashAPI* m_HashAPI;
     struct Longtail_ChunkerAPI* m_ChunkerAPI;
     TLongtail_Hash* m_PathHash;
-    uint64_t m_AssetIndex;
+    uint32_t m_AssetIndex;
     const char* m_RootPath;
     const char* m_Path;
     uint32_t m_MaxChunkCount;
@@ -1909,8 +1909,8 @@ static int ChunkAssets(
     uint32_t min_chunk_size;
     int err = chunker_api->GetMinChunkSize(chunker_api, &min_chunk_size);
 
-    uint64_t max_chunk_count = 0;
-    for (uint64_t asset_index = 0; asset_index < asset_count; ++asset_index)
+    uint32_t max_chunk_count = 0;
+    for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
         uint64_t asset_size = file_infos->m_Sizes[asset_index];
         uint64_t asset_part_count = 1 + (asset_size / max_hash_size);
@@ -1959,7 +1959,7 @@ static int ChunkAssets(
     Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)&tmp_hash_jobs[job_count];
     void** ctxs = (void**)&funcs[job_count];
 
-    uint64_t jobs_started = 0;
+    uint32_t jobs_started = 0;
     uint64_t chunks_offset = 0;
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
@@ -2067,7 +2067,7 @@ static int ChunkAssets(
         uint32_t chunk_offset = 0;
         for (uint32_t i = 0; i < jobs_started; ++i)
         {
-            uint64_t asset_index = tmp_hash_jobs[i].m_AssetIndex;
+            uint32_t asset_index = tmp_hash_jobs[i].m_AssetIndex;
             if (tmp_hash_jobs[i].m_StartRange == 0)
             {
                 asset_chunk_start_index[asset_index] = chunk_offset;
@@ -2865,7 +2865,7 @@ int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
     uint32_t tag,
     uint32_t chunk_count,
-    const uint64_t* chunk_indexes,
+    const uint32_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     struct Longtail_BlockIndex** out_block_index)
@@ -2901,7 +2901,7 @@ int Longtail_CreateBlockIndex(
     struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(mem, chunk_count);
     for (uint32_t i = 0; i < chunk_count; ++i)
     {
-        uint64_t chunk_index = chunk_indexes[i];
+        uint32_t chunk_index = chunk_indexes[i];
         block_index->m_ChunkHashes[i] = chunk_hashes[chunk_index];
         block_index->m_ChunkSizes[i] = chunk_sizes[chunk_index];
     }
@@ -3454,10 +3454,10 @@ int Longtail_ReadStoredBlock(
 static uint32_t GetUniqueHashes(
     uint32_t hash_count,
     const TLongtail_Hash* hashes,
-    uint64_t* out_unique_hash_indexes)
+    uint32_t* out_unique_hash_indexes)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(hash_count, "%" PRIu64),
+        LONGTAIL_LOGFIELD(hash_count, "%u"),
         LONGTAIL_LOGFIELD(hashes, "%p"),
         LONGTAIL_LOGFIELD(out_unique_hash_indexes, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
@@ -3474,7 +3474,7 @@ static uint32_t GetUniqueHashes(
     }
 
     uint32_t unique_hash_count = 0;
-    for (uint64_t i = 0; i < hash_count; ++i)
+    for (uint32_t i = 0; i < hash_count; ++i)
     {
         TLongtail_Hash hash = hashes[i];
         uint32_t* lookup_index = Longtail_LookupTable_PutUnique(lookup_table, hash, unique_hash_count);
@@ -3496,7 +3496,7 @@ static uint32_t GetUniqueHashes(
 int Longtail_GetRequiredChunkHashes(
     const struct Longtail_VersionIndex* version_index,
     const struct Longtail_VersionDiff* version_diff,
-    uint64_t* out_chunk_count,
+    uint32_t* out_chunk_count,
     TLongtail_Hash* out_chunk_hashes)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -3609,7 +3609,7 @@ static int CreateAssetPartLookup(
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
     {
         const char* path = &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
-        uint64_t asset_chunk_count = version_index->m_AssetChunkCounts[asset_index];
+        uint32_t asset_chunk_count = version_index->m_AssetChunkCounts[asset_index];
         uint32_t asset_chunk_index_start = version_index->m_AssetChunkIndexStarts[asset_index];
         uint64_t asset_chunk_offset = 0;
         for (uint32_t asset_chunk_index = 0; asset_chunk_index < asset_chunk_count; ++asset_chunk_index)
@@ -3649,7 +3649,7 @@ struct WriteBlockJob
     const char* m_AssetsFolder;
     const struct Longtail_StoreIndex* m_StoreIndex;
     struct AssetPartLookup* m_AssetPartLookup;
-    uint64_t m_BlockIndex;
+    uint32_t m_BlockIndex;
     int m_Err;
 };
 
@@ -3738,7 +3738,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
     uint32_t first_chunk_index = store_index->m_BlockChunksOffsets[job->m_BlockIndex];
 
     uint32_t block_data_size = 0;
-    for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
+    for (uint32_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
     {
         uint32_t chunk_size = store_index->m_ChunkSizes[chunk_index];
         block_data_size += chunk_size;
@@ -3775,7 +3775,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
     Longtail_StorageAPI_HOpenFile file_handle = 0;
     uint64_t asset_file_size = 0;
 
-    for (uint64_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
+    for (uint32_t chunk_index = first_chunk_index; chunk_index < first_chunk_index + chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_index];
         uint32_t chunk_size = store_index->m_ChunkSizes[chunk_index];
@@ -3915,14 +3915,14 @@ int Longtail_WriteContent(
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, assets_folder != 0, return EINVAL)
 
-    uint64_t block_count = *store_index->m_BlockCount;
+    uint32_t block_count = *store_index->m_BlockCount;
     if (block_count == 0)
     {
         return 0;
     }
 
     uint32_t version_chunk_count = *version_index->m_ChunkCount;
-    uint64_t version_store_index_chunk_count = *store_index->m_ChunkCount;
+    uint32_t version_store_index_chunk_count = *store_index->m_ChunkCount;
 
     size_t chunk_lookup_size = Longtail_LookupTable_GetSize(version_chunk_count);
     size_t chunk_sizes_size = sizeof(uint32_t) * version_store_index_chunk_count;
@@ -3961,7 +3961,7 @@ int Longtail_WriteContent(
         Longtail_LookupTable_Put(chunk_lookup, version_index->m_ChunkHashes[c], c);
     }
 
-    for (uint64_t c = 0; c < version_store_index_chunk_count; ++c)
+    for (uint32_t c = 0; c < version_store_index_chunk_count; ++c)
     {
         uint32_t* version_chunk_index = Longtail_LookupTable_Get(chunk_lookup, store_index->m_ChunkHashes[c]);
         if (version_chunk_index == 0)
@@ -3982,7 +3982,7 @@ int Longtail_WriteContent(
     }
 
     uint32_t job_count = 0;
-    for (uint64_t block_index = 0; block_index < block_count; ++block_index)
+    for (uint32_t block_index = 0; block_index < block_count; ++block_index)
     {
         TLongtail_Hash block_hash = store_index->m_BlockHashes[block_index];
 
@@ -4758,7 +4758,7 @@ struct WriteAssetsFromBlockJob
     const struct Longtail_VersionIndex* m_VersionIndex;
     const char* m_VersionFolder;
     struct BlockReaderJob m_BlockReadJob;
-    uint64_t m_BlockIndex;
+    uint32_t m_BlockIndex;
     uint32_t* m_AssetIndexes;
     uint32_t m_AssetCount;
     int m_RetainPermissions;
@@ -5351,7 +5351,7 @@ static int WriteAssets(
 //        job->m_StoreIndex = store_index;
         job->m_VersionIndex = version_index;
         job->m_VersionFolder = version_path;
-        job->m_BlockIndex = (uint64_t)block_index;
+        job->m_BlockIndex = block_index;
         job->m_AssetIndexes = &awl->m_BlockJobAssetIndexes[j];
         job->m_RetainPermissions = retain_permssions;
         job->m_Err = EINVAL;
@@ -5754,7 +5754,7 @@ static int DiffHashes(
             Longtail_LookupTable_Put(added_hashes_lookup, added_hashes[i], i);
         }
         added = 0;
-        for (uint64_t i = 0; i < new_hash_count; ++i)
+        for (uint32_t i = 0; i < new_hash_count; ++i)
         {
             TLongtail_Hash hash = new_hashes[i];
             if (Longtail_LookupTable_Get(added_hashes_lookup, hash) == 0)
@@ -5770,7 +5770,7 @@ static int DiffHashes(
 
 int Longtail_CreateStoreIndex(
     struct Longtail_HashAPI* hash_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
     const uint32_t* optional_chunk_tags,
@@ -5780,7 +5780,7 @@ int Longtail_CreateStoreIndex(
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(hash_api, "%p"),
-        LONGTAIL_LOGFIELD(chunk_count, "%" PRIu64),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(chunk_sizes, "%p"),
         LONGTAIL_LOGFIELD(optional_chunk_tags, "%p"),
@@ -5807,28 +5807,28 @@ int Longtail_CreateStoreIndex(
         return 0;
     }
 
-    size_t work_mem_size = (sizeof(uint64_t) * chunk_count) +
+    size_t work_mem_size = (sizeof(uint32_t) * chunk_count) +
         (sizeof(struct Longtail_BlockIndex*) * chunk_count) +
-        (sizeof(uint64_t) * max_chunks_per_block);
+        (sizeof(uint32_t) * max_chunks_per_block);
     void* work_mem = Longtail_Alloc("Longtail_CreateStoreIndex", work_mem_size);
     if (!work_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    uint64_t* tmp_chunk_indexes = (uint64_t*)work_mem;
+    uint32_t* tmp_chunk_indexes = (uint32_t*)work_mem;
     struct Longtail_BlockIndex** tmp_block_indexes = (struct Longtail_BlockIndex**)&tmp_chunk_indexes[chunk_count];
-    uint64_t* tmp_stored_chunk_indexes = (uint64_t*)&tmp_block_indexes[chunk_count];
+    uint32_t* tmp_stored_chunk_indexes = (uint32_t*)&tmp_block_indexes[chunk_count];
     uint32_t unique_chunk_count = GetUniqueHashes((uint32_t)chunk_count, chunk_hashes, tmp_chunk_indexes);
 
-    uint64_t i = 0;
+    uint32_t i = 0;
     uint32_t block_count = 0;
 
     while (i < unique_chunk_count)
     {
         uint32_t chunk_count_in_block = 0;
 
-        uint64_t chunk_index = tmp_chunk_indexes[i];
+        uint32_t chunk_index = tmp_chunk_indexes[i];
 
         uint32_t current_size = chunk_sizes[chunk_index];
         uint32_t current_tag = optional_chunk_tags ? optional_chunk_tags[chunk_index] : 0;
@@ -6025,14 +6025,14 @@ int Longtail_CreateMissingContent(
 
 int Longtail_GetMissingChunks(
     const struct Longtail_StoreIndex* store_index,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
-    uint64_t* out_chunk_count,
+    uint32_t* out_chunk_count,
     TLongtail_Hash* out_missing_chunk_hashes)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(store_index, "%p"),
-        LONGTAIL_LOGFIELD(chunk_count, "%" PRIu64),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(out_chunk_count, "%p"),
         LONGTAIL_LOGFIELD(out_missing_chunk_hashes, "%p")
@@ -7410,7 +7410,7 @@ LONGTAIL_EXPORT int Longtail_ValidateStore(
     uint32_t chunk_missing_count = 0;
     uint32_t asset_size_mismatch_count = 0;
 
-    uint64_t version_index_chunk_count = *version_index->m_ChunkCount;
+    uint32_t version_index_chunk_count = *version_index->m_ChunkCount;
     for (uint32_t chunk_index = 0; chunk_index < version_index_chunk_count; ++chunk_index)
     {
         TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];

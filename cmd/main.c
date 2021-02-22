@@ -309,7 +309,7 @@ static void AsyncGetExistingContentComplete_Dispose(struct AsyncGetExistingConte
     Longtail_Free(api->m_NotifySema);
 }
 
-static int SyncGetExistingContent(struct Longtail_BlockStoreAPI* block_store, uint64_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_StoreIndex** out_store_index)
+static int SyncGetExistingContent(struct Longtail_BlockStoreAPI* block_store, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_StoreIndex** out_store_index)
 {
     struct AsyncGetExistingContentComplete retarget_store_index_complete;
     AsyncGetExistingContentComplete_Init(&retarget_store_index_complete);
@@ -856,7 +856,7 @@ int DownSync(
         return 0;
     }
 
-    uint64_t required_chunk_count;
+    uint32_t required_chunk_count;
     TLongtail_Hash* required_chunk_hashes = (TLongtail_Hash*)Longtail_Alloc(0, sizeof(TLongtail_Hash) * (*source_version_index->m_ChunkCount));
     err = Longtail_GetRequiredChunkHashes(
             source_version_index,
