@@ -6141,7 +6141,6 @@ int Longtail_GetExistingStoreIndex(
     size_t block_to_index_lookup_size = Longtail_LookupTable_GetSize(store_block_count);
     size_t chunk_to_store_index_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
     size_t found_store_block_hashes_size = sizeof(TLongtail_Hash) * store_block_count;
-    size_t found_store_chunk_per_block_size = sizeof(uint32_t) * store_block_count;
     size_t block_uses_size = sizeof(uint32_t) * store_block_count;
     size_t block_sizes_size = sizeof(uint32_t) * store_block_count;
     size_t block_order_size = sizeof(uint32_t) * store_block_count;
@@ -6149,7 +6148,6 @@ int Longtail_GetExistingStoreIndex(
     size_t tmp_mem_size = chunk_to_index_lookup_size +
         block_to_index_lookup_size +
         chunk_to_store_index_lookup_size +
-        found_store_chunk_per_block_size +
         found_store_block_hashes_size +
         block_uses_size +
         block_sizes_size +
@@ -6174,9 +6172,6 @@ int Longtail_GetExistingStoreIndex(
 
     TLongtail_Hash* found_store_block_hashes = (TLongtail_Hash*)p;
     p += found_store_block_hashes_size;
-
-    uint32_t* found_store_chunk_per_block = (uint32_t*)p;
-    p += found_store_chunk_per_block_size;
 
     uint32_t* block_uses = (uint32_t*)p;
     p += block_uses_size;
@@ -6264,12 +6259,10 @@ int Longtail_GetExistingStoreIndex(
                     if (block_index_ptr == 0)
                     {
                         found_store_block_hashes[found_block_count++] = block_hash;
-                        found_store_chunk_per_block[current_found_block_index] = 1;
                     }
                     ++store_chunk_index_offset;
                     continue;
                 }
-                found_store_chunk_per_block[current_found_block_index]++;
                 ++store_chunk_index_offset;
             }
         }
