@@ -7680,6 +7680,9 @@ uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* ve
 uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* version_index) { return *version_index->m_HashIdentifier; }
 uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* version_index) { return *version_index->m_AssetCount; }
 uint32_t Longtail_VersionIndex_GetChunkCount(const struct Longtail_VersionIndex* version_index) { return *version_index->m_ChunkCount; }
+const TLongtail_Hash* Longtail_VersionIndex_GetChunkHashes(const struct Longtail_VersionIndex* version_index) { return version_index->m_ChunkHashes;}
+const uint32_t* Longtail_VersionIndex_GetChunkSizes(const struct Longtail_VersionIndex* version_index) { return version_index->m_ChunkSizes;}
+const uint32_t* Longtail_VersionIndex_GetChunkTags(const struct Longtail_VersionIndex* version_index) { return version_index->m_ChunkTags;}
 
 uint32_t Longtail_StoreIndex_GetVersion(const struct Longtail_StoreIndex* store_index) { return *store_index->m_Version;}
 uint32_t Longtail_StoreIndex_GetHashIdentifier(const struct Longtail_StoreIndex* store_index) { return *store_index->m_HashIdentifier;}

@@ -1573,6 +1573,9 @@ LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_
 LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* version_index);
 LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* version_index);
 LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetChunkCount(const struct Longtail_VersionIndex* version_index);
+LONGTAIL_EXPORT const TLongtail_Hash* Longtail_VersionIndex_GetChunkHashes(const struct Longtail_VersionIndex* version_index);
+LONGTAIL_EXPORT const uint32_t* Longtail_VersionIndex_GetChunkSizes(const struct Longtail_VersionIndex* version_index);
+LONGTAIL_EXPORT const uint32_t* Longtail_VersionIndex_GetChunkTags(const struct Longtail_VersionIndex* version_index);
 
 struct Longtail_VersionDiff
 {
