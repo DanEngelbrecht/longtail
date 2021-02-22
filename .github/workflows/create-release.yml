@@ -104,10 +104,47 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **CHANGE** `Longtail_LookupTabke` now uses uint32_t for indexes/values
-          - **ADDED** `Longtail_CopyStoreIndex` and `Longtail_CopyBlockIndex`
-          - **FIX** Removed redundant tag array in `ChunkAssets`
-          - **ADDED** `lib/memtracer` to track memory usage
+          - **CHANGED API**
+            - `Longtail_AsyncGetExistingContentAPI`
+            - `Longtail_BlockStore_PreflightGetFunc`
+            - `Longtail_BlockStore_GetExistingContentFunc`
+            - `Longtail_GetRequiredChunkHashes`
+            - `Longtail_WriteContent`
+            - `Longtail_WriteContent`
+            - `Longtail_CreateMissingContent`
+            - `Longtail_GetMissingChunks`
+            - `Longtail_AddContentIndex`
+            - `Longtail_CreateVersionDiff`
+            - `Longtail_ChangeVersion`
+            - `Longtail_InitBlockIndexFromData`
+          - **REMOVED API** Remove all `Longtail_ContentIndex` types and functions
+            - `struct Longtail_ContentIndex`
+            - `Longtail_GetContentIndexDataSize`
+            - `Longtail_GetContentIndexSize`
+            - `Longtail_InitContentIndexFromData`
+            - `Longtail_InitContentIndex`
+            - `Longtail_CreateContentIndexFromBlocks`
+            - `Longtail_CreateContentIndex`
+            - `Longtail_CreateContentIndexRaw`
+            - `Longtail_CreateContentIndexFromStoreIndex`
+            - `Longtail_WriteContentIndexToBuffer`
+            - `Longtail_ReadContentIndexFromBuffer`
+            - `Longtail_WriteContentIndex`
+            - `Longtail_ReadContentIndex`
+            - `Longtail_MergeContentIndex`
+            - `Longtail_ValidateContent`
+            - `Longtail_ValidateVersion`
+            - `Longtail_ContentIndex_GetVersion`
+            - `Longtail_ContentIndex_GetHashAPI`
+            - `Longtail_ContentIndex_GetBlockCount`
+            - `Longtail_ContentIndex_GetChunkCount`
+            - `Longtail_CreateStoreIndexFromContentIndex`
+            - `Longtail_GetExistingContentIndex`
+          - **ADDED API**
+            - `Longtail_CreateStoreIndex`
+            - `Longtail_GetExistingStoreIndex`
+            - `Longtail_ValidateStore`
+          - **REMOVED** `--version-content-index-path` option has been removed from command line tool
         draft: false
         prerelease: true
     - name: Download Linux artifacts
