@@ -5891,7 +5891,7 @@ int Longtail_CreateStoreIndex(
         out_store_index);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndexFromBlocks() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateStoreIndexFromBlocks() failed with %d", err)
         return err;
     }
 
@@ -5963,7 +5963,7 @@ int Longtail_CreateMissingContent(
             out_store_index);
         if (err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateContentIndex() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateStoreIndexFromBlocks() failed with %d", err)
         }
         return err;
     }
@@ -7683,10 +7683,10 @@ const char* Longtail_FileInfos_GetPath(const struct Longtail_FileInfos* file_inf
 uint64_t Longtail_FileInfos_GetSize(const struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_Sizes[index]; }
 const uint16_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_Permissions; }
 
-uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* content_index) { return *content_index->m_Version; }
-uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* content_index) { return *content_index->m_HashIdentifier; }
-uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* content_index) { return *content_index->m_AssetCount; }
-uint32_t Longtail_VersionIndex_GetChunkCount(const struct Longtail_VersionIndex* content_index) { return *content_index->m_ChunkCount; }
+uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* version_index) { return *version_index->m_Version; }
+uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* version_index) { return *version_index->m_HashIdentifier; }
+uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* version_index) { return *version_index->m_AssetCount; }
+uint32_t Longtail_VersionIndex_GetChunkCount(const struct Longtail_VersionIndex* version_index) { return *version_index->m_ChunkCount; }
 
 uint32_t Longtail_StoreIndex_GetVersion(const struct Longtail_StoreIndex* store_index) { return *store_index->m_Version;}
 uint32_t Longtail_StoreIndex_GetHashIdentifier(const struct Longtail_StoreIndex* store_index) { return *store_index->m_HashIdentifier;}

@@ -967,7 +967,7 @@ LONGTAIL_EXPORT int Longtail_GetRequiredChunkHashes(
 
 /*! @brief Write content blocks from version data
  *
- * Writes all blocks for @p version_content_index using @p version_index and asset_path as data source to a block store
+ * Writes all blocks for @p store_index using @p version_index and asset_path as data source to a block store
  *
  * @param[in] source_storage_api        An initialized struct Longtail_StorageAPI
  * @param[in] block_store_api           An initialized struct Longtail_BlockStoreAPI
@@ -976,7 +976,7 @@ LONGTAIL_EXPORT int Longtail_GetRequiredChunkHashes(
  * @param[in] progress_api              An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
  * @param[in] optional_cancel_api       An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token     A cancel token or null if @p optional_cancel_api is null
- * @param[in] content_index             The content index to write, all blocks in content index will be written
+ * @param[in] store_index               The store index to write, all blocks in store index will be written
  * @param[in] version_index             Version index of data in  @p assets_folder
  * @param[in] assets_folder             Path of version data inside @p source_storage_api
  * @return                  Return code (errno style), zero on success
@@ -992,14 +992,14 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_VersionIndex* version_index,
     const char* assets_folder);
 
-/*! @brief Generate a content index with what is missing.
+/*! @brief Generate a store index with what is missing.
  *
- * Any content in @p version_index that is not present in @p content_index will be included in @p out_content_index
- * Chunks that are not present in @p content_index will be bundled up in blocks according to @p max_block_size and @p max_chunks_per_block.
+ * Any content in @p version_index that is not present in @p store_index will be included in @p out_store_index
+ * Chunks that are not present in @p store_index will be bundled up in blocks according to @p max_block_size and @p max_chunks_per_block.
  *
- * @param[in] hash_api              An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both content index index and version index
- * @param[in] store_index           The known content to check against
- * @param[in] version_index         The version index content you test against @p reference_content_index
+ * @param[in] hash_api              An implementation of struct Longtail_HashAPI interface. This must match the hashing api used to create both store index index and version index
+ * @param[in] store_index           The known store index to check against
+ * @param[in] version_index         The version index content you test against @p store_index
  * @param[in] max_block_size        The maximum size if bytes one block is allowed to be
  * @param[in] max_chunks_per_block  The maximum number of chunks allowed inside one block
  * @param[out] out_store_index      The resulting missing store index will be created and assigned to this pointer reference if successful
@@ -1014,13 +1014,9 @@ LONGTAIL_EXPORT int Longtail_CreateMissingContent(
     struct Longtail_StoreIndex** out_store_index);
 
 
-/*! @brief Generate a content index with what is missing.
+/*! @brief Generates an array of all chunks missing in a store index.
  *
- * Any content in @p content_index that is not present in @p reference_content_index will be included in @p out_content_index
- * The content verification will only add blocks from @p content_index that has chunks it can not
- * find in @p reference_content_index.
- *
- * The missing blocks are added in complete form so you might get redundant content in @p out_content_index.
+ * Any chunk hashes in @p chunk_hashes that is not present in @p store_index will be included in @p out_missing_chunk_hashes
  *
  * @param[in] store_index               ???
  * @param[in] chunk_count               ???
@@ -1040,8 +1036,8 @@ LONGTAIL_EXPORT int Longtail_GetMissingChunks(
  *
  * Writes out a full version to @p version_storage_api at path @p version_path.
  * Usually done to an empty folder since it will not remove any assets that are not in @p version_index.
- * Uses @p content_index to know where chunks are located in blocks - this can either be the full
- * content index of @p block_storage_api or a content index that is slimmed down using Longtail_BlockStore_GetExistingContent.
+ * Uses @p store_index to know where chunks are located in blocks - this can either be the full
+ * store index of @p block_storage_api or a store index that is slimmed down using Longtail_BlockStore_GetExistingContent.
  * Blocks are fetched from @p block_storage_api on demand.
  *
  * @param[in] block_storage_api     An implementation of struct Longtail_BlockStoreAPI interface
@@ -1050,7 +1046,7 @@ LONGTAIL_EXPORT int Longtail_GetMissingChunks(
  * @param[in] progress_api          An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
  * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
- * @param[in] content_index         The content index for @p block_store_api
+ * @param[in] store_index           The store index for @p block_store_api
  * @param[in] version_index         The version index for the version to write
  * @param[in] version_path          The path in @p version_storage_api to write the version to
  * @param[in] retain_permissions    Flag for setting permissions - 0 = don't set permissions, 1 = set permissions
@@ -1088,8 +1084,8 @@ LONGTAIL_EXPORT int Longtail_CreateVersionDiff(
 /*! @brief Unpack and modify a version.
  *
  * Applies the changes from @p version_diff to change a version from @p source_version to @p target_version.
- * Uses @p content_index to know where chunks are located in blocks - this can either be the full
- * content index of @p block_storage_api or a content index that is slimmed down using Longtail_BlockStore_GetExistingContent.
+ * Uses @p store_index to know where chunks are located in blocks - this can either be the full
+ * store index of @p block_storage_api or a store index that is slimmed down using Longtail_BlockStore_GetExistingContent.
  * Blocks are fetched from @p block_storage_api on demand.
  *
  * @param[in] block_storage_api     An implementation of struct Longtail_BlockStoreAPI interface
@@ -1099,7 +1095,7 @@ LONGTAIL_EXPORT int Longtail_CreateVersionDiff(
  * @param[in] progress_api          An initialized struct Longtail_ProgressAPI, or 0 for no progress reporting
  * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
- * @param[in] content_index         @p target_version retargetted to @p block_storage_api (see Longtail_BlockStoreAPI::GetExistingContent)
+ * @param[in] store_index           @p target_version retargetted to @p block_storage_api (see Longtail_BlockStoreAPI::GetExistingContent)
  * @param[in] source_version        The version index for the current version
  * @param[in] target_version        The version index for the target version
  * @param[in] version_diff          The version diff between @p source_version and @p target_version
@@ -1183,7 +1179,7 @@ LONGTAIL_EXPORT int Longtail_InitBlockIndexFromData(
  * @param[in] chunk_indexes     Indexing into @p chunk_hashes
  * @param[in] chunk_hashes      Array of chunk hashes - it can contain many more hashes than chunks in block - use @p chunk_indexes array to identify hashes
  * @param[in] chunk_sizes       Array of chunk sizes - it can contain many more sizes than chunks in block - use @p chunk_indexes array to identify sizes
- * @param[out] out_block_index  The resulting content index will be created and assigned to this pointer reference if successful
+ * @param[out] out_block_index  The resulting block index will be created and assigned to this pointer reference if successful
  * @return                      Return code (errno style), zero on success
  */
 LONGTAIL_EXPORT int Longtail_CreateBlockIndex(
@@ -1466,7 +1462,7 @@ LONGTAIL_EXPORT int Longtail_GetExistingStoreIndex(
     uint32_t max_chunks_per_block,
     struct Longtail_StoreIndex** out_store_index);
 
-/*! @brief Validate that content_index contains all of version_index.
+/*! @brief Validate that store_index contains all of version_index.
  *
  * Validates that all chunks required for @p version_index are present in @p store_index
  * Validates that reconstructing an asset via chunks results in the same size as recorded in @p version_index
@@ -1573,10 +1569,10 @@ struct Longtail_VersionIndex
     char* m_NameData;
 };
 
-LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* content_index);
-LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* content_index);
-LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* content_index);
-LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetChunkCount(const struct Longtail_VersionIndex* content_index);
+LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* version_index);
+LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* version_index);
+LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* version_index);
+LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetChunkCount(const struct Longtail_VersionIndex* version_index);
 
 struct Longtail_VersionDiff
 {

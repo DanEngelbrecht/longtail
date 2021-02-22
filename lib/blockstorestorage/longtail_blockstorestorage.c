@@ -1244,7 +1244,7 @@ static int BlockStoreStorageAPI_Init(
     LONGTAIL_VALIDATE_INPUT(ctx, out_storage_api != 0, return 0)
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)mem;
-    uint64_t content_index_chunk_count = *store_index->m_ChunkCount;
+    uint64_t store_index_chunk_count = *store_index->m_ChunkCount;
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
 
     block_store_fs->m_API.m_API.Dispose = BlockStoreStorageAPI_Dispose;
@@ -1275,13 +1275,13 @@ static int BlockStoreStorageAPI_Init(
     block_store_fs->m_VersionIndex = version_index;
 
     char* p = (char*)&block_store_fs[1];
-    block_store_fs->m_ChunkHashToBlockIndexLookup = Longtail_LookupTable_Create(p, (uint32_t)content_index_chunk_count, 0);
-    p += Longtail_LookupTable_GetSize((uint32_t)content_index_chunk_count);
+    block_store_fs->m_ChunkHashToBlockIndexLookup = Longtail_LookupTable_Create(p, (uint32_t)store_index_chunk_count, 0);
+    p += Longtail_LookupTable_GetSize((uint32_t)store_index_chunk_count);
     block_store_fs->m_PathLookup = BlockStoreStorageAPI_CreatePathLookup(p, hash_api, version_index);
     p += GetPathEntriesSize(version_index_asset_count);
     block_store_fs->m_ChunkAssetOffsets = (uint64_t*)p;
 
-    const TLongtail_Hash* content_index_chunk_hashes = store_index->m_ChunkHashes;
+    const TLongtail_Hash* stire_index_chunk_hashes = store_index->m_ChunkHashes;
     uint32_t block_count = *store_index->m_BlockCount;
     for (uint32_t b = 0; b < block_count; ++b)
     {
