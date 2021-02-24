@@ -87,6 +87,85 @@ static const char* Denoms[] = {
     "tb"
 };
 
+const char* StatsDumpFileName = "memstats.csv";
+
+int Longtail_MemTracer_DumpStats(const char* name)
+{
+    char* full_stats = malloc(64*1024);
+    uint64_t stats_size = 0;
+    char* new_stats = full_stats;
+
+    Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
+
+    int len = sprintf(new_stats, "Context, Total Mem, Current Mem, Peak Mem, Total Count, Current Count, Peak Count, Global Mem Count, Global Peak Count\n");
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+    for (uint32_t c = 0; c < gMemTracer_Context->m_ContextCount; ++c) {
+        struct MemTracer_ContextStats* stats = &gMemTracer_Context->m_ContextStats[c];
+
+        len = sprintf(new_stats, "%s,", stats->context_name ? stats->context_name : "");
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 ",", stats->total_mem);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 ",", stats->current_mem);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 ",", stats->peak_mem);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 ",", stats->total_count);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 ",", stats->current_count);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 ",", stats->peak_count);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 ",", stats->global_peak_mem);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+        len = sprintf(new_stats, "%" PRIu64 "\n", stats->global_peak_count);
+        new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+    }
+    len = sprintf(new_stats, "Global,");
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 ",", gMemTracer_Context->m_AllocationTotalMem);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 ",", gMemTracer_Context->m_AllocationCurrentMem);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 ",", gMemTracer_Context->m_AllocationPeakMem);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 ",", gMemTracer_Context->m_AllocationTotalCount);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 ",", gMemTracer_Context->m_AllocationCurrentCount);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 ",", gMemTracer_Context->m_AllocationPeakCount);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 ",", gMemTracer_Context->m_AllocationTotalMem);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    len = sprintf(new_stats, "%" PRIu64 "\n", gMemTracer_Context->m_AllocationPeakCount);
+    new_stats = &new_stats[len]; stats_size += (uint64_t)len;
+
+    Longtail_UnlockSpinLock(gMemTracer_Context->m_Spinlock);
+
+    FILE* f = fopen(name, "wb");
+    fwrite(full_stats, 1, stats_size, f);
+    fclose(f);
+
+    free(full_stats);
+    return 0;
+}
+
 static void MemTracer_PrintSize(size_t size) {
     if (size < 1024 * 100) {
         printf("%" PRIu64, size);
