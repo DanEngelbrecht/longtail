@@ -146,7 +146,7 @@ jobs:
             - `Longtail_ValidateStore`
             - `Longtail_VersionIndex_GetChunkHashes`
             - `Longtail_VersionIndex_GetChunkSizes`
-            - `Longtail_StoreIndex_GetChunkTags`
+            - `Longtail_VersionIndex_GetChunkTags`
           - **REMOVED** `--version-content-index-path` option has been removed from command line tool
         draft: false
         prerelease: true
