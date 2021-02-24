@@ -1673,7 +1673,6 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
-    struct HashJob* hash_job = (struct HashJob*)context;
 
     if (is_cancelled)
     {
@@ -1682,6 +1681,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
         return 0;
     }
 
+    struct HashJob* hash_job = (struct HashJob*)context;
     if (hash_job->m_PathHash)
     {
         hash_job->m_Err = Longtail_GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
@@ -2031,11 +2031,11 @@ static int ChunkAssets(
     if (err)
     {
         LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
-        Longtail_Free(work_mem);
         for (uint32_t i = 0; i < jobs_started; ++i)
         {
             Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
         }
+        Longtail_Free(work_mem);
         return err;
     }
 
