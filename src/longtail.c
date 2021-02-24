@@ -1673,6 +1673,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
+    struct HashJob* hash_job = (struct HashJob*)context;
 
     if (is_cancelled)
     {
@@ -1681,7 +1682,6 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
         return 0;
     }
 
-    struct HashJob* hash_job = (struct HashJob*)context;
     if (hash_job->m_PathHash)
     {
         hash_job->m_Err = Longtail_GetPathHash(hash_job->m_HashAPI, hash_job->m_Path, hash_job->m_PathHash);
@@ -1884,6 +1884,36 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
     return 0;
 }
 
+struct ChunkAssetsData {
+    uint32_t m_ChunkCount;
+    TLongtail_Hash* m_ChunkHashes;
+    uint32_t* m_ChunkSizes;
+    uint32_t* m_ChunkTags;
+};
+
+struct ChunkAssetsData* AllocChunkAssetsData(uint32_t chunk_count)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(chunk_count, "%u")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+    size_t size = sizeof(struct ChunkAssetsData) +
+        sizeof(TLongtail_Hash) * chunk_count +
+        sizeof(uint32_t) * chunk_count +
+        sizeof(uint32_t) * chunk_count;
+    void* mem = Longtail_Alloc("AllocChunkAssetsData", size);
+    if (!mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return 0;
+    }
+    struct ChunkAssetsData* chunk_assets_data = (struct ChunkAssetsData*)mem;
+    chunk_assets_data->m_ChunkCount = chunk_count;
+    chunk_assets_data->m_ChunkHashes = (TLongtail_Hash*)&chunk_assets_data[1];
+    chunk_assets_data->m_ChunkSizes = (uint32_t*)&chunk_assets_data->m_ChunkHashes[chunk_count];
+    chunk_assets_data->m_ChunkTags = (uint32_t*)&chunk_assets_data->m_ChunkSizes[chunk_count];
+    return chunk_assets_data;
+}
+
 static int ChunkAssets(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
@@ -1899,11 +1929,8 @@ static int ChunkAssets(
     const uint32_t* optional_asset_tags,
     uint32_t* asset_chunk_start_index,
     uint32_t* asset_chunk_counts,
-    uint32_t** chunk_sizes,
-    TLongtail_Hash** chunk_hashes,
-    uint32_t** chunk_tags,
     uint32_t target_chunk_size,
-    uint32_t* chunk_count)
+    struct ChunkAssetsData** out_chunk_assets_data)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
@@ -1920,11 +1947,8 @@ static int ChunkAssets(
         LONGTAIL_LOGFIELD(optional_asset_tags, "%p"),
         LONGTAIL_LOGFIELD(asset_chunk_start_index, "%p"),
         LONGTAIL_LOGFIELD(asset_chunk_counts, "%p"),
-        LONGTAIL_LOGFIELD(chunk_sizes, "%p"),
-        LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
-        LONGTAIL_LOGFIELD(chunk_tags, "%p"),
         LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
-        LONGTAIL_LOGFIELD(chunk_count, "%p")
+        LONGTAIL_LOGFIELD(out_chunk_assets_data, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL)
@@ -1937,11 +1961,8 @@ static int ChunkAssets(
     LONGTAIL_FATAL_ASSERT(ctx, content_hashes != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, asset_chunk_start_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, asset_chunk_counts != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(ctx, chunk_sizes != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(ctx, chunk_hashes != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(ctx, chunk_tags != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, target_chunk_size != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(ctx, chunk_count != 0, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, out_chunk_assets_data != 0, return EINVAL)
 
     uint32_t asset_count = file_infos->m_Count;
 
@@ -2056,53 +2077,16 @@ static int ChunkAssets(
         {
             built_chunk_count += *tmp_hash_jobs[i].m_AssetChunkCount;
         }
-        *chunk_count = built_chunk_count;
-        size_t chunk_sizes_size = sizeof(uint32_t) * *chunk_count;
-        *chunk_sizes = (uint32_t*)Longtail_Alloc("ChunkAssets", chunk_sizes_size);
-        if (!*chunk_sizes)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            Longtail_Free(work_mem);
 
+        struct ChunkAssetsData* cad = AllocChunkAssetsData(built_chunk_count);
+        if (!cad)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AllocChunkAssetsData() failed with %d", ENOMEM)
             for (uint32_t i = 0; i < jobs_started; ++i)
             {
                 Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
             }
-
-            return ENOMEM;
-        }
-        size_t chunk_hashes_size = sizeof(TLongtail_Hash) * *chunk_count;
-        *chunk_hashes = (TLongtail_Hash*)Longtail_Alloc("ChunkAssets", chunk_hashes_size);
-        if (!*chunk_hashes)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            Longtail_Free(*chunk_sizes);
-            *chunk_sizes = 0;
             Longtail_Free(work_mem);
-
-            for (uint32_t i = 0; i < jobs_started; ++i)
-            {
-                Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
-            }
-
-            return ENOMEM;
-        }
-        size_t chunk_tags_size = sizeof(uint32_t) * *chunk_count;
-        *chunk_tags = (uint32_t*)Longtail_Alloc("ChunkAssets", chunk_tags_size);
-        if (!*chunk_tags)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            Longtail_Free(*chunk_hashes);
-            *chunk_hashes = 0;
-            Longtail_Free(*chunk_sizes);
-            *chunk_sizes = 0;
-            Longtail_Free(work_mem);
-
-            for (uint32_t i = 0; i < jobs_started; ++i)
-            {
-                Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
-            }
-
             return ENOMEM;
         }
 
@@ -2119,9 +2103,9 @@ static int ChunkAssets(
             asset_chunk_counts[asset_index] += job_chunk_count;
             for (uint32_t chunk_index = 0; chunk_index < job_chunk_count; ++chunk_index)
             {
-                (*chunk_sizes)[chunk_offset] = tmp_hash_jobs[i].m_ChunkSizes[chunk_index];
-                (*chunk_hashes)[chunk_offset] = tmp_hash_jobs[i].m_ChunkHashes[chunk_index];
-                (*chunk_tags)[chunk_offset] = optional_asset_tags ? optional_asset_tags[asset_index] : 0;
+                cad->m_ChunkSizes[chunk_offset] = tmp_hash_jobs[i].m_ChunkSizes[chunk_index];
+                cad->m_ChunkHashes[chunk_offset] = tmp_hash_jobs[i].m_ChunkHashes[chunk_index];
+                cad->m_ChunkTags[chunk_offset] = optional_asset_tags ? optional_asset_tags[asset_index] : 0;
                 ++chunk_offset;
             }
         }
@@ -2129,25 +2113,20 @@ static int ChunkAssets(
         {
             uint32_t chunk_start_index = asset_chunk_start_index[a];
             uint32_t hash_size = (uint32_t)(sizeof(TLongtail_Hash) * asset_chunk_counts[a]);
-            err = hash_api->HashBuffer(hash_api, hash_size, &(*chunk_hashes)[chunk_start_index], &content_hashes[a]);
+            err = hash_api->HashBuffer(hash_api, hash_size, &cad->m_ChunkHashes[chunk_start_index], &content_hashes[a]);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer() failed with %d", err)
-                Longtail_Free(*chunk_tags);
-                *chunk_tags = 0;
-                Longtail_Free(*chunk_hashes);
-                *chunk_hashes = 0;
-                Longtail_Free(*chunk_sizes);
-                *chunk_sizes = 0;
-                Longtail_Free(work_mem);
-
+                Longtail_Free(cad);
                 for (uint32_t i = 0; i < jobs_started; ++i)
                 {
                     Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
                 }
+                Longtail_Free(work_mem);
                 return err;
             }
         }
+        *out_chunk_assets_data = cad;
     }
 
     for (uint32_t i = 0; i < jobs_started; ++i)
@@ -2497,10 +2476,7 @@ int Longtail_CreateVersionIndex(
     uint32_t* tmp_asset_chunk_counts = (uint32_t*)&tmp_content_hashes[path_count];
     uint32_t* tmp_asset_chunk_start_index = (uint32_t*)&tmp_asset_chunk_counts[path_count];
 
-    uint32_t assets_chunk_index_count = 0;
-    uint32_t* asset_chunk_sizes = 0;
-    uint32_t* asset_chunk_tags = 0;
-    TLongtail_Hash* asset_chunk_hashes = 0;
+    struct ChunkAssetsData* chunk_assets_data;
 
     int err = ChunkAssets(
         storage_api,
@@ -2517,17 +2493,19 @@ int Longtail_CreateVersionIndex(
         optional_asset_tags,
         tmp_asset_chunk_start_index,
         tmp_asset_chunk_counts,
-        &asset_chunk_sizes,
-        &asset_chunk_hashes,
-        &asset_chunk_tags,
         target_chunk_size,
-        &assets_chunk_index_count);
+        &chunk_assets_data);
     if (err)
     {
         LONGTAIL_LOG(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "ChunkAssets() failed with %d", err)
         Longtail_Free(work_mem);
         return err;
     }
+
+    uint32_t assets_chunk_index_count = chunk_assets_data->m_ChunkCount;
+    uint32_t* asset_chunk_sizes = chunk_assets_data->m_ChunkSizes;
+    uint32_t* asset_chunk_tags = chunk_assets_data->m_ChunkTags;
+    TLongtail_Hash* asset_chunk_hashes = chunk_assets_data->m_ChunkHashes;
 
     size_t work_mem_compact_size = (sizeof(uint32_t) * assets_chunk_index_count) +
         (sizeof(TLongtail_Hash) * assets_chunk_index_count) + 
@@ -2538,9 +2516,7 @@ int Longtail_CreateVersionIndex(
     if (!work_mem_compact)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(asset_chunk_tags);
-        Longtail_Free(asset_chunk_hashes);
-        Longtail_Free(asset_chunk_sizes);
+        Longtail_Free(chunk_assets_data);
         Longtail_Free(work_mem);
         return ENOMEM;
     }
@@ -2577,9 +2553,7 @@ int Longtail_CreateVersionIndex(
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_Free(work_mem_compact);
-        Longtail_Free(asset_chunk_tags);
-        Longtail_Free(asset_chunk_hashes);
-        Longtail_Free(asset_chunk_sizes);
+        Longtail_Free(chunk_assets_data);
         Longtail_Free(work_mem);
         return ENOMEM;
     }
@@ -2607,17 +2581,13 @@ int Longtail_CreateVersionIndex(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_BuildVersionIndex() failed with %d", err)
         Longtail_Free(work_mem_compact);
         Longtail_Free(version_index_mem);
-        Longtail_Free(asset_chunk_tags);
-        Longtail_Free(asset_chunk_hashes);
-        Longtail_Free(asset_chunk_sizes);
+        Longtail_Free(chunk_assets_data);
         Longtail_Free(work_mem);
         return err;
     }
 
     Longtail_Free(work_mem_compact);
-    Longtail_Free(asset_chunk_tags);
-    Longtail_Free(asset_chunk_hashes);
-    Longtail_Free(asset_chunk_sizes);
+    Longtail_Free(chunk_assets_data);
     Longtail_Free(work_mem);
 
     *out_version_index = version_index;
