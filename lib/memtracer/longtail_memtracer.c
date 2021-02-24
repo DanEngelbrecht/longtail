@@ -91,7 +91,7 @@ const char* StatsDumpFileName = "memstats.csv";
 
 int Longtail_MemTracer_DumpStats(const char* name)
 {
-    char* full_stats = malloc(64*1024);
+    char* full_stats = (char*)malloc(64*1024);
     uint64_t stats_size = 0;
     char* new_stats = full_stats;
 
