@@ -5915,7 +5915,6 @@ static int WriteAssets(
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_LookupTable_Get() failed with %d", EINVAL)
                 return EINVAL;
             }
-            LONGTAIL_FATAL_ASSERT(ctx, block_index_ptr, return EINVAL);
             uint32_t block_index = *block_index_ptr;
             TLongtail_Hash block_hash = content_index->m_BlockHashes[block_index];
 
