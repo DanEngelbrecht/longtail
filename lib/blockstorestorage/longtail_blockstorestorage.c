@@ -351,8 +351,7 @@ static void BlockStoreStorageAPI_ReadBlock_OnComplete(struct Longtail_AsyncGetSt
     struct Longtail_JobAPI* job_api = cb->m_Data->m_BlockStoreFS->m_JobAPI;
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadBlock_OnComplete(%p, %p, %d)",
-            async_complete_api, stored_block, err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadBlock_OnComplete() caller failed with %d", err)
     }
     cb->m_Data->m_Err = err;
     cb->m_Data->m_StoredBlock = stored_block;
