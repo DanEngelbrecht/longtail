@@ -542,7 +542,10 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count, 
         return err;
     }
 
-    job_api->m_Shed = Bikeshed_Create(Longtail_Alloc("Bikeshed", BIKESHED_SIZE(1048576, 7340032, 1)), 1048576, 7340032, 1, &job_api->m_ReadyCallback.cb);
+    #define BIKESHED_MAX_TASK_COUNT         131072
+    #define BIKESHED_MAX_DEPENDENCY_COUNT   458752
+
+    job_api->m_Shed = Bikeshed_Create(Longtail_Alloc("Bikeshed", BIKESHED_SIZE(BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 1)), BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 1, &job_api->m_ReadyCallback.cb);
     if (!job_api->m_Shed)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Bikeshed_Create() failed with %d", ENOMEM)
