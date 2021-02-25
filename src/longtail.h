@@ -1458,8 +1458,6 @@ LONGTAIL_EXPORT int Longtail_GetExistingStoreIndex(
     uint32_t chunk_count,
     const TLongtail_Hash* chunks,
     uint32_t min_block_usage_percent,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
     struct Longtail_StoreIndex** out_store_index);
 
 /*! @brief Validate that store_index contains all of version_index.

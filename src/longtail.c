@@ -6129,8 +6129,6 @@ int Longtail_GetExistingStoreIndex(
     uint32_t chunk_count,
     const TLongtail_Hash* chunks,
     uint32_t min_block_usage_percent,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
     struct Longtail_StoreIndex** out_store_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -6138,8 +6136,6 @@ int Longtail_GetExistingStoreIndex(
         LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(chunks, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
-        LONGTAIL_LOGFIELD(max_block_size, "%u"),
-        LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 

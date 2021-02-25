@@ -948,8 +948,6 @@ TEST(Longtail, Longtail_GetExistingStoreIndex)
         (uint32_t)arrlen(chunk_hashes),
         chunk_hashes,
         0,
-        32 * block_count,
-        5,
         &all_blocks));
     ASSERT_EQ(6, *all_blocks->m_BlockCount);
     ASSERT_EQ(*block_indexes[4]->m_BlockHash, all_blocks->m_BlockHashes[0]);
@@ -966,8 +964,6 @@ TEST(Longtail, Longtail_GetExistingStoreIndex)
         (uint32_t)arrlen(chunk_hashes),
         chunk_hashes,
         100,
-        32 * 5,
-        5,
         &all_full_blocks));
     ASSERT_EQ(1, *all_full_blocks->m_BlockCount);
     ASSERT_EQ(*block_indexes[4]->m_BlockHash, all_full_blocks->m_BlockHashes[0]);
@@ -979,8 +975,6 @@ TEST(Longtail, Longtail_GetExistingStoreIndex)
         (uint32_t)arrlen(chunk_hashes),
         chunk_hashes,
         50,
-        32 * 5,
-        5,
         &half_full_blocks));
     ASSERT_EQ(3, *half_full_blocks->m_BlockCount);
     ASSERT_EQ(*block_indexes[4]->m_BlockHash, half_full_blocks->m_BlockHashes[0]);
@@ -994,8 +988,6 @@ TEST(Longtail, Longtail_GetExistingStoreIndex)
         (uint32_t)arrlen(chunk_hashes),
         chunk_hashes,
         2 * (100 / 5),
-        32 * 5,
-        5,
         &less_full_blocks));
     ASSERT_EQ(5, *less_full_blocks->m_BlockCount);
     ASSERT_EQ(*block_indexes[4]->m_BlockHash, less_full_blocks->m_BlockHashes[0]);
@@ -1011,8 +1003,6 @@ TEST(Longtail, Longtail_GetExistingStoreIndex)
         (uint32_t)arrlen(chunk_hashes),
         chunk_hashes,
         101,
-        32 * 5,
-        5,
         &no_blocks));
     ASSERT_EQ(0, *no_blocks->m_BlockCount);
     Longtail_Free(no_blocks);
@@ -3637,8 +3627,6 @@ int TestAsyncBlockStore::Worker(void* context_data)
                 (uint32_t)get_existing_content_content_request->chunk_count,
                 get_existing_content_content_request->chunk_hashes,
                 0,
-                MAX_BLOCK_SIZE,
-                MAX_CHUNKS_PER_BLOCK,
                 &store_index);
             Longtail_UnlockSpinLock(block_store->m_IndexLock);
             Longtail_Free(get_existing_content_content_request->chunk_hashes);
