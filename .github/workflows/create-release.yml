@@ -104,12 +104,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **ADDED API** `Longtail_MemTracer_DumpStats`
-          - **CHANGED** Reduced Bikeshed memory consumption
-          - **CHANGED** Use dynamic arrays when chunking content to reduce memory footprint
-          - **FIX** Consolidate output of ChunkAssets to single data structure
-          - **FIX** Fix sensitive execution order in TestCreateVersionCancelOperation
-          - **FIX** Cleaned up some logging
+          - **FIX** Gracefull fail instead of assert on bad store index
         draft: false
         prerelease: false
     - name: Download Linux artifacts
