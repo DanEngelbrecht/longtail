@@ -5580,7 +5580,19 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
 
             uint32_t* chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, chunk_hash);
-            LONGTAIL_FATAL_ASSERT(ctx, chunk_block_index != 0, job->m_Err = EINVAL; return 0)
+            if (chunk_block_index == 0)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_LookupTable_Get() failed with %d", err)
+                version_storage_api->CloseFile(version_storage_api, asset_file);
+                asset_file = 0;
+                Longtail_Free(full_asset_path);
+                full_asset_path = 0;
+                job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+                job->m_BlockReadJob.m_StoredBlock = 0;
+                job->m_Err = err;
+                Longtail_Free(tmp_mem);
+                return 0;
+            }
 
             uint32_t chunk_block_offset = chunk_offsets[*chunk_block_index];
             uint32_t chunk_size = chunk_sizes[*chunk_block_index];
@@ -5590,7 +5602,20 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 uint32_t next_chunk_index = version_index->m_AssetChunkIndexes[asset_chunk_index_start + asset_chunk_index + 1];
                 TLongtail_Hash next_chunk_hash = version_index->m_ChunkHashes[next_chunk_index];
                 uint32_t* next_chunk_block_index = Longtail_LookupTable_Get(block_chunks_lookup, next_chunk_hash);
-                LONGTAIL_FATAL_ASSERT(ctx, next_chunk_block_index != 0, job->m_Err = EINVAL; return 0)
+                if (next_chunk_block_index == 0)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_LookupTable_Get() failed with %d", err)
+                    version_storage_api->CloseFile(version_storage_api, asset_file);
+                    asset_file = 0;
+                    Longtail_Free(full_asset_path);
+                    full_asset_path = 0;
+                    job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+                    job->m_BlockReadJob.m_StoredBlock = 0;
+                    job->m_Err = err;
+                    Longtail_Free(tmp_mem);
+                    return 0;
+                }
+
                 uint32_t next_chunk_block_offset = chunk_offsets[*next_chunk_block_index];
                 if (next_chunk_block_offset != chunk_block_offset + chunk_size)
                 {
