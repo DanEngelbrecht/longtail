@@ -166,13 +166,13 @@ int Longtail_MemTracer_DumpStats(const char* name)
     return 0;
 }
 
-static void MemTracer_PrintSize(size_t size) {
+static void MemTracer_PrintSize(uint64_t size) {
     if (size < 1024 * 100) {
         printf("%" PRIu64, size);
         return;
     }
     int denom = 0;
-    size_t factor = 1;
+    uint64_t factor = 1;
     while ((size / factor) > 1024) {
         factor *= 1024;
         denom++;
