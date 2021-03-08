@@ -2819,8 +2819,12 @@ struct Longtail_BlockIndex* Longtail_CopyBlockIndex(struct Longtail_BlockIndex* 
     size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
     void* mem = Longtail_Alloc("Longtail_CopyBlockIndex", block_index_size);
     struct Longtail_BlockIndex* copy_block_index = Longtail_InitBlockIndex(mem, chunk_count);
-    size_t data_size = Longtail_GetBlockIndexDataSize(chunk_count);
-    memcpy(&copy_block_index[1], &block_index[1], data_size);
+    *copy_block_index->m_BlockHash = *block_index->m_BlockHash;
+    *copy_block_index->m_HashIdentifier = *block_index->m_HashIdentifier;
+    *copy_block_index->m_ChunkCount = *block_index->m_ChunkCount;
+    *copy_block_index->m_Tag = *block_index->m_Tag;
+    memcpy(copy_block_index->m_ChunkHashes, block_index->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
+    memcpy(copy_block_index->m_ChunkSizes, block_index->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
     return copy_block_index;
 }
 
@@ -8469,7 +8473,7 @@ int Longtail_MergeStoreIndex(
         uint32_t* index_ptr = Longtail_LookupTable_Get(source_lookup_table, block_hash);
         if (!index_ptr)
         {
-            // We block is no longer found in local_store_index, switch over to remote_store_index
+            // When block is no longer found in local_store_index, switch over to remote_store_index
             LONGTAIL_FATAL_ASSERT(ctx, source_index != remote_store_index, return EINVAL)
             source_index = remote_store_index;
             source_lookup_table = remote_block_hash_to_index;
@@ -8504,8 +8508,17 @@ struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* 
     size_t store_index_size = Longtail_GetStoreIndexSize(block_count, chunk_count);
     void* mem = Longtail_Alloc("Longtail_CopyStoreIndex", store_index_size);
     struct Longtail_StoreIndex* copy_store_index = Longtail_InitStoreIndex(mem, block_count, chunk_count);
-    size_t data_size = Longtail_GetStoreIndexDataSize(block_count, chunk_count);
-    memcpy(&copy_store_index[1], &store_index[1], data_size);
+
+    *copy_store_index->m_Version = Longtail_CurrentStoreIndexVersion;
+    *copy_store_index->m_HashIdentifier = *store_index->m_HashIdentifier;
+    *copy_store_index->m_BlockCount = block_count;
+    *copy_store_index->m_ChunkCount = chunk_count;
+    memcpy(copy_store_index->m_BlockHashes, store_index->m_BlockHashes, sizeof(TLongtail_Hash) * block_count);
+    memcpy(copy_store_index->m_ChunkHashes, store_index->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
+    memcpy(copy_store_index->m_BlockChunksOffsets, store_index->m_BlockChunksOffsets, sizeof(uint32_t) * block_count);
+    memcpy(copy_store_index->m_BlockChunkCounts, store_index->m_BlockChunkCounts, sizeof(uint32_t) * block_count);
+    memcpy(copy_store_index->m_BlockTags, store_index->m_BlockTags, sizeof(uint32_t) * block_count);
+    memcpy(copy_store_index->m_ChunkSizes, store_index->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
     return copy_store_index;
 }
 
