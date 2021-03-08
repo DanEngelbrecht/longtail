@@ -6352,3 +6352,67 @@ TEST(Longtail, TestFileSystemLock)
     ASSERT_EQ(0, Longtail_UnlockFile(file_lock));
     Longtail_Free(file_lock);
 }
+
+TEST(Longtail, CopyBlockIndex)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    struct Longtail_StoredBlock* b1 = TestCreateStoredBlock(
+        hash_api,
+        77,
+        33,
+        413);
+    struct Longtail_BlockIndex* b1i = Longtail_CopyBlockIndex(b1->m_BlockIndex);
+    ASSERT_EQ(*b1->m_BlockIndex->m_BlockHash, *b1i->m_BlockHash);
+    ASSERT_EQ(*b1->m_BlockIndex->m_ChunkCount, *b1i->m_ChunkCount);
+    ASSERT_EQ(*b1->m_BlockIndex->m_HashIdentifier, *b1i->m_HashIdentifier);
+    ASSERT_EQ(*b1->m_BlockIndex->m_Tag, *b1i->m_Tag);
+    for (uint32_t c = 0; c < *b1->m_BlockIndex->m_ChunkCount; ++c)
+    {
+        ASSERT_EQ(b1->m_BlockIndex->m_ChunkHashes[c], b1i->m_ChunkHashes[c]);
+    }
+    Longtail_Free(b1i);
+    Longtail_Free(b1);
+    Longtail_DisposeAPI(&hash_api->m_API);
+}
+
+TEST(Longtail, CopyStoreIndex)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    struct Longtail_StoredBlock* b1 = TestCreateStoredBlock(
+        hash_api,
+        77,
+        33,
+        413);
+    struct Longtail_StoredBlock* b2 = TestCreateStoredBlock(
+        hash_api,
+        99,
+        31,
+        317);
+    struct Longtail_BlockIndex* bindexes[2] = { b1->m_BlockIndex, b2->m_BlockIndex };
+    struct Longtail_StoreIndex* s1;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(2, (const Longtail_BlockIndex **)bindexes, &s1));
+    struct Longtail_StoreIndex* s1c = Longtail_CopyStoreIndex(s1);
+    ASSERT_EQ(*s1->m_Version, *s1c->m_Version);
+    ASSERT_EQ(*s1->m_HashIdentifier, *s1c->m_HashIdentifier);
+    ASSERT_EQ(*s1->m_BlockCount, *s1c->m_BlockCount);
+    ASSERT_EQ(*s1->m_ChunkCount, *s1c->m_ChunkCount);
+
+    for (uint32_t b = 0; b < *s1->m_BlockCount; ++b)
+    {
+        ASSERT_EQ(s1->m_BlockHashes[b], s1c->m_BlockHashes[b]);
+        ASSERT_EQ(s1->m_BlockChunksOffsets[b], s1c->m_BlockChunksOffsets[b]);
+        ASSERT_EQ(s1->m_BlockChunkCounts[b], s1c->m_BlockChunkCounts[b]);
+        ASSERT_EQ(s1->m_BlockTags[b], s1c->m_BlockTags[b]);
+    }
+    for (uint32_t c = 0; c < *s1->m_ChunkCount; ++c)
+    {
+        ASSERT_EQ(s1->m_ChunkHashes[c], s1c->m_ChunkHashes[c]);
+        ASSERT_EQ(s1->m_ChunkSizes[c], s1c->m_ChunkSizes[c]);
+    }
+
+    Longtail_Free(s1c);
+    Longtail_Free(s1);
+    Longtail_Free(b2);
+    Longtail_Free(b1);
+    Longtail_DisposeAPI(&hash_api->m_API);
+}
