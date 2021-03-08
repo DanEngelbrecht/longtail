@@ -36,14 +36,14 @@ struct MemTracer_Header {
 };
 
 struct MemTracer_ContextStats {
-    size_t total_mem;
-    size_t current_mem;
-    size_t peak_mem;
-    size_t total_count;
-    size_t current_count;
-    size_t peak_count;
-    size_t global_peak_count;
-    size_t global_peak_mem;
+    uint64_t total_mem;
+    uint64_t current_mem;
+    uint64_t peak_mem;
+    uint64_t total_count;
+    uint64_t current_count;
+    uint64_t peak_count;
+    uint64_t global_peak_count;
+    uint64_t global_peak_mem;
     const char* context_name;
 };
 
@@ -53,12 +53,12 @@ struct MemTracer_Context {
     struct Longtail_LookupTable* m_ContextLookup;
     struct MemTracer_ContextStats m_ContextStats[MEMTRACER_MAXCONTEXTCOUNT];
     HLongtail_SpinLock m_Spinlock;
-    size_t m_AllocationTotalCount;
-    size_t m_AllocationCurrentCount;
-    size_t m_AllocationPeakCount;
-    size_t m_AllocationTotalMem;
-    size_t m_AllocationCurrentMem;
-    size_t m_AllocationPeakMem;
+    uint64_t m_AllocationTotalCount;
+    uint64_t m_AllocationCurrentCount;
+    uint64_t m_AllocationPeakCount;
+    uint64_t m_AllocationTotalMem;
+    uint64_t m_AllocationCurrentMem;
+    uint64_t m_AllocationPeakMem;
     uint32_t m_ContextCount;
 };
 
