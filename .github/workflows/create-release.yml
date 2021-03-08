@@ -104,6 +104,11 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
+          - **CHANGED** Reworked/simplified logic in MergeStoreIndex
+          - **CHANGED** Sounder hash identifier check in Longtail_MergeStoreIndex()
+          - **FIX** Test for CopyBlockIndex
+          - **FIX** Test for CopyStoreIndex
+          - **FIX** Don't assume stuff about memory layout of StoreIndex and BlockIndex
           - **FIX** Graceful fail instead of assert on bad store index
         draft: false
         prerelease: false
