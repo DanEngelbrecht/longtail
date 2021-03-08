@@ -12,6 +12,8 @@
 #include <stdarg.h>
 #include <errno.h>
 
+//TODO: Either MergeStoreIndex or CopyBlockIndex is bad
+
 #if defined(__clang__) || defined(__GNUC__)
 #if defined(WIN32)
     #include <malloc.h>
@@ -2817,8 +2819,12 @@ struct Longtail_BlockIndex* Longtail_CopyBlockIndex(struct Longtail_BlockIndex* 
     size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
     void* mem = Longtail_Alloc("Longtail_CopyBlockIndex", block_index_size);
     struct Longtail_BlockIndex* copy_block_index = Longtail_InitBlockIndex(mem, chunk_count);
-    size_t data_size = Longtail_GetBlockIndexDataSize(chunk_count);
-    memcpy(&copy_block_index[1], &block_index[1], data_size);
+    *copy_block_index->m_BlockHash = *block_index->m_BlockHash;
+    *copy_block_index->m_HashIdentifier = *block_index->m_HashIdentifier;
+    *copy_block_index->m_ChunkCount = *block_index->m_ChunkCount;
+    *copy_block_index->m_Tag = *block_index->m_Tag;
+    memcpy(copy_block_index->m_ChunkHashes, block_index->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
+    memcpy(copy_block_index->m_ChunkSizes, block_index->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
     return copy_block_index;
 }
 
@@ -8398,12 +8404,33 @@ int Longtail_MergeStoreIndex(
     LONGTAIL_VALIDATE_INPUT(ctx, local_store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_store_index != 0, return EINVAL)
 
-    uint32_t hash_identifier = 0;
     uint32_t local_block_count = *local_store_index->m_BlockCount;
     uint32_t remote_block_count = *remote_store_index->m_BlockCount;
+    uint32_t hash_identifier = 0;
+    if (local_block_count == 0)
+    {
+        if (remote_block_count == 0)
+        {
+            return Longtail_CreateStoreIndexFromBlocks(0, 0, out_store_index);
+        }
+        hash_identifier = *remote_store_index->m_HashIdentifier;
+    }
+    else
+    {
+        hash_identifier = *local_store_index->m_HashIdentifier;
+        if (remote_block_count != 0)
+        {
+            if (hash_identifier != *remote_store_index->m_HashIdentifier)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeStoreIndex(), store indexes has conflicting hash identifier, failed with %d", EINVAL)
+                return EINVAL;
+            }
+        }
+    }
     size_t local_block_hash_to_index_size = Longtail_LookupTable_GetSize(local_block_count);
     size_t remote_block_hash_to_index_size = Longtail_LookupTable_GetSize(remote_block_count);
-    size_t work_mem_size = local_block_hash_to_index_size + remote_block_hash_to_index_size;
+    size_t block_hashes_size = sizeof(TLongtail_Hash) * (local_block_count + remote_block_count);
+    size_t work_mem_size = local_block_hash_to_index_size + remote_block_hash_to_index_size + block_hashes_size;
 
     void* work_mem = Longtail_Alloc("MergeStoreIndex", work_mem_size);
     if (!work_mem)
@@ -8416,6 +8443,8 @@ int Longtail_MergeStoreIndex(
     struct Longtail_LookupTable* local_block_hash_to_index = Longtail_LookupTable_Create(p, local_block_count, 0);
     p += local_block_hash_to_index_size;
     struct Longtail_LookupTable* remote_block_hash_to_index = Longtail_LookupTable_Create(p, remote_block_count, 0);
+    p += remote_block_hash_to_index_size;
+    TLongtail_Hash* block_hashes = (TLongtail_Hash*)p;
 
     uint32_t unique_block_count = 0;
     uint32_t chunk_count = 0;
@@ -8426,7 +8455,7 @@ int Longtail_MergeStoreIndex(
         {
             continue;
         }
-        hash_identifier = *local_store_index->m_HashIdentifier;
+        block_hashes[unique_block_count] = block_hash;
         ++unique_block_count;
         chunk_count += local_store_index->m_BlockChunkCounts[local_block];
     }
@@ -8441,7 +8470,7 @@ int Longtail_MergeStoreIndex(
         {
             continue;
         }
-        hash_identifier = *remote_store_index->m_HashIdentifier;
+        block_hashes[unique_block_count] = block_hash;
         ++unique_block_count;
         chunk_count += remote_store_index->m_BlockChunkCounts[remote_block];
     }
@@ -8459,58 +8488,36 @@ int Longtail_MergeStoreIndex(
     *merged_store_index->m_HashIdentifier = hash_identifier;
     *merged_store_index->m_BlockCount = unique_block_count;
     *merged_store_index->m_ChunkCount = chunk_count;
-    uint32_t block_index_offset = 0;
     uint32_t chunk_index_offset = 0;
-    for (uint32_t local_block = 0; local_block < local_block_count; ++local_block)
+    const struct Longtail_StoreIndex* source_index = local_store_index;
+    struct Longtail_LookupTable* source_lookup_table = local_block_hash_to_index;
+    for (uint32_t b = 0; b < unique_block_count; ++b)
     {
-        TLongtail_Hash block_hash = local_store_index->m_BlockHashes[local_block];
-        uint32_t* index_ptr = Longtail_LookupTable_Get(local_block_hash_to_index, block_hash);
+        TLongtail_Hash block_hash = block_hashes[b];
+        uint32_t* index_ptr = Longtail_LookupTable_Get(source_lookup_table, block_hash);
         if (!index_ptr)
         {
-            continue;
+            // When block is no longer found in local_store_index, switch over to remote_store_index
+            LONGTAIL_FATAL_ASSERT(ctx, source_index != remote_store_index, return EINVAL)
+            source_index = remote_store_index;
+            source_lookup_table = remote_block_hash_to_index;
+            index_ptr = Longtail_LookupTable_Get(source_lookup_table, block_hash);
+            LONGTAIL_FATAL_ASSERT(ctx, index_ptr, return EINVAL)
         }
-        merged_store_index->m_BlockHashes[block_index_offset] = block_hash;
-        uint32_t block_chunk_count = local_store_index->m_BlockChunkCounts[local_block];
-        merged_store_index->m_BlockChunkCounts[block_index_offset] = block_chunk_count;
-        merged_store_index->m_BlockChunksOffsets[block_index_offset] = chunk_index_offset;
-        merged_store_index->m_BlockTags[block_index_offset] = local_store_index->m_BlockTags[local_block];
-        uint32_t block_chunk_offset = local_store_index->m_BlockChunksOffsets[local_block];
+        uint32_t source_block = *index_ptr;
+        uint32_t block_chunk_count = source_index->m_BlockChunkCounts[source_block];
+        merged_store_index->m_BlockTags[b] = source_index->m_BlockTags[source_block];
+        uint32_t block_chunk_offset = source_index->m_BlockChunksOffsets[source_block];
+        const TLongtail_Hash* local_chunk_hashes = &source_index->m_ChunkHashes[block_chunk_offset];
+        const uint32_t* local_chunk_sizes = &source_index->m_ChunkSizes[block_chunk_offset];
+
+        merged_store_index->m_BlockHashes[b] = block_hash;
+        merged_store_index->m_BlockChunkCounts[b] = block_chunk_count;
+        merged_store_index->m_BlockChunksOffsets[b] = chunk_index_offset;
         TLongtail_Hash* merged_chunk_hashes = &merged_store_index->m_ChunkHashes[chunk_index_offset];
-        const TLongtail_Hash* local_chunk_hashes = &local_store_index->m_ChunkHashes[block_chunk_offset];
         memcpy(merged_chunk_hashes, local_chunk_hashes, sizeof(TLongtail_Hash) * block_chunk_count);
         uint32_t* merged_chunk_sizes = &merged_store_index->m_ChunkSizes[chunk_index_offset];
-        const uint32_t* local_chunk_sizes = &local_store_index->m_ChunkSizes[block_chunk_offset];
         memcpy(merged_chunk_sizes, local_chunk_sizes, sizeof(uint32_t) * block_chunk_count);
-        ++block_index_offset;
-        chunk_index_offset += block_chunk_count;
-    }
-    for (uint32_t remote_block = 0; remote_block < remote_block_count; ++remote_block)
-    {
-        TLongtail_Hash block_hash = remote_store_index->m_BlockHashes[remote_block];
-        if (Longtail_LookupTable_Get(local_block_hash_to_index, block_hash))
-        {
-            continue;
-        }
-
-        uint32_t* index_ptr = Longtail_LookupTable_Get(remote_block_hash_to_index, block_hash);
-        if (!index_ptr)
-        {
-            continue;
-        }
-
-        merged_store_index->m_BlockHashes[block_index_offset] = block_hash;
-        uint32_t block_chunk_count = remote_store_index->m_BlockChunkCounts[remote_block];
-        merged_store_index->m_BlockChunkCounts[block_index_offset] = block_chunk_count;
-        merged_store_index->m_BlockChunksOffsets[block_index_offset] = chunk_index_offset;
-        merged_store_index->m_BlockTags[block_index_offset] = remote_store_index->m_BlockTags[remote_block];
-        uint32_t block_chunk_offset = remote_store_index->m_BlockChunksOffsets[remote_block];
-        TLongtail_Hash* merged_chunk_hashes = &merged_store_index->m_ChunkHashes[chunk_index_offset];
-        const TLongtail_Hash* remote_chunk_hashes = &remote_store_index->m_ChunkHashes[block_chunk_offset];
-        memcpy(merged_chunk_hashes, remote_chunk_hashes, sizeof(TLongtail_Hash) * block_chunk_count);
-        uint32_t* merged_chunk_sizes = &merged_store_index->m_ChunkSizes[chunk_index_offset];
-        const uint32_t* remote_chunk_sizes = &remote_store_index->m_ChunkSizes[block_chunk_offset];
-        memcpy(merged_chunk_sizes, remote_chunk_sizes, sizeof(uint32_t) * block_chunk_count);
-        ++block_index_offset;
         chunk_index_offset += block_chunk_count;
     }
     Longtail_Free(work_mem);
@@ -8525,8 +8532,17 @@ struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* 
     size_t store_index_size = Longtail_GetStoreIndexSize(block_count, chunk_count);
     void* mem = Longtail_Alloc("Longtail_CopyStoreIndex", store_index_size);
     struct Longtail_StoreIndex* copy_store_index = Longtail_InitStoreIndex(mem, block_count, chunk_count);
-    size_t data_size = Longtail_GetStoreIndexDataSize(block_count, chunk_count);
-    memcpy(&copy_store_index[1], &store_index[1], data_size);
+
+    *copy_store_index->m_Version = Longtail_CurrentStoreIndexVersion;
+    *copy_store_index->m_HashIdentifier = *store_index->m_HashIdentifier;
+    *copy_store_index->m_BlockCount = block_count;
+    *copy_store_index->m_ChunkCount = chunk_count;
+    memcpy(copy_store_index->m_BlockHashes, store_index->m_BlockHashes, sizeof(TLongtail_Hash) * block_count);
+    memcpy(copy_store_index->m_ChunkHashes, store_index->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
+    memcpy(copy_store_index->m_BlockChunksOffsets, store_index->m_BlockChunksOffsets, sizeof(uint32_t) * block_count);
+    memcpy(copy_store_index->m_BlockChunkCounts, store_index->m_BlockChunkCounts, sizeof(uint32_t) * block_count);
+    memcpy(copy_store_index->m_BlockTags, store_index->m_BlockTags, sizeof(uint32_t) * block_count);
+    memcpy(copy_store_index->m_ChunkSizes, store_index->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
     return copy_store_index;
 }
 
