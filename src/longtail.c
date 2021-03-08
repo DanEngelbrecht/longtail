@@ -8400,9 +8400,29 @@ int Longtail_MergeStoreIndex(
     LONGTAIL_VALIDATE_INPUT(ctx, local_store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_store_index != 0, return EINVAL)
 
-    uint32_t hash_identifier = 0;
     uint32_t local_block_count = *local_store_index->m_BlockCount;
     uint32_t remote_block_count = *remote_store_index->m_BlockCount;
+    uint32_t hash_identifier = 0;
+    if (local_block_count == 0)
+    {
+        if (remote_block_count == 0)
+        {
+            return Longtail_CreateStoreIndexFromBlocks(0, 0, out_store_index);
+        }
+        hash_identifier = *remote_store_index->m_HashIdentifier;
+    }
+    else
+    {
+        hash_identifier = *local_store_index->m_HashIdentifier;
+        if (remote_block_count != 0)
+        {
+            if (hash_identifier != *remote_store_index->m_HashIdentifier)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MergeStoreIndex(), store indexes has conflicting hash identifier, failed with %d", EINVAL)
+                return EINVAL;
+            }
+        }
+    }
     size_t local_block_hash_to_index_size = Longtail_LookupTable_GetSize(local_block_count);
     size_t remote_block_hash_to_index_size = Longtail_LookupTable_GetSize(remote_block_count);
     size_t block_hashes_size = sizeof(TLongtail_Hash) * (local_block_count + remote_block_count);
@@ -8431,7 +8451,6 @@ int Longtail_MergeStoreIndex(
         {
             continue;
         }
-        hash_identifier = *local_store_index->m_HashIdentifier;
         block_hashes[unique_block_count] = block_hash;
         ++unique_block_count;
         chunk_count += local_store_index->m_BlockChunkCounts[local_block];
@@ -8447,7 +8466,6 @@ int Longtail_MergeStoreIndex(
         {
             continue;
         }
-        hash_identifier = *remote_store_index->m_HashIdentifier;
         block_hashes[unique_block_count] = block_hash;
         ++unique_block_count;
         chunk_count += remote_store_index->m_BlockChunkCounts[remote_block];
