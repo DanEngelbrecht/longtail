@@ -6629,3 +6629,25 @@ TEST(Longtail, TestFileSystemLock)
     ASSERT_EQ(0, Longtail_UnlockFile(file_lock));
     Longtail_Free(file_lock);
 }
+
+TEST(Longtail, CopyBlockIndex)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    struct Longtail_StoredBlock* b1 = TestCreateStoredBlock(
+        hash_api,
+        77,
+        33,
+        413);
+    struct Longtail_BlockIndex* b1i = Longtail_CopyBlockIndex(b1->m_BlockIndex);
+    ASSERT_EQ(*b1->m_BlockIndex->m_BlockHash, *b1i->m_BlockHash);
+    ASSERT_EQ(*b1->m_BlockIndex->m_ChunkCount, *b1i->m_ChunkCount);
+    ASSERT_EQ(*b1->m_BlockIndex->m_HashIdentifier, *b1i->m_HashIdentifier);
+    ASSERT_EQ(*b1->m_BlockIndex->m_Tag, *b1i->m_Tag);
+    for (uint32_t c = 0; c < *b1->m_BlockIndex->m_ChunkCount; ++c)
+    {
+        ASSERT_EQ(b1->m_BlockIndex->m_ChunkHashes[c], b1i->m_ChunkHashes[c]);
+    }
+    Longtail_Free(b1i);
+    Longtail_Free(b1);
+    Longtail_DisposeAPI(&hash_api->m_API);
+}
