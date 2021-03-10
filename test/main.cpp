@@ -58,7 +58,9 @@ int main(int argc, char** argv)
     int result = jc_test_run_all();
     Longtail_SetAssert(0);
     Longtail_MemTracer_DumpStats("test.csv");
-    Longtail_MemTracer_Dispose(Longtail_GetMemTracerSummary());
+    char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerSummary());
+    printf(memtrace_stats);
+    Longtail_MemTracer_Dispose();
 #ifdef _MSC_VER
     if (0 == result)
     {

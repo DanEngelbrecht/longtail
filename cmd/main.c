@@ -1790,7 +1790,9 @@ int main(int argc, char** argv)
 #endif
     if (enable_mem_tracer_raw) {
         Longtail_MemTracer_DumpStats("longtail.csv");
-        Longtail_MemTracer_Dispose(Longtail_GetMemTracerDetailed());
+        char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerDetailed());
+        printf(memtrace_stats);
+        Longtail_MemTracer_Dispose();
     }
     return err;
 }
