@@ -298,12 +298,12 @@ static int LRUBlockStore_PutStoredBlock(
 
 static int LRUBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
-        LONGTAIL_LOGFIELD(chunk_count, "%" PRIx64),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(chunk_hashes, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
@@ -508,7 +508,7 @@ static int LRUBlockStore_GetStoredBlock(
 
 static int LRUBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)

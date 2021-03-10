@@ -170,7 +170,7 @@ static int ShareBlockStore_PutStoredBlock(
 
 static int ShareBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -378,7 +378,7 @@ static int ShareBlockStore_GetStoredBlock(
 
 static int ShareBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t chunk_count,
+    uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     uint32_t min_block_usage_percent,
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)

@@ -38,7 +38,7 @@ There are targets for dynamic libaries (.so and .dll) in `shared_lib` and static
 # Concepts
 
 ## "Zero-parse" data formats
-The format for the data is stored in a "zero-parse" format - as long as the CPU architecture is little-endian, writing or reading one of the data formats - VersionIndex, ContentIndex or ContentBlock is just a matter of reading it into a chunk of memory and can be used in place. There are no pointers or complex data types (unless you count compression of the ContentBlock chunk data).
+The format for the data is stored in a "zero-parse" format - as long as the CPU architecture is little-endian, writing or reading one of the data formats - VersionIndex, StoreIndex or StoredBlock is just a matter of reading it into a chunk of memory and can be used in place. There are no pointers or complex data types (unless you count compression of the StoredBlock chunk data).
 
 ## Abstracted platform
 The core of the library is in the `src` folder and it defines a set of APIs that it need to operate. Each API is a structure with a number of C style function callbacks.
@@ -76,7 +76,7 @@ Currently there are:
 Longtail also borrows the chunking algorithm used to split up assets into chunks from the casync project by Lennart Poettering (https://github.com/systemd/casync).
 
 ## Content Adressable Storage
-Kinda, but not really - it started out that way but for various reasons it is only so in an indirect way, you can't get directly from a chunk hash to where it is located without going through a content index.
+Kinda, but not really - it started out that way but for various reasons it is only so in an indirect way, you can't get directly from a chunk hash to where it is located without going through a store index.
 
 Each chunk of data only contains one asset at most - one asset can be spread across multiple chunks. To make the store not suffer from a huge amount of small files chunks are bundled into blocks.
 
@@ -90,23 +90,23 @@ The version index in itself *does not* contain any of the data of the assets, it
 
 A version index is a particular version of a collection of assets, either a complete set of assets or a subset. Version indexes can be combined or updated/overriden.
 
-This is the "manifest" of a part of a game (or other) content- Small, efficient and easy to diff and make patches as well as easy to extend or replace with new asset data.
+This is the "manifest" of a part of a game (or other) content- Small, efficient and easy to diff and make patches from, as well as easy to extend or replace with new asset data.
 
 A version index can easily be constructed from a set of files/folders.
 
-## Content Block
-A content block contains one or more `chunks` of data with minimal meta data such as compress/uncompressed size and the hash of the uncompressed data of each chunk. Then Content Block is identified by a combined hash of all the chunk hashes inside the block.
+## Stored Block
+A stored block contains one or more `chunks` of data with minimal meta data such as compress/uncompressed size and the hash of the uncompressed data of each chunk. Then stored block is identified by a combined hash of all the chunk hashes inside the block.
 
-## Content Index
-A content index is a collection of ContentBlocks. This content index is used via the Version Index to reconstruct assets to a path.
+## Store Index
+A store index is a collection of Content Blocks indexes. This store index is used via the Version Index to reconstruct assets to a path.
 
-A content index can easily be constructed from a set of content blocks or you can create it based on a Version Index.
+A store index can easily be constructed from a set of content blocks or you can create it based on a Version Index.
 
 ## Version Diff
 Represents the difference between two Version Indexes - it contains which asset paths was created, modfied or deleted. 
 
 # So, what can it do?
-It can scan a folder on the file system, hash it and chunk it up, create content blocks and content index for the data.
+It can scan a folder on the file system, hash it and chunk it up, create content blocks and store index for the data.
 
 It can create a diff between one folder and another, find out which chunks it needs to go between said version and apply the change to a folder. It can write one version to a *new* folder or it can *update* an existing folder.
 

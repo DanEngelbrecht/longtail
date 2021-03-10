@@ -18,18 +18,45 @@
     #define alloca _alloca
 #endif
 
-static const uint32_t Prime = 0x01000193;
-static const uint32_t Seed  = 0x811C9DC5;
+static inline uint32_t murmur_32_scramble(uint32_t k) {
+    k *= 0xcc9e2d51;
+    k = (k << 15) | (k >> 17);
+    k *= 0x1b873593;
+    return k;
+}
 
-static uint32_t fnv1a(const void* data, uint32_t numBytes)
+static uint32_t murmur3_32(const uint8_t* key, size_t len, uint32_t seed)
 {
-    uint32_t hash = Seed;
-    const unsigned char* ptr = (const unsigned char*)data;
-    while (numBytes--)
-    {
-        hash = ((*ptr++) ^ hash) * Prime;
+	uint32_t h = seed;
+    uint32_t k;
+    /* Read in groups of 4. */
+    for (size_t i = len >> 2; i; i--) {
+        // Here is a source of differing results across endiannesses.
+        // A swap here has no effects on hash properties though.
+        memcpy(&k, key, sizeof(uint32_t));
+        key += sizeof(uint32_t);
+        h ^= murmur_32_scramble(k);
+        h = (h << 13) | (h >> 19);
+        h = h * 5 + 0xe6546b64;
     }
-    return hash;
+    /* Read the rest. */
+    k = 0;
+    for (size_t i = len & 3; i; i--) {
+        k <<= 8;
+        k |= key[i - 1];
+    }
+    // A swap is *not* necessary here because the preceding loop already
+    // places the low bytes in the low places according to whatever endianness
+    // we use. Swaps only apply when the memory is copied in a chunk.
+    h ^= murmur_32_scramble(k);
+    /* Finalize. */
+	h ^= len;
+	h ^= h >> 16;
+	h *= 0x85ebca6b;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16;
+	return h;
 }
 
 struct PathEntry
@@ -88,13 +115,15 @@ static void InMemStorageAPI_ToLowerCase(char *str)
     }
 }
 
+static const uint32_t Seed  = 0x811C9DC5;
+
 static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 {
     uint32_t pathlen = (uint32_t)strlen(path);
     char* buf = (char*)alloca(pathlen + 1);
     memcpy(buf, path, pathlen + 1);
     InMemStorageAPI_ToLowerCase(buf);
-    return fnv1a((void*)buf, pathlen);
+    return murmur3_32((const uint8_t*)buf, pathlen, Seed);
 }
 
 static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
@@ -128,7 +157,7 @@ static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api,
         if (path_entry->m_IsOpenWrite)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "File already open for write, failed with %d", EPERM)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "File already open for write, failed with %d", EPERM)
             return EPERM;
         }
         ++path_entry->m_IsOpenRead;
@@ -508,6 +537,12 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
     if (source_path_ptr != -1)
     {
         struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
+        if (path_entry->m_IsOpenRead || path_entry->m_IsOpenWrite)
+        {
+            Longtail_UnlockSpinLock(instance->m_SpinLock);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Directory already open as a file, failed with %d", EIO)
+            return EIO;
+        }
         if ((path_entry->m_Permissions & (Longtail_StorageAPI_OtherWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_UserWriteAccess)) == 0)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
@@ -520,7 +555,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
             return EEXIST;
         }
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Directory already exists failed with %d", EIO)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Directory already exists as a file, failed with %d", EIO)
         return EIO;
     }
 
@@ -531,6 +566,8 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
     path_entry->m_FileName = Longtail_Strdup(InMemStorageAPI_GetFileNamePart(path));
     path_entry->m_Content = 0;
     path_entry->m_Permissions = 0775;
+    path_entry->m_IsOpenRead = 0;
+    path_entry->m_IsOpenWrite = 0;
     hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     return 0;

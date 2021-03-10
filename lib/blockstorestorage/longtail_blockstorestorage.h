@@ -10,7 +10,7 @@ LONGTAIL_EXPORT extern struct Longtail_StorageAPI* Longtail_CreateBlockStoreStor
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_BlockStoreAPI* block_store,
-    struct Longtail_ContentIndex* content_index,
+    struct Longtail_StoreIndex* store_index,
     struct Longtail_VersionIndex* version_index);
 
 #ifdef __cplusplus
