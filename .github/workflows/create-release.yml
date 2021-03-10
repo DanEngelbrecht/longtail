@@ -148,6 +148,7 @@ jobs:
             - `Longtail_VersionIndex_GetChunkSizes`
             - `Longtail_VersionIndex_GetChunkTags`
           - **REMOVED** `--version-content-index-path` option has been removed from command line tool
+          - **CHANGED** MemStorageAPI uses murmur3_32 instead of fnv1 to avoid hash collisions
         draft: false
         prerelease: true
     - name: Download Linux artifacts
