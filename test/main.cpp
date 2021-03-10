@@ -60,6 +60,7 @@ int main(int argc, char** argv)
     Longtail_MemTracer_DumpStats("test.csv");
     char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerSummary());
     printf(memtrace_stats);
+    Longtail_Free(memtrace_stats);
     Longtail_MemTracer_Dispose();
 #ifdef _MSC_VER
     if (0 == result)
