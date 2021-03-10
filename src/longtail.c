@@ -2082,9 +2082,9 @@ static int ChunkAssets(
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AllocChunkAssetsData() failed with %d", ENOMEM)
             for (uint32_t i = 0; i < jobs_started; ++i)
-        {
+            {
                 Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
-        }
+            }
             Longtail_Free(work_mem);
             return ENOMEM;
         }
@@ -5392,7 +5392,6 @@ static int WriteAssets(
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
 
         job->m_VersionStorageAPI = version_storage_api;
-//        job->m_StoreIndex = store_index;
         job->m_VersionIndex = version_index;
         job->m_VersionFolder = version_path;
         job->m_BlockIndex = block_index;
