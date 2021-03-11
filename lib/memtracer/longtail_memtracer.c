@@ -186,13 +186,7 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
-    char* buffer = (char*)Longtail_Alloc("Longtail_MemTracer_GetStats", 65536);
-    if (!buffer)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d",
-            ENOMEM)
-        return 0;
-    }
+    char buffer[65536];
     char* wptr = buffer;
     int l = 0;
     Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
@@ -237,7 +231,9 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
     }
     Longtail_UnlockSpinLock(gMemTracer_Context->m_Spinlock);
     wptr[l] = '\0';
-    return wptr;
+
+    char* result = Longtail_Strdup(wptr);
+    return result;
 }
 
 void Longtail_MemTracer_Dispose() {
