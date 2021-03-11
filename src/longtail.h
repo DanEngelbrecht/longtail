@@ -1409,7 +1409,6 @@ struct Longtail_StoreIndex
     uint32_t* m_ChunkCount;             // Total number of chunks across all blocks - chunk hashes may occur more than once
     TLongtail_Hash* m_BlockHashes;      // [] m_BlockHashes is the hash of each block
     TLongtail_Hash* m_ChunkHashes;      // [] For each m_BlockChunkCount[n] there are n consecutive chunk hashes in m_ChunkHashes[]
-    uint32_t* m_BlockChunksOffsets;     // [] m_BlockChunksOffsets[n] is the offset in m_ChunkBlockCount[] and m_ChunkHashes[]
     uint32_t* m_BlockChunkCounts;       // [] m_BlockChunkCounts[n] is number of chunks in block m_BlockHash[n]
     uint32_t* m_BlockTags;              // [] m_BlockTags is the tag for each block
     uint32_t* m_ChunkSizes;             // [] m_ChunkSizes is the size of each chunk
@@ -1421,7 +1420,6 @@ LONGTAIL_EXPORT uint32_t Longtail_StoreIndex_GetBlockCount(const struct Longtail
 LONGTAIL_EXPORT uint32_t Longtail_StoreIndex_GetChunkCount(const struct Longtail_StoreIndex* store_index);
 LONGTAIL_EXPORT const TLongtail_Hash* Longtail_StoreIndex_GetBlockHashes(const struct Longtail_StoreIndex* store_index);
 LONGTAIL_EXPORT const TLongtail_Hash* Longtail_StoreIndex_GetChunkHashes(const struct Longtail_StoreIndex* store_index);
-LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockChunksOffsets(const struct Longtail_StoreIndex* store_index);
 LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockChunkCounts(const struct Longtail_StoreIndex* store_index);
 LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetBlockTags(const struct Longtail_StoreIndex* store_index);
 LONGTAIL_EXPORT const uint32_t* Longtail_StoreIndex_GetChunkSizes(const struct Longtail_StoreIndex* store_index);
@@ -1447,11 +1445,6 @@ LONGTAIL_EXPORT int Longtail_MergeStoreIndex(
     const struct Longtail_StoreIndex* local_store_index,
     const struct Longtail_StoreIndex* remote_store_index,
     struct Longtail_StoreIndex** out_store_index);
-
-LONGTAIL_EXPORT int Longtail_MakeBlockIndex(
-    const struct Longtail_StoreIndex* store_index,
-    uint32_t block_index,
-    struct Longtail_BlockIndex* out_block_index);
 
 LONGTAIL_EXPORT int Longtail_GetExistingStoreIndex(
     const struct Longtail_StoreIndex* store_index,
