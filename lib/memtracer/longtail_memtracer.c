@@ -187,7 +187,13 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
-    char* buffer = Longtail_Alloc("Longtail_MemTracer_GetStats", 65536);
+    char* buffer = (char*)Longtail_Alloc("Longtail_MemTracer_GetStats", 65536);
+    if (!buffer)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d",
+            ENOMEM)
+        return 0;
+    }
     char* wptr = buffer;
     int l = 0;
     if (log_level >= LONGTAIL_MEMTRACERDETAILED)
