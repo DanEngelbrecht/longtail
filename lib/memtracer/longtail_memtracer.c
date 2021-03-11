@@ -3,6 +3,7 @@
 #include "../../src/longtail.h"
 #include "../longtail_platform.h"
 
+#include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdint.h>
