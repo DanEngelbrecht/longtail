@@ -117,6 +117,7 @@ jobs:
             - `Longtail_CreateVersionDiff`
             - `Longtail_ChangeVersion`
             - `Longtail_InitBlockIndexFromData`
+            - 'Longtail_MemTracer_Dispose'
           - **REMOVED API** Remove all `Longtail_ContentIndex` types and functions
             - `struct Longtail_ContentIndex`
             - `Longtail_GetContentIndexDataSize`
@@ -147,8 +148,10 @@ jobs:
             - `Longtail_VersionIndex_GetChunkHashes`
             - `Longtail_VersionIndex_GetChunkSizes`
             - `Longtail_VersionIndex_GetChunkTags`
+            - `Longtail_MemTracer_GetStats`
           - **REMOVED** `--version-content-index-path` option has been removed from command line tool
           - **CHANGED** MemStorageAPI uses murmur3_32 instead of fnv1 to avoid hash collisions
+          - **CHANGED** Memtracer 'Longtail_MemTracer_Dispose' no longer outputs logging data, use separate `Longtail_MemTracer_GetStats` function instead
           - **ADDED** Test to validate the a nested store hierarchy handles cancelling correctly
         draft: false
         prerelease: false
