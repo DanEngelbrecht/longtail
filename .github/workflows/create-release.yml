@@ -153,6 +153,7 @@ jobs:
           - **CHANGED** MemStorageAPI uses murmur3_32 instead of fnv1 to avoid hash collisions
           - **CHANGED** Memtracer 'Longtail_MemTracer_Dispose' no longer outputs logging data, use separate `Longtail_MemTracer_GetStats` function instead
           - **ADDED** Test to validate the a nested store hierarchy handles cancelling correctly
+          - **CHANBGED** Memtracer `Longtail_MemTracer_GetStats` now allocates temp string on stack to not clutter stats string
         draft: false
         prerelease: false
     - name: Download Linux artifacts
