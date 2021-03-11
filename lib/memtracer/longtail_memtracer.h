@@ -6,7 +6,6 @@
 extern "C" {
 #endif
 
-LONGTAIL_EXPORT extern uint32_t Longtail_GetMemTracerSilent();
 LONGTAIL_EXPORT extern uint32_t Longtail_GetMemTracerSummary();
 LONGTAIL_EXPORT extern uint32_t Longtail_GetMemTracerDetailed();
 

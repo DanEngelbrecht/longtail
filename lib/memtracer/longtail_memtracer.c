@@ -10,11 +10,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define LONGTAIL_MEMTRACERSILENT    0
-#define LONGTAIL_MEMTRACERSUMMARY   1
-#define LONGTAIL_MEMTRACERDETAILED  2
+#define LONGTAIL_MEMTRACERSUMMARY   0
+#define LONGTAIL_MEMTRACERDETAILED  1
 
-uint32_t Longtail_GetMemTracerSilent() { return LONGTAIL_MEMTRACERSILENT;}
 uint32_t Longtail_GetMemTracerSummary() { return LONGTAIL_MEMTRACERSUMMARY; }
 uint32_t Longtail_GetMemTracerDetailed() { return LONGTAIL_MEMTRACERDETAILED; }
 
@@ -197,6 +195,7 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
     }
     char* wptr = buffer;
     int l = 0;
+    Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
     if (log_level >= LONGTAIL_MEMTRACERDETAILED)
     {
         for (uint32_t c = 0; c < gMemTracer_Context->m_ContextCount; ++c) {
@@ -236,6 +235,7 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
         l += sprintf(&wptr[l], "peak_count:    "); l += MemTracer_PrintSize(&wptr[l], gMemTracer_Context->m_AllocationPeakCount);     l += sprintf(&wptr[l], "\n");
         LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
     }
+    Longtail_UnlockSpinLock(gMemTracer_Context->m_Spinlock);
     wptr[l] = '\0';
     return wptr;
 }
