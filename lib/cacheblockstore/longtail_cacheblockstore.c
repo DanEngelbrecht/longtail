@@ -634,6 +634,7 @@ static void RetargetRemoteContent_GetExistingContentCompleteAPI_OnComplete(struc
     if (err)
     {
         retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
+        Longtail_Free(retarget_context->m_LocalRetargettedStoreIndex);
         Longtail_Free(retarget_context);
         return;
     }
