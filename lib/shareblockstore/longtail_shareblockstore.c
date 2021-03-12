@@ -170,23 +170,26 @@ static int ShareBlockStore_PutStoredBlock(
 
 static int ShareBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t chunk_count,
-    const TLongtail_Hash* chunk_hashes)
+    uint32_t block_count,
+    const TLongtail_Hash* block_hashes,
+    struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
-        LONGTAIL_LOGFIELD(chunk_count, "%u"),
-        LONGTAIL_LOGFIELD(chunk_hashes, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+        LONGTAIL_LOGFIELD(block_count, "%u"),
+        LONGTAIL_LOGFIELD(block_hashes, "%p"),
+        LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (block_count == 0) || (block_hashes != 0), return EINVAL)
     struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
     int err = api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
-        chunk_count,
-        chunk_hashes);
+        block_count,
+        block_hashes,
+        optional_async_complete_api);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "api->m_BackingBlockStore->PreflightGet() failed with %d", err)
@@ -389,7 +392,7 @@ static int ShareBlockStore_GetExistingContent(
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)

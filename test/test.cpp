@@ -3301,7 +3301,7 @@ public:
     static int InitBlockStore(TestAsyncBlockStore* block_store, struct Longtail_HashAPI* hash_api, struct Longtail_JobAPI* job_api);
     static void Dispose(struct Longtail_API* api);
     static int PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-    static int PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes);
+    static int PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api);
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
     static int Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
@@ -3676,8 +3676,12 @@ int TestAsyncBlockStore::PutStoredBlock(struct Longtail_BlockStoreAPI* block_sto
     return 0;
 }
 
-int TestAsyncBlockStore::PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes)
+int TestAsyncBlockStore::PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
 {
+    if (optional_async_complete_api)
+    {
+        optional_async_complete_api->OnComplete(optional_async_complete_api, 0, 0, 0);
+    }
     return 0;
 }
 
@@ -3713,7 +3717,7 @@ int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
@@ -4768,10 +4772,10 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
             return api->m_Base->PutStoredBlock(api->m_Base, stored_block, async_complete_api);
         }
-        static int PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes)
+        static int PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
         {
             struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
-            return api->m_Base->PreflightGet(api->m_Base, chunk_count, chunk_hashes);
+            return api->m_Base->PreflightGet(api->m_Base, chunk_count, chunk_hashes, optional_async_complete_api);
         }
         static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
         {
@@ -4790,7 +4794,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
                 LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
                 LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
                 LONGTAIL_LOGFIELD(async_complete_api, "%p")
-            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
                 block_store_api, chunk_count, chunk_hashes, async_complete_api)
@@ -6198,7 +6202,7 @@ static int CaptureBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block
     return api->m_BackingStore->PutStoredBlock(api->m_BackingStore, stored_block, async_complete_api);
 }
 
-static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes)
+static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_count, const TLongtail_Hash* block_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
 {
     struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
 
@@ -6208,7 +6212,7 @@ static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_s
         api->m_PreflightLUT = 0;
     }
     api->m_PreflightLUT = Longtail_LookupTable_Create(Longtail_Alloc(0, Longtail_LookupTable_GetSize(65536)), 65536, 0);
-    return api->m_BackingStore->PreflightGet(api->m_BackingStore, chunk_count, chunk_hashes);
+    return api->m_BackingStore->PreflightGet(api->m_BackingStore, block_count, block_hashes, optional_async_complete_api);
 }
 
 static int CaptureBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
@@ -6432,7 +6436,7 @@ static int CancelStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store
     return 0;
 }
 
-static int CancelStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes)
+static int CancelStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_count, const TLongtail_Hash* block_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
 {
     return ECANCELED;
 }
