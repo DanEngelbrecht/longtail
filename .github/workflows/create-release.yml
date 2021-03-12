@@ -108,7 +108,7 @@ jobs:
           - **FIXED** `Longtail_GetExistingStoreIndex` exits as soon as all unique blocks has been found
           - **CHANGED** `Longtail_BlockStore_PreflightGetFunc` and `Longtail_BlockStore_GetExistingContentFunc` now logs debug context at INFO level
         draft: true
-        prerelease: false
+        prerelease: true
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:
