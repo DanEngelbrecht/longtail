@@ -103,7 +103,7 @@ jobs:
         tag_name: ${{ github.ref }}
         release_name: Release ${{ github.ref }}
         body: |
-          # Changes in this Release
+          # Changes in this Pre-Release
           - **CHANGED API** `Longtail_BlockStore_PreflightGet` now takes block count and hashes and an optional "prefetch started" callback
           - **FIXED** `Longtail_GetExistingStoreIndex` exits as soon as all unique blocks has been found
           - **CHANGED** `Longtail_BlockStore_PreflightGetFunc` and `Longtail_BlockStore_GetExistingContentFunc` now logs debug context at INFO level
