@@ -104,7 +104,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIXED** `Longtail_GetExistingStoreIndex` only returns blocks for unique chunk hashes
+          - **FIXED** `Longtail_GetExistingStoreIndex` exits as soon as all unique blocks has been found
+          - **CHANGED API** `Longtail_BlockStore_PreflightGet` now takes block cound and hashes and an optonal "started" callback
         draft: true
         prerelease: false
     - name: Download Linux artifacts

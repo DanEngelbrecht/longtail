@@ -298,25 +298,28 @@ static int LRUBlockStore_PutStoredBlock(
 
 static int LRUBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t chunk_count,
-    const TLongtail_Hash* chunk_hashes)
+    uint32_t block_count,
+    const TLongtail_Hash* block_hashes,
+    struct Longtail_AsyncPreflightStartedAPI* async_complete_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
-        LONGTAIL_LOGFIELD(chunk_count, "%u"),
-        LONGTAIL_LOGFIELD(chunk_hashes, "%p")
+        LONGTAIL_LOGFIELD(block_count, "%u"),
+        LONGTAIL_LOGFIELD(block_hashes, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (block_count == 0) || (block_hashes != 0), return EINVAL)
 
     struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
 
     int err = api->m_BackingBlockStore->PreflightGet(
         api->m_BackingBlockStore,
-        chunk_count,
-        chunk_hashes);
+        block_count,
+        block_hashes,
+        async_complete_api);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->PreflightGet() failed with %d", err)
