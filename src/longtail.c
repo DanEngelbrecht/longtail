@@ -6221,10 +6221,16 @@ int Longtail_GetExistingStoreIndex(
     uint32_t* block_order = (uint32_t*)p;
     p += block_order_size;
 
+    uint32_t unique_chunk_count = 0;
     for (uint32_t i = 0; i < chunk_count; ++i)
     {
         TLongtail_Hash chunk_hash = chunks[i];
-        Longtail_LookupTable_Put(chunk_to_index_lookup, chunk_hash, i);
+        uint32_t* c_ptr = Longtail_LookupTable_PutUnique(chunk_to_index_lookup, chunk_hash, i);
+        if (c_ptr)
+        {
+            continue;
+        }
+        ++unique_chunk_count;
     }
 
     uint32_t found_block_count = 0;
@@ -6258,7 +6264,7 @@ int Longtail_GetExistingStoreIndex(
         // picking a block that we will not use 100% of
         QSORT(block_order, store_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_uses);
 
-        for (uint32_t bo = 0; (bo < store_block_count) && (found_chunk_count < chunk_count); ++bo)
+        for (uint32_t bo = 0; (bo < store_block_count) && (found_chunk_count < unique_chunk_count); ++bo)
         {
             uint32_t b = block_order[bo];
             uint32_t block_use = block_uses[b];
@@ -6308,8 +6314,8 @@ int Longtail_GetExistingStoreIndex(
     }
 
     if (found_block_count == 0)
-        {
-    Longtail_Free(tmp_mem);
+    {
+        Longtail_Free(tmp_mem);
         return Longtail_CreateStoreIndexFromBlocks(
             0,
             0,
