@@ -268,66 +268,66 @@ static void PreflightGet_PreflightStartedAPI_OnComplete(struct Longtail_AsyncPre
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    struct PreflightStartedContext* retarget_context = (struct PreflightStartedContext*)async_complete_api;
-    struct CacheBlockStoreAPI* api = retarget_context->m_CacheBlockStoreAPI;
+    struct PreflightStartedContext* get_existing_content_context = (struct PreflightStartedContext*)async_complete_api;
+    struct CacheBlockStoreAPI* api = get_existing_content_context->m_CacheBlockStoreAPI;
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "PreflightGet_PreflightStartedAPI_OnComplete called with error %d", err)
-        if (retarget_context->m_FinalAsyncCompleteAPI)
+        if (get_existing_content_context->m_FinalAsyncCompleteAPI)
         {
-            retarget_context->m_FinalAsyncCompleteAPI->OnComplete(retarget_context->m_FinalAsyncCompleteAPI, 0, 0, err);
+            get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, 0, err);
         }
-        Longtail_Free(retarget_context);
+        Longtail_Free(get_existing_content_context);
         CacheBlockStore_CompleteRequest(api);
         return;
     }
 
     // We found everything in the cache
-    if (block_count == retarget_context->m_BlockCount)
+    if (block_count == get_existing_content_context->m_BlockCount)
     {
-        if (retarget_context->m_FinalAsyncCompleteAPI)
+        if (get_existing_content_context->m_FinalAsyncCompleteAPI)
         {
-            retarget_context->m_FinalAsyncCompleteAPI->OnComplete(retarget_context->m_FinalAsyncCompleteAPI, block_count, block_hashes, 0);
+            get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, block_count, block_hashes, 0);
         }
-        Longtail_Free(retarget_context);
+        Longtail_Free(get_existing_content_context);
         CacheBlockStore_CompleteRequest(api);
         return;
     }
 
     if (block_count == 0)
     {
-        err = api->m_RemoteBlockStoreAPI->PreflightGet(api->m_RemoteBlockStoreAPI, retarget_context->m_BlockCount, retarget_context->m_BlockHashes, retarget_context->m_FinalAsyncCompleteAPI);
+        err = api->m_RemoteBlockStoreAPI->PreflightGet(api->m_RemoteBlockStoreAPI, get_existing_content_context->m_BlockCount, get_existing_content_context->m_BlockHashes, get_existing_content_context->m_FinalAsyncCompleteAPI);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_RemoteBlockStoreAPI->PreflightGet() failed with %d", err)
-            if (retarget_context->m_FinalAsyncCompleteAPI)
+            if (get_existing_content_context->m_FinalAsyncCompleteAPI)
             {
-                retarget_context->m_FinalAsyncCompleteAPI->OnComplete(retarget_context->m_FinalAsyncCompleteAPI, 0, 0, err);
+                get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, 0, err);
             }
-            Longtail_Free(retarget_context);
+            Longtail_Free(get_existing_content_context);
             CacheBlockStore_CompleteRequest(api);
             return;
         }
-        Longtail_Free(retarget_context);
+        Longtail_Free(get_existing_content_context);
         CacheBlockStore_CompleteRequest(api);
         return;
     }
 
-    struct Longtail_LookupTable* local_store_block_lookup = Longtail_LookupTable_Create(Longtail_Alloc("CacheBlockStore", Longtail_LookupTable_GetSize(retarget_context->m_BlockCount)), retarget_context->m_BlockCount, 0);
+    struct Longtail_LookupTable* local_store_block_lookup = Longtail_LookupTable_Create(Longtail_Alloc("CacheBlockStore", Longtail_LookupTable_GetSize(get_existing_content_context->m_BlockCount)), get_existing_content_context->m_BlockCount, 0);
     if (!local_store_block_lookup)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(retarget_context);
+        Longtail_Free(get_existing_content_context);
         CacheBlockStore_CompleteRequest(api);
         return;
     }
 
-    TLongtail_Hash* missing_block_hashes = (TLongtail_Hash*)Longtail_Alloc("CacheBlockStore", sizeof(TLongtail_Hash) * retarget_context->m_BlockCount);
+    TLongtail_Hash* missing_block_hashes = (TLongtail_Hash*)Longtail_Alloc("CacheBlockStore", sizeof(TLongtail_Hash) * get_existing_content_context->m_BlockCount);
     if (!missing_block_hashes)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
         Longtail_Free(local_store_block_lookup);
-        Longtail_Free(retarget_context);
+        Longtail_Free(get_existing_content_context);
         CacheBlockStore_CompleteRequest(api);
         return;
     }
@@ -339,9 +339,9 @@ static void PreflightGet_PreflightStartedAPI_OnComplete(struct Longtail_AsyncPre
     }
 
     uint32_t missing_block_count = 0;
-    for (uint32_t b = 0; b < retarget_context->m_BlockCount; ++b)
+    for (uint32_t b = 0; b < get_existing_content_context->m_BlockCount; ++b)
     {
-        TLongtail_Hash block_hash = retarget_context->m_BlockHashes[b];
+        TLongtail_Hash block_hash = get_existing_content_context->m_BlockHashes[b];
         if (Longtail_LookupTable_PutUnique(local_store_block_lookup, block_hash, b))
         {
             continue;
@@ -355,28 +355,28 @@ static void PreflightGet_PreflightStartedAPI_OnComplete(struct Longtail_AsyncPre
         // That is OK, because that would only need to happen if there were two layers of cache in a store block stack
         // and that use case is so far not a priority.
         err = api->m_RemoteBlockStoreAPI->PreflightGet(api->m_RemoteBlockStoreAPI, missing_block_count, missing_block_hashes, 0);
-        if (retarget_context->m_FinalAsyncCompleteAPI)
+        if (get_existing_content_context->m_FinalAsyncCompleteAPI)
         {
-            retarget_context->m_FinalAsyncCompleteAPI->OnComplete(retarget_context->m_FinalAsyncCompleteAPI, 0, 0, err);
+            get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, 0, err);
         }
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_RemoteBlockStoreAPI->PreflightGet() failed with %d", err)
             Longtail_Free(missing_block_hashes);
             Longtail_Free(local_store_block_lookup);
-            Longtail_Free(retarget_context);
+            Longtail_Free(get_existing_content_context);
             CacheBlockStore_CompleteRequest(api);
             return;
         }
     }
-    else if (retarget_context->m_FinalAsyncCompleteAPI)
+    else if (get_existing_content_context->m_FinalAsyncCompleteAPI)
     {
-        retarget_context->m_FinalAsyncCompleteAPI->OnComplete(retarget_context->m_FinalAsyncCompleteAPI, block_count, block_hashes, 0);
+        get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, block_count, block_hashes, 0);
     }
 
     Longtail_Free(missing_block_hashes);
     Longtail_Free(local_store_block_lookup);
-    Longtail_Free(retarget_context);
+    Longtail_Free(get_existing_content_context);
     CacheBlockStore_CompleteRequest(api);
 }
 
@@ -391,7 +391,7 @@ static int CacheBlockStore_PreflightGet(
         LONGTAIL_LOGFIELD(block_count, "%u"),
         LONGTAIL_LOGFIELD(block_hashes, "%p"),
         LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (block_count == 0) || (block_hashes != 0), return EINVAL)
@@ -668,17 +668,17 @@ static int CacheBlockStore_GetStoredBlock(
     return 0;
 }
 
-struct RetargetContext_RetargetToRemote_Context
+struct GetExistingContext_GetExistingRemoteContent_Context
 {
     struct Longtail_AsyncGetExistingContentAPI m_AsyncCompleteAPI;
     struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
-    struct Longtail_AsyncGetExistingContentAPI* m_RetargetAsyncCompleteAPI;
-    struct Longtail_StoreIndex* m_LocalRetargettedStoreIndex;
+    struct Longtail_AsyncGetExistingContentAPI* m_FinalAsyncCompleteAPI;
+    struct Longtail_StoreIndex* m_LocalExistingStoreIndex;
     uint32_t m_ChunkCount;
     TLongtail_Hash* m_ChunkHashes;
 };
 
-static void RetargetRemoteContent_GetExistingContentCompleteAPI_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err)
+static void GetExistingContent_GetExistingRemoteContentCompleteAPI_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
@@ -686,43 +686,43 @@ static void RetargetRemoteContent_GetExistingContentCompleteAPI_OnComplete(struc
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    struct RetargetContext_RetargetToRemote_Context* retarget_context = (struct RetargetContext_RetargetToRemote_Context*)async_complete_api;
-    struct CacheBlockStoreAPI* api = retarget_context->m_CacheBlockStoreAPI;
+    struct GetExistingContext_GetExistingRemoteContent_Context* get_existing_content_context = (struct GetExistingContext_GetExistingRemoteContent_Context*)async_complete_api;
+    struct CacheBlockStoreAPI* api = get_existing_content_context->m_CacheBlockStoreAPI;
     if (err)
     {
-        retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_context->m_LocalRetargettedStoreIndex);
-        Longtail_Free(retarget_context);
+        get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, err);
+        Longtail_Free(get_existing_content_context->m_LocalExistingStoreIndex);
+        Longtail_Free(get_existing_content_context);
         return;
     }
     struct Longtail_StoreIndex* merged_store_index;
     err = Longtail_MergeStoreIndex(
-        retarget_context->m_LocalRetargettedStoreIndex,
+        get_existing_content_context->m_LocalExistingStoreIndex,
         store_index,
         &merged_store_index);
     Longtail_Free(store_index);
-    Longtail_Free(retarget_context->m_LocalRetargettedStoreIndex);
+    Longtail_Free(get_existing_content_context->m_LocalExistingStoreIndex);
     if (err)
     {
-        retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_context);
+        get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, err);
+        Longtail_Free(get_existing_content_context);
         return;
     }
-    retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, merged_store_index, 0);
-    Longtail_Free(retarget_context);
+    get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, merged_store_index, 0);
+    Longtail_Free(get_existing_content_context);
 }
 
-struct RetargetContext_RetargetToLocal_Context
+struct GetExistingContext_GetExistingLocalContent_Context
 {
     struct Longtail_AsyncGetExistingContentAPI m_AsyncCompleteAPI;
     struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
-    struct Longtail_AsyncGetExistingContentAPI* m_RetargetAsyncCompleteAPI;
+    struct Longtail_AsyncGetExistingContentAPI* m_FinalAsyncCompleteAPI;
     uint32_t m_ChunkCount;
     TLongtail_Hash* m_ChunkHashes;
     uint32_t m_MinBlockUsagePercent;
 };
 
-static void RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err)
+static void GetExistingLocalContent_GetExistingContentCompleteAPI_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(async_complete_api, "%p"),
@@ -730,56 +730,56 @@ static void RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete(struct
         LONGTAIL_LOGFIELD(err, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    struct RetargetContext_RetargetToLocal_Context* retarget_context = (struct RetargetContext_RetargetToLocal_Context*)async_complete_api;
-    struct CacheBlockStoreAPI* api = retarget_context->m_CacheBlockStoreAPI;
+    struct GetExistingContext_GetExistingLocalContent_Context* get_existing_content_context = (struct GetExistingContext_GetExistingLocalContent_Context*)async_complete_api;
+    struct CacheBlockStoreAPI* api = get_existing_content_context->m_CacheBlockStoreAPI;
     if (err)
     {
-        retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_context);
+        get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, err);
+        Longtail_Free(get_existing_content_context);
         return;
     }
-    struct RetargetContext_RetargetToRemote_Context* retarget_remote_context = (struct RetargetContext_RetargetToRemote_Context*)Longtail_Alloc("CacheBlockStore", sizeof(struct RetargetContext_RetargetToRemote_Context) + (sizeof(TLongtail_Hash) * retarget_context->m_ChunkCount));
-    retarget_remote_context->m_ChunkHashes = (TLongtail_Hash*)&retarget_remote_context[1];
+    struct GetExistingContext_GetExistingRemoteContent_Context* existing_remote_content_context = (struct GetExistingContext_GetExistingRemoteContent_Context*)Longtail_Alloc("CacheBlockStore", sizeof(struct GetExistingContext_GetExistingRemoteContent_Context) + (sizeof(TLongtail_Hash) * get_existing_content_context->m_ChunkCount));
+    existing_remote_content_context->m_ChunkHashes = (TLongtail_Hash*)&existing_remote_content_context[1];
     err = Longtail_GetMissingChunks(
         store_index,
-        retarget_context->m_ChunkCount,
-        retarget_context->m_ChunkHashes,
-        &retarget_remote_context->m_ChunkCount,
-        retarget_remote_context->m_ChunkHashes);
+        get_existing_content_context->m_ChunkCount,
+        get_existing_content_context->m_ChunkHashes,
+        &existing_remote_content_context->m_ChunkCount,
+        existing_remote_content_context->m_ChunkHashes);
     if (err)
     {
         Longtail_Free(store_index);
-        retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_context);
+        get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, err);
+        Longtail_Free(get_existing_content_context);
         return;
     }
-    if (retarget_remote_context->m_ChunkCount == 0)
+    if (existing_remote_content_context->m_ChunkCount == 0)
     {
-        Longtail_Free(retarget_remote_context);
-        retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, store_index, 0);
-        Longtail_Free(retarget_context);
+        Longtail_Free(existing_remote_content_context);
+        get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, store_index, 0);
+        Longtail_Free(get_existing_content_context);
         return;
     }
-    retarget_remote_context->m_AsyncCompleteAPI.m_API.Dispose = 0;
-    retarget_remote_context->m_AsyncCompleteAPI.OnComplete = RetargetRemoteContent_GetExistingContentCompleteAPI_OnComplete;
-    retarget_remote_context->m_CacheBlockStoreAPI = api;
-    retarget_remote_context->m_LocalRetargettedStoreIndex = store_index;
-    retarget_remote_context->m_RetargetAsyncCompleteAPI = retarget_context->m_RetargetAsyncCompleteAPI;
+    existing_remote_content_context->m_AsyncCompleteAPI.m_API.Dispose = 0;
+    existing_remote_content_context->m_AsyncCompleteAPI.OnComplete = GetExistingContent_GetExistingRemoteContentCompleteAPI_OnComplete;
+    existing_remote_content_context->m_CacheBlockStoreAPI = api;
+    existing_remote_content_context->m_LocalExistingStoreIndex = store_index;
+    existing_remote_content_context->m_FinalAsyncCompleteAPI = get_existing_content_context->m_FinalAsyncCompleteAPI;
     err = api->m_RemoteBlockStoreAPI->GetExistingContent(
         api->m_RemoteBlockStoreAPI,
-        retarget_remote_context->m_ChunkCount,
-        retarget_remote_context->m_ChunkHashes,
-        retarget_context->m_MinBlockUsagePercent,
-        &retarget_remote_context->m_AsyncCompleteAPI);
+        existing_remote_content_context->m_ChunkCount,
+        existing_remote_content_context->m_ChunkHashes,
+        get_existing_content_context->m_MinBlockUsagePercent,
+        &existing_remote_content_context->m_AsyncCompleteAPI);
     if (err)
     {
-        retarget_context->m_RetargetAsyncCompleteAPI->OnComplete(retarget_context->m_RetargetAsyncCompleteAPI, 0, err);
-        Longtail_Free(retarget_remote_context);
+        get_existing_content_context->m_FinalAsyncCompleteAPI->OnComplete(get_existing_content_context->m_FinalAsyncCompleteAPI, 0, err);
+        Longtail_Free(existing_remote_content_context);
         Longtail_Free(store_index);
-        Longtail_Free(retarget_context);
+        Longtail_Free(get_existing_content_context);
         return;
     }
-    Longtail_Free(retarget_context);
+    Longtail_Free(get_existing_content_context);
 }
 
 static int CacheBlockStore_GetExistingContent(
@@ -795,7 +795,7 @@ static int CacheBlockStore_GetExistingContent(
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
@@ -804,27 +804,27 @@ static int CacheBlockStore_GetExistingContent(
     struct CacheBlockStoreAPI* api = (struct CacheBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
 
-    size_t async_complete_size = sizeof(struct RetargetContext_RetargetToLocal_Context) + sizeof(TLongtail_Hash) * chunk_count;
-    struct RetargetContext_RetargetToLocal_Context* retarget_local_context = (struct RetargetContext_RetargetToLocal_Context*)Longtail_Alloc("CacheBlockStore", async_complete_size);
-    retarget_local_context->m_AsyncCompleteAPI.m_API.Dispose = 0;
-    retarget_local_context->m_AsyncCompleteAPI.OnComplete = RetargetLocalContent_GetExistingContentCompleteAPI_OnComplete;
-    retarget_local_context->m_CacheBlockStoreAPI = api;
-    retarget_local_context->m_RetargetAsyncCompleteAPI = async_complete_api;
-    retarget_local_context->m_ChunkCount = chunk_count;
-    retarget_local_context->m_ChunkHashes = (TLongtail_Hash*)&retarget_local_context[1];
-    retarget_local_context->m_MinBlockUsagePercent = min_block_usage_percent;
-    memcpy(retarget_local_context->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    size_t async_complete_size = sizeof(struct GetExistingContext_GetExistingLocalContent_Context) + sizeof(TLongtail_Hash) * chunk_count;
+    struct GetExistingContext_GetExistingLocalContent_Context* existing_local_content_context = (struct GetExistingContext_GetExistingLocalContent_Context*)Longtail_Alloc("CacheBlockStore", async_complete_size);
+    existing_local_content_context->m_AsyncCompleteAPI.m_API.Dispose = 0;
+    existing_local_content_context->m_AsyncCompleteAPI.OnComplete = GetExistingLocalContent_GetExistingContentCompleteAPI_OnComplete;
+    existing_local_content_context->m_CacheBlockStoreAPI = api;
+    existing_local_content_context->m_FinalAsyncCompleteAPI = async_complete_api;
+    existing_local_content_context->m_ChunkCount = chunk_count;
+    existing_local_content_context->m_ChunkHashes = (TLongtail_Hash*)&existing_local_content_context[1];
+    existing_local_content_context->m_MinBlockUsagePercent = min_block_usage_percent;
+    memcpy(existing_local_content_context->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
 
     int err = api->m_LocalBlockStoreAPI->GetExistingContent(
         api->m_LocalBlockStoreAPI,
         chunk_count,
         chunk_hashes,
         min_block_usage_percent,
-        &retarget_local_context->m_AsyncCompleteAPI);
+        &existing_local_content_context->m_AsyncCompleteAPI);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_LocalBlockStoreAPI->GetExistingContent() failed with %d", err)
-        Longtail_Free(retarget_local_context);
+        Longtail_Free(existing_local_content_context);
         return err;
     }
     return 0;

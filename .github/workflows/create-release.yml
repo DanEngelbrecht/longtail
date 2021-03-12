@@ -104,8 +104,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
+          - **CHANGED API** `Longtail_BlockStore_PreflightGet` now takes block count and hashes and an optional "prefetch started" callback
           - **FIXED** `Longtail_GetExistingStoreIndex` exits as soon as all unique blocks has been found
-          - **CHANGED API** `Longtail_BlockStore_PreflightGet` now takes block cound and hashes and an optonal "started" callback
+          - **CHANGED** `Longtail_BlockStore_PreflightGetFunc` and `Longtail_BlockStore_GetExistingContentFunc` now logs debug context at INFO level
         draft: true
         prerelease: false
     - name: Download Linux artifacts

@@ -249,7 +249,7 @@ static int CompressBlockStore_PreflightGet(
         LONGTAIL_LOGFIELD(block_count, "%u"),
         LONGTAIL_LOGFIELD(block_hashes, "%p"),
         LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (block_count == 0) || (block_hashes != 0), return EINVAL)
@@ -467,7 +467,7 @@ static int CompressBlockStore_GetExistingContent(
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)

@@ -3717,7 +3717,7 @@ int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
@@ -4794,7 +4794,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
                 LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
                 LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
                 LONGTAIL_LOGFIELD(async_complete_api, "%p")
-            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
                 block_store_api, chunk_count, chunk_hashes, async_complete_api)
