@@ -351,12 +351,14 @@ static void PreflightGet_PreflightStartedAPI_OnComplete(struct Longtail_AsyncPre
 
     if (missing_block_count > 0)
     {
+        // We currently do not support calling back with a merged result for start of prefecth block
+        // That is OK, because that would only need to happen if there were two layers of cache in a store block stack
+        // and that use case is so far not a priority.
+        err = api->m_RemoteBlockStoreAPI->PreflightGet(api->m_RemoteBlockStoreAPI, missing_block_count, missing_block_hashes, 0);
         if (retarget_context->m_FinalAsyncCompleteAPI)
         {
-            // TODO: We should do our own preflight started callback here so we can merge what we started for local + remote!
-            // return...
+            retarget_context->m_FinalAsyncCompleteAPI->OnComplete(retarget_context->m_FinalAsyncCompleteAPI, 0, 0, err);
         }
-        err = api->m_RemoteBlockStoreAPI->PreflightGet(api->m_RemoteBlockStoreAPI, missing_block_count, missing_block_hashes, retarget_context->m_FinalAsyncCompleteAPI);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "api->m_RemoteBlockStoreAPI->PreflightGet() failed with %d", err)
