@@ -384,13 +384,13 @@ static int CacheBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint32_t block_count,
     const TLongtail_Hash* block_hashes,
-    struct Longtail_AsyncPreflightStartedAPI* async_complete_api)
+    struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(block_count, "%u"),
         LONGTAIL_LOGFIELD(block_hashes, "%p"),
-        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+        LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
@@ -405,7 +405,7 @@ static int CacheBlockStore_PreflightGet(
     context->m_CacheBlockStoreAPI = api;
     context->m_BlockCount = block_count;
     context->m_BlockHashes = (TLongtail_Hash*)&context[1];
-    context->m_FinalAsyncCompleteAPI = async_complete_api;
+    context->m_FinalAsyncCompleteAPI = optional_async_complete_api;
     memcpy(context->m_BlockHashes, block_hashes, sizeof(TLongtail_Hash) * block_count);
 
     Longtail_AtomicAdd32(&api->m_PendingRequestCount, 1);

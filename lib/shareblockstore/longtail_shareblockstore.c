@@ -172,13 +172,13 @@ static int ShareBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint32_t block_count,
     const TLongtail_Hash* block_hashes,
-    struct Longtail_AsyncPreflightStartedAPI* async_complete_api)
+    struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(block_count, "%u"),
         LONGTAIL_LOGFIELD(block_hashes, "%p"),
-        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+        LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
@@ -189,7 +189,7 @@ static int ShareBlockStore_PreflightGet(
         api->m_BackingBlockStore,
         block_count,
         block_hashes,
-        async_complete_api);
+        optional_async_complete_api);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "api->m_BackingBlockStore->PreflightGet() failed with %d", err)
