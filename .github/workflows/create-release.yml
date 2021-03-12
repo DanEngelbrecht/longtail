@@ -136,17 +136,9 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
-    - name: Upload Linux GitHub release
-      uses: skx/github-action-publish-binaries@master
-      with:
-        args: linux-x64.zip
-    - name: Upload Windows GitHub release
-      uses: skx/github-action-publish-binaries@master
-      with:
-        args: win32-x64.zip
     - name: Upload Darwin GitHub release
       uses: skx/github-action-publish-binaries@master
       with:
-        args: darwin-x64.zip
+        args: linux-x64.zip win32-x64.zip darwin-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
