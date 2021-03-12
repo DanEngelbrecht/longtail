@@ -103,11 +103,11 @@ jobs:
         tag_name: ${{ github.ref }}
         release_name: Release ${{ github.ref }}
         body: |
-          # Changes in this Pre-Release
+          # Changes in this Release
           - **CHANGED API** `Longtail_BlockStore_PreflightGet` now takes block count and hashes and an optional "prefetch started" callback
           - **FIXED** `Longtail_GetExistingStoreIndex` exits as soon as all unique blocks has been found
           - **CHANGED** `Longtail_BlockStore_PreflightGetFunc` and `Longtail_BlockStore_GetExistingContentFunc` now logs debug context at INFO level
-        draft: true
+        draft: false
         prerelease: true
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
@@ -136,9 +136,12 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
-    - name: Upload Darwin GitHub release
-      uses: skx/github-action-publish-binaries@master
+    - name: Upload to GitHub release
+      uses: Roang-zero1/github-upload-release-artifacts-action@master
       with:
-        args: linux-x64.zip win32-x64.zip darwin-x64.zip
+        args: |
+          linux-x64.zip
+          win32-x64.zip
+          darwin-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
