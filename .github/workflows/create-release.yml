@@ -136,12 +136,20 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
-    - name: Upload to GitHub release
-      uses: Roang-zero1/github-upload-release-artifacts-action@master
+    - name: Upload Linux GitHub release
+      uses: actions/upload-artifact@v2
       with:
-        args: |
-          linux-x64.zip
-          win32-x64.zip
-          darwin-x64.zip
+        name: linux-x64.zip
+        path: linux-x64.zip
+    - name: Upload Windows GitHub release
+      uses: actions/upload-artifact@v2
+      with:
+        name: win32-x64.zip
+        path: win32-x64.zip
+    - name: Upload Darwin GitHub release
+      uses: actions/upload-artifact@v2
+      with:
+        name: darwin-x64.zip
+        path: darwin-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
