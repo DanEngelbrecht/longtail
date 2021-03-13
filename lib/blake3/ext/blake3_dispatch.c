@@ -123,10 +123,10 @@ static
       }
     }
     g_cpu_features = (enum cpu_feature)features;
-    return features;
+    return g_cpu_features;
 #else
     /* How to detect NEON? */
-    return 0;
+    return (enum cpu_feature)0;
 #endif
   }
 }
