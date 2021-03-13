@@ -2,8 +2,6 @@
 
 #include <immintrin.h>
 
-#if !defined(BLAKE3_NO_AVX2)
-
 #define DEGREE 8
 
 INLINE __m256i loadu(const uint8_t src[32]) {
@@ -210,7 +208,7 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
   out[14] = loadu(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
   out[15] = loadu(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
   for (size_t i = 0; i < 8; ++i) {
-    _mm_prefetch((const char*)(&inputs[i][block_offset + 256]), _MM_HINT_T0);
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
   }
   transpose_vecs(&out[0]);
   transpose_vecs(&out[8]);
@@ -325,5 +323,3 @@ void blake3_hash_many_avx2(const uint8_t *const *inputs, size_t num_inputs,
                             out);
 #endif
 }
-
-#endif // 0

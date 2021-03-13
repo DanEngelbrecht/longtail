@@ -1,7 +1,5 @@
 #include "blake3_impl.h"
 
-#if defined(BLAKE3_USE_NEON)
-
 #include <arm_neon.h>
 
 // TODO: This is probably incorrect for big-endian ARM. How should that work?
@@ -346,5 +344,3 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
     out = &out[BLAKE3_OUT_LEN];
   }
 }
-
-#endif
