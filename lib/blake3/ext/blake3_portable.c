@@ -1,14 +1,6 @@
 #include "blake3_impl.h"
 #include <string.h>
 
-INLINE void store32(void *dst, uint32_t w) {
-  uint8_t *p = (uint8_t *)dst;
-  p[0] = (uint8_t)(w >> 0);
-  p[1] = (uint8_t)(w >> 8);
-  p[2] = (uint8_t)(w >> 16);
-  p[3] = (uint8_t)(w >> 24);
-}
-
 INLINE uint32_t rotr32(uint32_t w, uint32_t c) {
   return (w >> c) | (w << (32 - c));
 }

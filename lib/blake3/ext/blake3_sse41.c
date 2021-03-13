@@ -1,7 +1,5 @@
 #include "blake3_impl.h"
 
-#if !defined(BLAKE3_NO_SSE41)
-
 #include <immintrin.h>
 
 #define DEGREE 4
@@ -444,7 +442,7 @@ INLINE void load_counters(uint64_t counter, bool increment_counter,
   const __m128i mask = _mm_set1_epi32(-(int32_t)increment_counter);
   const __m128i add0 = _mm_set_epi32(3, 2, 1, 0);
   const __m128i add1 = _mm_and_si128(mask, add0);
-  __m128i l = _mm_add_epi32(_mm_set1_epi32(counter), add1);
+  __m128i l = _mm_add_epi32(_mm_set1_epi32((int)counter), add1);
   __m128i carry = _mm_cmpgt_epi32(_mm_xor_si128(add1, _mm_set1_epi32(0x80000000)), 
                                   _mm_xor_si128(   l, _mm_set1_epi32(0x80000000)));
   __m128i h = _mm_sub_epi32(_mm_set1_epi32(counter >> 32), carry);
@@ -559,5 +557,3 @@ void blake3_hash_many_sse41(const uint8_t *const *inputs, size_t num_inputs,
     out = &out[BLAKE3_OUT_LEN];
   }
 }
-
-#endif
