@@ -104,6 +104,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
+          - **UPDATE** Update ZStdLib to 1.4.9
           - **UPDATE** Update Blake3 to 0.3.7
         draft: false
         prerelease: false
