@@ -1,0 +1,1 @@
+Blake3: 0.3.7 https://github.com/BLAKE3-team/BLAKE3/releases/tag/0.3.7
