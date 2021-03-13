@@ -89,7 +89,7 @@ static
     uint32_t regs[4] = {0};
     uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
     (void)edx;
-    uint32_t features = 0;
+    int features = 0;
     cpuid(regs, 0);
     const int max_id = *eax;
     cpuid(regs, 1);
@@ -123,10 +123,10 @@ static
       }
     }
     g_cpu_features = (enum cpu_feature)features;
-    return (enum cpu_feature)features;
+    return g_cpu_features;
 #else
     /* How to detect NEON? */
-    return 0;
+    return (enum cpu_feature)0;
 #endif
   }
 }
@@ -149,6 +149,12 @@ void blake3_compress_in_place(uint32_t cv[8],
     return;
   }
 #endif
+#if !defined(BLAKE3_NO_SSE2)
+  if (features & SSE2) {
+    blake3_compress_in_place_sse2(cv, block, block_len, counter, flags);
+    return;
+  }
+#endif
 #endif
   blake3_compress_in_place_portable(cv, block, block_len, counter, flags);
 }
@@ -168,6 +174,12 @@ void blake3_compress_xof(const uint32_t cv[8],
 #if !defined(BLAKE3_NO_SSE41)
   if (features & SSE41) {
     blake3_compress_xof_sse41(cv, block, block_len, counter, flags, out);
+    return;
+  }
+#endif
+#if !defined(BLAKE3_NO_SSE2)
+  if (features & SSE2) {
+    blake3_compress_xof_sse2(cv, block, block_len, counter, flags, out);
     return;
   }
 #endif
@@ -205,6 +217,14 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
     return;
   }
 #endif
+#if !defined(BLAKE3_NO_SSE2)
+  if (features & SSE2) {
+    blake3_hash_many_sse2(inputs, num_inputs, blocks, key, counter,
+                          increment_counter, flags, flags_start, flags_end,
+                          out);
+    return;
+  }
+#endif
 #endif
 
 #if defined(BLAKE3_USE_NEON)
@@ -234,6 +254,11 @@ size_t blake3_simd_degree(void) {
 #endif
 #if !defined(BLAKE3_NO_SSE41)
   if (features & SSE41) {
+    return 4;
+  }
+#endif
+#if !defined(BLAKE3_NO_SSE2)
+  if (features & SSE2) {
     return 4;
   }
 #endif
