@@ -470,7 +470,7 @@ INLINE void transpose_msg_vecs4(const uint8_t *const *inputs,
   out[14] = loadu_128(&inputs[2][block_offset + 3 * sizeof(__m128i)]);
   out[15] = loadu_128(&inputs[3][block_offset + 3 * sizeof(__m128i)]);
   for (size_t i = 0; i < 4; ++i) {
-    _mm_prefetch((const char*)(&inputs[i][block_offset + 256]), _MM_HINT_T0);
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
   }
   transpose_vecs_128(&out[0]);
   transpose_vecs_128(&out[4]);
@@ -726,7 +726,7 @@ INLINE void transpose_msg_vecs8(const uint8_t *const *inputs,
   out[14] = loadu_256(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
   out[15] = loadu_256(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
   for (size_t i = 0; i < 8; ++i) {
-    _mm_prefetch((const char*)(&inputs[i][block_offset + 256]), _MM_HINT_T0);
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
   }
   transpose_vecs_256(&out[0]);
   transpose_vecs_256(&out[8]);
@@ -1039,7 +1039,7 @@ INLINE void transpose_msg_vecs16(const uint8_t *const *inputs,
   out[14] = loadu_512(&inputs[14][block_offset]);
   out[15] = loadu_512(&inputs[15][block_offset]);
   for (size_t i = 0; i < 16; ++i) {
-    _mm_prefetch((const char*)(&inputs[i][block_offset + 256]), _MM_HINT_T0);
+    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
   }
   transpose_vecs_512(out);
 }
@@ -1049,7 +1049,7 @@ INLINE void load_counters16(uint64_t counter, bool increment_counter,
   const __m512i mask = _mm512_set1_epi32(-(int32_t)increment_counter);
   const __m512i add0 = _mm512_set_epi32(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
   const __m512i add1 = _mm512_and_si512(mask, add0);
-  __m512i l = _mm512_add_epi32(_mm512_set1_epi32((int)counter), add1);
+  __m512i l = _mm512_add_epi32(_mm512_set1_epi32(counter), add1);
   __mmask16 carry = _mm512_cmp_epu32_mask(l, add1, _MM_CMPINT_LT);
   __m512i h = _mm512_mask_add_epi32(_mm512_set1_epi32(counter >> 32), carry, _mm512_set1_epi32(counter >> 32), _mm512_set1_epi32(1));
   *out_lo = l;

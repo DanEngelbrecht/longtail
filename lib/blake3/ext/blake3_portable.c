@@ -147,7 +147,7 @@ INLINE void hash_one_portable(const uint8_t *input, size_t blocks,
     blocks -= 1;
     block_flags = flags;
   }
-  memcpy(out, cv, 32);
+  store_cv_words(out, cv);
 }
 
 void blake3_hash_many_portable(const uint8_t *const *inputs, size_t num_inputs,
