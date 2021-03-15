@@ -32,8 +32,6 @@ struct FSBlockStoreAPI
     struct Longtail_BlockIndex** m_AddedBlockIndexes;
     const char* m_BlockExtension;
     const char* m_StoreIndexLockPath;
-    uint32_t m_DefaultMaxBlockSize;
-    uint32_t m_DefaultMaxChunksPerBlock;
     uint32_t m_StoreIndexIsDirty;
     char m_TmpExtension[TMP_EXTENSION_LENGTH + 1];
 };
@@ -447,8 +445,6 @@ static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
 static int ReadContent(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_JobAPI* job_api,
-    uint32_t max_block_size,
-    uint32_t max_chunks_per_block,
     const char* store_path,
     const char* block_extension,
     struct Longtail_StoreIndex** out_store_index)
@@ -456,8 +452,6 @@ static int ReadContent(
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(job_api, "%p"),
-        LONGTAIL_LOGFIELD(max_block_size, "%u"),
-        LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(store_path, "%s"),
         LONGTAIL_LOGFIELD(block_extension, "%s"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
@@ -614,8 +608,6 @@ int FSBlockStore_GetStoreIndexFromStorage(
     struct Longtail_JobAPI* job_api = fsblockstore_api->m_JobAPI;
     const char* store_path = fsblockstore_api->m_StorePath;
     const char* block_extension = fsblockstore_api->m_BlockExtension;
-    uint32_t default_max_block_size = fsblockstore_api->m_DefaultMaxBlockSize;
-    uint32_t default_max_chunks_per_block = fsblockstore_api->m_DefaultMaxChunksPerBlock;
 
     struct Longtail_StoreIndex* store_index = 0;
 
@@ -657,8 +649,6 @@ int FSBlockStore_GetStoreIndexFromStorage(
     err = ReadContent(
         storage_api,
         job_api,
-        default_max_block_size,
-        default_max_chunks_per_block,
         store_path,
         block_extension,
         &store_index);
@@ -1155,8 +1145,6 @@ static int FSBlockStore_Init(
     struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
-    uint32_t default_max_block_size,
-    uint32_t default_max_chunks_per_block,
     const char* optional_extension,
     uint64_t unique_id,
     struct Longtail_BlockStoreAPI** out_block_store_api)
@@ -1166,8 +1154,6 @@ static int FSBlockStore_Init(
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(content_path, "%s"),
-        LONGTAIL_LOGFIELD(default_max_block_size, "%u"),
-        LONGTAIL_LOGFIELD(default_max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(optional_extension, "%p"),
         LONGTAIL_LOGFIELD(unique_id, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_block_store_api, "%p")
@@ -1204,8 +1190,6 @@ static int FSBlockStore_Init(
     api->m_StoreIndexLockPath = storage_api->ConcatPath(storage_api, content_path, "store.lsi.sync");
 
     GetUniqueExtension(unique_id, api->m_TmpExtension);
-    api->m_DefaultMaxBlockSize = default_max_block_size;
-    api->m_DefaultMaxChunksPerBlock = default_max_chunks_per_block;
     api->m_StoreIndexIsDirty = 0;
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
@@ -1230,23 +1214,17 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
-    uint32_t default_max_block_size,
-    uint32_t default_max_chunks_per_block,
     const char* optional_extension)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(content_path, "%s"),
-        LONGTAIL_LOGFIELD(default_max_block_size, "%u"),
-        LONGTAIL_LOGFIELD(default_max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(optional_extension, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, content_path != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT(ctx, default_max_block_size != 0, return 0)
-    LONGTAIL_VALIDATE_INPUT(ctx, default_max_chunks_per_block != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, optional_extension == 0 || strlen(optional_extension) < 15, return 0)
     size_t api_size = sizeof(struct FSBlockStoreAPI);
     void* mem = Longtail_Alloc("FSBlockStoreAPI", api_size);
@@ -1265,8 +1243,6 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
         job_api,
         storage_api,
         content_path,
-        default_max_block_size,
-        default_max_chunks_per_block,
         optional_extension,
         unique_id,
         &block_store_api);
