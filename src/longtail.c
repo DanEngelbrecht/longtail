@@ -4608,12 +4608,14 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     size_t chunk_sizes_size = sizeof(uint32_t) * block_chunks_count;
     size_t chunk_offsets_size = sizeof(uint32_t) * block_chunks_count;
     size_t block_indexes_size = sizeof(uint32_t) * block_chunks_count;
+    size_t buffer_size = 512*1024;
 
     size_t work_mem_size =
         block_chunks_lookup_size +
         chunk_sizes_size +
         chunk_offsets_size +
-        block_indexes_size;
+        block_indexes_size +
+        buffer_size;
     void* work_mem = Longtail_Alloc("WritePartialAssetFromBlocks", work_mem_size);
     if (!work_mem)
     {
@@ -4641,6 +4643,8 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
     uint32_t* chunk_offsets = (uint32_t*)p;
     p += chunk_offsets_size;
     uint32_t* block_indexes = (uint32_t*)p;
+    p += block_indexes_size;
+    char* buffer = p;
 
     uint32_t block_chunk_index_offset = 0;
     for(uint32_t b = 0; b < block_reader_job_count; ++b)
@@ -4662,7 +4666,10 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         }
     }
 
-    while (chunk_index_offset < write_chunk_index_offset + write_chunk_count)
+    size_t buffer_used_size = 0;
+    uint32_t chunk_index_end = write_chunk_index_offset + write_chunk_count;
+
+    while (chunk_index_offset < chunk_index_end)
     {
         uint32_t asset_chunk_index = chunk_index_start + chunk_index_offset;
         uint32_t chunk_index = job->m_VersionIndex->m_AssetChunkIndexes[asset_chunk_index];
@@ -4693,7 +4700,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
         uint32_t chunk_size = chunk_sizes[*chunk_block_index];
         const char* block_data = (char*)stored_block[block_index]->m_BlockData;
 
-        while(chunk_index_offset < (write_chunk_index_offset + write_chunk_count - 1))
+        while(chunk_index_offset < (chunk_index_end - 1))
         {
             uint32_t next_chunk_index = job->m_VersionIndex->m_AssetChunkIndexes[asset_chunk_index + 1];
             TLongtail_Hash next_chunk_hash = job->m_VersionIndex->m_ChunkHashes[next_chunk_index];
@@ -4732,6 +4739,55 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             ++chunk_index_offset;
         }
 
+        if (buffer_used_size + chunk_size <= buffer_size)
+        {
+            if (buffer_used_size > 0 || (chunk_index_offset < chunk_index_end - 1))
+            {
+                memcpy(&buffer[buffer_used_size], &block_data[chunk_block_offset], chunk_size);
+                buffer_used_size += chunk_size;
+                ++chunk_index_offset;
+                continue;
+            }
+        }
+
+        if (buffer_used_size > 0)
+        {
+            int err = job->m_VersionStorageAPI->Write(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset, buffer_used_size, buffer);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_VersionStorageAPI->Write() failed with %d", err)
+                job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+                job->m_AssetOutputFile = 0;
+
+                for (uint32_t d = 0; d < block_reader_job_count; ++d)
+                {
+                    stored_block[d]->Dispose(stored_block[d]);
+                    stored_block[d] = 0;
+                }
+                job->m_Err = err;
+                if (sync_write_job)
+                {
+                    int sync_err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+                    LONGTAIL_FATAL_ASSERT(ctx, sync_err == 0, return 0)
+                }
+                Longtail_Free(work_mem);
+                return 0;
+            }
+            write_offset += buffer_used_size;
+            buffer_used_size = 0;
+        }
+
+        if (buffer_used_size + chunk_size <= buffer_size)
+        {
+            if (buffer_used_size > 0 || (chunk_index_offset < chunk_index_end - 1))
+            {
+                memcpy(&buffer[buffer_used_size], &block_data[chunk_block_offset], chunk_size);
+                buffer_used_size += chunk_size;
+                ++chunk_index_offset;
+                continue;
+            }
+        }
+
         int err = job->m_VersionStorageAPI->Write(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset, chunk_size, &block_data[chunk_block_offset]);
         if (err)
         {
@@ -4757,6 +4813,34 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
         ++chunk_index_offset;
     }
+
+    if (buffer_used_size > 0)
+    {
+        int err = job->m_VersionStorageAPI->Write(job->m_VersionStorageAPI, job->m_AssetOutputFile, write_offset, buffer_used_size, buffer);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_VersionStorageAPI->Write() failed with %d", err)
+            job->m_VersionStorageAPI->CloseFile(job->m_VersionStorageAPI, job->m_AssetOutputFile);
+            job->m_AssetOutputFile = 0;
+
+            for (uint32_t d = 0; d < block_reader_job_count; ++d)
+            {
+                stored_block[d]->Dispose(stored_block[d]);
+                stored_block[d] = 0;
+            }
+            job->m_Err = err;
+            if (sync_write_job)
+            {
+                int sync_err = job->m_JobAPI->ReadyJobs(job->m_JobAPI, 1, sync_write_job);
+                LONGTAIL_FATAL_ASSERT(ctx, sync_err == 0, return 0)
+            }
+            Longtail_Free(work_mem);
+            return 0;
+        }
+        write_offset += buffer_used_size;
+        buffer_used_size = 0;
+    }
+
     Longtail_Free(work_mem);
 
     for (uint32_t d = 0; d < block_reader_job_count; ++d)

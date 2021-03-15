@@ -106,6 +106,7 @@ jobs:
           # Changes in this Release
           - **UPDATE** Update ZStdLib to 1.4.9
           - **UPDATE** Update Blake3 to 0.3.7
+          - **FIX** Collapse chunk writes for multiblock assets accross blocks and discontiguous chunks
         draft: false
         prerelease: false
     - name: Download Linux artifacts
