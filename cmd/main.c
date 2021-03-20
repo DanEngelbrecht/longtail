@@ -360,7 +360,7 @@ int UpSync(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
 
     struct Longtail_VersionIndex* source_version_index = 0;
@@ -619,10 +619,7 @@ int DownSync(
     const char* source_path,
     const char* target_path,
     const char* optional_target_index_path,
-    int retain_permissions,
-    uint32_t target_chunk_size,
-    uint32_t target_block_size,
-    uint32_t max_chunks_per_block)
+    int retain_permissions)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -630,10 +627,7 @@ int DownSync(
         LONGTAIL_LOGFIELD(source_path, "%s"),
         LONGTAIL_LOGFIELD(target_path, "%s"),
         LONGTAIL_LOGFIELD(optional_target_index_path, "%p"),
-        LONGTAIL_LOGFIELD(retain_permissions, "%d"),
-        LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
-        LONGTAIL_LOGFIELD(target_block_size, "%u"),
-        LONGTAIL_LOGFIELD(max_chunks_per_block, "%u")
+        LONGTAIL_LOGFIELD(retain_permissions, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     const char* storage_path = NormalizePath(storage_uri_raw);
@@ -641,13 +635,13 @@ int DownSync(
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
     struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
     struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
     if (cache_path)
     {
-        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, 0);
         store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
         compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     }
@@ -726,7 +720,7 @@ int DownSync(
         }
     }
 
-    target_chunk_size = *source_version_index->m_TargetChunkSize;
+    uint32_t target_chunk_size = *source_version_index->m_TargetChunkSize;
 
     if (target_version_index == 0)
     {
@@ -995,22 +989,18 @@ int SetLogLevel(const char* log_level_raw)
 
 int ValidateVersionIndex(
     const char* storage_uri_raw,
-    const char* version_index_path,
-    uint32_t target_block_size,
-    uint32_t max_chunks_per_block)
+    const char* version_index_path)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
-        LONGTAIL_LOGFIELD(version_index_path, "%s"),
-        LONGTAIL_LOGFIELD(target_block_size, "%u"),
-        LONGTAIL_LOGFIELD(max_chunks_per_block, "%u")
+        LONGTAIL_LOGFIELD(version_index_path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     const char* storage_path = NormalizePath(storage_uri_raw);
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
     
     struct Longtail_VersionIndex* version_index = 0;
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
@@ -1099,7 +1089,6 @@ int VersionIndex_ls(
         job_api,
         fake_block_store_fs,
         "store",
-        1024*1024*1024, 1024,
         0);
 
 
@@ -1215,8 +1204,6 @@ int VersionIndex_cp(
     const char* storage_uri_raw,
     const char* version_index_path,
     const char* cache_path,
-    uint32_t target_block_size,
-    uint32_t max_chunks_per_block,
     const char* source_path,
     const char* target_path)
 {
@@ -1224,8 +1211,6 @@ int VersionIndex_cp(
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
         LONGTAIL_LOGFIELD(version_index_path, "%s"),
         LONGTAIL_LOGFIELD(cache_path, "%s"),
-        LONGTAIL_LOGFIELD(target_block_size, "%u"),
-        LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(source_path, "%s"),
         LONGTAIL_LOGFIELD(target_path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
@@ -1236,13 +1221,13 @@ int VersionIndex_cp(
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, target_block_size, max_chunks_per_block, 0);
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
     struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
     struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
     if (cache_path)
     {
-        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, target_block_size, max_chunks_per_block, 0);
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, 0);
         store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
         compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     }
@@ -1506,15 +1491,6 @@ int main(int argc, char** argv)
     const char* log_level_raw = 0;
     kgflags_string("log-level", "warn", "Log level (debug, info, warn, error)", false, &log_level_raw);
 
-    int32_t target_chunk_size = 8;
-    kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
-
-    int32_t target_block_size = 0;
-    kgflags_int("target-block-size", 8388608, "Target block size", false, &target_block_size);
-
-    int32_t max_chunks_per_block = 0;
-    kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
-
     bool enable_mem_tracer_raw = 0;
     kgflags_bool("mem-tracer", false, "Enable tracing of memory usage", false, &enable_mem_tracer_raw);
 
@@ -1556,6 +1532,15 @@ int main(int argc, char** argv)
 
         const char* compression_raw = 0;
         kgflags_string("compression-algorithm", "zstd", "Compression algorithm: none, brotli, brotli_min, brotli_max, brotli_text, brotli_text_min, brotli_text_max, lz4, zstd, zstd_min, zstd_max", false, &compression_raw);
+
+        int32_t target_chunk_size = 8;
+        kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
+
+        int32_t target_block_size = 0;
+        kgflags_int("target-block-size", 8388608, "Target block size", false, &target_block_size);
+
+        int32_t max_chunks_per_block = 0;
+        kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
 
         int32_t min_block_usage_percent = 8;
         kgflags_int("min-block-usage-percent", 0, "Minimum percent of block content than must match for it to be considered \"existing\"", false, &min_block_usage_percent);
@@ -1658,10 +1643,7 @@ int main(int argc, char** argv)
             source_path,
             target_path,
             target_index,
-            retain_permission_raw,
-            target_chunk_size,
-            target_block_size,
-            max_chunks_per_block);
+            retain_permission_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_index);
@@ -1696,9 +1678,7 @@ int main(int argc, char** argv)
 
         err = ValidateVersionIndex(
             storage_uri_raw,
-            version_index_path,
-            target_block_size,
-            max_chunks_per_block);
+            version_index_path);
 
         Longtail_Free((void*)version_index_path);
     }
@@ -1780,8 +1760,6 @@ int main(int argc, char** argv)
             storage_uri_raw,
             version_index_path,
             cache_path,
-            target_block_size,
-            max_chunks_per_block,
             source_path,
             target_path);
     }
