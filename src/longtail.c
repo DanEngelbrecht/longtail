@@ -12,8 +12,6 @@
 #include <stdarg.h>
 #include <errno.h>
 
-//TODO: Either MergeStoreIndex or CopyBlockIndex is bad
-
 #if !defined(alloca)
     #if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__)
         #include <alloca.h>     // alloca
