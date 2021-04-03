@@ -10,17 +10,26 @@
 #include <inttypes.h>
 #include <string.h>
 
-#if defined(__clang__) || defined(__GNUC__)
-#if defined(WIN32)
-    #include <malloc.h>
-    #define CompareIgnoreCase _stricmp
-#else
-    #include <alloca.h>
-    #define CompareIgnoreCase strcasecmp
+#if !defined(alloca)
+    #if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__)
+        #include <alloca.h>     // alloca
+    #elif defined(_WIN32)
+        #include <malloc.h>     // alloca
+        #if !defined(alloca)
+            #define alloca _alloca  // for clang with MS Codegen
+        #endif
+    #else
+        #include <stdlib.h>     // alloca
+    #endif
 #endif
+
+#if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__)
+    #if defined(WIN32)
+        #define CompareIgnoreCase _stricmp
+    #else
+        #define CompareIgnoreCase strcasecmp
+    #endif
 #elif defined(_MSC_VER)
-    #include <malloc.h>
-    #define alloca _alloca
     #define CompareIgnoreCase _stricmp
 #endif
 
