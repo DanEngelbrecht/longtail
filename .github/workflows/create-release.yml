@@ -105,6 +105,7 @@ jobs:
         body: |
           # Changes in this Release
           - **CHANGED API** `Longtail_CreateFSBlockStoreAPI` not longer takes `default_max_block_size` and `default_max_chunks_per_block`
+          - **CHANGED** Fixed includes for `alloca` and `CompareIgnoreCase` to build under Cygwin
         draft: false
         prerelease: false
     - name: Download Linux artifacts
