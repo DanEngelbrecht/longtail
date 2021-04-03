@@ -23,7 +23,7 @@
     #endif
 #endif
 
-#if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__)
+#if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__) || defined(__APPLE__)
     #define CompareIgnoreCase strcasecmp
 #else
     #define CompareIgnoreCase _stricmp
