@@ -24,12 +24,8 @@
 #endif
 
 #if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__)
-    #if defined(WIN32)
-        #define CompareIgnoreCase _stricmp
-    #else
-        #define CompareIgnoreCase strcasecmp
-    #endif
-#elif defined(_MSC_VER)
+    #define CompareIgnoreCase strcasecmp
+#else
     #define CompareIgnoreCase _stricmp
 #endif
 
