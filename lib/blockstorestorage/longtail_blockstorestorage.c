@@ -1287,13 +1287,13 @@ static int BlockStoreStorageAPI_Init(
 
     const TLongtail_Hash* stire_index_chunk_hashes = store_index->m_ChunkHashes;
     uint32_t block_count = *store_index->m_BlockCount;
+    uint32_t chunk_index_offset = 0;
     for (uint32_t b = 0; b < block_count; ++b)
     {
         uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-        uint32_t chunk_index_offset = store_index->m_BlockChunksOffsets[b];
         for (uint32_t c = 0; c < block_chunk_count; ++c)
         {
-            uint32_t chunk_index = chunk_index_offset + c;
+            uint32_t chunk_index = chunk_index_offset++;
             TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_index];
             Longtail_LookupTable_Put(block_store_fs->m_ChunkHashToBlockIndexLookup, chunk_hash, b);
         }

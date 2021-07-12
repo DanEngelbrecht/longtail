@@ -607,35 +607,14 @@ TEST(Longtail, Longtail_CreateStoreIndexFromBlocks)
     ASSERT_EQ(4, *store_index->m_ChunkCount);
     ASSERT_EQ(*block_index1->m_BlockHash, store_index->m_BlockHashes[0]);
     ASSERT_EQ(*block_index1->m_Tag, store_index->m_BlockTags[0]);
-    ASSERT_EQ(0, store_index->m_BlockChunksOffsets[0]);
     ASSERT_EQ(2, store_index->m_BlockChunkCounts[0]);
     ASSERT_EQ(*block_index2->m_BlockHash, store_index->m_BlockHashes[1]);
     ASSERT_EQ(*block_index2->m_Tag, store_index->m_BlockTags[1]);
-    ASSERT_EQ(2, store_index->m_BlockChunksOffsets[1]);
     ASSERT_EQ(2, store_index->m_BlockChunkCounts[1]);
     ASSERT_EQ(chunk_hashes[0], store_index->m_ChunkHashes[0]);
     ASSERT_EQ(chunk_hashes[1], store_index->m_ChunkHashes[1]);
     ASSERT_EQ(chunk_hashes[2], store_index->m_ChunkHashes[2]);
     ASSERT_EQ(chunk_hashes[3], store_index->m_ChunkHashes[3]);
-
-
-    struct Longtail_BlockIndex restored_block_indexes[2];
-    ASSERT_EQ(0, Longtail_MakeBlockIndex(store_index, 0, &restored_block_indexes[0]));
-    ASSERT_EQ(0, Longtail_MakeBlockIndex(store_index, 1, &restored_block_indexes[1]));
-
-    ASSERT_EQ(*block_index1->m_BlockHash, *restored_block_indexes[0].m_BlockHash);
-    ASSERT_EQ(*block_index1->m_HashIdentifier, *restored_block_indexes[0].m_HashIdentifier);
-    ASSERT_EQ(2, *restored_block_indexes[0].m_ChunkCount);
-    ASSERT_EQ(*block_index1->m_Tag, *restored_block_indexes[0].m_Tag);
-    ASSERT_EQ(chunk_hashes[0], restored_block_indexes[0].m_ChunkHashes[0]);
-    ASSERT_EQ(chunk_hashes[1], restored_block_indexes[0].m_ChunkHashes[1]);
-
-    ASSERT_EQ(*block_index2->m_BlockHash, *restored_block_indexes[1].m_BlockHash);
-    ASSERT_EQ(*block_index2->m_HashIdentifier, *restored_block_indexes[1].m_HashIdentifier);
-    ASSERT_EQ(2, *restored_block_indexes[1].m_ChunkCount);
-    ASSERT_EQ(*block_index2->m_Tag, *restored_block_indexes[1].m_Tag);
-    ASSERT_EQ(chunk_hashes[2], restored_block_indexes[1].m_ChunkHashes[0]);
-    ASSERT_EQ(chunk_hashes[3], restored_block_indexes[1].m_ChunkHashes[1]);
 
     Longtail_Free(store_index);
     Longtail_Free(block_index2);
@@ -756,11 +735,9 @@ TEST(Longtail, Longtail_MergeStoreIndex)
     ASSERT_EQ(5, *store_index->m_ChunkCount);
     ASSERT_EQ(*block_index1->m_BlockHash, store_index->m_BlockHashes[0]);
     ASSERT_EQ(*block_index1->m_Tag, store_index->m_BlockTags[0]);
-    ASSERT_EQ(0, store_index->m_BlockChunksOffsets[0]);
     ASSERT_EQ(2, store_index->m_BlockChunkCounts[0]);
     ASSERT_EQ(*block_index2->m_BlockHash, store_index->m_BlockHashes[1]);
     ASSERT_EQ(*block_index2->m_Tag, store_index->m_BlockTags[1]);
-    ASSERT_EQ(2, store_index->m_BlockChunksOffsets[1]);
     ASSERT_EQ(3, store_index->m_BlockChunkCounts[1]);
     ASSERT_EQ(chunk_hashes[0], store_index->m_ChunkHashes[0]);
     ASSERT_EQ(chunk_hashes[1], store_index->m_ChunkHashes[1]);
@@ -815,34 +792,14 @@ TEST(Longtail, Longtail_CreateStoreIndexFromContentIndex)
     ASSERT_EQ(4, *store_index->m_ChunkCount);
     ASSERT_EQ(*block_index1->m_BlockHash, store_index->m_BlockHashes[0]);
     ASSERT_EQ(*block_index1->m_Tag, store_index->m_BlockTags[0]);
-    ASSERT_EQ(0, store_index->m_BlockChunksOffsets[0]);
     ASSERT_EQ(2, store_index->m_BlockChunkCounts[0]);
     ASSERT_EQ(*block_index2->m_BlockHash, store_index->m_BlockHashes[1]);
     ASSERT_EQ(*block_index2->m_Tag, store_index->m_BlockTags[1]);
-    ASSERT_EQ(2, store_index->m_BlockChunksOffsets[1]);
     ASSERT_EQ(2, store_index->m_BlockChunkCounts[1]);
     ASSERT_EQ(chunk_hashes[0], store_index->m_ChunkHashes[0]);
     ASSERT_EQ(chunk_hashes[1], store_index->m_ChunkHashes[1]);
     ASSERT_EQ(chunk_hashes[2], store_index->m_ChunkHashes[2]);
     ASSERT_EQ(chunk_hashes[3], store_index->m_ChunkHashes[3]);
-
-    struct Longtail_BlockIndex restored_block_indexes[2];
-    ASSERT_EQ(0, Longtail_MakeBlockIndex(store_index, 0, &restored_block_indexes[0]));
-    ASSERT_EQ(0, Longtail_MakeBlockIndex(store_index, 1, &restored_block_indexes[1]));
-
-    ASSERT_EQ(*block_index1->m_BlockHash, *restored_block_indexes[0].m_BlockHash);
-    ASSERT_EQ(*block_index1->m_HashIdentifier, *restored_block_indexes[0].m_HashIdentifier);
-    ASSERT_EQ(2, *restored_block_indexes[0].m_ChunkCount);
-    ASSERT_EQ(*block_index1->m_Tag, *restored_block_indexes[0].m_Tag);
-    ASSERT_EQ(chunk_hashes[0], restored_block_indexes[0].m_ChunkHashes[0]);
-    ASSERT_EQ(chunk_hashes[1], restored_block_indexes[0].m_ChunkHashes[1]);
-
-    ASSERT_EQ(*block_index2->m_BlockHash, *restored_block_indexes[1].m_BlockHash);
-    ASSERT_EQ(*block_index2->m_HashIdentifier, *restored_block_indexes[1].m_HashIdentifier);
-    ASSERT_EQ(2, *restored_block_indexes[1].m_ChunkCount);
-    ASSERT_EQ(*block_index2->m_Tag, *restored_block_indexes[1].m_Tag);
-    ASSERT_EQ(chunk_hashes[2], restored_block_indexes[1].m_ChunkHashes[0]);
-    ASSERT_EQ(chunk_hashes[3], restored_block_indexes[1].m_ChunkHashes[1]);
 
     Longtail_Free(store_index);
     Longtail_Free(block_index2);
@@ -6404,7 +6361,6 @@ TEST(Longtail, CopyStoreIndex)
     for (uint32_t b = 0; b < *s1->m_BlockCount; ++b)
     {
         ASSERT_EQ(s1->m_BlockHashes[b], s1c->m_BlockHashes[b]);
-        ASSERT_EQ(s1->m_BlockChunksOffsets[b], s1c->m_BlockChunksOffsets[b]);
         ASSERT_EQ(s1->m_BlockChunkCounts[b], s1c->m_BlockChunkCounts[b]);
         ASSERT_EQ(s1->m_BlockTags[b], s1c->m_BlockTags[b]);
     }
