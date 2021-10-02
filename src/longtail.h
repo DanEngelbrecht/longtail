@@ -1501,6 +1501,12 @@ LONGTAIL_EXPORT int Longtail_GetExistingStoreIndex(
     uint32_t min_block_usage_percent,
     struct Longtail_StoreIndex** out_store_index);
 
+LONGTAIL_EXPORT int Longtail_PruneStoreIndex(
+    const struct Longtail_StoreIndex* source_store_index,
+    uint32_t keep_block_count,
+    const TLongtail_Hash* keep_block_hashes,
+    struct Longtail_StoreIndex** out_store_index);
+
 /*! @brief Validate that store_index contains all of version_index.
  *
  * Validates that all chunks required for @p version_index are present in @p store_index
