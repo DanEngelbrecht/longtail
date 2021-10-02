@@ -6293,16 +6293,16 @@ int Longtail_GetExistingStoreIndex(
     size_t block_to_index_lookup_size = Longtail_LookupTable_GetSize(store_block_count);
     size_t chunk_to_store_index_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
     size_t found_store_block_hashes_size = sizeof(TLongtail_Hash) * store_block_count;
-    size_t block_uses_size = sizeof(uint32_t) * store_block_count;
-    size_t block_sizes_size = sizeof(uint32_t) * store_block_count;
+    size_t block_uses_percent_size = sizeof(uint32_t) * store_block_count;
+    size_t block_index_size = sizeof(uint32_t) * store_block_count;
     size_t block_order_size = sizeof(uint32_t) * store_block_count;
 
     size_t tmp_mem_size = chunk_to_index_lookup_size +
         block_to_index_lookup_size +
         chunk_to_store_index_lookup_size +
         found_store_block_hashes_size +
-        block_uses_size +
-        block_sizes_size +
+        block_uses_percent_size +
+        block_index_size +
         block_order_size;
 
     void* tmp_mem = Longtail_Alloc("Longtail_GetExistingStoreIndex", tmp_mem_size);
@@ -6325,11 +6325,11 @@ int Longtail_GetExistingStoreIndex(
     TLongtail_Hash* found_store_block_hashes = (TLongtail_Hash*)p;
     p += found_store_block_hashes_size;
 
-    uint32_t* block_uses = (uint32_t*)p;
-    p += block_uses_size;
+    uint32_t* block_uses_percent = (uint32_t*)p;
+    p += block_uses_percent_size;
 
-    uint32_t* block_sizes = (uint32_t*)p;
-    p += block_sizes_size;
+    uint32_t* block_index = (uint32_t*)p;
+    p += block_index_size;
 
     uint32_t* block_order = (uint32_t*)p;
     p += block_order_size;
@@ -6350,11 +6350,11 @@ int Longtail_GetExistingStoreIndex(
     uint32_t found_chunk_count = 0;
     if (min_block_usage_percent <= 100)
     {
+        uint32_t potential_block_count = 0;
         for (uint32_t b = 0; b < store_block_count; ++b)
         {
-            block_order[b] = b;
-            block_uses[b] = 0;
-            block_sizes[b] = 0;
+            uint32_t block_use = 0;
+            uint32_t block_size = 0;
             TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
             uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
             uint32_t chunk_offset = store_index->m_BlockChunksOffsets[b];
@@ -6363,36 +6363,49 @@ int Longtail_GetExistingStoreIndex(
                 uint32_t chunk_size = store_index->m_ChunkSizes[chunk_offset];
                 TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_offset];
                 ++chunk_offset;
-                block_sizes[b] += chunk_size;
+                block_size += chunk_size;
                 if (Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
                 {
-                    block_uses[b] += chunk_size;
+                    block_use += chunk_size;
                 }
             }
+            if (block_use > 0)
+            {
+                uint32_t block_usage_percent = (uint32_t)(((uint64_t)block_use * 100) / block_size);
+                if (min_block_usage_percent > 0 &&
+                    block_usage_percent < min_block_usage_percent) {
+                    continue;
+                }
+
+                block_order[potential_block_count] = potential_block_count;
+                block_index[potential_block_count] = b;
+                block_uses_percent[potential_block_count] = block_usage_percent;
+
+                ++potential_block_count;
+            }
         }
+
+        if (potential_block_count == 0)
+        {
+            Longtail_Free(tmp_mem);
+            return Longtail_CreateStoreIndexFromBlocks(
+                0,
+                0,
+                out_store_index);
+        }
+
         // Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
-        // the blocks that has the most requested chunk data
+        // the blocks that has highest ratio of use inside the block.
         // This does not guarantee a perfect block match as one block can be a 100% match which
         // could lead to skipping part or whole of another 100% match block resulting in us
         // picking a block that we will not use 100% of
-        QSORT(block_order, store_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_uses);
+        QSORT(block_order, potential_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_uses_percent);
 
-        for (uint32_t bo = 0; (bo < store_block_count) && (found_chunk_count < unique_chunk_count); ++bo)
+        for (uint32_t bo = 0; (bo < potential_block_count) && (found_chunk_count < unique_chunk_count); ++bo)
         {
-            uint32_t b = block_order[bo];
-            uint32_t block_use = block_uses[b];
-            uint32_t block_size = block_sizes[b];
-            if (min_block_usage_percent > 0) {
-                if (block_use == 0)
-                {
-                    break;
-                }
-                uint32_t block_usage_percent = (uint32_t)(((uint64_t)block_use * 100) / block_size);
-                if (block_usage_percent < min_block_usage_percent)
-                {
-                    continue;
-                }
-            }
+            uint32_t pb = block_order[bo];
+            uint32_t b = block_index[pb];
+
             TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
             uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
             uint32_t store_chunk_index_offset = store_index->m_BlockChunksOffsets[b];
@@ -6400,7 +6413,7 @@ int Longtail_GetExistingStoreIndex(
             for (uint32_t c = 0; c < block_chunk_count; ++c)
             {
                 TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[store_chunk_index_offset];
-                if ((block_use != block_size) && (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash)))
+                if (!Longtail_LookupTable_Get(chunk_to_index_lookup, chunk_hash))
                 {
                     ++store_chunk_index_offset;
                     continue;
@@ -6459,8 +6472,8 @@ int Longtail_GetExistingStoreIndex(
         TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
         if (0 == Longtail_LookupTable_Get(block_to_index_lookup, block_hash))
         {
-                continue;
-            }
+            continue;
+        }
         Longtail_LookupTable_Put(block_hash_lookup, block_hash, b);
     }
 
