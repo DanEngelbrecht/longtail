@@ -3305,6 +3305,7 @@ public:
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
     static int Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
+    static int PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api);
     static int GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
     static void CompleteRequest(class TestAsyncBlockStore* block_store);
 private:
@@ -3365,6 +3366,7 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
         TestAsyncBlockStore::PreflightGet,
         TestAsyncBlockStore::GetStoredBlock,
         TestAsyncBlockStore::GetExistingContent,
+        TestAsyncBlockStore::PruneBlocks,
         TestAsyncBlockStore::GetStats,
         TestAsyncBlockStore::Flush);
     if (!api)
@@ -3734,6 +3736,22 @@ int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block
     arrput(block_store->m_GetExistingContentRequests, get_existing_content_content_request);
     Longtail_UnlockSpinLock(block_store->m_IOLock);
     Longtail_PostSema(block_store->m_RequestSema, 1);
+    return 0;
+}
+
+int TestAsyncBlockStore::PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+        LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+    async_complete_api->OnComplete(async_complete_api, 0, 0);
     return 0;
 }
 
@@ -4796,13 +4814,30 @@ TEST(Longtail, TestChangeVersionCancelOperation)
                 LONGTAIL_LOGFIELD(async_complete_api, "%p")
             MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockStoreProxy_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
                 block_store_api, chunk_count, chunk_hashes, async_complete_api)
             LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
             LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
             LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
             struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
             return api->m_Base->GetExistingContent(api->m_Base, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api);
+        }
+        static int PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+        {
+            MAKE_LOG_CONTEXT_FIELDS(ctx)
+                LONGTAIL_LOGFIELD(block_store_api, "%p"),
+                LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+                LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+                LONGTAIL_LOGFIELD(async_complete_api, "%p")
+            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockStoreProxy_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
+                block_store_api, block_keep_count, block_keep_hashes, async_complete_api)
+            LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+            LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
+            LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+            struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
+            return api->m_Base->PruneBlocks(api->m_Base, block_keep_count, block_keep_hashes, async_complete_api);
         }
         static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
         {
@@ -4824,6 +4859,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         BlockStoreProxy::PreflightGet,
         BlockStoreProxy::GetStoredBlock,
         BlockStoreProxy::GetExistingContent,
+        BlockStoreProxy::PruneBlocks,
         BlockStoreProxy::GetStats,
         BlockStoreProxy::Flush);
 
@@ -6232,6 +6268,12 @@ static int CaptureBlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* b
     return api->m_BackingStore->GetExistingContent(api->m_BackingStore, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api);
 }
 
+static int CaptureBlockStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    return api->m_BackingStore->PruneBlocks(api->m_BackingStore, block_keep_count, block_keep_hashes, async_complete_api);
+}
+
 static int CaptureBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
@@ -6252,6 +6294,7 @@ struct Longtail_BlockStoreAPI* CaptureBlockStoreInit(struct CaptureBlockStore* s
         CaptureBlockStore_PreflightGet,
         CaptureBlockStore_GetStoredBlock,
         CaptureBlockStore_GetExistingContent,
+        CaptureBlockStore_PruneBlocks,
         CaptureBlockStore_GetStats,
         CaptureBlockStore_Flush);
     store->m_BackingStore = backing_store;
@@ -6453,6 +6496,12 @@ static int CancelStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_s
     return 0;
 }
 
+static int CancelStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    async_complete_api->OnComplete(async_complete_api, 0, ECANCELED);
+    return 0;
+}
+
 static int CancelStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     return ECANCELED;
@@ -6472,6 +6521,7 @@ struct Longtail_BlockStoreAPI* CancelStoreInit(struct CancelStore* store)
         CancelStore_PreflightGet,
         CancelStore_GetStoredBlock,
         CancelStore_GetExistingContent,
+        CancelStore_PruneBlocks,
         CancelStore_GetStats,
         CancelStore_Flush);
     return api;

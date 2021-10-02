@@ -415,6 +415,41 @@ static int ShareBlockStore_GetExistingContent(
     return 0;
 }
 
+static int ShareBlockStore_PruneBlocks(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint32_t block_keep_count,
+    const TLongtail_Hash* block_keep_hashes,
+    struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+        LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+
+    struct ShareBlockStoreAPI* api = (struct ShareBlockStoreAPI*)block_store_api;
+
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count], 1);
+
+    int err = api->m_BackingBlockStore->PruneBlocks(
+        api->m_BackingBlockStore,
+        block_keep_count,
+        block_keep_hashes,
+        async_complete_api);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->PruneBlocks() failed with %d", err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
+        return err;
+    }
+    return 0;
+}
+
 static int ShareBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -501,6 +536,7 @@ static int ShareBlockStore_Init(
         ShareBlockStore_PreflightGet,
         ShareBlockStore_GetStoredBlock,
         ShareBlockStore_GetExistingContent,
+        ShareBlockStore_PruneBlocks,
         ShareBlockStore_GetStats,
         ShareBlockStore_Flush);
     if (!block_store_api)

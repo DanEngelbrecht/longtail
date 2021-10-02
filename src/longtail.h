@@ -602,6 +602,18 @@ struct Longtail_AsyncGetExistingContentAPI
     Longtail_AsyncGetExistingContent_OnCompleteFunc OnComplete;
 };
 
+////////////// Longtail_AsyncGetExistingContentAPI
+
+struct Longtail_AsyncPruneBlocksAPI;
+
+typedef void (*Longtail_AsyncPruneBlocks_OnCompleteFunc)(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err);
+
+struct Longtail_AsyncPruneBlocksAPI
+{
+    struct Longtail_API m_API;
+    Longtail_AsyncPruneBlocks_OnCompleteFunc OnComplete;
+};
+
 LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetExistingContentAPISize();
 
 LONGTAIL_EXPORT struct Longtail_AsyncGetExistingContentAPI* Longtail_MakeAsyncGetExistingContentAPI(
@@ -675,6 +687,10 @@ enum
     Longtail_BlockStoreAPI_StatU64_GetExistingContent_RetryCount,
     Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount,
 
+    Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count,
+    Longtail_BlockStoreAPI_StatU64_PruneBlocks_RetryCount,
+    Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount,
+
     Longtail_BlockStoreAPI_StatU64_PreflightGet_Count,
     Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount,
     Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount,
@@ -695,6 +711,7 @@ typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStore
 typedef int (*Longtail_BlockStore_PreflightGetFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_count, const TLongtail_Hash* block_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api);
 typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetExistingContentFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent,  struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_PruneBlocksFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api);
 typedef int (*Longtail_BlockStore_GetStatsFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 typedef int (*Longtail_BlockStore_FlushFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
@@ -705,6 +722,7 @@ struct Longtail_BlockStoreAPI
     Longtail_BlockStore_PreflightGetFunc PreflightGet;
     Longtail_BlockStore_GetStoredBlockFunc GetStoredBlock;
     Longtail_BlockStore_GetExistingContentFunc GetExistingContent;
+    Longtail_BlockStore_PruneBlocksFunc PruneBlocks;
     Longtail_BlockStore_GetStatsFunc GetStats;
     Longtail_BlockStore_FlushFunc Flush;
 };
@@ -719,6 +737,7 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_PreflightGetFunc preflight_get_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetExistingContentFunc get_existing_content_func,
+    Longtail_BlockStore_PruneBlocksFunc prune_blocks_func,
     Longtail_BlockStore_GetStatsFunc get_stats_func,
     Longtail_BlockStore_FlushFunc flush_func);
 
@@ -726,6 +745,7 @@ LONGTAIL_EXPORT int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStor
 LONGTAIL_EXPORT int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
+LONGTAIL_EXPORT int Longtail_BlockStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes,  struct Longtail_AsyncPruneBlocksAPI* async_complete_api);
 LONGTAIL_EXPORT int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
 LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
