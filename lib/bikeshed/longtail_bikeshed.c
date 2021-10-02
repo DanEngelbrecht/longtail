@@ -430,6 +430,15 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
     LONGTAIL_VALIDATE_INPUT(ctx, job_api, return EINVAL)
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     struct Bikeshed_JobAPI_Group* bikeshed_job_group = (struct Bikeshed_JobAPI_Group*)job_group;
+
+    if (optional_cancel_api && optional_cancel_token)
+    {
+        if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+        {
+            Longtail_AtomicAdd32(&bikeshed_job_group->m_Cancelled, 1);
+        }
+    }
+
     int32_t old_pending_count = 0;
     while (bikeshed_job_group->m_PendingJobCount > 0)
     {
