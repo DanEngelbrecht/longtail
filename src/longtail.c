@@ -6293,9 +6293,7 @@ int Longtail_GetExistingStoreIndex(
     size_t block_to_index_lookup_size = Longtail_LookupTable_GetSize(store_block_count);
     size_t chunk_to_store_index_lookup_size = Longtail_LookupTable_GetSize(chunk_count);
     size_t found_store_block_hashes_size = sizeof(TLongtail_Hash) * store_block_count;
-    size_t block_uses_size = sizeof(uint32_t) * store_block_count;
-//    size_t block_uses_percent_size = sizeof(uint32_t) * store_block_count;
-//    size_t block_sizes_size = sizeof(uint32_t) * store_block_count;
+    size_t block_uses_percent_size = sizeof(uint32_t) * store_block_count;
     size_t block_index_size = sizeof(uint32_t) * store_block_count;
     size_t block_order_size = sizeof(uint32_t) * store_block_count;
 
@@ -6303,9 +6301,7 @@ int Longtail_GetExistingStoreIndex(
         block_to_index_lookup_size +
         chunk_to_store_index_lookup_size +
         found_store_block_hashes_size +
-        block_uses_size +
-//        block_uses_percent_size +
-//        block_sizes_size +
+        block_uses_percent_size +
         block_index_size +
         block_order_size;
 
@@ -6329,14 +6325,8 @@ int Longtail_GetExistingStoreIndex(
     TLongtail_Hash* found_store_block_hashes = (TLongtail_Hash*)p;
     p += found_store_block_hashes_size;
 
-    uint32_t* block_uses = (uint32_t*)p;
-    p += block_uses_size;
-
-//    uint32_t* block_uses_percent = (uint32_t*)p;
-//    p += block_uses_percent_size;
-
-//    uint32_t* block_sizes = (uint32_t*)p;
-//    p += block_sizes_size;
+    uint32_t* block_uses_percent = (uint32_t*)p;
+    p += block_uses_percent_size;
 
     uint32_t* block_index = (uint32_t*)p;
     p += block_index_size;
@@ -6381,20 +6371,15 @@ int Longtail_GetExistingStoreIndex(
             }
             if (block_use > 0)
             {
-                uint32_t block_usage_percent = 100;
-                if (min_block_usage_percent > 0) {
-                    block_usage_percent = (uint32_t)(((uint64_t)block_use * 100) / block_size);
-                    if (block_usage_percent < min_block_usage_percent)
-                    {
-                        continue;
-                    }
+                uint32_t block_usage_percent = (uint32_t)(((uint64_t)block_use * 100) / block_size);
+                if (min_block_usage_percent > 0 &&
+                    block_usage_percent < min_block_usage_percent) {
+                    continue;
                 }
 
                 block_order[potential_block_count] = potential_block_count;
                 block_index[potential_block_count] = b;
-                block_uses[potential_block_count] = block_use;
-//                block_sizes[potential_block_count] = block_size;
-//                block_uses_percent[potential_block_count] = block_usage_percent;
+                block_uses_percent[potential_block_count] = block_usage_percent;
 
                 ++potential_block_count;
             }
@@ -6410,11 +6395,11 @@ int Longtail_GetExistingStoreIndex(
         }
 
         // Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
-        // the blocks that has the most requested chunk data
+        // the blocks that has highest ratio of use inside the block.
         // This does not guarantee a perfect block match as one block can be a 100% match which
         // could lead to skipping part or whole of another 100% match block resulting in us
         // picking a block that we will not use 100% of
-        QSORT(block_order, potential_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_uses);
+        QSORT(block_order, potential_block_count, sizeof(uint32_t), SortBlockUsageHighToLow, (void*)block_uses_percent);
 
         for (uint32_t bo = 0; (bo < potential_block_count) && (found_chunk_count < unique_chunk_count); ++bo)
         {
