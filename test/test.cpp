@@ -6783,6 +6783,7 @@ TEST(Longtail, Longtail_PruneFSBlockStore)
     ASSERT_EQ(0, block_store_api->PruneBlocks(block_store_api, 2, block1and3hash, &pruneCB.m_API));
     pruneCB.Wait();
     ASSERT_EQ(0, pruneCB.m_Err);
+    ASSERT_EQ(1, pruneCB.m_PruneCount);
 
     {
         struct TestAsyncGetBlockComplete getCB0;
