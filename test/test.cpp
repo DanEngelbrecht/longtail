@@ -6587,3 +6587,114 @@ TEST(Longtail, NestedStoreCancel)
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
 }
+
+TEST(Longtail, Longtail_PruneStoreIndex)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    const uint32_t chunk_indexes[7] = {0, 1, 2, 3, 4, 5, 6};
+    const TLongtail_Hash chunk_hashes[7] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedb5effeed5a50, 0xfeed5a17deadbee1, 0xae3d5a17deadbee2, 0xdae1beeffeed5a53};
+    const uint32_t chunk_sizes[7] = {4711, 1147, 1137, 3219, 213, 453, 6122};
+    struct Longtail_BlockIndex* block_index1;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        2,
+        &chunk_indexes[0],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index1));
+
+    struct Longtail_BlockIndex* block_index2;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        2,
+        &chunk_indexes[2],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index2));
+
+    struct Longtail_BlockIndex* block_index3;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        3,
+        &chunk_indexes[4],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index3));
+
+    const struct Longtail_BlockIndex* block_indexes[3] = {block_index1, block_index2, block_index3};
+
+    struct Longtail_StoreIndex* store_index;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        3,
+        (const struct Longtail_BlockIndex**)block_indexes,
+        &store_index));
+
+
+    struct Longtail_StoreIndex* block1_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        1,
+        &store_index->m_BlockHashes[0],
+        &block1_kept_store_index));
+    ASSERT_EQ(1u, *block1_kept_store_index->m_BlockCount);
+    ASSERT_EQ(2u, *block1_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[0], block1_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(chunk_hashes[0], block1_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[1], block1_kept_store_index->m_ChunkHashes[1]);
+
+    struct Longtail_StoreIndex* block2_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        1,
+        &store_index->m_BlockHashes[1],
+        &block2_kept_store_index));
+    ASSERT_EQ(1u, *block2_kept_store_index->m_BlockCount);
+    ASSERT_EQ(2u, *block2_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[1], block2_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(chunk_hashes[2], block2_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[3], block2_kept_store_index->m_ChunkHashes[1]);
+
+    struct Longtail_StoreIndex* block3_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        1,
+        &store_index->m_BlockHashes[2],
+        &block3_kept_store_index));
+    ASSERT_EQ(1u, *block3_kept_store_index->m_BlockCount);
+    ASSERT_EQ(3u, *block3_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[2], block3_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(chunk_hashes[4], block3_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[5], block3_kept_store_index->m_ChunkHashes[1]);
+    ASSERT_EQ(chunk_hashes[6], block3_kept_store_index->m_ChunkHashes[2]);
+
+    TLongtail_Hash block1and3hash[2] = {*block_index1->m_BlockHash, *block_index3->m_BlockHash};
+
+    struct Longtail_StoreIndex* block1and3_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        2,
+        &block1and3hash[0],
+        &block1and3_kept_store_index));
+    ASSERT_EQ(2u, *block1and3_kept_store_index->m_BlockCount);
+    ASSERT_EQ(5u, *block1and3_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[0], block1and3_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(store_index->m_BlockHashes[2], block1and3_kept_store_index->m_BlockHashes[1]);
+    ASSERT_EQ(chunk_hashes[0], block1and3_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[1], block1and3_kept_store_index->m_ChunkHashes[1]);
+    ASSERT_EQ(chunk_hashes[4], block1and3_kept_store_index->m_ChunkHashes[2]);
+    ASSERT_EQ(chunk_hashes[5], block1and3_kept_store_index->m_ChunkHashes[3]);
+    ASSERT_EQ(chunk_hashes[6], block1and3_kept_store_index->m_ChunkHashes[4]);
+
+    Longtail_Free(block1and3_kept_store_index);
+    Longtail_Free(block3_kept_store_index);
+    Longtail_Free(block2_kept_store_index);
+    Longtail_Free(block1_kept_store_index);
+    Longtail_Free(store_index);
+    Longtail_Free(block_index2);
+    Longtail_Free(block_index1);
+    SAFE_DISPOSE_API(hash_api);
+}
