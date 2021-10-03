@@ -1160,7 +1160,41 @@ struct TestAsyncPutBlockComplete
     }
 
     int m_Err;
+};
 
+struct TestAsyncPruneBlocksComplete
+{
+    struct Longtail_AsyncPruneBlocksAPI m_API;
+    HLongtail_Sema m_NotifySema;
+    TestAsyncPruneBlocksComplete()
+        : m_Err(EINVAL)
+        , m_PruneCount(0)
+    {
+        m_API.m_API.Dispose = 0;
+        m_API.OnComplete = OnComplete;
+        Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &m_NotifySema);
+    }
+    ~TestAsyncPruneBlocksComplete()
+    {
+        Longtail_DeleteSema(m_NotifySema);
+        Longtail_Free(m_NotifySema);
+    }
+
+    static void OnComplete(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err)
+    {
+        struct TestAsyncPruneBlocksComplete* cb = (struct TestAsyncPruneBlocksComplete*)async_complete_api;
+        cb->m_PruneCount = pruned_block_count;
+        cb->m_Err = err;
+        Longtail_PostSema(cb->m_NotifySema, 1);
+    }
+
+    void Wait()
+    {
+        Longtail_WaitSema(m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
+    }
+
+    uint32_t m_PruneCount;
+    int m_Err;
 };
 
 struct TestAsyncGetBlockComplete
@@ -6696,5 +6730,83 @@ TEST(Longtail, Longtail_PruneStoreIndex)
     Longtail_Free(store_index);
     Longtail_Free(block_index2);
     Longtail_Free(block_index1);
+    SAFE_DISPOSE_API(hash_api);
+}
+
+TEST(Longtail, Longtail_PruneFSBlockStore)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "cache/chunks", 0);
+
+    TLongtail_Hash block_hashes[3];
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 4;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {624, 885, 81, 771};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[0] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 3;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {1624, 886, 611};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[1] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 5;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {1623, 85, 981, 7741};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[2] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    TLongtail_Hash block1and3hash[2] = {block_hashes[0], block_hashes[2]};
+    TestAsyncPruneBlocksComplete pruneCB;
+    ASSERT_EQ(0, block_store_api->PruneBlocks(block_store_api, 2, block1and3hash, &pruneCB.m_API));
+    pruneCB.Wait();
+    ASSERT_EQ(0, pruneCB.m_Err);
+
+    {
+        struct TestAsyncGetBlockComplete getCB0;
+        ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, block_hashes[0], &getCB0.m_API));
+        getCB0.Wait();
+        getCB0.m_StoredBlock->Dispose(getCB0.m_StoredBlock);
+        ASSERT_EQ(0, getCB0.m_Err);
+    }
+
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, block_hashes[1], &getCB1.m_API));
+    }
+
+    {
+        struct TestAsyncGetBlockComplete getCB2;
+        ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, block_hashes[2], &getCB2.m_API));
+        getCB2.Wait();
+        getCB2.m_StoredBlock->Dispose(getCB2.m_StoredBlock);
+        ASSERT_EQ(0, getCB2.m_Err);
+    }
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(storage_api);
     SAFE_DISPOSE_API(hash_api);
 }
