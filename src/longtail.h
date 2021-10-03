@@ -602,7 +602,16 @@ struct Longtail_AsyncGetExistingContentAPI
     Longtail_AsyncGetExistingContent_OnCompleteFunc OnComplete;
 };
 
-////////////// Longtail_AsyncGetExistingContentAPI
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetExistingContentAPISize();
+
+LONGTAIL_EXPORT struct Longtail_AsyncGetExistingContentAPI* Longtail_MakeAsyncGetExistingContentAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncGetExistingContent_OnCompleteFunc on_complete_func);
+
+LONGTAIL_EXPORT void Longtail_AsyncGetExistingContent_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err);
+
+////////////// Longtail_AsyncPruneBlocksAPI
 
 struct Longtail_AsyncPruneBlocksAPI;
 
@@ -614,14 +623,14 @@ struct Longtail_AsyncPruneBlocksAPI
     Longtail_AsyncPruneBlocks_OnCompleteFunc OnComplete;
 };
 
-LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetExistingContentAPISize();
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncPruneBlocksAPISize();
 
-LONGTAIL_EXPORT struct Longtail_AsyncGetExistingContentAPI* Longtail_MakeAsyncGetExistingContentAPI(
+LONGTAIL_EXPORT struct Longtail_AsyncPruneBlocksAPI* Longtail_MakeAsyncPruneBlocksAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
-    Longtail_AsyncGetExistingContent_OnCompleteFunc on_complete_func);
+    Longtail_AsyncPruneBlocks_OnCompleteFunc on_complete_func);
 
-LONGTAIL_EXPORT void Longtail_AsyncGetExistingContent_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err);
+LONGTAIL_EXPORT void Longtail_AsyncPruneBlocks_OnComplete(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err);
 
 ////////////// Longtail_AsyncPreflightStartedAPI
 

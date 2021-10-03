@@ -567,6 +567,33 @@ struct Longtail_AsyncGetExistingContentAPI* Longtail_MakeAsyncGetExistingContent
 
 void Longtail_AsyncGetExistingContent_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err) { async_complete_api->OnComplete(async_complete_api, store_index, err); }
 
+////////////// AsyncPruneBlocksAPI
+
+uint64_t Longtail_GetAsyncPruneBlocksAPISize()
+{
+    return sizeof(struct Longtail_AsyncPruneBlocksAPI);
+}
+
+struct Longtail_AsyncPruneBlocksAPI* Longtail_MakeAsyncPruneBlocksAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncPruneBlocks_OnCompleteFunc on_complete_func)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(dispose_func, "%p"),
+        LONGTAIL_LOGFIELD(on_complete_func, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+    struct Longtail_AsyncPruneBlocksAPI* api = (struct Longtail_AsyncPruneBlocksAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->OnComplete = on_complete_func;
+    return api;
+}
+
+void Longtail_AsyncPruneBlocks_OnComplete(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err) { async_complete_api->OnComplete(async_complete_api, pruned_block_count, err); }
+
 ////////////// Longtail_AsyncPreflightStartedAPI
 
 uint64_t Longtail_GetAsyncPreflightStartedAPISize()
