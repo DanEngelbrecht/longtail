@@ -108,7 +108,7 @@ jobs:
           - **CHANGED API** `Longtail_BlockStore_Stats` has three new fields `Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count`, `Longtail_BlockStoreAPI_StatU64_PruneBlocks_RetryCount` and `Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount`
           - **ADDED** `Longtail_PruneStoreIndex` function added to remove blocks from a store index
         draft: false
-        prerelease: false
+        prerelease: true
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:
