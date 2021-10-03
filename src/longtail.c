@@ -3188,6 +3188,7 @@ int Longtail_ReadBlockIndex(
         storage_api->CloseFile(storage_api, f);
         return err;
     }
+    storage_api->CloseFile(storage_api, f);
     *out_block_index = block_index;
     return 0;
 }
