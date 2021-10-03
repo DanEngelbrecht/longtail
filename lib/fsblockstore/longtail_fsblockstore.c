@@ -237,8 +237,8 @@ static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api)
     Longtail_Free((void*)store_index_path_tmp);
 
     return err;
-}
 
+}
 static int SafeWriteStoredBlock(
     struct FSBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
@@ -1048,6 +1048,7 @@ static int FSBlockStore_PruneBlocks(
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
     struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)block_store_api;
+
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count], 1);
     struct Longtail_StoreIndex* store_index;
     int err = FSBlockStore_GetIndexSync(api, &store_index);
@@ -1070,6 +1071,7 @@ static int FSBlockStore_PruneBlocks(
         Longtail_Free(store_index);
         return err;
     }
+    Longtail_LockSpinLock(api->m_Lock);
 
     struct Longtail_StoreIndex* pruned_store_index;
     err = Longtail_PruneStoreIndex(
@@ -1083,6 +1085,7 @@ static int FSBlockStore_PruneBlocks(
         api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
         Longtail_Free(store_index);
+        Longtail_UnlockSpinLock(api->m_Lock);
         return err;
     }
 
@@ -1099,6 +1102,7 @@ static int FSBlockStore_PruneBlocks(
         api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
         Longtail_Free(store_index);
+        Longtail_UnlockSpinLock(api->m_Lock);
         return err;
     }
 
@@ -1115,6 +1119,7 @@ static int FSBlockStore_PruneBlocks(
             api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
             Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
             Longtail_Free(store_index);
+            Longtail_UnlockSpinLock(api->m_Lock);
             return err;
         }
         struct Longtail_LookupTable* kept_block_lookup = Longtail_LookupTable_Create(kept_block_lookup_mem, block_count, 0);
@@ -1146,11 +1151,13 @@ static int FSBlockStore_PruneBlocks(
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PruneBlocks() failed to remove file `%s`, error %d", block_path, err);
             }
             Longtail_Free((void*)block_path);
+            hmdel(api->m_BlockState, block_hash);
         }
     }
 
     api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
     Longtail_Free(store_index);
+    Longtail_UnlockSpinLock(api->m_Lock);
 
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count], 1);
 
