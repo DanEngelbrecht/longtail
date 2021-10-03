@@ -6728,6 +6728,7 @@ TEST(Longtail, Longtail_PruneStoreIndex)
     Longtail_Free(block2_kept_store_index);
     Longtail_Free(block1_kept_store_index);
     Longtail_Free(store_index);
+    Longtail_Free(block_index3);
     Longtail_Free(block_index2);
     Longtail_Free(block_index1);
     SAFE_DISPOSE_API(hash_api);

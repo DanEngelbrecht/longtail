@@ -1153,6 +1153,7 @@ static int FSBlockStore_PruneBlocks(
             Longtail_Free((void*)block_path);
             hmdel(api->m_BlockState, block_hash);
         }
+        Longtail_Free(kept_block_lookup_mem);
     }
 
     api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
