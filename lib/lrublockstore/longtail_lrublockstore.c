@@ -562,22 +562,7 @@ static int LRUBlockStore_PruneBlocks(
     LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
-    struct LRUBlockStoreAPI* api = (struct LRUBlockStoreAPI*)block_store_api;
-
-    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count], 1);
-
-    int err = api->m_BackingBlockStore->PruneBlocks(
-        api->m_BackingBlockStore,
-        block_keep_count,
-        block_keep_hashes,
-        async_complete_api);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_BackingBlockStore->PruneBlocks() failed with %d", err)
-        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
-        return err;
-    }
-    return 0;
+    return ENOTSUP;
 }
 
 static int LRUBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)

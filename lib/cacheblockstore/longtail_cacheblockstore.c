@@ -830,40 +830,6 @@ static int CacheBlockStore_GetExistingContent(
     return 0;
 }
 
-struct PruneBlocks_Context
-{
-    struct Longtail_AsyncPruneBlocksAPI m_AsyncCompleteAPI;
-    struct CacheBlockStoreAPI* m_CacheBlockStoreAPI;
-    struct Longtail_AsyncPruneBlocksAPI* m_FinalAsyncCompleteAPI;
-    uint32_t block_keep_count;
-    TLongtail_Hash* block_keep_hashes;
-    TLongtail_Atomic64 pruned_block_count;
-    TLongtail_Atomic32 pending_complete_callbacks;
-    int err;
-};
-
-static void CacheBlockStore_PruneBlocks_OnComplete(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err)
-{
-    struct PruneBlocks_Context* context = (struct PruneBlocks_Context*)async_complete_api;
-    if (err)
-    {
-        context->err = err;
-    }
-    if (0 == Longtail_AtomicAdd32(&context->pending_complete_callbacks, -1))
-    {
-        if (context->err == 0)
-        {
-            Longtail_AtomicAdd64(&context->m_CacheBlockStoreAPI->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count], 1);
-        }
-        else
-        {
-            Longtail_AtomicAdd64(&context->m_CacheBlockStoreAPI->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
-        }
-        context->m_FinalAsyncCompleteAPI->OnComplete(context->m_FinalAsyncCompleteAPI, (uint32_t)pruned_block_count, context->err);
-        Longtail_Free(context);
-    }
-}
-
 static int CacheBlockStore_PruneBlocks(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint32_t block_keep_count,
@@ -881,40 +847,7 @@ static int CacheBlockStore_PruneBlocks(
     LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
-    struct CacheBlockStoreAPI* api = (struct CacheBlockStoreAPI*)block_store_api;
-
-    size_t context_size = sizeof(struct PruneBlocks_Context) + sizeof(TLongtail_Hash) * block_keep_count;
-    struct PruneBlocks_Context* context = (struct PruneBlocks_Context*)Longtail_Alloc("CacheBlockStore_PruneBlocks", context_size);
-    context->m_AsyncCompleteAPI.m_API.Dispose = 0;
-    context->m_AsyncCompleteAPI.OnComplete = CacheBlockStore_PruneBlocks_OnComplete;
-    context->m_CacheBlockStoreAPI = api;
-    context->m_FinalAsyncCompleteAPI = async_complete_api;
-    context->block_keep_count = block_keep_count;
-    context->block_keep_hashes = (TLongtail_Hash*)&context[1];
-    context->pruned_block_count = 0;
-    context->pending_complete_callbacks = 2;
-
-    for (uint32_t b = 0; b < block_keep_count; ++b)
-    {
-        context->block_keep_hashes[b] = block_keep_hashes[b];
-    }
-
-    int err = api->m_LocalBlockStoreAPI->PruneBlocks(api->m_LocalBlockStoreAPI, context->block_keep_count, context->block_keep_hashes, &context->m_AsyncCompleteAPI);
-    if (err != 0)
-    {
-        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
-        Longtail_Free(context);
-        return err;
-    }
-
-    err = api->m_LocalBlockStoreAPI->PruneBlocks(api->m_RemoteBlockStoreAPI, context->block_keep_count, context->block_keep_hashes, &context->m_AsyncCompleteAPI);
-    if (err != 0)
-    {
-        CacheBlockStore_PruneBlocks_OnComplete(&context->m_AsyncCompleteAPI, 0, err);
-        return 0;
-    }
-
-    return 0;
+    return ENOTSUP;
 }
 
 static int CacheBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
