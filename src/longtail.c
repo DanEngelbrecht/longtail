@@ -567,6 +567,33 @@ struct Longtail_AsyncGetExistingContentAPI* Longtail_MakeAsyncGetExistingContent
 
 void Longtail_AsyncGetExistingContent_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_StoreIndex* store_index, int err) { async_complete_api->OnComplete(async_complete_api, store_index, err); }
 
+////////////// AsyncPruneBlocksAPI
+
+uint64_t Longtail_GetAsyncPruneBlocksAPISize()
+{
+    return sizeof(struct Longtail_AsyncPruneBlocksAPI);
+}
+
+struct Longtail_AsyncPruneBlocksAPI* Longtail_MakeAsyncPruneBlocksAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncPruneBlocks_OnCompleteFunc on_complete_func)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(dispose_func, "%p"),
+        LONGTAIL_LOGFIELD(on_complete_func, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+    struct Longtail_AsyncPruneBlocksAPI* api = (struct Longtail_AsyncPruneBlocksAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->OnComplete = on_complete_func;
+    return api;
+}
+
+void Longtail_AsyncPruneBlocks_OnComplete(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err) { async_complete_api->OnComplete(async_complete_api, pruned_block_count, err); }
+
 ////////////// Longtail_AsyncPreflightStartedAPI
 
 uint64_t Longtail_GetAsyncPreflightStartedAPISize()
@@ -636,6 +663,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_BlockStore_PreflightGetFunc preflight_get_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
     Longtail_BlockStore_GetExistingContentFunc get_existing_content_func,
+    Longtail_BlockStore_PruneBlocksFunc prune_blocks_func,
     Longtail_BlockStore_GetStatsFunc get_stats_func,
     Longtail_BlockStore_FlushFunc flush_func)
 {
@@ -646,6 +674,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
         LONGTAIL_LOGFIELD(preflight_get_func, "%p"),
         LONGTAIL_LOGFIELD(get_stored_block_func, "%p"),
         LONGTAIL_LOGFIELD(get_existing_content_func, "%p"),
+        LONGTAIL_LOGFIELD(prune_blocks_func, "%p"),
         LONGTAIL_LOGFIELD(get_stats_func, "%p"),
         LONGTAIL_LOGFIELD(flush_func, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
@@ -657,6 +686,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     api->PreflightGet = preflight_get_func;
     api->GetStoredBlock = get_stored_block_func;
     api->GetExistingContent = get_existing_content_func;
+    api->PruneBlocks = prune_blocks_func;
     api->GetStats = get_stats_func;
     api->Flush = flush_func;
     return api;
@@ -666,6 +696,7 @@ int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_stor
 int Longtail_BlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api) { return block_store_api->PreflightGet(block_store_api, chunk_count, chunk_hashes, optional_async_complete_api); }
 int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api) { return block_store_api->GetStoredBlock(block_store_api, block_hash, async_complete_api); }
 int Longtail_BlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api) { return block_store_api->GetExistingContent(block_store_api, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api); }
+int Longtail_BlockStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api) { return block_store_api->PruneBlocks(block_store_api, block_keep_count, block_keep_hashes, async_complete_api);}
 int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats) { return block_store_api->GetStats(block_store_api, out_stats); }
 int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api) {return block_store_api->Flush(block_store_api, async_complete_api); }
 
@@ -3184,6 +3215,7 @@ int Longtail_ReadBlockIndex(
         storage_api->CloseFile(storage_api, f);
         return err;
     }
+    storage_api->CloseFile(storage_api, f);
     *out_block_index = block_index;
     return 0;
 }
@@ -7417,7 +7449,6 @@ int Longtail_MakeBlockIndex(
     return 0;
 }
 
-
 int Longtail_MergeStoreIndex(
     const struct Longtail_StoreIndex* local_store_index,
     const struct Longtail_StoreIndex* remote_store_index,
@@ -7551,6 +7582,142 @@ int Longtail_MergeStoreIndex(
     }
     Longtail_Free(work_mem);
     *out_store_index = merged_store_index;
+    return 0;
+}
+
+LONGTAIL_EXPORT int Longtail_PruneStoreIndex(
+    const struct Longtail_StoreIndex* source_store_index,
+    uint32_t keep_block_count,
+    const TLongtail_Hash* keep_block_hashes,
+    struct Longtail_StoreIndex** out_store_index)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(source_store_index, "%p"),
+        LONGTAIL_LOGFIELD(keep_block_count, "%u"),
+        LONGTAIL_LOGFIELD(keep_block_hashes, "%p"),
+        LONGTAIL_LOGFIELD(out_store_index, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, source_store_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (keep_block_count == 0) || (keep_block_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_store_index != 0, return EINVAL)
+
+    uint32_t store_block_count = *source_store_index->m_BlockCount;
+    uint32_t store_chunk_count = *source_store_index->m_ChunkCount;
+    size_t keep_block_hash_lookup_size = Longtail_LookupTable_GetSize(keep_block_count);
+    size_t block_hashes_size = sizeof(TLongtail_Hash) * store_block_count;
+    size_t chunk_hashes_size = sizeof(TLongtail_Hash) * store_chunk_count;
+    size_t block_chunks_offsets_size = sizeof(uint32_t) * store_block_count;
+    size_t block_chunks_counts_size = sizeof(uint32_t) * store_block_count;
+    size_t block_tags_size = sizeof(uint32_t) * store_block_count;
+    size_t chunk_sizes_size = sizeof(uint32_t) * store_chunk_count;
+
+    size_t work_mem_size = keep_block_hash_lookup_size +
+        block_hashes_size +
+        chunk_hashes_size +
+        block_chunks_offsets_size +
+        block_chunks_counts_size +
+        block_tags_size +
+        chunk_sizes_size;
+
+    void* work_mem = Longtail_Alloc("PruneStoreIndex", work_mem_size);
+    if (!work_mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return ENOMEM;
+    }
+
+    char* p = (char*)work_mem;
+    struct Longtail_LookupTable* keep_block_hash_lookup = Longtail_LookupTable_Create(p, keep_block_count, 0);
+    p += keep_block_hash_lookup_size;
+
+    TLongtail_Hash* block_hashes = (TLongtail_Hash*)p;
+    p += block_hashes_size;
+
+    TLongtail_Hash* chunk_hashes = (TLongtail_Hash*)p;
+    p += chunk_hashes_size;
+
+    uint32_t* block_chunks_offsets = (uint32_t*)p;
+    p += block_chunks_offsets_size;
+
+    uint32_t* block_chunks_counts = (uint32_t*)p;
+    p += block_chunks_counts_size;
+
+    uint32_t* block_tags = (uint32_t*)p;
+    p += block_tags_size;
+
+    uint32_t* chunk_sizes = (uint32_t*)p;
+    p += chunk_sizes_size;
+
+    for (uint32_t keep_block = 0; keep_block < keep_block_count; ++keep_block)
+    {
+        TLongtail_Hash block_hash = keep_block_hashes[keep_block];
+        if (Longtail_LookupTable_PutUnique(keep_block_hash_lookup, block_hash, keep_block))
+        {
+            continue;
+        }
+    }
+
+    uint32_t block_count = 0;
+    uint32_t chunk_count = 0;
+    for (uint32_t block = 0; block < store_block_count; ++block)
+    {
+        TLongtail_Hash block_hash = source_store_index->m_BlockHashes[block];
+        if (!Longtail_LookupTable_Get(keep_block_hash_lookup, block_hash))
+        {
+            continue;
+        }
+        uint32_t block_chunk_count = source_store_index->m_BlockChunkCounts[block];
+        uint32_t chunk_offset = source_store_index->m_BlockChunksOffsets[block];
+
+        block_hashes[block_count] = block_hash;
+        block_tags[block_count] = source_store_index->m_BlockTags[block];
+        block_chunks_offsets[block_count] = chunk_count;
+        block_chunks_counts[block_count] = block_chunk_count;
+        for (uint32_t chunk = 0; chunk < block_chunk_count; ++chunk)
+        {
+            chunk_hashes[chunk_count + chunk] = source_store_index->m_ChunkHashes[chunk_offset + chunk];
+            chunk_sizes[chunk_count + chunk] = source_store_index->m_ChunkSizes[chunk_offset + chunk];
+        }
+
+        chunk_count += block_chunk_count;
+        block_count++;
+    }
+
+    size_t store_index_size = Longtail_GetStoreIndexSize(block_count, chunk_count);
+    void* store_index_mem = (struct Longtail_StoreIndex*)Longtail_Alloc("PruneStoreIndex", store_index_size);
+    if (!store_index_mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_Free(work_mem);
+        return ENOMEM;
+    }
+    struct Longtail_StoreIndex* store_index = Longtail_InitStoreIndex(
+        store_index_mem,
+        block_count,
+        chunk_count);
+    if (!store_index)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoreIndex() failed with %d", ENOMEM)
+        Longtail_Free(work_mem);
+        return ENOMEM;
+    }
+
+    *store_index->m_Version = Longtail_CurrentStoreIndexVersion;
+    *store_index->m_HashIdentifier = *source_store_index->m_HashIdentifier;
+    *store_index->m_BlockCount = block_count;
+    *store_index->m_ChunkCount = chunk_count;
+
+    memcpy(store_index->m_BlockHashes, block_hashes, sizeof(TLongtail_Hash) * block_count);
+    memcpy(store_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+    memcpy(store_index->m_BlockChunksOffsets, block_chunks_offsets, sizeof(uint32_t) * block_count);
+    memcpy(store_index->m_BlockChunkCounts, block_chunks_counts, sizeof(uint32_t) * block_count);
+    memcpy(store_index->m_BlockTags, block_tags, sizeof(uint32_t) * block_count);
+    memcpy(store_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
+
+    Longtail_Free(work_mem);
+
+    *out_store_index = store_index;
     return 0;
 }
 

@@ -104,10 +104,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **CHANGED API** `Longtail_CreateFSBlockStoreAPI` not longer takes `default_max_block_size` and `default_max_chunks_per_block`
-          - **CHANGED** Fixed includes for `alloca` and `CompareIgnoreCase` to build under Cygwin
-          - **CHANGED** Prefer blocks based on how much of the block is used rather than how much data is used in a block
-          - **FIXED** Only sort and consider blocks that has any matching usage
+          - **CHANGED API** `Longtail_BlockStoreAPI` has new function `PruneBlocks`
+          - **CHANGED API** `Longtail_BlockStore_Stats` has three new fields `Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count`, `Longtail_BlockStoreAPI_StatU64_PruneBlocks_RetryCount` and `Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount`
+          - **ADDED** `Longtail_PruneStoreIndex` function added to remove blocks from a store index
         draft: false
         prerelease: false
     - name: Download Linux artifacts

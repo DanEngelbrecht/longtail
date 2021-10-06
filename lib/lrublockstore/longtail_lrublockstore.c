@@ -545,6 +545,26 @@ static int LRUBlockStore_GetExistingContent(
     return 0;
 }
 
+static int LRUBlockStore_PruneBlocks(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint32_t block_keep_count,
+    const TLongtail_Hash* block_keep_hashes,
+    struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+        LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+
+    return ENOTSUP;
+}
+
 static int LRUBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -642,6 +662,7 @@ static int LRUBlockStore_Init(
         LRUBlockStore_PreflightGet,
         LRUBlockStore_GetStoredBlock,
         LRUBlockStore_GetExistingContent,
+        LRUBlockStore_PruneBlocks,
         LRUBlockStore_GetStats,
         LRUBlockStore_Flush);
     if (!block_store_api)

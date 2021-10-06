@@ -462,7 +462,7 @@ static int CompressBlockStore_GetExistingContent(
     struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
@@ -490,6 +490,26 @@ static int CompressBlockStore_GetExistingContent(
         return err;
     }
     return 0;
+}
+
+static int CompressBlockStore_PruneBlocks(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint32_t block_keep_count,
+    const TLongtail_Hash* block_keep_hashes,
+    struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+        LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+
+    return ENOTSUP;
 }
 
 static int CompressBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
@@ -579,6 +599,7 @@ static int CompressBlockStore_Init(
         CompressBlockStore_PreflightGet,
         CompressBlockStore_GetStoredBlock,
         CompressBlockStore_GetExistingContent,
+        CompressBlockStore_PruneBlocks,
         CompressBlockStore_GetStats,
         CompressBlockStore_Flush);
     if (!block_store_api)

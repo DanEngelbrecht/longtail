@@ -1160,7 +1160,41 @@ struct TestAsyncPutBlockComplete
     }
 
     int m_Err;
+};
 
+struct TestAsyncPruneBlocksComplete
+{
+    struct Longtail_AsyncPruneBlocksAPI m_API;
+    HLongtail_Sema m_NotifySema;
+    TestAsyncPruneBlocksComplete()
+        : m_Err(EINVAL)
+        , m_PruneCount(0)
+    {
+        m_API.m_API.Dispose = 0;
+        m_API.OnComplete = OnComplete;
+        Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &m_NotifySema);
+    }
+    ~TestAsyncPruneBlocksComplete()
+    {
+        Longtail_DeleteSema(m_NotifySema);
+        Longtail_Free(m_NotifySema);
+    }
+
+    static void OnComplete(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err)
+    {
+        struct TestAsyncPruneBlocksComplete* cb = (struct TestAsyncPruneBlocksComplete*)async_complete_api;
+        cb->m_PruneCount = pruned_block_count;
+        cb->m_Err = err;
+        Longtail_PostSema(cb->m_NotifySema, 1);
+    }
+
+    void Wait()
+    {
+        Longtail_WaitSema(m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
+    }
+
+    uint32_t m_PruneCount;
+    int m_Err;
 };
 
 struct TestAsyncGetBlockComplete
@@ -3305,6 +3339,7 @@ public:
     static int GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
     static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats);
     static int Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api);
+    static int PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api);
     static int GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
     static void CompleteRequest(class TestAsyncBlockStore* block_store);
 private:
@@ -3365,6 +3400,7 @@ int TestAsyncBlockStore::InitBlockStore(TestAsyncBlockStore* block_store, struct
         TestAsyncBlockStore::PreflightGet,
         TestAsyncBlockStore::GetStoredBlock,
         TestAsyncBlockStore::GetExistingContent,
+        TestAsyncBlockStore::PruneBlocks,
         TestAsyncBlockStore::GetStats,
         TestAsyncBlockStore::Flush);
     if (!api)
@@ -3734,6 +3770,22 @@ int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block
     arrput(block_store->m_GetExistingContentRequests, get_existing_content_content_request);
     Longtail_UnlockSpinLock(block_store->m_IOLock);
     Longtail_PostSema(block_store->m_RequestSema, 1);
+    return 0;
+}
+
+int TestAsyncBlockStore::PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+        LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
+    TestAsyncBlockStore* block_store = (TestAsyncBlockStore*)block_store_api;
+    async_complete_api->OnComplete(async_complete_api, 0, 0);
     return 0;
 }
 
@@ -4796,13 +4848,30 @@ TEST(Longtail, TestChangeVersionCancelOperation)
                 LONGTAIL_LOGFIELD(async_complete_api, "%p")
             MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockStoreProxy_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
                 block_store_api, chunk_count, chunk_hashes, async_complete_api)
             LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
             LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
             LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
             struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
             return api->m_Base->GetExistingContent(api->m_Base, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api);
+        }
+        static int PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+        {
+            MAKE_LOG_CONTEXT_FIELDS(ctx)
+                LONGTAIL_LOGFIELD(block_store_api, "%p"),
+                LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+                LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+                LONGTAIL_LOGFIELD(async_complete_api, "%p")
+            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockStoreProxy_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
+                block_store_api, block_keep_count, block_keep_hashes, async_complete_api)
+            LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+            LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
+            LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+            struct BlockStoreProxy* api = (struct BlockStoreProxy*)block_store_api;
+            return api->m_Base->PruneBlocks(api->m_Base, block_keep_count, block_keep_hashes, async_complete_api);
         }
         static int GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
         {
@@ -4824,6 +4893,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         BlockStoreProxy::PreflightGet,
         BlockStoreProxy::GetStoredBlock,
         BlockStoreProxy::GetExistingContent,
+        BlockStoreProxy::PruneBlocks,
         BlockStoreProxy::GetStats,
         BlockStoreProxy::Flush);
 
@@ -6232,6 +6302,12 @@ static int CaptureBlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* b
     return api->m_BackingStore->GetExistingContent(api->m_BackingStore, chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api);
 }
 
+static int CaptureBlockStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
+    return api->m_BackingStore->PruneBlocks(api->m_BackingStore, block_keep_count, block_keep_hashes, async_complete_api);
+}
+
 static int CaptureBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     struct CaptureBlockStore* api = (struct CaptureBlockStore*)block_store_api;
@@ -6252,6 +6328,7 @@ struct Longtail_BlockStoreAPI* CaptureBlockStoreInit(struct CaptureBlockStore* s
         CaptureBlockStore_PreflightGet,
         CaptureBlockStore_GetStoredBlock,
         CaptureBlockStore_GetExistingContent,
+        CaptureBlockStore_PruneBlocks,
         CaptureBlockStore_GetStats,
         CaptureBlockStore_Flush);
     store->m_BackingStore = backing_store;
@@ -6453,6 +6530,12 @@ static int CancelStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_s
     return 0;
 }
 
+static int CancelStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    async_complete_api->OnComplete(async_complete_api, 0, ECANCELED);
+    return 0;
+}
+
 static int CancelStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     return ECANCELED;
@@ -6472,6 +6555,7 @@ struct Longtail_BlockStoreAPI* CancelStoreInit(struct CancelStore* store)
         CancelStore_PreflightGet,
         CancelStore_GetStoredBlock,
         CancelStore_GetExistingContent,
+        CancelStore_PruneBlocks,
         CancelStore_GetStats,
         CancelStore_Flush);
     return api;
@@ -6536,4 +6620,195 @@ TEST(Longtail, NestedStoreCancel)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(storage_api);
+}
+
+TEST(Longtail, Longtail_PruneStoreIndex)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    const uint32_t chunk_indexes[7] = {0, 1, 2, 3, 4, 5, 6};
+    const TLongtail_Hash chunk_hashes[7] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedb5effeed5a50, 0xfeed5a17deadbee1, 0xae3d5a17deadbee2, 0xdae1beeffeed5a53};
+    const uint32_t chunk_sizes[7] = {4711, 1147, 1137, 3219, 213, 453, 6122};
+    struct Longtail_BlockIndex* block_index1;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        2,
+        &chunk_indexes[0],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index1));
+
+    struct Longtail_BlockIndex* block_index2;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        2,
+        &chunk_indexes[2],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index2));
+
+    struct Longtail_BlockIndex* block_index3;
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        3,
+        &chunk_indexes[4],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index3));
+
+    const struct Longtail_BlockIndex* block_indexes[3] = {block_index1, block_index2, block_index3};
+
+    struct Longtail_StoreIndex* store_index;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        3,
+        (const struct Longtail_BlockIndex**)block_indexes,
+        &store_index));
+
+
+    struct Longtail_StoreIndex* block1_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        1,
+        &store_index->m_BlockHashes[0],
+        &block1_kept_store_index));
+    ASSERT_EQ(1u, *block1_kept_store_index->m_BlockCount);
+    ASSERT_EQ(2u, *block1_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[0], block1_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(chunk_hashes[0], block1_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[1], block1_kept_store_index->m_ChunkHashes[1]);
+
+    struct Longtail_StoreIndex* block2_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        1,
+        &store_index->m_BlockHashes[1],
+        &block2_kept_store_index));
+    ASSERT_EQ(1u, *block2_kept_store_index->m_BlockCount);
+    ASSERT_EQ(2u, *block2_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[1], block2_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(chunk_hashes[2], block2_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[3], block2_kept_store_index->m_ChunkHashes[1]);
+
+    struct Longtail_StoreIndex* block3_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        1,
+        &store_index->m_BlockHashes[2],
+        &block3_kept_store_index));
+    ASSERT_EQ(1u, *block3_kept_store_index->m_BlockCount);
+    ASSERT_EQ(3u, *block3_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[2], block3_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(chunk_hashes[4], block3_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[5], block3_kept_store_index->m_ChunkHashes[1]);
+    ASSERT_EQ(chunk_hashes[6], block3_kept_store_index->m_ChunkHashes[2]);
+
+    TLongtail_Hash block1and3hash[2] = {*block_index1->m_BlockHash, *block_index3->m_BlockHash};
+
+    struct Longtail_StoreIndex* block1and3_kept_store_index;
+    ASSERT_EQ(0, Longtail_PruneStoreIndex(
+        store_index,
+        2,
+        &block1and3hash[0],
+        &block1and3_kept_store_index));
+    ASSERT_EQ(2u, *block1and3_kept_store_index->m_BlockCount);
+    ASSERT_EQ(5u, *block1and3_kept_store_index->m_ChunkCount);
+    ASSERT_EQ(store_index->m_BlockHashes[0], block1and3_kept_store_index->m_BlockHashes[0]);
+    ASSERT_EQ(store_index->m_BlockHashes[2], block1and3_kept_store_index->m_BlockHashes[1]);
+    ASSERT_EQ(chunk_hashes[0], block1and3_kept_store_index->m_ChunkHashes[0]);
+    ASSERT_EQ(chunk_hashes[1], block1and3_kept_store_index->m_ChunkHashes[1]);
+    ASSERT_EQ(chunk_hashes[4], block1and3_kept_store_index->m_ChunkHashes[2]);
+    ASSERT_EQ(chunk_hashes[5], block1and3_kept_store_index->m_ChunkHashes[3]);
+    ASSERT_EQ(chunk_hashes[6], block1and3_kept_store_index->m_ChunkHashes[4]);
+
+    Longtail_Free(block1and3_kept_store_index);
+    Longtail_Free(block3_kept_store_index);
+    Longtail_Free(block2_kept_store_index);
+    Longtail_Free(block1_kept_store_index);
+    Longtail_Free(store_index);
+    Longtail_Free(block_index3);
+    Longtail_Free(block_index2);
+    Longtail_Free(block_index1);
+    SAFE_DISPOSE_API(hash_api);
+}
+
+TEST(Longtail, Longtail_PruneFSBlockStore)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "cache/chunks", 0);
+
+    TLongtail_Hash block_hashes[3];
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 4;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {624, 885, 81, 771};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[0] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 3;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {1624, 886, 611};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[1] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    {
+        static const uint32_t BLOCK_CHUNK_COUNT = 5;
+        static const uint32_t BLOCK_CHUNK_SIZES[BLOCK_CHUNK_COUNT] = {1623, 85, 981, 7741};
+        static Longtail_StoredBlock* block = GenerateStoredBlock(hash_api, BLOCK_CHUNK_COUNT, BLOCK_CHUNK_SIZES);
+        struct TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, block, &putCB.m_API));
+        putCB.Wait();
+        ASSERT_EQ(0, putCB.m_Err);
+        block_hashes[2] = *block->m_BlockIndex->m_BlockHash;
+        block->Dispose(block);
+    }
+
+    TLongtail_Hash block1and3hash[2] = {block_hashes[0], block_hashes[2]};
+    TestAsyncPruneBlocksComplete pruneCB;
+    ASSERT_EQ(0, block_store_api->PruneBlocks(block_store_api, 2, block1and3hash, &pruneCB.m_API));
+    pruneCB.Wait();
+    ASSERT_EQ(0, pruneCB.m_Err);
+    ASSERT_EQ(1, pruneCB.m_PruneCount);
+
+    {
+        struct TestAsyncGetBlockComplete getCB0;
+        ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, block_hashes[0], &getCB0.m_API));
+        getCB0.Wait();
+        getCB0.m_StoredBlock->Dispose(getCB0.m_StoredBlock);
+        ASSERT_EQ(0, getCB0.m_Err);
+    }
+
+    {
+        struct TestAsyncGetBlockComplete getCB1;
+        ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, block_hashes[1], &getCB1.m_API));
+    }
+
+    {
+        struct TestAsyncGetBlockComplete getCB2;
+        ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, block_hashes[2], &getCB2.m_API));
+        getCB2.Wait();
+        getCB2.m_StoredBlock->Dispose(getCB2.m_StoredBlock);
+        ASSERT_EQ(0, getCB2.m_Err);
+    }
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(hash_api);
 }
