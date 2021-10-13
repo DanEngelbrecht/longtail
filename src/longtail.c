@@ -2841,10 +2841,10 @@ struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_co
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(chunk_count, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
 
     struct Longtail_BlockIndex* block_index = (struct Longtail_BlockIndex*)mem;
     char* p = (char*)&block_index[1];
@@ -2896,11 +2896,11 @@ int Longtail_InitBlockIndexFromData(
         LONGTAIL_LOGFIELD(data, "%p"),
         LONGTAIL_LOGFIELD(data_size, "%" PRIu64)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-    LONGTAIL_VALIDATE_INPUT(ctx, block_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, data != 0, return EINVAL)
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, data != 0, return EINVAL)
 
     char* p = (char*)data;
 
@@ -6693,6 +6693,7 @@ int Longtail_CreateVersionDiff(
     LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_version_diff != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api->GetIdentifier(hash_api) == *source_version->m_HashIdentifier, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api->GetIdentifier(hash_api) == *target_version->m_HashIdentifier, return EINVAL)
 
