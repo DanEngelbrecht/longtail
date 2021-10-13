@@ -6693,6 +6693,7 @@ int Longtail_CreateVersionDiff(
     LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_version_diff != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api->GetIdentifier(hash_api) == *source_version->m_HashIdentifier, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api->GetIdentifier(hash_api) == *target_version->m_HashIdentifier, return EINVAL)
 
