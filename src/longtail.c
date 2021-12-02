@@ -8000,29 +8000,6 @@ int Longtail_ReadStoreIndex(
     return 0;
 }
 
-/*size_t Longtail_GetArchiveIndexDataSize(
-    const struct Longtail_StoreIndex* store_index,
-    const struct Longtail_VersionIndex* version_index)
-{
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(store_index, "%p"),
-        LONGTAIL_LOGFIELD(version_index, "%p"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
-
-    LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
-
-    size_t store_index_data_size = Longtail_GetStoreIndexDataSize(*store_index->m_BlockCount, *store_index->m_ChunkCount);
-    size_t version_index_data_size = Longtail_GetVersionIndexDataSize(*version_index->m_AssetCount, *version_index->m_ChunkCount, *version_index->m_AssetChunkIndexCount, version_index->m_NameDataSize);
-    size_t size =
-        sizeof(uint32_t) +
-        sizeof(uint32_t) +
-        store_index_data_size +
-        sizeof(uint64_t) * (*store_index->m_BlockCount) +
-        version_index_data_size;
-    return size;
-}*/
-
 LONGTAIL_EXPORT int Longtail_CreateArchiveIndex(
     const struct Longtail_StoreIndex* store_index,
     const struct Longtail_VersionIndex* version_index,

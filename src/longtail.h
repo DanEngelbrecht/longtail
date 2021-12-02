@@ -1633,10 +1633,6 @@ struct Longtail_ArchiveIndex
     struct Longtail_VersionIndex m_VersionIndex;
 };
 
-/*LONGTAIL_EXPORT size_t Longtail_GetArchiveIndexDataSize(
-    const struct Longtail_StoreIndex* store_index,
-    const struct Longtail_VersionIndex* version_index);*/
-
 LONGTAIL_EXPORT int Longtail_CreateArchiveIndex(
     const struct Longtail_StoreIndex* store_index,
     const struct Longtail_VersionIndex* version_index,
