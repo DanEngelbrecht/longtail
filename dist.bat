@@ -16,6 +16,7 @@ cp build\static\liblongtail_win32_x64_debug.a dist
 mkdir dist\include
 mkdir dist\include\src
 mkdir dist\include\lib
+mkdir dist\include\lib\archiveblockstore
 mkdir dist\include\lib\atomiccancel
 mkdir dist\include\lib\bikeshed
 mkdir dist\include\lib\blake2
@@ -38,6 +39,7 @@ mkdir dist\include\lib\ratelimitedprogress
 mkdir dist\include\lib\shareblockstore
 mkdir dist\include\lib\zstd
 cp src/*.h dist/include/src
+cp lib/archiveblockstore/*.h dist/include/lib/archiveblockstore
 cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
 cp lib/bikeshed/*.h dist/include/lib/bikeshed
 cp lib/blake2/*.h dist/include/lib/blake2
