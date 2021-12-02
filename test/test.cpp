@@ -6813,6 +6813,255 @@ TEST(Longtail, Longtail_PruneFSBlockStore)
     SAFE_DISPOSE_API(hash_api);
 }
 
+
+struct ArchiveBlockStoreAPI
+{
+    struct Longtail_BlockStoreAPI m_BlockStoreAPI;
+    TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
+
+    HLongtail_SpinLock m_Lock;
+
+    struct Longtail_StorageAPI* m_StorageAPI;
+    struct Longtail_ArchiveIndex* m_ArchiveIndex;
+    char* m_ArchivePath;
+};
+
+static int ArchiveBlockStore_PutStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StoredBlock* stored_block,
+    struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    return ENOTSUP;
+}
+
+static int ArchiveBlockStore_PreflightGet(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint32_t block_count,
+    const TLongtail_Hash* block_hashes,
+    struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_count, "%u"),
+        LONGTAIL_LOGFIELD(block_hashes, "%p"),
+        LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    return 0;
+}
+
+static int ArchiveBlockStore_GetStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint64_t block_hash,
+    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    return ENOTSUP;
+}
+
+static int ArchiveBlockStore_GetExistingContent(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint32_t chunk_count,
+    const TLongtail_Hash* chunk_hashes,
+    uint32_t min_block_usage_percent,
+    struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
+        LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+
+    return ENOTSUP;
+}
+
+static int ArchiveBlockStore_PruneBlocks(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint32_t block_keep_count,
+    const TLongtail_Hash* block_keep_hashes,
+    struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_keep_count, "%u"),
+        LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+
+    return ENOTSUP;
+}
+
+static int ArchiveBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(out_stats, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_stats, return EINVAL)
+    struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
+    memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
+    for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
+    {
+        out_stats->m_StatU64[s] = api->m_StatU64[s];
+    }
+    return 0;
+}
+
+static int ArchiveBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    return ENOTSUP;
+}
+
+static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return)
+    struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
+
+    int err = ArchiveBlockStore_Flush(&api->m_BlockStoreAPI, 0);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_Flush() failed with %d", err);
+    }
+
+    Longtail_DeleteSpinLock(api->m_Lock);
+    Longtail_Free(api->m_Lock);
+    Longtail_Free(api->m_ArchivePath);
+    Longtail_Free(api);
+}
+
+static int ArchiveBlockStore_Init(
+    void* mem,
+    struct Longtail_StorageAPI* storage_api,
+    const char* archive_path,
+    struct Longtail_ArchiveIndex* archive_index,
+    struct Longtail_BlockStoreAPI** out_block_store_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(out_block_store_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, mem, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, storage_api, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, archive_path, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, out_block_store_api, return EINVAL)
+
+    struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
+        mem,
+        ArchiveBlockStore_Dispose,
+        ArchiveBlockStore_PutStoredBlock,
+        ArchiveBlockStore_PreflightGet,
+        ArchiveBlockStore_GetStoredBlock,
+        ArchiveBlockStore_GetExistingContent,
+        ArchiveBlockStore_PruneBlocks,
+        ArchiveBlockStore_GetStats,
+        ArchiveBlockStore_Flush);
+    if (!block_store_api)
+    {
+        return EINVAL;
+    }
+
+    struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
+
+    api->m_StorageAPI = storage_api;
+    api->m_ArchiveIndex = archive_index;
+    api->m_ArchivePath = Longtail_Strdup(archive_path);
+
+    for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
+    {
+        api->m_StatU64[s] = 0;
+    }
+
+    int err = Longtail_CreateSpinLock(Longtail_Alloc("FSBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);
+    if (err)
+    {
+        return err;
+    }
+    *out_block_store_api = block_store_api;
+    return 0;
+}
+
+LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateArchiveBlockStore(
+    struct Longtail_StorageAPI* storage_api,
+    const char* archive_path,
+    struct Longtail_ArchiveIndex* archive_index)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(archive_path, "%s"),
+        LONGTAIL_LOGFIELD(archive_index, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, archive_path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, archive_index, return 0)
+
+    size_t api_size = sizeof(struct ArchiveBlockStoreAPI);
+    void* mem = Longtail_Alloc("ArchiveBlockStoreAPI", api_size);
+    if (!mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return 0;
+    }
+
+    struct Longtail_BlockStoreAPI* block_store_api;
+    int err = ArchiveBlockStore_Init(
+        mem,
+        storage_api,
+        archive_path,
+        archive_index,
+        &block_store_api);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ArchiveBlockStore_Init() failed with %d", err)
+        Longtail_Free(mem);
+        return 0;
+    }
+    return block_store_api;
+}
+
 TEST(Longtail, Longtail_Archive)
 {
     static const uint32_t TARGET_CHUNK_SIZE = 8192;
