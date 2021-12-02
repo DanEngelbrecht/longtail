@@ -86,6 +86,19 @@ if "!RELEASE_MODE!" == "release" (
     set CXXFLAGS=!BASE_CXXFLAGS! !CXXFLAGS_DEBUG!
 )
 
+
+if NOT DEFINED VCINSTALLDIR (
+    if exist "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+    )
+)
+
+if NOT DEFINED VCINSTALLDIR (
+    if exist "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
+        call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+    )
+)
+
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
         call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
