@@ -361,10 +361,18 @@ static int ArchiveBlockStore_Init(
 
     if (enable_write)
     {
-        int err = api->m_StorageAPI->OpenWriteFile(api->m_StorageAPI, api->m_ArchivePath, 0, &api->m_ArchiveFileHandle);
+        int err = EnsureParentPathExists(api->m_StorageAPI, api->m_ArchivePath);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
+            Longtail_Free(api->m_ArchivePath);
+            return err;
+        }
+        err = api->m_StorageAPI->OpenWriteFile(api->m_StorageAPI, api->m_ArchivePath, 0, &api->m_ArchiveFileHandle);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_StorageAPI->OpenWriteFile() failed with %d", err)
+            Longtail_Free(api->m_ArchivePath);
             return err;
         }
         api->m_StorageAPI->Write(api->m_StorageAPI, api->m_ArchiveFileHandle, 0, *archive_index->m_IndexDataSize, &archive_index[1]);
@@ -375,6 +383,7 @@ static int ArchiveBlockStore_Init(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_StorageAPI->OpenReadFile() failed with %d", err)
+            Longtail_Free(api->m_ArchivePath);
             return err;
         }
     }
@@ -384,6 +393,7 @@ static int ArchiveBlockStore_Init(
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_StorageAPI->Longtail_CreateSpinLock() failed with %d", err)
         api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
+        Longtail_Free(api->m_ArchivePath);
         return err;
     }
 
