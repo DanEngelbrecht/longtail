@@ -104,8 +104,12 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** `Longtail_CreateVersionDiff` validate hash api pointer before using it
-          - **FIX**  Validate input parameters in `Longtail_InitBlockIndex` and `Longtail_InitBlockIndexFromData` even in release mode
+          - **ADDED** Added API for packing version index and store data into a single file
+            - `struct Longtail_ArchiveIndex`
+            - `Longtail_CreateArchiveIndex`
+            - `Longtail_ReadArchiveIndex`
+            - `Longtail_CreateArchiveBlockStore`
+          - **ADDED** `pack` and `unpack` command to create stand alone archives
         draft: false
         prerelease: false
     - name: Download Linux artifacts
