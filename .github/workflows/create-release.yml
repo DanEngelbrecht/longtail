@@ -110,6 +110,7 @@ jobs:
             - `Longtail_ReadArchiveIndex`
             - `Longtail_CreateArchiveBlockStore`
           - **ADDED** `pack` and `unpack` command to create stand alone archives
+          - **ADDED** Support for compiling with Visual Studio 2022 on Windows
         draft: false
         prerelease: false
     - name: Download Linux artifacts
