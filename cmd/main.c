@@ -4,6 +4,7 @@
 #endif
 
 #include "../src/longtail.h"
+#include "../lib/archiveblockstore/longtail_archiveblockstore.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
@@ -1479,6 +1480,568 @@ int VersionIndex_cp(
     return 0;
 }
 
+
+struct SyncFlush
+{
+    struct Longtail_AsyncFlushAPI m_API;
+    HLongtail_Sema m_NotifySema;
+    int m_Err;
+};
+
+void SyncFlush_OnComplete(struct Longtail_AsyncFlushAPI* async_complete_api, int err)
+{
+    struct SyncFlush* api = (struct SyncFlush*)async_complete_api;
+    api->m_Err = err;
+    Longtail_PostSema(api->m_NotifySema, 1);
+}
+
+void SyncFlush_Wait(struct SyncFlush* sync_flush)
+{
+    Longtail_WaitSema(sync_flush->m_NotifySema, LONGTAIL_TIMEOUT_INFINITE);
+}
+
+void SyncFlush_Dispose(struct Longtail_API* longtail_api)
+{
+    struct SyncFlush* api = (struct SyncFlush*)longtail_api;
+    Longtail_DeleteSema(api->m_NotifySema);
+    Longtail_Free(api->m_NotifySema);
+}
+
+int SyncFlush_Init(struct SyncFlush* sync_flush)
+{
+    sync_flush->m_Err = EINVAL;
+    sync_flush->m_API.m_API.Dispose = SyncFlush_Dispose;
+    sync_flush->m_API.OnComplete = SyncFlush_OnComplete;
+    return Longtail_CreateSema(Longtail_Alloc(0, Longtail_GetSemaSize()), 0, &sync_flush->m_NotifySema);
+}
+
+
+
+int Pack(
+    const char* source_path,
+    const char* target_path,
+    uint32_t target_chunk_size,
+    uint32_t target_block_size,
+    uint32_t max_chunks_per_block,
+    uint32_t min_block_usage_percent,
+    uint32_t hashing_type,
+    uint32_t compression_type)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(source_path, "%s"),
+        LONGTAIL_LOGFIELD(target_path, "%s"),
+        LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
+        LONGTAIL_LOGFIELD(target_block_size, "%u"),
+        LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
+        LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
+        LONGTAIL_LOGFIELD(hashing_type, "%u"),
+        LONGTAIL_LOGFIELD(compression_type, "%u")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
+    struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+
+    struct Longtail_HashAPI* hash_api;
+    int err = hash_registry->GetHashAPI(hash_registry, hashing_type, &hash_api);
+    if (err)
+    {
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+    struct Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    if (!chunker_api)
+    {
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
+
+    struct Longtail_VersionIndex* source_version_index = 0;
+    {
+        struct Longtail_FileInfos* file_infos;
+        err = Longtail_GetFilesRecursively(
+            storage_api,
+            0,
+            0,
+            0,
+            source_path,
+            &file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", source_path, err);
+            SAFE_DISPOSE_API(chunker_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_registry);
+            return err;
+        }
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * file_infos->m_Count);
+        for (uint32_t i = 0; i < file_infos->m_Count; ++i)
+        {
+            tags[i] = compression_type;
+        }
+
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        if (progress)
+        {
+            err = Longtail_CreateVersionIndex(
+                storage_api,
+                hash_api,
+                chunker_api,
+                job_api,
+                progress,
+                0,
+                0,
+                source_path,
+                file_infos,
+                tags,
+                target_chunk_size,
+                &source_version_index);
+            SAFE_DISPOSE_API(progress);
+        }
+        else
+        {
+            err = ENOMEM;
+        }
+
+        Longtail_Free(tags);
+        Longtail_Free(file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", source_path, err);
+            SAFE_DISPOSE_API(chunker_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_registry);
+            return err;
+        }
+    }
+
+    struct Longtail_StoreIndex* store_index;
+    err  = Longtail_CreateStoreIndex(
+        hash_api,
+        *source_version_index->m_ChunkCount,
+        source_version_index->m_ChunkHashes,
+        source_version_index->m_ChunkSizes,
+        source_version_index->m_ChunkTags,
+        target_block_size,
+        max_chunks_per_block,
+        &store_index);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create missing store index %d", err);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+
+
+    struct Longtail_ArchiveIndex* archive_index;
+    err = Longtail_CreateArchiveIndex(
+        store_index,
+        source_version_index,
+        &archive_index);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive index %d", err);
+        Longtail_Free(store_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+
+    struct Longtail_BlockStoreAPI* archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        storage_api,
+        target_path,
+        archive_index,
+        true);
+    if (archive_block_store_api == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive block store %d", ENOMEM);
+        Longtail_Free(archive_index);
+        Longtail_Free(store_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
+
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(archive_block_store_api, compression_registry);
+    if (store_block_store_api == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create compression block store %d", ENOMEM);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        Longtail_Free(archive_index);
+        Longtail_Free(store_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
+
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks");
+    if (progress)
+    {
+        err = Longtail_WriteContent(
+            storage_api,
+            store_block_store_api,
+            job_api,
+            progress,
+            0,
+            0,
+            store_index,
+            source_version_index,
+            source_path);
+        SAFE_DISPOSE_API(progress);
+    }
+    else
+    {
+        err = ENOMEM;
+    }
+
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create store blocks for `%s` to `%s`, %d", source_path, target_path, err);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        Longtail_Free(archive_index);
+        Longtail_Free(store_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+
+
+    struct SyncFlush flushCB;
+    err = SyncFlush_Init(&flushCB);
+    if (err)
+    {
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        Longtail_Free(archive_index);
+        Longtail_Free(store_index);
+        Longtail_Free(source_version_index);
+        SAFE_DISPOSE_API(chunker_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+    err = archive_block_store_api->Flush(store_block_store_api, &flushCB.m_API);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to flush block store for `%s` to `%s`, %d", source_path, target_path, err);
+    }
+    else
+    {
+        SyncFlush_Wait(&flushCB);
+        if (flushCB.m_Err != 0)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to flush block store for `%s` to `%s`, %d", source_path, target_path, flushCB.m_Err);
+        }
+    }
+
+
+    SAFE_DISPOSE_API(&flushCB.m_API);
+    SAFE_DISPOSE_API(store_block_store_api);
+    SAFE_DISPOSE_API(archive_block_store_api);
+    Longtail_Free(archive_index);
+    Longtail_Free(store_index);
+    Longtail_Free(source_version_index);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_registry);
+
+    return 0;
+}
+
+int Unpack(
+    const char* source_path,
+    const char* target_path,
+    int retain_permissions)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(source_path, "%s"),
+        LONGTAIL_LOGFIELD(target_path, "%s"),
+        LONGTAIL_LOGFIELD(retain_permissions, "%d")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
+    struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
+    struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+
+    struct Longtail_ArchiveIndex* archive_index;
+    int err = Longtail_ReadArchiveIndex(
+            storage_api,
+            source_path,
+            &archive_index);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read archive index from `%s`, %d", source_path, err);
+        return err;
+    }
+
+    uint32_t hashing_type = *archive_index->m_VersionIndex.m_HashIdentifier;
+    struct Longtail_HashAPI* hash_api;
+    err = hash_registry->GetHashAPI(hash_registry, hashing_type, &hash_api);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create hashing api from `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+    struct Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    if (chunker_api == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create chunking api from `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+
+    struct Longtail_VersionIndex* target_version_index = 0;
+    {
+        struct Longtail_FileInfos* file_infos;
+        err = Longtail_GetFilesRecursively(
+            storage_api,
+            0,
+            0,
+            0,
+            target_path,
+            &file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", target_path, err);
+            SAFE_DISPOSE_API(chunker_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_registry);
+            return err;
+        }
+        uint32_t* tags = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * file_infos->m_Count);
+        for (uint32_t i = 0; i < file_infos->m_Count; ++i)
+        {
+            tags[i] = 0;
+        }
+
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        if (progress)
+        {
+            err = Longtail_CreateVersionIndex(
+                storage_api,
+                hash_api,
+                chunker_api,
+                job_api,
+                progress,
+                0,
+                0,
+                target_path,
+                file_infos,
+                tags,
+                *archive_index->m_VersionIndex.m_TargetChunkSize,
+                &target_version_index);
+            SAFE_DISPOSE_API(progress);
+        }
+        else
+        {
+            err = ENOMEM;
+        }
+
+        Longtail_Free(tags);
+        Longtail_Free(file_infos);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
+            SAFE_DISPOSE_API(chunker_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(job_api);
+            SAFE_DISPOSE_API(hash_registry);
+            return err;
+        }
+    }
+
+
+
+    struct Longtail_BlockStoreAPI* archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        storage_api,
+        source_path,
+        archive_index,
+        false);
+    if (archive_block_store_api == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive block store `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
+
+    struct Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(archive_block_store_api, compression_registry);
+    if (compress_block_store_api == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create compress block store `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
+
+    struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
+    if (lru_block_store_api == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create lru block store `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
+
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(lru_block_store_api);
+    if (store_block_store_api == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create share block store `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return ENOMEM;
+    }
+
+    struct Longtail_VersionDiff* version_diff;
+    err = Longtail_CreateVersionDiff(
+        hash_api,
+        target_version_index,
+        &archive_index->m_VersionIndex,
+        &version_diff);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create diff between `%s` and `%s`, %d", source_path, target_path, err);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+
+    if ((*version_diff->m_SourceRemovedCount == 0) &&
+        (*version_diff->m_ModifiedContentCount == 0) &&
+        (*version_diff->m_TargetAddedCount == 0) &&
+        (*version_diff->m_ModifiedPermissionsCount == 0 || !retain_permissions) )
+    {
+        Longtail_Free(version_diff);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return 0;
+    }
+
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
+    if (progress)
+    {
+        err = Longtail_ChangeVersion(
+            store_block_store_api,
+            storage_api,
+            hash_api,
+            job_api,
+            progress,
+            0,
+            0,
+            &archive_index->m_StoreIndex,
+            target_version_index,
+            &archive_index->m_VersionIndex,
+            version_diff,
+            target_path,
+            retain_permissions ? 1 : 0);
+        SAFE_DISPOSE_API(progress);
+    }
+    else
+    {
+        err = ENOMEM;
+    }
+
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s`, %d", target_path, source_path, err);
+        Longtail_Free(version_diff);
+        SAFE_DISPOSE_API(store_block_store_api);
+        SAFE_DISPOSE_API(lru_block_store_api);
+        SAFE_DISPOSE_API(compress_block_store_api);
+        SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(compression_registry);
+        SAFE_DISPOSE_API(job_api);
+        SAFE_DISPOSE_API(hash_registry);
+        return err;
+    }
+
+    Longtail_Free(version_diff);
+    SAFE_DISPOSE_API(store_block_store_api);
+    SAFE_DISPOSE_API(lru_block_store_api);
+    SAFE_DISPOSE_API(compress_block_store_api);
+    SAFE_DISPOSE_API(archive_block_store_api);
+    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(hash_registry);
+    return err;
+}
+
 int main(int argc, char** argv)
 {
 #if defined(_CRTDBG_MAP_ALLOC)
@@ -1496,7 +2059,7 @@ int main(int argc, char** argv)
 
     if (argc < 2)
     {
-        kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls` or `cp`");
+        kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls`, `cp`, `pack` or `unpack`");
         kgflags_print_usage();
         return 1;
     }
@@ -1506,9 +2069,11 @@ int main(int argc, char** argv)
         (strcmp(command, "downsync") != 0) &&
         (strcmp(command, "validate") != 0) &&
         (strcmp(command, "ls") != 0) &&
-        (strcmp(command, "cp") != 0))
+        (strcmp(command, "cp") != 0) &&
+        (strcmp(command, "pack") != 0) &&
+        (strcmp(command, "unpack") != 0))
     {
-        kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls` or `cp`");
+        kgflags_set_custom_description("Use command `upsync`, `downsync`, `validate`, `ls`, `cp`, `pack` or `unpack`");
         kgflags_print_usage();
         return 1;
     }
@@ -1762,6 +2327,117 @@ int main(int argc, char** argv)
             cache_path,
             source_path,
             target_path);
+    }
+    else if (strcmp(command, "pack") == 0)
+    {
+        const char* hasing_raw = 0;
+        kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake2, blake3, meow", false, &hasing_raw);
+
+        const char* source_path_raw = 0;
+        kgflags_string("source-path", 0, "Source folder path", true, &source_path_raw);
+
+        const char* target_path_raw = 0;
+        kgflags_string("target-path", 0, "Target file path", true, &target_path_raw);
+
+        const char* compression_raw = 0;
+        kgflags_string("compression-algorithm", "zstd", "Compression algorithm: none, brotli, brotli_min, brotli_max, brotli_text, brotli_text_min, brotli_text_max, lz4, zstd, zstd_min, zstd_max", false, &compression_raw);
+
+        int32_t target_chunk_size = 8;
+        kgflags_int("target-chunk-size", 32768, "Target chunk size", false, &target_chunk_size);
+
+        int32_t target_block_size = 0;
+        kgflags_int("target-block-size", 8388608, "Target block size", false, &target_block_size);
+
+        int32_t max_chunks_per_block = 0;
+        kgflags_int("max-chunks-per-block", 1024, "Max chunks per block", false, &max_chunks_per_block);
+
+        int32_t min_block_usage_percent = 8;
+        kgflags_int("min-block-usage-percent", 0, "Minimum percent of block content than must match for it to be considered \"existing\"", false, &min_block_usage_percent);
+
+        if (!kgflags_parse(argc, argv)) {
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+
+        if (SetLogLevel(log_level_raw))
+        {
+            return 1;
+        }
+
+        if (enable_mem_tracer_raw) {
+            Longtail_MemTracer_Init();
+            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+        }
+
+        uint32_t compression = ParseCompressionType(compression_raw);
+        if (compression == 0xffffffff)
+        {
+            printf("Invalid compression algorithm `%s`\n", compression_raw);
+            return 1;
+        }
+
+        uint32_t hashing = ParseHashingType(hasing_raw);
+        if (hashing == 0xffffffff)
+        {
+            printf("Invalid hashing algorithm `%s`\n", hasing_raw);
+            return 1;
+        }
+
+        const char* source_path = NormalizePath(source_path_raw);
+
+        const char* target_path = NormalizePath(target_path_raw);
+
+        err = Pack(
+            source_path,
+            target_path,
+            target_chunk_size,
+            target_block_size,
+            max_chunks_per_block,
+            min_block_usage_percent,
+            hashing,
+            compression);
+
+        Longtail_Free((void*)source_path);
+        Longtail_Free((void*)target_path);
+    }
+    if (strcmp(command, "unpack") == 0)
+    {
+        const char* source_path_raw = 0;
+        kgflags_string("source-path", 0, "Source folder path", true, &source_path_raw);
+
+        const char* target_path_raw = 0;
+        kgflags_string("target-path", 0, "Target file path", true, &target_path_raw);
+
+        bool retain_permission_raw = 0;
+        kgflags_bool("retain-permissions", true, "Disable setting permission on file/directories from source", false, &retain_permission_raw);
+
+        if (!kgflags_parse(argc, argv)) {
+            kgflags_print_errors();
+            kgflags_print_usage();
+            return 1;
+        }
+
+        if (SetLogLevel(log_level_raw))
+        {
+            return 1;
+        }
+
+        if (enable_mem_tracer_raw) {
+            Longtail_MemTracer_Init();
+            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+        }
+
+        const char* source_path = NormalizePath(source_path_raw);
+        const char* target_path = NormalizePath(target_path_raw);
+
+        err = Unpack(
+            source_path,
+            target_path,
+            retain_permission_raw);
+
+        Longtail_Free((void*)source_path);
+        Longtail_Free((void*)target_path);
     }
 #if defined(_CRTDBG_MAP_ALLOC)
     _CrtDumpMemoryLeaks();
