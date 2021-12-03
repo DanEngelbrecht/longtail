@@ -6875,11 +6875,10 @@ TEST(Longtail, Longtail_Archive)
         "archive.lta",
         archive_index,
         true);
-    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(archive_block_store_api, compression_registry);
 
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
-        block_store_api,
+        archive_block_store_api,
         job_api,
         0,
         0,
@@ -6889,11 +6888,10 @@ TEST(Longtail, Longtail_Archive)
         "two_items"));
 
     TestAsyncFlushComplete flushCB;
-    ASSERT_EQ(0, block_store_api->Flush(block_store_api, &flushCB.m_API));
+    ASSERT_EQ(0, archive_block_store_api->Flush(archive_block_store_api, &flushCB.m_API));
     flushCB.Wait();
     ASSERT_EQ(0, flushCB.m_Err);
 
-    SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(archive_block_store_api);
 
     Longtail_Free(archive_index);
@@ -6916,10 +6914,9 @@ TEST(Longtail, Longtail_Archive)
         "archive.lta",
         archive_index,
         false);
-    block_store_api = Longtail_CreateCompressBlockStoreAPI(archive_block_store_api, compression_registry);
 
     ASSERT_EQ(0, Longtail_WriteVersion(
-        block_store_api,
+        archive_block_store_api,
         local_storage,
         job_api,
         0,
@@ -6930,7 +6927,6 @@ TEST(Longtail, Longtail_Archive)
         "two_items_copy",
         1));
 
-    SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(archive_block_store_api);
 
     Longtail_Free(archive_index);
