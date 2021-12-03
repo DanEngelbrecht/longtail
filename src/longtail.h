@@ -1623,6 +1623,26 @@ struct Longtail_VersionIndex
     char* m_NameData;
 };
 
+struct Longtail_ArchiveIndex
+{
+    uint32_t* m_Version;
+    uint32_t* m_IndexDataSize;
+    struct Longtail_StoreIndex m_StoreIndex;
+    uint64_t* m_BlockStartOffets;
+    uint32_t* m_BlockSizes;
+    struct Longtail_VersionIndex m_VersionIndex;
+};
+
+LONGTAIL_EXPORT int Longtail_CreateArchiveIndex(
+    const struct Longtail_StoreIndex* store_index,
+    const struct Longtail_VersionIndex* version_index,
+    struct Longtail_ArchiveIndex** out_archive_index);
+
+LONGTAIL_EXPORT int Longtail_ReadArchiveIndex(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    struct Longtail_ArchiveIndex** out_archive_index);
+
 LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* version_index);
 LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetHashAPI(const struct Longtail_VersionIndex* version_index);
 LONGTAIL_EXPORT uint32_t Longtail_VersionIndex_GetAssetCount(const struct Longtail_VersionIndex* version_index);

@@ -7,6 +7,7 @@
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
 #include "../lib/brotli/longtail_brotli.h"
+#include "../lib/archiveblockstore/longtail_archiveblockstore.h"
 #include "../lib/atomiccancel/longtail_atomiccancel.h"
 #include "../lib/blockstorestorage/longtail_blockstorestorage.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
@@ -6811,4 +6812,130 @@ TEST(Longtail, Longtail_PruneFSBlockStore)
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(storage_api);
     SAFE_DISPOSE_API(hash_api);
+}
+
+
+
+TEST(Longtail, Longtail_Archive)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 8192;
+    static const uint32_t MAX_BLOCK_SIZE = 26973;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
+
+    Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+//    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, "store", 0);
+
+    ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 2));
+
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "two_items", &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        local_storage,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        "two_items",
+        version1_paths,
+        compression_types,
+        TARGET_CHUNK_SIZE,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+
+    struct Longtail_StoreIndex* store_index;
+    ASSERT_EQ(0, Longtail_CreateStoreIndex(
+        hash_api,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
+        vindex->m_ChunkTags,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &store_index));
+
+
+    struct Longtail_ArchiveIndex* archive_index;
+    ASSERT_EQ(0, Longtail_CreateArchiveIndex(
+        store_index,
+        vindex,
+        &archive_index));
+
+    Longtail_BlockStoreAPI* archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        local_storage,
+        "archive.lta",
+        archive_index,
+        true);
+
+    ASSERT_EQ(0, Longtail_WriteContent(
+        local_storage,
+        archive_block_store_api,
+        job_api,
+        0,
+        0,
+        0,
+        store_index,
+        vindex,
+        "two_items"));
+
+    TestAsyncFlushComplete flushCB;
+    ASSERT_EQ(0, archive_block_store_api->Flush(archive_block_store_api, &flushCB.m_API));
+    flushCB.Wait();
+    ASSERT_EQ(0, flushCB.m_Err);
+
+    SAFE_DISPOSE_API(archive_block_store_api);
+
+    Longtail_Free(archive_index);
+    archive_index = 0;
+
+    Longtail_Free(store_index);
+    store_index = 0;
+
+    Longtail_Free(vindex);
+    Longtail_Free(compression_types);
+    Longtail_Free(version1_paths);
+
+    ASSERT_EQ(0, Longtail_ReadArchiveIndex(
+        local_storage,
+        "archive.lta",
+        &archive_index));
+
+    archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        local_storage,
+        "archive.lta",
+        archive_index,
+        false);
+
+    ASSERT_EQ(0, Longtail_WriteVersion(
+        archive_block_store_api,
+        local_storage,
+        job_api,
+        0,
+        0,
+        0,
+        &archive_index->m_StoreIndex,
+        &archive_index->m_VersionIndex,
+        "two_items_copy",
+        1));
+
+    SAFE_DISPOSE_API(archive_block_store_api);
+
+    Longtail_Free(archive_index);
+    archive_index = 0;
+
+
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(local_storage);
 }
