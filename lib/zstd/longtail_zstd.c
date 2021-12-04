@@ -1,7 +1,7 @@
 #include "longtail_zstd.h"
 
 #include "ext/zstd.h"
-#include "ext/common/zstd_errors.h"
+#include "ext/zstd_errors.h"
 
 #include <errno.h>
 #include <inttypes.h>
