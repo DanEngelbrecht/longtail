@@ -91,7 +91,7 @@ static
     uint32_t regs[4] = {0};
     uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
     (void)edx;
-    enum cpu_feature features = 0;
+    enum cpu_feature features = (enum cpu_feature)0;
     cpuid(regs, 0);
     const int max_id = *eax;
     cpuid(regs, 1);
