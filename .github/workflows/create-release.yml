@@ -104,7 +104,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           # Changes in this Release
-          - **FIX** Make sure to create parent path when writing archive
+          - **UPDATE** Brotli 1.0.9
         draft: false
         prerelease: false
     - name: Download Linux artifacts
