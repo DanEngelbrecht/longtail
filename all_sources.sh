@@ -51,7 +51,7 @@ LZ4_SRC="${BASE_DIR}lib/lz4/*.c"
 LZ4_THIRDPARTY_SRC="${BASE_DIR}lib/lz4/ext/*.c"
 
 BROTLI_SRC="${BASE_DIR}lib/brotli/*.c"
-BROTLI_THIRDPARTY_SRC="${BASE_DIR}lib/brotli/ext/common/*.c ${BASE_DIR}lib/brotli/ext/dec/*.c ${BASE_DIR}lib/brotli/ext/enc/*.c ${BASE_DIR}lib/brotli/ext/fuzz/*.c"
+BROTLI_THIRDPARTY_SRC="${BASE_DIR}lib/brotli/ext/common/*.c ${BASE_DIR}lib/brotli/ext/dec/*.c ${BASE_DIR}lib/brotli/ext/enc/*.c"
 
 ZSTD_SRC="${BASE_DIR}lib/zstd/*.c"
 ZSTD_THIRDPARTY_SRC="${BASE_DIR}lib/zstd/ext/common/*.c ${BASE_DIR}lib/zstd/ext/compress/*.c ${BASE_DIR}lib/zstd/ext/decompress/*.c"

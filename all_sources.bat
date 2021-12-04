@@ -49,7 +49,7 @@ set LZ4_SRC=%BASE_DIR%lib\lz4\*.c
 set LZ4_THIRDPARTY_SRC=%BASE_DIR%lib\lz4\ext\*.c
 
 set BROTLI_SRC=%BASE_DIR%lib\brotli\*.c 
-set BROTLI_THIRDPARTY_SRC=%BASE_DIR%lib\brotli\ext\common\*.c %BASE_DIR%lib\brotli\ext\dec\*.c %BASE_DIR%lib\brotli\ext\enc\*.c %BASE_DIR%lib\brotli\ext\fuzz\*.c
+set BROTLI_THIRDPARTY_SRC=%BASE_DIR%lib\brotli\ext\common\*.c %BASE_DIR%lib\brotli\ext\dec\*.c %BASE_DIR%lib\brotli\ext\enc\*.c
 
 set ZSTD_SRC=%BASE_DIR%lib\zstd\*.c
 set ZSTD_THIRDPARTY_SRC=%BASE_DIR%lib\zstd\ext\common\*.c %BASE_DIR%lib\zstd\ext\compress\*.c %BASE_DIR%lib\zstd\ext\decompress\*.c
