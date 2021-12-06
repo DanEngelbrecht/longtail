@@ -35,14 +35,20 @@ static int ArchiveBlockStore_PutStoredBlock(
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
+
     struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
     LONGTAIL_FATAL_ASSERT(ctx, api->m_ArchiveFileHandle != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, api->m_IsWriteMode == 1, return EINVAL)
+
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     uint32_t* block_index_ptr = Longtail_LookupTable_Get(api->m_BlockIndexLookup, *stored_block->m_BlockIndex->m_BlockHash);
     if (!block_index_ptr)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_LookupTable_Get() failed with %d", ENOENT)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         return ENOENT;
     }
     int block_index = *block_index_ptr;
@@ -59,6 +65,7 @@ static int ArchiveBlockStore_PutStoredBlock(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Write() failed with %d", err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         Longtail_UnlockSpinLock(api->m_Lock);
         return err;
     }
@@ -68,6 +75,7 @@ static int ArchiveBlockStore_PutStoredBlock(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Write() failed with %d", err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         Longtail_UnlockSpinLock(api->m_Lock);
         return err;
     }
@@ -96,6 +104,9 @@ static int ArchiveBlockStore_PreflightGet(
         LONGTAIL_LOGFIELD(block_hashes, "%p"),
         LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
 
     if (optional_async_complete_api)
     {
@@ -135,8 +146,14 @@ static int ArchiveBlockStore_GetStoredBlock(
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
+
     struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
-    LONGTAIL_FATAL_ASSERT(ctx, api->m_IsWriteMode == 0, return EINVAL)
+    if (api->m_IsWriteMode != 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ArchiveBlockStore_GetStoredBlock() can't read from a write store, failed with %d", EINVAL)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+        return EINVAL;
+    }
 
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
@@ -156,6 +173,7 @@ static int ArchiveBlockStore_GetStoredBlock(
     if (!stored_block)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         return ENOMEM;
     }
     void* block_data = &((uint8_t*)stored_block)[block_mem_size - stored_block_data_size];
@@ -166,6 +184,7 @@ static int ArchiveBlockStore_GetStoredBlock(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Read() failed with %d", err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         Longtail_Free(stored_block);
         return err;
     }
@@ -176,10 +195,15 @@ static int ArchiveBlockStore_GetStoredBlock(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
         Longtail_Free(stored_block);
         return err;
     }
     stored_block->Dispose = ArchiveBlockStore_StoredBlock_Dispose;
+
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
+
     async_complete_api->OnComplete(async_complete_api, stored_block, 0);
 
     return 0;
@@ -204,6 +228,10 @@ static int ArchiveBlockStore_GetExistingContent(
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
+    struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
+
     return ENOTSUP;
 }
 
@@ -223,6 +251,10 @@ static int ArchiveBlockStore_PruneBlocks(
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+
+    struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count], 1);
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
 
     return ENOTSUP;
 }
@@ -257,6 +289,7 @@ static int ArchiveBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_ap
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
 
     struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
 
     if (api->m_IsWriteMode)
     {
@@ -266,6 +299,7 @@ static int ArchiveBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_ap
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "api->m_StorageAPI->Write() failed with %d", err);
+            Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_FailCount], 1);
             return err;
         }
     }
