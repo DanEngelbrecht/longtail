@@ -94,23 +94,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@master
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@latest
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        body: |
-          # Changes in this Release
-          - **UPDATE** Update LZ4 to 1.9.3
-          - **UPDATE** Brotli 1.0.9
-          - **UPDATE** Update Blake3 to 1.2.0
-          - **UPDATE** Update ZStd to 1.5.0
-          - **FIXED** Archive store not properly tracks stats
-        draft: false
-        prerelease: false
+    - name: Set RELEASE_VERSION env
+      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:
@@ -138,12 +123,22 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
-    - name: Upload to GitHub release
-      uses: Roang-zero1/github-upload-release-artifacts-action@master
-      with:
-        args: |
-          linux-x64.zip
-          win32-x64.zip
-          darwin-x64.zip
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+      with:
+        tag_name: ${{ env.RELEASE_VERSION }}
+        release_name: Release ${{ env.RELEASE_VERSION }}
+        body: |
+          # Changes in this Release
+          - **UPDATE** Update LZ4 to 1.9.3
+          - **UPDATE** Brotli 1.0.9
+          - **UPDATE** Update Blake3 to 1.2.0
+          - **UPDATE** Update ZStd to 1.5.0
+          - **FIXED** Archive store not properly tracks stats
+          - **FIXED** Allow null-ptr for `file_infos` when calling `Longtail_CreateVersionIndex`
+        draft: false
+        prerelease: false
+        files: "*-x64.zip"
