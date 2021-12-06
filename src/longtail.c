@@ -2390,14 +2390,14 @@ int Longtail_BuildVersionIndex(
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || path_hashes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || content_hashes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, asset_chunk_counts == 0 || asset_chunk_index_starts != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, file_infos->m_Count == 0 || asset_chunk_counts != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, (file_infos == 0 || file_infos->m_Count == 0) || asset_chunk_counts != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, asset_chunk_index_count >= chunk_count, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || asset_chunk_indexes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || chunk_sizes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || chunk_hashes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_version_index != 0, return EINVAL)
 
-    uint32_t asset_count = file_infos->m_Count;
+    uint32_t asset_count = file_infos == 0 ? 0u : file_infos->m_Count;
     struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)mem;
     uint32_t* p = (uint32_t*)(void*)&version_index[1];
     version_index->m_Version = &p[0];
@@ -2421,25 +2421,28 @@ int Longtail_BuildVersionIndex(
         return err;
     }
 
-    memmove(version_index->m_PathHashes, path_hashes, sizeof(TLongtail_Hash) * asset_count);
-    memmove(version_index->m_ContentHashes, content_hashes, sizeof(TLongtail_Hash) * asset_count);
-    memmove(version_index->m_AssetSizes, file_infos->m_Sizes, sizeof(uint64_t) * asset_count);
-    memmove(version_index->m_AssetChunkCounts, asset_chunk_counts, sizeof(uint32_t) * asset_count);
-    memmove(version_index->m_AssetChunkIndexStarts, asset_chunk_index_starts, sizeof(uint32_t) * asset_count);
-    memmove(version_index->m_AssetChunkIndexes, asset_chunk_indexes, sizeof(uint32_t) * asset_chunk_index_count);
-    memmove(version_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
-    memmove(version_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
-    if (optional_chunk_tags)
+    if (asset_count > 0)
     {
-        memmove(version_index->m_ChunkTags, optional_chunk_tags, sizeof(uint32_t) * chunk_count);
+        memmove(version_index->m_PathHashes, path_hashes, sizeof(TLongtail_Hash) * asset_count);
+        memmove(version_index->m_ContentHashes, content_hashes, sizeof(TLongtail_Hash) * asset_count);
+        memmove(version_index->m_AssetSizes, file_infos->m_Sizes, sizeof(uint64_t) * asset_count);
+        memmove(version_index->m_AssetChunkCounts, asset_chunk_counts, sizeof(uint32_t) * asset_count);
+        memmove(version_index->m_AssetChunkIndexStarts, asset_chunk_index_starts, sizeof(uint32_t) * asset_count);
+        memmove(version_index->m_AssetChunkIndexes, asset_chunk_indexes, sizeof(uint32_t) * asset_chunk_index_count);
+        memmove(version_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * chunk_count);
+        memmove(version_index->m_ChunkSizes, chunk_sizes, sizeof(uint32_t) * chunk_count);
+        if (optional_chunk_tags)
+        {
+            memmove(version_index->m_ChunkTags, optional_chunk_tags, sizeof(uint32_t) * chunk_count);
+        }
+        else
+        {
+            memset(version_index->m_ChunkTags, 0, sizeof(uint32_t) * chunk_count);
+        }
+        memmove(version_index->m_NameOffsets, file_infos->m_PathStartOffsets, sizeof(uint32_t) * asset_count);
+        memmove(version_index->m_Permissions, file_infos->m_Permissions, sizeof(uint16_t) * asset_count);
+        memmove(version_index->m_NameData, file_infos->m_PathData, file_infos->m_PathDataSize);
     }
-    else
-    {
-        memset(version_index->m_ChunkTags, 0, sizeof(uint32_t) * chunk_count);
-    }
-    memmove(version_index->m_NameOffsets, file_infos->m_PathStartOffsets, sizeof(uint32_t) * asset_count);
-    memmove(version_index->m_Permissions, file_infos->m_Permissions, sizeof(uint16_t) * asset_count);
-    memmove(version_index->m_NameData, file_infos->m_PathData, file_infos->m_PathDataSize);
 
     *out_version_index = version_index;
     return 0;
@@ -2481,7 +2484,7 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_VALIDATE_INPUT(ctx, (file_infos == 0 || file_infos->m_Count == 0) || target_chunk_size > 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (file_infos == 0 || file_infos->m_Count == 0) || out_version_index != 0, return EINVAL)
 
-    uint32_t path_count = file_infos->m_Count;
+    uint32_t path_count = file_infos == 0 ? 0u : file_infos->m_Count;
 
     if (path_count == 0)
     {
