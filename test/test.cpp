@@ -1081,6 +1081,38 @@ TEST(Longtail, CreateEmptyVersionIndex)
     SAFE_DISPOSE_API(local_storage);
 }
 
+TEST(Longtail, CreateVersionIndexNoFileIndex)
+{
+    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    uint32_t* compression_types = 0;
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        local_storage,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        "source/version1",
+        0,
+        compression_types,
+        16384,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+    ASSERT_EQ(0u, *vindex->m_ChunkCount);
+    ASSERT_EQ(0u, *vindex->m_AssetCount);
+    Longtail_Free(vindex);
+    Longtail_Free(compression_types);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(local_storage);
+}
+
 TEST(Longtail, Longtail_CreateStoredBlock)
 {
     TLongtail_Hash block_hash = 0x77aa661199bb0011;

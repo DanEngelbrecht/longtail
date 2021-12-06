@@ -2386,7 +2386,6 @@ int Longtail_BuildVersionIndex(
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, mem_size != 0, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, file_infos != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || path_hashes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || content_hashes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, asset_chunk_counts == 0 || asset_chunk_index_starts != 0, return EINVAL)
