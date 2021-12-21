@@ -135,5 +135,5 @@ jobs:
           # Changes in this Release
           - **FIX** Move ZSTD_DISABLE_ASM flag to default_build_options.sh/bat
         draft: false
-        prerelease: false
+        prerelease: true
         files: "*-x64.zip"
