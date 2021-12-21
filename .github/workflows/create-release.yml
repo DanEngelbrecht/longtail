@@ -133,7 +133,7 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **FIX** Move ZSTD_DISABLE_ASM flag to default_build_options.sh/bat
+          - **FIX** Fix ZSTD_DISABLE_ASM link errors
         draft: false
-        prerelease: true
+        prerelease: false
         files: "*-x64.zip"
