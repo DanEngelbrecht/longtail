@@ -22,7 +22,7 @@ else
     RUN=""
 fi
 
-export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded -DZSTD_DISABLE_ASM"
+export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
 
 # -pedantic
 # -Wno-atomic-implicit-seq-cst
@@ -78,6 +78,9 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     fi
     if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
         clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
+    fi
+    if [ -n "$ZSTD_THIRDPARTY_GCC_SRC" ]; then
+        clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $ZSTD_THIRDPARTY_GCC_SRC
     fi
     ar rc ${BASE_DIR}build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
     cd $BASE_DIR
