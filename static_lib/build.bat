@@ -65,6 +65,9 @@ if NOT "%THIRDPARTY_SRC_AVX2%" == "" (
 if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
     gcc -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
 )
+if NOT "%ZSTD_THIRDPARTY_GCC_SRC%" == "" (
+    gcc -c !CXXFLAGS! !OPT! -fno-asynchronous-unwind-tables %ZSTD_THIRDPARTY_GCC_SRC%
+)
 
 popd
 

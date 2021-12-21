@@ -79,6 +79,9 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
         clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
     fi
+    if [ -n "$ZSTD_THIRDPARTY_GCC_SRC" ]; then
+        clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $ZSTD_THIRDPARTY_GCC_SRC
+    fi
     ar rc ${BASE_DIR}build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB *.o
     cd $BASE_DIR
 fi

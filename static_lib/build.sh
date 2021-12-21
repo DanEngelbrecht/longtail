@@ -63,6 +63,9 @@ fi
 if [ ! -z ${THIRDPARTY_SRC_AVX512} ]; then
     ${COMPILER} -c ${CXXFLAGS} ${OPT} -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables ${THIRDPARTY_SRC_AVX512}
 fi
+if [ ! -z ${ZSTD_THIRDPARTY_GCC_SRC} ]; then
+    ${COMPILER} -c ${CXXFLAGS} ${OPT} -fno-asynchronous-unwind-tables ${ZSTD_THIRDPARTY_GCC_SRC}
+fi
 
 popd
 
