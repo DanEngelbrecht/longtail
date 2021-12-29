@@ -122,6 +122,21 @@ static int Win32ErrorToErrno(DWORD err)
     }
 }
 
+static const char* MakeLongPath(const char* path)
+{
+    size_t path_len = strlen(path);
+    if (path_len < MAX_PATH)
+    {
+        return path;
+    }
+    static const char* LongPathPrefix = "\\\\?\\";
+    size_t long_path_len = strlen(path) + 4 + 1;
+    char* long_path = (char*)Longtail_Alloc("MakeLongPath", long_path_len);
+    strncpy(long_path, LongPathPrefix, 4);
+    strcpy(&long_path[4], path);
+    return long_path;
+}
+
 uint32_t Longtail_GetCPUCount()
 {
     SYSTEM_INFO sysinfo;
@@ -351,7 +366,12 @@ void Longtail_DenormalizePath(char* path)
 
 int Longtail_CreateDirectory(const char* path)
 {
-    BOOL ok = CreateDirectoryA(path, NULL);
+    const char* long_path = MakeLongPath(path);
+    BOOL ok = CreateDirectoryA(long_path, NULL);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (ok)
     {
         return 0;
@@ -361,7 +381,17 @@ int Longtail_CreateDirectory(const char* path)
 
 int Longtail_MoveFile(const char* source, const char* target)
 {
-    BOOL ok = MoveFileA(source, target);
+    const char* long_source_path = MakeLongPath(source);
+    const char* long_target_path = MakeLongPath(target);
+    BOOL ok = MoveFileA(long_source_path, long_target_path);
+    if (long_source_path != source)
+    {
+        Longtail_Free((char*)long_source_path);
+    }
+    if (long_target_path != target)
+    {
+        Longtail_Free((char*)long_target_path);
+    }
     if (ok)
     {
         return 0;
@@ -379,7 +409,12 @@ int Longtail_IsDir(const char* path)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    DWORD attrs = GetFileAttributesA(path);
+    const char* long_path = MakeLongPath(path);
+    DWORD attrs = GetFileAttributesA(long_path);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
@@ -403,7 +438,12 @@ int Longtail_IsFile(const char* path)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    DWORD attrs = GetFileAttributesA(path);
+    const char* long_path = MakeLongPath(path);
+    DWORD attrs = GetFileAttributesA(long_path);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
@@ -419,7 +459,12 @@ int Longtail_IsFile(const char* path)
 
 int Longtail_RemoveDir(const char* path)
 {
-    BOOL ok = RemoveDirectoryA(path);
+    const char* long_path = MakeLongPath(path);
+    BOOL ok = RemoveDirectoryA(long_path);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (ok)
     {
         return 0;
@@ -429,7 +474,12 @@ int Longtail_RemoveDir(const char* path)
 
 int Longtail_RemoveFile(const char* path)
 {
-    BOOL ok = DeleteFileA(path);
+    const char* long_path = MakeLongPath(path);
+    BOOL ok = DeleteFileA(long_path);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (ok)
     {
         return 0;
@@ -485,11 +535,15 @@ static int Skip(HLongtail_FSIterator fs_iterator)
 
 int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
 {
-    char scan_pattern[MAX_PATH];
-    strcpy(scan_pattern, path);
-    strncat(scan_pattern, "\\*.*", MAX_PATH - strlen(scan_pattern));
+    const char* scan_pattern = Longtail_ConcatPath(path, "*.*");
+    const char* long_scan_pattern = MakeLongPath(scan_pattern);
     fs_iterator->m_Path = Longtail_Strdup(path);
-    fs_iterator->m_Handle = FindFirstFileA(scan_pattern, &fs_iterator->m_FindData);
+    fs_iterator->m_Handle = FindFirstFileA(long_scan_pattern, &fs_iterator->m_FindData);
+    if (long_scan_pattern != scan_pattern)
+    {
+        Longtail_Free((char*)long_scan_pattern);
+    }
+    Longtail_Free((char*)scan_pattern);
     if (fs_iterator->m_Handle == INVALID_HANDLE_VALUE)
     {
         Longtail_Free(fs_iterator->m_Path);
@@ -527,7 +581,12 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
 {
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-        const char* validatePath = Longtail_ConcatPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
+        const char* full_path = Longtail_ConcatPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
+        const char* validatePath = MakeLongPath(full_path);
+        if (validatePath != full_path)
+        {
+            Longtail_Free((char*)full_path);
+        }
         DWORD attr = GetFileAttributesA(validatePath);
         Longtail_Free((char*)validatePath);
         if (attr == INVALID_FILE_ATTRIBUTES)
@@ -565,7 +624,12 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
 
 int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
 {
-    HANDLE handle = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    const char* long_path = MakeLongPath(path);
+    HANDLE handle = CreateFileA(long_path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (handle == INVALID_HANDLE_VALUE)
     {
         return Win32ErrorToErrno(GetLastError());
@@ -576,7 +640,12 @@ int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
 
 int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file)
 {
-    HANDLE handle = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, 0, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, 0, 0);
+    const char* long_path = MakeLongPath(path);
+    HANDLE handle = CreateFileA(long_path, GENERIC_READ | GENERIC_WRITE, 0, 0, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, 0, 0);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (handle == INVALID_HANDLE_VALUE)
     {
         return Win32ErrorToErrno(GetLastError());
@@ -631,9 +700,15 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    DWORD attrs = GetFileAttributesA(path);
+    const char* long_path = MakeLongPath(path);
+
+    DWORD attrs = GetFileAttributesA(long_path);
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
+        if (long_path != path)
+        {
+            Longtail_Free((char*)long_path);
+        }
         int e = Win32ErrorToErrno(GetLastError());
         if (e == ENOENT)
         {
@@ -654,8 +729,12 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
         {
             attrs = attrs | FILE_ATTRIBUTE_READONLY;
         }
-        if (FALSE == SetFileAttributesA(path, attrs))
+        if (FALSE == SetFileAttributesA(long_path, attrs))
         {
+            if (long_path != path)
+            {
+                Longtail_Free((char*)long_path);
+            }
             int e = Win32ErrorToErrno(GetLastError());
             if (e == ENOENT)
             {
@@ -664,6 +743,10 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Can't set read only attribyte of `%s`: %d\n", path, e);
             return e;
         }
+    }
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
     }
     return 0;
 }
@@ -679,7 +762,12 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    DWORD attrs = GetFileAttributesA(path);
+    const char* long_path = MakeLongPath(path);
+    DWORD attrs = GetFileAttributesA(long_path);
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
+    }
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
@@ -808,6 +896,8 @@ size_t Longtail_GetFileLockSize()
 
 int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_lock)
 {
+    const char* long_path = MakeLongPath(path);
+
     *out_file_lock = (HLongtail_FileLock)mem;
     (*out_file_lock)->handle = INVALID_HANDLE_VALUE;
 
@@ -815,7 +905,7 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
     uint64_t retry_delay = 1000;
 
     HANDLE handle = CreateFileA(
-        path,
+        long_path,
         GENERIC_READ | GENERIC_WRITE,
         0,
         0,
@@ -826,11 +916,15 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
     {
         if (--try_count == 0)
         {
+            if (long_path != path)
+            {
+                Longtail_Free((char*)long_path);
+            }
             return EACCES;
         }
         Longtail_Sleep(retry_delay);
         handle = CreateFileA(
-            path,
+            long_path,
             GENERIC_READ | GENERIC_WRITE,
             0,
             0,
@@ -855,9 +949,17 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
             case ERROR_OPLOCK_NOT_GRANTED:
                 break;
             default:
+                if (long_path != path)
+                {
+                    Longtail_Free((char*)long_path);
+                }
                 return Win32ErrorToErrno(error);
         }
         retry_delay += 2000;
+    }
+    if (long_path != path)
+    {
+        Longtail_Free((char*)long_path);
     }
     (*out_file_lock)->handle = handle;
     return 0;
