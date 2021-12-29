@@ -7,6 +7,9 @@
 
 #include <errno.h>
 
+#define BIKESHED_MAX_TASK_COUNT         131072
+#define BIKESHED_MAX_DEPENDENCY_COUNT   458752
+
 struct ReadyCallback
 {
     struct Bikeshed_ReadyCallback cb;
@@ -521,23 +524,55 @@ static void Bikeshed_Dispose(struct Longtail_API* job_api)
     Longtail_Free(bikeshed_job_api);
 }
 
-static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count, int worker_priority)
+static int Bikeshed_GetMaxBatchCountFunc(struct Longtail_JobAPI* job_api, uint32_t* out_max_job_batch_count, uint32_t* out_max_dependency_batch_count)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
+        LONGTAIL_LOGFIELD(out_max_job_batch_count, "%p"),
+        LONGTAIL_LOGFIELD(out_max_dependency_batch_count, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, job_api, return EINVAL)
+
+    if (out_max_job_batch_count)
+    {
+        *out_max_job_batch_count = BIKESHED_MAX_TASK_COUNT;
+    }
+    if (out_max_dependency_batch_count)
+    {
+        *out_max_dependency_batch_count = BIKESHED_MAX_DEPENDENCY_COUNT;
+    }
+    return 0;
+}
+
+static int Bikeshed_Init(
+    void* mem,
+    uint32_t worker_count,
+    int worker_priority,
+    struct Longtail_JobAPI** out_job_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(worker_count, "%u"),
-        LONGTAIL_LOGFIELD(worker_priority, "%d")
+        LONGTAIL_LOGFIELD(worker_priority, "%d"),
+        LONGTAIL_LOGFIELD(out_job_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
-    LONGTAIL_FATAL_ASSERT(ctx, job_api, return EINVAL)
-    job_api->m_BikeshedAPI.m_API.Dispose = Bikeshed_Dispose;
-    job_api->m_BikeshedAPI.GetWorkerCount = Bikeshed_GetWorkerCount;
-    job_api->m_BikeshedAPI.ReserveJobs = Bikeshed_ReserveJobs;
-    job_api->m_BikeshedAPI.CreateJobs = Bikeshed_CreateJobs;
-    job_api->m_BikeshedAPI.AddDependecies = Bikeshed_AddDependecies;
-    job_api->m_BikeshedAPI.ReadyJobs = Bikeshed_ReadyJobs;
-    job_api->m_BikeshedAPI.WaitForAllJobs = Bikeshed_WaitForAllJobs;
-    job_api->m_BikeshedAPI.ResumeJob = Bikeshed_ResumeJob;
+    LONGTAIL_FATAL_ASSERT(ctx, mem, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, out_job_api, return EINVAL)
+
+    struct Longtail_JobAPI* out_api = Longtail_MakeJobAPI(mem,
+        Bikeshed_Dispose,
+        Bikeshed_GetWorkerCount,
+        Bikeshed_ReserveJobs,
+        Bikeshed_CreateJobs,
+        Bikeshed_AddDependecies,
+        Bikeshed_ReadyJobs,
+        Bikeshed_WaitForAllJobs,
+        Bikeshed_ResumeJob,
+        Bikeshed_GetMaxBatchCountFunc);
+
+    struct BikeshedJobAPI* job_api = (struct BikeshedJobAPI*)out_api;
     job_api->m_Shed = 0;
     job_api->m_WorkerCount = worker_count;
     job_api->m_Workers = 0;
@@ -550,9 +585,6 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count, 
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ReadyCallback_Init() failed with %d", err)
         return err;
     }
-
-    #define BIKESHED_MAX_TASK_COUNT         131072
-    #define BIKESHED_MAX_DEPENDENCY_COUNT   458752
 
     job_api->m_Shed = Bikeshed_Create(Longtail_Alloc("Bikeshed", BIKESHED_SIZE(BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 1)), BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 1, &job_api->m_ReadyCallback.cb);
     if (!job_api->m_Shed)
@@ -586,6 +618,7 @@ static int Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count, 
             return err;
         }
     }
+    *out_job_api = out_api;
     return 0;
 }
 
@@ -597,12 +630,18 @@ struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count, int
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, worker_priority >= -1 && worker_priority <= 1, return 0)
-    struct BikeshedJobAPI* job_api = (struct BikeshedJobAPI*)Longtail_Alloc("Bikeshed", sizeof(struct BikeshedJobAPI));
-    int err = Bikeshed_Init(job_api, worker_count, worker_priority);
+    void* mem = Longtail_Alloc("Bikeshed", sizeof(struct BikeshedJobAPI));
+    if (!mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateBikeshedJobAPI() failed with %d", ENOMEM)
+        return 0;
+    }
+    struct Longtail_JobAPI* job_api;
+    int err = Bikeshed_Init(mem, worker_count, worker_priority, &job_api);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Bikeshed_Init() failed with %d", err)
         return 0;
     }
-    return &job_api->m_BikeshedAPI;
+    return job_api;
 }

@@ -413,7 +413,8 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
     Longtail_Job_AddDependeciesFunc add_dependecies_func,
     Longtail_Job_ReadyJobsFunc ready_jobs_func,
     Longtail_Job_WaitForAllJobsFunc wait_for_all_jobs_func,
-    Longtail_Job_ResumeJobFunc resume_job_func)
+    Longtail_Job_ResumeJobFunc resume_job_func,
+    Longtail_Job_GetMaxBatchCountFunc get_max_batch_count_func)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -424,7 +425,8 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
         LONGTAIL_LOGFIELD(add_dependecies_func, "%p"),
         LONGTAIL_LOGFIELD(ready_jobs_func, "%p"),
         LONGTAIL_LOGFIELD(wait_for_all_jobs_func, "%p"),
-        LONGTAIL_LOGFIELD(resume_job_func, "%p")
+        LONGTAIL_LOGFIELD(resume_job_func, "%p"),
+        LONGTAIL_LOGFIELD(get_max_batch_count_func, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -437,6 +439,7 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
     api->ReadyJobs = ready_jobs_func;
     api->WaitForAllJobs = wait_for_all_jobs_func;
     api->ResumeJob = resume_job_func;
+    api->GetMaxBatchCountFunc = get_max_batch_count_func;
     return api;
 }
 
@@ -447,6 +450,7 @@ int Longtail_Job_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job_co
 int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs) { return job_api->ReadyJobs(job_api, job_count, jobs); }
 int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token) { return job_api->WaitForAllJobs(job_api, job_group, progressAPI, optional_cancel_api, optional_cancel_token); }
 int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id) { return job_api->ResumeJob(job_api, job_id); }
+int Longtail_Job_GetMaxBatchCount(struct Longtail_JobAPI* job_api, uint32_t* out_max_job_batch_count, uint32_t* out_max_dependency_batch_count) { return job_api->GetMaxBatchCountFunc(job_api, out_max_job_batch_count, out_max_dependency_batch_count); }
 
 ////////////// ChunkerAPI
 

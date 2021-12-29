@@ -470,6 +470,7 @@ typedef int (*Longtail_Job_AddDependeciesFunc)(struct Longtail_JobAPI* job_api, 
 typedef int (*Longtail_Job_ReadyJobsFunc)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
 typedef int (*Longtail_Job_WaitForAllJobsFunc)(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token);
 typedef int (*Longtail_Job_ResumeJobFunc)(struct Longtail_JobAPI* job_api, uint32_t job_id);
+typedef int (*Longtail_Job_GetMaxBatchCountFunc)(struct Longtail_JobAPI* job_api, uint32_t* out_max_job_batch_count, uint32_t* out_max_dependency_batch_count);
 
 struct Longtail_JobAPI
 {
@@ -481,6 +482,7 @@ struct Longtail_JobAPI
     Longtail_Job_ReadyJobsFunc ReadyJobs;
     Longtail_Job_WaitForAllJobsFunc WaitForAllJobs;
     Longtail_Job_ResumeJobFunc ResumeJob;
+    Longtail_Job_GetMaxBatchCountFunc GetMaxBatchCountFunc;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetJobAPISize();
@@ -494,7 +496,8 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
     Longtail_Job_AddDependeciesFunc add_dependecies_func,
     Longtail_Job_ReadyJobsFunc ready_jobs_func,
     Longtail_Job_WaitForAllJobsFunc wait_for_all_jobs_func,
-    Longtail_Job_ResumeJobFunc resume_job_func);
+    Longtail_Job_ResumeJobFunc resume_job_func,
+    Longtail_Job_GetMaxBatchCountFunc get_max_batch_count_func);
 
 LONGTAIL_EXPORT uint32_t Longtail_Job_GetWorkerCount(struct Longtail_JobAPI* job_api);
 LONGTAIL_EXPORT int Longtail_Job_ReserveJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Group* out_job_group);
@@ -503,6 +506,7 @@ LONGTAIL_EXPORT int Longtail_Job_AddDependecies(struct Longtail_JobAPI* job_api,
 LONGTAIL_EXPORT int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
 LONGTAIL_EXPORT int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token);
 LONGTAIL_EXPORT int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id);
+LONGTAIL_EXPORT int Longtail_Job_GetMaxBatchCount(struct Longtail_JobAPI* job_api, uint32_t* out_max_job_batch_count, uint32_t* out_max_dependency_batch_count);
 
 ////////////// Longtail_ChunkerAPI
 
