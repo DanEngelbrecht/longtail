@@ -124,9 +124,15 @@ static int Win32ErrorToErrno(DWORD err)
 
 static const char* MakeLongPath(const char* path)
 {
+    if (path[0] && (path[1] != ':'))
+    {
+        // Don't add long path prefix if we don't specify a drive
+        return path;
+    }
     size_t path_len = strlen(path);
     if (path_len < MAX_PATH)
     {
+        // Don't add long path prefix if the path isn't that long
         return path;
     }
     static const char* LongPathPrefix = "\\\\?\\";
