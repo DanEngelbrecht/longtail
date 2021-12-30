@@ -133,7 +133,9 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **FIX** Fix ZSTD_DISABLE_ASM link errors
+          - **CHANGED API** JobAPI now has `GetMaxBatchCount` function for querying max queued job count
+          - **FIX** Fix issue 160 - `CreateVersionIndex` and `WriteContent` getting blocked when > 131072 files
+          - **FIX** Long paths in Windows
         draft: false
         prerelease: false
         files: "*-x64.zip"
