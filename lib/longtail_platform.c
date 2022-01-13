@@ -354,10 +354,10 @@ static wchar_t* MakeWCharString(const char* s)
     return r;
 }
 
-static char* MakeACharString(const wchar_t* s)
+static char* MakeUTF8String(const wchar_t* s)
 {
     int l = WideCharToMultiByte(CP_UTF8, 0, s, -1, 0, 0, NULL ,NULL);
-    char* r = (char*)Longtail_Alloc("MakeACharString", l * sizeof(char));
+    char* r = (char*)Longtail_Alloc("MakeUTF8String", l * sizeof(char));
     WideCharToMultiByte(CP_UTF8, 0, s, -1, r, l, NULL ,NULL);
     return r;
 }
@@ -376,7 +376,7 @@ static wchar_t* MakePlatformPath(const char* path)
 
 static wchar_t* MakeLongPlatformPath(const char* path)
 {
-    wchar_t* platform_path = MakeWCharString(path);
+    wchar_t* platform_path = MakePlatformPath(path);
     const wchar_t* r = MakeLongPath(platform_path);
     if (r != platform_path)
     {
@@ -385,50 +385,25 @@ static wchar_t* MakeLongPlatformPath(const char* path)
     return (wchar_t*)r;
 }
 
-static wchar_t* ConcatPath(const wchar_t* a, const wchar_t* b)
+static wchar_t* ConcatPlatformPath(const wchar_t* a, const wchar_t* b)
 {
     size_t la = wcslen(a);
-    if (la > 0 && a[la - 1] == '\\')
-    {
-        --la;
-    }
     size_t lb = wcslen(b);
-    size_t l = la + 1 + lb + 1;
+
+    int add_delimiter = (la > 0) && (a[la - 1] != '\\');
+
+    size_t l = la + (add_delimiter ? 1 : 0) + lb + 1;
     wchar_t* r = (wchar_t*)Longtail_Alloc("ConcatPath", l * sizeof(wchar_t));
     wcsncpy(r, a, la);
-    r[la] = '\\';
-    wcscpy(&r[la + 1], b);
+    if (add_delimiter)
+    {
+        r[la] = '\\';
+        ++la;
+    }
+    wcscpy(&r[la], b);
     return r;
 }
 
-static void NormalizePath(char* path)
-{
-    while (*path)
-    {
-        *path = ((*path) == '\\') ? '/' : (*path);
-        ++path;
-    }
-}
-
-/*
-void Longtail_NormalizePath(char* path)
-{
-    while (*path)
-    {
-        *path = ((*path) == '\\') ? '/' : (*path);
-        ++path;
-    }
-}
-
-void Longtail_DenormalizePath(char* path)
-{
-    while (*path)
-    {
-        *path = ((*path) == '/') ? '\\' : (*path);
-        ++path;
-    }
-}
-*/
 int Longtail_CreateDirectory(const char* path)
 {
     wchar_t* long_path = MakeLongPlatformPath(path);
@@ -581,7 +556,7 @@ static int Skip(HLongtail_FSIterator fs_iterator)
 int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
 {
     fs_iterator->m_Path = MakeLongPlatformPath(path);
-    wchar_t* scan_pattern = ConcatPath(fs_iterator->m_Path, L"*.*");
+    wchar_t* scan_pattern = ConcatPlatformPath(fs_iterator->m_Path, L"*.*");
     fs_iterator->m_ItemPath = 0;
     fs_iterator->m_Handle = FindFirstFileW(scan_pattern, &fs_iterator->m_FindData);
     Longtail_Free(scan_pattern);
@@ -617,7 +592,7 @@ const char* Longtail_GetFileName(HLongtail_FSIterator fs_iterator)
         return 0;
     }
     Longtail_Free(fs_iterator->m_ItemPath);
-    fs_iterator->m_ItemPath = MakeACharString(fs_iterator->m_FindData.cFileName);
+    fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName);
     return fs_iterator->m_ItemPath;
 }
 
@@ -625,7 +600,7 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
 {
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-        wchar_t* full_path = ConcatPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
+        wchar_t* full_path = ConcatPlatformPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
         DWORD attr = GetFileAttributesW(full_path);
         Longtail_Free(full_path);
         if (attr == INVALID_FILE_ATTRIBUTES)
@@ -634,7 +609,7 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
             return 0;
         }
         Longtail_Free(fs_iterator->m_ItemPath);
-        fs_iterator->m_ItemPath = MakeACharString(fs_iterator->m_FindData.cFileName);
+        fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName);
         return fs_iterator->m_ItemPath;
     }
     return 0;
@@ -871,15 +846,8 @@ char* Longtail_ConcatPath(const char* folder, const char* file)
     size_t file_length = strlen(file);
 
     char delimiter = '/';
-    int add_delimiter = 0;
-    if (folder_length > 0)
-    {
-        char last_folder_char = folder[folder_length - 1];
-        if ((last_folder_char != '/') && (last_folder_char != '\\'))
-        {
-            add_delimiter = 1;
-        }
-    }
+    char last_folder_char = (folder_length > 0) ? folder[folder_length - 1] : 0;
+    int add_delimiter = ((last_folder_char != 0) && (last_folder_char != '/') && (last_folder_char != '\\'));
 
     size_t path_len = folder_length + (add_delimiter ? 1 : 0) + file_length + 1;
     char* path = (char*)Longtail_Alloc("ConcatPath", path_len);
@@ -1489,16 +1457,6 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
 
 
 
-void Longtail_NormalizePath(char* path)
-{
-    // Nothing to do
-}
-
-void Longtail_DenormalizePath(char* path)
-{
-    // Nothing to do
-}
-
 int Longtail_CreateDirectory(const char* path)
 {
     int err = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -1875,11 +1833,7 @@ char* Longtail_ConcatPath(const char* folder, const char* file)
     size_t folder_length = strlen(folder);
     size_t file_length = strlen(file);
 
-    int add_delimiter = 0;
-    if ((folder_length > 0) && (folder[folder_length - 1] != '/'))
-    {
-        add_delimiter = 1;
-    }
+    int add_delimiter = (folder_length > 0) && (folder[folder_length - 1] != '/');
 
     size_t path_len = folder_length + (add_delimiter ? 1 : 0) + file_length + 1;
     char* path = (char*)Longtail_Alloc("ConcatPath", path_len);
