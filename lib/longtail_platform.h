@@ -46,8 +46,6 @@ typedef struct Longtail_FSIterator_private* HLongtail_FSIterator;
 
 size_t Longtail_GetFSIteratorSize();
 
-void    Longtail_NormalizePath(char* path);
-void    Longtail_DenormalizePath(char* path);
 int     Longtail_CreateDirectory(const char* path);
 int     Longtail_MoveFile(const char* source, const char* target);
 int     Longtail_IsDir(const char* path);
