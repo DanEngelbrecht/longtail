@@ -35,12 +35,6 @@ static void FSStorageAPI_Dispose(struct Longtail_API* storage_api)
     Longtail_Free(storage_api);
 }
 
-#define TMP_STR(str) \
-    size_t len_##str = strlen(str); \
-    char* tmp_##str = (char*)alloca(len_##str + 1); \
-    memmove(tmp_##str, str, len_##str); \
-    tmp_##str[len_##str] = '\0';
-
 static int FSStorageAPI_OpenReadFile(
     struct Longtail_StorageAPI* storage_api,
     const char* path,

@@ -956,12 +956,12 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
             case ERROR_OPLOCK_NOT_GRANTED:
                 break;
             default:
-                Longtail_Free((char*)long_path);
+                Longtail_Free(long_path);
                 return Win32ErrorToErrno(error);
         }
         retry_delay += 2000;
     }
-    Longtail_Free((char*)long_path);
+    Longtail_Free(long_path);
     (*out_file_lock)->handle = handle;
     return 0;
 }
