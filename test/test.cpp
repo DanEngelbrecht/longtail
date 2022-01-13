@@ -248,6 +248,14 @@ TEST(Longtail, Longtail_ConcatPath)
     char* p7 = Longtail_ConcatPath("/dir/subdir/", "file");
     ASSERT_STREQ("/dir/subdir/file", p7);
     Longtail_Free(p7);
+
+    char* p8 = Longtail_ConcatPath(u8"�", "file");
+    ASSERT_STREQ(u8"�/file", p8);
+    Longtail_Free(p8);
+
+    char* p9 = Longtail_ConcatPath("dir", u8"�");
+    ASSERT_STREQ(u8"dir/�", p9);
+    Longtail_Free(p9);
 }
 
 TEST(Longtail, Longtail_LZ4)
