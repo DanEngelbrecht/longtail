@@ -35,12 +35,6 @@ static void FSStorageAPI_Dispose(struct Longtail_API* storage_api)
     Longtail_Free(storage_api);
 }
 
-#define TMP_STR(str) \
-    size_t len_##str = strlen(str); \
-    char* tmp_##str = (char*)alloca(len_##str + 1); \
-    memmove(tmp_##str, str, len_##str); \
-    tmp_##str[len_##str] = '\0';
-
 static int FSStorageAPI_OpenReadFile(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
@@ -60,10 +54,8 @@ static int FSStorageAPI_OpenReadFile(
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return EINVAL);
 
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
     HLongtail_OpenFile r;
-    int err = Longtail_OpenReadFile(tmp_path, &r);
+    int err = Longtail_OpenReadFile(path, &r);
     if (err != 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_OpenReadFile() failed with %d", err)
@@ -151,10 +143,8 @@ static int FSStorageAPI_OpenWriteFile(
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
     HLongtail_OpenFile r;
-    int err = Longtail_OpenWriteFile(tmp_path, initial_size, &r);
+    int err = Longtail_OpenWriteFile(path, initial_size, &r);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_OpenWriteFile() failed with %d", err)
@@ -238,9 +228,7 @@ static int FSStorageAPI_SetPermissions(
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int err = Longtail_SetFilePermissions(tmp_path, permissions);
+    int err = Longtail_SetFilePermissions(path, permissions);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_SetFilePermissions() failed with %d", err)
@@ -266,9 +254,7 @@ static int FSStorageAPI_GetPermissions(
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int err = Longtail_GetFilePermissions(tmp_path, out_permissions);
+    int err = Longtail_GetFilePermissions(path, out_permissions);
     if (err == ENOENT)
     {
         return err;
@@ -309,9 +295,7 @@ static int FSStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int err = Longtail_CreateDirectory(tmp_path);
+    int err = Longtail_CreateDirectory(path);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateDirectory() failed with %d", err)
@@ -335,11 +319,7 @@ static int FSStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, cons
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, source_path != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, target_path != 0, return EINVAL);
-    TMP_STR(source_path)
-    TMP_STR(target_path)
-    Longtail_DenormalizePath(tmp_source_path);
-    Longtail_DenormalizePath(tmp_target_path);
-    int err = Longtail_MoveFile(tmp_source_path, tmp_target_path);
+    int err = Longtail_MoveFile(source_path, target_path);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_MoveFile() failed with %d", err)
@@ -363,17 +343,12 @@ static char* FSStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, co
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
     LONGTAIL_VALIDATE_INPUT(ctx, root_path != 0, return 0);
     LONGTAIL_VALIDATE_INPUT(ctx, sub_path != 0, return 0);
-    TMP_STR(root_path)
-    Longtail_DenormalizePath(tmp_root_path);
-    TMP_STR(sub_path)
-    Longtail_DenormalizePath(tmp_sub_path);
-    char* path = (char*)Longtail_ConcatPath(tmp_root_path, tmp_sub_path);
+    char* path = Longtail_ConcatPath(root_path, sub_path);
     if (!path)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ConcatPath() failed with %d", ENOMEM)
         return 0;
     }
-    Longtail_NormalizePath(path);
     return path;
 }
 
@@ -390,9 +365,7 @@ static int FSStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const cha
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int is_dir = Longtail_IsDir(tmp_path);
+    int is_dir = Longtail_IsDir(path);
     return is_dir;
 }
 
@@ -409,9 +382,7 @@ static int FSStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const ch
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int is_file = Longtail_IsFile(tmp_path);
+    int is_file = Longtail_IsFile(path);
     return is_file;
 }
 
@@ -428,9 +399,7 @@ static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int err = Longtail_RemoveDir(tmp_path);
+    int err = Longtail_RemoveDir(path);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_RemoveDir() failed with %d", err)
@@ -452,9 +421,7 @@ static int FSStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, cons
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int err = Longtail_RemoveFile(tmp_path);
+    int err = Longtail_RemoveFile(path);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_RemoveFile() failed with %d", err)
@@ -479,9 +446,7 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, out_iterator != 0, return EINVAL);
     Longtail_StorageAPI_HIterator iterator = (Longtail_StorageAPI_HIterator)Longtail_Alloc("FSStorageAPI", Longtail_GetFSIteratorSize());
-    TMP_STR(path)
-    Longtail_DenormalizePath(tmp_path);
-    int err = Longtail_StartFind((HLongtail_FSIterator)iterator, tmp_path);
+    int err = Longtail_StartFind((HLongtail_FSIterator)iterator, path);
     if (err == ENOENT)
     {
         Longtail_Free(iterator);

@@ -133,9 +133,7 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **CHANGED API** JobAPI now has `GetMaxBatchCount` function for querying max queued job count
-          - **FIX** Fix issue 160 - `CreateVersionIndex` and `WriteContent` getting blocked when > 131072 files
-          - **FIX** Long paths in Windows
+          - **FIX** Windows platform now handles non-ascii file names
         draft: false
         prerelease: false
         files: "*-x64.zip"

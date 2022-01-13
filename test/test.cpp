@@ -193,6 +193,71 @@ TEST(Longtail, Longtail_Malloc)
     Longtail_Free(p);
 }
 
+TEST(Longtail, Longtail_ConcatPath)
+{
+    char* p1 = Longtail_ConcatPath("", "file");
+    ASSERT_STREQ("file", p1);
+    Longtail_Free(p1);
+
+    char* p2 = Longtail_ConcatPath("dir", "file");
+    ASSERT_STREQ("dir/file", p2);
+    Longtail_Free(p2);
+
+    char* p3 = Longtail_ConcatPath("dir/subdir", "file");
+    ASSERT_STREQ("dir/subdir/file", p3);
+    Longtail_Free(p3);
+
+#if defined(_WIN32)
+    char* p1w = Longtail_ConcatPath("dir\\subdir", "file");
+    ASSERT_STREQ("dir\\subdir\\file", p1w);
+    Longtail_Free(p1w);
+
+    char* p2w = Longtail_ConcatPath("\\dir\\subdir", "file");
+    ASSERT_STREQ("\\dir\\subdir\\file", p2w);
+    Longtail_Free(p2w);
+
+    char* p3w = Longtail_ConcatPath("\\dir\\subdir\\", "file");
+    ASSERT_STREQ("\\dir\\subdir\\file", p3w);
+    Longtail_Free(p3w);
+
+    char* p4w = Longtail_ConcatPath("\\", "file");
+    ASSERT_STREQ("\\file", p4w);
+    Longtail_Free(p4w);
+
+    char* p5w = Longtail_ConcatPath("C:\\", "file");
+    ASSERT_STREQ("C:\\file", p5w);
+    Longtail_Free(p5w);
+
+    char* p6w = Longtail_ConcatPath("C:/", "file");
+    ASSERT_STREQ("C:/file", p6w);
+    Longtail_Free(p6w);
+
+    char* p7w = Longtail_ConcatPath("\\", "file");
+    ASSERT_STREQ("\\file", p7w);
+    Longtail_Free(p7w);
+#endif
+
+    char* p5 = Longtail_ConcatPath("/", "file");
+    ASSERT_STREQ("/file", p5);
+    Longtail_Free(p5);
+
+    char* p6 = Longtail_ConcatPath("/dir/", "file");
+    ASSERT_STREQ("/dir/file", p6);
+    Longtail_Free(p6);
+
+    char* p7 = Longtail_ConcatPath("/dir/subdir/", "file");
+    ASSERT_STREQ("/dir/subdir/file", p7);
+    Longtail_Free(p7);
+
+    char* p8 = Longtail_ConcatPath("�", "file");
+    ASSERT_STREQ("�/file", p8);
+    Longtail_Free(p8);
+
+    char* p9 = Longtail_ConcatPath("dir", "�");
+    ASSERT_STREQ("dir/�", p9);
+    Longtail_Free(p9);
+}
+
 TEST(Longtail, Longtail_LZ4)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLZ4CompressionAPI();
@@ -3241,7 +3306,7 @@ TEST(Longtail, FileSystemStorage)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
 
-    const uint32_t ASSET_COUNT = 9u;
+    const uint32_t ASSET_COUNT = 10u;
 
     const char* TEST_FILENAMES[] = {
         "ContentChangedSameLength.txt",
@@ -3252,7 +3317,8 @@ TEST(Longtail, FileSystemStorage)
         "JustDifferent.txt",
         "EmptyFileInFolder/.init.py",
         "a/file/in/folder/LongWithChangedStart.dll",
-        "a/file/in/other/folder/LongChangedAtEnd.exe"
+        "a/file/in/other/folder/LongChangedAtEnd.exe",
+        "strange/�.txt"
     };
 
     const char* TEST_STRINGS[] = {
@@ -3297,14 +3363,15 @@ TEST(Longtail, FileSystemStorage)
             "0123456789876543213241247632464358091345+2438568736283249873298ntyvntrndwoiy78n43ctyermdr498xrnhse78tnls43tc49mjrx3hcnthv4t"
             "liurhe ngvh43oecgclri8fhso7r8ab3gwc409nu3p9t757nvv74oe8nfyiecffömocsrhf ,jsyvblse4tmoxw3umrc9sen8tyn8öoerucdlc4igtcov8evrnocs8lhrf"
             "That will look like garbage, will that really be a good idea?"
-            "This is the end tough..."
+            "This is the end tough...",
+        "funky filename"
     };
 
     const char* root_path = "testdata/sample_folder";
 
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path, &file_infos));
-    ASSERT_EQ(18u, file_infos->m_Count);
+    ASSERT_EQ(20u, file_infos->m_Count);
     Longtail_Free(file_infos);
 
     for (uint32_t a = 0; a < ASSET_COUNT; ++a)

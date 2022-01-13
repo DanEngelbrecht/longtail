@@ -246,24 +246,14 @@ static char* NormalizePath(const char* path)
         switch (path[ri])
         {
         case '/':
-            if (wi && normalized_path[wi - 1] == '/')
+        case '\\':
+            if (wi && (normalized_path[wi - 1] == '/' || normalized_path[wi - 1] == '\\'))
             {
                 ++ri;
             }
             else
             {
                 normalized_path[wi++] = path[ri++];
-            }
-            break;
-        case '\\':
-            if (wi && normalized_path[wi - 1] == '/')
-            {
-                ++ri;
-            }
-            else
-            {
-                normalized_path[wi++] = '/';
-                ++ri;
             }
             break;
         default:
