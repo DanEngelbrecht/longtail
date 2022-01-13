@@ -865,31 +865,39 @@ void Longtail_CloseFile(HLongtail_OpenFile handle)
     CloseHandle(h);
 }
 
-const char* Longtail_ConcatPath(const char* folder, const char* file)
+char* Longtail_ConcatPath(const char* folder, const char* file)
 {
-    wchar_t* wfolder = MakePlatformPath(folder);
-    wchar_t* wfile = MakePlatformPath(file);
-    wchar_t* wide_r = ConcatPath(wfolder, wfile);
-    Longtail_Free(wfolder);
-    Longtail_Free(wfile);
-    char* r = MakeACharString(wide_r);
-    Longtail_Free(wide_r);
-    NormalizePath(r);
-    return r;
-/*
     size_t folder_length = strlen(folder);
-    if (folder_length > 0 && folder[folder_length - 1] == '\\')
-    {
-        --folder_length;
-    }
-    size_t path_len = folder_length + 1 + strlen(file) + 1;
-    char* path = (char*)Longtail_Alloc("ConcatPath", path_len);
+    size_t file_length = strlen(file);
 
-    memmove(path, folder, folder_length);
-    path[folder_length] = '\\';
-    strcpy(&path[folder_length + 1], file);
+    char delimiter = '/';
+    int add_delimiter = 0;
+    if (folder_length > 0)
+    {
+        char last_folder_char = folder[folder_length - 1];
+        if ((last_folder_char != '/') && (last_folder_char != '\\'))
+        {
+            add_delimiter = 1;
+        }
+    }
+
+    size_t path_len = folder_length + (add_delimiter ? 1 : 0) + file_length + 1;
+    char* path = (char*)Longtail_Alloc("ConcatPath", path_len);
+    for (size_t p = 0; p < folder_length; ++p)
+    {
+        if (folder[p] == '\\')
+        {
+            delimiter = '\\';
+        }
+        path[p] = folder[p];
+    }
+    if (add_delimiter)
+    {
+        path[folder_length] = delimiter;
+        ++folder_length;
+    }
+    strcpy(&path[folder_length], file);
     return path;
-*/
 }
 
 char* Longtail_GetTempFolder()
@@ -1862,13 +1870,26 @@ void Longtail_CloseFile(HLongtail_OpenFile handle)
     fclose(f);
 }
 
-const char* Longtail_ConcatPath(const char* folder, const char* file)
+char* Longtail_ConcatPath(const char* folder, const char* file)
 {
-    size_t path_len = strlen(folder) + 1 + strlen(file) + 1;
+    size_t folder_length = strlen(folder);
+    size_t file_length = strlen(file);
+
+    int add_delimiter = 0;
+    if ((folder_length > 0) && (folder[folder_length - 1] != '/'))
+    {
+        add_delimiter = 1;
+    }
+
+    size_t path_len = folder_length + (add_delimiter ? 1 : 0) + file_length + 1;
     char* path = (char*)Longtail_Alloc("ConcatPath", path_len);
     strcpy(path, folder);
-    strcat(path, "/");
-    strcat(path, file);
+    if (add_delimiter)
+    {
+        path[folder_length] = '/';
+        ++folder_length;
+    }
+    strcpy(&path[folder_length], file);
     return path;
 }
 

@@ -193,6 +193,63 @@ TEST(Longtail, Longtail_Malloc)
     Longtail_Free(p);
 }
 
+TEST(Longtail, Longtail_ConcatPath)
+{
+    char* p1 = Longtail_ConcatPath("", "file");
+    ASSERT_STREQ("file", p1);
+    Longtail_Free(p1);
+
+    char* p2 = Longtail_ConcatPath("dir", "file");
+    ASSERT_STREQ("dir/file", p2);
+    Longtail_Free(p2);
+
+    char* p3 = Longtail_ConcatPath("dir/subdir", "file");
+    ASSERT_STREQ("dir/subdir/file", p3);
+    Longtail_Free(p3);
+
+#if defined(_WIN32)
+    char* p1w = Longtail_ConcatPath("dir\\subdir", "file");
+    ASSERT_STREQ("dir\\subdir\\file", p1w);
+    Longtail_Free(p1w);
+
+    char* p2w = Longtail_ConcatPath("\\dir\\subdir", "file");
+    ASSERT_STREQ("\\dir\\subdir\\file", p2w);
+    Longtail_Free(p2w);
+
+    char* p3w = Longtail_ConcatPath("\\dir\\subdir\\", "file");
+    ASSERT_STREQ("\\dir\\subdir\\file", p3w);
+    Longtail_Free(p3w);
+
+    char* p4w = Longtail_ConcatPath("\\", "file");
+    ASSERT_STREQ("\\file", p4w);
+    Longtail_Free(p4w);
+
+    char* p5w = Longtail_ConcatPath("C:\\", "file");
+    ASSERT_STREQ("C:\\file", p5w);
+    Longtail_Free(p5w);
+
+    char* p6w = Longtail_ConcatPath("C:/", "file");
+    ASSERT_STREQ("C:/file", p6w);
+    Longtail_Free(p6w);
+
+    char* p7w = Longtail_ConcatPath("\\", "file");
+    ASSERT_STREQ("\\file", p7w);
+    Longtail_Free(p7w);
+#endif
+
+    char* p5 = Longtail_ConcatPath("/", "file");
+    ASSERT_STREQ("/file", p5);
+    Longtail_Free(p5);
+
+    char* p6 = Longtail_ConcatPath("/dir/", "file");
+    ASSERT_STREQ("/dir/file", p6);
+    Longtail_Free(p6);
+
+    char* p7 = Longtail_ConcatPath("/dir/subdir/", "file");
+    ASSERT_STREQ("/dir/subdir/file", p7);
+    Longtail_Free(p7);
+}
+
 TEST(Longtail, Longtail_LZ4)
 {
     Longtail_CompressionAPI* compression_api = Longtail_CreateLZ4CompressionAPI();

@@ -349,7 +349,7 @@ static char* FSStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, co
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0);
     LONGTAIL_VALIDATE_INPUT(ctx, root_path != 0, return 0);
     LONGTAIL_VALIDATE_INPUT(ctx, sub_path != 0, return 0);
-    char* path = (char*)Longtail_ConcatPath(root_path, sub_path);
+    char* path = Longtail_ConcatPath(root_path, sub_path);
     if (!path)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ConcatPath() failed with %d", ENOMEM)
