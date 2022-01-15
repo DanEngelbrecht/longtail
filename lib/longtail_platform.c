@@ -255,6 +255,12 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
     thread->m_Handle = INVALID_HANDLE_VALUE;
 }
 
+uint64_t Longtail_GetCurrentThreadId()
+{
+    return (uint64_t)GetCurrentThreadId();
+}
+
+
 struct Longtail_Sema
 {
     HANDLE m_Handle;
@@ -1213,6 +1219,12 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
     pthread_mutex_destroy(&thread->m_ExitLock);
     thread->m_Handle = 0;
 }
+
+uint64_t Longtail_GetCurrentThreadId()
+{
+    return (uint64_t)pthread_self();
+}
+
 /*
     struct stat path_stat;
     int err = stat(path, &path_stat);
