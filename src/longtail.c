@@ -2130,17 +2130,6 @@ static int ChunkAssets(
 
     if (jobs_prepared > 0)
     {
-        err = job_api->ReserveJobs(job_api, jobs_prepared, job_group);
-        if (err)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-            for (uint32_t i = 0; i < jobs_submitted; ++i)
-            {
-                Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
-            }
-            Longtail_Free(work_mem);
-            return err;
-        }
         Longtail_JobAPI_Jobs jobs;
         err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, (uint32_t)jobs_prepared, &funcs[jobs_submitted], &ctxs[jobs_submitted], &jobs);
         LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
