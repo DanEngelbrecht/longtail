@@ -629,7 +629,7 @@ static int BlockStoreStorageAPI_ReadFile(
         ctxs[b] = &job_datas[b];
     }
     Longtail_JobAPI_Jobs jobs;
-    err = job_api->CreateJobs(job_api, job_group, block_count, funcs, ctxs, &jobs);
+    err = job_api->CreateJobs(job_api, job_group, 0, 0, 0, block_count, funcs, ctxs, &jobs);
     LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
     err = job_api->ReadyJobs(job_api, block_count, jobs);
     LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)

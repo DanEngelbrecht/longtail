@@ -4530,7 +4530,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     void* job_ctxs[1] = {&job_context};
     Longtail_JobAPI_Jobs jobs;
 
-    ASSERT_EQ(0, job_api->CreateJobs(job_api, job_group, 1, job_funcs, job_ctxs, &jobs));
+    ASSERT_EQ(0, job_api->CreateJobs(job_api, job_group, 0, 0, 0, 1, job_funcs, job_ctxs, &jobs));
     ASSERT_EQ(0, cancel_api->Cancel(cancel_api, cancel_token));
     ASSERT_EQ(0, job_api->ReadyJobs(job_api, 1, jobs));
     ASSERT_EQ(0, Longtail_PostSema(sema, 1));
