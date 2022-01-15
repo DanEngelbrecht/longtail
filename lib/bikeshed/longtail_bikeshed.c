@@ -7,8 +7,8 @@
 
 #include <errno.h>
 
-#define BIKESHED_MAX_TASK_COUNT         131072
-#define BIKESHED_MAX_DEPENDENCY_COUNT   458752
+#define BIKESHED_MAX_TASK_COUNT         65536
+#define BIKESHED_MAX_DEPENDENCY_COUNT   262144
 
 struct ReadyCallback
 {
@@ -172,6 +172,7 @@ struct Bikeshed_JobAPI_Group
     struct BikeshedJobAPI* m_API;
     struct JobWrapper* m_ReservedJobs;
     Bikeshed_TaskID* m_ReservedTasksIDs;
+    uint64_t m_ReservingThreadId;
     uint32_t m_ReservedJobCount;
     int32_t volatile m_Cancelled;
     int32_t volatile m_SubmittedJobCount;
@@ -206,6 +207,7 @@ struct Bikeshed_JobAPI_Group* CreateJobGroup(struct BikeshedJobAPI* job_api, uin
     job_group->m_ReservedTasksIDs = (Bikeshed_TaskID*)p;
     p += sizeof(Bikeshed_TaskID) * job_count;
     job_group->m_API = job_api;
+    job_group->m_ReservingThreadId = Longtail_GetCurrentThreadId();
     job_group->m_ReservedJobCount = job_count;
     job_group->m_Cancelled = 0;
     job_group->m_PendingJobCount = 0;
@@ -291,6 +293,9 @@ on_error:
 static int Bikeshed_CreateJobs(
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_Group job_group,
+    struct Longtail_ProgressAPI* progressAPI,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     uint32_t job_count,
     Longtail_JobAPI_JobFunc job_funcs[],
     void* job_contexts[],
@@ -357,8 +362,24 @@ static int Bikeshed_CreateJobs(
         ctxs[i] = job_wrapper;
     }
 
+    int is_reserve_thread = bikeshed_job_group->m_ReservingThreadId == Longtail_GetCurrentThreadId();
+
     while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, funcs, ctxs, task_ids))
     {
+        if (bikeshed_job_group->m_Cancelled == 0)
+        {
+            if (progressAPI && is_reserve_thread)
+            {
+                progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_group->m_ReservedJobCount, (uint32_t)bikeshed_job_group->m_JobsCompleted);
+            }
+            if (optional_cancel_api && optional_cancel_token)
+            {
+                if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+                {
+                    Longtail_AtomicAdd32(&bikeshed_job_group->m_Cancelled, 1);
+                }
+            }
+        }
         Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
     }
 
