@@ -133,7 +133,9 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **FIX** Windows platform now handles non-ascii file names
+          - **CHANGED API** JobAPI.CreateJobsFunc() now takes progress and cancel options. progress callback will only be called if it is same thread that made ReserveJobs
+          - **ADDED** Longtail_GetCurrentThreadId()
+          - **FIX** Smoother progress when indexing folders with many files
         draft: false
         prerelease: false
         files: "*-x64.zip"
