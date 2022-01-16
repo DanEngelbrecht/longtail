@@ -330,6 +330,8 @@ static int Bikeshed_CreateJobs(
         sizeof(BikeShed_TaskFunc) * job_count +
         sizeof(void*) * job_count;
 
+    int is_reserve_thread = bikeshed_job_group->m_ReservingThreadId == Longtail_GetCurrentThreadId();
+
     int32_t new_job_count = Longtail_AtomicAdd32(&bikeshed_job_group->m_SubmittedJobCount, (int32_t)job_count);
     LONGTAIL_FATAL_ASSERT(ctx, new_job_count > 0, return EINVAL);
     if (new_job_count > (int32_t)bikeshed_job_group->m_ReservedJobCount)
@@ -361,8 +363,6 @@ static int Bikeshed_CreateJobs(
         funcs[i] = Bikeshed_Job;
         ctxs[i] = job_wrapper;
     }
-
-    int is_reserve_thread = bikeshed_job_group->m_ReservingThreadId == Longtail_GetCurrentThreadId();
 
     while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, funcs, ctxs, task_ids))
     {
