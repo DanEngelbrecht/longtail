@@ -445,7 +445,7 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
 
 uint32_t Longtail_Job_GetWorkerCount(struct Longtail_JobAPI* job_api) { return job_api->GetWorkerCount(job_api); }
 int Longtail_Job_ReserveJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Group* out_job_group) { return job_api->ReserveJobs(job_api, job_count, out_job_group); }
-int Longtail_Job_CreateJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs) { return job_api->CreateJobs(job_api, job_group, job_count, job_funcs, job_contexts, out_jobs); }
+int Longtail_Job_CreateJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs) { return job_api->CreateJobs(job_api, job_group, progressAPI, optional_cancel_api, optional_cancel_token, job_count, job_funcs, job_contexts, out_jobs); }
 int Longtail_Job_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs) { return job_api->AddDependecies(job_api, job_count, jobs, dependency_job_count, dependency_jobs); }
 int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs) { return job_api->ReadyJobs(job_api, job_count, jobs); }
 int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token) { return job_api->WaitForAllJobs(job_api, job_group, progressAPI, optional_cancel_api, optional_cancel_token); }
@@ -1978,46 +1978,6 @@ struct ChunkAssetsData* AllocChunkAssetsData(uint32_t chunk_count)
     return chunk_assets_data;
 }
 
-struct PartialProgressAPI {
-    struct Longtail_ProgressAPI m_ProgressAPI;
-    struct Longtail_ProgressAPI* m_Progress;
-    uint32_t m_BaseOffset;
-    uint32_t m_TotalCount;
-};
-
-void PartialProgress_Dispose(struct Longtail_API* api)
-{
-}
-
-void PartialProgress_OnProgress(struct Longtail_ProgressAPI* progressAPI, uint32_t total_count, uint32_t done_count)
-{
-    struct PartialProgressAPI* progress_api = (struct PartialProgressAPI*)progressAPI;
-    if (!progress_api->m_Progress)
-    {
-        return;
-    }
-    progress_api->m_Progress->OnProgress(progress_api->m_Progress, progress_api->m_TotalCount, progress_api->m_BaseOffset + done_count);
-}
-
-
-static struct Longtail_ProgressAPI* InitPartialProgressAPI(
-    struct Longtail_ProgressAPI* progress_api,
-    uint32_t base_offset,
-    uint32_t total_count,
-    struct PartialProgressAPI* out_progress)
-{
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(progress_api, "%p"),
-        LONGTAIL_LOGFIELD(base_offset, "%u"),
-        LONGTAIL_LOGFIELD(total_count, "%u"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-
-    out_progress->m_Progress = progress_api;
-    out_progress->m_BaseOffset = base_offset;
-    out_progress->m_TotalCount = total_count;
-    return Longtail_MakeProgressAPI(out_progress, PartialProgress_Dispose, PartialProgress_OnProgress);
-}
-
 static int ChunkAssets(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_HashAPI* hash_api,
@@ -2098,9 +2058,7 @@ static int ChunkAssets(
     size_t work_mem_size = (sizeof(uint32_t) * job_count) +
         (sizeof(struct HashJob) * job_count) +
         (sizeof(Longtail_JobAPI_JobFunc) * job_count) +
-        (sizeof(void*) * job_count) +
-        (sizeof(Longtail_JobAPI_Group) * batch_count) +
-        (sizeof(uint32_t) * batch_count);
+        (sizeof(void*) * job_count);
     void* work_mem = Longtail_Alloc("ChunkAssets", work_mem_size);
     if (!work_mem)
     {
@@ -2112,12 +2070,16 @@ static int ChunkAssets(
     struct HashJob* tmp_hash_jobs = (struct HashJob*)&tmp_job_chunk_counts[job_count];
     Longtail_JobAPI_JobFunc* funcs = (Longtail_JobAPI_JobFunc*)&tmp_hash_jobs[job_count];
     void** ctxs = (void**)&funcs[job_count];
-    Longtail_JobAPI_Group* job_groups = (Longtail_JobAPI_Group*)&ctxs[job_count];
-    uint32_t* job_group_offsets = (uint32_t*)&job_groups[batch_count];
 
     Longtail_JobAPI_Group job_group = 0;
+    err = job_api->ReserveJobs(job_api, job_count, &job_group);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
+        Longtail_Free(work_mem);
+        return err;
+    }
 
-    uint32_t job_groups_ready = 0;
     uint32_t jobs_submitted = 0;
     uint32_t jobs_prepared = 0;
     uint64_t chunks_offset = 0;
@@ -2128,25 +2090,12 @@ static int ChunkAssets(
 
         if (jobs_prepared + asset_part_count > max_job_batch_count)
         {
-            job_group_offsets[job_groups_ready] = jobs_submitted;
-            err = job_api->ReserveJobs(job_api, jobs_prepared, &job_groups[job_groups_ready]);
-            if (err)
-            {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-                for (uint32_t i = 0; i < jobs_submitted; ++i)
-                {
-                    Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
-                }
-                Longtail_Free(work_mem);
-                return err;
-            }
             Longtail_JobAPI_Jobs jobs;
-            err = job_api->CreateJobs(job_api, job_groups[job_groups_ready], (uint32_t)jobs_prepared, &funcs[jobs_submitted], &ctxs[jobs_submitted], &jobs);
+            err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, (uint32_t)jobs_prepared, &funcs[jobs_submitted], &ctxs[jobs_submitted], &jobs);
             LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
             err = job_api->ReadyJobs(job_api, (uint32_t)jobs_prepared, jobs);
             LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
 
-            job_groups_ready++;
             jobs_submitted += jobs_prepared;
             jobs_prepared = 0;
         }
@@ -2181,39 +2130,21 @@ static int ChunkAssets(
 
     if (jobs_prepared > 0)
     {
-        job_group_offsets[job_groups_ready] = jobs_submitted;
-        err = job_api->ReserveJobs(job_api, jobs_prepared, &job_groups[job_groups_ready]);
-        if (err)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-            for (uint32_t i = 0; i < jobs_submitted; ++i)
-            {
-                Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
-            }
-            Longtail_Free(work_mem);
-            return err;
-        }
         Longtail_JobAPI_Jobs jobs;
-        err = job_api->CreateJobs(job_api, job_groups[job_groups_ready], (uint32_t)jobs_prepared, &funcs[jobs_submitted], &ctxs[jobs_submitted], &jobs);
+        err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, (uint32_t)jobs_prepared, &funcs[jobs_submitted], &ctxs[jobs_submitted], &jobs);
         LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
         err = job_api->ReadyJobs(job_api, (uint32_t)jobs_prepared, jobs);
         LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
 
-        job_groups_ready++;
         jobs_submitted += jobs_prepared;
         jobs_prepared = 0;
     }
     LONGTAIL_FATAL_ASSERT(ctx, jobs_submitted == job_count, return ENOMEM);
 
-    for (uint32_t job_group = 0; job_group < job_groups_ready; ++job_group)
+    err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
+    if (err)
     {
-        struct PartialProgressAPI tmp_partial_progress;
-        struct Longtail_ProgressAPI* partial_progress_api = InitPartialProgressAPI(progress_api, job_group_offsets[job_group], job_count, &tmp_partial_progress);
-        err = job_api->WaitForAllJobs(job_api, job_groups[job_group], partial_progress_api, optional_cancel_api, optional_cancel_token);
-        if (err)
-        {
-            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
-        }
+        LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
     }
 
     if (err != 0)
@@ -4130,17 +4061,12 @@ int Longtail_WriteContent(
     }
     uint32_t batch_count = (block_count + max_job_batch_count - 1) / max_job_batch_count;
 
-    size_t job_groups_size = sizeof(Longtail_JobAPI_Group) * batch_count;
-    size_t job_groups_offsets_size = sizeof(uint32_t) * batch_count;
-
     size_t work_mem_size =
         chunk_lookup_size +
         chunk_sizes_size +
         write_block_jobs_size +
         funcs_size +
-        ctxs_size +
-        job_groups_size +
-        job_groups_offsets_size;
+        ctxs_size;
 
     void* work_mem = Longtail_Alloc("WriteContent", work_mem_size);
     if (!work_mem)
@@ -4161,9 +4087,6 @@ int Longtail_WriteContent(
     p += funcs_size;
     void** ctxs = (void**)p;
     p += ctxs_size;
-    Longtail_JobAPI_Group* job_groups = (Longtail_JobAPI_Group*)p;
-    p += job_groups_size;
-    uint32_t* job_group_offsets = (uint32_t*)p;
 
     for (uint32_t c = 0; c < version_chunk_count; ++c)
     {
@@ -4215,50 +4138,33 @@ int Longtail_WriteContent(
         ++job_count;
     }
 
-    if (job_count == 0)
+    Longtail_JobAPI_Group job_group = 0;
+    err = job_api->ReserveJobs(job_api, job_count, &job_group);
+    if (err)
     {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
         Longtail_Free(asset_part_lookup);
         Longtail_Free(work_mem);
-        return 0;
+        return err;
     }
 
-    uint32_t job_groups_ready = 0;
     uint32_t jobs_submitted = 0;
-
     while (jobs_submitted < job_count)
     {
-        job_group_offsets[job_groups_ready] = jobs_submitted;
-
         uint32_t jobs_left = job_count - jobs_submitted;
         uint32_t jobs_batch = jobs_left > max_job_batch_count ? max_job_batch_count : jobs_left;
-        err = job_api->ReserveJobs(job_api, jobs_batch, &job_groups[job_groups_ready]);
-        if (err)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-            Longtail_Free(asset_part_lookup);
-            Longtail_Free(work_mem);
-            return err;
-        }
-
         Longtail_JobAPI_Jobs jobs;
-        err = job_api->CreateJobs(job_api, job_groups[job_groups_ready], jobs_batch, &funcs[jobs_submitted], &ctxs[jobs_submitted], &jobs);
+        err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, jobs_batch, &funcs[jobs_submitted], &ctxs[jobs_submitted], &jobs);
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
         err = job_api->ReadyJobs(job_api, jobs_batch, jobs);
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
-
-        job_groups_ready++;
         jobs_submitted += jobs_batch;
     }
 
-    for (uint32_t job_group = 0; job_group < job_groups_ready; ++job_group)
+    err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
+    if (err)
     {
-        struct PartialProgressAPI tmp_partial_progress;
-        struct Longtail_ProgressAPI* partial_progress_api = InitPartialProgressAPI(progress_api, job_group_offsets[job_group], job_count, &tmp_partial_progress);
-        err = job_api->WaitForAllJobs(job_api, job_groups[job_group], partial_progress_api, optional_cancel_api, optional_cancel_token);
-        if (err)
-        {
-            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
-        }
+        LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
     }
 
     if (err)
@@ -4385,6 +4291,9 @@ struct WritePartialAssetFromBlocksJob
     struct Longtail_StorageAPI* m_VersionStorageAPI;
     struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
+    struct Longtail_ProgressAPI* m_ProgressAPI;
+    struct Longtail_CancelAPI* m_OptionalCancelAPI;
+    Longtail_CancelAPI_HCancelToken m_OptionalCancelToken;
     const struct Longtail_StoreIndex* m_StoreIndex;
     const struct Longtail_VersionIndex* m_VersionIndex;
     const char* m_VersionFolder;
@@ -4411,6 +4320,9 @@ static int CreatePartialAssetWriteJob(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_JobAPI* job_api,
+    struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const struct Longtail_StoreIndex* store_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_folder,
@@ -4454,6 +4366,9 @@ static int CreatePartialAssetWriteJob(
     job->m_VersionStorageAPI = version_storage_api;
     job->m_BlockStoreAPI = block_store_api;
     job->m_JobAPI = job_api;
+    job->m_ProgressAPI = progress_api;
+    job->m_OptionalCancelAPI = optional_cancel_api;
+    job->m_OptionalCancelToken = optional_cancel_token;
     job->m_StoreIndex = store_index;
     job->m_VersionIndex = version_index;
     job->m_VersionFolder = version_folder;
@@ -4521,7 +4436,7 @@ static int CreatePartialAssetWriteJob(
     Longtail_JobAPI_JobFunc write_funcs[1] = { WritePartialAssetFromBlocks };
     void* write_ctx[1] = { job };
     Longtail_JobAPI_Jobs write_job;
-    int err = job_api->CreateJobs(job_api, job_group, 1, write_funcs, write_ctx, &write_job);
+    int err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, 1, write_funcs, write_ctx, &write_job);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->CreateJobs() failed with %d", err)
@@ -4531,12 +4446,12 @@ static int CreatePartialAssetWriteJob(
     if (job->m_BlockReaderJobCount > 0)
     {
         Longtail_JobAPI_Jobs block_read_jobs;
-        err = job_api->CreateJobs(job_api, job_group, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_read_jobs);
+        err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, job->m_BlockReaderJobCount, block_read_funcs, block_read_ctx, &block_read_jobs);
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
         Longtail_JobAPI_JobFunc sync_write_funcs[1] = { WriteReady };
         void* sync_write_ctx[1] = { 0 };
         Longtail_JobAPI_Jobs write_sync_job;
-        err = job_api->CreateJobs(job_api, job_group, 1, sync_write_funcs, sync_write_ctx, &write_sync_job);
+        err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, 1, sync_write_funcs, sync_write_ctx, &write_sync_job);
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
 
         err = job_api->AddDependecies(job_api, 1, write_job, 1, write_sync_job);
@@ -4742,6 +4657,9 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             job->m_BlockStoreAPI,
             job->m_VersionStorageAPI,
             job->m_JobAPI,
+            job->m_ProgressAPI,
+            job->m_OptionalCancelAPI,
+            job->m_OptionalCancelToken,
             job->m_StoreIndex,
             job->m_VersionIndex,
             job->m_VersionFolder,
@@ -5682,7 +5600,7 @@ static int WriteAssets(
         Longtail_JobAPI_JobFunc block_read_funcs[1] = { BlockReader };
         void* block_read_ctxs[1] = {block_job};
         Longtail_JobAPI_Jobs block_read_job;
-        err = job_api->CreateJobs(job_api, job_group, 1, block_read_funcs, block_read_ctxs, &block_read_job);
+        err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, 1, block_read_funcs, block_read_ctxs, &block_read_job);
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
 
         job->m_VersionStorageAPI = version_storage_api;
@@ -5714,7 +5632,7 @@ static int WriteAssets(
         void* ctxs[1] = { job };
 
         Longtail_JobAPI_Jobs block_write_job;
-        err = job_api->CreateJobs(job_api, job_group, 1, funcs, ctxs, &block_write_job);
+        err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, 1, funcs, ctxs, &block_write_job);
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
         err = job_api->AddDependecies(job_api, 1, block_write_job, 1, block_read_job);
         LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
@@ -5766,6 +5684,9 @@ Write Task Execute (When block_reador Tasks [block_readorCount] and WriteSync Ta
             block_store_api,
             version_storage_api,
             job_api,
+            progress_api,
+            optional_cancel_api,
+            optional_cancel_token,
             store_index,
             version_index,
             version_path,
