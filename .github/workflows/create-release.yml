@@ -133,9 +133,8 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **CHANGED API** JobAPI.CreateJobsFunc() now takes progress and cancel options. progress callback will only be called if it is same thread that made ReserveJobs
-          - **ADDED** Longtail_GetCurrentThreadId()
-          - **FIX** Smoother progress when indexing folders with many files
+          - **CHANGED API** Added `GetParentPath()` to `Storage_API`
+          - **FIX** EnsureParentPath now handles Windows path with backslashes properly
         draft: false
         prerelease: false
         files: "*-x64.zip"
