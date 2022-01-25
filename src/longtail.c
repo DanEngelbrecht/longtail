@@ -290,7 +290,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_CloseFindFunc close_find_func,
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
     Longtail_Storage_LockFileFunc lock_file_func,
-    Longtail_Storage_UnlockFileFunc unlock_file_func)
+    Longtail_Storage_UnlockFileFunc unlock_file_func,
+    Longtail_Storage_GetParentPathFunc get_parent_path_func)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -316,7 +317,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
         LONGTAIL_LOGFIELD(close_find_func, "%p"),
         LONGTAIL_LOGFIELD(get_entry_properties_func, "%p"),
         LONGTAIL_LOGFIELD(lock_file_func, "%p"),
-        LONGTAIL_LOGFIELD(unlock_file_func, "%p")
+        LONGTAIL_LOGFIELD(unlock_file_func, "%p"),
+        LONGTAIL_LOGFIELD(get_parent_path_func, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -344,6 +346,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->GetEntryProperties = get_entry_properties_func;
     api->LockFile = lock_file_func;
     api->UnlockFile = unlock_file_func;
+    api->GetParentPath = get_parent_path_func;
     return api;
 }
 
@@ -369,6 +372,7 @@ void Longtail_Storage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtai
 int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties) { return storage_api->GetEntryProperties(storage_api, iterator, out_properties); }
 int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { return storage_api->LockFile(storage_api, path, out_lock_file); }
 int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { return storage_api->UnlockFile(storage_api, lock_file); }
+char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
 
 ////////////// ProgressAPI
 
@@ -1170,43 +1174,32 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
 
-    size_t delim_pos = 0;
-    size_t path_len = 0;
-    while (path[path_len] != 0)
-    {
-        if (path[path_len] == '/')
-        {
-            delim_pos = path_len;
-        }
-        ++path_len;
-    }
-    if (path[delim_pos] != '/')
+    char* parent_path = storage_api->GetParentPath(storage_api, path);
+    if (parent_path == 0)
     {
         return 0;
     }
 
-    size_t path_size = path_len + 1;
-    char* dir_path = (char*)alloca(path_size);
-    memcpy(dir_path, path, path_size);
-
-    dir_path[delim_pos] = '\0';
-    if (storage_api->IsDir(storage_api, dir_path))
+    if (storage_api->IsDir(storage_api, parent_path))
     {
+        Longtail_Free(parent_path);
         return 0;
     }
-
-    int err = EnsureParentPathExists(storage_api, dir_path);
+    int err = EnsureParentPathExists(storage_api, parent_path);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
+        Longtail_Free(parent_path);
         return err;
     }
-    err = SafeCreateDir(storage_api, dir_path);
+    err = SafeCreateDir(storage_api, parent_path);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir() failed with %d", err)
+        Longtail_Free(parent_path);
         return err;
     }
+    Longtail_Free(parent_path);
     return 0;
 }
 

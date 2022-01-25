@@ -567,6 +567,21 @@ static int FSStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, Long
     return 0;
 }
 
+static char* FSStorageAPI_GetParentPath(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+
+    return Longtail_GetParentPath(path);
+}
+
 static int FSStorageAPI_Init(
     void* mem,
     struct Longtail_StorageAPI** out_storage_api)
@@ -601,7 +616,8 @@ static int FSStorageAPI_Init(
         FSStorageAPI_CloseFind,
         FSStorageAPI_GetEntryProperties,
         FSStorageAPI_LockFile,
-        FSStorageAPI_UnlockFile);
+        FSStorageAPI_UnlockFile,
+        FSStorageAPI_GetParentPath);
     *out_storage_api = api;
     return 0;
 }
