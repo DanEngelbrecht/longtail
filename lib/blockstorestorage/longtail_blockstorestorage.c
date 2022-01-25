@@ -1215,6 +1215,77 @@ static int BlockStoreStorageAPI_GetEntryProperties(
     return 0;
 }
 
+static int BlockStoreStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_lock_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_lock_file != 0, return 0)
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    return ENOTSUP;
+}
+
+static int BlockStoreStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(lock_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, lock_file != 0, return 0)
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    return ENOTSUP;
+}
+
+static char* BlockStoreStorageAPI_GetParentPath(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+
+    size_t delim_pos = 0;
+    size_t path_len = 0;
+    while (path[path_len] != 0)
+    {
+        if (path[path_len] == '/')
+        {
+            delim_pos = path_len;
+        }
+        ++path_len;
+    }
+    if (path[delim_pos] != '/' || delim_pos == 0)
+    {
+        return 0;
+    }
+
+    char* result = (char*)Longtail_Alloc("BlockStoreStorageAPI_GetParentPath", delim_pos + 1);
+    if (!result)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return 0;
+    }
+    result[delim_pos] = 0;
+    while (delim_pos--)
+    {
+        result[delim_pos] = path[delim_pos];
+    }
+    return result;
+}
+
 static void BlockStoreStorageAPI_Dispose(struct Longtail_API* api)
 {
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)api;
@@ -1247,31 +1318,38 @@ static int BlockStoreStorageAPI_Init(
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, out_storage_api != 0, return 0)
 
-    struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)mem;
+    struct Longtail_StorageAPI* api = Longtail_MakeStorageAPI(
+        mem,
+        BlockStoreStorageAPI_Dispose,
+        BlockStoreStorageAPI_OpenReadFile,
+        BlockStoreStorageAPI_GetSize,
+        BlockStoreStorageAPI_Read,
+        BlockStoreStorageAPI_OpenWriteFile,
+        BlockStoreStorageAPI_Write,
+        BlockStoreStorageAPI_SetSize,
+        BlockStoreStorageAPI_SetPermissions,
+        BlockStoreStorageAPI_GetPermissions,
+        BlockStoreStorageAPI_CloseFile,
+        BlockStoreStorageAPI_CreateDir,
+        BlockStoreStorageAPI_RenameFile,
+        BlockStoreStorageAPI_ConcatPath,
+        BlockStoreStorageAPI_IsDir,
+        BlockStoreStorageAPI_IsFile,
+        BlockStoreStorageAPI_RemoveDir,
+        BlockStoreStorageAPI_RemoveFile,
+        BlockStoreStorageAPI_StartFind,
+        BlockStoreStorageAPI_FindNext,
+        BlockStoreStorageAPI_CloseFind,
+        BlockStoreStorageAPI_GetEntryProperties,
+        BlockStoreStorageAPI_LockFile,
+        BlockStoreStorageAPI_UnlockFile,
+        BlockStoreStorageAPI_GetParentPath);
+
+    struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)api;
+
     uint64_t store_index_chunk_count = *store_index->m_ChunkCount;
     uint32_t version_index_asset_count = *version_index->m_AssetCount;
 
-    block_store_fs->m_API.m_API.Dispose = BlockStoreStorageAPI_Dispose;
-    block_store_fs->m_API.OpenReadFile = BlockStoreStorageAPI_OpenReadFile;
-    block_store_fs->m_API.GetSize = BlockStoreStorageAPI_GetSize;
-    block_store_fs->m_API.Read = BlockStoreStorageAPI_Read;
-    block_store_fs->m_API.OpenWriteFile = BlockStoreStorageAPI_OpenWriteFile;
-    block_store_fs->m_API.Write = BlockStoreStorageAPI_Write;
-    block_store_fs->m_API.SetSize = BlockStoreStorageAPI_SetSize;
-    block_store_fs->m_API.SetPermissions = BlockStoreStorageAPI_SetPermissions;
-    block_store_fs->m_API.GetPermissions = BlockStoreStorageAPI_GetPermissions;
-    block_store_fs->m_API.CloseFile = BlockStoreStorageAPI_CloseFile;
-    block_store_fs->m_API.CreateDir = BlockStoreStorageAPI_CreateDir;
-    block_store_fs->m_API.RenameFile = BlockStoreStorageAPI_RenameFile;
-    block_store_fs->m_API.ConcatPath = BlockStoreStorageAPI_ConcatPath;
-    block_store_fs->m_API.IsDir = BlockStoreStorageAPI_IsDir;
-    block_store_fs->m_API.IsFile = BlockStoreStorageAPI_IsFile;
-    block_store_fs->m_API.RemoveDir = BlockStoreStorageAPI_RemoveDir;
-    block_store_fs->m_API.RemoveFile = BlockStoreStorageAPI_RemoveFile;
-    block_store_fs->m_API.StartFind = BlockStoreStorageAPI_StartFind;
-    block_store_fs->m_API.FindNext = BlockStoreStorageAPI_FindNext;
-    block_store_fs->m_API.CloseFind = BlockStoreStorageAPI_CloseFind;
-    block_store_fs->m_API.GetEntryProperties = BlockStoreStorageAPI_GetEntryProperties;
     block_store_fs->m_HashAPI = hash_api;
     block_store_fs->m_JobAPI = job_api;
     block_store_fs->m_BlockStore = block_store;

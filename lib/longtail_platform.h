@@ -73,6 +73,7 @@ int     Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t leng
 int     Longtail_GetFileSize(HLongtail_OpenFile handle, uint64_t* out_size);
 void    Longtail_CloseFile(HLongtail_OpenFile handle);
 char*   Longtail_ConcatPath(const char* folder, const char* file);
+char*   Longtail_GetParentPath(const char* path);
 
 char* Longtail_GetTempFolder();
 

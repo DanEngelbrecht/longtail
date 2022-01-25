@@ -874,6 +874,42 @@ char* Longtail_ConcatPath(const char* folder, const char* file)
     return path;
 }
 
+static int is_path_delimiter(char c)
+{
+    return (c == '/') || (c == '\\');
+}
+
+char* Longtail_GetParentPath(const char* path)
+{
+    size_t delim_pos = 0;
+    size_t path_len = 0;
+    while (path[path_len] != 0)
+    {
+        if (is_path_delimiter(path[path_len]))
+        {
+            delim_pos = path_len;
+        }
+        ++path_len;
+    }
+    if ((!is_path_delimiter(path[delim_pos])) || delim_pos == 0)
+    {
+        return 0;
+    }
+
+    char* result = (char*)Longtail_Alloc("Longtail_GetParentPath", delim_pos + 1);
+    if (!result)
+    {
+        LONGTAIL_LOG(0, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return 0;
+    }
+    result[delim_pos] = 0;
+    while (delim_pos--)
+    {
+        result[delim_pos] = path[delim_pos];
+    }
+    return result;
+}
+
 char* Longtail_GetTempFolder()
 {
     char tmp[MAX_PATH + 1];
@@ -1857,6 +1893,42 @@ char* Longtail_ConcatPath(const char* folder, const char* file)
     }
     strcpy(&path[folder_length], file);
     return path;
+}
+
+static int is_path_delimiter(char c)
+{
+    return (c == '/');
+}
+
+char* Longtail_GetParentPath(const char* path)
+{
+    size_t delim_pos = 0;
+    size_t path_len = 0;
+    while (path[path_len] != 0)
+    {
+        if (is_path_delimiter(path[path_len]))
+        {
+            delim_pos = path_len;
+        }
+        ++path_len;
+    }
+    if ((!is_path_delimiter(path[delim_pos])) || delim_pos == 0)
+    {
+        return 0;
+    }
+
+    char* result = (char*)Longtail_Alloc("Longtail_GetParentPath", delim_pos + 1);
+    if (!result)
+    {
+        LONGTAIL_LOG(0, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return 0;
+    }
+    result[delim_pos] = 0;
+    while (delim_pos--)
+    {
+        result[delim_pos] = path[delim_pos];
+    }
+    return result;
 }
 
 char* Longtail_GetTempFolder()

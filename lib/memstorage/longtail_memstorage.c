@@ -1057,6 +1057,47 @@ static int InMemStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, L
     return 0;
 }
 
+static char* InMemStorageAPI_GetParentPath(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+
+    size_t delim_pos = 0;
+    size_t path_len = 0;
+    while (path[path_len] != 0)
+    {
+        if (path[path_len] == '/')
+        {
+            delim_pos = path_len;
+        }
+        ++path_len;
+    }
+    if (path[delim_pos] != '/' || delim_pos == 0)
+    {
+        return 0;
+    }
+
+    char* result = (char*)Longtail_Alloc("InMemStorageAPI_GetParentPath", delim_pos + 1);
+    if (!result)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return 0;
+    }
+    result[delim_pos] = 0;
+    while (delim_pos--)
+    {
+        result[delim_pos] = path[delim_pos];
+    }
+    return result;
+}
+
 static int InMemStorageAPI_Init(
     void* mem,
     struct Longtail_StorageAPI** out_storage_api)
@@ -1091,7 +1132,8 @@ static int InMemStorageAPI_Init(
         InMemStorageAPI_CloseFind,
         InMemStorageAPI_GetEntryProperties,
         InMemStorageAPI_LockFile,
-        InMemStorageAPI_UnlockFile);
+        InMemStorageAPI_UnlockFile,
+        InMemStorageAPI_GetParentPath);
 
     struct InMemStorageAPI* storage_api = (struct InMemStorageAPI*)api;
 
