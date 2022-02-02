@@ -11,6 +11,7 @@ static const uint64_t LONGTAIL_TIMEOUT_INFINITE = ((uint64_t)-1);
 
 uint32_t    Longtail_GetCPUCount();
 void        Longtail_Sleep(uint64_t timeout_us);
+uint64_t    Longtail_GetCurrentTime();	// Time since 00:00:00 on January 1, 1970 in nanoseconds
 
 typedef int32_t volatile TLongtail_Atomic32;
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount);
@@ -59,7 +60,7 @@ int         Longtail_FindNext(HLongtail_FSIterator fs_iterator);
 void        Longtail_CloseFind(HLongtail_FSIterator fs_iterator);
 const char* Longtail_GetFileName(HLongtail_FSIterator fs_iterator);
 const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator);
-int         Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, int* out_is_dir);
+int         Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, uint64_t* out_modification_date, int* out_is_dir);
 
 typedef struct Longtail_OpenFile_private* HLongtail_OpenFile;
 

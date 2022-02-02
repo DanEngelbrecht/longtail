@@ -1364,9 +1364,10 @@ static int RecurseTree(
 static size_t GetFileInfosSize(uint32_t path_count, uint32_t path_data_size)
 {
     return sizeof(struct Longtail_FileInfos) +
-        sizeof(uint32_t) * path_count +    // m_Permissions[path_count]
-        sizeof(uint32_t) * path_count +    // m_Offsets[path_count]
         sizeof(uint64_t) * path_count +    // m_Sizes[path_count]
+        sizeof(uint64_t) * path_count +    // m_ModificationTimes
+        sizeof(uint32_t) * path_count +    // m_Offsets[path_count]
+        sizeof(uint32_t) * path_count +    // m_Permissions[path_count]
         path_data_size;
 };
 
@@ -1390,6 +1391,8 @@ static struct Longtail_FileInfos* CreateFileInfos(uint32_t path_count, uint32_t 
     file_infos->m_PathDataSize = 0;
     file_infos->m_Sizes = (uint64_t*)p;
     p += sizeof(uint64_t) * path_count;
+    file_infos->m_ModificationTimes = (uint64_t*)p;
+    p += sizeof(uint64_t) * path_count;
     file_infos->m_PathStartOffsets = (uint32_t*)p;
     p += sizeof(uint32_t) * path_count;
     file_infos->m_Permissions = (uint16_t*)p;
@@ -1402,6 +1405,7 @@ int Longtail_MakeFileInfos(
     uint32_t path_count,
     const char* const* path_names,
     const uint64_t* file_sizes,
+    const uint64_t* modification_times,
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos)
 {
@@ -1434,6 +1438,7 @@ int Longtail_MakeFileInfos(
     {
         uint32_t length = (uint32_t)strlen(path_names[i]) + 1;
         file_infos->m_Sizes[i] = file_sizes[i];
+        file_infos->m_ModificationTimes[i] = modification_times[i];
         file_infos->m_Permissions[i] = file_permissions[i];
         file_infos->m_PathStartOffsets[i] = offset;
         memmove(&file_infos->m_PathData[offset], path_names[i], length);
@@ -1449,6 +1454,7 @@ static int AppendPath(
     struct Longtail_FileInfos** file_infos,
     const char* path,
     uint64_t file_size,
+    uint64_t file_modification_time,
     uint16_t file_permissions,
     uint32_t* max_path_count,
     uint32_t* max_data_size,
@@ -1497,6 +1503,7 @@ static int AppendPath(
         new_file_infos->m_Count = (*file_infos)->m_Count;
 
         memmove(new_file_infos->m_Sizes, (*file_infos)->m_Sizes, sizeof(uint64_t) * (*file_infos)->m_Count);
+        memmove(new_file_infos->m_ModificationTimes, (*file_infos)->m_ModificationTimes, sizeof(uint64_t) * (*file_infos)->m_Count);
         memmove(new_file_infos->m_PathStartOffsets, (*file_infos)->m_PathStartOffsets, sizeof(uint32_t) * (*file_infos)->m_Count);
         memmove(new_file_infos->m_Permissions, (*file_infos)->m_Permissions, sizeof(uint32_t) * (*file_infos)->m_Count);
         memmove(new_file_infos->m_PathData, (*file_infos)->m_PathData, (*file_infos)->m_PathDataSize);
@@ -1509,6 +1516,7 @@ static int AppendPath(
     (*file_infos)->m_PathStartOffsets[(*file_infos)->m_Count] = (*file_infos)->m_PathDataSize;
     (*file_infos)->m_PathDataSize += path_size;
     (*file_infos)->m_Sizes[(*file_infos)->m_Count] = file_size;
+    (*file_infos)->m_ModificationTimes[(*file_infos)->m_Count] = file_modification_time;
     (*file_infos)->m_Permissions[(*file_infos)->m_Count] = file_permissions;
     (*file_infos)->m_Count++;
 
@@ -1552,7 +1560,7 @@ static int AddFile(void* context, const char* root_path, const char* asset_path,
         full_path[asset_path_length + 1] = 0;
     }
 
-    int err = AppendPath(&paths_context->m_FileInfos, full_path, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 1024, 1024 * 32);
+    int err = AppendPath(&paths_context->m_FileInfos, full_path, properties->m_Size, properties->m_ModificationTime, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 1024, 1024 * 32);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AppendPath() failed with %d", err)
@@ -2088,7 +2096,7 @@ static int ChunkAssets(
         uint64_t asset_size = file_infos->m_Sizes[asset_index];
         uint64_t asset_part_count = 1 + (asset_size / max_hash_size);
         job_count += (uint32_t)asset_part_count;
-        }
+    }
 
     if (job_count == 0)
     {
@@ -8364,6 +8372,7 @@ uint32_t Longtail_BlockIndex_GetBlockChunksDataSize(struct Longtail_StoredBlock*
 uint32_t Longtail_FileInfos_GetCount(const struct Longtail_FileInfos* file_infos) { return file_infos->m_Count; }
 const char* Longtail_FileInfos_GetPath(const struct Longtail_FileInfos* file_infos, uint32_t index) { return &file_infos->m_PathData[file_infos->m_PathStartOffsets[index]]; }
 uint64_t Longtail_FileInfos_GetSize(const struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_Sizes[index]; }
+uint64_t Longtail_FileInfos_GetModificationTime(const struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_ModificationTimes[index]; }
 const uint16_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index) { return file_infos->m_Permissions; }
 
 uint32_t Longtail_VersionIndex_GetVersion(const struct Longtail_VersionIndex* version_index) { return *version_index->m_Version; }

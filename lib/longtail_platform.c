@@ -161,6 +161,26 @@ void Longtail_Sleep(uint64_t timeout_us)
     Sleep(wait_ms);
 }
 
+#define WINDOWS_TICK_TO_NANOSEC_FACTOR 100
+#define WINDOWS_NANOSEC_TO_UNIX_EPOCH ((uint64_t)11644473600LL * (uint64_t)1000000000LL)
+
+static uint64_t windowsTickToUnixMicroSeconds(FILETIME fileTime)
+{
+    uint64_t t = (((uint64_t)fileTime.dwHighDateTime) << 32) + fileTime.dwLowDateTime;
+    t *= WINDOWS_TICK_TO_NANOSEC_FACTOR;
+    return (uint64_t)(t - WINDOWS_NANOSEC_TO_UNIX_EPOCH);
+}
+
+uint64_t Longtail_GetCurrentTime()
+{
+    FILETIME ft;
+    SYSTEMTIME st;
+
+    GetSystemTime(&st);
+    SystemTimeToFileTime(&st, &ft);
+    return windowsTickToUnixMicroSeconds(ft);
+}
+
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount)
 {
     return (int32_t)InterlockedAdd((LONG volatile*)value, (LONG)amount);
@@ -673,7 +693,7 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
     return 0;
 }
 
-int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, int* out_is_dir)
+int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, uint64_t* out_modification_date, int* out_is_dir)
 {
     DWORD high = fs_iterator->m_FindData.nFileSizeHigh;
     DWORD low = fs_iterator->m_FindData.nFileSizeLow;
@@ -693,6 +713,7 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
         permissions = permissions | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess;
     }
     *out_permissions = permissions;
+    *out_modification_date = windowsTickToUnixMicroSeconds(fs_iterator->m_FindData.ftLastWriteTime);
     return 0;
 }
 
@@ -1187,6 +1208,7 @@ void Longtail_UnmapFile(HLongtail_FileMap file_map)
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -1202,6 +1224,18 @@ uint32_t Longtail_GetCPUCount()
 void Longtail_Sleep(uint64_t timeout_us)
 {
     usleep((useconds_t)timeout_us);
+}
+
+static uint64_t linuxTimeSpecToMicroSeconds(struct timespec time_spec)
+{
+    return (uint64_t)time_spec.tv_sec * 1000000000LL + time_spec.tv_nsec;
+}
+
+uint64_t Longtail_GetCurrentTime()
+{
+    struct timespec time_spec;
+    clock_gettime(CLOCK_REALTIME, &time_spec);
+    return linuxTimeSpecToMicroSeconds(time_spec);
 }
 
 int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount)
@@ -1915,7 +1949,7 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
     return fs_iterator->m_DirEntry->d_name;
 }
 
-int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, int* out_is_dir)
+int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_size, uint16_t* out_permissions, uint64_t* out_modification_date, int* out_is_dir)
 {
     size_t dir_len = strlen(fs_iterator->m_DirPath);
     size_t file_len = strlen(fs_iterator->m_DirEntry->d_name);
@@ -1939,6 +1973,7 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
             *out_is_dir = 0;
             *out_size = (uint64_t)stat_buf.st_size;
         }
+        *out_modification_date = linuxTimeSpecToMicroSeconds(stat_buf.st_mtim);
     }
     else
     {

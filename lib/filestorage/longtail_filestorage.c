@@ -518,7 +518,7 @@ static int FSStorageAPI_GetEntryProperties(
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_FATAL_ASSERT(ctx, iterator != 0, return EINVAL);
     LONGTAIL_FATAL_ASSERT(ctx, out_properties != 0, return EINVAL);
-    int err = Longtail_GetEntryProperties((HLongtail_FSIterator)iterator, &out_properties->m_Size, &out_properties->m_Permissions, &out_properties->m_IsDir);
+    int err = Longtail_GetEntryProperties((HLongtail_FSIterator)iterator, &out_properties->m_Size, &out_properties->m_Permissions, &out_properties->m_ModificationTime, &out_properties->m_IsDir);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_GetEntryProperties() failed with %d", err)

@@ -329,6 +329,7 @@ struct Longtail_StorageAPI_EntryProperties
 {
     const char* m_Name;
     uint64_t m_Size;
+    uint64_t m_ModificationTime;
     uint16_t m_Permissions;
     int m_IsDir;
 };
@@ -1463,6 +1464,7 @@ struct Longtail_FileInfos
     uint32_t m_Count;
     uint32_t m_PathDataSize;
     uint64_t* m_Sizes;
+    uint64_t* m_ModificationTimes;
     uint32_t* m_PathStartOffsets;
     uint16_t* m_Permissions;
     char* m_PathData;
@@ -1703,6 +1705,7 @@ int Longtail_MakeFileInfos(
     uint32_t path_count,
     const char* const* path_names,
     const uint64_t* file_sizes,
+    const uint64_t* modification_times,
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos);
 
