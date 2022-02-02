@@ -1973,8 +1973,12 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
             *out_is_dir = 0;
             *out_size = (uint64_t)stat_buf.st_size;
         }
+#ifdef __APPLE__
+         *out_modification_date = linuxTimeSpecToMicroSeconds(stat_buf.st_mtimespec);
+#else
         *out_modification_date = linuxTimeSpecToMicroSeconds(stat_buf.st_mtim);
-    }
+#endif
+   }
     else
     {
         res = errno;
