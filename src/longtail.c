@@ -2347,6 +2347,82 @@ size_t Longtail_GetVersionIndexSize(
             Longtail_GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, path_data_size);
 }
 
+struct Longtail_VersionIndex* Longtail_InitVersionIndex(
+    void* mem,
+    uint32_t asset_count,
+    uint32_t chunk_count,
+    uint32_t asset_chunk_index_count,
+    uint32_t path_data_size)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(asset_count, "%u"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(asset_chunk_index_count, "%u"),
+        LONGTAIL_LOGFIELD(path_data_size, "%u")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+
+    struct Longtail_VersionIndex* version_index = (struct Longtail_VersionIndex*)mem;
+    char* p = (char*)&version_index[1];
+
+    version_index->m_Version = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    version_index->m_HashIdentifier = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    version_index->m_TargetChunkSize = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    version_index->m_AssetCount = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    version_index->m_ChunkCount = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    version_index->m_AssetChunkIndexCount = (uint32_t*)(void*)p;
+    p += sizeof(uint32_t);
+
+    version_index->m_PathHashes = (TLongtail_Hash*)(void*)p;
+    p += (sizeof(TLongtail_Hash) * asset_count);
+
+    version_index->m_ContentHashes = (TLongtail_Hash*)(void*)p;
+    p += (sizeof(TLongtail_Hash) * asset_count);
+
+    version_index->m_AssetSizes = (uint64_t*)(void*)p;
+    p += (sizeof(uint64_t) * asset_count);
+
+    version_index->m_AssetChunkCounts = (uint32_t*)(void*)p;
+    p += (sizeof(uint32_t) * asset_count);
+
+    version_index->m_AssetChunkIndexStarts = (uint32_t*)(void*)p;
+    p += (sizeof(uint32_t) * asset_count);
+
+    version_index->m_AssetChunkIndexes = (uint32_t*)(void*)p;
+    p += (sizeof(uint32_t) * asset_chunk_index_count);
+
+    version_index->m_ChunkHashes = (TLongtail_Hash*)(void*)p;
+    p += (sizeof(TLongtail_Hash) * chunk_count);
+
+    version_index->m_ChunkSizes = (uint32_t*)(void*)p;
+    p += (sizeof(uint32_t) * chunk_count);
+
+    version_index->m_ChunkTags = (uint32_t*)(void*)p;
+    p += (sizeof(uint32_t) * chunk_count);
+
+    version_index->m_NameOffsets = (uint32_t*)(void*)p;
+    p += (sizeof(uint32_t) * asset_count);
+
+    version_index->m_Permissions = (uint16_t*)(void*)p;
+    p += (sizeof(uint16_t) * asset_count);
+
+    version_index->m_NameData = (char*)p;
+
+    return version_index;
+}
+
 static int InitVersionIndexFromData(
     struct Longtail_VersionIndex* version_index,
     void* data,
@@ -2752,6 +2828,48 @@ int Longtail_CreateVersionIndex(
 
     *out_version_index = version_index;
     return 0;
+}
+
+struct Longtail_VersionIndex* Longtail_CopyVersionIndex(const struct Longtail_VersionIndex* version_index)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(version_index, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return 0)
+
+    uint32_t asset_count = *version_index->m_AssetCount;
+    uint32_t chunk_count = *version_index->m_ChunkCount;
+    uint32_t asset_chunk_index_count = *version_index->m_AssetChunkIndexCount;
+    uint32_t name_data_size = version_index->m_NameDataSize;
+    size_t version_index_size = Longtail_GetVersionIndexSize(asset_count, chunk_count, asset_chunk_index_count, name_data_size);
+    void* mem = Longtail_Alloc("Longtail_CopyVersionIndex", version_index_size);
+    struct Longtail_VersionIndex* copy_version_index = Longtail_InitVersionIndex(
+        mem,
+        asset_count,
+        chunk_count,
+        asset_chunk_index_count,
+        name_data_size);
+
+    *copy_version_index->m_Version = Longtail_CurrentVersionIndexVersion;
+    *copy_version_index->m_HashIdentifier = *version_index->m_HashIdentifier;
+    *copy_version_index->m_TargetChunkSize = *version_index->m_TargetChunkSize;
+    *copy_version_index->m_AssetCount = asset_count;
+    *copy_version_index->m_ChunkCount = chunk_count;
+    *copy_version_index->m_AssetChunkIndexCount = asset_chunk_index_count;
+    memcpy(copy_version_index->m_PathHashes, version_index->m_PathHashes, sizeof(TLongtail_Hash) * asset_count);
+    memcpy(copy_version_index->m_ContentHashes, version_index->m_ContentHashes, sizeof(TLongtail_Hash) * asset_count);
+    memcpy(copy_version_index->m_AssetSizes, version_index->m_AssetSizes, sizeof(uint64_t) * asset_count);
+    memcpy(copy_version_index->m_AssetChunkCounts, version_index->m_AssetChunkCounts, sizeof(uint32_t) * asset_count);
+    memcpy(copy_version_index->m_AssetChunkIndexStarts, version_index->m_AssetChunkIndexStarts, sizeof(uint32_t) * asset_count);
+    memcpy(copy_version_index->m_AssetChunkIndexes, version_index->m_AssetChunkIndexes, sizeof(uint32_t) * asset_chunk_index_count);
+    memcpy(copy_version_index->m_ChunkHashes, version_index->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
+    memcpy(copy_version_index->m_ChunkSizes, version_index->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
+    memcpy(copy_version_index->m_ChunkTags, version_index->m_ChunkTags, sizeof(uint32_t) * chunk_count);
+    memcpy(copy_version_index->m_NameOffsets, version_index->m_NameOffsets, sizeof(uint32_t) * asset_count);
+    memcpy(copy_version_index->m_Permissions, version_index->m_Permissions, sizeof(uint32_t) * asset_count);
+    memcpy(copy_version_index->m_NameData, version_index->m_NameData, name_data_size);
+    return copy_version_index;
 }
 
 int Longtail_WriteVersionIndexToBuffer(

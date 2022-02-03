@@ -965,6 +965,15 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     int enable_file_map,
     struct Longtail_VersionIndex** out_version_index);
 
+/*! @brief Copies a struct Longtail_VersionIndex.
+ *
+ * Allocates a chunk of memory and copies the data from an existing version_index
+ *
+ * @param[in] version_index   The source index to copy from
+ * @return                     An initialized struct Longtail_VersionIndex copied from @p version_index, or 0 on bad parameters / out of memory
+ */
+LONGTAIL_EXPORT struct Longtail_VersionIndex* Longtail_CopyVersionIndex(const struct Longtail_VersionIndex* version_index);
+
 /*! @brief Writes a struct Longtail_VersionIndex to a byte buffer.
  *
  * Serializes a struct Longtail_VersionIndex to a buffer which is allocated using Longtail_Alloc()
