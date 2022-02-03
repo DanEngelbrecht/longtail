@@ -359,6 +359,99 @@ struct State
     uint64_t* m_ModificationTimes;
 };
 
+static struct Longtail_VersionIndex* UpdateVersionIndex(struct Longtail_StorageAPI* storage_api, struct Longtail_HashAPI* hash_api, struct State* state, const char* root_path)
+{
+    struct Longtail_FileInfos* file_infos;
+    int err = Longtail_GetFilesRecursively(
+        storage_api,
+        0,
+        0,
+        0,
+        root_path,
+        &file_infos);
+
+    // Added files - index into file_infos?
+    // Modified files - index into state->m_VersionIndex?
+    // Deleted files - index into state->m_VersionIndex?
+    uint32_t* added_file_indexes = (uint32_t*)Longtail_Alloc("UpdateVersionIndex", sizeof(uint32_t) * file_infos->m_Count);
+    uint32_t* modified_file_indexes = (uint32_t*)Longtail_Alloc("UpdateVersionIndex", sizeof(uint32_t) * file_infos->m_Count);
+    uint32_t* deleted_file_indexes = (uint32_t*)Longtail_Alloc("UpdateVersionIndex", sizeof(uint32_t) * (*state->m_VersionIndex->m_AssetCount));
+    uint32_t added_file_count = 0;
+    uint32_t modified_file_count = 0;
+    uint32_t deleted_file_count = 0;
+
+    struct Longtail_LookupTable* version_index_path_lut = Longtail_LookupTable_Create(Longtail_Alloc("UpdateVersionIndex", Longtail_LookupTable_GetSize(*state->m_VersionIndex->m_AssetCount)), *state->m_VersionIndex->m_AssetCount, 0);
+    for (uint32_t a = 0; a < *state->m_VersionIndex->m_AssetCount; ++a)
+    {
+        TLongtail_Hash path_hash = state->m_VersionIndex->m_PathHashes[a];
+        Longtail_LookupTable_Put(version_index_path_lut, path_hash, a);
+    }
+
+    struct Longtail_LookupTable* file_infos_path_lut = Longtail_LookupTable_Create(Longtail_Alloc("UpdateVersionIndex", Longtail_LookupTable_GetSize(file_infos->m_Count)), file_infos->m_Count, 0);
+    for (uint32_t a = 0; a < file_infos->m_Count; ++a)
+    {
+        const char* path = &file_infos->m_PathData[file_infos->m_PathStartOffsets[a]];
+        TLongtail_Hash path_hash;
+        err = Longtail_GetPathHash(hash_api, path, &path_hash);
+        Longtail_LookupTable_Put(file_infos_path_lut, path_hash, a);
+
+        uint32_t* file_info_index_ptr = Longtail_LookupTable_Get(version_index_path_lut, path_hash);
+        if (file_info_index_ptr == 0)
+        {
+            added_file_indexes[added_file_count++] = a;
+            continue;
+        }
+        uint64_t modification_date = file_infos->m_ModificationTimes[*file_info_index_ptr];
+        uint64_t size = file_infos->m_Sizes[*file_info_index_ptr];
+        if (modification_date != state->m_ModificationTimes[*file_info_index_ptr] ||
+            size != state->m_VersionIndex->m_AssetSizes[*file_info_index_ptr])
+        {
+            modified_file_indexes[modified_file_count++] = a;
+        }
+    }
+
+    TLongtail_Hash* path_hashes = 0;
+    TLongtail_Hash* content_hashes = 0;
+    uint32_t* asset_chunk_index_starts = 0;
+    uint32_t* asset_chunk_counts = 0;
+    uint32_t* asset_chunk_index_count = 0;
+    uint32_t* asset_chunk_indexes = 0;
+    uint32_t* chunk_sizes = 0;
+    uint32_t* chunk_hashes = 0;
+    uint32_t* optional_chunk_tags = 0;
+
+    uint32_t chunk_count = 0;
+    uint32_t asset_chunk_index_count = 0;
+    uint32_t path_data_size = 0;
+    size_t version_index_size = Longtail_GetVersionIndexSize(file_infos->m_Count, chunk_count, asset_chunk_index_count, path_data_size);
+    void* version_index_mem = Longtail_Alloc("UpdateVersionIndex", version_index_size);
+    struct Longtail_VersionIndex* version_index;
+    err = Longtail_BuildVersionIndex(
+        version_index_mem,
+        version_index_size,
+        file_infos,
+        path_hashes,
+        content_hashes,
+        asset_chunk_index_starts,
+        asset_chunk_counts,
+        asset_chunk_index_count,
+        asset_chunk_indexes,
+        chunk_count,
+        chunk_sizes,
+        chunk_hashes,
+        optional_chunk_tags,
+        hash_api->GetIdentifier(hash_api),
+        *state->m_VersionIndex->m_HashIdentifier,
+        &version_index);
+
+    Longtail_Free(version_index_path_lut);
+    Longtail_Free(file_infos_path_lut);
+    Longtail_Free(deleted_file_indexes);
+    Longtail_Free(modified_file_indexes);
+    Longtail_Free(added_file_indexes);
+    Longtail_Free(file_infos);
+}
+
 static struct Longtail_VersionDiff* GetDiff(const struct State* current_state, const struct Longtail_VersionIndex* desired_state)
 {
     return 0;
@@ -449,7 +542,7 @@ static struct State* ApplyVersion(
         if (l)
         {
             uint32_t* t = Longtail_LookupTable_Get(touched_assets_lut, h);
-            if (!t)
+            if (!t && current_state->m_ModificationTimes)
             {
                 state->m_ModificationTimes[a] = current_state->m_ModificationTimes[*l];
                 continue;
@@ -459,6 +552,7 @@ static struct State* ApplyVersion(
         state->m_ModificationTimes[a] = 0;
     }
 
+    Longtail_Free(touched_assets_lut);
     Longtail_Free(modification_times_lut);
     Longtail_Free(store_index);
     Longtail_Free(diff);
