@@ -241,6 +241,10 @@ static char* NormalizePath(const char* path)
     char* normalized_path = Longtail_Strdup(path);
     size_t wi = 0;
     size_t ri = 0;
+    if (normalized_path[0] == '\\' && normalized_path[1] == '\\' && normalized_path[2] == '?' && normalized_path[3] == '\\')
+    {
+        ri += 4;
+    }
     while (path[ri])
     {
         switch (path[ri])
