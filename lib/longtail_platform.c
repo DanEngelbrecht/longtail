@@ -129,6 +129,11 @@ static const wchar_t* MakeLongPath(const wchar_t* path)
         // Don't add long path prefix if we don't specify a drive
         return path;
     }
+    if (path[0] == '\\' && path[1] == '\\' && path[2] == '?' && path[3] == '\\')
+    {
+        // Don't add long path prefix if we aleady have an UNC path
+        return path;
+    }
     size_t path_len = wcslen(path);
     if (path_len < MAX_PATH)
     {
