@@ -133,8 +133,7 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **CHANGED API** Added `GetParentPath()` to `Storage_API`
-          - **FIX** EnsureParentPath now handles Windows path with backslashes properly
+          - **FIX** Properly handle UNC paths
         draft: false
         prerelease: false
         files: "*-x64.zip"
