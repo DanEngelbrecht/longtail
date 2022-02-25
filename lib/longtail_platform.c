@@ -379,7 +379,7 @@ static wchar_t* MakePlatformPath(const char* path)
     wchar_t* p = r;
     while (*p)
     {
-        *r = ((*r) == '/') ? '\\' : (*r);
+        *p = ((*p) == '/') ? '\\' : (*p);
         ++p;
     }
     return r;
