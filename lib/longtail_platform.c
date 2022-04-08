@@ -576,7 +576,13 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
         Longtail_Free(fs_iterator->m_Path);
         return Win32ErrorToErrno(GetLastError());
     }
-    return Skip(fs_iterator);
+    int err = Skip(fs_iterator);
+    if (err != 0)
+    {
+        FindClose(fs_iterator->m_Handle);
+        Longtail_Free(fs_iterator->m_Path);
+    }
+    return err;
 }
 
 int Longtail_FindNext(HLongtail_FSIterator fs_iterator)
