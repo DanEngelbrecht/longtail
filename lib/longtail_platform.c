@@ -1029,6 +1029,55 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     }
     return 0;
 }
+
+int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, void** out_data_ptr)
+{
+    HANDLE h = (HANDLE)(handle);
+
+    HANDLE file_mapping = CreateFileMapping(h,
+        0,
+        PAGE_READONLY,
+        0,
+        0,
+        0);
+
+    if (file_mapping == INVALID_HANDLE_VALUE)
+    {
+        DWORD error = GetLastError();
+        return Win32ErrorToErrno(error);
+    }
+
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+    uint64_t base_address = offset & ~((uint64_t)(system_info.dwAllocationGranularity - 1));
+    uint64_t address_offset = offset - base_address;
+
+    uint8_t* base_data_ptr = MapViewOfFile(file_mapping,
+        FILE_MAP_READ,
+        (uint32_t)(base_address >> 32),
+        (uint32_t)(base_address & 0xffffffff),
+        length + address_offset);
+
+    if (base_data_ptr == 0)
+    {
+        DWORD error = GetLastError();
+        CloseHandle(file_mapping);
+        return Win32ErrorToErrno(error);
+    }
+
+    *out_file_map = (HLongtail_FileMap)file_mapping;
+    *out_data_ptr = &base_data_ptr[address_offset];
+
+    return 0;
+}
+
+void Longtail_UnmapFile(HLongtail_FileMap file_map)
+{
+    HANDLE h = (HANDLE)(file_map);
+    CloseHandle(h);
+}
+
+
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)

@@ -6923,7 +6923,8 @@ TEST(Longtail, Longtail_Archive)
     static const uint32_t MAX_BLOCK_SIZE = 26973;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
 
-    Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
+//    Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();

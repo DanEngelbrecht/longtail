@@ -1147,6 +1147,10 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
+    if (storage_api->IsDir(storage_api, path))
+    {
+        return 0;
+    }
     int err = storage_api->CreateDir(storage_api, path);
     if (err)
     {
