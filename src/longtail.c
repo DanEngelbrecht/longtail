@@ -3293,8 +3293,9 @@ int Longtail_InitStoredBlockFromData(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitBlockIndexFromData() failed with %d", err)
         return err;
     }
-    stored_block->m_BlockData = &((uint8_t*)stored_block->m_BlockIndex)[Longtail_GetBlockIndexSize(*stored_block->m_BlockIndex->m_ChunkCount)];
-    stored_block->m_BlockChunksDataSize = (uint32_t)(block_data_size - Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount));
+    size_t BlockIndexDataSize = Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount);
+    stored_block->m_BlockData = &((uint8_t*)block_data)[BlockIndexDataSize];
+    stored_block->m_BlockChunksDataSize = (uint32_t)(block_data_size - BlockIndexDataSize);
     stored_block->Dispose = 0;
     return 0;
 }
