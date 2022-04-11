@@ -2741,6 +2741,7 @@ int Longtail_WriteVersionIndex(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->OpenWriteFile) failed with %d",err)
         return err;
     }
+
     err = storage_api->Write(storage_api, file_handle, 0, index_data_size, version_index->m_Version);
     if (err)
     {
@@ -2749,6 +2750,7 @@ int Longtail_WriteVersionIndex(
         file_handle = 0;
         return err;
     }
+
     storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
 
@@ -7954,6 +7956,7 @@ int Longtail_WriteStoreIndex(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->OpenWriteFile() failed with %d", err)
         return err;
     }
+
     err = storage_api->Write(storage_api, file_handle, 0, index_data_size, store_index->m_Version);
     if (err)
     {
@@ -8112,7 +8115,7 @@ LONGTAIL_EXPORT int Longtail_CreateArchiveIndex(
     *archive_index->m_IndexDataSize = (uint32_t)archive_data_index_size;
 
     void* store_index_data_ptr = p;
-    memcpy(p, &store_index[1], store_index_data_size);  // TODO: This is risky - assumes store index header and data is allocated together!
+    memcpy(p, store_index->m_Version, store_index_data_size);
     p += store_index_data_size;
 
     archive_index->m_BlockStartOffets = (uint64_t*)p;
@@ -8122,7 +8125,7 @@ LONGTAIL_EXPORT int Longtail_CreateArchiveIndex(
     p += sizeof(uint32_t) * (*store_index->m_BlockCount);
 
     void* version_index_data_ptr = p;
-    memcpy(p, &version_index[1], version_index_data_size);  // TODO: This is risky - assumes version index header and data is allocated together!
+    memcpy(p, version_index->m_Version, version_index_data_size);
 
     int err = InitStoreIndexFromData(&archive_index->m_StoreIndex, store_index_data_ptr, store_index_data_size);
     if (err)
@@ -8215,7 +8218,16 @@ LONGTAIL_EXPORT int Longtail_ReadArchiveIndex(
     archive_index->m_BlockSizes = (uint32_t*)p;
     p += sizeof(uint32_t) * (*archive_index->m_StoreIndex.m_BlockCount);
 
-    err = InitVersionIndexFromData(&archive_index->m_VersionIndex, p, archive_index_data_size);
+    uint32_t offset = (uint32_t)(p - (const uint8_t*)&archive_index[1]);
+
+    uint32_t version_index_data_size = (uint32_t)(archive_index_data_size -
+        (sizeof(uint32_t) +
+        sizeof(uint32_t) +
+        store_index_data_size +
+        sizeof(uint64_t) * (*archive_index->m_StoreIndex.m_BlockCount) +
+        sizeof(uint32_t) * (*archive_index->m_StoreIndex.m_BlockCount)));
+
+    err = InitVersionIndexFromData(&archive_index->m_VersionIndex, p, version_index_data_size);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "InitVersionIndexFromData() failed with %d", err)
