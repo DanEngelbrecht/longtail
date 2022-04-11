@@ -617,14 +617,14 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
 {
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-//        wchar_t* full_path = ConcatPlatformPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
-//        DWORD attr = GetFileAttributesW(full_path);
-//        Longtail_Free(full_path);
-//        if (attr == INVALID_FILE_ATTRIBUTES)
-//        {
-//            // Silly, silly windows - if we try to scan a folder to fast after it has contents deleted we see if when scanning but it is not really there...
-//            return 0;
-//        }
+        wchar_t* full_path = ConcatPlatformPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
+        DWORD attr = GetFileAttributesW(full_path);
+        Longtail_Free(full_path);
+        if (attr == INVALID_FILE_ATTRIBUTES)
+        {
+            // Silly, silly windows - if we try to scan a folder to fast after it has contents deleted we see if when scanning but it is not really there...
+            return 0;
+        }
         Longtail_Free(fs_iterator->m_ItemPath);
         fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName);
         return fs_iterator->m_ItemPath;
