@@ -315,7 +315,7 @@ static int DecompressBlock(
     LONGTAIL_FATAL_ASSERT(ctx, uncompressed_stored_block->m_BlockIndex, return EINVAL; )
     uncompressed_stored_block->m_BlockData = &((uint8_t*)(&uncompressed_stored_block->m_BlockIndex[1]))[block_index_data_size];
     uncompressed_stored_block->m_BlockChunksDataSize = uncompressed_size;
-    memmove(&uncompressed_stored_block->m_BlockIndex[1], &compressed_stored_block->m_BlockIndex[1], block_index_data_size);
+    memmove(&uncompressed_stored_block->m_BlockIndex[1], ((const uint8_t*)(compressed_stored_block->m_BlockData))-block_index_data_size, block_index_data_size);
 
     size_t real_uncompressed_size = 0;
     err = compression_api->Decompress(

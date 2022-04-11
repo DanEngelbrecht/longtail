@@ -133,7 +133,8 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **FIX** Properly handle UNC paths
+          - **FIX** Fix memory and handle leak when encountering empty folders
+          - **FIX** Fix reallocation size when scanning folders
         draft: false
         prerelease: false
         files: "*-x64.zip"
