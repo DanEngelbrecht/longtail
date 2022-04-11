@@ -2707,7 +2707,7 @@ int Longtail_WriteVersionIndexToBuffer(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    memcpy(*out_buffer, &version_index[1], index_data_size);
+    memcpy(*out_buffer, version_index->m_Version, index_data_size);
     *out_size = index_data_size;
     return 0;
 }
@@ -2741,7 +2741,7 @@ int Longtail_WriteVersionIndex(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->OpenWriteFile) failed with %d",err)
         return err;
     }
-    err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &version_index[1]);
+    err = storage_api->Write(storage_api, file_handle, 0, index_data_size, version_index->m_Version);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Write() failed with %d", err)
@@ -3062,7 +3062,7 @@ int Longtail_WriteBlockIndexToBuffer(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    memcpy(*out_buffer, &block_index[1], index_data_size);
+    memcpy(*out_buffer, block_index->m_BlockHash, index_data_size);
     *out_size = index_data_size;
     return 0;
 }
@@ -3138,7 +3138,7 @@ int Longtail_WriteBlockIndex(
         return err;
     }
     size_t index_data_size = Longtail_GetBlockIndexDataSize(*block_index->m_ChunkCount);
-    err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &block_index[1]);
+    err = storage_api->Write(storage_api, file_handle, 0, index_data_size, block_index->m_BlockHash);
     if (err){
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Write() failed with %d", err)
         storage_api->CloseFile(storage_api, file_handle);
@@ -3402,7 +3402,7 @@ int Longtail_WriteStoredBlockToBuffer(
     }
     uint8_t* write_ptr = (uint8_t*)mem;
 
-    memcpy(write_ptr, &stored_block->m_BlockIndex[1], block_index_data_size);
+    memcpy(write_ptr, stored_block->m_BlockIndex->m_BlockHash, block_index_data_size);
     write_ptr += block_index_data_size;
     memcpy(write_ptr, stored_block->m_BlockData, stored_block->m_BlockChunksDataSize);
 
@@ -3482,7 +3482,7 @@ int Longtail_WriteStoredBlock(
     uint32_t write_offset = 0;
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
     uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
-    err = storage_api->Write(storage_api, block_file_handle, write_offset, block_index_data_size, &stored_block->m_BlockIndex[1]);
+    err = storage_api->Write(storage_api, block_file_handle, write_offset, block_index_data_size, stored_block->m_BlockIndex->m_BlockHash);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Write() failed with %d", err)
@@ -7919,7 +7919,7 @@ int Longtail_WriteStoreIndexToBuffer(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetStoreIndexDataSize() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    memcpy(*out_buffer, &store_index[1], index_data_size);
+    memcpy(*out_buffer, store_index->m_Version, index_data_size);
     *out_size = index_data_size;
     return 0;
 }
@@ -7954,7 +7954,7 @@ int Longtail_WriteStoreIndex(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->OpenWriteFile() failed with %d", err)
         return err;
     }
-    err = storage_api->Write(storage_api, file_handle, 0, index_data_size, &store_index[1]);
+    err = storage_api->Write(storage_api, file_handle, 0, index_data_size, store_index->m_Version);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Write() failed with %d", err)
