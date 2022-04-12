@@ -475,6 +475,7 @@ static int ReadContent(
         0,
         0,
         chunks_path,
+        0,
         &file_infos);
     if (err)
     {

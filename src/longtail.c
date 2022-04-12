@@ -1216,6 +1216,137 @@ struct HashToIndexItem
 
 typedef int (*ProcessEntry)(void* context, const char* root_path, const char* relative_path, const struct Longtail_StorageAPI_EntryProperties* properties);
 
+struct Longtail_ScannedFolder
+{
+    size_t m_EntryCount;
+    size_t m_NameLength;
+    struct Longtail_StorageAPI_EntryProperties* m_Entries;
+};
+
+struct Longtail_ScannedFolder* AppendToScannedFolder(struct Longtail_ScannedFolder* scanned_folder, struct Longtail_StorageAPI_EntryProperties* entry)
+{
+    static const uint64_t EntryCountIncrement = 64;
+    static const uint64_t EntryNameIncrement = 64 * 64;
+    uint64_t name_length = strlen(entry->m_Name) + 1;
+    uint64_t count = scanned_folder ? scanned_folder->m_EntryCount : 0;
+    uint64_t length = scanned_folder ? scanned_folder->m_NameLength : 0;
+    uint64_t new_count = count + 1;
+    uint64_t new_length = length + name_length;
+    uint64_t entry_capacity = (count + EntryCountIncrement - 1) & ~(EntryCountIncrement - 1);
+    uint64_t name_capacity = (length + EntryNameIncrement - 1) & ~(EntryNameIncrement - 1);
+    if (entry_capacity < new_count || name_capacity < new_length)
+    {
+        uint64_t new_entry_capacity = (new_count + 63u) & ~63u;
+        uint64_t new_name_capacity = (new_length + 4095u) & ~4095u;
+        size_t old_mem_size = sizeof(struct Longtail_ScannedFolder) + entry_capacity * sizeof(struct Longtail_StorageAPI_EntryProperties) + name_capacity;
+        size_t new_mem_size = sizeof(struct Longtail_ScannedFolder) + new_entry_capacity * sizeof(struct Longtail_StorageAPI_EntryProperties) + new_name_capacity;
+        struct Longtail_ScannedFolder* new_scanned_folder = (struct Longtail_ScannedFolder*)Longtail_Alloc("Longtail_ScannedFolder", new_mem_size);
+        if (!new_scanned_folder)
+        {
+            return 0;
+        }
+        if (scanned_folder)
+        {
+            memcpy(new_scanned_folder, scanned_folder, old_mem_size);
+            new_scanned_folder->m_Entries = (struct Longtail_StorageAPI_EntryProperties*)&new_scanned_folder[1];
+
+            char* old_name_base = (char*)&scanned_folder->m_Entries[entry_capacity];
+            char* new_name_base = (char*)&new_scanned_folder->m_Entries[new_entry_capacity];
+
+            for (size_t i = 0; i < count; ++i)
+            {
+                new_scanned_folder->m_Entries[i].m_Name = scanned_folder->m_Entries[i].m_Name - old_name_base + new_name_base;
+            }
+            Longtail_Free(scanned_folder);
+        }
+        else
+        {
+            new_scanned_folder->m_EntryCount = 0;
+            new_scanned_folder->m_NameLength = 0;
+            new_scanned_folder->m_Entries = (struct Longtail_StorageAPI_EntryProperties*)&new_scanned_folder[1];
+        }
+        scanned_folder = new_scanned_folder;
+        entry_capacity = new_entry_capacity;
+        name_capacity = new_name_capacity;
+    }
+    memcpy(&scanned_folder->m_Entries[scanned_folder->m_EntryCount], entry, sizeof(struct Longtail_StorageAPI_EntryProperties));
+    char* name_base = (char*)&scanned_folder->m_Entries[entry_capacity];
+    char* name = &name_base[scanned_folder->m_NameLength];
+    scanned_folder->m_Entries[scanned_folder->m_EntryCount].m_Name = name;
+    memcpy(name, entry->m_Name, name_length);
+    scanned_folder->m_EntryCount++;
+    scanned_folder->m_NameLength += name_length;
+    return scanned_folder;
+}
+
+static int ScanFolder(struct Longtail_StorageAPI* storage_api,
+    struct Longtail_PathFilterAPI* optional_path_filter_api, const char* root_folder, const char* folder, struct Longtail_ScannedFolder** out_scanned_folder)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_path_filter_api, "%p"),
+        LONGTAIL_LOGFIELD(folder, "%s"),
+        LONGTAIL_LOGFIELD(out_scanned_folder, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    struct Longtail_ScannedFolder* scanned_folder = 0;
+    Longtail_StorageAPI_HIterator fs_iterator = 0;
+    char* search_folder = storage_api->ConcatPath(storage_api, root_folder, folder);
+    int err = storage_api->StartFind(storage_api, search_folder, &fs_iterator);
+    Longtail_Free(search_folder);
+    if (err == ENOENT)
+    {
+        return 0;
+    }
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "storage_api->StartFind() failed with %d", err)
+        return err;
+    }
+    while(err == 0)
+    {
+        struct Longtail_StorageAPI_EntryProperties properties;
+        err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "storage_api->GetEntryProperties() failed with %d", err)
+            storage_api->CloseFind(storage_api, fs_iterator);
+            Longtail_Free(scanned_folder);
+            return err;
+        }
+
+        if (!optional_path_filter_api
+            || optional_path_filter_api->Include(
+                optional_path_filter_api,
+                root_folder,
+                folder,
+                properties.m_Name,
+                properties.m_IsDir,
+                properties.m_Size,
+                properties.m_Permissions)
+            )
+        {
+            scanned_folder = AppendToScannedFolder(scanned_folder, &properties);
+        }
+
+        err = storage_api->FindNext(storage_api, fs_iterator);
+        if (err == ENOENT)
+        {
+            err = 0;
+            break;
+        }
+    }
+    storage_api->CloseFind(storage_api, fs_iterator);
+    *out_scanned_folder = scanned_folder;
+    return err;
+}
+
+struct Longtail_SearchFolder
+{
+    const char* m_ParentPath;
+    struct Longtail_StorageAPI_EntryProperties m_Properties;
+};
+
 static int RecurseTree(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_PathFilterAPI* optional_path_filter_api,
@@ -1223,7 +1354,8 @@ static int RecurseTree(
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_folder,
     ProcessEntry entry_processor,
-    void* context)
+    void* context,
+    int retain_empty_folders)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
@@ -1239,25 +1371,21 @@ static int RecurseTree(
     LONGTAIL_FATAL_ASSERT(ctx, root_folder != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, entry_processor != 0, return EINVAL)
 
-    char* root_folder_copy = Longtail_Strdup(root_folder);
-    if (!root_folder_copy)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Strdup() failed with %d",
-            ENOMEM)
-        return ENOMEM;
-    }
     uint32_t folder_index = 0;
 
-    char** full_search_paths = 0;
-    arrsetcap(full_search_paths, 256);
-    char** relative_parent_paths = 0;
-    arrsetcap(relative_parent_paths, 256);
+    struct Longtail_SearchFolder* search_folders = 0;
+    arrsetcap(search_folders, 256);
 
-    arrput(full_search_paths, root_folder_copy);
-    arrput(relative_parent_paths, 0);
+    struct Longtail_SearchFolder root;
+    root.m_ParentPath = Longtail_Strdup("");
+    root.m_Properties.m_Name = Longtail_Strdup("");
+    root.m_Properties.m_IsDir = 1;
+    root.m_Properties.m_Size = 0;
+    root.m_Properties.m_Permissions = 0;
+    arrput(search_folders, root);
 
     int err = 0;
-    while (folder_index < (uint32_t)arrlen(full_search_paths))
+    while (folder_index < (uint32_t)arrlen(search_folders))
     {
         if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
         {
@@ -1265,132 +1393,71 @@ static int RecurseTree(
             break;
         }
 
-        char* full_search_path = full_search_paths[folder_index];
-        char* relative_parent_path = relative_parent_paths[folder_index++];
+        struct Longtail_SearchFolder* search_folder = &search_folders[folder_index];
 
-        Longtail_StorageAPI_HIterator fs_iterator = 0;
-        MAKE_LOG_CONTEXT_FIELDS(ctx2)
-            LONGTAIL_LOGFIELD(storage_api, "%p"),
-            LONGTAIL_LOGFIELD(full_search_path, "%s"),
-            LONGTAIL_LOGFIELDFMT_REF(fs_iterator, "%p")
-        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx2, ctx, LONGTAIL_LOG_LEVEL_DEBUG)
-        err = storage_api->StartFind(storage_api, full_search_path, &fs_iterator);
-        if (err == ENOENT)
+        const char* search_folder_path = storage_api->ConcatPath(storage_api, search_folder->m_ParentPath, search_folder->m_Properties.m_Name);
+
+        struct Longtail_ScannedFolder* scanned_folder = 0;
+        err = ScanFolder(storage_api, optional_path_filter_api, root_folder, search_folder_path, &scanned_folder);
+        if (err)
         {
-            Longtail_Free((void*)full_search_path);
-            full_search_path = 0;
-            Longtail_Free((void*)relative_parent_path);
-            relative_parent_path = 0;
-            err = 0;
-            continue;
-        }
-        else if (err)
-        {
-            LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "storage_api->StartFind() failed with %d", err)
-            Longtail_Free((void*)full_search_path);
-            full_search_path = 0;
-            Longtail_Free((void*)relative_parent_path);
-            relative_parent_path = 0;
+            Longtail_Free((void*)search_folder_path);
+            search_folder_path = 0;
             break;
         }
-        LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_DEBUG, "Scanning `%s`", full_search_path)
-        while(err == 0)
+        if (folder_index > 0)
         {
-            struct Longtail_StorageAPI_EntryProperties properties;
-            err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
+            err = entry_processor(context, root_folder, search_folder_path, &search_folders[folder_index].m_Properties);
             if (err)
             {
-                LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "storage_api->GetEntryProperties() failed with %d", err)
-            }
-            else
-            {
-                char* asset_path = 0;
-                if (!relative_parent_path)
-                {
-                    asset_path = Longtail_Strdup(properties.m_Name);
-                }
-                else
-                {
-                    size_t current_relative_path_length = strlen(relative_parent_path);
-                    size_t new_parent_path_length = current_relative_path_length + 1 + strlen(properties.m_Name);
-                    asset_path = (char*)Longtail_Alloc("GetFilesRecursively", new_parent_path_length + 1);
-                    if (!asset_path)
-                    {
-                        LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
-                        break;
-                    }
-                    strcpy(asset_path, relative_parent_path);
-                    asset_path[current_relative_path_length] = '/';
-                    strcpy(&asset_path[current_relative_path_length + 1], properties.m_Name);
-                }
-
-                if (!optional_path_filter_api
-                    || optional_path_filter_api->Include(
-                        optional_path_filter_api,
-                        root_folder,
-                        asset_path,
-                        properties.m_Name,
-                        properties.m_IsDir,
-                        properties.m_Size,
-                        properties.m_Permissions)
-                    )
-                {
-                    MAKE_LOG_CONTEXT_FIELDS(ctx3)
-                        LONGTAIL_LOGFIELD(context, "%p"),
-                        LONGTAIL_LOGFIELD(full_search_path, "%s"),
-                        LONGTAIL_LOGFIELD(asset_path, "%s"),
-                        LONGTAIL_LOGFIELDFMT_REF(properties, "%p")
-                    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx3, ctx2, LONGTAIL_LOG_LEVEL_DEBUG)
-                    err = entry_processor(context, full_search_path, asset_path, &properties);
-                    if (err)
-                    {
-                        LONGTAIL_LOG(ctx3, LONGTAIL_LOG_LEVEL_WARNING, "entry_processor() failed with %d",
-                            err)
-                        Longtail_Free(asset_path);
-                        asset_path = 0;
-                        break;
-                    }
-                    if (properties.m_IsDir)
-                    {
-                        if ((size_t)arrlen(full_search_paths) == arrcap(full_search_paths))
-                        {
-                            if (folder_index > 0)
-                            {
-                                uint32_t unprocessed_count = (uint32_t)(arrlen(full_search_paths) - folder_index);
-                                memmove(full_search_paths, &full_search_paths[folder_index], sizeof(const char*) * unprocessed_count);
-                                arrsetlen(full_search_paths, unprocessed_count);
-                                memmove(relative_parent_paths, &relative_parent_paths[folder_index], sizeof(const char*) * unprocessed_count);
-                                arrsetlen(relative_parent_paths, unprocessed_count);
-                                folder_index = 0;
-                            }
-                        }
-                        arrput(full_search_paths, storage_api->ConcatPath(storage_api, full_search_path, properties.m_Name));
-                        arrput(relative_parent_paths, asset_path);
-                        asset_path = 0;
-                    }
-                }
-                Longtail_Free(asset_path);
-            }
-            err = storage_api->FindNext(storage_api, fs_iterator);
-            if (err == ENOENT)
-            {
-                err = 0;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "entry_processor() failed with %d",
+                    err)
+                Longtail_Free((void*)search_folder_path);
+                search_folder_path = 0;
                 break;
             }
         }
-        storage_api->CloseFind(storage_api, fs_iterator);
-        Longtail_Free((void*)full_search_path);
-        full_search_path = 0;
-        Longtail_Free((void*)relative_parent_path);
-        relative_parent_path = 0;
+        if (scanned_folder)
+        {
+            for (size_t i = 0; i < scanned_folder->m_EntryCount; ++i)
+            {
+                const struct Longtail_StorageAPI_EntryProperties* entry = &scanned_folder->m_Entries[i];
+                if (entry->m_IsDir)
+                {
+                    struct Longtail_SearchFolder new_search_folder;
+                    new_search_folder.m_ParentPath = Longtail_Strdup(search_folder_path);
+                    new_search_folder.m_Properties = *entry;
+                    new_search_folder.m_Properties.m_Name = Longtail_Strdup(entry->m_Name);
+                    arrput(search_folders, new_search_folder);
+                    continue;
+                }
+                char* asset_path = storage_api->ConcatPath(storage_api, search_folder_path, entry->m_Name);
+                err = entry_processor(context, root_folder, asset_path, entry);
+                Longtail_Free(asset_path);
+                if (err)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "entry_processor() failed with %d",
+                        err)
+                        break;
+                }
+            }
+            Longtail_Free(scanned_folder);
+            scanned_folder = 0;
+        }
+        Longtail_Free((void*)search_folder_path);
+        search_folder_path = 0;
+
+        Longtail_Free((void*)search_folder->m_ParentPath);
+        Longtail_Free((void*)search_folder->m_Properties.m_Name);
+        search_folder = 0;
+        folder_index++;
     }
-    while (folder_index < (uint32_t)arrlen(full_search_paths))
+    while (folder_index < (uint32_t)arrlen(search_folders))
     {
-        Longtail_Free(full_search_paths[folder_index]);
-        Longtail_Free(relative_parent_paths[folder_index++]);
+        Longtail_Free((void*)search_folders[folder_index].m_ParentPath);
+        Longtail_Free((void*)search_folders[folder_index].m_Properties.m_Name);
     }
-    arrfree(relative_parent_paths);
-    arrfree(full_search_paths);
+    arrfree(search_folders);
     return err;
 }
 
@@ -1609,6 +1676,7 @@ int Longtail_GetFilesRecursively(
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
+    int retain_empty_folders,
     struct Longtail_FileInfos** out_file_infos)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -1636,7 +1704,7 @@ int Longtail_GetFilesRecursively(
     struct AddFile_Context context = {storage_api, default_path_count, default_path_data_size, (uint32_t)(strlen(root_path)), file_infos};
     file_infos = 0;
 
-    int err = RecurseTree(storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, AddFile, &context);
+    int err = RecurseTree(storage_api, optional_path_filter_api, optional_cancel_api, optional_cancel_token, root_path, AddFile, &context, retain_empty_folders);
     if(err)
     {
         LONGTAIL_LOG(ctx, (err == ECANCELED) ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "RecurseTree() failed with %d", err)

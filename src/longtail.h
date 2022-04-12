@@ -906,6 +906,7 @@ LONGTAIL_EXPORT char* Longtail_Strdup(const char* str);
  * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
  * @param[in] root_path             Root path to search for files and directories - may not be null
+ * @param[in] retain_empty_folders  Should empty folders be included or not
  * @param[out] out_file_infos       Pointer to a struct Longtail_FileInfos* pointer which will be set on success
  * @return                          Return code (errno style), zero on success
  */
@@ -915,6 +916,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
+    int retain_empty_folders,
     struct Longtail_FileInfos** out_file_infos);
 
 /*! @brief Create a version index for a struct Longtail_FileInfos.
