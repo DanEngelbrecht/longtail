@@ -1098,6 +1098,72 @@ static char* InMemStorageAPI_GetParentPath(
     return result;
 }
 
+static int InMemStorageAPI_MapFile(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HOpenFile f,
+    uint64_t offset,
+    uint64_t length,
+    Longtail_StorageAPI_HFileMap* out_file_map,
+    void** out_data_ptr)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(f, "%p"),
+        LONGTAIL_LOGFIELD(offset, "%" PRIu64),
+        LONGTAIL_LOGFIELD(length, "%" PRIu64),
+        LONGTAIL_LOGFIELD(out_file_map, "%p"),
+        LONGTAIL_LOGFIELD(out_data_ptr, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, f != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_file_map !=0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_data_ptr !=0, return EINVAL)
+
+    struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
+    Longtail_LockSpinLock(instance->m_SpinLock);
+    uint32_t path_hash = (uint32_t)(uintptr_t)f;
+    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    if (it == -1) {
+        Longtail_UnlockSpinLock(instance->m_SpinLock);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "File not found, failed with %d", EINVAL)
+        return EINVAL;
+    }
+    struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
+    if ((ptrdiff_t)(offset + length) > arrlen(path_entry->m_Content))
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Read out of bounds, failed with %d", EIO)
+        Longtail_UnlockSpinLock(instance->m_SpinLock);
+        return EIO;
+    }
+    void* content_ptr = path_entry->m_Content;
+    // A bit dangerous - we assume nobody is writing to the file while we are reading (which is unsupported here)
+    Longtail_UnlockSpinLock(instance->m_SpinLock);
+    *out_file_map = (Longtail_StorageAPI_HFileMap)content_ptr;
+    *out_data_ptr = &((uint8_t*)content_ptr)[offset];
+    return 0;
+}
+
+static void InMemStorageAPI_UnmapFile(
+    struct Longtail_StorageAPI* storage_api,
+    Longtail_StorageAPI_HFileMap m,
+    void* data_ptr,
+    uint64_t length)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(m, "%p"),
+        LONGTAIL_LOGFIELD(data_ptr, "%p"),
+        LONGTAIL_LOGFIELD(length, "%" PRIu64),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, m != 0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, data_ptr !=0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return)
+}
+
 static int InMemStorageAPI_Init(
     void* mem,
     struct Longtail_StorageAPI** out_storage_api)
@@ -1133,7 +1199,9 @@ static int InMemStorageAPI_Init(
         InMemStorageAPI_GetEntryProperties,
         InMemStorageAPI_LockFile,
         InMemStorageAPI_UnlockFile,
-        InMemStorageAPI_GetParentPath);
+        InMemStorageAPI_GetParentPath,
+        InMemStorageAPI_MapFile,
+        InMemStorageAPI_UnmapFile);
 
     struct InMemStorageAPI* storage_api = (struct InMemStorageAPI*)api;
 

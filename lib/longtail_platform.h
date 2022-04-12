@@ -77,7 +77,7 @@ char*   Longtail_GetParentPath(const char* path);
 
 typedef struct Longtail_FileMap_private* HLongtail_FileMap;
 int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, void** out_data_ptr);
-void Longtail_UnmapFile(HLongtail_FileMap file_map);
+void Longtail_UnmapFile(HLongtail_FileMap file_map, void* data_ptr, uint64_t length);
 
 char* Longtail_GetTempFolder();
 

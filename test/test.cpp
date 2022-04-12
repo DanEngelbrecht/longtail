@@ -5409,6 +5409,8 @@ struct FailableStorageAPI
     static int LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->LockFile(api->m_BackingAPI, path, out_lock_file);}
     static int UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnlockFile(api->m_BackingAPI, lock_file);}
     static char* GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetParentPath(api->m_BackingAPI, path);}
+    static int MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, void** out_data_ptr) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->MapFile(api->m_BackingAPI, f, offset, length, out_file_map, out_data_ptr);}
+    static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, void* data_ptr, uint64_t length) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m, data_ptr, length);}
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5439,7 +5441,9 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
         FailableStorageAPI::GetEntryProperties,
         FailableStorageAPI::LockFile,
         FailableStorageAPI::UnlockFile,
-        FailableStorageAPI::GetParentPath);
+        FailableStorageAPI::GetParentPath,
+        FailableStorageAPI::MapFile,
+        FailableStorageAPI::UnmapFile);
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;
     failable_storage_api->m_PassCount = 0x7fffffff;
@@ -6923,8 +6927,8 @@ TEST(Longtail, Longtail_Archive)
     static const uint32_t MAX_BLOCK_SIZE = 26973;
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
 
-//    Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
-    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
+    Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
+//    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();

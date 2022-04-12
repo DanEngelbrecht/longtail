@@ -291,7 +291,9 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
     Longtail_Storage_LockFileFunc lock_file_func,
     Longtail_Storage_UnlockFileFunc unlock_file_func,
-    Longtail_Storage_GetParentPathFunc get_parent_path_func)
+    Longtail_Storage_GetParentPathFunc get_parent_path_func,
+    Longtail_Storage_MapFileFunc map_file_func,
+    Longtail_Storage_UnmapFileFunc unmap_file_func)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -318,7 +320,9 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
         LONGTAIL_LOGFIELD(get_entry_properties_func, "%p"),
         LONGTAIL_LOGFIELD(lock_file_func, "%p"),
         LONGTAIL_LOGFIELD(unlock_file_func, "%p"),
-        LONGTAIL_LOGFIELD(get_parent_path_func, "%p")
+        LONGTAIL_LOGFIELD(get_parent_path_func, "%p"),
+        LONGTAIL_LOGFIELD(map_file_func, "%p"),
+        LONGTAIL_LOGFIELD(unmap_file_func, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -347,6 +351,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->LockFile = lock_file_func;
     api->UnlockFile = unlock_file_func;
     api->GetParentPath = get_parent_path_func;
+    api->MapFile = map_file_func;
+    api->UnMapFile = unmap_file_func;
     return api;
 }
 
@@ -373,6 +379,8 @@ int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api,
 int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { return storage_api->LockFile(storage_api, path, out_lock_file); }
 int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { return storage_api->UnlockFile(storage_api, lock_file); }
 char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
+int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
+void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, void* data_ptr, uint64_t length) { storage_api->UnMapFile(storage_api, m, data_ptr, length); }
 
 ////////////// ProgressAPI
 

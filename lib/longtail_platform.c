@@ -1071,12 +1071,11 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
     return 0;
 }
 
-void Longtail_UnmapFile(HLongtail_FileMap file_map)
+void Longtail_UnmapFile(HLongtail_FileMap file_map, void* data_ptr, uint64_t length)
 {
     HANDLE h = (HANDLE)(file_map);
     CloseHandle(h);
 }
-
 
 #endif
 
@@ -2043,6 +2042,41 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     close(file_lock->fd);
     file_lock->fd = -1;
     return 0;
+}
+
+int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, void** out_data_ptr)
+{
+    FILE* f = (FILE*)handle;
+
+    long page_size = sysconf(PAGESIZE);
+    if (page_size < 1)
+    {
+        return errno;
+    }
+    uint64_t base_address = offset & ~((uint64_t)(page_size - 1));
+    uint64_t address_offset = offset - base_address;
+
+	void* mapped_address = mmap(
+		0,
+		length,
+		PROT_READ,
+		MAP_NORESERVE,
+		fileno(f),
+		base_address);
+
+    if (mapped_adress == MAP_FAILED)
+    {
+        return errno;
+    }
+    *out_file_map = (HLongtail_FileMap)mapped_address;
+    *out_data_ptr = &((const uint8_t*)mapped_address)[address_offset];
+    return 0;
+}
+
+void Longtail_UnmapFile(HLongtail_FileMap file_map, void* data_ptr, uint64_t length)
+{
+    void* mapped_address = (void*)file_map;
+    munmap(mapped_address, length);
 }
 
 #endif

@@ -13,7 +13,8 @@ struct ArchiveBlockStoreAPI
     HLongtail_SpinLock m_Lock;
     uint64_t m_BlockDataOffset;
     Longtail_StorageAPI_HOpenFile m_ArchiveFileHandle;
-    HLongtail_FileMap m_ArchiveFileMapping;
+    Longtail_StorageAPI_HFileMap m_ArchiveFileMapping;
+    uint64_t m_BlockBytesSize;
     void* m_BlockBytes;
 
     struct Longtail_StorageAPI* m_StorageAPI;
@@ -168,44 +169,71 @@ static int ArchiveBlockStore_GetStoredBlock(
     }
     int block_index = *block_index_ptr;
     uint64_t block_offset = api->m_ArchiveIndex->m_BlockStartOffets[block_index];
-//    uint64_t read_offset = (*api->m_ArchiveIndex->m_IndexDataSize) + block_offset;
     uint32_t block_size = api->m_ArchiveIndex->m_BlockSizes[block_index];
-//    uint64_t stored_block_data_size = block_size;
 
-    size_t block_mem_size = Longtail_GetStoredBlockSize(0);//stored_block_data_size);
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc("ArchiveBlockStore_GetStoredBlock", block_mem_size);
-    if (!stored_block)
+    struct Longtail_StoredBlock* stored_block = 0;
+    if (api->m_BlockBytes)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-        return ENOMEM;
+        size_t block_mem_size = Longtail_GetStoredBlockSize(0);
+        stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc("ArchiveBlockStore_GetStoredBlock", block_mem_size);
+        if (!stored_block)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            return ENOMEM;
+        }
+        void* block_data = &((uint8_t*)api->m_BlockBytes)[block_offset];
+        int err = Longtail_InitStoredBlockFromData(
+            stored_block,
+            block_data,
+            block_size);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
+            Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            Longtail_Free(stored_block);
+            return err;
+        }
     }
-//    void* block_data = &((uint8_t*)stored_block)[block_mem_size - stored_block_data_size];
-    void* block_data = &((uint8_t*)api->m_BlockBytes)[block_offset];
+    else
+    {
+        uint64_t read_offset = (*api->m_ArchiveIndex->m_IndexDataSize) + block_offset;
+        uint64_t stored_block_data_size = block_size;
+        size_t block_mem_size = Longtail_GetStoredBlockSize(stored_block_data_size);
+        stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc("ArchiveBlockStore_GetStoredBlock", block_mem_size);
+        if (!stored_block)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            return ENOMEM;
+        }
+        void* block_data = &((uint8_t*)stored_block)[block_mem_size - stored_block_data_size];
 
-//    Longtail_LockSpinLock(api->m_Lock);
-//    int err = api->m_StorageAPI->Read(api->m_StorageAPI, api->m_ArchiveFileHandle, read_offset, stored_block_data_size, block_data);
-//    Longtail_UnlockSpinLock(api->m_Lock);
-//    if (err)
-//    {
-//        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Read() failed with %d", err)
-//        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-//        Longtail_Free(stored_block);
-//        return err;
-//    }
-    int err = Longtail_InitStoredBlockFromData(
-        stored_block,
-        block_data,
-        block_size);
-//        stored_block_data_size);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
-        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-        Longtail_Free(stored_block);
-        return err;
+        Longtail_LockSpinLock(api->m_Lock);
+        int err = api->m_StorageAPI->Read(api->m_StorageAPI, api->m_ArchiveFileHandle, read_offset, stored_block_data_size, block_data);
+        Longtail_UnlockSpinLock(api->m_Lock);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Read() failed with %d", err)
+            Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            Longtail_Free(stored_block);
+            return err;
+        }
+        err = Longtail_InitStoredBlockFromData(
+            stored_block,
+            block_data,
+            stored_block_data_size);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
+            Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            Longtail_Free(stored_block);
+            return err;
+        }
     }
+
     stored_block->Dispose = ArchiveBlockStore_StoredBlock_Dispose;
+
     LONGTAIL_FATAL_ASSERT(ctx, stored_block->m_BlockChunksDataSize < block_size, return EINVAL);
     LONGTAIL_FATAL_ASSERT(ctx, *stored_block->m_BlockIndex->m_ChunkCount <= 1024, return EINVAL);
 
@@ -336,13 +364,13 @@ static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
     }
 
     Longtail_LockSpinLock(api->m_Lock);
-    api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
-    api->m_ArchiveFileHandle = 0;
     if (api->m_BlockBytes)
     {
-        Longtail_UnmapFile(api->m_ArchiveFileMapping);
+        api->m_StorageAPI->UnMapFile(api->m_StorageAPI, api->m_ArchiveFileMapping, api->m_BlockBytes, api->m_BlockBytesSize);
         api->m_ArchiveFileMapping = 0;
     }
+    api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
+    api->m_ArchiveFileHandle = 0;
     Longtail_UnlockSpinLock(api->m_Lock);
 
     Longtail_DeleteSpinLock(api->m_Lock);
@@ -395,6 +423,8 @@ static int ArchiveBlockStore_Init(
     api->m_ArchivePath = Longtail_Strdup(archive_path);
     api->m_IsWriteMode = enable_write;
     api->m_BlockIndexLookup =Longtail_LookupTable_Create(&api[1], *archive_index->m_StoreIndex.m_BlockCount, 0);
+    api->m_ArchiveFileMapping = 0;
+    api->m_BlockBytesSize = 0;
     api->m_BlockBytes = 0;
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
@@ -444,13 +474,11 @@ static int ArchiveBlockStore_Init(
             return err;
         }
         
-        err = Longtail_MapFile((HLongtail_OpenFile)api->m_ArchiveFileHandle, *api->m_ArchiveIndex->m_IndexDataSize, archive_size - *api->m_ArchiveIndex->m_IndexDataSize, &api->m_ArchiveFileMapping, &api->m_BlockBytes);
+        api->m_BlockBytesSize = archive_size - *api->m_ArchiveIndex->m_IndexDataSize;
+        err = api->m_StorageAPI->MapFile(api->m_StorageAPI, api->m_ArchiveFileHandle, *api->m_ArchiveIndex->m_IndexDataSize, api->m_BlockBytesSize, &api->m_ArchiveFileMapping, &api->m_BlockBytes);
         if (err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MapFile() failed with %d", err)
-            api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
-            Longtail_Free(api->m_ArchivePath);
-            return err;
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_MapFile() failed with %d, using normal file IO", err)
         }
     }
 
