@@ -5244,7 +5244,7 @@ struct AssetWriteList
     uint32_t* m_AssetIndexJobs;
 };
 
-struct BlockJobCompareContext
+struct JobCompareContext
 {
     const struct AssetWriteList* m_AssetWriteList;
     const uint32_t* asset_chunk_index_starts;
@@ -5253,7 +5253,7 @@ struct BlockJobCompareContext
     struct Longtail_LookupTable* chunk_hash_to_block_index;
 };
 
-static SORTFUNC(BlockJobCompare)
+static SORTFUNC(JobCompare)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -5269,7 +5269,7 @@ static SORTFUNC(BlockJobCompare)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
 
-    struct BlockJobCompareContext* c = (struct BlockJobCompareContext*)context;
+    struct JobCompareContext* c = (struct JobCompareContext*)context;
     struct Longtail_LookupTable* chunk_hash_to_block_index = c->chunk_hash_to_block_index;
 
     uint32_t a = *(const uint32_t*)a_ptr;
@@ -5302,7 +5302,6 @@ static SORTFUNC(BlockJobCompare)
     }
     return 0;
 }
-
 
 static struct AssetWriteList* CreateAssetWriteList(uint32_t asset_count)
 {
@@ -5418,14 +5417,15 @@ static int BuildAssetWriteList(
         }
     }
 
-    struct BlockJobCompareContext block_job_compare_context = {
-            awl,    // m_AssetWriteList
+    struct JobCompareContext block_job_compare_context = {
+            awl,
             asset_chunk_index_starts,
             asset_chunk_indexes,
-            chunk_hashes,   // chunk_hashes
-            chunk_hash_to_block_index  // chunk_hash_to_block_index
+            chunk_hashes,
+            chunk_hash_to_block_index
         };
-    QSORT(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
+    QSORT(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), JobCompare, &block_job_compare_context);
+    QSORT(awl->m_AssetIndexJobs, (size_t)awl->m_AssetJobCount, sizeof(uint32_t), JobCompare, &block_job_compare_context);
 
     *out_asset_write_list = awl;
     return 0;
