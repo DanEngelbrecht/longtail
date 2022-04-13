@@ -1022,7 +1022,7 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     return 0;
 }
 
-int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, void** out_data_ptr)
+int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr)
 {
     HANDLE h = (HANDLE)(handle);
 
@@ -1063,7 +1063,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
     return 0;
 }
 
-void Longtail_UnmapFile(HLongtail_FileMap file_map, void* data_ptr, uint64_t length)
+void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64_t length)
 {
     HANDLE h = (HANDLE)(file_map);
     CloseHandle(h);
@@ -2037,7 +2037,7 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     return 0;
 }
 
-int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, void** out_data_ptr)
+int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr)
 {
     FILE* f = (FILE*)handle;
 
@@ -2068,7 +2068,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
     return 0;
 }
 
-void Longtail_UnmapFile(HLongtail_FileMap file_map, void* data_ptr, uint64_t length)
+void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64_t length)
 {
     void* mapped_address = (void*)file_map;
     munmap(mapped_address, length);

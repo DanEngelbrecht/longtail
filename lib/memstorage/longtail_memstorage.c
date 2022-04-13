@@ -1104,7 +1104,7 @@ static int InMemStorageAPI_MapFile(
     uint64_t offset,
     uint64_t length,
     Longtail_StorageAPI_HFileMap* out_file_map,
-    void** out_data_ptr)
+    const void** out_data_ptr)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
@@ -1137,18 +1137,18 @@ static int InMemStorageAPI_MapFile(
         Longtail_UnlockSpinLock(instance->m_SpinLock);
         return EIO;
     }
-    void* content_ptr = path_entry->m_Content;
+    const void* content_ptr = path_entry->m_Content;
     // A bit dangerous - we assume nobody is writing to the file while we are reading (which is unsupported here)
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     *out_file_map = (Longtail_StorageAPI_HFileMap)content_ptr;
-    *out_data_ptr = &((uint8_t*)content_ptr)[offset];
+    *out_data_ptr = &((const uint8_t*)content_ptr)[offset];
     return 0;
 }
 
 static void InMemStorageAPI_UnmapFile(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HFileMap m,
-    void* data_ptr,
+    const void* data_ptr,
     uint64_t length)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)

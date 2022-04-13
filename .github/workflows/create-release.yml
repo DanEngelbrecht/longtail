@@ -133,7 +133,7 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading
+          - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback
           - **CHANGED** Archive block store now uses memory mapped file if possible when reading blocks from archive file
           - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU
           - **FIX** Remove redundant check if directory exists when getting directory name

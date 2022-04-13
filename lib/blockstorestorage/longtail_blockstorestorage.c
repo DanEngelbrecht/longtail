@@ -1292,7 +1292,7 @@ static int BlockStoreStorageAPI_MapFile(
     uint64_t offset,
     uint64_t length,
     Longtail_StorageAPI_HFileMap* out_file_map,
-    void** out_data_ptr)
+    const void** out_data_ptr)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
@@ -1316,7 +1316,7 @@ static int BlockStoreStorageAPI_MapFile(
 static void BlockStoreStorageAPI_UnmapFile(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HFileMap m,
-    void* data_ptr,
+    const void* data_ptr,
     uint64_t length)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)

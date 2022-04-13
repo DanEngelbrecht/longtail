@@ -379,8 +379,8 @@ int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api,
 int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { return storage_api->LockFile(storage_api, path, out_lock_file); }
 int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { return storage_api->UnlockFile(storage_api, lock_file); }
 char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
-int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
-void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, void* data_ptr, uint64_t length) { storage_api->UnMapFile(storage_api, m, data_ptr, length); }
+int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
+void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length) { storage_api->UnMapFile(storage_api, m, data_ptr, length); }
 
 ////////////// ProgressAPI
 
@@ -5247,11 +5247,39 @@ struct AssetWriteList
 struct JobCompareContext
 {
     const struct AssetWriteList* m_AssetWriteList;
+    const uint32_t* asset_chunk_counts;
     const uint32_t* asset_chunk_index_starts;
     const uint32_t* asset_chunk_indexes;
     const TLongtail_Hash* chunk_hashes;
     struct Longtail_LookupTable* chunk_hash_to_block_index;
 };
+
+static uint32_t GetJobBlockIndex(struct JobCompareContext* c, uint32_t asset_index)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(c, "%p"),
+        LONGTAIL_LOGFIELD(asset_index, "%u"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    if (c->asset_chunk_counts[asset_index] == 0)
+    {
+        return 0xffffffffu;
+    }
+
+    uint32_t asset_chunk_offset = c->asset_chunk_index_starts[asset_index];
+    uint32_t chunk_index = c->asset_chunk_indexes[asset_chunk_offset];
+
+    TLongtail_Hash first_chunk_hash = c->chunk_hashes[chunk_index];
+
+    const uint32_t* block_index_ptr = Longtail_LookupTable_Get(c->chunk_hash_to_block_index, first_chunk_hash);
+    LONGTAIL_FATAL_ASSERT(ctx, block_index_ptr, return 0)
+
+    return *block_index_ptr;
+}
 
 static SORTFUNC(JobCompare)
 {
@@ -5270,28 +5298,12 @@ static SORTFUNC(JobCompare)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
 
     struct JobCompareContext* c = (struct JobCompareContext*)context;
-    struct Longtail_LookupTable* chunk_hash_to_block_index = c->chunk_hash_to_block_index;
 
     uint32_t a = *(const uint32_t*)a_ptr;
+    uint32_t a_block_index = GetJobBlockIndex(c, a);
     uint32_t b = *(const uint32_t*)b_ptr;
+    uint32_t b_block_index = GetJobBlockIndex(c, b);
 
-    uint32_t asset_chunk_offset_a = c->asset_chunk_index_starts[a];
-    uint32_t asset_chunk_offset_b = c->asset_chunk_index_starts[b];
-    uint32_t chunk_index_a = c->asset_chunk_indexes[asset_chunk_offset_a];
-    uint32_t chunk_index_b = c->asset_chunk_indexes[asset_chunk_offset_b];
-
-    TLongtail_Hash a_first_chunk_hash = c->chunk_hashes[chunk_index_a];
-    TLongtail_Hash b_first_chunk_hash = c->chunk_hashes[chunk_index_b];
-//    if (a_first_chunk_hash == b_first_chunk_hash)
-//    {
-//        return 0;
-//    }
-    const uint32_t* a_block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, a_first_chunk_hash);
-    LONGTAIL_FATAL_ASSERT(ctx, a_block_index_ptr, return 0)
-    const uint32_t* b_block_index_ptr = Longtail_LookupTable_Get(chunk_hash_to_block_index, b_first_chunk_hash);
-    LONGTAIL_FATAL_ASSERT(ctx, b_block_index_ptr, return 0)
-    uint32_t a_block_index = *a_block_index_ptr;
-    uint32_t b_block_index = *b_block_index_ptr;
     if (a_block_index < b_block_index)
     {
         return -1;
@@ -5419,6 +5431,7 @@ static int BuildAssetWriteList(
 
     struct JobCompareContext block_job_compare_context = {
             awl,
+            asset_chunk_counts,
             asset_chunk_index_starts,
             asset_chunk_indexes,
             chunk_hashes,
