@@ -1049,13 +1049,13 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
 
     SYSTEM_INFO system_info;
     GetSystemInfo(&system_info);
-    uint64_t base_address = offset & ~((uint64_t)(system_info.dwAllocationGranularity - 1));
-    uint64_t address_offset = offset - base_address;
+    uint64_t base_offset = offset & ~((uint64_t)(system_info.dwAllocationGranularity - 1));
+    uint64_t address_offset = offset - base_offset;
 
     uint8_t* base_data_ptr = MapViewOfFile(file_mapping,
         FILE_MAP_READ,
-        (uint32_t)(base_address >> 32),
-        (uint32_t)(base_address & 0xffffffff),
+        (uint32_t)(base_offset >> 32),
+        (uint32_t)(base_offset & 0xffffffff),
         length + address_offset);
 
     if (base_data_ptr == 0)
@@ -1088,6 +1088,7 @@ void Longtail_UnmapFile(HLongtail_FileMap file_map, void* data_ptr, uint64_t len
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <pthread.h>
@@ -2048,28 +2049,30 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
 {
     FILE* f = (FILE*)handle;
 
-    long page_size = sysconf(PAGESIZE);
+    long page_size = sysconf(_SC_PAGESIZE);
     if (page_size < 1)
     {
         return errno;
     }
-    uint64_t base_address = offset & ~((uint64_t)(page_size - 1));
-    uint64_t address_offset = offset - base_address;
+    uint64_t base_offset = offset & ~((uint64_t)(page_size - 1));
+    uint64_t address_offset = offset - base_offset;
+
+    int fd = fileno(f);
 
 	void* mapped_address = mmap(
 		0,
 		length,
 		PROT_READ,
 		MAP_NORESERVE,
-		fileno(f),
-		base_address);
+		fd,
+		base_offset);
 
-    if (mapped_adress == MAP_FAILED)
+    if (mapped_address == MAP_FAILED)
     {
         return errno;
     }
     *out_file_map = (HLongtail_FileMap)mapped_address;
-    *out_data_ptr = &((const uint8_t*)mapped_address)[address_offset];
+    *out_data_ptr = &((uint8_t*)mapped_address)[address_offset];
     return 0;
 }
 
