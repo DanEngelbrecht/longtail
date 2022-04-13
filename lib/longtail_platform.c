@@ -2061,9 +2061,9 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
 
 	void* mapped_address = mmap(
 		0,
-		length,
+		length + base_offset,
 		PROT_READ,
-		MAP_NORESERVE,
+		MAP_PRIVATE | MAP_NORESERVE,
 		fd,
 		base_offset);
 
