@@ -133,7 +133,10 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **FIX** Fix calulcation of version index size when reading archive index
+          - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading
+          - **CHANGED** Archive block store now uses memory mapped file if possible when reading blocks from archive file
+          - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU
+          - **FIX** Remove redundant check if directory exists when getting directory name
         draft: false
         prerelease: false
         files: "*-x64.zip"
