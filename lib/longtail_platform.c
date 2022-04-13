@@ -617,14 +617,6 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
 {
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-        wchar_t* full_path = ConcatPlatformPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
-        DWORD attr = GetFileAttributesW(full_path);
-        Longtail_Free(full_path);
-        if (attr == INVALID_FILE_ATTRIBUTES)
-        {
-            // Silly, silly windows - if we try to scan a folder to fast after it has contents deleted we see if when scanning but it is not really there...
-            return 0;
-        }
         Longtail_Free(fs_iterator->m_ItemPath);
         fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName);
         return fs_iterator->m_ItemPath;
@@ -1029,6 +1021,54 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     }
     return 0;
 }
+
+int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr)
+{
+    HANDLE h = (HANDLE)(handle);
+
+    HANDLE file_mapping = CreateFileMapping(h,
+        0,
+        PAGE_READONLY,
+        0,
+        0,
+        0);
+
+    if (file_mapping == INVALID_HANDLE_VALUE)
+    {
+        DWORD error = GetLastError();
+        return Win32ErrorToErrno(error);
+    }
+
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+    uint64_t base_offset = offset & ~((uint64_t)(system_info.dwAllocationGranularity - 1));
+    uint64_t address_offset = offset - base_offset;
+
+    uint8_t* base_data_ptr = MapViewOfFile(file_mapping,
+        FILE_MAP_READ,
+        (uint32_t)(base_offset >> 32),
+        (uint32_t)(base_offset & 0xffffffff),
+        length + address_offset);
+
+    if (base_data_ptr == 0)
+    {
+        DWORD error = GetLastError();
+        CloseHandle(file_mapping);
+        return Win32ErrorToErrno(error);
+    }
+
+    *out_file_map = (HLongtail_FileMap)file_mapping;
+    *out_data_ptr = &base_data_ptr[address_offset];
+
+    return 0;
+}
+
+void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64_t length)
+{
+    HANDLE h = (HANDLE)(file_map);
+    CloseHandle(h);
+}
+
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -1040,6 +1080,7 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <pthread.h>
@@ -1994,6 +2035,43 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     close(file_lock->fd);
     file_lock->fd = -1;
     return 0;
+}
+
+int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr)
+{
+    FILE* f = (FILE*)handle;
+
+    long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size < 1)
+    {
+        return errno;
+    }
+    uint64_t base_offset = offset & ~((uint64_t)(page_size - 1));
+    uint64_t address_offset = offset - base_offset;
+
+    int fd = fileno(f);
+
+	void* mapped_address = mmap(
+		0,
+		length + base_offset,
+		PROT_READ,
+		MAP_PRIVATE | MAP_NORESERVE,
+		fd,
+		base_offset);
+
+    if (mapped_address == MAP_FAILED)
+    {
+        return errno;
+    }
+    *out_file_map = (HLongtail_FileMap)mapped_address;
+    *out_data_ptr = &((uint8_t*)mapped_address)[address_offset];
+    return 0;
+}
+
+void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64_t length)
+{
+    void* mapped_address = (void*)file_map;
+    munmap(mapped_address, length);
 }
 
 #endif

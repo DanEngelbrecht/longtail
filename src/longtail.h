@@ -308,6 +308,7 @@ LONGTAIL_EXPORT int Longtail_GetCompressionRegistry_GetCompressionAPI(struct Lon
 typedef struct Longtail_StorageAPI_OpenFile* Longtail_StorageAPI_HOpenFile;
 typedef struct Longtail_StorageAPI_Iterator* Longtail_StorageAPI_HIterator;
 typedef struct Longtail_StorageAPI_LockFile* Longtail_StorageAPI_HLockFile;
+typedef struct Longtail_StorageAPI_FileMap* Longtail_StorageAPI_HFileMap;
 
 enum
 {
@@ -357,6 +358,8 @@ typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAP
 typedef int (*Longtail_Storage_LockFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
 typedef int (*Longtail_Storage_UnlockFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile file_lock);
 typedef char* (*Longtail_Storage_GetParentPathFunc)(struct Longtail_StorageAPI* storage_api, const char* path);
+typedef int (*Longtail_Storage_MapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
+typedef void (*Longtail_Storage_UnmapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length);
 
 struct Longtail_StorageAPI
 {
@@ -384,6 +387,8 @@ struct Longtail_StorageAPI
     Longtail_Storage_LockFileFunc LockFile;
     Longtail_Storage_UnlockFileFunc UnlockFile;
     Longtail_Storage_GetParentPathFunc GetParentPath;
+    Longtail_Storage_MapFileFunc MapFile;
+    Longtail_Storage_UnmapFileFunc UnMapFile;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize();
@@ -413,7 +418,9 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
     Longtail_Storage_LockFileFunc lock_file_func,
     Longtail_Storage_UnlockFileFunc unlock_file_func,
-    Longtail_Storage_GetParentPathFunc get_parent_path_func);
+    Longtail_Storage_GetParentPathFunc get_parent_path_func,
+    Longtail_Storage_MapFileFunc map_file_func,
+    Longtail_Storage_UnmapFileFunc unmap_file_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 LONGTAIL_EXPORT int Longtail_Storage_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
@@ -438,6 +445,8 @@ LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageA
 LONGTAIL_EXPORT int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
 LONGTAIL_EXPORT int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file);
 LONGTAIL_EXPORT char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
+LONGTAIL_EXPORT int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
+LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length);
 
 ////////////// Longtail_ProgressAPI
 
