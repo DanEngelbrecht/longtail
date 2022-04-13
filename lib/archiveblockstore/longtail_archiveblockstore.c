@@ -475,7 +475,7 @@ static int ArchiveBlockStore_Init(
         }
         
         api->m_BlockBytesSize = archive_size - *api->m_ArchiveIndex->m_IndexDataSize;
-        err = api->m_StorageAPI->MapFile(api->m_StorageAPI, api->m_ArchiveFileHandle, *api->m_ArchiveIndex->m_IndexDataSize, api->m_BlockBytesSize, &api->m_ArchiveFileMapping, &api->m_BlockBytes);
+        err = api->m_StorageAPI->MapFile(api->m_StorageAPI, api->m_ArchiveFileHandle, *api->m_ArchiveIndex->m_IndexDataSize, api->m_BlockBytesSize, &api->m_ArchiveFileMapping, (const void**)&api->m_BlockBytes);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_MapFile() failed with %d, using normal file IO", err)
