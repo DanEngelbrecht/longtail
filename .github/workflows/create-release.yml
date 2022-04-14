@@ -137,6 +137,7 @@ jobs:
           - **CHANGED** Archive block store now uses memory mapped file if possible when reading blocks from archive file
           - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU
           - **FIX** Remove redundant check if directory exists when getting directory name
+          - **UPDATE** zstdlib updated to 1.5.2
         draft: false
         prerelease: false
         files: "*-x64.zip"
