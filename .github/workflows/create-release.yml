@@ -134,10 +134,11 @@ jobs:
         body: |
           # Changes in this Release
           - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback
-          - **CHANGED** Archive block store now uses memory mapped file if possible when reading blocks from archive file
-          - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU
-          - **FIX** Remove redundant check if directory exists when getting directory name
+          - **CHANGED** Archive block store now uses memory mapped file if possible when reading blocks from archive file (perf improvement)
+          - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU (perf improvement)
+          - **FIX** Remove redundant check if directory exists when getting directory name (perf improvement)
+          - **FIX** Use SOA for asset part lookup (minor perf improvement)
           - **UPDATE** zstdlib updated to 1.5.2
-        draft: false
+       draft: false
         prerelease: false
         files: "*-x64.zip"
