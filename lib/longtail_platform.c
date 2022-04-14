@@ -801,29 +801,32 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
 int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output)
 {
     HANDLE h = (HANDLE)(handle);
-    LONG low = (LONG)(offset & 0xffffffff);
-    LONG high = (LONG)(offset >> 32);
-    if (INVALID_SET_FILE_POINTER == SetFilePointer(h, low, &high, FILE_BEGIN))
+
+    OVERLAPPED ReadOp;
+    memset(&ReadOp, 0, sizeof(ReadOp));
+
+    ReadOp.Offset  = (DWORD)(offset & 0xffffffff);
+    ReadOp.OffsetHigh = (DWORD)(offset >> 32);
+
+    if (FALSE == ReadFile(h, output, (DWORD)length, 0, &ReadOp))
     {
         return Win32ErrorToErrno(GetLastError());
     }
-    if (FALSE == ReadFile(h, output, (LONG)length, 0, 0))
-    {
-        return Win32ErrorToErrno(GetLastError());
-    }
+
     return 0;
 }
 
 int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, const void* input)
 {
     HANDLE h = (HANDLE)(handle);
-    LONG low = (LONG)(offset & 0xffffffff);
-    LONG high = (LONG)(offset >> 32);
-    if (INVALID_SET_FILE_POINTER == SetFilePointer(h, low, &high, FILE_BEGIN))
-    {
-        return Win32ErrorToErrno(GetLastError());
-    }
-    if (FALSE == WriteFile(h, input, (LONG)length, 0, 0))
+
+    OVERLAPPED WriteOp;
+    memset(&WriteOp, 0, sizeof(WriteOp));
+
+    WriteOp.Offset  = (DWORD)(offset & 0xffffffff);
+    WriteOp.OffsetHigh = (DWORD)(offset >> 32);
+
+    if (FALSE == WriteFile(h, input, (DWORD)length, 0, &WriteOp))
     {
         return Win32ErrorToErrno(GetLastError());
     }

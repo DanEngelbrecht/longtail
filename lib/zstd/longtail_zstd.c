@@ -2,6 +2,7 @@
 
 #include "ext/zstd.h"
 #include "ext/zstd_errors.h"
+#include "ext/compress/clevels.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -9,7 +10,7 @@
 
 const int LONGTAIL_ZSTD_MIN_COMPRESSION_LEVEL      = 0;
 const int LONGTAIL_ZSTD_DEFAULT_COMPRESSION_LEVEL  = ZSTD_CLEVEL_DEFAULT;
-const int LONGTAIL_ZSTD_MAX_COMPRESSION_LEVEL      = 19;
+const int LONGTAIL_ZSTD_MAX_COMPRESSION_LEVEL      = ZSTD_MAX_CLEVEL;
 
 #define LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE     ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
 #define LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))

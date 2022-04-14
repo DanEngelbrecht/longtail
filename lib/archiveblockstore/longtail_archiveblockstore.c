@@ -15,7 +15,7 @@ struct ArchiveBlockStoreAPI
     Longtail_StorageAPI_HOpenFile m_ArchiveFileHandle;
     Longtail_StorageAPI_HFileMap m_ArchiveFileMapping;
     uint64_t m_BlockBytesSize;
-    void* m_BlockBytes;
+    const void* m_BlockBytes;
 
     struct Longtail_StorageAPI* m_StorageAPI;
     struct Longtail_ArchiveIndex* m_ArchiveIndex;
