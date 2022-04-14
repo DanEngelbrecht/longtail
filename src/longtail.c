@@ -3695,17 +3695,12 @@ int Longtail_GetRequiredChunkHashes(
     return 0;
 }
 
-struct ChunkAssetPartReference
-{
-    const char* m_AssetPath;
-    uint32_t m_ChunkIndex;
-    uint64_t m_AssetOffset;
-    uint32_t m_Tag;
-};
-
 struct AssetPartLookup
 {
-    struct ChunkAssetPartReference* m_ChunkAssetPartReferences;
+    uint64_t* m_AssetOffsets;
+    uint32_t* m_PathNameOffsets;
+    uint32_t* m_ChunkIndexes;
+    uint32_t* m_Tags;
     struct Longtail_LookupTable* m_ChunkHashToIndex;
 };
 
@@ -3724,16 +3719,32 @@ static int CreateAssetPartLookup(
     uint32_t asset_chunk_index_count = *version_index->m_AssetChunkIndexCount;
     size_t asset_part_lookup_size =
         sizeof(struct AssetPartLookup) +
-        Longtail_LookupTable_GetSize(asset_chunk_index_count) +
-        sizeof(struct ChunkAssetPartReference) * asset_chunk_index_count;
+        sizeof(uint64_t) * asset_chunk_index_count +
+        sizeof(uint32_t) * asset_chunk_index_count +
+        sizeof(uint32_t) * asset_chunk_index_count +
+        sizeof(uint32_t) * asset_chunk_index_count +
+        Longtail_LookupTable_GetSize(asset_chunk_index_count);
     struct AssetPartLookup* asset_part_lookup = (struct AssetPartLookup*)Longtail_Alloc("CreateAssetPartLookup", asset_part_lookup_size);
     if (!asset_part_lookup_size)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    asset_part_lookup->m_ChunkAssetPartReferences = (struct ChunkAssetPartReference*)&asset_part_lookup[1];
-    asset_part_lookup->m_ChunkHashToIndex = Longtail_LookupTable_Create(&asset_part_lookup->m_ChunkAssetPartReferences[asset_chunk_index_count], asset_chunk_index_count, 0);
+    char* p = (char*)&asset_part_lookup[1];
+
+    asset_part_lookup->m_AssetOffsets = (uint64_t*)p;
+    p += sizeof(uint64_t) * asset_chunk_index_count;
+
+    asset_part_lookup->m_PathNameOffsets = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_chunk_index_count;
+
+    asset_part_lookup->m_ChunkIndexes = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_chunk_index_count;
+
+    asset_part_lookup->m_Tags = (uint32_t*)p;
+    p += sizeof(uint32_t) * asset_chunk_index_count;
+
+    asset_part_lookup->m_ChunkHashToIndex = Longtail_LookupTable_Create(p, asset_chunk_index_count, 0);
 
     uint32_t unique_chunk_count = 0;
     uint32_t asset_count = *version_index->m_AssetCount;
@@ -3753,14 +3764,11 @@ static int CreateAssetPartLookup(
             uint32_t tag = version_index->m_ChunkTags[chunk_index];
             if (0 == Longtail_LookupTable_PutUnique(asset_part_lookup->m_ChunkHashToIndex, chunk_hash, unique_chunk_count))
             {
-                struct ChunkAssetPartReference chunk_asset_part_reference =
-                {
-                    path,
-                    unique_chunk_count,
-                    asset_chunk_offset,
-                    tag
-                };
-                asset_part_lookup->m_ChunkAssetPartReferences[unique_chunk_count++] = chunk_asset_part_reference;
+                asset_part_lookup->m_AssetOffsets[unique_chunk_count] = asset_chunk_offset;
+                asset_part_lookup->m_PathNameOffsets[unique_chunk_count] = version_index->m_NameOffsets[asset_index];
+                asset_part_lookup->m_ChunkIndexes[unique_chunk_count] = unique_chunk_count;
+                asset_part_lookup->m_Tags[unique_chunk_count] = tag;
+                unique_chunk_count++;
             }
             asset_chunk_offset += chunk_size;
         }
@@ -3781,6 +3789,7 @@ struct WriteBlockJob
     const struct Longtail_StoreIndex* m_StoreIndex;
     struct AssetPartLookup* m_AssetPartLookup;
     uint32_t m_BlockIndex;
+    const char* m_PathData;
     int m_Err;
 };
 
@@ -3899,7 +3908,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
     char* write_buffer = block_data_buffer;
     char* write_ptr = write_buffer;
 
-    const char* asset_path = 0;
+    uint32_t path_name_offset = 0xffffffffu;
     uint32_t tag = 0;
 
     Longtail_StorageAPI_HOpenFile file_handle = 0;
@@ -3911,9 +3920,10 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         uint32_t chunk_size = store_index->m_ChunkSizes[chunk_index];
         uint32_t* asset_part_index = Longtail_LookupTable_Get(job->m_AssetPartLookup->m_ChunkHashToIndex, chunk_hash);
         LONGTAIL_FATAL_ASSERT(ctx, asset_part_index != 0, job->m_Err = EINVAL; return 0)
-        const struct ChunkAssetPartReference* next_asset_part = &job->m_AssetPartLookup->m_ChunkAssetPartReferences[*asset_part_index];
+        uint32_t next_asset_index = *asset_part_index;
 
-        if (asset_path && tag != next_asset_part->m_Tag)
+        uint32_t next_tag = job->m_AssetPartLookup->m_Tags[next_asset_index];
+        if (path_name_offset != 0xffffffffu && tag != next_tag)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "WriteContentBlockJob(%p, %u, %d): Warning: Inconsistent tag type for chunks inside block 0x%" PRIx64 ", retaining 0x%" PRIx64 "",
                 context, job_id, is_cancelled,
@@ -3921,19 +3931,21 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
         }
         else
         {
-            tag = next_asset_part->m_Tag;
+            tag = next_tag;
         }
 
-        if (next_asset_part->m_AssetPath != asset_path)
+        uint32_t next_path_name_offset = job->m_AssetPartLookup->m_PathNameOffsets[next_asset_index];
+        if (next_path_name_offset != path_name_offset)
         {
             if (file_handle)
             {
                 source_storage_api->CloseFile(source_storage_api, file_handle);
                 file_handle = 0;
             }
-            LONGTAIL_FATAL_ASSERT(ctx, !IsDirPath(next_asset_part->m_AssetPath), job->m_Err = EINVAL; return 0)
+            const char* asset_path = &job->m_PathData[next_path_name_offset];
+            LONGTAIL_FATAL_ASSERT(ctx, !IsDirPath(asset_path), job->m_Err = EINVAL; return 0)
 
-            char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, next_asset_part->m_AssetPath);
+            char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
             int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
             Longtail_Free(full_path);
             full_path = 0;
@@ -3954,10 +3966,10 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
                 return 0;
             }
             asset_file_size = next_asset_file_size;
-            asset_path = next_asset_part->m_AssetPath;
+            path_name_offset = next_path_name_offset;
         }
 
-        uint64_t asset_offset = next_asset_part->m_AssetOffset;
+        uint64_t asset_offset = job->m_AssetPartLookup->m_AssetOffsets[next_asset_index];
         if (asset_file_size < (asset_offset + chunk_size))
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Source asset file does not match indexed size %" PRIu64 " < %" PRIu64,
@@ -4138,6 +4150,7 @@ int Longtail_WriteContent(
         job->m_StoreIndex = store_index;
         job->m_BlockIndex = block_index;
         job->m_AssetPartLookup = asset_part_lookup;
+        job->m_PathData = version_index->m_NameData;
         job->m_Err = EINVAL;
 
         funcs[job_count] = WriteContentBlockJob;
