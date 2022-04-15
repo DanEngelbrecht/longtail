@@ -1142,36 +1142,6 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
     return 0;
 }
 
-static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
-{
-#if defined(LONGTAIL_ASSERTS)
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(storage_api, "%p"),
-        LONGTAIL_LOGFIELD(path, "%s")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-
-    LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL)
-    LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
-    if (storage_api->IsDir(storage_api, path))
-    {
-        return 0;
-    }
-    int err = storage_api->CreateDir(storage_api, path);
-    if (err)
-    {
-        if ((err == EEXIST) || storage_api->IsDir(storage_api, path))
-        {
-            return 0;
-        }
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->CreateDir() failed with %d", err)
-        return err;
-    }
-    return 0;
-}
-
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -1192,27 +1162,25 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
         return 0;
     }
 
-    if (storage_api->IsDir(storage_api, parent_path))
-    {
+    int err = storage_api->CreateDir(storage_api, parent_path);
+    if (err == 0 || err == EEXIST) {
         Longtail_Free(parent_path);
         return 0;
     }
-    int err = EnsureParentPathExists(storage_api, parent_path);
-    if (err)
+    err = EnsureParentPathExists(storage_api, parent_path);
+    if (err != 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
         Longtail_Free(parent_path);
         return err;
     }
-    err = SafeCreateDir(storage_api, parent_path);
-    if (err)
+    err = storage_api->CreateDir(storage_api, parent_path);
+    if (err == EEXIST)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir() failed with %d", err)
-        Longtail_Free(parent_path);
-        return err;
+        return 0;
     }
     Longtail_Free(parent_path);
-    return 0;
+    return err;
 }
 
 
@@ -4605,10 +4573,14 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             LONGTAIL_FATAL_ASSERT(ctx, block_reader_job_count == 0, job->m_Err = EINVAL; return 0)
             // Remove trailing forward slash
             full_asset_path[strlen(full_asset_path) - 1] = '\0';
-            err = SafeCreateDir(job->m_VersionStorageAPI, full_asset_path);
-            if (err)
+            err = job->m_VersionStorageAPI->CreateDir(job->m_VersionStorageAPI, full_asset_path);
+            if (err == EEXIST)
             {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir() failed with %d", err)
+                err = 0;
+            }
+            if (err != 0)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_VersionStorageAPI->CreateDir() failed with %d", err)
                 Longtail_Free(full_asset_path);
                 job->m_Err = err;
                 return 0;
@@ -7061,10 +7033,14 @@ int Longtail_ChangeVersion(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
         return err;
     }
-    err = SafeCreateDir(version_storage_api, version_path);
-    if (err)
+    err = version_storage_api->CreateDir(version_storage_api, version_path);
+    if (err == EEXIST)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir() failed with %d", err)
+        err = 0;
+    }
+    if (err != 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->CreateDir() failed with %d", err)
         return err;
     }
 
