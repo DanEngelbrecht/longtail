@@ -5225,9 +5225,9 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
         version_storage_api->CloseFile(version_storage_api, asset_file);
         asset_file = 0;
 
-        if (job->m_RetainPermissions)
+        if (job->m_RetainPermissions && (permissions != version_index->m_Permissions[asset_index]))
         {
-            err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, (uint16_t)version_index->m_Permissions[asset_index]);
+            err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, version_index->m_Permissions[asset_index]);
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
             if (err)
