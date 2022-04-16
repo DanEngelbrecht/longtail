@@ -5,6 +5,8 @@
 #include <inttypes.h>
 #include <string.h>
 
+#define MEASURE_ACCESS  1
+
 struct ArchiveBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
@@ -24,6 +26,10 @@ struct ArchiveBlockStoreAPI
     char* m_ArchivePath;
     int m_IsWriteMode;
     struct Longtail_LookupTable* m_BlockIndexLookup;
+
+#if MEASURE_ACCESS
+    struct Longtail_LookupTable* m_BlockAccessLookup;
+#endif
 };
 
 static int ArchiveBlockStore_PutStoredBlock(
@@ -172,6 +178,17 @@ static int ArchiveBlockStore_GetStoredBlock(
     int block_index = *block_index_ptr;
     uint64_t block_offset = api->m_ArchiveIndex->m_BlockStartOffets[block_index];
     uint32_t block_size = api->m_ArchiveIndex->m_BlockSizes[block_index];
+
+
+#if MEASURE_ACCESS
+    Longtail_LockSpinLock(api->m_Lock);
+    uint32_t* count_ptr = Longtail_LookupTable_PutUnique(api->m_BlockAccessLookup, block_hash, 1);
+    if (count_ptr)
+    {
+        (*count_ptr)++;
+    }
+    Longtail_UnlockSpinLock(api->m_Lock);
+#endif
 
     struct Longtail_StoredBlock* stored_block = 0;
 #if LONGTAIL_ENABLE_MMAPED_FILES
@@ -368,6 +385,24 @@ static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
     }
 
     Longtail_LockSpinLock(api->m_Lock);
+#if MEASURE_ACCESS
+    uint32_t total_count = 0;
+    uint32_t worst_offender = 0;
+    for (uint32_t b = 0; b < *api->m_ArchiveIndex->m_StoreIndex.m_BlockCount; ++b)
+    {
+        TLongtail_Hash block_hash = api->m_ArchiveIndex->m_StoreIndex.m_BlockHashes[b];
+        const uint32_t* count_ptr = Longtail_LookupTable_Get(api->m_BlockAccessLookup, block_hash);
+        if (count_ptr)
+        {
+            total_count += *count_ptr;
+            if (*count_ptr > worst_offender)
+            {
+                worst_offender = *count_ptr;
+            }
+        }
+    }
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "ArchiveBlockStore_Dispose() fetch_count %u, worst %u", total_count, worst_offender);
+#endif
 #if LONGTAIL_ENABLE_MMAPED_FILES
     if (api->m_BlockBytes)
     {
@@ -428,11 +463,16 @@ static int ArchiveBlockStore_Init(
     api->m_ArchiveIndex = archive_index;
     api->m_ArchivePath = Longtail_Strdup(archive_path);
     api->m_IsWriteMode = enable_write;
-    api->m_BlockIndexLookup =Longtail_LookupTable_Create(&api[1], *archive_index->m_StoreIndex.m_BlockCount, 0);
 #if LONGTAIL_ENABLE_MMAPED_FILES
     api->m_ArchiveFileMapping = 0;
     api->m_BlockBytesSize = 0;
     api->m_BlockBytes = 0;
+#endif
+    char* p = (char*)&api[1];
+    api->m_BlockIndexLookup = Longtail_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
+#if MEASURE_ACCESS
+    p += Longtail_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
+    api->m_BlockAccessLookup = Longtail_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
 #endif
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
@@ -525,6 +565,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateArchiveBlockStore(
 
     size_t api_size = sizeof(struct ArchiveBlockStoreAPI);
 
+    api_size += Longtail_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
     api_size += Longtail_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
 
     void* mem = Longtail_Alloc("ArchiveBlockStoreAPI", api_size);

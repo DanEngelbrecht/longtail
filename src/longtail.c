@@ -5419,7 +5419,8 @@ static SORTFUNC(JobCompare)
         {
             return 1;
         }
-        chunk_offset++;
+        return 0;
+//        chunk_offset++;
     }
 }
 
