@@ -403,6 +403,81 @@ int HPCDCChunker_DisposeChunker(struct Longtail_ChunkerAPI* chunker_api, Longtai
 	return 0;
 }
 
+#if LONGTAIL_ENABLE_MMAPED_FILES
+int HPCDCChunker_NextChunkFromBuffer(
+    struct Longtail_ChunkerAPI* chunker_api,
+    Longtail_ChunkerAPI_HChunker chunker,
+    const void* buffer,
+    uint64_t buffer_size,
+    const void** out_next_chunk_start)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(chunker_api, "%p"),
+        LONGTAIL_LOGFIELD(chunker, "%p"),
+        LONGTAIL_LOGFIELD(buffer, "%p"),
+        LONGTAIL_LOGFIELD(buffer_size, "%p"),
+        LONGTAIL_LOGFIELD(out_next_chunk_start, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, chunker, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, buffer, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, buffer_size > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_next_chunk_start, return EINVAL)
+
+	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
+	struct Longtail_HPCDCChunker* c = (struct Longtail_HPCDCChunker*)chunker;
+
+    if (buffer_size <= c->params.min)
+    {
+        // Less than min-size left, just consume it all
+        *out_next_chunk_start = ((const uint8_t*)buffer) + buffer_size;
+        return 0;
+    }
+
+    const uint8_t* buf = (const uint8_t*)buffer;
+
+    uint32_t hash = 0;
+    for (uint32_t i = 0; i < ChunkerWindowSize; ++i)
+    {
+        uint8_t b = buf[i];
+        hash ^= LONGTAIL_rotl32(hashTable[b], (int)((ChunkerWindowSize-i-1u) & 31));
+        c->hWindow[i] = b;
+    }
+
+    uint32_t pos = c->params.min;
+    uint32_t idx = 0;
+
+    uint32_t data_len = (uint32_t)(buffer_size > c->params.max ? c->params.max : buffer_size);
+    uint8_t* window = c->hWindow;
+    const uint32_t discriminator = c->hDiscriminator - 1;
+    const uint32_t d = c->hDiscriminator;
+    while(pos < data_len)
+    {
+        uint8_t in = buf[pos++];
+        uint8_t out = window[idx];
+        window[idx++] = in;
+        hash = LONGTAIL_rotl32(hash, 1) ^
+            LONGTAIL_rotl32(hashTable[out], (int)(ChunkerWindowSize & 31)) ^
+            hashTable[in];
+
+        if ((hash % d) == discriminator)
+        {
+            break;
+        }
+        if (idx == ChunkerWindowSize)
+        {
+            idx = 0;
+        }
+    }
+    *out_next_chunk_start = ((const uint8_t*)buffer) + pos;
+    return 0;
+}
+#endif
+
 static int HPCDCChunker_Init(
     void* mem,
     struct Longtail_ChunkerAPI** out_chunker_api)
@@ -421,7 +496,11 @@ static int HPCDCChunker_Init(
 		HPCDCChunker_GetMinChunkSize,
 		HPCDCChunker_CreateChunker,
 		HPCDCChunker_NextChunk,
-		HPCDCChunker_DisposeChunker);
+		HPCDCChunker_DisposeChunker
+#if LONGTAIL_ENABLE_MMAPED_FILES
+        ,HPCDCChunker_NextChunkFromBuffer
+#endif
+        );
     if (!chunker_api)
     {
         return EINVAL;

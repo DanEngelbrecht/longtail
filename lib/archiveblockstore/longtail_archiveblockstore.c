@@ -13,9 +13,11 @@ struct ArchiveBlockStoreAPI
     HLongtail_SpinLock m_Lock;
     uint64_t m_BlockDataOffset;
     Longtail_StorageAPI_HOpenFile m_ArchiveFileHandle;
+#if LONGTAIL_ENABLE_MMAPED_FILES
     Longtail_StorageAPI_HFileMap m_ArchiveFileMapping;
     uint64_t m_BlockBytesSize;
     const void* m_BlockBytes;
+#endif
 
     struct Longtail_StorageAPI* m_StorageAPI;
     struct Longtail_ArchiveIndex* m_ArchiveIndex;
@@ -172,6 +174,7 @@ static int ArchiveBlockStore_GetStoredBlock(
     uint32_t block_size = api->m_ArchiveIndex->m_BlockSizes[block_index];
 
     struct Longtail_StoredBlock* stored_block = 0;
+#if LONGTAIL_ENABLE_MMAPED_FILES
     if (api->m_BlockBytes)
     {
         size_t block_mem_size = Longtail_GetStoredBlockSize(0);
@@ -196,6 +199,7 @@ static int ArchiveBlockStore_GetStoredBlock(
         }
     }
     else
+#endif
     {
         uint64_t read_offset = (*api->m_ArchiveIndex->m_IndexDataSize) + block_offset;
         uint64_t stored_block_data_size = block_size;
@@ -364,11 +368,13 @@ static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
     }
 
     Longtail_LockSpinLock(api->m_Lock);
+#if LONGTAIL_ENABLE_MMAPED_FILES
     if (api->m_BlockBytes)
     {
         api->m_StorageAPI->UnMapFile(api->m_StorageAPI, api->m_ArchiveFileMapping, api->m_BlockBytes, api->m_BlockBytesSize);
         api->m_ArchiveFileMapping = 0;
     }
+#endif
     api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
     api->m_ArchiveFileHandle = 0;
     Longtail_UnlockSpinLock(api->m_Lock);
@@ -423,9 +429,11 @@ static int ArchiveBlockStore_Init(
     api->m_ArchivePath = Longtail_Strdup(archive_path);
     api->m_IsWriteMode = enable_write;
     api->m_BlockIndexLookup =Longtail_LookupTable_Create(&api[1], *archive_index->m_StoreIndex.m_BlockCount, 0);
+#if LONGTAIL_ENABLE_MMAPED_FILES
     api->m_ArchiveFileMapping = 0;
     api->m_BlockBytesSize = 0;
     api->m_BlockBytes = 0;
+#endif
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
     {
@@ -464,6 +472,7 @@ static int ArchiveBlockStore_Init(
             Longtail_Free(api->m_ArchivePath);
             return err;
         }
+#if LONGTAIL_ENABLE_MMAPED_FILES
         uint64_t archive_size;
         err = api->m_StorageAPI->GetSize(api->m_StorageAPI, api->m_ArchiveFileHandle, &archive_size);
         if (err)
@@ -480,6 +489,7 @@ static int ArchiveBlockStore_Init(
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_MapFile() failed with %d, using normal file IO", err)
         }
+#endif
     }
 
     int err = Longtail_CreateSpinLock(Longtail_Alloc("FSBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);

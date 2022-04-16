@@ -133,7 +133,6 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback
           - **CHANGED** Archive block store now uses memory mapped file if possible when reading blocks from archive file (perf improvement)
           - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU (perf improvement)
           - **FIX** Remove redundant check if directory exists when getting directory name (perf improvement)
@@ -141,6 +140,8 @@ jobs:
           - **FIX** Don't set permissions on files that already have correct permissions (minor perf improvement)
           - **FIX** Faster EnsureParentPathExists (minor perf improvement)
           - **UPDATE** zstdlib updated to 1.5.2
+          - **CHANGED API** OPTIONAL: `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback. Enable by defining LONGTAIL_ENABLE_MMAPED_FILES
+          - **FIX** OPTIONAL: Memory mapped indexing and archive block reading, defaults to disabled. Enable by defining LONGTAIL_ENABLE_MMAPED_FILES
        draft: false
         prerelease: false
         files: "*-x64.zip"

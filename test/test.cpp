@@ -3302,6 +3302,82 @@ TEST(Longtail, ChunkerLargeFile)
     SAFE_DISPOSE_API(chunker_api);
 }
 
+#if LONGTAIL_ENABLE_MMAPED_FILES
+TEST(Longtail, MemMappedChunkerLargeFile)
+{
+    HLongtail_OpenFile large_file;
+    ASSERT_EQ(0, Longtail_OpenReadFile("testdata/chunker.input", &large_file));
+    ASSERT_NE((HLongtail_OpenFile)0, large_file);
+
+    uint64_t size;
+    ASSERT_EQ(0, Longtail_GetFileSize(large_file, &size));
+
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+
+    const uint64_t ChunkSizeAvgDefault    = 64 * 1024;
+    const uint64_t ChunkSizeMinDefault    = ChunkSizeAvgDefault / 4;
+    const uint64_t ChunkSizeMaxDefault    = ChunkSizeAvgDefault * 4;
+
+    Longtail_ChunkerAPI_HChunker chunker;
+    ASSERT_EQ(0, chunker_api->CreateChunker(
+        chunker_api,
+        ChunkSizeMinDefault,
+        ChunkSizeAvgDefault,
+        ChunkSizeMaxDefault,
+        &chunker));
+    ASSERT_NE((Longtail_ChunkerAPI_HChunker)0, chunker);
+
+    const uint32_t expected_chunk_count = 20u;
+    const struct Longtail_Chunker_ChunkRange expected_chunks[expected_chunk_count] =
+    {
+        { (const uint8_t*)0, 0,       81590},
+        { (const uint8_t*)0, 81590,   46796},
+        { (const uint8_t*)0, 128386,  36543},
+        { (const uint8_t*)0, 164929,  83172},
+        { (const uint8_t*)0, 248101,  76749},
+        { (const uint8_t*)0, 324850,  79550},
+        { (const uint8_t*)0, 404400,  41484},
+        { (const uint8_t*)0, 445884,  20326},
+        { (const uint8_t*)0, 466210,  31652},
+        { (const uint8_t*)0, 497862,  19995},
+        { (const uint8_t*)0, 517857,  103873},
+        { (const uint8_t*)0, 621730,  38087},
+        { (const uint8_t*)0, 659817,  38377},
+        { (const uint8_t*)0, 698194,  23449},
+        { (const uint8_t*)0, 721643,  47321},
+        { (const uint8_t*)0, 768964,  86692},
+        { (const uint8_t*)0, 855656,  28268},
+        { (const uint8_t*)0, 883924,  65465},
+        { (const uint8_t*)0, 949389,  33255},
+        { (const uint8_t*)0, 982644,  65932}
+    };
+
+    const uint8_t* mapped_ptr = 0;
+    HLongtail_FileMap mapping = 0;
+    ASSERT_EQ(0, Longtail_MapFile(large_file, 0, size, &mapping, (const void**)&mapped_ptr));
+    const uint8_t* ptr = mapped_ptr;
+    for (uint32_t i = 0; i < expected_chunk_count; ++i)
+    {
+        const uint8_t* next_ptr;
+        uint64_t size_left = size - (ptr - mapped_ptr);
+        ASSERT_EQ(0, chunker_api->NextChunkFromBuffer(chunker_api, chunker, ptr, size_left, (const void**)&next_ptr));
+        ASSERT_EQ(expected_chunks[i].offset, (ptr - mapped_ptr));
+        ASSERT_EQ(expected_chunks[i].len, (next_ptr - ptr));
+        ptr = next_ptr;
+    }
+    uint64_t size_left = size - (ptr - mapped_ptr);
+    ASSERT_EQ(0u, size_left);
+
+    chunker_api->DisposeChunker(chunker_api, chunker);
+    chunker = 0;
+
+    Longtail_UnmapFile(mapping, mapped_ptr, size);
+    Longtail_CloseFile(large_file);
+
+    SAFE_DISPOSE_API(chunker_api);
+}
+#endif
+
 TEST(Longtail, FileSystemStorage)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
@@ -5409,8 +5485,10 @@ struct FailableStorageAPI
     static int LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->LockFile(api->m_BackingAPI, path, out_lock_file);}
     static int UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnlockFile(api->m_BackingAPI, lock_file);}
     static char* GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetParentPath(api->m_BackingAPI, path);}
+#if LONGTAIL_ENABLE_MMAPED_FILES
     static int MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->MapFile(api->m_BackingAPI, f, offset, length, out_file_map, out_data_ptr);}
     static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m, data_ptr, length);}
+#endif
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5441,9 +5519,12 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
         FailableStorageAPI::GetEntryProperties,
         FailableStorageAPI::LockFile,
         FailableStorageAPI::UnlockFile,
-        FailableStorageAPI::GetParentPath,
-        FailableStorageAPI::MapFile,
-        FailableStorageAPI::UnmapFile);
+        FailableStorageAPI::GetParentPath
+#if LONGTAIL_ENABLE_MMAPED_FILES
+        , FailableStorageAPI::MapFile
+        , FailableStorageAPI::UnmapFile
+#endif
+        );
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;
     failable_storage_api->m_PassCount = 0x7fffffff;
