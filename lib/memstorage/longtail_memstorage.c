@@ -370,12 +370,6 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     ptrdiff_t size = arrlen(path_entry->m_Content);
-    if ((ptrdiff_t)offset > size)
-    {
-        Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write out of bounds, failed with %d", EIO)
-        return EIO;
-    }
     if ((ptrdiff_t)(offset + length) > size)
     {
         size = offset + length;
@@ -1164,7 +1158,7 @@ static void InMemStorageAPI_UnmapFile(
     LONGTAIL_VALIDATE_INPUT(ctx, data_ptr !=0, return)
     LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return)
 }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 static int InMemStorageAPI_Init(
     void* mem,
@@ -1205,7 +1199,7 @@ static int InMemStorageAPI_Init(
 #if LONGTAIL_ENABLE_MMAPED_FILES
         ,InMemStorageAPI_MapFile
         ,InMemStorageAPI_UnmapFile
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
         );
 
     struct InMemStorageAPI* storage_api = (struct InMemStorageAPI*)api;

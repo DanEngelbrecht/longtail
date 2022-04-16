@@ -1072,7 +1072,7 @@ void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64
     HANDLE h = (HANDLE)(file_map);
     CloseHandle(h);
 }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 #endif
 
@@ -2078,6 +2078,6 @@ void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64
     void* mapped_address = (void*)file_map;
     munmap(mapped_address, length);
 }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 #endif

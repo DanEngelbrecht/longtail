@@ -42,6 +42,10 @@ void Longtail_NukeFree(void* p);
 #endif // defined(LONGTAIL_ASSERTS)
 */
 
+#ifndef LONGTAIL_ENABLE_MMAPPED_INDEXING
+    #define LONGTAIL_ENABLE_MMAPPED_INDEXING       0
+#endif
+
 #define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
 #define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
 #define LONGTAIL_STORE_INDEX_VERSION_1_0_0    LONGTAIL_VERSION(1,0,0)
@@ -295,7 +299,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
 #if LONGTAIL_ENABLE_MMAPED_FILES
     ,Longtail_Storage_MapFileFunc map_file_func
     ,Longtail_Storage_UnmapFileFunc unmap_file_func
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
     )
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -327,7 +331,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
 #if LONGTAIL_ENABLE_MMAPED_FILES
         LONGTAIL_LOGFIELD(map_file_func, "%p"),
         LONGTAIL_LOGFIELD(unmap_file_func, "%p")
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -359,7 +363,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
 #if LONGTAIL_ENABLE_MMAPED_FILES
     api->MapFile = map_file_func;
     api->UnMapFile = unmap_file_func;
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
     return api;
 }
 
@@ -389,7 +393,7 @@ char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, co
 #if LONGTAIL_ENABLE_MMAPED_FILES
 int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
 void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length) { storage_api->UnMapFile(storage_api, m, data_ptr, length); }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 ////////////// ProgressAPI
 
@@ -489,7 +493,7 @@ struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
     Longtail_Chunker_DisposeChunkerFunc dispose_chunker_func
 #if LONGTAIL_ENABLE_MMAPED_FILES
     , Longtail_Chunker_NextChunkFromBufferFunc next_chunk_from_buffer
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
     )
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -501,7 +505,7 @@ struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
         LONGTAIL_LOGFIELD(dispose_chunker_func, "%p")
 #if LONGTAIL_ENABLE_MMAPED_FILES
         , LONGTAIL_LOGFIELD(next_chunk_from_buffer, "%p")
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -513,7 +517,7 @@ struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
     api->DisposeChunker = dispose_chunker_func;
 #if LONGTAIL_ENABLE_MMAPED_FILES
     api->NextChunkFromBuffer = next_chunk_from_buffer;
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
     return api;
 }
 
@@ -1859,7 +1863,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 hash_job->m_Err = err;
                 return 0;
             }
-#if 0
+#if LONGTAIL_ENABLE_MMAPPED_INDEXING
             const uint8_t* mapped_ptr = 0;
             Longtail_StorageAPI_HFileMap mapping = 0;
             err = storage_api->MapFile(storage_api, file_handle, hash_job->m_StartRange, hash_size, &mapping, (const void**)&mapped_ptr);
@@ -1942,7 +1946,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
             }
             else
-#endif
+#endif // LONGTAIL_ENABLE_MMAPPED_INDEXING
             {
                 struct StorageChunkFeederContext feeder_context =
                 {

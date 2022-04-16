@@ -5,7 +5,12 @@
 #include <inttypes.h>
 #include <string.h>
 
-#define MEASURE_ACCESS  1
+#ifndef LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
+    #define LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS   0
+#endif
+#ifndef LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
+    #define LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES   0
+#endif
 
 struct ArchiveBlockStoreAPI
 {
@@ -15,11 +20,11 @@ struct ArchiveBlockStoreAPI
     HLongtail_SpinLock m_Lock;
     uint64_t m_BlockDataOffset;
     Longtail_StorageAPI_HOpenFile m_ArchiveFileHandle;
-#if LONGTAIL_ENABLE_MMAPED_FILES
+#if LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     Longtail_StorageAPI_HFileMap m_ArchiveFileMapping;
     uint64_t m_BlockBytesSize;
     const void* m_BlockBytes;
-#endif
+#endif // LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
 
     struct Longtail_StorageAPI* m_StorageAPI;
     struct Longtail_ArchiveIndex* m_ArchiveIndex;
@@ -27,9 +32,10 @@ struct ArchiveBlockStoreAPI
     int m_IsWriteMode;
     struct Longtail_LookupTable* m_BlockIndexLookup;
 
-#if MEASURE_ACCESS
+#if LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
+    uint32_t m_PrefetchBlockCount;
     struct Longtail_LookupTable* m_BlockAccessLookup;
-#endif
+#endif // LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
 };
 
 static int ArchiveBlockStore_PutStoredBlock(
@@ -70,8 +76,8 @@ static int ArchiveBlockStore_PutStoredBlock(
 
     api->m_ArchiveIndex->m_BlockStartOffets[block_index] = api->m_BlockDataOffset;
     api->m_ArchiveIndex->m_BlockSizes[block_index] = block_index_data_size + stored_block->m_BlockChunksDataSize;
-    api->m_BlockDataOffset += api->m_ArchiveIndex->m_BlockSizes[block_index];
     uint64_t write_pos = api->m_BlockDataOffset + *api->m_ArchiveIndex->m_IndexDataSize;
+    api->m_BlockDataOffset += api->m_ArchiveIndex->m_BlockSizes[block_index];
 
     Longtail_UnlockSpinLock(api->m_Lock);
 
@@ -114,6 +120,10 @@ static int ArchiveBlockStore_PreflightGet(
 
     struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
+
+#if LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
+    api->m_PrefetchBlockCount = block_count;
+#endif // LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
 
     if (optional_async_complete_api)
     {
@@ -176,7 +186,7 @@ static int ArchiveBlockStore_GetStoredBlock(
     uint32_t block_size = api->m_ArchiveIndex->m_BlockSizes[block_index];
 
 
-#if MEASURE_ACCESS
+#if LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
     Longtail_LockSpinLock(api->m_Lock);
     uint32_t* count_ptr = Longtail_LookupTable_PutUnique(api->m_BlockAccessLookup, block_hash, 1);
     if (count_ptr)
@@ -184,10 +194,10 @@ static int ArchiveBlockStore_GetStoredBlock(
         (*count_ptr)++;
     }
     Longtail_UnlockSpinLock(api->m_Lock);
-#endif
+#endif // LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
 
     struct Longtail_StoredBlock* stored_block = 0;
-#if LONGTAIL_ENABLE_MMAPED_FILES
+#if LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     if (api->m_BlockBytes)
     {
         size_t block_mem_size = Longtail_GetStoredBlockSize(0);
@@ -212,7 +222,7 @@ static int ArchiveBlockStore_GetStoredBlock(
         }
     }
     else
-#endif
+#endif // LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     {
         uint64_t read_offset = (*api->m_ArchiveIndex->m_IndexDataSize) + block_offset;
         uint64_t stored_block_data_size = block_size;
@@ -281,9 +291,22 @@ static int ArchiveBlockStore_GetExistingContent(
 
     struct ArchiveBlockStoreAPI* api = (struct ArchiveBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
-    Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
 
-    return ENOTSUP;
+    struct Longtail_StoreIndex* existing_store_index;
+    int err = Longtail_GetExistingStoreIndex(
+        &api->m_ArchiveIndex->m_StoreIndex,
+        chunk_count,
+        chunk_hashes,
+        min_block_usage_percent,
+        &existing_store_index);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetExistingStoreIndex() failed with %d", err)
+        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
+        return err;
+    }
+    async_complete_api->OnComplete(async_complete_api, existing_store_index, 0);
+    return 0;
 }
 
 static int ArchiveBlockStore_PruneBlocks(
@@ -379,7 +402,7 @@ static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
     }
 
     Longtail_LockSpinLock(api->m_Lock);
-#if MEASURE_ACCESS
+#if LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
     uint32_t total_count = 0;
     uint32_t worst_offender = 0;
     for (uint32_t b = 0; b < *api->m_ArchiveIndex->m_StoreIndex.m_BlockCount; ++b)
@@ -395,15 +418,15 @@ static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
             }
         }
     }
-    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "ArchiveBlockStore_Dispose() count %u, fetch_count %u, overfetch %u, worst %u", *api->m_ArchiveIndex->m_StoreIndex.m_BlockCount, total_count, total_count - *api->m_ArchiveIndex->m_StoreIndex.m_BlockCount, worst_offender);
-#endif
-#if LONGTAIL_ENABLE_MMAPED_FILES
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "ArchiveBlockStore_Dispose() count %u, fetch_count %u, overfetch %u, worst %u", api->m_PrefetchBlockCount, total_count, total_count - api->m_PrefetchBlockCount, worst_offender);
+#endif // LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
+#if LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     if (api->m_BlockBytes)
     {
         api->m_StorageAPI->UnMapFile(api->m_StorageAPI, api->m_ArchiveFileMapping, api->m_BlockBytes, api->m_BlockBytesSize);
         api->m_ArchiveFileMapping = 0;
     }
-#endif
+#endif // LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
     api->m_ArchiveFileHandle = 0;
     Longtail_UnlockSpinLock(api->m_Lock);
@@ -457,17 +480,17 @@ static int ArchiveBlockStore_Init(
     api->m_ArchiveIndex = archive_index;
     api->m_ArchivePath = Longtail_Strdup(archive_path);
     api->m_IsWriteMode = enable_write;
-#if LONGTAIL_ENABLE_MMAPED_FILES
+#if LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     api->m_ArchiveFileMapping = 0;
     api->m_BlockBytesSize = 0;
     api->m_BlockBytes = 0;
-#endif
+#endif // LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     char* p = (char*)&api[1];
     api->m_BlockIndexLookup = Longtail_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
-#if MEASURE_ACCESS
+#if LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
     p += Longtail_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
     api->m_BlockAccessLookup = Longtail_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
-#endif
+#endif // LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
     {
@@ -506,7 +529,7 @@ static int ArchiveBlockStore_Init(
             Longtail_Free(api->m_ArchivePath);
             return err;
         }
-#if LONGTAIL_ENABLE_MMAPED_FILES
+#if LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
         uint64_t archive_size;
         err = api->m_StorageAPI->GetSize(api->m_StorageAPI, api->m_ArchiveFileHandle, &archive_size);
         if (err)
@@ -523,7 +546,7 @@ static int ArchiveBlockStore_Init(
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_MapFile() failed with %d, using normal file IO", err)
         }
-#endif
+#endif // LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     }
 
     int err = Longtail_CreateSpinLock(Longtail_Alloc("FSBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);

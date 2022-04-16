@@ -3376,7 +3376,7 @@ TEST(Longtail, MemMappedChunkerLargeFile)
 
     SAFE_DISPOSE_API(chunker_api);
 }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 TEST(Longtail, FileSystemStorage)
 {
@@ -5488,7 +5488,7 @@ struct FailableStorageAPI
 #if LONGTAIL_ENABLE_MMAPED_FILES
     static int MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->MapFile(api->m_BackingAPI, f, offset, length, out_file_map, out_data_ptr);}
     static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m, data_ptr, length);}
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5523,7 +5523,7 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
 #if LONGTAIL_ENABLE_MMAPED_FILES
         , FailableStorageAPI::MapFile
         , FailableStorageAPI::UnmapFile
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
         );
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;

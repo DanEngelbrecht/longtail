@@ -476,7 +476,7 @@ int HPCDCChunker_NextChunkFromBuffer(
     *out_next_chunk_start = ((const uint8_t*)buffer) + pos;
     return 0;
 }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 static int HPCDCChunker_Init(
     void* mem,
@@ -499,7 +499,7 @@ static int HPCDCChunker_Init(
 		HPCDCChunker_DisposeChunker
 #if LONGTAIL_ENABLE_MMAPED_FILES
         ,HPCDCChunker_NextChunkFromBuffer
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
         );
     if (!chunker_api)
     {

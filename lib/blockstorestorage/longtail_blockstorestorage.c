@@ -1332,7 +1332,7 @@ static void BlockStoreStorageAPI_UnmapFile(
     LONGTAIL_VALIDATE_INPUT(ctx, data_ptr !=0, return)
     LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return)
 }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 static void BlockStoreStorageAPI_Dispose(struct Longtail_API* api)
 {
@@ -1395,7 +1395,7 @@ static int BlockStoreStorageAPI_Init(
 #if LONGTAIL_ENABLE_MMAPED_FILES
         ,BlockStoreStorageAPI_MapFile
         ,BlockStoreStorageAPI_UnmapFile
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
         );
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)api;

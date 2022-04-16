@@ -629,7 +629,7 @@ static void FSStorageAPI_UnmapFile(
 
     Longtail_UnmapFile((HLongtail_FileMap)m, data_ptr, length);
 }
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 static int FSStorageAPI_Init(
     void* mem,
@@ -670,7 +670,7 @@ static int FSStorageAPI_Init(
 #if LONGTAIL_ENABLE_MMAPED_FILES
         , FSStorageAPI_MapFile
         , FSStorageAPI_UnmapFile
-#endif
+#endif // LONGTAIL_ENABLE_MMAPED_FILES
         );
     *out_storage_api = api;
     return 0;
