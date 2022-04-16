@@ -5347,7 +5347,7 @@ struct JobCompareContext
     struct Longtail_LookupTable* chunk_hash_to_block_index;
 };
 
-static uint32_t GetJobBlockIndex(struct JobCompareContext* c, uint32_t asset_index)
+static uint32_t GetJobBlockIndex(struct JobCompareContext* c, uint32_t asset_index, uint32_t chunk_offset)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -5358,17 +5358,12 @@ static uint32_t GetJobBlockIndex(struct JobCompareContext* c, uint32_t asset_ind
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    if (c->asset_chunk_counts[asset_index] == 0)
-    {
-        return 0xffffffffu;
-    }
-
     uint32_t asset_chunk_offset = c->asset_chunk_index_starts[asset_index];
-    uint32_t chunk_index = c->asset_chunk_indexes[asset_chunk_offset];
+    uint32_t chunk_index = c->asset_chunk_indexes[asset_chunk_offset+chunk_offset];
 
-    TLongtail_Hash first_chunk_hash = c->chunk_hashes[chunk_index];
+    TLongtail_Hash chunk_hash = c->chunk_hashes[chunk_index];
 
-    const uint32_t* block_index_ptr = Longtail_LookupTable_Get(c->chunk_hash_to_block_index, first_chunk_hash);
+    const uint32_t* block_index_ptr = Longtail_LookupTable_Get(c->chunk_hash_to_block_index, chunk_hash);
     LONGTAIL_FATAL_ASSERT(ctx, block_index_ptr, return 0)
 
     return *block_index_ptr;
@@ -5391,21 +5386,41 @@ static SORTFUNC(JobCompare)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
 
     struct JobCompareContext* c = (struct JobCompareContext*)context;
-
     uint32_t a = *(const uint32_t*)a_ptr;
-    uint32_t a_block_index = GetJobBlockIndex(c, a);
     uint32_t b = *(const uint32_t*)b_ptr;
-    uint32_t b_block_index = GetJobBlockIndex(c, b);
 
-    if (a_block_index < b_block_index)
+    uint32_t a_chunk_count = c->asset_chunk_counts[a];
+    uint32_t b_chunk_count = c->asset_chunk_counts[b];
+    uint32_t chunk_offset = 0;
+    while (1)
     {
-        return -1;
+        if (chunk_offset >= a_chunk_count)
+        {
+            if (chunk_offset >= b_chunk_count)
+            {
+                return 0;
+            }
+            else
+            {
+                return 1;
+            }
+        }
+        else if (chunk_offset >= b_chunk_count)
+        {
+            return -1;
+        }
+        uint32_t a_block_index = GetJobBlockIndex(c, a, chunk_offset);
+        uint32_t b_block_index = GetJobBlockIndex(c, b, chunk_offset);
+        if (a_block_index < b_block_index)
+        {
+            return -1;
+        }
+        else if (a_block_index > b_block_index)
+        {
+            return 1;
+        }
+        chunk_offset++;
     }
-    else if (a_block_index > b_block_index)
-    {
-        return 1;
-    }
-    return 0;
 }
 
 static struct AssetWriteList* CreateAssetWriteList(uint32_t asset_count)
