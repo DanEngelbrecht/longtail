@@ -5212,6 +5212,8 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 return 0;
             }
         }
+        Longtail_Free(full_asset_path);
+        full_asset_path = 0;
     }
     Longtail_Free(tmp_mem);
 
