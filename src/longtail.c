@@ -1177,7 +1177,7 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     err = storage_api->CreateDir(storage_api, parent_path);
     if (err == EEXIST)
     {
-        return 0;
+        err = 0;
     }
     Longtail_Free(parent_path);
     return err;
