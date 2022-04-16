@@ -75,9 +75,11 @@ void    Longtail_CloseFile(HLongtail_OpenFile handle);
 char*   Longtail_ConcatPath(const char* folder, const char* file);
 char*   Longtail_GetParentPath(const char* path);
 
+#if LONGTAIL_ENABLE_MMAPED_FILES
 typedef struct Longtail_FileMap_private* HLongtail_FileMap;
 int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr);
 void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64_t length);
+#endif
 
 char* Longtail_GetTempFolder();
 

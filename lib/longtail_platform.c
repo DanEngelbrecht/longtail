@@ -1025,6 +1025,7 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     return 0;
 }
 
+#if LONGTAIL_ENABLE_MMAPED_FILES
 int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr)
 {
     HANDLE h = (HANDLE)(handle);
@@ -1071,6 +1072,7 @@ void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64
     HANDLE h = (HANDLE)(file_map);
     CloseHandle(h);
 }
+#endif
 
 #endif
 
@@ -2039,7 +2041,7 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
     file_lock->fd = -1;
     return 0;
 }
-
+#if LONGTAIL_ENABLE_MMAPED_FILES
 int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr)
 {
     FILE* f = (FILE*)handle;
@@ -2076,5 +2078,6 @@ void Longtail_UnmapFile(HLongtail_FileMap file_map, const void* data_ptr, uint64
     void* mapped_address = (void*)file_map;
     munmap(mapped_address, length);
 }
+#endif
 
 #endif

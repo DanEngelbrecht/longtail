@@ -1098,6 +1098,7 @@ static char* InMemStorageAPI_GetParentPath(
     return result;
 }
 
+#if LONGTAIL_ENABLE_MMAPED_FILES
 static int InMemStorageAPI_MapFile(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HOpenFile f,
@@ -1163,6 +1164,7 @@ static void InMemStorageAPI_UnmapFile(
     LONGTAIL_VALIDATE_INPUT(ctx, data_ptr !=0, return)
     LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return)
 }
+#endif
 
 static int InMemStorageAPI_Init(
     void* mem,
@@ -1199,9 +1201,12 @@ static int InMemStorageAPI_Init(
         InMemStorageAPI_GetEntryProperties,
         InMemStorageAPI_LockFile,
         InMemStorageAPI_UnlockFile,
-        InMemStorageAPI_GetParentPath,
-        InMemStorageAPI_MapFile,
-        InMemStorageAPI_UnmapFile);
+        InMemStorageAPI_GetParentPath
+#if LONGTAIL_ENABLE_MMAPED_FILES
+        ,InMemStorageAPI_MapFile
+        ,InMemStorageAPI_UnmapFile
+#endif
+        );
 
     struct InMemStorageAPI* storage_api = (struct InMemStorageAPI*)api;
 

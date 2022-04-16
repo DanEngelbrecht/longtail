@@ -291,9 +291,12 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
     Longtail_Storage_LockFileFunc lock_file_func,
     Longtail_Storage_UnlockFileFunc unlock_file_func,
-    Longtail_Storage_GetParentPathFunc get_parent_path_func,
-    Longtail_Storage_MapFileFunc map_file_func,
-    Longtail_Storage_UnmapFileFunc unmap_file_func)
+    Longtail_Storage_GetParentPathFunc get_parent_path_func
+#if LONGTAIL_ENABLE_MMAPED_FILES
+    ,Longtail_Storage_MapFileFunc map_file_func
+    ,Longtail_Storage_UnmapFileFunc unmap_file_func
+#endif
+    )
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -321,8 +324,10 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
         LONGTAIL_LOGFIELD(lock_file_func, "%p"),
         LONGTAIL_LOGFIELD(unlock_file_func, "%p"),
         LONGTAIL_LOGFIELD(get_parent_path_func, "%p"),
+#if LONGTAIL_ENABLE_MMAPED_FILES
         LONGTAIL_LOGFIELD(map_file_func, "%p"),
         LONGTAIL_LOGFIELD(unmap_file_func, "%p")
+#endif
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -351,8 +356,10 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->LockFile = lock_file_func;
     api->UnlockFile = unlock_file_func;
     api->GetParentPath = get_parent_path_func;
+#if LONGTAIL_ENABLE_MMAPED_FILES
     api->MapFile = map_file_func;
     api->UnMapFile = unmap_file_func;
+#endif
     return api;
 }
 
@@ -379,8 +386,10 @@ int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api,
 int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { return storage_api->LockFile(storage_api, path, out_lock_file); }
 int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { return storage_api->UnlockFile(storage_api, lock_file); }
 char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
+#if LONGTAIL_ENABLE_MMAPED_FILES
 int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
 void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length) { storage_api->UnMapFile(storage_api, m, data_ptr, length); }
+#endif
 
 ////////////// ProgressAPI
 
@@ -477,7 +486,11 @@ struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
     Longtail_Chunker_GetMinChunkSizeFunc get_min_chunk_size_func,
     Longtail_Chunker_CreateChunkerFunc create_chunker_func,
     Longtail_Chunker_NextChunkFunc next_chunk_func,
-    Longtail_Chunker_DisposeChunkerFunc dispose_chunker_func)
+    Longtail_Chunker_DisposeChunkerFunc dispose_chunker_func
+#if LONGTAIL_ENABLE_MMAPED_FILES
+    , Longtail_Chunker_NextChunkFromBufferFunc next_chunk_from_buffer
+#endif
+    )
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -486,6 +499,9 @@ struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
         LONGTAIL_LOGFIELD(create_chunker_func, "%p"),
         LONGTAIL_LOGFIELD(next_chunk_func, "%p"),
         LONGTAIL_LOGFIELD(dispose_chunker_func, "%p")
+#if LONGTAIL_ENABLE_MMAPED_FILES
+        , LONGTAIL_LOGFIELD(next_chunk_from_buffer, "%p")
+#endif
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -495,6 +511,9 @@ struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
     api->CreateChunker = create_chunker_func;
     api->NextChunk = next_chunk_func;
     api->DisposeChunker = dispose_chunker_func;
+#if LONGTAIL_ENABLE_MMAPED_FILES
+    api->NextChunkFromBuffer = next_chunk_from_buffer;
+#endif
     return api;
 }
 
@@ -502,6 +521,9 @@ int Longtail_Chunker_GetMinChunkSize(struct Longtail_ChunkerAPI* chunker_api, ui
 int Longtail_Chunker_CreateChunker(struct Longtail_ChunkerAPI* chunker_api, uint32_t min_chunk_size, uint32_t avg_chunk_size, uint32_t max_chunk_size, Longtail_ChunkerAPI_HChunker* out_chunker) { return chunker_api->CreateChunker(chunker_api, min_chunk_size, avg_chunk_size, max_chunk_size, out_chunker); }
 int Longtail_Chunker_NextChunk(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, Longtail_Chunker_Feeder feeder, void* feeder_context, struct Longtail_Chunker_ChunkRange* out_chunk_range) { return chunker_api->NextChunk(chunker_api, chunker, feeder, feeder_context, out_chunk_range); }
 int Longtail_Chunker_DisposeChunker(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker) { return chunker_api->DisposeChunker(chunker_api, chunker); }
+#if LONGTAIL_ENABLE_MMAPED_FILES
+int Longtail_Chunker_NextChunkFromBuffer(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, const void* buffer, uint64_t buffer_size, const void** out_next_chunk_start) { return chunker_api->NextChunkFromBuffer(chunker_api, chunker, buffer, buffer_size, out_next_chunk_start); }
+#endif
 
 ////////////// AsyncPutStoredBlockAPI
 
@@ -1837,30 +1859,57 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 hash_job->m_Err = err;
                 return 0;
             }
-
-            struct StorageChunkFeederContext feeder_context =
+#if 0
+            const uint8_t* mapped_ptr = 0;
+            Longtail_StorageAPI_HFileMap mapping = 0;
+            err = storage_api->MapFile(storage_api, file_handle, hash_job->m_StartRange, hash_size, &mapping, (const void**)&mapped_ptr);
+            if (err == 0)
             {
-                storage_api,
-                file_handle,
-                path,
-                hash_job->m_StartRange,
-                hash_size,
-                0
-            };
-
-            struct Longtail_Chunker_ChunkRange chunk_range;
-            err = hash_job->m_ChunkerAPI->NextChunk(hash_job->m_ChunkerAPI, chunker, StorageChunkFeederFunc, &feeder_context, &chunk_range);
-            while (err == 0)
-            {
-                if (chunk_capacity == chunk_count)
+                const uint8_t* chunk_start_ptr = mapped_ptr;
+                const uint8_t* buffer_end_ptr = &mapped_ptr[hash_size];
+                while (chunk_start_ptr != buffer_end_ptr)
                 {
-                    uint64_t bytes_left = hash_size - (chunk_range.offset);
-                    uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_chunk_size);
-
-                    void* new_output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) * new_chunk_capacity + sizeof(uint32_t) * new_chunk_capacity);
-                    if (!new_output_mem)
+                    uint64_t bytes_left = buffer_end_ptr - chunk_start_ptr;
+                    if (chunk_capacity == chunk_count)
                     {
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                        uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_chunk_size);
+
+                        void* new_output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) * new_chunk_capacity + sizeof(uint32_t) * new_chunk_capacity);
+                        if (!new_output_mem)
+                        {
+                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                            storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
+                            mapping = 0;
+                            hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
+                            chunker = 0;
+                            storage_api->CloseFile(storage_api, file_handle);
+                            file_handle = 0;
+                            Longtail_Free(path);
+                            path = 0;
+                            hash_job->m_Err = ENOMEM;
+                            return 0;
+                        }
+
+                        TLongtail_Hash* new_chunk_hashes = (TLongtail_Hash*)new_output_mem;
+                        uint32_t* new_chunk_sizes = (uint32_t*)&new_chunk_hashes[new_chunk_capacity];
+                        if (hash_job->m_ChunkHashes)
+                        {
+                            memcpy(new_chunk_hashes, hash_job->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
+                            memcpy(new_chunk_sizes, hash_job->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
+                            Longtail_Free(hash_job->m_ChunkHashes);
+                        }
+                        hash_job->m_ChunkHashes = new_chunk_hashes;
+                        hash_job->m_ChunkSizes = new_chunk_sizes;
+                        chunk_capacity = new_chunk_capacity;
+                    }
+
+                    const uint8_t* next_chunk_start;
+                    err = hash_job->m_ChunkerAPI->NextChunkFromBuffer(hash_job->m_ChunkerAPI, chunker, chunk_start_ptr, bytes_left, (const void**)&next_chunk_start);
+                    if (err != 0)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_ChunkerAPI->NextChunkFromBuffer() failed with %d", err)
+                        storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
+                        mapping = 0;
                         hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
                         chunker = 0;
                         storage_api->CloseFile(storage_api, file_handle);
@@ -1868,43 +1917,100 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         Longtail_Free(path);
                         path = 0;
                         hash_job->m_Err = err;
-                        hash_job->m_Err = ENOMEM;
                         return 0;
                     }
-
-                    TLongtail_Hash* new_chunk_hashes = (TLongtail_Hash*)new_output_mem;
-                    uint32_t* new_chunk_sizes = (uint32_t*)&new_chunk_hashes[new_chunk_capacity];
-                    if (hash_job->m_ChunkHashes)
+                    uint32_t range_length = (uint32_t)(next_chunk_start - chunk_start_ptr);
+                    err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, range_length, (const void*)chunk_start_ptr, &hash_job->m_ChunkHashes[chunk_count]);
+                    if (err != 0)
                     {
-                        memcpy(new_chunk_hashes, hash_job->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
-                        memcpy(new_chunk_sizes, hash_job->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
-                        Longtail_Free(hash_job->m_ChunkHashes);
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_HashAPI->HashBuffer() failed with %d", err)
+                        storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
+                        mapping = 0;
+                        hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
+                        chunker = 0;
+                        storage_api->CloseFile(storage_api, file_handle);
+                        file_handle = 0;
+                        Longtail_Free(path);
+                        path = 0;
+                        hash_job->m_Err = err;
+                        return 0;
                     }
-                    hash_job->m_ChunkHashes = new_chunk_hashes;
-                    hash_job->m_ChunkSizes = new_chunk_sizes;
-                    chunk_capacity = new_chunk_capacity;
+                    hash_job->m_ChunkSizes[chunk_count] = range_length;
+                    ++chunk_count;
+                    chunk_start_ptr = next_chunk_start;
                 }
-
-                err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, chunk_range.len, (void*)chunk_range.buf, &hash_job->m_ChunkHashes[chunk_count]);
-                if (err != 0)
-                {
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_HashAPI->HashBuffer() failed with %d", err)
-                    hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
-                    chunker = 0;
-                    storage_api->CloseFile(storage_api, file_handle);
-                    file_handle = 0;
-                    Longtail_Free(path);
-                    path = 0;
-                    hash_job->m_Err = err;
-                    return 0;
-                }
-                hash_job->m_ChunkSizes[chunk_count] = chunk_range.len;
-
-                ++chunk_count;
-
-                err = hash_job->m_ChunkerAPI->NextChunk(hash_job->m_ChunkerAPI, chunker, StorageChunkFeederFunc, &feeder_context, &chunk_range);
+                storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
             }
+            else
+#endif
+            {
+                struct StorageChunkFeederContext feeder_context =
+                {
+                    storage_api,
+                    file_handle,
+                    path,
+                    hash_job->m_StartRange,
+                    hash_size,
+                    0
+                };
 
+                struct Longtail_Chunker_ChunkRange chunk_range;
+                err = hash_job->m_ChunkerAPI->NextChunk(hash_job->m_ChunkerAPI, chunker, StorageChunkFeederFunc, &feeder_context, &chunk_range);
+                while (err == 0)
+                {
+                    if (chunk_capacity == chunk_count)
+                    {
+                        uint64_t bytes_left = hash_size - (chunk_range.offset);
+                        uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_chunk_size);
+
+                        void* new_output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) * new_chunk_capacity + sizeof(uint32_t) * new_chunk_capacity);
+                        if (!new_output_mem)
+                        {
+                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                            hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
+                            chunker = 0;
+                            storage_api->CloseFile(storage_api, file_handle);
+                            file_handle = 0;
+                            Longtail_Free(path);
+                            path = 0;
+                            hash_job->m_Err = err;
+                            hash_job->m_Err = ENOMEM;
+                            return 0;
+                        }
+
+                        TLongtail_Hash* new_chunk_hashes = (TLongtail_Hash*)new_output_mem;
+                        uint32_t* new_chunk_sizes = (uint32_t*)&new_chunk_hashes[new_chunk_capacity];
+                        if (hash_job->m_ChunkHashes)
+                        {
+                            memcpy(new_chunk_hashes, hash_job->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
+                            memcpy(new_chunk_sizes, hash_job->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
+                            Longtail_Free(hash_job->m_ChunkHashes);
+                        }
+                        hash_job->m_ChunkHashes = new_chunk_hashes;
+                        hash_job->m_ChunkSizes = new_chunk_sizes;
+                        chunk_capacity = new_chunk_capacity;
+                    }
+
+                    err = hash_job->m_HashAPI->HashBuffer(hash_job->m_HashAPI, chunk_range.len, (void*)chunk_range.buf, &hash_job->m_ChunkHashes[chunk_count]);
+                    if (err != 0)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_HashAPI->HashBuffer() failed with %d", err)
+                        hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
+                        chunker = 0;
+                        storage_api->CloseFile(storage_api, file_handle);
+                        file_handle = 0;
+                        Longtail_Free(path);
+                        path = 0;
+                        hash_job->m_Err = err;
+                        return 0;
+                    }
+                    hash_job->m_ChunkSizes[chunk_count] = chunk_range.len;
+
+                    ++chunk_count;
+
+                    err = hash_job->m_ChunkerAPI->NextChunk(hash_job->m_ChunkerAPI, chunker, StorageChunkFeederFunc, &feeder_context, &chunk_range);
+                }
+            }
             hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
         }
     }
