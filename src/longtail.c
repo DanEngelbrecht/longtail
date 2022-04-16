@@ -4379,7 +4379,7 @@ static int WriteReady(void* context, uint32_t job_id, int is_cancelled)
     return 0;
 }
 
-#define MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE  64u
+#define MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE  32u
 
 struct WritePartialAssetFromBlocksJob
 {
@@ -5347,7 +5347,7 @@ struct JobCompareContext
     struct Longtail_LookupTable* chunk_hash_to_block_index;
 };
 
-static uint32_t GetJobBlockIndex(struct JobCompareContext* c, uint32_t asset_index, uint32_t chunk_offset)
+static uint32_t GetJobBlockIndex(struct JobCompareContext* c, uint32_t asset_index)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -5359,7 +5359,7 @@ static uint32_t GetJobBlockIndex(struct JobCompareContext* c, uint32_t asset_ind
 #endif // defined(LONGTAIL_ASSERTS)
 
     uint32_t asset_chunk_offset = c->asset_chunk_index_starts[asset_index];
-    uint32_t chunk_index = c->asset_chunk_indexes[asset_chunk_offset+chunk_offset];
+    uint32_t chunk_index = c->asset_chunk_indexes[asset_chunk_offset];
 
     TLongtail_Hash chunk_hash = c->chunk_hashes[chunk_index];
 
@@ -5391,37 +5391,32 @@ static SORTFUNC(JobCompare)
 
     uint32_t a_chunk_count = c->asset_chunk_counts[a];
     uint32_t b_chunk_count = c->asset_chunk_counts[b];
-    uint32_t chunk_offset = 0;
-    while (1)
+    if (a_chunk_count == 0)
     {
-        if (chunk_offset >= a_chunk_count)
+        if (b_chunk_count == 0)
         {
-            if (chunk_offset >= b_chunk_count)
-            {
-                return 0;
-            }
-            else
-            {
-                return 1;
-            }
+            return 0;
         }
-        else if (chunk_offset >= b_chunk_count)
+        else
         {
             return -1;
         }
-        uint32_t a_block_index = GetJobBlockIndex(c, a, chunk_offset);
-        uint32_t b_block_index = GetJobBlockIndex(c, b, chunk_offset);
-        if (a_block_index < b_block_index)
-        {
-            return -1;
-        }
-        else if (a_block_index > b_block_index)
-        {
-            return 1;
-        }
-        return 0;
-//        chunk_offset++;
     }
+    else if (b_chunk_count == 0)
+    {
+        return 1;
+    }
+    uint32_t a_block_index = GetJobBlockIndex(c, a);
+    uint32_t b_block_index = GetJobBlockIndex(c, b);
+    if (a_block_index < b_block_index)
+    {
+        return -1;
+    }
+    else if (a_block_index > b_block_index)
+    {
+        return 1;
+    }
+    return 0;
 }
 
 static struct AssetWriteList* CreateAssetWriteList(uint32_t asset_count)
@@ -5591,6 +5586,7 @@ static int WriteAssets(
     LONGTAIL_FATAL_ASSERT(ctx, chunk_hash_to_block_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, awl != 0, return EINVAL)
 
+#if defined(LONGTAIL_ASSERTS)
     {
         uint32_t j = 0;
         while (j < awl->m_BlockJobCount)
@@ -5626,6 +5622,7 @@ static int WriteAssets(
             }
         }
     }
+#endif // defined(LONGTAIL_ASSERTS)
 
     const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
     const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
