@@ -1665,7 +1665,8 @@ int Pack(
         storage_api,
         target_path,
         archive_index,
-        true);
+        1,
+        0);
     if (archive_block_store_api == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive block store %d", ENOMEM);
@@ -1892,13 +1893,12 @@ int Unpack(
         }
     }
 
-
-
     struct Longtail_BlockStoreAPI* archive_block_store_api = Longtail_CreateArchiveBlockStore(
         storage_api,
         source_path,
         archive_index,
-        false);
+        0,
+        0);
     if (archive_block_store_api == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive block store `%s`, %d", source_path, err);

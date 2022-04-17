@@ -7061,7 +7061,8 @@ TEST(Longtail, Longtail_Archive)
         local_storage,
         "archive.lta",
         archive_index,
-        true);
+        1,
+        0);
 
     ASSERT_EQ(0, Longtail_WriteContent(
         local_storage,
@@ -7100,7 +7101,8 @@ TEST(Longtail, Longtail_Archive)
         local_storage,
         "archive.lta",
         archive_index,
-        false);
+        0,
+        0);
 
     ASSERT_EQ(0, Longtail_WriteVersion(
         archive_block_store_api,

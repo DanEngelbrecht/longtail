@@ -443,12 +443,16 @@ static int ArchiveBlockStore_Init(
     const char* archive_path,
     struct Longtail_ArchiveIndex* archive_index,
     int enable_write,
+    int enable_mmap_reading,
     struct Longtail_BlockStoreAPI** out_block_store_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(archive_path, "%s"),
+        LONGTAIL_LOGFIELD(archive_index, "%p"),
         LONGTAIL_LOGFIELD(enable_write, "%d"),
+        LONGTAIL_LOGFIELD(enable_mmap_reading, "%d"),
         LONGTAIL_LOGFIELD(out_block_store_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
@@ -530,21 +534,24 @@ static int ArchiveBlockStore_Init(
             return err;
         }
 #if LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
-        uint64_t archive_size;
-        err = api->m_StorageAPI->GetSize(api->m_StorageAPI, api->m_ArchiveFileHandle, &archive_size);
-        if (err)
+        if (enable_mmap_reading)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MapFile() failed with %d", err)
-            api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
-            Longtail_Free(api->m_ArchivePath);
-            return err;
-        }
-        
-        api->m_BlockBytesSize = archive_size - *api->m_ArchiveIndex->m_IndexDataSize;
-        err = api->m_StorageAPI->MapFile(api->m_StorageAPI, api->m_ArchiveFileHandle, *api->m_ArchiveIndex->m_IndexDataSize, api->m_BlockBytesSize, &api->m_ArchiveFileMapping, (const void**)&api->m_BlockBytes);
-        if (err)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_MapFile() failed with %d, using normal file IO", err)
+            uint64_t archive_size;
+            err = api->m_StorageAPI->GetSize(api->m_StorageAPI, api->m_ArchiveFileHandle, &archive_size);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_MapFile() failed with %d", err)
+                api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);
+                Longtail_Free(api->m_ArchivePath);
+                return err;
+            }
+
+            api->m_BlockBytesSize = archive_size - *api->m_ArchiveIndex->m_IndexDataSize;
+            err = api->m_StorageAPI->MapFile(api->m_StorageAPI, api->m_ArchiveFileHandle, *api->m_ArchiveIndex->m_IndexDataSize, api->m_BlockBytesSize, &api->m_ArchiveFileMapping, (const void**)&api->m_BlockBytes);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_MapFile() failed with %d, using normal file IO", err)
+            }
         }
 #endif // LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
     }
@@ -566,13 +573,15 @@ struct Longtail_BlockStoreAPI* Longtail_CreateArchiveBlockStore(
     struct Longtail_StorageAPI* storage_api,
     const char* archive_path,
     struct Longtail_ArchiveIndex* archive_index,
-    int enable_write)
+    int enable_write,
+    int enable_mmap_reading)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(archive_path, "%s"),
+        LONGTAIL_LOGFIELD(archive_index, "%p"),
         LONGTAIL_LOGFIELD(enable_write, "%d"),
-        LONGTAIL_LOGFIELD(archive_index, "%p")
+        LONGTAIL_LOGFIELD(enable_mmap_reading, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
@@ -599,6 +608,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateArchiveBlockStore(
         archive_path,
         archive_index,
         enable_write,
+        enable_mmap_reading,
         &block_store_api);
     if (err)
     {
