@@ -442,6 +442,7 @@ int UpSync(
                 file_infos,
                 tags,
                 target_chunk_size,
+                0,
                 &source_version_index);
             SAFE_DISPOSE_API(progress);
         }
@@ -766,6 +767,7 @@ int DownSync(
                 file_infos,
                 tags,
                 target_chunk_size,
+                0,
                 &target_version_index);
             SAFE_DISPOSE_API(progress);
         }
@@ -1598,6 +1600,7 @@ int Pack(
                 file_infos,
                 tags,
                 target_chunk_size,
+                0,
                 &source_version_index);
             SAFE_DISPOSE_API(progress);
         }
@@ -1871,6 +1874,7 @@ int Unpack(
                 file_infos,
                 tags,
                 *archive_index->m_VersionIndex.m_TargetChunkSize,
+                0,
                 &target_version_index);
             SAFE_DISPOSE_API(progress);
         }

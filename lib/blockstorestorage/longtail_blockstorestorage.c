@@ -1286,7 +1286,6 @@ static char* BlockStoreStorageAPI_GetParentPath(
     return result;
 }
 
-#if LONGTAIL_ENABLE_MMAPED_FILES
 static int BlockStoreStorageAPI_MapFile(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HOpenFile f,
@@ -1332,7 +1331,6 @@ static void BlockStoreStorageAPI_UnmapFile(
     LONGTAIL_VALIDATE_INPUT(ctx, data_ptr !=0, return)
     LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return)
 }
-#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 static void BlockStoreStorageAPI_Dispose(struct Longtail_API* api)
 {
@@ -1391,12 +1389,9 @@ static int BlockStoreStorageAPI_Init(
         BlockStoreStorageAPI_GetEntryProperties,
         BlockStoreStorageAPI_LockFile,
         BlockStoreStorageAPI_UnlockFile,
-        BlockStoreStorageAPI_GetParentPath
-#if LONGTAIL_ENABLE_MMAPED_FILES
-        ,BlockStoreStorageAPI_MapFile
-        ,BlockStoreStorageAPI_UnmapFile
-#endif // LONGTAIL_ENABLE_MMAPED_FILES
-        );
+        BlockStoreStorageAPI_GetParentPath,
+        BlockStoreStorageAPI_MapFile,
+        BlockStoreStorageAPI_UnmapFile);
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)api;
 

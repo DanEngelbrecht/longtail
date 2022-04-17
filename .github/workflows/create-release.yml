@@ -133,6 +133,10 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
+          - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback.
+          - **CHANGED API** `Longtail_CreateArchiveBlockStore` takes flag to enable or disable memory mapped reading of blocks
+          - **CHANGED API** `Longtail_CreateVersionIndex` takes flag to enable or disable memory mapped reading of files
+          - **CHANGED API** CHUNKER API!
           - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU (perf improvement)
           - **FIX** Remove redundant check if directory exists when getting directory name (perf improvement)
           - **FIX** Use SOA for asset part lookup (perf improvement)
@@ -140,9 +144,6 @@ jobs:
           - **FIX** Faster EnsureParentPathExists (perf improvement)
           - **FIX** ArchiveBlockStore no longer keeps spin lock when reading or writing blocks (perf improvement)
           - **UPDATE** zstdlib updated to 1.5.2
-          - **CHANGED API** OPTIONAL: `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback. Enable by defining LONGTAIL_ENABLE_MMAPED_FILES
-          - **FIX** OPTIONAL: Memory mapped indexing, defaults to disabled. Enable by defining LONGTAIL_ENABLE_MMAPED_FILES and LONGTAIL_ENABLE_MMAPPED_INDEXING
-          - **FIX** OPTIONAL: Memory mapped archive block reading, defaults to disabled. Enable by defining LONGTAIL_ENABLE_MMAPED_FILES and LONGTAIL_ARCHIVE_ENABLE_MMAPPED_FILES
        draft: false
         prerelease: false
         files: "*-x64.zip"

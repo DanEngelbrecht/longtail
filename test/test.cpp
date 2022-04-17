@@ -1135,6 +1135,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
         version1_paths,
         compression_types,
         16384,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     Longtail_Free(vindex);
@@ -1166,6 +1167,7 @@ TEST(Longtail, CreateVersionIndexNoFileIndex)
         0,
         compression_types,
         16384,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     ASSERT_EQ(0u, *vindex->m_ChunkCount);
@@ -2258,6 +2260,7 @@ TEST(Longtail, Longtail_WriteContent)
         version1_paths,
         compression_types,
         16,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     Longtail_Free(compression_types);
@@ -2336,6 +2339,7 @@ TEST(Longtail, TestVeryLargeFile)
         assets_path,
         paths,
         32758u,
+        0,
         &version_index));
 
     Longtail_Free(version_index);
@@ -2479,6 +2483,7 @@ TEST(Longtail, VersionIndexDirectories)
         local_paths,
         compression_types,
         16384,
+        0,
         &local_version_index));
     ASSERT_NE((Longtail_VersionIndex*)0, local_version_index);
     ASSERT_EQ(16u, *local_version_index->m_AssetCount);
@@ -2520,6 +2525,7 @@ TEST(Longtail, EmptyFolderGetRequiredChunkHashes)
         file_infos,
         0,
         64,
+        0,
         &version_index));
 
     uint32_t zero = 0;
@@ -2793,6 +2799,7 @@ TEST(Longtail, Longtail_VersionDiff)
         old_version_paths,
         old_compression_types,
         16,
+        0,
         &old_vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, old_vindex);
     Longtail_Free(old_compression_types);
@@ -2818,6 +2825,7 @@ TEST(Longtail, Longtail_VersionDiff)
         new_version_paths,
         new_compression_types,
         16,
+        0,
         &new_vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, new_vindex);
     Longtail_Free(new_compression_types);
@@ -3106,6 +3114,7 @@ TEST(Longtail, Longtail_WriteVersion)
         version1_paths,
         version1_compression_types,
         50,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     Longtail_Free(version1_compression_types);
@@ -3302,7 +3311,6 @@ TEST(Longtail, ChunkerLargeFile)
     SAFE_DISPOSE_API(chunker_api);
 }
 
-#if LONGTAIL_ENABLE_MMAPED_FILES
 TEST(Longtail, MemMappedChunkerLargeFile)
 {
     HLongtail_OpenFile large_file;
@@ -3376,7 +3384,6 @@ TEST(Longtail, MemMappedChunkerLargeFile)
 
     SAFE_DISPOSE_API(chunker_api);
 }
-#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 TEST(Longtail, FileSystemStorage)
 {
@@ -4117,10 +4124,11 @@ TEST(Longtail, AsyncBlockStore)
         0,
             0,
         0,
-    "local",
+        "local",
         version1_paths,
         version1_compression_types,
         50,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     Longtail_Free(version1_compression_types);
@@ -4359,6 +4367,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
         version1_paths,
         version1_compression_types,
         50,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     Longtail_Free(version1_compression_types);
@@ -4585,6 +4594,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
                 job->file_infos,
                 0,
                 16384,
+                0,
                 job->vindex);
             return 0;
         }
@@ -4908,6 +4918,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         version_paths,
         compression_types,
         16,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     Longtail_Free(compression_types);
@@ -4933,6 +4944,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         current_version_paths,
         current_compression_types,
         16,
+        0,
         &current_vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, current_vindex);
     Longtail_Free(current_compression_types);
@@ -5321,6 +5333,7 @@ TEST(Longtail, VersionLocalContent)
         version1_file_infos,
         0,
         128,
+        0,
         &version1_index));
 
     struct Longtail_StoreIndex* version1_block_store_store_index = SyncGetExistingContent(
@@ -5383,6 +5396,7 @@ TEST(Longtail, VersionLocalContent)
         version2_file_infos,
         0,
         128,
+        0,
         &version2_index));
 
     struct Longtail_StoreIndex* version2_block_store_store_index = SyncGetExistingContent(
@@ -5485,10 +5499,8 @@ struct FailableStorageAPI
     static int LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->LockFile(api->m_BackingAPI, path, out_lock_file);}
     static int UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnlockFile(api->m_BackingAPI, lock_file);}
     static char* GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetParentPath(api->m_BackingAPI, path);}
-#if LONGTAIL_ENABLE_MMAPED_FILES
     static int MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->MapFile(api->m_BackingAPI, f, offset, length, out_file_map, out_data_ptr);}
     static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m, data_ptr, length);}
-#endif // LONGTAIL_ENABLE_MMAPED_FILES
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5519,12 +5531,9 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
         FailableStorageAPI::GetEntryProperties,
         FailableStorageAPI::LockFile,
         FailableStorageAPI::UnlockFile,
-        FailableStorageAPI::GetParentPath
-#if LONGTAIL_ENABLE_MMAPED_FILES
-        , FailableStorageAPI::MapFile
-        , FailableStorageAPI::UnmapFile
-#endif // LONGTAIL_ENABLE_MMAPED_FILES
-        );
+        FailableStorageAPI::GetParentPath,
+        FailableStorageAPI::MapFile,
+        FailableStorageAPI::UnmapFile);
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;
     failable_storage_api->m_PassCount = 0x7fffffff;
@@ -5619,6 +5628,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
         version_paths,
         compression_types,
         48,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
     Longtail_Free(compression_types);
@@ -5670,6 +5680,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
         current_version_paths,
         current_compression_types,
         16,
+        0,
         &current_vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, current_vindex);
     Longtail_Free(current_compression_types);
@@ -5772,6 +5783,7 @@ TEST(Longtail, TestLongtailBlockFS)
         version_paths,
         compression_types,
         MAX_BLOCK_SIZE / MAX_CHUNKS_PER_BLOCK,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
 
@@ -6045,6 +6057,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
             version_paths,
             compression_types,
             (MAX_BLOCK_SIZE / MAX_CHUNKS_PER_BLOCK) * 2,
+            0,
             &vindex));
         ASSERT_NE((Longtail_VersionIndex*)0, vindex);
         Longtail_Free(compression_types);
@@ -6212,6 +6225,7 @@ static int UploadFolder(
         version_file_infos,
         0,
         TARGET_CHUNK_SIZE,
+        0,
         &version_index);
     if (err)
     {
@@ -6297,6 +6311,7 @@ static int DownloadFolder(
         version_file_infos,
         0,
         TARGET_CHUNK_SIZE,
+        0,
         &current_version_index);
     if (err)
     {
@@ -6379,6 +6394,7 @@ static int ValidateVersion(
         expected_file_infos,
         0,
         TARGET_CHUNK_SIZE,
+        0,
         &expected_version_index);
     if (err)
     {
@@ -6398,6 +6414,7 @@ static int ValidateVersion(
         file_infos,
         0,
         TARGET_CHUNK_SIZE,
+        0,
         &version_index);
     if (err)
     {
@@ -7036,6 +7053,7 @@ TEST(Longtail, Longtail_Archive)
         version1_paths,
         compression_types,
         TARGET_CHUNK_SIZE,
+        0,
         &vindex));
     ASSERT_NE((Longtail_VersionIndex*)0, vindex);
 

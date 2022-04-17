@@ -403,7 +403,6 @@ int HPCDCChunker_DisposeChunker(struct Longtail_ChunkerAPI* chunker_api, Longtai
 	return 0;
 }
 
-#if LONGTAIL_ENABLE_MMAPED_FILES
 int HPCDCChunker_NextChunkFromBuffer(
     struct Longtail_ChunkerAPI* chunker_api,
     Longtail_ChunkerAPI_HChunker chunker,
@@ -476,7 +475,6 @@ int HPCDCChunker_NextChunkFromBuffer(
     *out_next_chunk_start = ((const uint8_t*)buffer) + pos;
     return 0;
 }
-#endif // LONGTAIL_ENABLE_MMAPED_FILES
 
 static int HPCDCChunker_Init(
     void* mem,
@@ -496,11 +494,8 @@ static int HPCDCChunker_Init(
 		HPCDCChunker_GetMinChunkSize,
 		HPCDCChunker_CreateChunker,
 		HPCDCChunker_NextChunk,
-		HPCDCChunker_DisposeChunker
-#if LONGTAIL_ENABLE_MMAPED_FILES
-        ,HPCDCChunker_NextChunkFromBuffer
-#endif // LONGTAIL_ENABLE_MMAPED_FILES
-        );
+		HPCDCChunker_DisposeChunker,
+        HPCDCChunker_NextChunkFromBuffer);
     if (!chunker_api)
     {
         return EINVAL;
