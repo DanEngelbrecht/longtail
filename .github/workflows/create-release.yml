@@ -137,6 +137,7 @@ jobs:
           - **CHANGED API** `Longtail_CreateArchiveBlockStore` now takes flag to enable or disable memory mapped reading of blocks
           - **CHANGED API** `Longtail_CreateVersionIndex` now takes flag to enable or disable memory mapped reading of files
           - **CHANGED API** `Longtail_ChunkerAPI` now has `NextChunkFromBuffer` method used when enabling memory mapping during `Longtail_CreateVersionIndex`
+          - **CHANGED API** `Longtail_CreateFSBlockStoreAPI` now takes flag to enable or disable memory mapped reading of block files
           - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU (perf improvement)
           - **FIX** Remove redundant check if directory exists when getting directory name (perf improvement)
           - **FIX** Use SOA for asset part lookup (perf improvement)
