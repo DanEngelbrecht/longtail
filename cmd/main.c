@@ -336,7 +336,8 @@ int UpSync(
     uint32_t min_block_usage_percent,
     uint32_t hashing_type,
     uint32_t compression_type,
-    int enable_mmap_indexing)
+    int enable_mmap_indexing,
+    int enable_mmap_block_store)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -356,7 +357,7 @@ int UpSync(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
+    struct Longtail_BlockStoreAPI* store_block_fsstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0, enable_mmap_block_store);
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_fsstore_api, compression_registry);
 
     struct Longtail_VersionIndex* source_version_index = 0;
@@ -617,7 +618,8 @@ int DownSync(
     const char* target_path,
     const char* optional_target_index_path,
     int retain_permissions,
-    int enable_mmap_indexing)
+    int enable_mmap_indexing,
+    int enable_mmap_block_store)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -633,13 +635,13 @@ int DownSync(
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0, enable_mmap_block_store);
     struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
     struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
     if (cache_path)
     {
-        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, 0);
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, 0, enable_mmap_block_store);
         store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
         compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     }
@@ -988,7 +990,8 @@ int SetLogLevel(const char* log_level_raw)
 
 int ValidateVersionIndex(
     const char* storage_uri_raw,
-    const char* version_index_path)
+    const char* version_index_path,
+    int enable_mmap_block_store)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -999,7 +1002,7 @@ int ValidateVersionIndex(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
+    struct Longtail_BlockStoreAPI* store_block_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0, enable_mmap_block_store);
     
     struct Longtail_VersionIndex* version_index = 0;
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
@@ -1072,7 +1075,8 @@ int ValidateVersionIndex(
 
 int VersionIndex_ls(
     const char* version_index_path,
-    const char* ls_dir)
+    const char* ls_dir,
+    int enable_mmap_block_store)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(version_index_path, "%s"),
@@ -1088,7 +1092,8 @@ int VersionIndex_ls(
         job_api,
         fake_block_store_fs,
         "store",
-        0);
+        0,
+        enable_mmap_block_store);
 
 
     struct Longtail_VersionIndex* version_index = 0;
@@ -1204,7 +1209,8 @@ int VersionIndex_cp(
     const char* version_index_path,
     const char* cache_path,
     const char* source_path,
-    const char* target_path)
+    const char* target_path,
+    int enable_mmap_block_store)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -1220,13 +1226,13 @@ int VersionIndex_cp(
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
     struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0);
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0, enable_mmap_block_store);
     struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
     struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
     if (cache_path)
     {
-        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, 0);
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, 0, enable_mmap_block_store);
         store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
         compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     }
@@ -2116,6 +2122,9 @@ int main(int argc, char** argv)
         bool enable_mmap_indexing_raw = 0;
         kgflags_bool("mmap-indexing", false, "Enable memory mapping of files while indexing", false, &enable_mmap_indexing_raw);
 
+        bool enable_mmap_block_store_raw = 0;
+        kgflags_bool("mmap-block-store", false, "Enable memory mapping of files in block store", false, &enable_mmap_block_store_raw);
+
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
@@ -2161,7 +2170,8 @@ int main(int argc, char** argv)
             min_block_usage_percent,
             hashing,
             compression,
-            enable_mmap_indexing_raw);
+            enable_mmap_indexing_raw,
+            enable_mmap_block_store_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)source_index);
@@ -2189,6 +2199,9 @@ int main(int argc, char** argv)
 
         bool enable_mmap_indexing_raw = 0;
         kgflags_bool("mmap-indexing", false, "Enable memory mapping of files while indexing", false, &enable_mmap_indexing_raw);
+
+        bool enable_mmap_block_store_raw = 0;
+        kgflags_bool("mmap-block-store", false, "Enable memory mapping of files in block store", false, &enable_mmap_block_store_raw);
 
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
@@ -2219,7 +2232,8 @@ int main(int argc, char** argv)
             target_path,
             target_index,
             retain_permission_raw,
-            enable_mmap_indexing_raw);
+            enable_mmap_indexing_raw,
+            enable_mmap_block_store_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_index);
@@ -2233,6 +2247,9 @@ int main(int argc, char** argv)
 
         const char* version_index_path_raw = 0;
         kgflags_string("version-index-path", 0, "Path to version index", true, &version_index_path_raw);
+
+        bool enable_mmap_block_store_raw = 0;
+        kgflags_bool("mmap-block-store", false, "Enable memory mapping of files in block store", false, &enable_mmap_block_store_raw);
 
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
@@ -2254,7 +2271,8 @@ int main(int argc, char** argv)
 
         err = ValidateVersionIndex(
             storage_uri_raw,
-            version_index_path);
+            version_index_path,
+            enable_mmap_block_store_raw);
 
         Longtail_Free((void*)version_index_path);
     }
@@ -2262,6 +2280,9 @@ int main(int argc, char** argv)
     {
         const char* version_index_path_raw = 0;
         kgflags_string("version-index-path", 0, "Version index file path", true, &version_index_path_raw);
+
+        bool enable_mmap_block_store_raw = 0;
+        kgflags_bool("mmap-block-store", false, "Enable memory mapping of files in block store", false, &enable_mmap_block_store_raw);
 
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
@@ -2288,7 +2309,8 @@ int main(int argc, char** argv)
 
         err = VersionIndex_ls(
             version_index_path,
-            ls_dir);
+            ls_dir,
+            enable_mmap_block_store_raw);
 	// ls [path] --source-path <version.lvi> --storage-uri <store-uri>
 	// cp source target --source-path <version.lvi> --storage-uri <store-uri>
 	// 
@@ -2304,6 +2326,9 @@ int main(int argc, char** argv)
 
         const char* version_index_path_raw = 0;
         kgflags_string("version-index-path", 0, "Version index file path", true, &version_index_path_raw);
+
+        bool enable_mmap_block_store_raw = 0;
+        kgflags_bool("mmap-block-store", false, "Enable memory mapping of files in block store", false, &enable_mmap_block_store_raw);
 
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
@@ -2337,7 +2362,8 @@ int main(int argc, char** argv)
             version_index_path,
             cache_path,
             source_path,
-            target_path);
+            target_path,
+            enable_mmap_block_store_raw);
     }
     else if (strcmp(command, "pack") == 0)
     {
