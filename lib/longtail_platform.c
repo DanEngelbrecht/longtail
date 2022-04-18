@@ -2075,7 +2075,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
         fd,
         base_offset);
 
-    if (mapped_address == MAP_FAILED)
+    if (m->m_BaseAddress == MAP_FAILED)
     {
         Longtail_Free(m);
         return errno;
