@@ -1887,12 +1887,9 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
 int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output)
 {
     FILE* f = (FILE*)handle;
-    if (-1 == fseek(f, (long int)offset, SEEK_SET))
-    {
-        return errno;
-    }
-    size_t read = fread(output, (size_t)length, 1, f);
-    if (read != 1u)
+    int fd = fileno(f);
+    ssize_t length_read = pread(fd, output, (off_t)length, (off_t)offset);
+    if (length_read == -1)
     {
         return errno;
     }
@@ -1902,12 +1899,10 @@ int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, v
 int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, const void* input)
 {
     FILE* f = (FILE*)handle;
-    if (-1 == fseek(f, (long int )offset, SEEK_SET))
-    {
-        return errno;
-    }
-    size_t written = fwrite(input, (size_t)length, 1, f);
-    if (written != 1u)
+
+    int fd = fileno(f);
+    ssize_t length_written = pwrite(fd, input, length, offset);
+    if (length_written != -1)
     {
         return errno;
     }
