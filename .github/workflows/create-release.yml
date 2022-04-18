@@ -134,9 +134,9 @@ jobs:
         body: |
           # Changes in this Release
           - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback.
-          - **CHANGED API** `Longtail_CreateArchiveBlockStore` takes flag to enable or disable memory mapped reading of blocks
-          - **CHANGED API** `Longtail_CreateVersionIndex` takes flag to enable or disable memory mapped reading of files
-          - **CHANGED API** CHUNKER API!
+          - **CHANGED API** `Longtail_CreateArchiveBlockStore` now takes flag to enable or disable memory mapped reading of blocks
+          - **CHANGED API** `Longtail_CreateVersionIndex` now takes flag to enable or disable memory mapped reading of files
+          - **CHANGED API** `Longtail_ChunkerAPI` now has `NextChunkFromBuffer` method used when enabling memory mapping during `Longtail_CreateVersionIndex`
           - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU (perf improvement)
           - **FIX** Remove redundant check if directory exists when getting directory name (perf improvement)
           - **FIX** Use SOA for asset part lookup (perf improvement)

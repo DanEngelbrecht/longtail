@@ -335,7 +335,8 @@ int UpSync(
     uint32_t max_chunks_per_block,
     uint32_t min_block_usage_percent,
     uint32_t hashing_type,
-    uint32_t compression_type)
+    uint32_t compression_type,
+    int enable_mmap_indexing)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -442,7 +443,7 @@ int UpSync(
                 file_infos,
                 tags,
                 target_chunk_size,
-                0,
+                enable_mmap_indexing,
                 &source_version_index);
             SAFE_DISPOSE_API(progress);
         }
@@ -615,7 +616,8 @@ int DownSync(
     const char* source_path,
     const char* target_path,
     const char* optional_target_index_path,
-    int retain_permissions)
+    int retain_permissions,
+    int enable_mmap_indexing)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -767,7 +769,7 @@ int DownSync(
                 file_infos,
                 tags,
                 target_chunk_size,
-                0,
+                enable_mmap_indexing,
                 &target_version_index);
             SAFE_DISPOSE_API(progress);
         }
@@ -1521,7 +1523,8 @@ int Pack(
     uint32_t max_chunks_per_block,
     uint32_t min_block_usage_percent,
     uint32_t hashing_type,
-    uint32_t compression_type)
+    uint32_t compression_type,
+    int enable_mmap_indexing)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(source_path, "%s"),
@@ -1600,7 +1603,7 @@ int Pack(
                 file_infos,
                 tags,
                 target_chunk_size,
-                0,
+                enable_mmap_indexing,
                 &source_version_index);
             SAFE_DISPOSE_API(progress);
         }
@@ -1786,7 +1789,9 @@ int Pack(
 int Unpack(
     const char* source_path,
     const char* target_path,
-    int retain_permissions)
+    int retain_permissions,
+    int enable_mmap_indexing,
+    int enable_mmap_unpacking)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(source_path, "%s"),
@@ -1874,7 +1879,7 @@ int Unpack(
                 file_infos,
                 tags,
                 *archive_index->m_VersionIndex.m_TargetChunkSize,
-                0,
+                enable_mmap_indexing,
                 &target_version_index);
             SAFE_DISPOSE_API(progress);
         }
@@ -1902,7 +1907,7 @@ int Unpack(
         source_path,
         archive_index,
         0,
-        0);
+        enable_mmap_unpacking);
     if (archive_block_store_api == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive block store `%s`, %d", source_path, err);
@@ -2108,6 +2113,9 @@ int main(int argc, char** argv)
         int32_t min_block_usage_percent = 8;
         kgflags_int("min-block-usage-percent", 0, "Minimum percent of block content than must match for it to be considered \"existing\"", false, &min_block_usage_percent);
 
+        bool enable_mmap_indexing_raw = 0;
+        kgflags_bool("mmap-indexing", false, "Enable memory mapping of files while indexing", false, &enable_mmap_indexing_raw);
+
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
@@ -2152,7 +2160,8 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             min_block_usage_percent,
             hashing,
-            compression);
+            compression,
+            enable_mmap_indexing_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)source_index);
@@ -2177,6 +2186,9 @@ int main(int argc, char** argv)
 
         bool retain_permission_raw = 0;
         kgflags_bool("retain-permissions", true, "Disable setting permission on file/directories from source", false, &retain_permission_raw);
+
+        bool enable_mmap_indexing_raw = 0;
+        kgflags_bool("mmap-indexing", false, "Enable memory mapping of files while indexing", false, &enable_mmap_indexing_raw);
 
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
@@ -2206,7 +2218,8 @@ int main(int argc, char** argv)
             source_path,
             target_path,
             target_index,
-            retain_permission_raw);
+            retain_permission_raw,
+            enable_mmap_indexing_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_index);
@@ -2352,6 +2365,9 @@ int main(int argc, char** argv)
         int32_t min_block_usage_percent = 8;
         kgflags_int("min-block-usage-percent", 0, "Minimum percent of block content than must match for it to be considered \"existing\"", false, &min_block_usage_percent);
 
+        bool enable_mmap_indexing_raw = 0;
+        kgflags_bool("mmap-indexing", false, "Enable memory mapping of files while indexing", false, &enable_mmap_indexing_raw);
+
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
@@ -2394,7 +2410,8 @@ int main(int argc, char** argv)
             max_chunks_per_block,
             min_block_usage_percent,
             hashing,
-            compression);
+            compression,
+            enable_mmap_indexing_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_path);
@@ -2409,6 +2426,12 @@ int main(int argc, char** argv)
 
         bool retain_permission_raw = 0;
         kgflags_bool("retain-permissions", true, "Disable setting permission on file/directories from source", false, &retain_permission_raw);
+
+        bool enable_mmap_indexing_raw = 0;
+        kgflags_bool("mmap-indexing", false, "Enable memory mapping of files while indexing", false, &enable_mmap_indexing_raw);
+
+        bool enable_mmap_unpacking_raw = 0;
+        kgflags_bool("mmap-unpacking", false, "Enable memory mapping of files unpacking", false, &enable_mmap_unpacking_raw);
 
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
@@ -2432,7 +2455,9 @@ int main(int argc, char** argv)
         err = Unpack(
             source_path,
             target_path,
-            retain_permission_raw);
+            retain_permission_raw,
+            enable_mmap_indexing_raw,
+            enable_mmap_unpacking_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_path);
