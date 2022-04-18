@@ -2041,8 +2041,8 @@ int Longtail_UnlockFile(HLongtail_FileLock file_lock)
 }
 
 struct Longtail_FileMap_private {
-    const uint8_t* m_BaseAddress;
-    uint64_t m_BaseSize;
+    void* m_BaseAddress;
+    size_t m_BaseSize;
 };
 
 int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, HLongtail_FileMap* out_file_map, const void** out_data_ptr)
@@ -2065,7 +2065,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
         return ENOMEM;
     }
 
-    m->m_BaseSize = length + base_offset;
+    m->m_BaseSize = (size_t)(length + base_offset);
 
     m->m_BaseAddress = mmap(
         0,
@@ -2088,7 +2088,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
 void Longtail_UnmapFile(HLongtail_FileMap file_map)
 {
     munmap(file_map->m_BaseAddress, file_map->m_BaseSize);
-    Longtaiol_Free(file_map);
+    Longtail_Free(file_map);
 }
 
 #endif

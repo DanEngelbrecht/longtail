@@ -1017,7 +1017,7 @@ static int FSBlockStore_GetStoredBlock(
         }
         void* block_data;
         Longtail_StorageAPI_HFileMap file_map;
-        err = fsblockstore_api->m_StorageAPI->MapFile(fsblockstore_api->m_StorageAPI, file_handle, 0, block_size, &file_map, &block_data);
+        err = fsblockstore_api->m_StorageAPI->MapFile(fsblockstore_api->m_StorageAPI, file_handle, 0, block_size, &file_map, (const void**)&block_data);
         if (!err)
         {
             size_t block_mem_size = Longtail_GetStoredBlockSize(0) + sizeof(struct Longtail_StorageAPI*) + sizeof(Longtail_StorageAPI_HOpenFile) + sizeof(Longtail_StorageAPI_HFileMap);
