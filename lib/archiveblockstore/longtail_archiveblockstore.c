@@ -415,7 +415,7 @@ static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
 #endif // LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
     if (api->m_BlockBytes)
     {
-        api->m_StorageAPI->UnMapFile(api->m_StorageAPI, api->m_ArchiveFileMapping, api->m_BlockBytes, api->m_BlockBytesSize);
+        api->m_StorageAPI->UnMapFile(api->m_StorageAPI, api->m_ArchiveFileMapping);
         api->m_ArchiveFileMapping = 0;
     }
     api->m_StorageAPI->CloseFile(api->m_StorageAPI, api->m_ArchiveFileHandle);

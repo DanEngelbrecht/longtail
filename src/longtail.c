@@ -42,10 +42,6 @@ void Longtail_NukeFree(void* p);
 #endif // defined(LONGTAIL_ASSERTS)
 */
 
-#ifndef LONGTAIL_ENABLE_MMAPPED_INDEXING
-    #define LONGTAIL_ENABLE_MMAPPED_INDEXING       0
-#endif
-
 #define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
 #define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
 #define LONGTAIL_STORE_INDEX_VERSION_1_0_0    LONGTAIL_VERSION(1,0,0)
@@ -384,7 +380,7 @@ int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const cha
 int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { return storage_api->UnlockFile(storage_api, lock_file); }
 char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
 int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
-void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length) { storage_api->UnMapFile(storage_api, m, data_ptr, length); }
+void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { storage_api->UnMapFile(storage_api, m); }
 
 ////////////// ProgressAPI
 
@@ -1847,7 +1843,6 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 return 0;
             }
 
-#if LONGTAIL_ENABLE_MMAPPED_INDEXING
             int use_read_file = 1;
             if (hash_job->m_EnableFileMap)
             {
@@ -1870,7 +1865,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                             if (!new_output_mem)
                             {
                                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-                                storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
+                                storage_api->UnMapFile(storage_api, mapping);
                                 mapping = 0;
                                 hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
                                 chunker = 0;
@@ -1900,7 +1895,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         if (err != 0)
                         {
                             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_ChunkerAPI->NextChunkFromBuffer() failed with %d", err)
-                            storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
+                            storage_api->UnMapFile(storage_api, mapping);
                             mapping = 0;
                             hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
                             chunker = 0;
@@ -1916,7 +1911,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         if (err != 0)
                         {
                             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_HashAPI->HashBuffer() failed with %d", err)
-                            storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
+                            storage_api->UnMapFile(storage_api, mapping);
                             mapping = 0;
                             hash_job->m_ChunkerAPI->DisposeChunker(hash_job->m_ChunkerAPI, chunker);
                             chunker = 0;
@@ -1931,11 +1926,10 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         ++chunk_count;
                         chunk_start_ptr = next_chunk_start;
                     }
-                    storage_api->UnMapFile(storage_api, mapping, mapped_ptr, hash_size);
+                    storage_api->UnMapFile(storage_api, mapping);
                 }
             }
             if (use_read_file)
- #endif // LONGTAIL_ENABLE_MMAPPED_INDEXING
             {
                 struct StorageChunkFeederContext feeder_context =
                 {
