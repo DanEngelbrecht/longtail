@@ -70,8 +70,53 @@ static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char*
     return 0;
 }
 
-
-
+static int DeleteFolder(Longtail_StorageAPI* storage_api, const char* path)
+{
+    if (Longtail_IsDir(path))
+    {
+        Longtail_StorageAPI_HIterator fs_iterator = 0;
+        int err = storage_api->StartFind(storage_api, path, &fs_iterator);
+        if (err == ENOENT)
+        {
+            err = storage_api->RemoveDir(storage_api, path);
+            return err;
+        }
+        else if (err)
+        {
+            return err;
+        }
+        while (err == 0)
+        {
+            struct Longtail_StorageAPI_EntryProperties properties;
+            err = storage_api->GetEntryProperties(storage_api, fs_iterator, &properties);
+            if (err)
+            {
+                break;
+            }
+            char* sub_path = storage_api->ConcatPath(storage_api, path, properties.m_Name);
+            if (properties.m_IsDir)
+            {
+                err = DeleteFolder(storage_api, sub_path);
+                err = err ? err : Longtail_RemoveDir(sub_path);
+            }
+            else
+            {
+                err = storage_api->RemoveFile(storage_api, sub_path);
+            }
+            Longtail_Free(sub_path);
+            err = storage_api->FindNext(storage_api, fs_iterator);
+            if (err == ENOENT)
+            {
+                err = 0;
+                break;
+            }
+        }
+        storage_api->CloseFind(storage_api, fs_iterator);
+        storage_api->RemoveDir(storage_api, path);
+        return err;
+    }
+    return 0;
+}
 
 static int MakePath(Longtail_StorageAPI* storage_api, const char* path)
 {
@@ -7145,4 +7190,493 @@ TEST(Longtail, Longtail_Archive)
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(local_storage);
+}
+
+TEST(Longtail, Longtail_ArchiveMemMapped)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 8192;
+    static const uint32_t MAX_BLOCK_SIZE = 26973;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
+
+    Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+
+    ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 22));
+
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "two_items", &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        local_storage,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        "two_items",
+        version1_paths,
+        compression_types,
+        TARGET_CHUNK_SIZE,
+        1,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+
+    struct Longtail_StoreIndex* store_index;
+    ASSERT_EQ(0, Longtail_CreateStoreIndex(
+        hash_api,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
+        vindex->m_ChunkTags,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &store_index));
+
+
+    struct Longtail_ArchiveIndex* archive_index;
+    ASSERT_EQ(0, Longtail_CreateArchiveIndex(
+        store_index,
+        vindex,
+        &archive_index));
+
+    Longtail_BlockStoreAPI* archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        local_storage,
+        "archive.lta",
+        archive_index,
+        1,
+        0);
+
+    ASSERT_EQ(0, Longtail_WriteContent(
+        local_storage,
+        archive_block_store_api,
+        job_api,
+        0,
+        0,
+        0,
+        store_index,
+        vindex,
+        "two_items"));
+
+    TestAsyncFlushComplete flushCB;
+    ASSERT_EQ(0, archive_block_store_api->Flush(archive_block_store_api, &flushCB.m_API));
+    flushCB.Wait();
+    ASSERT_EQ(0, flushCB.m_Err);
+
+    SAFE_DISPOSE_API(archive_block_store_api);
+
+    Longtail_Free(archive_index);
+    archive_index = 0;
+
+    Longtail_Free(store_index);
+    store_index = 0;
+
+    Longtail_Free(vindex);
+    Longtail_Free(compression_types);
+    Longtail_Free(version1_paths);
+
+    ASSERT_EQ(0, Longtail_ReadArchiveIndex(
+        local_storage,
+        "archive.lta",
+        &archive_index));
+
+    archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        local_storage,
+        "archive.lta",
+        archive_index,
+        0,
+        1);
+
+    ASSERT_EQ(0, Longtail_WriteVersion(
+        archive_block_store_api,
+        local_storage,
+        job_api,
+        0,
+        0,
+        0,
+        &archive_index->m_StoreIndex,
+        &archive_index->m_VersionIndex,
+        "two_items_copy",
+        1));
+
+    SAFE_DISPOSE_API(archive_block_store_api);
+
+    Longtail_Free(archive_index);
+    archive_index = 0;
+
+
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(local_storage);
+}
+
+TEST(Longtail, Longtail_ArchiveMemMappedFS)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 8192;
+    static const uint32_t MAX_BLOCK_SIZE = 26973;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
+
+    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
+    char* temp_folder = Longtail_GetTempFolder();
+    char* source_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.two_items");
+    char* target_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.two_items_copy");
+    char* archive_file = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.archive.la");
+    ASSERT_EQ(0, DeleteFolder(local_storage, source_folder));
+    if (local_storage->IsFile(local_storage, archive_file))
+    {
+        ASSERT_EQ(0, local_storage->RemoveFile(local_storage, archive_file));
+    }
+    ASSERT_EQ(0, DeleteFolder(local_storage, target_folder));
+    ASSERT_EQ(0, local_storage->CreateDir(local_storage, source_folder));
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+
+    ASSERT_EQ(1, CreateFakeContent(local_storage, source_folder, 22));
+
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, source_folder, &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        local_storage,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        source_folder,
+        version1_paths,
+        compression_types,
+        TARGET_CHUNK_SIZE,
+        1,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+
+    struct Longtail_StoreIndex* store_index;
+    ASSERT_EQ(0, Longtail_CreateStoreIndex(
+        hash_api,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        vindex->m_ChunkSizes,
+        vindex->m_ChunkTags,
+        MAX_BLOCK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &store_index));
+
+    struct Longtail_ArchiveIndex* archive_index;
+    ASSERT_EQ(0, Longtail_CreateArchiveIndex(
+        store_index,
+        vindex,
+        &archive_index));
+
+    Longtail_BlockStoreAPI* archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        local_storage,
+        archive_file,
+        archive_index,
+        1,
+        0);
+
+    ASSERT_EQ(0, Longtail_WriteContent(
+        local_storage,
+        archive_block_store_api,
+        job_api,
+        0,
+        0,
+        0,
+        store_index,
+        vindex,
+        source_folder));
+
+    TestAsyncFlushComplete flushCB;
+    ASSERT_EQ(0, archive_block_store_api->Flush(archive_block_store_api, &flushCB.m_API));
+    flushCB.Wait();
+    ASSERT_EQ(0, flushCB.m_Err);
+
+    SAFE_DISPOSE_API(archive_block_store_api);
+
+    Longtail_Free(archive_index);
+    archive_index = 0;
+
+    Longtail_Free(store_index);
+    store_index = 0;
+
+    Longtail_Free(vindex);
+    Longtail_Free(compression_types);
+    Longtail_Free(version1_paths);
+
+    ASSERT_EQ(0, Longtail_ReadArchiveIndex(
+        local_storage,
+        archive_file,
+        &archive_index));
+
+    archive_block_store_api = Longtail_CreateArchiveBlockStore(
+        local_storage,
+        archive_file,
+        archive_index,
+        0,
+        1);
+
+    ASSERT_EQ(0, Longtail_WriteVersion(
+        archive_block_store_api,
+        local_storage,
+        job_api,
+        0,
+        0,
+        0,
+        &archive_index->m_StoreIndex,
+        &archive_index->m_VersionIndex,
+        target_folder,
+        1));
+
+    SAFE_DISPOSE_API(archive_block_store_api);
+
+    Longtail_Free(archive_index);
+    archive_index = 0;
+
+
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(local_storage);
+
+    Longtail_Free((void*)temp_folder);
+    Longtail_Free((void*)source_folder);
+    Longtail_Free((void*)target_folder);
+    Longtail_Free((void*)archive_file);
+}
+
+TEST(Longtail, Longtail_BlockStoreFS)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 8192;
+    static const uint32_t MAX_BLOCK_SIZE = 26973;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
+
+    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
+    char* temp_folder = Longtail_GetTempFolder();
+    char* source_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.two_items");
+    char* target_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.two_items_copy");
+    char* store_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.store");
+    ASSERT_EQ(0, DeleteFolder(local_storage, source_folder));
+    ASSERT_EQ(0, DeleteFolder(local_storage, store_folder));
+    ASSERT_EQ(0, DeleteFolder(local_storage, target_folder));
+    ASSERT_EQ(0, local_storage->CreateDir(local_storage, source_folder));
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, store_folder, 0, 0);
+
+    ASSERT_EQ(1, CreateFakeContent(local_storage, source_folder, 22));
+
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, source_folder, &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        local_storage,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        source_folder,
+        version1_paths,
+        compression_types,
+        TARGET_CHUNK_SIZE,
+        1,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+
+    struct Longtail_StoreIndex* existing_remote_store_index = SyncGetExistingContent(
+        block_store_api,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        0);
+    ASSERT_NE((struct Longtail_StoreIndex*)0, existing_remote_store_index);
+
+    struct Longtail_StoreIndex* remote_missing_store_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        existing_remote_store_index,
+        vindex,
+        TARGET_CHUNK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &remote_missing_store_index));
+
+    ASSERT_EQ(0, Longtail_WriteContent(
+            local_storage,
+            block_store_api,
+            job_api,
+            0,
+            0,
+            0,
+            remote_missing_store_index,
+            vindex,
+            source_folder));
+
+    TestAsyncFlushComplete flushCB;
+    ASSERT_EQ(0, block_store_api->Flush(block_store_api, &flushCB.m_API));
+    flushCB.Wait();
+    ASSERT_EQ(0, flushCB.m_Err);
+
+    Longtail_Free(compression_types);
+    Longtail_Free(version1_paths);
+
+    ASSERT_EQ(0, Longtail_WriteVersion(
+        block_store_api,
+        local_storage,
+        job_api,
+        0,
+        0,
+        0,
+        remote_missing_store_index,
+        vindex,
+        target_folder,
+        1));
+
+    Longtail_Free(remote_missing_store_index);
+    remote_missing_store_index = 0;
+
+    Longtail_Free(vindex);
+    vindex = 0;
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(local_storage);
+
+    Longtail_Free((void*)temp_folder);
+    Longtail_Free((void*)source_folder);
+    Longtail_Free((void*)target_folder);
+    Longtail_Free((void*)store_folder);
+}
+
+TEST(Longtail, Longtail_BlockStoreMemMappedFS)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 8192;
+    static const uint32_t MAX_BLOCK_SIZE = 26973;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
+
+    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
+    char* temp_folder = Longtail_GetTempFolder();
+    char* source_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.two_items");
+    char* target_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.two_items_copy");
+    char* store_folder = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.store");
+    ASSERT_EQ(0, DeleteFolder(local_storage, source_folder));
+    ASSERT_EQ(0, DeleteFolder(local_storage, store_folder));
+    ASSERT_EQ(0, DeleteFolder(local_storage, target_folder));
+    ASSERT_EQ(0, local_storage->CreateDir(local_storage, source_folder));
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, store_folder, 0, 1);
+
+    ASSERT_EQ(1, CreateFakeContent(local_storage, source_folder, 22));
+
+    Longtail_FileInfos* version1_paths;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, source_folder, &version1_paths));
+    ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
+    uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
+    ASSERT_NE((uint32_t*)0, compression_types);
+    Longtail_VersionIndex* vindex;
+    ASSERT_EQ(0, Longtail_CreateVersionIndex(
+        local_storage,
+        hash_api,
+        chunker_api,
+        job_api,
+        0,
+        0,
+        0,
+        source_folder,
+        version1_paths,
+        compression_types,
+        TARGET_CHUNK_SIZE,
+        1,
+        &vindex));
+    ASSERT_NE((Longtail_VersionIndex*)0, vindex);
+
+    struct Longtail_StoreIndex* existing_remote_store_index = SyncGetExistingContent(
+        block_store_api,
+        *vindex->m_ChunkCount,
+        vindex->m_ChunkHashes,
+        0);
+    ASSERT_NE((struct Longtail_StoreIndex*)0, existing_remote_store_index);
+
+    struct Longtail_StoreIndex* remote_missing_store_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        existing_remote_store_index,
+        vindex,
+        TARGET_CHUNK_SIZE,
+        MAX_CHUNKS_PER_BLOCK,
+        &remote_missing_store_index));
+
+    ASSERT_EQ(0, Longtail_WriteContent(
+            local_storage,
+            block_store_api,
+            job_api,
+            0,
+            0,
+            0,
+            remote_missing_store_index,
+            vindex,
+            source_folder));
+
+    TestAsyncFlushComplete flushCB;
+    ASSERT_EQ(0, block_store_api->Flush(block_store_api, &flushCB.m_API));
+    flushCB.Wait();
+    ASSERT_EQ(0, flushCB.m_Err);
+
+    Longtail_Free(compression_types);
+    Longtail_Free(version1_paths);
+
+    ASSERT_EQ(0, Longtail_WriteVersion(
+        block_store_api,
+        local_storage,
+        job_api,
+        0,
+        0,
+        0,
+        remote_missing_store_index,
+        vindex,
+        target_folder,
+        1));
+
+    Longtail_Free(remote_missing_store_index);
+    remote_missing_store_index = 0;
+
+    Longtail_Free(vindex);
+    vindex = 0;
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(local_storage);
+
+    Longtail_Free((void*)temp_folder);
+    Longtail_Free((void*)source_folder);
+    Longtail_Free((void*)target_folder);
+    Longtail_Free((void*)store_folder);
 }

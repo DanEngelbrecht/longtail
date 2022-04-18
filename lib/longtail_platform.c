@@ -2059,7 +2059,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
 
     int fd = fileno(f);
 
-    struct Longtail_FileMap_private* m = (struct Longtail_FileMap_private*)Longtail_Alloc("Longtail_MapFile", sizeof(Longtail_FileMap_private));
+    struct Longtail_FileMap_private* m = (struct Longtail_FileMap_private*)Longtail_Alloc("Longtail_MapFile", sizeof(struct Longtail_FileMap_private));
     if (!m)
     {
         return ENOMEM;
