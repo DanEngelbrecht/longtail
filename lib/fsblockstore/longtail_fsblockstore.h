@@ -10,7 +10,8 @@ LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStor
     struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
-    const char* optional_extension);
+    const char* optional_extension,
+    int enable_file_mapping);
 
 #ifdef __cplusplus
 }

@@ -33,6 +33,7 @@ struct FSBlockStoreAPI
     const char* m_BlockExtension;
     const char* m_StoreIndexLockPath;
     uint32_t m_StoreIndexIsDirty;
+    int m_EnableFileMapping;
     char m_TmpExtension[TMP_EXTENSION_LENGTH + 1];
 };
 
@@ -916,6 +917,35 @@ static int FSBlockStore_PreflightGet(
     return 0;
 }
 
+static int MappedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(stored_block, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    LONGTAIL_FATAL_ASSERT(ctx, stored_block, return EINVAL)
+
+    const char* p = (const char*)stored_block;
+    p += Longtail_GetStoredBlockSize(0);
+
+    struct Longtail_StorageAPI* storage_api = *(struct Longtail_StorageAPI**)p;
+    p += sizeof(struct Longtail_StorageAPI*);
+    Longtail_StorageAPI_HOpenFile file_handle = *(Longtail_StorageAPI_HOpenFile*)p;
+    p += sizeof(Longtail_StorageAPI_HOpenFile);
+    Longtail_StorageAPI_HFileMap file_map = *(Longtail_StorageAPI_HFileMap*)p;
+
+    storage_api->UnMapFile(storage_api, file_map);
+    storage_api->CloseFile(storage_api, file_handle);
+
+    Longtail_Free(stored_block);
+    return 0;
+}
+
+
 static int FSBlockStore_GetStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t block_hash,
@@ -963,14 +993,86 @@ static int FSBlockStore_GetStoredBlock(
     }
     char* block_path = GetBlockPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_StorePath, fsblockstore_api->m_BlockExtension, block_hash);
 
-    struct Longtail_StoredBlock* stored_block;
-    int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
-    if (err)
+    struct Longtail_StoredBlock* stored_block = 0;
+    if (fsblockstore_api->m_EnableFileMapping)
     {
-        LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadStoredBlock() failed with %d", err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-        Longtail_Free((char*)block_path);
-        return err;
+        Longtail_StorageAPI_HOpenFile file_handle;
+        int err = fsblockstore_api->m_StorageAPI->OpenReadFile(fsblockstore_api->m_StorageAPI, block_path, &file_handle);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->OpenReadFile() failed with %d", err)
+            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            Longtail_Free((char*)block_path);
+            return err;
+        }
+        uint64_t block_size;
+        err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, file_handle, &block_size);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->GetSize() failed with %d", err)
+            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+            Longtail_Free((char*)block_path);
+            return err;
+        }
+        void* block_data;
+        Longtail_StorageAPI_HFileMap file_map;
+        err = fsblockstore_api->m_StorageAPI->MapFile(fsblockstore_api->m_StorageAPI, file_handle, 0, block_size, &file_map, (const void**)&block_data);
+        if (!err)
+        {
+            size_t block_mem_size = Longtail_GetStoredBlockSize(0) + sizeof(struct Longtail_StorageAPI*) + sizeof(Longtail_StorageAPI_HOpenFile) + sizeof(Longtail_StorageAPI_HFileMap);
+            stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc("ArchiveBlockStore_GetStoredBlock", block_mem_size);
+            if (!stored_block)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+                fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
+                fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+                Longtail_Free((char*)block_path);
+                return ENOMEM;
+            }
+            int err = Longtail_InitStoredBlockFromData(
+                stored_block,
+                block_data,
+                block_size);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
+                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+                Longtail_Free(stored_block);
+                fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
+                fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+                Longtail_Free((char*)block_path);
+                return err;
+            }
+            char* p = (char*)stored_block;
+            p += Longtail_GetStoredBlockSize(0);
+            *(struct Longtail_StorageAPI**)p = fsblockstore_api->m_StorageAPI;
+            p += sizeof(struct Longtail_StorageAPI*);
+            *(Longtail_StorageAPI_HOpenFile*)p = file_handle;
+            p += sizeof(Longtail_StorageAPI_HOpenFile);
+            *(Longtail_StorageAPI_HFileMap*)p = file_map;
+            stored_block->Dispose = MappedStoredBlock_Dispose;
+        }
+        else if (err != ENOTSUP)
+        {
+            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->MapFile() failed with %d", err)
+            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+            Longtail_Free((char*)block_path);
+            return err;
+        }
+    }
+    if (stored_block == 0)
+    {
+        int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadStoredBlock() failed with %d", err)
+            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            Longtail_Free((char*)block_path);
+            return err;
+        }
     }
     Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
     Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
@@ -1284,6 +1386,7 @@ static int FSBlockStore_Init(
     const char* content_path,
     const char* optional_extension,
     uint64_t unique_id,
+    int enable_file_mapping,
     struct Longtail_BlockStoreAPI** out_block_store_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -1329,6 +1432,7 @@ static int FSBlockStore_Init(
 
     GetUniqueExtension(unique_id, api->m_TmpExtension);
     api->m_StoreIndexIsDirty = 0;
+    api->m_EnableFileMapping = enable_file_mapping;
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
     {
@@ -1352,7 +1456,8 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
-    const char* optional_extension)
+    const char* optional_extension,
+    int enable_file_mapping)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
@@ -1383,6 +1488,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
         content_path,
         optional_extension,
         unique_id,
+        enable_file_mapping,
         &block_store_api);
     if (err)
     {

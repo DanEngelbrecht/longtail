@@ -358,10 +358,8 @@ typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAP
 typedef int (*Longtail_Storage_LockFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
 typedef int (*Longtail_Storage_UnlockFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile file_lock);
 typedef char* (*Longtail_Storage_GetParentPathFunc)(struct Longtail_StorageAPI* storage_api, const char* path);
-#if LONGTAIL_ENABLE_MMAPED_FILES
 typedef int (*Longtail_Storage_MapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
-typedef void (*Longtail_Storage_UnmapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length);
-#endif
+typedef void (*Longtail_Storage_UnmapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
 
 struct Longtail_StorageAPI
 {
@@ -389,10 +387,8 @@ struct Longtail_StorageAPI
     Longtail_Storage_LockFileFunc LockFile;
     Longtail_Storage_UnlockFileFunc UnlockFile;
     Longtail_Storage_GetParentPathFunc GetParentPath;
-#if LONGTAIL_ENABLE_MMAPED_FILES
     Longtail_Storage_MapFileFunc MapFile;
     Longtail_Storage_UnmapFileFunc UnMapFile;
-#endif
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize();
@@ -422,12 +418,9 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func,
     Longtail_Storage_LockFileFunc lock_file_func,
     Longtail_Storage_UnlockFileFunc unlock_file_func,
-    Longtail_Storage_GetParentPathFunc get_parent_path_func
-#if LONGTAIL_ENABLE_MMAPED_FILES
-    ,Longtail_Storage_MapFileFunc map_file_func
-    ,Longtail_Storage_UnmapFileFunc unmap_file_func
-#endif
-    );
+    Longtail_Storage_GetParentPathFunc get_parent_path_func,
+    Longtail_Storage_MapFileFunc map_file_func,
+    Longtail_Storage_UnmapFileFunc unmap_file_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 LONGTAIL_EXPORT int Longtail_Storage_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
@@ -452,11 +445,8 @@ LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageA
 LONGTAIL_EXPORT int Longtail_Storage_LockFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file);
 LONGTAIL_EXPORT int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file);
 LONGTAIL_EXPORT char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
-
-#if LONGTAIL_ENABLE_MMAPED_FILES
 LONGTAIL_EXPORT int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
-LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m, const void* data_ptr, uint64_t length);
-#endif
+LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
 
 ////////////// Longtail_ProgressAPI
 
@@ -550,9 +540,7 @@ typedef int (*Longtail_Chunker_GetMinChunkSizeFunc)(struct Longtail_ChunkerAPI* 
 typedef int (*Longtail_Chunker_CreateChunkerFunc)(struct Longtail_ChunkerAPI* chunker_api, uint32_t min_chunk_size, uint32_t avg_chunk_size, uint32_t max_chunk_size, Longtail_ChunkerAPI_HChunker* out_chunker);
 typedef int (*Longtail_Chunker_NextChunkFunc)(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, Longtail_Chunker_Feeder feeder, void* feeder_context, struct Longtail_Chunker_ChunkRange* out_chunk_range);
 typedef int (*Longtail_Chunker_DisposeChunkerFunc)(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker);
-#if LONGTAIL_ENABLE_MMAPED_FILES
 typedef int (*Longtail_Chunker_NextChunkFromBufferFunc)(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, const void* buffer, uint64_t buffer_size, const void** out_next_chunk_start);
-#endif
 
 struct Longtail_ChunkerAPI
 {
@@ -561,9 +549,7 @@ struct Longtail_ChunkerAPI
     Longtail_Chunker_CreateChunkerFunc CreateChunker;
     Longtail_Chunker_NextChunkFunc NextChunk;
     Longtail_Chunker_DisposeChunkerFunc DisposeChunker;
-#if LONGTAIL_ENABLE_MMAPED_FILES
     Longtail_Chunker_NextChunkFromBufferFunc NextChunkFromBuffer;
-#endif
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetChunkerAPISize();
@@ -574,19 +560,14 @@ LONGTAIL_EXPORT struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
     Longtail_Chunker_GetMinChunkSizeFunc get_min_chunk_size_func,
     Longtail_Chunker_CreateChunkerFunc create_chunker_func,
     Longtail_Chunker_NextChunkFunc next_chunk_func,
-    Longtail_Chunker_DisposeChunkerFunc dispose_chunker_func
-#if LONGTAIL_ENABLE_MMAPED_FILES
-    , Longtail_Chunker_NextChunkFromBufferFunc next_chunk_from_buffer
-#endif
-    );
+    Longtail_Chunker_DisposeChunkerFunc dispose_chunker_func,
+    Longtail_Chunker_NextChunkFromBufferFunc next_chunk_from_buffer);
 
 LONGTAIL_EXPORT int Longtail_Chunker_GetMinChunkSize(struct Longtail_ChunkerAPI* chunker_api, uint32_t* out_min_chunk_size);
 LONGTAIL_EXPORT int Longtail_Chunker_CreateChunker(struct Longtail_ChunkerAPI* chunker_api, uint32_t min_chunk_size, uint32_t avg_chunk_size, uint32_t max_chunk_size, Longtail_ChunkerAPI_HChunker* out_chunker);
 LONGTAIL_EXPORT int Longtail_Chunker_NextChunk(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, Longtail_Chunker_Feeder feeder, void* feeder_context, struct Longtail_Chunker_ChunkRange* out_chunk_range);
 LONGTAIL_EXPORT int Longtail_Chunker_DisposeChunker(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker);
-#if LONGTAIL_ENABLE_MMAPED_FILES
 LONGTAIL_EXPORT int Longtail_Chunker_NextChunkFromBuffer(struct Longtail_ChunkerAPI* chunker_api, Longtail_ChunkerAPI_HChunker chunker, const void* buffer, uint64_t buffer_size, const void** out_next_chunk_start);
-#endif
 
 ////////////// Longtail_AsyncPutStoredBlockAPI
 
@@ -964,6 +945,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
  * @param[in] root_path             Root path for files in @p file_infos
  * @param[in] optional_asset_tags   An array with a tag for each entry in @p file_infos, usually a compression tag, set to zero if no tags are wanted
  * @param[in] target_chunk_size     The target size of chunks, with minimum size set to @target_chunk_size / 8 and maximum size set to @p target_chunk_size * 2
+ * @param[in] enable_file_map       Enable memory mapping when reading files, only has effect if storage_api supports memory mapping
  * @param[out] out_version_index    Pointer to a struct Longtail_VersionIndex* pointer which will be set on success
  * @return                          Return code (errno style), zero on success
  */
@@ -979,6 +961,7 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     const struct Longtail_FileInfos* file_infos,
     const uint32_t* optional_asset_tags,
     uint32_t target_chunk_size,
+    int enable_file_map,
     struct Longtail_VersionIndex** out_version_index);
 
 /*! @brief Writes a struct Longtail_VersionIndex to a byte buffer.

@@ -10,7 +10,8 @@ LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateArchiveBloc
     struct Longtail_StorageAPI* storage_api,
     const char* archive_path,
     struct Longtail_ArchiveIndex* archive_index,
-    int enable_write);
+    int enable_write,
+    int enable_mmap_reading);
 
 #ifdef __cplusplus
 }

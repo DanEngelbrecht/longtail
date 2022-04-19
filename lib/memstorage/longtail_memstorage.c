@@ -370,12 +370,6 @@ static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longta
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     ptrdiff_t size = arrlen(path_entry->m_Content);
-    if ((ptrdiff_t)offset > size)
-    {
-        Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write out of bounds, failed with %d", EIO)
-        return EIO;
-    }
     if ((ptrdiff_t)(offset + length) > size)
     {
         size = offset + length;
@@ -1098,7 +1092,6 @@ static char* InMemStorageAPI_GetParentPath(
     return result;
 }
 
-#if LONGTAIL_ENABLE_MMAPED_FILES
 static int InMemStorageAPI_MapFile(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HOpenFile f,
@@ -1148,23 +1141,16 @@ static int InMemStorageAPI_MapFile(
 
 static void InMemStorageAPI_UnmapFile(
     struct Longtail_StorageAPI* storage_api,
-    Longtail_StorageAPI_HFileMap m,
-    const void* data_ptr,
-    uint64_t length)
+    Longtail_StorageAPI_HFileMap m)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(m, "%p"),
-        LONGTAIL_LOGFIELD(data_ptr, "%p"),
-        LONGTAIL_LOGFIELD(length, "%" PRIu64),
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return)
     LONGTAIL_VALIDATE_INPUT(ctx, m != 0, return)
-    LONGTAIL_VALIDATE_INPUT(ctx, data_ptr !=0, return)
-    LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return)
 }
-#endif
 
 static int InMemStorageAPI_Init(
     void* mem,
@@ -1201,12 +1187,9 @@ static int InMemStorageAPI_Init(
         InMemStorageAPI_GetEntryProperties,
         InMemStorageAPI_LockFile,
         InMemStorageAPI_UnlockFile,
-        InMemStorageAPI_GetParentPath
-#if LONGTAIL_ENABLE_MMAPED_FILES
-        ,InMemStorageAPI_MapFile
-        ,InMemStorageAPI_UnmapFile
-#endif
-        );
+        InMemStorageAPI_GetParentPath,
+        InMemStorageAPI_MapFile,
+        InMemStorageAPI_UnmapFile);
 
     struct InMemStorageAPI* storage_api = (struct InMemStorageAPI*)api;
 

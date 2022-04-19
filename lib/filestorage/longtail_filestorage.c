@@ -582,7 +582,6 @@ static char* FSStorageAPI_GetParentPath(
     return Longtail_GetParentPath(path);
 }
 
-#if LONGTAIL_ENABLE_MMAPED_FILES
 static int FSStorageAPI_MapFile(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HOpenFile f,
@@ -611,25 +610,18 @@ static int FSStorageAPI_MapFile(
 
 static void FSStorageAPI_UnmapFile(
     struct Longtail_StorageAPI* storage_api,
-    Longtail_StorageAPI_HFileMap m,
-    const void* data_ptr,
-    uint64_t length)
+    Longtail_StorageAPI_HFileMap m)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(m, "%p"),
-        LONGTAIL_LOGFIELD(data_ptr, "%p"),
-        LONGTAIL_LOGFIELD(length, "%" PRIu64),
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return)
     LONGTAIL_VALIDATE_INPUT(ctx, m != 0, return)
-    LONGTAIL_VALIDATE_INPUT(ctx, data_ptr !=0, return)
-    LONGTAIL_VALIDATE_INPUT(ctx, length > 0, return)
 
-    Longtail_UnmapFile((HLongtail_FileMap)m, data_ptr, length);
+    Longtail_UnmapFile((HLongtail_FileMap)m);
 }
-#endif
 
 static int FSStorageAPI_Init(
     void* mem,
@@ -666,12 +658,9 @@ static int FSStorageAPI_Init(
         FSStorageAPI_GetEntryProperties,
         FSStorageAPI_LockFile,
         FSStorageAPI_UnlockFile,
-        FSStorageAPI_GetParentPath
-#if LONGTAIL_ENABLE_MMAPED_FILES
-        , FSStorageAPI_MapFile
-        , FSStorageAPI_UnmapFile
-#endif
-        );
+        FSStorageAPI_GetParentPath,
+        FSStorageAPI_MapFile,
+        FSStorageAPI_UnmapFile);
     *out_storage_api = api;
     return 0;
 }
