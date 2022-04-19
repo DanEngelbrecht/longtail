@@ -133,7 +133,7 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **FIX** Fix calulcation of version index size when reading archive index
+          - **FIX** Fix memory leak when retain permissions was set to off
         draft: false
         prerelease: false
         files: "*-x64.zip"

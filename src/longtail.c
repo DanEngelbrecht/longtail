@@ -5203,11 +5203,11 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
         if (job->m_RetainPermissions)
         {
             err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, (uint16_t)version_index->m_Permissions[asset_index]);
-            Longtail_Free(full_asset_path);
-            full_asset_path = 0;
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                Longtail_Free(full_asset_path);
+                full_asset_path = 0;
                 job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
                 job->m_BlockReadJob.m_StoredBlock = 0;
                 job->m_Err = err;
@@ -5215,6 +5215,8 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 return 0;
             }
         }
+        Longtail_Free(full_asset_path);
+        full_asset_path = 0;
     }
     Longtail_Free(tmp_mem);
 
