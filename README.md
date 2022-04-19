@@ -76,11 +76,7 @@ Currently there are:
 Longtail also borrows the chunking algorithm used to split up assets into chunks from the casync project by Lennart Poettering (https://github.com/systemd/casync).
 
 ## Content Adressable Storage
-Kinda, but not really - it started out that way but for various reasons it is only so in an indirect way, you can't get directly from a chunk hash to where it is located without going through a store index.
-
-Each chunk of data only contains one asset at most - one asset can be spread across multiple chunks. To make the store not suffer from a huge amount of small files chunks are bundled into blocks.
-
-Not sure if this is how it will continue to work, but this is the current state of things.
+An asset inside a version is composed by a series of chunk, each chunk is identified by the hash of the content of the chunk. Each asset is identified by a hash-of-hashes of the chunks that composes the asset. Each chunk is in turn stored inside blocks and the block is identified by a hash-of-hashes of the chunks inside the block.
 
 # Data Types
 
@@ -115,6 +111,6 @@ It is *very* fast, it is significantly faster att all the stages than desync (by
 Modifying an existing folder is something desync can't (currently) do and is crucial to achive reasonable speed when working with large amount of data (multi-gigabyte folders).
 
 # What can't it do?
-The C99 version in this repo has intentionally been restricted to not add any big complicated dependencies but intead provide interfaces where you can extend it, for example - it has two forms of storage - disk and memory, it does not have http, S3, GCS or any other fancy stuff in it, for that kind of storge, use the golang version https://github.com/DanEngelbrecht/golongtail.git.
+The C99 version in this repo has intentionally been restricted to not add any big complicated dependencies but instead provide interfaces where you can extend it, for example - it has two forms of storage - disk and memory, it does not have http, S3, GCS or any other fancy stuff in it, for that kind of storge, use the golang version https://github.com/DanEngelbrecht/golongtail.git.
 
 This has been an active choice, as the library is writting in C99 for ultimate portability some sacrifices had to be done. It has minimal dependencies and no complicated build system but it is written so adding other storage mechanisms or exchanging hashing or other parts are reasonably easy. 
