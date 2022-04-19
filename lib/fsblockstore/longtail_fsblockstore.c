@@ -1005,7 +1005,7 @@ static int FSBlockStore_GetStoredBlock(
             Longtail_Free((char*)block_path);
             return err;
         }
-        size_t block_size;
+        uint64_t block_size;
         err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, file_handle, &block_size);
         if (err)
         {
