@@ -7520,6 +7520,9 @@ TEST(Longtail, Longtail_BlockStoreFS)
         MAX_CHUNKS_PER_BLOCK,
         &remote_missing_store_index));
 
+    Longtail_Free(existing_remote_store_index);
+    existing_remote_store_index = 0;
+
     ASSERT_EQ(0, Longtail_WriteContent(
             local_storage,
             block_store_api,
@@ -7630,6 +7633,9 @@ TEST(Longtail, Longtail_BlockStoreMemMappedFS)
         TARGET_CHUNK_SIZE,
         MAX_CHUNKS_PER_BLOCK,
         &remote_missing_store_index));
+
+    Longtail_Free(existing_remote_store_index);
+    existing_remote_store_index = 0;
 
     ASSERT_EQ(0, Longtail_WriteContent(
             local_storage,

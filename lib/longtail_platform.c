@@ -1902,7 +1902,7 @@ int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, 
 
     int fd = fileno(f);
     ssize_t length_written = pwrite(fd, input, length, offset);
-    if (length_written != -1)
+    if (length_written == -1)
     {
         return errno;
     }
@@ -2060,7 +2060,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
         return ENOMEM;
     }
 
-    m->m_BaseSize = (size_t)(length + base_offset);
+    m->m_BaseSize = (size_t)(length + offset - base_offset);
 
     m->m_BaseAddress = mmap(
         0,
