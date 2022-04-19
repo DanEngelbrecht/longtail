@@ -141,7 +141,7 @@ jobs:
           - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU (perf improvement)
           - **FIX** Remove redundant check if directory exists when getting directory name (perf improvement)
           - **FIX** Use SOA for asset part lookup (perf improvement)
-          - **FIX** Don't set permissions on files that already have correct permissions (perf improvement)
+          - **FIX** Fix memory leak when retain permissions was set to off
           - **FIX** Faster EnsureParentPathExists (perf improvement)
           - **FIX** ArchiveBlockStore no longer keeps spin lock when reading or writing blocks (perf improvement)
           - **UPDATE** zstdlib updated to 1.5.2
