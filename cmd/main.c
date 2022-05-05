@@ -47,14 +47,33 @@ static int LogContext(struct Longtail_LogContext* log_context, char* buffer, int
     {
         return 0;
     }
-    int len = sprintf(buffer, " { ");
+    int len = 0;
+    int part_len = sprintf(buffer, " { ");
+    if (len + part_len >= buffer_size)
+    {
+        buffer[len] = 0;
+        return len;
+    }
+    len += part_len;
     size_t log_field_count = log_context->field_count;
     for (size_t f = 0; f < log_field_count; ++f)
     {
         struct Longtail_LogField* log_field = &log_context->fields[f];
-        len += snprintf(&buffer[len], buffer_size - len, "\"%s\": %s%s", log_field->name, log_field->value, ((f + 1) < log_field_count) ? ", " : "");
+        part_len = snprintf(&buffer[len], buffer_size - len, "\"%s\": %s%s", log_field->name, log_field->value, ((f + 1) < log_field_count) ? ", " : "");
+        if (len + part_len >= buffer_size)
+        {
+            buffer[len] = 0;
+            return len;
+        }
+        len += part_len;
     }
-    len += snprintf(&buffer[len], buffer_size - len, " }");
+    part_len = snprintf(&buffer[len], buffer_size - len, " }");
+    if (len + part_len >= buffer_size)
+    {
+        buffer[len] = 0;
+        return len;
+    }
+    len += part_len;
     return len;
 }
 
