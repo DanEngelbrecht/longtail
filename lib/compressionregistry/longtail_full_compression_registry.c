@@ -29,7 +29,7 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
         return 0;
     }
 
-    uint32_t compression_types[13] = {
+    uint32_t compression_types[12] = {
         Longtail_GetBrotliGenericMinQuality(),
         Longtail_GetBrotliGenericDefaultQuality(),
         Longtail_GetBrotliGenericMaxQuality(),
@@ -41,8 +41,10 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
 
         Longtail_GetZStdMinQuality(),
         Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality()};
-    struct Longtail_CompressionAPI* compression_apis[10] = {
+        Longtail_GetZStdMaxQuality(),
+        Longtail_GetZStdHighQuality(),
+        Longtail_GetZStdLowQuality()};
+    struct Longtail_CompressionAPI* compression_apis[12] = {
         brotli_compression,
         brotli_compression,
         brotli_compression,
@@ -52,8 +54,10 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
         lz4_compression,
         zstd_compression,
         zstd_compression,
+        zstd_compression,
+        zstd_compression,
         zstd_compression};
-    uint32_t compression_settings[10] = {
+    uint32_t compression_settings[12] = {
         Longtail_GetBrotliGenericMinQuality(),
         Longtail_GetBrotliGenericDefaultQuality(),
         Longtail_GetBrotliGenericMaxQuality(),
@@ -63,10 +67,12 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
         Longtail_GetLZ4DefaultQuality(),
         Longtail_GetZStdMinQuality(),
         Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality()};
+        Longtail_GetZStdMaxQuality(),
+        Longtail_GetZStdHighQuality(),
+        Longtail_GetZStdLowQuality()};
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        10,
+        12,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
         compression_settings);

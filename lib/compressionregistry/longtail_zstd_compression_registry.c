@@ -12,21 +12,25 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateZStdCompressionRegistry()
         return 0;
     }
 
-    uint32_t compression_types[3] = {
+    uint32_t compression_types[5] = {
         Longtail_GetZStdMinQuality(),
         Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality()};
-    struct Longtail_CompressionAPI* compression_apis[3] = {
+        Longtail_GetZStdMaxQuality(),
+        Longtail_GetZStdHighQuality(),
+        Longtail_GetZStdLowQuality()};
+    struct Longtail_CompressionAPI* compression_apis[5] = {
         zstd_compression,
         zstd_compression,
         zstd_compression};
-    uint32_t compression_settings[3] = {
+    uint32_t compression_settings[5] = {
         Longtail_GetZStdMinQuality(),
         Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality()};
+        Longtail_GetZStdMaxQuality(),
+        Longtail_GetZStdHighQuality(),
+        Longtail_GetZStdLowQuality()};
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        3,
+        5,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
         compression_settings);

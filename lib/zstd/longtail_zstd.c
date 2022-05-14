@@ -9,16 +9,22 @@
 
 
 const int LONGTAIL_ZSTD_MIN_COMPRESSION_LEVEL      = 0;
+const int LONGTAIL_ZSTD_LOW_COMPRESSION_TYPE       = 2;
 const int LONGTAIL_ZSTD_DEFAULT_COMPRESSION_LEVEL  = ZSTD_CLEVEL_DEFAULT;
+const int LONGTAIL_ZSTD_HIGH_COMPRESSION_LEVEL     = 8;
 const int LONGTAIL_ZSTD_MAX_COMPRESSION_LEVEL      = ZSTD_MAX_CLEVEL;
 
 #define LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE     ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
 #define LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
 #define LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE     ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
+#define LONGTAIL_ZSTD_HIGH_COMPRESSION_TYPE     ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'4'))
+#define LONGTAIL_ZSTD_LOW_COMPRESSION_TYPE     ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'5'))
 
 uint32_t Longtail_GetZStdMinQuality() { return LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE; }
 uint32_t Longtail_GetZStdDefaultQuality() { return LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE; }
 uint32_t Longtail_GetZStdMaxQuality() { return LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE; }
+uint32_t Longtail_GetZStdHighQuality() { return LONGTAIL_ZSTD_HIGH_COMPRESSION_TYPE; }
+uint32_t Longtail_GetZStdLowQuality() { return LONGTAIL_ZSTD_LOW_COMPRESSION_TYPE; }
 
 static int SettingsIDToCompressionSetting(uint32_t settings_id)
 {
@@ -30,6 +36,10 @@ static int SettingsIDToCompressionSetting(uint32_t settings_id)
             return LONGTAIL_ZSTD_DEFAULT_COMPRESSION_LEVEL;
         case LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE:
             return LONGTAIL_ZSTD_MAX_COMPRESSION_LEVEL;
+        case LONGTAIL_ZSTD_HIGH_COMPRESSION_TYPE:
+            return LONGTAIL_ZSTD_HIGH_COMPRESSION_LEVEL;
+        case LONGTAIL_ZSTD_LOW_COMPRESSION_TYPE:
+            return LONGTAIL_ZSTD_LOW_COMPRESSION_TYPE;
        default:
            return 0;
     }

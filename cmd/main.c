@@ -212,6 +212,14 @@ uint32_t ParseCompressionType(const char* compression_algorithm) {
     {
         return Longtail_GetZStdMaxQuality();
     }
+    if (strcmp("zstd_high", compression_algorithm) == 0)
+    {
+        return Longtail_GetZStdHighQuality();
+    }
+    if (strcmp("zstd_low", compression_algorithm) == 0)
+    {
+        return Longtail_GetZStdLowQuality();
+    }
     return 0xffffffff;
 }
 

@@ -11,6 +11,8 @@ LONGTAIL_EXPORT extern struct Longtail_CompressionAPI* Longtail_CreateZStdCompre
 LONGTAIL_EXPORT extern uint32_t Longtail_GetZStdMinQuality();
 LONGTAIL_EXPORT extern uint32_t Longtail_GetZStdDefaultQuality();
 LONGTAIL_EXPORT extern uint32_t Longtail_GetZStdMaxQuality();
+LONGTAIL_EXPORT extern uint32_t Longtail_GetZStdHighQuality();
+LONGTAIL_EXPORT extern uint32_t Longtail_GetZStdLowQuality();
 
 #ifdef __cplusplus
 }
