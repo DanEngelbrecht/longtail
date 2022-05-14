@@ -979,6 +979,10 @@ static int InMemStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, con
         LONGTAIL_LOGFIELD(out_lock_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
+    LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, out_lock_file != 0, return EINVAL);
+
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = InMemStorageAPI_GetPathHash(path);
     uint32_t parent_path_hash = InMemStorageAPI_GetParentPathHash(path);
@@ -1036,6 +1040,9 @@ static int InMemStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, L
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(lock_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, lock_file != 0, return EINVAL);
 
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t path_hash = (uint32_t)(uintptr_t)lock_file;
