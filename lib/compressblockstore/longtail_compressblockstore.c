@@ -89,7 +89,7 @@ static int CompressBlock(
         return 0;
     }
     struct Longtail_CompressionAPI* compression_api;
-    uint32_t compression_settings;
+        uint32_t compression_settings;
     int err = compression_registry->GetCompressionAPI(
         compression_registry,
         compressionType,

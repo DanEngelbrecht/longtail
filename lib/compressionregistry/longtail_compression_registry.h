@@ -6,11 +6,11 @@
 extern "C" {
 #endif
 
+typedef struct Longtail_CompressionAPI* (*Longtail_CompressionRegistry_CreateForTypeFunc)(uint32_t compression_type, uint32_t* out_settings);
+
 LONGTAIL_EXPORT extern struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
-        uint32_t compression_type_count,
-        const uint32_t* compression_types,
-        const struct Longtail_CompressionAPI** compression_apis,
-        const uint32_t* compression_setting_ids);
+        uint32_t compression_api_count,
+        const Longtail_CompressionRegistry_CreateForTypeFunc* create_api_funcs);
 
 #ifdef __cplusplus
 }

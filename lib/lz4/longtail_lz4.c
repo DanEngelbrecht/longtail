@@ -9,6 +9,19 @@ static int LZ4CompressionAPI_DefaultCompressionSetting   = 1;
 
 #define LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE ((((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2'))
 
+struct Longtail_CompressionAPI* Longtail_CompressionRegistry_CreateForLZ4(uint32_t compression_type, uint32_t* out_settings)
+{
+    if (compression_type != LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE)
+    {
+        return 0;
+    }
+    if (out_settings)
+    {
+        *out_settings = compression_type;
+    }
+    return Longtail_CreateLZ4CompressionAPI();
+}
+
 uint32_t Longtail_GetLZ4DefaultQuality() { return LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE; }
 
 static int SettingsIDToCompressionSetting(uint32_t settings_id)
