@@ -527,8 +527,27 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Invalid path, failed with %d", EINVAL)
-        return EINVAL;
+
+        // Try to create parent
+        const char* parent_path_begin = strrchr(path, '/');
+        if (!parent_path_begin)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Invalid path, failed with %d", EINVAL)
+            return EINVAL;
+        }
+        size_t dir_length = (uintptr_t)parent_path_begin - (uintptr_t)path;
+        char* parent_path = (char*)alloca(dir_length + 1);
+        strncpy(parent_path, path, dir_length);
+
+        parent_path[dir_length] = '\0';
+        int parent_err = InMemStorageAPI_CreateDir(storage_api, parent_path);
+        if (parent_err != 0)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Invalid path, failed with %d", EINVAL)
+            return EINVAL;
+        }
+
+        Longtail_LockSpinLock(instance->m_SpinLock);
     }
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
     if (source_path_ptr != -1)
