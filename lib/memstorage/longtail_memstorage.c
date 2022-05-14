@@ -541,7 +541,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
 
         parent_path[dir_length] = '\0';
         int parent_err = InMemStorageAPI_CreateDir(storage_api, parent_path);
-        if (parent_err != 0)
+        if (parent_err != 0 && parent_err != EEXIST)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Invalid path, failed with %d", EINVAL)
             return EINVAL;
