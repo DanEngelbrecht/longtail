@@ -451,9 +451,9 @@ static DWORD NativeCreateDirectory(wchar_t* long_path)
                 return last_error;
             }
             long_path[delim_pos] = '\0';
-            last_error = NativeCreateDirectory(long_path);
+            DWORD parent_error = NativeCreateDirectory(long_path);
             long_path[delim_pos] = '\\';
-            switch (last_error)
+            switch (parent_error)
             {
                 case ERROR_SUCCESS:
                 case ERROR_FILE_EXISTS:
