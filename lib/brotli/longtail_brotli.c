@@ -21,12 +21,13 @@ static struct BrotliSettings LONGTAIL_BROTLI_TEXT_MIN_QUALITY_SETTINGS        = 
 static struct BrotliSettings LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_SETTINGS    = {BROTLI_MODE_TEXT,    BROTLI_DEFAULT_WINDOW,  BROTLI_DEFAULT_QUALITY};
 static struct BrotliSettings LONGTAIL_BROTLI_TEXT_MAX_QUALITY_SETTINGS        = {BROTLI_MODE_TEXT,    BROTLI_MAX_WINDOW_BITS, BROTLI_MAX_QUALITY};
 
-#define LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0'))
-#define LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1'))
-#define LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2'))
-#define LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE        ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'a'))
-#define LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'b'))
-#define LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'c'))
+#define LONGTAIL_BROTLI_COMPRESSION_TYPE             ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8))
+#define LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     (LONGTAIL_BROTLI_COMPRESSION_TYPE + ((uint32_t)'0'))
+#define LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE (LONGTAIL_BROTLI_COMPRESSION_TYPE + ((uint32_t)'1'))
+#define LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     (LONGTAIL_BROTLI_COMPRESSION_TYPE + ((uint32_t)'2'))
+#define LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE        (LONGTAIL_BROTLI_COMPRESSION_TYPE + ((uint32_t)'a'))
+#define LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    (LONGTAIL_BROTLI_COMPRESSION_TYPE + ((uint32_t)'b'))
+#define LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        (LONGTAIL_BROTLI_COMPRESSION_TYPE + ((uint32_t)'c'))
 
 uint32_t Longtail_GetBrotliGenericMinQuality() { return LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE; }
 uint32_t Longtail_GetBrotliGenericDefaultQuality() { return LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE; }
@@ -34,6 +35,19 @@ uint32_t Longtail_GetBrotliGenericMaxQuality() { return LONGTAIL_BROTLI_GENERIC_
 uint32_t Longtail_GetBrotliTextMinQuality() { return LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE; }
 uint32_t Longtail_GetBrotliTextDefaultQuality() { return LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE; }
 uint32_t Longtail_GetBrotliTextMaxQuality() { return LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE; }
+
+struct Longtail_CompressionAPI* Longtail_CompressionRegistry_CreateForBrotli(uint32_t compression_type, uint32_t* out_settings)
+{
+    if ((compression_type & 0xffffff00) != LONGTAIL_BROTLI_COMPRESSION_TYPE)
+    {
+        return 0;
+    }
+    if (out_settings)
+    {
+        *out_settings = compression_type;
+    }
+    return Longtail_CreateBrotliCompressionAPI();
+}
 
 static struct BrotliSettings* SettingsIDToCompressionSetting(uint32_t settings_id)
 {

@@ -1,16 +1,31 @@
 #include "longtail_compression_registry.h"
 
+#include "../longtail_platform.h"
+#include "../../src/ext/stb_ds.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>
+
+struct Compression_API_LookupValue
+{
+    struct Longtail_CompressionAPI* api;
+    uint32_t settings;
+};
+
+struct Compression_API_Lookup
+{
+    uint32_t key;
+    struct Compression_API_LookupValue value;
+};
 
 struct Default_CompressionRegistry
 {
     struct Longtail_CompressionRegistryAPI m_CompressionRegistryAPI;
     uint32_t m_Count;
-    uint32_t* m_Types;
-    struct Longtail_CompressionAPI** m_APIs;
-    uint32_t* m_Settings;
+    Longtail_CompressionRegistry_CreateForTypeFunc* m_CreateAPIFuncs;
+    HLongtail_SpinLock m_SpinLock;
+    struct Compression_API_Lookup* m_CompressionAPIs;
 };
 
 static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
@@ -20,17 +35,9 @@ static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, api, return);
-    struct Longtail_CompressionAPI* last_api = 0;
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
-    for (uint32_t c = 0; c < default_compression_registry->m_Count; ++c)
-    {
-        struct Longtail_CompressionAPI* compression_api = default_compression_registry->m_APIs[c];
-        if (compression_api != last_api)
-        {
-            compression_api->m_API.Dispose(&compression_api->m_API);
-            last_api = compression_api;
-        }
-    }
+    hmfree(default_compression_registry->m_CompressionAPIs);
+    Longtail_DeleteSpinLock(default_compression_registry->m_SpinLock);
     Longtail_Free(default_compression_registry);
 }
 
@@ -52,39 +59,56 @@ static int Default_GetCompressionAPI(
     LONGTAIL_FATAL_ASSERT(ctx, out_settings, return EINVAL);
     
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)compression_registry;
+
+    Longtail_LockSpinLock(default_compression_registry->m_SpinLock);
+    intptr_t it = hmgeti(default_compression_registry->m_CompressionAPIs, compression_type);
+    if (it != -1)
+    {
+        struct Compression_API_LookupValue existing_api = default_compression_registry->m_CompressionAPIs[it].value;
+        Longtail_UnlockSpinLock(default_compression_registry->m_SpinLock);
+        *out_compression_api = existing_api.api;
+        if (out_settings)
+        {
+            *out_settings = existing_api.settings;
+        }
+        return 0;
+    }
+
     for (uint32_t i = 0; i < default_compression_registry->m_Count; ++i)
     {
-        if (default_compression_registry->m_Types[i] == compression_type)
+        struct Compression_API_LookupValue new_api;
+        new_api.api = default_compression_registry->m_CreateAPIFuncs[i](compression_type, &new_api.settings);
+        if (new_api.api)
         {
-            *out_compression_api = default_compression_registry->m_APIs[i];
-            *out_settings = default_compression_registry->m_Settings[i];
+            hmput(default_compression_registry->m_CompressionAPIs, compression_type, new_api);
+            Longtail_UnlockSpinLock(default_compression_registry->m_SpinLock);
+            *out_compression_api = new_api.api;
+            if (out_settings)
+            {
+                *out_settings = new_api.settings;
+            }
             return 0;
         }
     }
+    Longtail_UnlockSpinLock(default_compression_registry->m_SpinLock);
     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Unknown compression type %u", compression_type)
     return ENOENT;
 }
 
 struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
     uint32_t compression_type_count,
-    const uint32_t* compression_types,
-    const struct Longtail_CompressionAPI** compression_apis,
-    const uint32_t* compression_settings)
+    const Longtail_CompressionRegistry_CreateForTypeFunc* create_api_funcs)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(compression_type_count, "%u"),
-        LONGTAIL_LOGFIELD(compression_types, "%p"),
-        LONGTAIL_LOGFIELD(compression_apis, "%p"),
-        LONGTAIL_LOGFIELD(compression_settings, "%p")
+        LONGTAIL_LOGFIELD(create_api_funcs, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
 
-    LONGTAIL_VALIDATE_INPUT(ctx, compression_types, return 0);
-    LONGTAIL_VALIDATE_INPUT(ctx, compression_apis, return 0);
-    LONGTAIL_VALIDATE_INPUT(ctx, compression_settings, return 0);
+    LONGTAIL_VALIDATE_INPUT(ctx, create_api_funcs, return 0);
     size_t registry_size = sizeof(struct Default_CompressionRegistry) +
         sizeof(uint32_t) * compression_type_count +
-        sizeof(struct Longtail_CompressionAPI*) * compression_type_count +
-        sizeof(uint32_t) * compression_type_count;
+        sizeof(Longtail_CompressionRegistry_CreateForTypeFunc) * compression_type_count +
+        sizeof(Longtail_GetSpinLockSize());
     void* mem = Longtail_Alloc("CompressionRegistry", registry_size);
     if (!mem)
     {
@@ -99,17 +123,18 @@ struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistr
 
     registry->m_Count = compression_type_count;
     char* p = (char*)&registry[1];
-    registry->m_Types = (uint32_t*)(void*)p;
-    p += sizeof(uint32_t) * compression_type_count;
+    registry->m_CreateAPIFuncs = (Longtail_CompressionRegistry_CreateForTypeFunc*)(void*)p;
+    p += sizeof(Longtail_CompressionRegistry_CreateForTypeFunc) * compression_type_count;
+    int err = Longtail_CreateSpinLock(p, &registry->m_SpinLock);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateSpinLock() failed with %d", ENOMEM)
+        Longtail_Free(mem);
+        return 0;
+    }
+    registry->m_CompressionAPIs = 0;
 
-    registry->m_APIs = (struct Longtail_CompressionAPI**)(void*)p;
-    p += sizeof(struct Longtail_CompressionAPI*) * compression_type_count;
-
-    registry->m_Settings = (uint32_t*)(void*)p;
-
-    memmove(registry->m_Types, compression_types, sizeof(uint32_t) * compression_type_count);
-    memmove(registry->m_APIs, compression_apis, sizeof(struct Longtail_CompressionAPI*) * compression_type_count);
-    memmove(registry->m_Settings, compression_settings, sizeof(const uint32_t) * compression_type_count);
+    memmove(registry->m_CreateAPIFuncs, create_api_funcs, sizeof(Longtail_CompressionRegistry_CreateForTypeFunc) * compression_type_count);
 
     return &registry->m_CompressionRegistryAPI;
 }

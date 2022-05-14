@@ -6,38 +6,10 @@
 
 struct Longtail_CompressionRegistryAPI* Longtail_CreateZStdCompressionRegistry()
 {
-    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
-    if (zstd_compression == 0)
-    {
-        return 0;
-    }
+    Longtail_CompressionRegistry_CreateForTypeFunc compression_create_api_funcs[1] = {
+        Longtail_CompressionRegistry_CreateForZstd};
 
-    uint32_t compression_types[5] = {
-        Longtail_GetZStdMinQuality(),
-        Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality(),
-        Longtail_GetZStdHighQuality(),
-        Longtail_GetZStdLowQuality()};
-    struct Longtail_CompressionAPI* compression_apis[5] = {
-        zstd_compression,
-        zstd_compression,
-        zstd_compression};
-    uint32_t compression_settings[5] = {
-        Longtail_GetZStdMinQuality(),
-        Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality(),
-        Longtail_GetZStdHighQuality(),
-        Longtail_GetZStdLowQuality()};
-
-    struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        5,
-        (const uint32_t*)compression_types,
-        (const struct Longtail_CompressionAPI **)compression_apis,
-        compression_settings);
-    if (registry == 0)
-    {
-        SAFE_DISPOSE_API(zstd_compression);
-        return 0;
-    }
-    return registry;
+    return Longtail_CreateDefaultCompressionRegistry(
+        1,
+        (const Longtail_CompressionRegistry_CreateForTypeFunc*)compression_create_api_funcs);
 }

@@ -8,80 +8,12 @@
 
 struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompressionRegistry()
 {
-    struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
-    if (lz4_compression == 0)
-    {
-        return 0;
-    }
+    Longtail_CompressionRegistry_CreateForTypeFunc compression_create_api_funcs[3] = {
+        Longtail_CompressionRegistry_CreateForBrotli,
+        Longtail_CompressionRegistry_CreateForLZ4,
+        Longtail_CompressionRegistry_CreateForZstd};
 
-    struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
-    if (brotli_compression == 0)
-    {
-        SAFE_DISPOSE_API(lz4_compression);
-        return 0;
-    }
-
-    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
-    if (zstd_compression == 0)
-    {
-        SAFE_DISPOSE_API(lz4_compression);
-        SAFE_DISPOSE_API(brotli_compression);
-        return 0;
-    }
-
-    uint32_t compression_types[12] = {
-        Longtail_GetBrotliGenericMinQuality(),
-        Longtail_GetBrotliGenericDefaultQuality(),
-        Longtail_GetBrotliGenericMaxQuality(),
-        Longtail_GetBrotliTextMinQuality(),
-        Longtail_GetBrotliTextDefaultQuality(),
-        Longtail_GetBrotliTextMaxQuality(),
-
-        Longtail_GetLZ4DefaultQuality(),
-
-        Longtail_GetZStdMinQuality(),
-        Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality(),
-        Longtail_GetZStdHighQuality(),
-        Longtail_GetZStdLowQuality()};
-    struct Longtail_CompressionAPI* compression_apis[12] = {
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        brotli_compression,
-        lz4_compression,
-        zstd_compression,
-        zstd_compression,
-        zstd_compression,
-        zstd_compression,
-        zstd_compression};
-    uint32_t compression_settings[12] = {
-        Longtail_GetBrotliGenericMinQuality(),
-        Longtail_GetBrotliGenericDefaultQuality(),
-        Longtail_GetBrotliGenericMaxQuality(),
-        Longtail_GetBrotliTextMinQuality(),
-        Longtail_GetBrotliTextDefaultQuality(),
-        Longtail_GetBrotliTextMaxQuality(),
-        Longtail_GetLZ4DefaultQuality(),
-        Longtail_GetZStdMinQuality(),
-        Longtail_GetZStdDefaultQuality(),
-        Longtail_GetZStdMaxQuality(),
-        Longtail_GetZStdHighQuality(),
-        Longtail_GetZStdLowQuality()};
-
-    struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        12,
-        (const uint32_t*)compression_types,
-        (const struct Longtail_CompressionAPI **)compression_apis,
-        compression_settings);
-    if (registry == 0)
-    {
-        SAFE_DISPOSE_API(lz4_compression);
-        SAFE_DISPOSE_API(brotli_compression);
-        SAFE_DISPOSE_API(zstd_compression);
-        return 0;
-    }
-    return registry;
+    return Longtail_CreateDefaultCompressionRegistry(
+        3,
+        (const Longtail_CompressionRegistry_CreateForTypeFunc*)compression_create_api_funcs);
 }
