@@ -134,7 +134,7 @@ jobs:
         body: |
           # Changes in this Release
           - **CHANGED API** `Longtail_StorageAPI.CreateDirectory` is now expected to create the full path hierarchy
-          - **FIX** Add retry when opening files and creating directories due to network drives are sometimes slow in picking up create directories
+          - **FIX** Add retry when opening files and creating directories on Win32 platform due to network drives are sometimes slow in picking up create directories
         draft: false
         prerelease: false
         files: "*-x64.zip"
