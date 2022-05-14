@@ -1672,6 +1672,29 @@ int Longtail_CreateDirectory(const char* path)
         return 0;
     }
     int e = errno;
+    if (e == ENOENT)
+    {
+        // Try to create parent folder
+        const char* delim_path = strrchr(path, '/');
+        if (delim_path == 0)
+        {
+            return e;
+        }
+        char* parent_path = Longtail_Strdup(path);
+        parent_path[delim_path - path] = '\0';
+        int parent_err = Longtail_CreateDirectory(parent_path);
+        Longtail_Free(parent_path);
+        if (parent_err != 0 && parent_err != EEXIST)
+        {
+            return e;
+        }
+        err = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        if (err == 0)
+        {
+            return 0;
+        }
+        e = errno;
+    }
     return e;
 }
 
