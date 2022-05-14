@@ -296,7 +296,7 @@ static int FSStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     int err = Longtail_CreateDirectory(path);
-    if (err)
+    if (err && err != EEXIST)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateDirectory() failed with %d", err)
         return err;

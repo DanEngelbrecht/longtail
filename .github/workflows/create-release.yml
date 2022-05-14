@@ -133,19 +133,8 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **CHANGED API** `Longtail_StorageAPI` now has `MapFile` and `UnMapFile` to do memory mapping of files when reading, return ENOTSUP in implementation to enable regular I/O fallback.
-          - **CHANGED API** `Longtail_CreateArchiveBlockStore` now takes flag to enable or disable memory mapped reading of blocks
-          - **CHANGED API** `Longtail_CreateVersionIndex` now takes flag to enable or disable memory mapped reading of files
-          - **CHANGED API** `Longtail_ChunkerAPI` now has `NextChunkFromBuffer` method used when enabling memory mapping during `Longtail_CreateVersionIndex`
-          - **CHANGED API** `Longtail_CreateFSBlockStoreAPI` now takes flag to enable or disable memory mapped reading of block files
-          - **FIX** Sort of write jobs for assets spanning multiple blocks to increase hit rate in LRU (perf improvement)
-          - **FIX** Remove redundant check if directory exists when getting directory name (perf improvement)
-          - **FIX** Use SOA for asset part lookup (perf improvement)
-          - **FIX** Fix memory leak when retain permissions was set to off
-          - **FIX** Faster EnsureParentPathExists (perf improvement)
-          - **FIX** ArchiveBlockStore no longer keeps spin lock when reading or writing blocks (perf improvement)
-          - **UPDATE** zstdlib updated to 1.5.2
-          - **UPDATE** Blake3 to 1.3.1
+          - **CHANGED API** `Longtail_StorageAPI.CreateDirectory` is now expected to create the full path hierarchy
+          - **FIX** Add retry when opening files and creating directories on Win32 platform due to network drives are sometimes slow in picking up create directories
         draft: false
         prerelease: false
         files: "*-x64.zip"
