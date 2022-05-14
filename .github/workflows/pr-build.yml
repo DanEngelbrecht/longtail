@@ -5,43 +5,51 @@ on:
     branches: [ main ]
 
 jobs:
+  prep:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Cancel Previous Runs
+      uses: styfle/cancel-workflow-action@0.9.1
+      with:
+        access_token: ${{ github.token }}
+
   linux:
 
+    needs: prep
+
     runs-on: ubuntu-latest
+    strategy:
+      matrix: 
+          include:
+            - config: "debug"
+              build_param: ""
+              exe_suffx: "debug"
+            - config: "release"
+              build_param: "release"
+              exe_suffix: ""
 
     steps:
     - uses: actions/checkout@v2
     - name: build test
       run: |
-        test/build.sh
-        test/build.sh release
+        test/build.sh ${{ matrix.build_param }}
     - name: build static_lib
       run: |
-        static_lib/build.sh
-        static_lib/build.sh release
+        static_lib/build.sh ${{ matrix.build_param }}
     - name: build shared_lib
       run: |
-        shared_lib/build.sh
-        shared_lib/build.sh release
+        shared_lib/build.sh ${{ matrix.build_param }}
     - name: build cmd
       run: |
-        cmd/build.sh
-        cmd/build.sh release
+        cmd/build.sh ${{ matrix.build_param }}
     - name: run tests
       run: |
         pushd ./test
-        ../build/test_debug
-        ../build/test
+        ../build/test${{ matrix.exe_suffix }}
         popd
-    - name: build dist
-      run: |
-        ./dist.sh
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-linux-x64
-        path: dist
 
   darwin:
+    needs: prep
 
     runs-on: macos-latest
 
@@ -78,6 +86,7 @@ jobs:
         path: dist
 
   win32:
+    needs: prep
 
     runs-on: windows-latest
 
