@@ -415,16 +415,64 @@ static wchar_t* ConcatPlatformPath(const wchar_t* a, const wchar_t* b)
     return r;
 }
 
+static DWORD NativeCreateDirectory(wchar_t* long_path)
+{
+    while (1)
+    {
+        BOOL ok = CreateDirectoryW(long_path, NULL);
+        if (ok)
+        {
+            return ERROR_SUCCESS;
+        }
+        DWORD last_error = GetLastError();
+        if (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS)
+        {
+            return last_error;
+        }
+
+        if (last_error == ERROR_PATH_NOT_FOUND)
+        {
+            size_t delim_pos = 0;
+            size_t path_len = 0;
+            while (long_path[path_len] != 0)
+            {
+                if (long_path[path_len] == '\\')
+                {
+                    // Don't accept double backslash as path delimiter
+                    if (delim_pos + 1 != path_len)
+                    {
+                        delim_pos = path_len;
+                    }
+                }
+                ++path_len;
+            }
+            if (long_path[delim_pos] != '\\' || delim_pos == 0)
+            {
+                return last_error;
+            }
+            long_path[delim_pos] = '\0';
+            last_error = NativeCreateDirectory(long_path);
+            long_path[delim_pos] = '\\';
+            switch (last_error)
+            {
+                case ERROR_SUCCESS:
+                case ERROR_FILE_EXISTS:
+                case ERROR_ALREADY_EXISTS:
+                    // Try again
+                    break;
+                default:
+                    return last_error;
+            }
+        }
+    }
+}
+
 int Longtail_CreateDirectory(const char* path)
 {
     wchar_t* long_path = MakeLongPlatformPath(path);
-    BOOL ok = CreateDirectoryW(long_path, NULL);
+    DWORD error = NativeCreateDirectory(long_path);
     Longtail_Free(long_path);
-    if (ok)
-    {
-        return 0;
-    }
-    return Win32ErrorToErrno(GetLastError());
+    return Win32ErrorToErrno(error);
 }
 
 int Longtail_MoveFile(const char* source, const char* target)
@@ -647,27 +695,83 @@ int Longtail_GetEntryProperties(HLongtail_FSIterator fs_iterator, uint64_t* out_
     return 0;
 }
 
+DWORD NativeOpenReadFileWithRetry(wchar_t* long_path, HANDLE* out_handle)
+{
+    int retry_count = 10;
+    while (1)
+    {
+        HANDLE handle = CreateFileW(long_path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+        if (handle == INVALID_HANDLE_VALUE)
+        {
+            DWORD error = GetLastError();
+            if (error == ERROR_PATH_NOT_FOUND)
+            {
+                // Retry - network drives on Windows can report failure if a different thread created
+                // the parent directory just before our call to CreateFileW, even if we get an OK
+                // that the parent exists...
+                if (retry_count--)
+                {
+                    Sleep(1);
+                    continue;
+                }
+            }
+            return error;
+        }
+        *out_handle = handle;
+        return 0;
+    }
+}
+
 int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
 {
     wchar_t* long_path = MakeLongPlatformPath(path);
-    HANDLE handle = CreateFileW(long_path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    HANDLE handle;
+    DWORD error = NativeOpenReadFileWithRetry(long_path, &handle);
     Longtail_Free(long_path);
-    if (handle == INVALID_HANDLE_VALUE)
+    if (error != ERROR_SUCCESS)
     {
-        return Win32ErrorToErrno(GetLastError());
+        return Win32ErrorToErrno(error);
     }
     *out_read_file = (HLongtail_OpenFile)handle;
     return 0;
 }
 
+DWORD NativeOpenWriteFileWithRetry(wchar_t* long_path, DWORD create_disposition, HANDLE* out_handle)
+{
+    int retry_count = 10;
+    while (1)
+    {
+        HANDLE handle = CreateFileW(long_path, GENERIC_READ | GENERIC_WRITE, 0, 0, create_disposition, 0, 0);
+        if (handle == INVALID_HANDLE_VALUE)
+        {
+            DWORD error = GetLastError();
+            if (error == ERROR_PATH_NOT_FOUND)
+            {
+                // Retry - network drives on Windows can report failure if a different thread created
+                // the parent directory just before our call to CreateFileW, even if we get an OK
+                // that the parent exists...
+                if (retry_count--)
+                {
+                    Sleep(1);
+                    continue;
+                }
+            }
+            return error;
+        }
+        *out_handle = handle;
+        return 0;
+    }
+}
+
 int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file)
 {
     wchar_t* long_path = MakeLongPlatformPath(path);
-    HANDLE handle = CreateFileW(long_path, GENERIC_READ | GENERIC_WRITE, 0, 0, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, 0, 0);
+    HANDLE handle;
+    DWORD error = NativeOpenWriteFileWithRetry(long_path, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, &handle);
     Longtail_Free(long_path);
-    if (handle == INVALID_HANDLE_VALUE)
+    if (error != ERROR_SUCCESS)
     {
-        return Win32ErrorToErrno(GetLastError());
+        return Win32ErrorToErrno(error);
     }
 
     if (initial_size > 0)

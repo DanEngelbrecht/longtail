@@ -1148,14 +1148,10 @@ int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TL
 
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
 {
-#if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
@@ -1167,23 +1163,10 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     }
 
     int err = storage_api->CreateDir(storage_api, parent_path);
+    Longtail_Free(parent_path);
     if (err == 0 || err == EEXIST) {
-        Longtail_Free(parent_path);
         return 0;
     }
-    err = EnsureParentPathExists(storage_api, parent_path);
-    if (err != 0)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
-        Longtail_Free(parent_path);
-        return err;
-    }
-    err = storage_api->CreateDir(storage_api, parent_path);
-    if (err == EEXIST)
-    {
-        err = 0;
-    }
-    Longtail_Free(parent_path);
     return err;
 }
 
