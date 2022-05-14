@@ -36,6 +36,12 @@ static void DefaultCompressionRegistry_Dispose(struct Longtail_API* api)
 
     LONGTAIL_VALIDATE_INPUT(ctx, api, return);
     struct Default_CompressionRegistry* default_compression_registry = (struct Default_CompressionRegistry*)api;
+    intptr_t api_count = hmlen(default_compression_registry->m_CompressionAPIs);
+    for (intptr_t i = 0; i < api_count; ++i)
+    {
+        struct Longtail_API* dispose_api = &default_compression_registry->m_CompressionAPIs[i].value.api->m_API;
+        dispose_api->Dispose(dispose_api);
+    }
     hmfree(default_compression_registry->m_CompressionAPIs);
     Longtail_DeleteSpinLock(default_compression_registry->m_SpinLock);
     Longtail_Free(default_compression_registry);
