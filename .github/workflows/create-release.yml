@@ -7,7 +7,7 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 jobs:
-  linux-build:
+  build-linux:
 
     runs-on: ubuntu-latest
     strategy:
@@ -30,9 +30,9 @@ jobs:
           !build/**/*.o
           !build/**/third-party/**
 
-  linux-dist:
+  dist-linux:
 
-    needs: linux-build
+    needs: build-linux
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -47,7 +47,7 @@ jobs:
         name: dist-linux-x64
         path: dist
 
-  darwin-build:
+  build-darwin:
 
     runs-on: macos-latest
     strategy:
@@ -70,9 +70,9 @@ jobs:
           !build/**/*.o
           !build/**/third-party/**
 
-  darwin-dist:
+  dist-darwin:
 
-    needs: darwin-build
+    needs: build-darwin
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v2
@@ -87,7 +87,7 @@ jobs:
         name: dist-darwin-x64
         path: dist
 
-  win32-build:
+  build-win32:
 
     runs-on: windows-latest
     strategy:
@@ -111,9 +111,9 @@ jobs:
           !build/**/*.o
           !build/**/third-party/**
 
-  win32-dist:
+  dist-win32:
 
-    needs: win32-build
+    needs: build-win32
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v2
@@ -132,7 +132,7 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    needs: [linux-dist, darwin-dist, win32-dist]
+    needs: [dist-linux, dist-darwin, dist-win32]
 
     steps:
     - name: Checkout code

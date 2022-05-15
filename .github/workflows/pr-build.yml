@@ -14,7 +14,7 @@ jobs:
       with:
         access_token: ${{ github.token }}
 
-  linux-build:
+  build-linux:
 
     runs-on: ubuntu-latest
     strategy:
@@ -37,7 +37,7 @@ jobs:
           !build/**/*.o
           !build/**/third-party/**
 
-  linux-test:
+  test-linux:
 
     runs-on: ubuntu-latest
     strategy:
@@ -54,9 +54,9 @@ jobs:
         ../build/linux_x64/test/${{matrix.config}}/test
         cd ..
 
-  linux-dist:
+  dist-linux:
 
-    needs: linux-build
+    needs: build-linux
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -71,7 +71,7 @@ jobs:
         name: dist-linux-x64
         path: dist
 
-  darwin-build:
+  build-darwin:
 
     runs-on: macos-latest
     strategy:
@@ -94,7 +94,7 @@ jobs:
           !build/**/*.o
           !build/**/third-party/**
 
-  darwin-test:
+  test-darwin:
 
     runs-on: macos-latest
     strategy:
@@ -111,9 +111,9 @@ jobs:
         ../build/darwin_x64/test/${{matrix.config}}/test
         cd ..
 
-  darwin-dist:
+  dist-darwin:
 
-    needs: darwin-build
+    needs: build-darwin
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v2
@@ -128,7 +128,7 @@ jobs:
         name: dist-darwin-x64
         path: dist
 
-  win32-build:
+  build-win32:
 
     runs-on: windows-latest
     strategy:
@@ -152,7 +152,7 @@ jobs:
           !build/**/*.o
           !build/**/third-party/**
 
-  win32-test:
+  test-win32:
 
     runs-on: windows-latest
     strategy:
@@ -169,9 +169,9 @@ jobs:
         ../build/win32_x64/test/${{matrix.config}}/test.exe
         cd ..
 
-  win32-dist:
+  dist-win32:
 
-    needs: win32-build
+    needs: build-win32
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v2
