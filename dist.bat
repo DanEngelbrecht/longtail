@@ -7,17 +7,17 @@ mkdir dist
 cp build\%PLATFORM%\longtail\debug\longtail.exe dist\longtail_debug.exe
 cp build\%PLATFORM%\longtail\release\longtail.exe dist\longtail.exe
 
-cp build\%PLATFORM%\shared_lib\debug\shared_lib.dll dist\longtail_win32_x64_debug.dll
-cp build\%PLATFORM%\shared_lib\debug\shared_lib.pdb dist\longtail_win32_x64_debug.pdb
-cp build\%PLATFORM%\shared_lib\debug\shared_lib.lib dist\longtail_win32_x64_debug.lib
-cp build\%PLATFORM%\shared_lib\debug\shared_lib.exp dist\longtail_win32_x64_debug.exp
-cp build\%PLATFORM%\shared_lib\release\shared_lib.dll dist\longtail_win32_x64.dll
-cp build\%PLATFORM%\shared_lib\release\shared_lib.pdb dist\longtail_win32_x64.pdb
-cp build\%PLATFORM%\shared_lib\release\shared_lib.lib dist\longtail_win32_x64.lib
-cp build\%PLATFORM%\shared_lib\release\shared_lib.exp dist\longtail_win32_x64.exp
+cp build\%PLATFORM%\longtail_dylib\debug\longtail_dylib.dll dist\longtail_win32_x64_debug.dll
+cp build\%PLATFORM%\longtail_dylib\debug\longtail_dylib.pdb dist\longtail_win32_x64_debug.pdb
+cp build\%PLATFORM%\longtail_dylib\debug\longtail_dylib.lib dist\longtail_win32_x64_debug.lib
+cp build\%PLATFORM%\longtail_dylib\debug\longtail_dylib.exp dist\longtail_win32_x64_debug.exp
+cp build\%PLATFORM%\longtail_dylib\release\longtail_dylib.dll dist\longtail_win32_x64.dll
+cp build\%PLATFORM%\longtail_dylib\release\longtail_dylib.pdb dist\longtail_win32_x64.pdb
+cp build\%PLATFORM%\longtail_dylib\release\longtail_dylib.lib dist\longtail_win32_x64.lib
+cp build\%PLATFORM%\longtail_dylib\release\longtail_dylib.exp dist\longtail_win32_x64.exp
 
-cp build\%PLATFORM%\libLongtail\debug\libLongtail.a dist\liblongtail_win32_x64_debug.a
-cp build\%PLATFORM%\libLongtail\release\libLongtail.a dist\liblongtail_win32_x64.a
+cp build\%PLATFORM%\longtail_static\debug\liblongtail_static.a dist\liblongtail_win32_x64_debug.a
+cp build\%PLATFORM%\longtail_static\release\liblongtail_static.a dist\liblongtail_win32_x64.a
 
 mkdir dist\include
 mkdir dist\include\src

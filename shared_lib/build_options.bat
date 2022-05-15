@@ -1,4 +1,4 @@
-set TARGET=shared_lib
+set TARGET=longtail_dylib
 set TARGET_TYPE=SHAREDLIB
 
 call %BASE_DIR%all_sources.bat
