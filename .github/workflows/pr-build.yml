@@ -136,13 +136,16 @@ jobs:
     - uses: actions/download-artifact@v3
       with:
         path: artifacts
-    - name: show all
+    - name: show downloaded artifacts
       run: |
-        tree artifacts
+        tree /f artifacts
     - name: copy artifacts
       run: |
         mkdir ./build
         cp -r ./artifacts-*/* ./build
+    - name: show build artifacts
+      run: |
+        tree /f artifacts
     - name: build dist
       run: |
         ./dist.bat
