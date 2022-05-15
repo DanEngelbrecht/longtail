@@ -5,20 +5,20 @@ call arch_helper.bat
 
 mkdir dist
 
-copy build\artifacts\artifacts-cmd-debug\!PLATFORM!\longtail\debug\longtail.exe dist\longtail_debug.exe
-copy build\artifacts\artifacts-cmd-release\!PLATFORM!\longtail\release\longtail.exe dist\longtail.exe
+copy build\artifacts\!PLATFORM!-cmd-debug\!PLATFORM!\longtail\debug\longtail.exe dist\longtail_debug.exe
+copy build\artifacts\!PLATFORM!-cmd-release\!PLATFORM!\longtail\release\longtail.exe dist\longtail.exe
 
-copy build\artifacts\artifacts-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.dll dist\longtail_!PLATFORM!_debug.dll
-copy build\artifacts\artifacts-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.pdb dist\longtail_!PLATFORM!_debug.pdb
-copy build\artifacts\artifacts-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.lib dist\longtail_!PLATFORM!_debug.lib
-copy build\artifacts\artifacts-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.exp dist\longtail_!PLATFORM!_debug.exp
-copy build\artifacts\artifacts-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.dll dist\longtail_!PLATFORM!.dll
-copy build\artifacts\artifacts-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.pdb dist\longtail_!PLATFORM!.pdb
-copy build\artifacts\artifacts-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.lib dist\longtail_!PLATFORM!.lib
-copy build\artifacts\artifacts-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.exp dist\longtail_!PLATFORM!.exp
+copy build\artifacts\!PLATFORM!-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.dll dist\longtail_!PLATFORM!_debug.dll
+copy build\artifacts\!PLATFORM!-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.pdb dist\longtail_!PLATFORM!_debug.pdb
+copy build\artifacts\!PLATFORM!-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.lib dist\longtail_!PLATFORM!_debug.lib
+copy build\artifacts\!PLATFORM!-longtail_dylib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.exp dist\longtail_!PLATFORM!_debug.exp
+copy build\artifacts\!PLATFORM!-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.dll dist\longtail_!PLATFORM!.dll
+copy build\artifacts\!PLATFORM!-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.pdb dist\longtail_!PLATFORM!.pdb
+copy build\artifacts\!PLATFORM!-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.lib dist\longtail_!PLATFORM!.lib
+copy build\artifacts\!PLATFORM!-longtail_dylib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.exp dist\longtail_!PLATFORM!.exp
 
-copy build\artifacts\artifacts-longtail_static-debug\!PLATFORM!\longtail_static\debug\liblongtail_static.a dist\liblongtail_!PLATFORM!_debug.a
-copy build\artifacts\artifacts-longtail_static-release\!PLATFORM!\longtail_static\release\liblongtail_static.a dist\liblongtail_!PLATFORM!.a
+copy build\artifacts\!PLATFORM!-longtail_static-debug\!PLATFORM!\longtail_static\debug\liblongtail_static.a dist\liblongtail_!PLATFORM!_debug.a
+copy build\artifacts\!PLATFORM!-longtail_static-release\!PLATFORM!\longtail_static\release\liblongtail_static.a dist\liblongtail_!PLATFORM!.a
 
 mkdir dist\include
 mkdir dist\include\src
