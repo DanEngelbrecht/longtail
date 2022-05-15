@@ -135,7 +135,7 @@ jobs:
     - uses: actions/checkout@v2
     - uses: actions/download-artifact@v3
       with:
-        path: artifacts
+        path: artifacts/
     - name: show downloaded artifacts
       run: |
         tree /f artifacts
