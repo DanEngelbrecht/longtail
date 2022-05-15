@@ -2,7 +2,6 @@
 SetLocal EnableDelayedExpansion
 
 set BASE_DIR=%~dp0
-set THIRDPARTY_DIR=!BASE_DIR!third-party\
 set SOURCE_FOLDER=%1%
 
 call !BASE_DIR!arch_helper.bat
@@ -69,18 +68,6 @@ set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHs
 
 call !SOURCE_FOLDER!build_options.bat
 if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
-
-if NOT EXIST !BASE_DIR!build (
-    mkdir !BASE_DIR!build
-)
-
-if NOT EXIST !BASE_DIR!build\!PLATFORM! (
-    mkdir !BASE_DIR!build\!PLATFORM!
-)
-
-if NOT EXIST !BASE_DIR!build\!PLATFORM!\!TARGET! (
-    mkdir !BASE_DIR!build\!PLATFORM!\!TARGET!
-)
 
 set OUTPUT_FOLDER=!BASE_DIR!build\!PLATFORM!\!TARGET!\!RELEASE_MODE!
 if NOT EXIST !OUTPUT_FOLDER! (
