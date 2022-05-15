@@ -183,6 +183,7 @@ jobs:
           - **NEW API** `Longtail_CompressionRegistry_CreateForBrotli`, `Longtail_CompressionRegistry_CreateForLZ4`, `Longtail_CompressionRegistry_CreateForZstd`
           - **FIX** Add path in log context in `FSStorageAPI_LockFile`
           - **FIX** Add input parameter validation in `FSStorageAPI_LockFile`, `FSStorageAPI_UnlockFile`, `InMemStorageAPI_LockFile` and `InMemStorageAPI_UnlockFile`
+          - **FIX** Restructured build scripts and GitHub workflows to allow more parallel builds
         draft: false
         prerelease: false
         files: "*-x64.zip"
