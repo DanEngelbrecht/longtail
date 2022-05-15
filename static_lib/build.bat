@@ -51,9 +51,6 @@ if NOT EXIST !OUTPUT_FOLDER! (
     mkdir !OUTPUT_FOLDER!
 )
 
-set OBJDIR=!BASE_DIR!build\static-lib-release
-set OBJDIR=!BASE_DIR!build\static-lib-debug
-
 set LIB_TARGET=!OUTPUT_FOLDER!\lib!TARGET!.a
 
 echo Building !LIB_TARGET!
@@ -79,7 +76,7 @@ if NOT "%ZSTD_THIRDPARTY_GCC_SRC%" == "" (
 
 popd
 
-set TEST_EXECUTABLEPATH=!OUTPUT_FOLDER!\static_lib_test.exe
+set TEST_EXECUTABLEPATH=!OUTPUT_FOLDER!\!LIBNAME!_test.exe
 
 ar cru -v !LIB_TARGET! !OUTPUT_FOLDER!\*.o
 ls -la ${LIB_TARGET}

@@ -100,6 +100,16 @@ jobs:
       run: |
         ${{matrix.target}}/build.bat ${{matrix.config}}
 
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: artifacts-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.exe
+          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.pdb
+          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.dll
+          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.lib
+
   win32-test:
     needs: prep
 
@@ -117,6 +127,18 @@ jobs:
         cd ./test
         ../build/win32_x64/test/${{matrix.config}}/test.exe
         cd ..
+
+  win32-dist:
+    needs: win32-build
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+    - name: show all
+      run: |
+        tree artifacts
 
 #    steps:
 #    - name: build dist
