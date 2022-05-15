@@ -26,7 +26,7 @@ then
     mkdir -p ${OUTPUT_FOLDER}
 fi
 
-set LIB_TARGET="${OUTPUT_FOLDER}\lib${TARGET}.a"
+LIB_TARGET="${OUTPUT_FOLDER}/lib${TARGET}.a"
 
 echo Building ${LIB_TARGET}
 
