@@ -34,18 +34,6 @@ goto build
 
 :build
 
-if NOT EXIST !BASE_DIR!build (
-    mkdir !BASE_DIR!build
-)
-
-if NOT EXIST !BASE_DIR!build\!PLATFORM! (
-    mkdir !BASE_DIR!build\!PLATFORM!
-)
-
-if NOT EXIST !BASE_DIR!build\!PLATFORM!\!TARGET! (
-    mkdir !BASE_DIR!build\!PLATFORM!\!TARGET!
-)
-
 set OUTPUT_FOLDER=!BASE_DIR!build\!PLATFORM!\!TARGET!\!RELEASE_MODE!
 if NOT EXIST !OUTPUT_FOLDER! (
     mkdir !OUTPUT_FOLDER!
