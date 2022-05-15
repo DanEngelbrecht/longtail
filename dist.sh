@@ -3,7 +3,7 @@ set -e
 
 . arch_helper.sh
 
-mkdir dist
+mkdir -p dist
 
 cp build/artifacts/artifacts-cmd-debug/${PLATFORM}/longtail/debug/longtail dist/longtail_debug
 cp build/artifacts/artifacts-cmd-release/${PLATFORM}/longtail/release/longtail dist/longtail
