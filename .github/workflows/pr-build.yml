@@ -5,7 +5,8 @@ on:
     branches: [ main ]
 
 jobs:
-  cancel-old:
+  cancel-old-build:
+ 
     runs-on: ubuntu-latest
     steps:
     - name: Cancel Previous Runs
@@ -37,6 +38,7 @@ jobs:
           !build/**/third-party/**
 
   linux-test:
+
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -53,6 +55,7 @@ jobs:
         cd ..
 
   linux-dist:
+
     needs: linux-build
     runs-on: ubuntu-latest
     steps:
@@ -92,6 +95,7 @@ jobs:
           !build/**/third-party/**
 
   darwin-test:
+
     runs-on: macos-latest
     strategy:
       matrix:
@@ -108,6 +112,7 @@ jobs:
         cd ..
 
   darwin-dist:
+
     needs: darwin-build
     runs-on: macos-latest
     steps:
@@ -148,6 +153,7 @@ jobs:
           !build/**/third-party/**
 
   win32-test:
+
     runs-on: windows-latest
     strategy:
       matrix:
@@ -164,6 +170,7 @@ jobs:
         cd ..
 
   win32-dist:
+
     needs: win32-build
     runs-on: windows-latest
     steps:
