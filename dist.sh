@@ -8,11 +8,11 @@ mkdir -p dist
 cp build/artifacts/${PLATFORM}-cmd-debug/${PLATFORM}/longtail/debug/longtail dist/longtail_debug
 cp build/artifacts/${PLATFORM}-cmd-release/${PLATFORM}/longtail/release/longtail dist/longtail
 
-cp build/artifacts/${PLATFORM}-longtail_dylib-debug/${PLATFORM}/longtail_dylib/debug/longtail_dylib.so dist/longtail_${PLATFORM}_debug.so
-cp build/artifacts/${PLATFORM}-longtail_dylib-release/${PLATFORM}/longtail_dylib/release/longtail_dylib.so dist/longtail_${PLATFORM}.so
+cp build/artifacts/${PLATFORM}-shared_lib-debug/${PLATFORM}/longtail_dylib/debug/longtail_dylib.so dist/longtail_${PLATFORM}_debug.so
+cp build/artifacts/${PLATFORM}-shared_lib-release/${PLATFORM}/longtail_dylib/release/longtail_dylib.so dist/longtail_${PLATFORM}.so
 
-cp build/artifacts/${PLATFORM}-longtail_static-debug/${PLATFORM}/longtail_static/debug/liblongtail_static.a dist/liblongtail_${PLATFORM}_debug.a
-cp build/artifacts/${PLATFORM}-longtail_static-release/${PLATFORM}/longtail_static/release/liblongtail_static.a dist/liblongtail_${PLATFORM}.a
+cp build/artifacts/${PLATFORM}-static_lib-debug/${PLATFORM}/longtail_static/debug/liblongtail_static.a dist/liblongtail_${PLATFORM}_debug.a
+cp build/artifacts/${PLATFORM}-static_lib-release/${PLATFORM}/longtail_static/release/liblongtail_static.a dist/liblongtail_${PLATFORM}.a
 
 mkdir dist/include
 mkdir dist/include/src
