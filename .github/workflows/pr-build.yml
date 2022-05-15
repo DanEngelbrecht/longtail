@@ -49,7 +49,7 @@ jobs:
     - name: run tests
       run: |
         cd ./test
-        ../build/win32_x64/test/${{matrix.config}}/test
+        ../build/linux_x64/test/${{matrix.config}}/test
         cd ..
 
 #  linux:
