@@ -138,6 +138,8 @@ jobs:
           - **FIX** Add retry when opening files and creating directories on Win32 platform due to network drives are sometimes slow in picking up create directories
           - **NEW API** `Longtail_GetZStdHighQuality`, `Longtail_GetZStdLowQuality` added
           - **NEW API** `Longtail_CompressionRegistry_CreateForBrotli`, `Longtail_CompressionRegistry_CreateForLZ4`, `Longtail_CompressionRegistry_CreateForZstd`
+          - **FIX** Add path in log context in `FSStorageAPI_LockFile`
+          - **FIX** Add input parameter validation in `FSStorageAPI_LockFile`, `FSStorageAPI_UnlockFile`, `InMemStorageAPI_LockFile` and `InMemStorageAPI_UnlockFile`
         draft: false
         prerelease: false
         files: "*-x64.zip"

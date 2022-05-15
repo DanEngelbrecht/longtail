@@ -532,8 +532,13 @@ static int FSStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, const 
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_lock_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, out_lock_file != 0, return EINVAL);
 
     void* mem = Longtail_Alloc("FSStorageAPI", Longtail_GetFileLockSize());
     if (!mem)
@@ -557,6 +562,9 @@ static int FSStorageAPI_UnlockFile(struct Longtail_StorageAPI* storage_api, Long
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(lock_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_FATAL_ASSERT(ctx, lock_file != 0, return EINVAL);
 
     int err = Longtail_UnlockFile((HLongtail_FileLock)lock_file);
     if (err)
