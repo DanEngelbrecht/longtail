@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  prep:
+  cancel-old:
     runs-on: ubuntu-latest
     steps:
     - name: Cancel Previous Runs
@@ -86,7 +86,6 @@ jobs:
 #        path: dist
 
   win32-build:
-    needs: prep
 
     runs-on: windows-latest
     strategy:
@@ -111,8 +110,6 @@ jobs:
           !build/**/third-party/**
 
   win32-test:
-    needs: prep
-
     runs-on: windows-latest
     strategy:
       matrix:
