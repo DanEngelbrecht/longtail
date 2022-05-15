@@ -105,10 +105,10 @@ jobs:
       with:
         name: artifacts-${{matrix.target}}-${{matrix.config}}
         path: |
-          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.exe
-          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.pdb
-          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.dll
-          build/win32_x64/${{matrix.target}}/${{matrix.config}}/*.lib
+          build/**
+          !build/**/*.obj
+          !build/**/*.o
+          !build/**/third-party/**
 
   win32-test:
     needs: prep
