@@ -5,14 +5,14 @@ set -e
 
 mkdir dist
 
-copy build/artifacts/artifacts-cmd-debug/${PLATFORM}/longtail/debug/longtail dist/longtail_debug
-copy build/artifacts/artifacts-cmd-release/${PLATFORM}/longtail/release/longtail dist/longtail
+cp build/artifacts/artifacts-cmd-debug/${PLATFORM}/longtail/debug/longtail dist/longtail_debug
+cp build/artifacts/artifacts-cmd-release/${PLATFORM}/longtail/release/longtail dist/longtail
 
-copy build/artifacts/artifacts-longtail_dylib-debug/${PLATFORM}/longtail_dylib/debug/longtail_dylib.so dist/longtail_${PLATFORM}_debug.so
-copy build/artifacts/artifacts-longtail_dylib-release/${PLATFORM}/longtail_dylib/release/longtail_dylib.so dist/longtail_${PLATFORM}.so
+cp build/artifacts/artifacts-longtail_dylib-debug/${PLATFORM}/longtail_dylib/debug/longtail_dylib.so dist/longtail_${PLATFORM}_debug.so
+cp build/artifacts/artifacts-longtail_dylib-release/${PLATFORM}/longtail_dylib/release/longtail_dylib.so dist/longtail_${PLATFORM}.so
 
-copy build/artifacts/artifacts-longtail_static-debug/${PLATFORM}/longtail_static/debug/liblongtail_static.a dist/liblongtail_${PLATFORM}_debug.a
-copy build/artifacts/artifacts-longtail_static-release/${PLATFORM}/longtail_static/release/liblongtail_static.a dist/liblongtail_${PLATFORM}.a
+cp build/artifacts/artifacts-longtail_static-debug/${PLATFORM}/longtail_static/debug/liblongtail_static.a dist/liblongtail_${PLATFORM}_debug.a
+cp build/artifacts/artifacts-longtail_static-release/${PLATFORM}/longtail_static/release/liblongtail_static.a dist/liblongtail_${PLATFORM}.a
 
 mkdir dist/include
 mkdir dist/include/src
