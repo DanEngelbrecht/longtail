@@ -60,86 +60,14 @@ jobs:
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
+    - name: build dist
+      run: |
+        ./dist.sh
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-linux-x64
+        path: dist
 
-#    - name: build dist
-#      run: |
-#        ./dist.bat
-#    - uses: actions/upload-artifact@master
-#      with:
-#        name: dist-win32-x64
-#        path: dist
-
-#  linux:
-#
-#    needs: prep
-#
-#    runs-on: ubuntu-latest
-#    strategy:
-#      matrix:
-#          include:
-#            - config: "debug"
-#              build_param: ""
-#              exe_suffx: "debug"
-#            - config: "release"
-#              build_param: "release"
-#              exe_suffix: ""
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#    - name: build test
-#      run: |
-#        test/build.sh ${{ matrix.build_param }}
-#    - name: build static_lib
-#      run: |
-#        static_lib/build.sh ${{ matrix.build_param }}
-#    - name: build shared_lib
-#      run: |
-#        shared_lib/build.sh ${{ matrix.build_param }}
-#    - name: build cmd
-#      run: |
-#        cmd/build.sh ${{ matrix.build_param }}
-#    - name: run tests
-#      run: |
-#        pushd ./test
-#        ../build/test${{ matrix.exe_suffix }}
-#        popd
-#
-#  darwin:
-#    needs: prep
-#
-#    runs-on: macos-latest
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#    - name: build test
-#      run: |
-#        test/build.sh
-#        test/build.sh release
-#    - name: build static_lib
-#      run: |
-#        static_lib/build.sh
-#        static_lib/build.sh release
-#    - name: build shared_lib
-#      run: |
-#        shared_lib/build.sh
-#        shared_lib/build.sh release
-#    - name: build cmd
-#      run: |
-#        cmd/build.sh
-#        cmd/build.sh release
-#    - name: run tests
-#      run: |
-#        pushd ./test
-#        ../build/test_debug
-#        ../build/test
-#        popd
-#    - name: build dist
-#      run: |
-#        ./dist.sh
-#    - uses: actions/upload-artifact@master
-#      with:
-#        name: dist-darwin-x64
-#        path: dist
   darwin-build:
 
     runs-on: macos-latest
@@ -187,13 +115,13 @@ jobs:
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
-#    - name: build dist
-#      run: |
-#        ./dist.bat
-#    - uses: actions/upload-artifact@master
-#      with:
-#        name: dist-win32-x64
-#        path: dist
+    - name: build dist
+      run: |
+        ./dist.sh
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-darwin-x64
+        path: dist
 
   win32-build:
 

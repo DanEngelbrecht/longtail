@@ -1,19 +1,19 @@
 #!/bin/bash
 set -e
 
-if [ "$(uname)" == "Darwin" ]; then
-    export PLATFORM=darwin
-else
-	export PLATFORM=linux
-fi
+. arch_helper.sh
 
 mkdir dist
-cp build/longtail_debug dist
-cp build/longtail dist
-cp build/liblongtail_${PLATFORM}_x64_debug.so dist
-cp build/liblongtail_${PLATFORM}_x64.so dist
-cp build/static/liblongtail_${PLATFORM}_x64_debug.a dist
-cp build/static/liblongtail_${PLATFORM}_x64.a dist
+
+copy build/artifacts/artifacts-cmd-debug/${PLATFORM}/longtail/debug/longtail dist/longtail_debug
+copy build/artifacts/artifacts-cmd-release/${PLATFORM}/longtail/release/longtail dist/longtail
+
+copy build/artifacts/artifacts-longtail_dylib-debug/${PLATFORM}/longtail_dylib/debug/longtail_dylib.so dist/longtail_${PLATFORM}_debug.so
+copy build/artifacts/artifacts-longtail_dylib-release/${PLATFORM}/longtail_dylib/release/longtail_dylib.so dist/longtail_${PLATFORM}.so
+
+copy build/artifacts/artifacts-longtail_static-debug/${PLATFORM}/longtail_static/debug/liblongtail_static.a dist/liblongtail_${PLATFORM}_debug.a
+copy build/artifacts/artifacts-longtail_static-release/${PLATFORM}/longtail_static/release/liblongtail_static.a dist/liblongtail_${PLATFORM}.a
+
 mkdir dist/include
 mkdir dist/include/src
 mkdir dist/include/lib
