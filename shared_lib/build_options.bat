@@ -1,4 +1,4 @@
-set TARGET=longtail_win32_x64
+set TARGET=shared_lib
 set TARGET_TYPE=SHAREDLIB
 
 call %BASE_DIR%all_sources.bat

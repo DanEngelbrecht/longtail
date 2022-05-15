@@ -1,18 +1,24 @@
 @echo off
 
+call arch_helper.bat
+
 mkdir dist
-cp build\longtail_debug.exe dist
-cp build\longtail.exe dist
-cp build\longtail_win32_x64_debug.dll dist
-cp build\longtail_win32_x64_debug.pdb dist
-cp build\longtail_win32_x64_debug.lib dist
-cp build\longtail_win32_x64_debug.exp dist
-cp build\longtail_win32_x64.dll dist
-cp build\longtail_win32_x64.pdb dist
-cp build\longtail_win32_x64.lib dist
-cp build\longtail_win32_x64.exp dist
-cp build\static\liblongtail_win32_x64.a dist
-cp build\static\liblongtail_win32_x64_debug.a dist
+
+cp build\%PLATFORM%\longtail\debug\longtail.exe dist\longtail_debug.exe
+cp build\%PLATFORM%\longtail\release\longtail.exe dist\longtail.exe
+
+cp build\%PLATFORM%\shared_lib\debug\shared_lib.dll dist\longtail_win32_x64_debug.dll
+cp build\%PLATFORM%\shared_lib\debug\shared_lib.pdb dist\longtail_win32_x64_debug.pdb
+cp build\%PLATFORM%\shared_lib\debug\shared_lib.lib dist\longtail_win32_x64_debug.lib
+cp build\%PLATFORM%\shared_lib\debug\shared_lib.exp dist\longtail_win32_x64_debug.exp
+cp build\%PLATFORM%\shared_lib\release\shared_lib.dll dist\longtail_win32_x64.dll
+cp build\%PLATFORM%\shared_lib\release\shared_lib.pdb dist\longtail_win32_x64.pdb
+cp build\%PLATFORM%\shared_lib\release\shared_lib.lib dist\longtail_win32_x64.lib
+cp build\%PLATFORM%\shared_lib\release\shared_lib.exp dist\longtail_win32_x64.exp
+
+cp build\%PLATFORM%\libLongtail\debug\libLongtail.a dist\liblongtail_win32_x64_debug.a
+cp build\%PLATFORM%\libLongtail\release\libLongtail.a dist\liblongtail_win32_x64.a
+
 mkdir dist\include
 mkdir dist\include\src
 mkdir dist\include\lib

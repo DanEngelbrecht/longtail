@@ -3,7 +3,9 @@ SetLocal EnableDelayedExpansion
 
 set BASE_DIR=%~dp0
 set THIRDPARTY_DIR=!BASE_DIR!third-party\
-set BUILD_FOLDER=%1%
+set SOURCE_FOLDER=%1%
+
+call !BASE_DIR!arch_helper.bat
 
 :run_arg
 
@@ -63,29 +65,44 @@ goto arg_end
 
 :arg_end
 
+call !BASE_DIR!arch_helper.bat
+
 set BASE_CXXFLAGS=/nologo /Zi /D_CRT_SECURE_NO_WARNINGS /D_HAS_EXCEPTIONS=0 /EHsc /W3 /wd5045 /wd4514 /wd4710 /wd4820 /wd4820 /wd4668 /wd4464 /wd5039 /wd4255 /wd4626 /GR-
+
+call !SOURCE_FOLDER!build_options.bat
+if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+
+if NOT EXIST !BASE_DIR!build (
+    mkdir !BASE_DIR!build
+)
+
+if NOT EXIST !BASE_DIR!build\!PLATFORM! (
+    mkdir !BASE_DIR!build\!PLATFORM!
+)
+
+if NOT EXIST !BASE_DIR!build\!PLATFORM!\!TARGET! (
+    mkdir !BASE_DIR!build\!PLATFORM!\!TARGET!
+)
+
+set OUTPUT_FOLDER=!BASE_DIR!build\!PLATFORM!\!TARGET!\!RELEASE_MODE!
+if NOT EXIST !OUTPUT_FOLDER! (
+    mkdir !OUTPUT_FOLDER!
+)
+
+set THIRD_PARTY_OUTPUT_FOLDER=!OUTPUT_FOLDER!\third-party
+IF NOT EXIST !THIRD_PARTY_OUTPUT_FOLDER! (
+    mkdir !THIRD_PARTY_OUTPUT_FOLDER!
+)
+
+set THIRD_PARTY_LIB=!TARGET!-third-party.lib
 
 if "!RELEASE_MODE!" == "release" (
     set OPT=/O2 /Oi /Oy /GS- /Gs- /MT /GL /GS- /GF
-
-    call !BUILD_FOLDER!build_options.bat
-    set OUTPUT=!TARGET!
-    set THIRD_PARTY_LIB=!TARGET!-third-party.lib
-    if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
     set CXXFLAGS=!BASE_CXXFLAGS! !CXXFLAGS!
-
 ) else (
     set OPT=/MTd
-
-    call !BUILD_FOLDER!build_options.bat
-    set OUTPUT=!TARGET!_debug
-    set THIRD_PARTY_LIB=!TARGET!-third-party-debug.lib
-
-    if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
-
     set CXXFLAGS=!BASE_CXXFLAGS! !CXXFLAGS_DEBUG!
 )
-
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
@@ -166,23 +183,18 @@ if NOT DEFINED VCINSTALLDIR (
     exit 1
 )
 
-
-if NOT EXIST !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! (
+if NOT EXIST !THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB! (
     set BUILD_THIRD_PARTY=build-third-party
-)
-
-IF NOT EXIST !BASE_DIR!build\third-party-!RELEASE_MODE! (
-    mkdir !BASE_DIR!build\third-party-!RELEASE_MODE!
 )
 
 if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo Compiling third party dependencies to library !THIRD_PARTY_LIB!
-    del /q !BASE_DIR!build\third-party-!RELEASE_MODE!\*.obj >nul 2>&1
-    cd !BASE_DIR!build\third-party-!RELEASE_MODE!
+    del /q !THIRD_PARTY_OUTPUT_FOLDER!\*.obj >nul 2>&1
+    cd !THIRD_PARTY_OUTPUT_FOLDER!
     cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% %THIRDPARTY_SRC% %THIRDPARTY_SRC_SSE42% %THIRDPARTY_SRC_AVX2% %THIRDPARTY_SRC_AVX512%
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
     echo Creating third party dependencies library !THIRD_PARTY_LIB!
-    lib.exe /nologo *.obj /OUT:!BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
+    lib.exe /nologo *.obj /OUT:!THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB!
     set LIB_BUILD_ERROR=%ERRORLEVEL%
     cd !BASE_DIR!
     if !LIB_COMPILE_ERROR! neq 0 exit /b !LIB_COMPILE_ERROR!
@@ -190,38 +202,37 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
 )
 
 if "!TARGET_TYPE!" == "EXECUTABLE" (
-    set OUTPUT_TARGET=!OUTPUT!.exe
+    set OUTPUT_TARGET=!TARGET!.exe
 )
 
 if "!TARGET_TYPE!" == "SHAREDLIB" (
-    set OUTPUT_TARGET=!OUTPUT!.dll
+    set OUTPUT_TARGET=!TARGET!.dll
     set EXTRA_CC_OPTIONS=lib/D_USRDLL /D_WINDLL
     set EXTRA_LINK_OPTIONS=/pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library
 )
 
 if "!TARGET_TYPE!" == "STATICLIB" (
-    set OUTPUT_TARGET=!OUTPUT!_static.lib
+    set OUTPUT_TARGET=!TARGET!_static.lib
 )
 
-cd !BASE_DIR!\build
+cd !OUTPUT_FOLDER!
 echo Building %OUTPUT_TARGET%
 if "!TARGET_TYPE!" == "EXECUTABLE" (
-    cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
+    cl.exe !EXTRA_CC_OPTIONS! %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:!TARGET!.pdb /link !EXTRA_LINK_OPTIONS! /out:!OUTPUT_TARGET! /pdb:!TARGET!.pdb !THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB! /OPT:REF
 )
 
 if "!TARGET_TYPE!" == "SHAREDLIB" (
-    cl.exe /D_USRDLL /D_WINDLL %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb /link /pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library /out:!OUTPUT_TARGET! /pdb:%OUTPUT%.pdb !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB! /OPT:REF
+    cl.exe /D_USRDLL /D_WINDLL %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:!TARGET!.pdb /link /pdbaltpath:%%_PDB%% /DLL /SUBSYSTEM:WINDOWS /NODEFAULTLIB:library /out:!OUTPUT_TARGET! /pdb:!TARGET!.pdb !THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB! /OPT:REF
 )
 
 if "!TARGET_TYPE!" == "STATICLIB" (
-    IF NOT EXIST static-lib-!RELEASE_MODE! (
-        mkdir static-lib-!RELEASE_MODE!
+    IF NOT EXIST static-lib (
+        mkdir static-lib
     )
-    cd static-lib-!RELEASE_MODE! 
-    cl.exe /c %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:%OUTPUT%.pdb
+    cd static-lib 
+    cl.exe /c %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:!TARGET!.pdb
     cd ..
-    lib -nologo -out:!OUTPUT_TARGET! static-lib-!RELEASE_MODE!\*.o !BASE_DIR!build\third-party-!RELEASE_MODE!\!THIRD_PARTY_LIB!
-    cd !BASE_DIR!\build
+    lib -nologo -out:!OUTPUT_TARGET! *.o !THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB!
 )
 
 set BUILD_ERROR=%ERRORLEVEL%
@@ -231,8 +242,8 @@ if !BUILD_ERROR! neq 0 exit /b !BUILD_ERROR!
 
 if "!TARGET_TYPE!" == "EXECUTABLE" (
     if "!RUN!" == "run" (
-        cd !BUILD_FOLDER!
-        !BASE_DIR!\build\!OUTPUT_TARGET!
+        cd !SOURCE_FOLDER!
+        !OUTPUT_FOLDER!\!OUTPUT_TARGET!
         cd ..
     )
 )
