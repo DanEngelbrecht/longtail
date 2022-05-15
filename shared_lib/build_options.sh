@@ -1,12 +1,6 @@
 #!/bin/bash
 
-if [ "$(uname)" == "Darwin" ]; then
-    export PLATFORM=darwin
-else
-	export PLATFORM=linux
-fi
-
-export TARGET=longtail_${PLATFORM}_x64
+export TARGET=longtail_dylib
 export TARGET_TYPE=SHAREDLIB
 
 . ${BASE_DIR}all_sources.sh
