@@ -139,6 +139,17 @@ jobs:
     - name: show all
       run: |
         tree artifacts
+    - name: copy artifacts
+      run: |
+        mkdir ./build
+        cp -r ./artifacts-*/* ./build
+    - name: build dist
+      run: |
+        ./dist.bat
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-win32-x64
+        path: dist
 
 #    steps:
 #    - name: build dist
