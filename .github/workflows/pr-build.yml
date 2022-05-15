@@ -52,6 +52,23 @@ jobs:
         ../build/linux_x64/test/${{matrix.config}}/test
         cd ..
 
+  linux-dist:
+    needs: linux-build
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
+
+#    - name: build dist
+#      run: |
+#        ./dist.bat
+#    - uses: actions/upload-artifact@master
+#      with:
+#        name: dist-win32-x64
+#        path: dist
+
 #  linux:
 #
 #    needs: prep
@@ -123,6 +140,60 @@ jobs:
 #      with:
 #        name: dist-darwin-x64
 #        path: dist
+  darwin-build:
+
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build ${{matrix.target}}
+      run: |
+        ${{matrix.target}}/build.sh ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: artifacts-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.o
+          !build/**/third-party/**
+
+  darwin-test:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+    steps:
+    - uses: actions/checkout@v2
+    - name: build test
+      run: |
+        test/build.sh ${{matrix.config}}
+    - name: run tests
+      run: |
+        cd ./test
+        ../build/darwin_x64/test/${{matrix.config}}/test
+        cd ..
+
+  darwin-dist:
+    needs: darwin-build
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
+#    - name: build dist
+#      run: |
+#        ./dist.bat
+#    - uses: actions/upload-artifact@master
+#      with:
+#        name: dist-win32-x64
+#        path: dist
 
   win32-build:
 
@@ -172,9 +243,6 @@ jobs:
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
-#    - name: show downloaded artifacts
-#      run: |
-#        tree /f build/artifacts
     - name: build dist
       run: |
         ./dist.bat
@@ -182,12 +250,3 @@ jobs:
       with:
         name: dist-win32-x64
         path: dist
-
-#    steps:
-#    - name: build dist
-#      run: |
-#        ./dist.bat
-#    - uses: actions/upload-artifact@master
-#      with:
-#        name: dist-win32-x64
-#        path: dist
