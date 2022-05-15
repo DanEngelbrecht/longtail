@@ -132,10 +132,10 @@ jobs:
     - uses: actions/checkout@v2
     - uses: actions/download-artifact@v3
       with:
-        path: builds/artifacts
-    - name: show downloaded artifacts
-      run: |
-        tree /f builds/artifacts
+        path: build/artifacts
+#    - name: show downloaded artifacts
+#      run: |
+#        tree /f build/artifacts
     - name: build dist
       run: |
         ./dist.bat
