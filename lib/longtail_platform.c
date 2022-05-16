@@ -2135,7 +2135,7 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
 {
     *out_file_lock = (HLongtail_FileLock)mem;
     (*out_file_lock)->fd = -1;
-    int fd = open("lockfile.tmp", O_RDWR | O_CREAT, 0666);
+    int fd = open(path, O_RDWR | O_CREAT, 0666);
     if (fd == -1)
     {
         return errno;
