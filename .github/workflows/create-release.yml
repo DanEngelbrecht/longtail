@@ -184,6 +184,7 @@ jobs:
           - **FIX** Add path in log context in `FSStorageAPI_LockFile`
           - **FIX** Add input parameter validation in `FSStorageAPI_LockFile`, `FSStorageAPI_UnlockFile`, `InMemStorageAPI_LockFile` and `InMemStorageAPI_UnlockFile`
           - **FIX** Restructured build scripts and GitHub workflows to allow more parallel builds
+          - **FIX** Use correct path for lock file in fsblockstore on Mac and Linux
         draft: false
         prerelease: false
         files: "*-x64.zip"
