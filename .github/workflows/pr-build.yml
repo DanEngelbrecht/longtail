@@ -5,34 +5,64 @@ on:
     branches: [ main ]
 
 jobs:
-  linux:
+  cancel-old-build:
+ 
+    runs-on: ubuntu-latest
+    steps:
+    - name: Cancel Previous Runs
+      uses: styfle/cancel-workflow-action@0.9.1
+      with:
+        access_token: ${{ github.token }}
+
+  build-linux:
 
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
 
+    steps:
+    - uses: actions/checkout@v2
+    - name: build ${{matrix.target}}
+      run: |
+        ${{matrix.target}}/build.sh ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: linux_x64-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.o
+          !build/**/third-party/**
+
+  test-linux:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config: [debug, release]
     steps:
     - uses: actions/checkout@v2
     - name: build test
       run: |
-        test/build.sh
-        test/build.sh release
-    - name: build static_lib
-      run: |
-        static_lib/build.sh
-        static_lib/build.sh release
-    - name: build shared_lib
-      run: |
-        shared_lib/build.sh
-        shared_lib/build.sh release
-    - name: build cmd
-      run: |
-        cmd/build.sh
-        cmd/build.sh release
+        test/build.sh ${{matrix.config}}
     - name: run tests
       run: |
-        pushd ./test
-        ../build/test_debug
-        ../build/test
-        popd
+        cd ./test
+        ../build/linux_x64/test/${{matrix.config}}/test
+        cd ..
+
+  dist-linux:
+
+    needs: build-linux
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
@@ -41,34 +71,55 @@ jobs:
         name: dist-linux-x64
         path: dist
 
-  darwin:
+  build-darwin:
 
     runs-on: macos-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
 
+    steps:
+    - uses: actions/checkout@v2
+    - name: build ${{matrix.target}}
+      run: |
+        ${{matrix.target}}/build.sh ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: darwin_x64-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.o
+          !build/**/third-party/**
+
+  test-darwin:
+
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        config: [debug, release]
     steps:
     - uses: actions/checkout@v2
     - name: build test
       run: |
-        test/build.sh
-        test/build.sh release
-    - name: build static_lib
-      run: |
-        static_lib/build.sh
-        static_lib/build.sh release
-    - name: build shared_lib
-      run: |
-        shared_lib/build.sh
-        shared_lib/build.sh release
-    - name: build cmd
-      run: |
-        cmd/build.sh
-        cmd/build.sh release
+        test/build.sh ${{matrix.config}}
     - name: run tests
       run: |
-        pushd ./test
-        ../build/test_debug
-        ../build/test
-        popd
+        cd ./test
+        ../build/darwin_x64/test/${{matrix.config}}/test
+        cd ..
+
+  dist-darwin:
+
+    needs: build-darwin
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
@@ -77,34 +128,56 @@ jobs:
         name: dist-darwin-x64
         path: dist
 
-  win32:
+  build-win32:
 
     runs-on: windows-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
 
+    steps:
+    - uses: actions/checkout@v2
+    - name: build ${{matrix.target}}
+      run: |
+        ${{matrix.target}}/build.bat ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: win32_x64-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.obj
+          !build/**/*.o
+          !build/**/third-party/**
+
+  test-win32:
+
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        config: [debug, release]
     steps:
     - uses: actions/checkout@v2
     - name: build test
       run: |
-        test/build.bat
-        test/build.bat release
-    - name: build static_lib
-      run: |
-        static_lib/build.bat
-        static_lib/build.bat release
-    - name: build shared_lib
-      run: |
-        shared_lib/build.bat
-        shared_lib/build.bat release
-    - name: build cmd
-      run: |
-        cmd/build.bat
-        cmd/build.bat release
+        test/build.bat ${{matrix.config}}
     - name: run tests
       run: |
         cd ./test
-        ../build/test_debug.exe
-        ../build/test.exe
+        ../build/win32_x64/test/${{matrix.config}}/test.exe
         cd ..
+
+  dist-win32:
+
+    needs: build-win32
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
     - name: build dist
       run: |
         ./dist.bat

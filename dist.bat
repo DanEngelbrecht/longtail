@@ -1,18 +1,25 @@
 @echo off
+SetLocal EnableDelayedExpansion
+
+call arch_helper.bat
 
 mkdir dist
-cp build\longtail_debug.exe dist
-cp build\longtail.exe dist
-cp build\longtail_win32_x64_debug.dll dist
-cp build\longtail_win32_x64_debug.pdb dist
-cp build\longtail_win32_x64_debug.lib dist
-cp build\longtail_win32_x64_debug.exp dist
-cp build\longtail_win32_x64.dll dist
-cp build\longtail_win32_x64.pdb dist
-cp build\longtail_win32_x64.lib dist
-cp build\longtail_win32_x64.exp dist
-cp build\static\liblongtail_win32_x64.a dist
-cp build\static\liblongtail_win32_x64_debug.a dist
+
+copy build\artifacts\!PLATFORM!-cmd-debug\!PLATFORM!\longtail\debug\longtail.exe dist\longtail_debug.exe
+copy build\artifacts\!PLATFORM!-cmd-release\!PLATFORM!\longtail\release\longtail.exe dist\longtail.exe
+
+copy build\artifacts\!PLATFORM!-shared_lib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.dll dist\longtail_!PLATFORM!_debug.dll
+copy build\artifacts\!PLATFORM!-shared_lib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.pdb dist\longtail_!PLATFORM!_debug.pdb
+copy build\artifacts\!PLATFORM!-shared_lib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.lib dist\longtail_!PLATFORM!_debug.lib
+copy build\artifacts\!PLATFORM!-shared_lib-debug\!PLATFORM!\longtail_dylib\debug\longtail_dylib.exp dist\longtail_!PLATFORM!_debug.exp
+copy build\artifacts\!PLATFORM!-shared_lib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.dll dist\longtail_!PLATFORM!.dll
+copy build\artifacts\!PLATFORM!-shared_lib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.pdb dist\longtail_!PLATFORM!.pdb
+copy build\artifacts\!PLATFORM!-shared_lib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.lib dist\longtail_!PLATFORM!.lib
+copy build\artifacts\!PLATFORM!-shared_lib-release\!PLATFORM!\longtail_dylib\release\longtail_dylib.exp dist\longtail_!PLATFORM!.exp
+
+copy build\artifacts\!PLATFORM!-static_lib-debug\!PLATFORM!\longtail_static\debug\liblongtail_static.a dist\liblongtail_!PLATFORM!_debug.a
+copy build\artifacts\!PLATFORM!-static_lib-release\!PLATFORM!\longtail_static\release\liblongtail_static.a dist\liblongtail_!PLATFORM!.a
+
 mkdir dist\include
 mkdir dist\include\src
 mkdir dist\include\lib
@@ -38,26 +45,26 @@ mkdir dist\include\lib\meowhash
 mkdir dist\include\lib\ratelimitedprogress
 mkdir dist\include\lib\shareblockstore
 mkdir dist\include\lib\zstd
-cp src/*.h dist/include/src
-cp lib/archiveblockstore/*.h dist/include/lib/archiveblockstore
-cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
-cp lib/bikeshed/*.h dist/include/lib/bikeshed
-cp lib/blake2/*.h dist/include/lib/blake2
-cp lib/blake3/*.h dist/include/lib/blake3
-cp lib/blockstorestorage/*.h dist/include/lib/blockstorestorage
-cp lib/brotli/*.h dist/include/lib/brotli
-cp lib/cacheblockstore/*.h dist/include/lib/cacheblockstore
-cp lib/compressblockstore/*.h dist/include/lib/compressblockstore
-cp lib/compressionregistry/*.h dist/include/lib/compressionregistry
-cp lib/filestorage/*.h dist/include/lib/filestorage
-cp lib/fsblockstore/*.h dist/include/lib/fsblockstore
-cp lib/hpcdcchunker/*.h dist/include/lib/hpcdcchunker
-cp lib/lrublockstore/*.h dist/include/lib/lrublockstore
-cp lib/hashregistry/*.h dist/include/lib/hashregistry
-cp lib/lz4/*.h dist/include/lib/lz4
-cp lib/memstorage/*.h dist/include/lib/memstorage
-cp lib/memtracer/*.h dist/include/lib/memtracer
-cp lib/meowhash/*.h dist/include/lib/meowhash
-cp lib/shareblockstore/*.h dist/include/lib/shareblockstore
-cp lib/ratelimitedprogress/*.h dist/include/lib/ratelimitedprogress
-cp lib/zstd/*.h dist/include/lib/zstd
+copy src\*.h dist\include\src
+copy lib\archiveblockstore\*.h dist\include\lib\archiveblockstore
+copy lib\atomiccancel\*.h dist\include\lib\atomiccancel
+copy lib\bikeshed\*.h dist\include\lib\bikeshed
+copy lib\blake2\*.h dist\include\lib\blake2
+copy lib\blake3\*.h dist\include\lib\blake3
+copy lib\blockstorestorage\*.h dist\include\lib\blockstorestorage
+copy lib\brotli\*.h dist\include\lib\brotli
+copy lib\cacheblockstore\*.h dist\include\lib\cacheblockstore
+copy lib\compressblockstore\*.h dist\include\lib\compressblockstore
+copy lib\compressionregistry\*.h dist\include\lib\compressionregistry
+copy lib\filestorage\*.h dist\include\lib\filestorage
+copy lib\fsblockstore\*.h dist\include\lib\fsblockstore
+copy lib\hpcdcchunker\*.h dist\include\lib\hpcdcchunker
+copy lib\lrublockstore\*.h dist\include\lib\lrublockstore
+copy lib\hashregistry\*.h dist\include\lib\hashregistry
+copy lib\lz4\*.h dist\include\lib\lz4
+copy lib\memstorage\*.h dist\include\lib\memstorage
+copy lib\memtracer\*.h dist\include\lib\memtracer
+copy lib\meowhash\*.h dist\include\lib\meowhash
+copy lib\shareblockstore\*.h dist\include\lib\shareblockstore
+copy lib\ratelimitedprogress\*.h dist\include\lib\ratelimitedprogress
+copy lib\zstd\*.h dist\include\lib\zstd

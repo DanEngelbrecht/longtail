@@ -1,19 +1,13 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
-SET BUILDFOLDER=%~dp0
-FOR %%a IN ("%BUILDFOLDER:~0,-1%") DO SET BASE_DIR=%%~dpa
+SET SOURCEFOLDER=%~dp0
+FOR %%a IN ("%SOURCEFOLDER:~0,-1%") DO SET BASE_DIR=%%~dpa
 
-If %PROCESSOR_ARCHITECTURE% == AMD64 (
-    set ARCH=x64
-) Else (
-    set ARCH=x86
-)
-set OS=win32
+call !BASE_DIR!arch_helper.bat
 
-set PLATFORM=%OS%_%ARCH%
 set CXXFLAGS=-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread  -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
-set LIB_TARGET_FOLDER=!BASE_DIR!build\static\
+set TARGET=longtail_static
 
 call !BASE_DIR!all_sources.bat
 
@@ -25,36 +19,35 @@ goto build_debug_mode
 
 :build_release_mode
 
-set LIB_FILENAME=longtail_%PLATFORM%
+set RELEASE_MODE=release
 set OPT=-O3
-set OBJDIR=!BASE_DIR!build\static-lib-release
 
 goto build
 
 :build_debug_mode
 
-set LIB_FILENAME=longtail_%PLATFORM%_debug
+set RELEASE_MODE=debug
 set OPT=
-set OBJDIR=!BASE_DIR!build\static-lib-debug
 set CXXFLAGS=!CXXFLAGS! -DLONGTAIL_ASSERTS -DBIKESHED_ASSERTS
 
 goto build
 
 :build
 
-set LIB_TARGET=%LIB_TARGET_FOLDER%lib%LIB_FILENAME%.a
+set OUTPUT_FOLDER=!BASE_DIR!build\!PLATFORM!\!TARGET!\!RELEASE_MODE!
+if NOT EXIST !OUTPUT_FOLDER! (
+    mkdir !OUTPUT_FOLDER!
+)
 
-echo Building %LIB_TARGET%
+set LIB_TARGET=!OUTPUT_FOLDER!\lib!TARGET!.a
+
+echo Building !LIB_TARGET!
 
 if exist !LIB_TARGET! del !LIB_TARGET!
 
-if not exist "!LIB_TARGET_FOLDER!" mkdir "!LIB_TARGET_FOLDER!"
+del /q !OUTPUT_FOLDER!\*.o >nul 2>&1
 
-if exist !OBJDIR! rmdir /Q /S !OBJDIR!
-mkdir !OBJDIR!
-
-pushd !OBJDIR!
-
+pushd !OUTPUT_FOLDER!
 gcc -c !CXXFLAGS! !OPT! !THIRDPARTY_SRC! !SRC!
 if NOT "!THIRDPARTY_SRC_SSE42!" == "" (
     gcc -c !CXXFLAGS! !OPT! -msse4.2 %THIRDPARTY_SRC_SSE42%
@@ -71,11 +64,11 @@ if NOT "%ZSTD_THIRDPARTY_GCC_SRC%" == "" (
 
 popd
 
-set TEST_EXECUTABLEPATH=%BASE_DIR%build\static_lib_test.exe
+set TEST_EXECUTABLEPATH=!OUTPUT_FOLDER!\!TARGET!_test.exe
 
-ar cru -v !LIB_TARGET! !OBJDIR!\*.o
+ar cru -v !LIB_TARGET! !OUTPUT_FOLDER!\*.o
 ls -la ${LIB_TARGET}
 
 echo Validating !LIB_TARGET!
-gcc -o %TEST_EXECUTABLEPATH% !CXXFLAGS! !BUILDFOLDER!test.c -lm -L%LIB_TARGET_FOLDER% -l!LIB_FILENAME! --verbose
-%TEST_EXECUTABLEPATH%
+gcc -o !TEST_EXECUTABLEPATH! !CXXFLAGS! !SOURCEFOLDER!test.c -lm -L!OUTPUT_FOLDER! -l!TARGET! --verbose
+!TEST_EXECUTABLEPATH!

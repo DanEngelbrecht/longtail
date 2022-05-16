@@ -7,24 +7,38 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 jobs:
-  linux:
+  build-linux:
 
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
 
     steps:
     - uses: actions/checkout@v2
-    - name: build cmd
+    - name: build ${{matrix.target}}
       run: |
-        cmd/build.sh
-        cmd/build.sh release
-    - name: build shared_lib
-      run: |
-        shared_lib/build.sh
-        shared_lib/build.sh release
-    - name: build static_lib
-      run: |
-        static_lib/build.sh
-        static_lib/build.sh release
+        ${{matrix.target}}/build.sh ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: linux_x64-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.o
+          !build/**/third-party/**
+
+  dist-linux:
+
+    needs: build-linux
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
@@ -33,24 +47,38 @@ jobs:
         name: dist-linux-x64
         path: dist
 
-  darwin:
+  build-darwin:
 
     runs-on: macos-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
 
     steps:
     - uses: actions/checkout@v2
-    - name: build cmd
+    - name: build ${{matrix.target}}
       run: |
-        cmd/build.sh
-        cmd/build.sh release
-    - name: build shared_lib
-      run: |
-        shared_lib/build.sh
-        shared_lib/build.sh release
-    - name: build static_lib
-      run: |
-        static_lib/build.sh
-        static_lib/build.sh release
+        ${{matrix.target}}/build.sh ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: darwin_x64-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.o
+          !build/**/third-party/**
+
+  dist-darwin:
+
+    needs: build-darwin
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
@@ -59,24 +87,39 @@ jobs:
         name: dist-darwin-x64
         path: dist
 
-  win32:
+  build-win32:
 
     runs-on: windows-latest
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
 
     steps:
     - uses: actions/checkout@v2
-    - name: build cmd
+    - name: build ${{matrix.target}}
       run: |
-        cmd/build.bat
-        cmd/build.bat release
-    - name: build shared_lib
-      run: |
-        shared_lib/build.bat
-        shared_lib/build.bat release
-    - name: build static_lib
-      run: |
-        static_lib/build.bat
-        static_lib/build.bat release
+        ${{matrix.target}}/build.bat ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v3
+      name: upload ${{matrix.target}}
+      with:
+        name: win32_x64-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.obj
+          !build/**/*.o
+          !build/**/third-party/**
+
+  dist-win32:
+
+    needs: build-win32
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/download-artifact@v3
+      with:
+        path: build/artifacts
     - name: build dist
       run: |
         ./dist.bat
@@ -89,7 +132,7 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    needs: [linux, darwin, win32]
+    needs: [dist-linux, dist-darwin, dist-win32]
 
     steps:
     - name: Checkout code
@@ -140,6 +183,7 @@ jobs:
           - **NEW API** `Longtail_CompressionRegistry_CreateForBrotli`, `Longtail_CompressionRegistry_CreateForLZ4`, `Longtail_CompressionRegistry_CreateForZstd`
           - **FIX** Add path in log context in `FSStorageAPI_LockFile`
           - **FIX** Add input parameter validation in `FSStorageAPI_LockFile`, `FSStorageAPI_UnlockFile`, `InMemStorageAPI_LockFile` and `InMemStorageAPI_UnlockFile`
+          - **FIX** Restructured build scripts and GitHub workflows to allow more parallel builds
         draft: false
         prerelease: false
         files: "*-x64.zip"

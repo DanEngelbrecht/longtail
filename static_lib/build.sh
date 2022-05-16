@@ -1,39 +1,32 @@
 #!/bin/bash
 set -e
 
-if [ "$(uname)" == "Darwin" ]; then
-    OS="darwin"
-    COMPILER="clang"
-else
-    OS="linux"
-    COMPILER="gcc"
-fi
+SOURCEFOLDER="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
+BASE_DIR="$(dirname "$SOURCEFOLDER")/"
 
-ARCH=x64
+. ${BASE_DIR}arch_helper.sh
 
-BUILD_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
-BASE_DIR="$(dirname "$BUILD_DIR")/"
-
-PLATFORM="${OS}_${ARCH}"
 CXXFLAGS="-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread"
-LIB_TARGET_FOLDER=${BASE_DIR}build/static/
-
-mkdir -p $LIB_TARGET_FOLDER
+TARGET=longtail_static
 
 . $BASE_DIR/all_sources.sh
 
 if [ "$1" == "release" ]; then
-    LIB_FILENAME="longtail_${PLATFORM}"
+    RELEASE_MODE="release"
     OPT="-O3"
-    OBJDIR="${BASE_DIR}build/static-lib-release/"
 else
-    LIB_FILENAME="longtail_${PLATFORM}_debug"
+    RELEASE_MODE="debug"
     OPT=
-    OBJDIR="${BASE_DIR}build/static-lib-debug/"
     CXXFLAGS="${CXXFLAGS} -DLONGTAIL_ASSERTS -DBIKESHED_ASSERTS"
 fi
 
-LIB_TARGET="${LIB_TARGET_FOLDER}lib${LIB_FILENAME}.a"
+OUTPUT_FOLDER="${BASE_DIR}build/${PLATFORM}/${TARGET}/${RELEASE_MODE}"
+if [ ! -d ${OUTPUT_FOLDER} ]
+then
+    mkdir -p ${OUTPUT_FOLDER}
+fi
+
+LIB_TARGET="${OUTPUT_FOLDER}/lib${TARGET}.a"
 
 echo Building ${LIB_TARGET}
 
@@ -42,17 +35,9 @@ then
     rm ${LIB_TARGET}
 fi
 
-mkdir -p ${LIB_TARGET_FOLDER}
+rm -rf ${OUTPUT_FOLDER}/*.o
 
-if [ -d ${OBJDIR} ]
-then
-    rm -rf ${OBJDIR}
-fi
-
-mkdir -p ${OBJDIR}
-
-pushd ${OBJDIR}
-
+pushd ${OUTPUT_FOLDER}
 ${COMPILER} -c ${CXXFLAGS} ${OPT} ${THIRDPARTY_SRC} ${SRC}
 if [ ! -z ${THIRDPARTY_SRC_SSE42} ]; then
     ${COMPILER} -c ${CXXFLAGS} ${OPT} -msse4.2 ${THIRDPARTY_SRC_SSE42}
@@ -69,11 +54,11 @@ fi
 
 popd
 
-TEST_EXECUTABLEPATH="${BASE_DIR}build/static_lib_test"
+TEST_EXECUTABLEPATH="${OUTPUT_FOLDER}/${TARGET}_test"
 
-ar cru -v ${LIB_TARGET} ${OBJDIR}*.o
+ar cru -v ${LIB_TARGET} ${OUTPUT_FOLDER}/*.o
 ls -la ${LIB_TARGET}
 
 echo Validating ${LIB_TARGET}
-${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BUILD_DIR}test.c -lm -L${LIB_TARGET_FOLDER} -l${LIB_FILENAME} --verbose
+${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${SOURCEFOLDER}test.c -lm -L${OUTPUT_FOLDER} -l${TARGET} --verbose
 ${TEST_EXECUTABLEPATH}
