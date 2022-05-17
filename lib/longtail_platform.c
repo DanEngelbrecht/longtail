@@ -197,6 +197,7 @@ size_t Longtail_GetThreadSize()
 int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t stack_size, void* context_data, int priority, HLongtail_Thread* out_thread)
 {
     struct Longtail_Thread* thread = (struct Longtail_Thread*)mem;
+
     thread->m_ThreadFunc = thread_func;
     thread->m_ContextData = context_data;
     thread->m_Handle = CreateThread(
@@ -206,7 +207,7 @@ int Longtail_CreateThread(void* mem, Longtail_ThreadFunc thread_func, size_t sta
         thread,
         0,
         0);
-    if (thread->m_Handle == INVALID_HANDLE_VALUE)
+    if (thread->m_Handle == NULL)
     {
         return Win32ErrorToErrno(GetLastError());
     }
@@ -1140,7 +1141,7 @@ int Longtail_MapFile(HLongtail_OpenFile handle, uint64_t offset, uint64_t length
         0,
         0);
 
-    if (m == INVALID_HANDLE_VALUE)
+    if (m == NULL)
     {
         DWORD error = GetLastError();
         return Win32ErrorToErrno(error);
