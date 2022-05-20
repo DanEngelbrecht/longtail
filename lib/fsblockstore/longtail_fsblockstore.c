@@ -1384,7 +1384,7 @@ static int FSBlockStore_Init(
     struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
-    const char* optional_extension,
+    const char* block_extension,
     uint64_t unique_id,
     int enable_file_mapping,
     struct Longtail_BlockStoreAPI** out_block_store_api)
@@ -1394,7 +1394,7 @@ static int FSBlockStore_Init(
         LONGTAIL_LOGFIELD(job_api, "%p"),
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(content_path, "%s"),
-        LONGTAIL_LOGFIELD(optional_extension, "%p"),
+        LONGTAIL_LOGFIELD(block_extension, "%p"),
         LONGTAIL_LOGFIELD(unique_id, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_block_store_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
@@ -1402,6 +1402,7 @@ static int FSBlockStore_Init(
     LONGTAIL_FATAL_ASSERT(ctx, mem, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, storage_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, content_path, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(ctx, block_extension, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, out_block_store_api, return EINVAL)
 
     struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
@@ -1427,7 +1428,8 @@ static int FSBlockStore_Init(
     api->m_StoreIndex = 0;
     api->m_BlockState = 0;
     api->m_AddedBlockIndexes = 0;
-    api->m_BlockExtension = optional_extension ? optional_extension : ".lrb";
+    api->m_BlockExtension = (char*)&api[1];
+    strcpy((char*)api->m_BlockExtension, block_extension);
     api->m_StoreIndexLockPath = storage_api->ConcatPath(storage_api, content_path, "store.lsi.sync");
 
     GetUniqueExtension(unique_id, api->m_TmpExtension);
@@ -1438,6 +1440,7 @@ static int FSBlockStore_Init(
     {
         api->m_StatU64[s] = 0;
     }
+
 
     int err = Longtail_CreateSpinLock(Longtail_Alloc("FSBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
@@ -1470,7 +1473,9 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     LONGTAIL_VALIDATE_INPUT(ctx, content_path != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, optional_extension == 0 || strlen(optional_extension) < 15, return 0)
     size_t api_size = sizeof(struct FSBlockStoreAPI);
-    void* mem = Longtail_Alloc("FSBlockStoreAPI", api_size);
+    const char* block_extension = optional_extension ? optional_extension : ".lrb";
+    size_t block_extension_length = strlen(block_extension);
+    void* mem = Longtail_Alloc("FSBlockStoreAPI", api_size + block_extension_length + 1);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1486,7 +1491,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
         job_api,
         storage_api,
         content_path,
-        optional_extension,
+        block_extension,
         unique_id,
         enable_file_mapping,
         &block_store_api);
