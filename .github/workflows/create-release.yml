@@ -176,7 +176,7 @@ jobs:
         release_name: Release ${{ env.RELEASE_VERSION }}
         body: |
           # Changes in this Release
-          - **FIX** Correctly check return values of CreateThread and CreateFileMapping in Win32
+          - **FIX** Copy block extension string in FSBlockStore_Init
         draft: false
         prerelease: false
         files: "*-x64.zip"
