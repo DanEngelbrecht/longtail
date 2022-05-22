@@ -60,16 +60,16 @@ else
     export CXXFLAGS="$BASE_CXXFLAGS $CXXFLAGS_DEBUG"
 fi
 
-if [ ! -f "${THIRD_PARTY_OUTPUT_FOLDER}/lib${THIRD_PARTY_LIB}" ]; then
-    BUILD_THIRD_PARTY="build-third-party"
-fi
-
 if [ $TARGET_TYPE == "SHAREDLIB" ] || [ $TARGET_TYPE == "STATICLIB" ]; then
     # Keep third-party lib separate from other builds
     # Disable ASAN since it would force user of .so to enable ASAN
     export THIRD_PARTY_LIB="lib${THIRD_PARTY_LIB}"
     export ASAN=""
     export OPT="$OPT -fPIC -fvisibility=hidden"
+fi
+
+if [ ! -f "${THIRD_PARTY_OUTPUT_FOLDER}/${THIRD_PARTY_LIB}" ]; then
+    BUILD_THIRD_PARTY="build-third-party"
 fi
 
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
