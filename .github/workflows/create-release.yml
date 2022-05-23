@@ -179,6 +179,12 @@ jobs:
         if_true: "true"
         if_false: "false"
 
+    - name: Read CHANGELOG
+      id: read_changelog
+      uses: andstor/file-reader-action@v1
+      with:
+        path: "CHANGELOG"
+
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -186,10 +192,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
       with:
         tag_name: ${{github.ref.name}}
-        release_name: Release ${{github.ref.name}}
+        name: Release ${{github.ref.name}}
         body: |
           # Changes in this Release
-          - **FIX** Copy block extension string in FSBlockStore_Init
+          ${{steps.read_changelog.outputs.contents}}
         draft: false
         prerelease: ${{steps.get-prerelease.outputs.value}}
         files: "*-x64.zip"
