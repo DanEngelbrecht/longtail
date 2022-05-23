@@ -137,46 +137,59 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@master
-    - name: Set RELEASE_VERSION env
-      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-linux-x64
         path: dist-linux-x64
+
     - name: Download Win32 artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-win32-x64
         path: dist-win32-x64
+
     - name: Download darwin artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-darwin-x64
         path: dist-darwin-x64
+
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./linux-x64.zip ./dist-linux-x64
+
     - name: Zip Win32 artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
+
     - name: Zip darwin artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
+
+    - name: Check prerelease
+      id: get-prerelease
+      uses: haya14busa/action-cond@v1
+      with:
+        cond: ${{contains(github.ref, '-pre')}}
+        if_true: "true"
+        if_false: "false"
+
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
       with:
-        tag_name: ${{ env.RELEASE_VERSION }}
-        release_name: Release ${{ env.RELEASE_VERSION }}
+        tag_name: ${{github.ref.name}}
+        release_name: Release ${{github.ref.name}}
         body: |
           # Changes in this Release
           - **FIX** Copy block extension string in FSBlockStore_Init
         draft: false
-        prerelease: false
+        prerelease: ${{steps.get-prerelease.outputs.value}}
         files: "*-x64.zip"
