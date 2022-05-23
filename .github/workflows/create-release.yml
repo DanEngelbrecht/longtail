@@ -185,6 +185,12 @@ jobs:
       with:
         path: "CHANGELOG"
 
+    - uses: jungwinter/split@v2
+      id: split
+      with:
+        separator: "--------------------------------------------------------------------------------"
+        msg:  ${{steps.read_changelog.outputs.contents}}
+
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -192,10 +198,9 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
       with:
         tag_name: ${{github.ref.name}}
-        name: Release ${{github.ref.name}}
         body: |
           # Changes in this Release
-          ${{steps.read_changelog.outputs.contents}}
+          ${{steps.split.outputs._0}}
         draft: false
         prerelease: ${{steps.get-prerelease.outputs.value}}
         files: "*-x64.zip"
