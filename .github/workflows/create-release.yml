@@ -179,11 +179,15 @@ jobs:
         if_true: "true"
         if_false: "false"
 
-    - name: Read CHANGELOG
+    - name: Extract Version Changes
+      run: |
+        sed '1,/^##/!d;/##/d' CHANGELOG.md > CHANGELOG.tmp
+
+    - name: Read CHANGELOG.tmp
       id: read_changelog
       uses: andstor/file-reader-action@v1
       with:
-        path: "CHANGELOG.md"
+        path: "CHANGELOG.tmp"
 
     - name: Create Release
       id: create_release
