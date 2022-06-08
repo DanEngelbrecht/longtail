@@ -66,6 +66,7 @@ struct PathEntry
 {
     char* m_FileName;
     uint32_t m_ParentHash;
+    uint64_t m_ModificationDate;
     uint8_t* m_Content;
     uint16_t m_Permissions;
     uint8_t m_IsOpenWrite;
@@ -336,6 +337,7 @@ static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api
     }
     arrsetcap(path_entry->m_Content, initial_size == 0 ? 16 : (uint32_t)initial_size);
     arrsetlen(path_entry->m_Content, (uint32_t)initial_size);
+    path_entry->m_ModificationDate = Longtail_GetCurrentTime();
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     *out_open_file = (Longtail_StorageAPI_HOpenFile)(uintptr_t)path_hash;
     return 0;
@@ -407,6 +409,7 @@ static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Long
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     arrsetlen(path_entry->m_Content, (uint32_t)length);
+    path_entry->m_ModificationDate = Longtail_GetCurrentTime();
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     return 0;
 }
@@ -501,6 +504,7 @@ static void InMemStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, L
     {
         LONGTAIL_FATAL_ASSERT(ctx, path_entry->m_IsOpenRead == 0, return);
         LONGTAIL_FATAL_ASSERT(ctx, path_entry->m_IsOpenWrite == 1, return);
+        path_entry->m_ModificationDate = Longtail_GetCurrentTime();
         path_entry->m_IsOpenWrite = 0;
     }
 
@@ -584,6 +588,7 @@ static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, co
     path_entry->m_Permissions = 0775;
     path_entry->m_IsOpenRead = 0;
     path_entry->m_IsOpenWrite = 0;
+    path_entry->m_ModificationDate = Longtail_GetCurrentTime();
     hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     return 0;
@@ -1026,6 +1031,7 @@ static int InMemStorageAPI_LockFile(struct Longtail_StorageAPI* storage_api, con
     path_entry->m_Permissions = 0644;
     path_entry->m_IsOpenRead = 0;
     path_entry->m_IsOpenWrite = 2;
+    path_entry->m_ModificationDate = Longtail_GetCurrentTime();
     hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
 
     arrsetcap(path_entry->m_Content, 16);

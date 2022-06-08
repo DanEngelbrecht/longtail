@@ -633,6 +633,8 @@ TEST(Longtail, Longtail_VersionIndex)
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const uint64_t asset_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
+    uint64_t now_ns = Longtail_GetCurrentTime();
+    const uint64_t modification_times[5] = {now_ns - 1000000L, now_ns - 2000000L, now_ns - 3000000L, now_ns - 4000000L, now_ns - 5000000L};
     const uint16_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
     const uint32_t chunk_sizes[5] = {64003u, 64003u, 64002u, 64001u, 64001u};
     const uint32_t asset_chunk_counts[5] = {1, 1, 1, 1, 1};
@@ -640,7 +642,7 @@ TEST(Longtail, Longtail_VersionIndex)
     const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
+    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, modification_times, asset_permissions, &file_infos));
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(0, version_index_size);
 
@@ -2417,6 +2419,8 @@ TEST(Longtail, Longtail_CreateMissingContent)
     const TLongtail_Hash asset_content_hashes[5] = { 5, 4, 3, 2, 1};
     const TLongtail_Hash asset_path_hashes[5] = {50, 40, 30, 20, 10};
     const uint64_t asset_sizes[5] = {43593, 43593, 43592, 43591, 43591};
+    uint64_t now_ns = Longtail_GetCurrentTime();
+    const uint64_t modification_times[5] = {now_ns - 1000000L, now_ns - 2000000L, now_ns - 3000000L, now_ns - 4000000L, now_ns - 5000000L};
     const uint32_t chunk_sizes[5] = {43593, 43593, 43592, 43591, 43591};
     const uint16_t asset_permissions[5] = {0644, 0644, 0644, 0644, 0644};
 //    const uint32_t asset_name_offsets[5] = { 7 * 0, 7 * 1, 7 * 2, 7 * 3, 7 * 4};
@@ -2447,7 +2451,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     };
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
+    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, modification_times, asset_permissions, &file_infos));
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(0, version_index_size);
 
@@ -7685,4 +7689,28 @@ TEST(Longtail, Longtail_BlockStoreMemMappedFS)
     Longtail_Free((void*)source_folder);
     Longtail_Free((void*)target_folder);
     Longtail_Free((void*)store_folder);
+}
+TEST(Longtail, GetCurrentTime)
+{
+    uint64_t time1 = Longtail_GetCurrentTime();
+    Longtail_Sleep(1000*100);
+    uint64_t time2 = Longtail_GetCurrentTime();
+    ASSERT_GT(time2, time1);
+}
+
+TEST(Longtail, GetModificationTime)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+    const char* root_path = "testdata/sample_folder";
+
+    Longtail_FileInfos* file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path, &file_infos));
+    ASSERT_EQ(20u, file_infos->m_Count);
+    for (uint32_t f = 0; f < file_infos->m_Count; ++f)
+    {
+        uint64_t modification_date = file_infos->m_ModificationTimes[f];
+    }
+
+    Longtail_Free(file_infos);
+    SAFE_DISPOSE_API(storage_api);
 }
