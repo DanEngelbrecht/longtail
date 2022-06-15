@@ -5669,8 +5669,41 @@ static int WriteAssets(
         return ENOMEM;
     }
 
+    uint32_t job_count = asset_job_count;
+    {
+        uint32_t j = 0;
+        uint32_t block_job_count = 0;
+        while (j < awl->m_BlockJobCount)
+        {
+            uint32_t asset_index = awl->m_BlockJobAssetIndexes[j];
+            TLongtail_Hash first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[asset_index]]];
+            const uint32_t* block_index_ptr = LongtailPrivate_LookupTable_Get(chunk_hash_to_block_index, first_chunk_hash);
+            LONGTAIL_FATAL_ASSERT(ctx, block_index_ptr, return EINVAL)
+            uint32_t block_index = *block_index_ptr;
+
+            job_count++;
+
+            ++j;
+            while (j < awl->m_BlockJobCount)
+            {
+                uint32_t next_asset_index = awl->m_BlockJobAssetIndexes[j];
+                TLongtail_Hash next_first_chunk_hash = version_index->m_ChunkHashes[version_index->m_AssetChunkIndexes[version_index->m_AssetChunkIndexStarts[next_asset_index]]];
+                uint32_t* next_block_index = LongtailPrivate_LookupTable_Get(chunk_hash_to_block_index, next_first_chunk_hash);
+                LONGTAIL_FATAL_ASSERT(ctx, next_block_index != 0, return EINVAL)
+                if (block_index != *next_block_index)
+                {
+                    break;
+                }
+
+                ++j;
+            }
+
+            job_count++;
+        }
+    }
+
     Longtail_JobAPI_Group job_group = 0;
-    err = job_api->ReserveJobs(job_api, (awl->m_BlockJobCount * 2u) + asset_job_count, &job_group);
+    err = job_api->ReserveJobs(job_api, job_count, &job_group);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
