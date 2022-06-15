@@ -874,7 +874,7 @@ static int FSBlockStore_PreflightGet(
         return err;
     }
 
-    struct Longtail_LookupTable* requested_block_lookup = Longtail_LookupTable_Create(Longtail_Alloc("FSBlockStore", Longtail_LookupTable_GetSize(block_count)), block_count, 0);
+    struct Longtail_LookupTable* requested_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("FSBlockStore", LongtailPrivate_LookupTable_GetSize(block_count)), block_count, 0);
     if (!requested_block_lookup)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -895,13 +895,13 @@ static int FSBlockStore_PreflightGet(
     for (uint32_t b = 0; b < block_count; ++b)
     {
         TLongtail_Hash block_hash = block_hashes[b];
-        Longtail_LookupTable_PutUnique(requested_block_lookup, block_hash, b);
+        LongtailPrivate_LookupTable_PutUnique(requested_block_lookup, block_hash, b);
     }
 
     for (uint32_t b = 0; b < *store_index->m_BlockCount; ++b)
     {
         TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
-        if (Longtail_LookupTable_Get(requested_block_lookup, block_hash))
+        if (LongtailPrivate_LookupTable_Get(requested_block_lookup, block_hash))
         {
             found_block_hashes[found_block_count++] = block_hash;
         }
@@ -1213,7 +1213,7 @@ static int FSBlockStore_PruneBlocks(
     uint32_t pruned_count = *store_index->m_BlockCount - block_count;
     if (pruned_count > 0)
     {
-        size_t kept_block_lookup_size = Longtail_LookupTable_GetSize(block_count);
+        size_t kept_block_lookup_size = LongtailPrivate_LookupTable_GetSize(block_count);
         void* kept_block_lookup_mem = Longtail_Alloc("FSBlockStore_PruneBlocks", kept_block_lookup_size);
         if (kept_block_lookup_mem == 0)
         {
@@ -1224,17 +1224,17 @@ static int FSBlockStore_PruneBlocks(
             Longtail_UnlockSpinLock(api->m_Lock);
             return err;
         }
-        struct Longtail_LookupTable* kept_block_lookup = Longtail_LookupTable_Create(kept_block_lookup_mem, block_count, 0);
+        struct Longtail_LookupTable* kept_block_lookup = LongtailPrivate_LookupTable_Create(kept_block_lookup_mem, block_count, 0);
         for (uint32_t b = 0; b < block_count; ++b)
         {
             TLongtail_Hash block_hash = pruned_store_index->m_BlockHashes[b];
-            Longtail_LookupTable_PutUnique(kept_block_lookup, block_hash, b);
+            LongtailPrivate_LookupTable_PutUnique(kept_block_lookup, block_hash, b);
         }
 
         for (uint32_t b = 0; b < old_block_count; ++b)
         {
             TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
-            if (Longtail_LookupTable_Get(kept_block_lookup, block_hash))
+            if (LongtailPrivate_LookupTable_Get(kept_block_lookup, block_hash))
             {
                 continue;
             }

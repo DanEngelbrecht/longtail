@@ -65,7 +65,7 @@ static struct MemTracer_Context* gMemTracer_Context = 0;
 
 
 void Longtail_MemTracer_Init() {
-    size_t lookupSize = Longtail_LookupTable_GetSize(MEMTRACER_MAXCONTEXTCOUNT);
+    size_t lookupSize = LongtailPrivate_LookupTable_GetSize(MEMTRACER_MAXCONTEXTCOUNT);
     size_t context_size = sizeof(struct MemTracer_Context) + lookupSize + Longtail_GetSpinLockSize();
     void* mem = malloc(context_size);
     if (mem == 0)
@@ -74,7 +74,7 @@ void Longtail_MemTracer_Init() {
     }
     memset(mem, 0, context_size);
     gMemTracer_Context = (struct MemTracer_Context*)mem;
-    gMemTracer_Context->m_ContextLookup = Longtail_LookupTable_Create(&gMemTracer_Context[1], MEMTRACER_MAXCONTEXTCOUNT, 0);
+    gMemTracer_Context->m_ContextLookup = LongtailPrivate_LookupTable_Create(&gMemTracer_Context[1], MEMTRACER_MAXCONTEXTCOUNT, 0);
     Longtail_CreateSpinLock(&((char*)gMemTracer_Context->m_ContextLookup)[lookupSize], &gMemTracer_Context->m_Spinlock);
 }
 
@@ -257,7 +257,7 @@ void* Longtail_MemTracer_Alloc(const char* context, size_t s)
 
     struct MemTracer_ContextStats* contextStats = 0;
     Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
-    uint32_t* context_index_ptr = Longtail_LookupTable_PutUnique(gMemTracer_Context->m_ContextLookup, context_id, gMemTracer_Context->m_ContextCount);
+    uint32_t* context_index_ptr = LongtailPrivate_LookupTable_PutUnique(gMemTracer_Context->m_ContextLookup, context_id, gMemTracer_Context->m_ContextCount);
     if (context_index_ptr == 0) {
         LONGTAIL_FATAL_ASSERT(ctx, gMemTracer_Context->m_ContextCount < MEMTRACER_MAXCONTEXTCOUNT, return 0)
         contextStats = &gMemTracer_Context->m_ContextStats[gMemTracer_Context->m_ContextCount];
@@ -336,7 +336,7 @@ void Longtail_MemTracer_Free(void* p)
     LONGTAIL_VALIDATE_INPUT(ctx, s != (uint32_t)-1, return)
     memset(header_ptr, 255, sizeof(struct MemTracer_Header));
     Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
-    uint32_t* context_index_ptr = Longtail_LookupTable_Get(gMemTracer_Context->m_ContextLookup, context_id);
+    uint32_t* context_index_ptr = LongtailPrivate_LookupTable_Get(gMemTracer_Context->m_ContextLookup, context_id);
     struct MemTracer_ContextStats* contextStats = &gMemTracer_Context->m_ContextStats[*context_index_ptr];
     gMemTracer_Context->m_AllocationCurrentMem -= s;
     gMemTracer_Context->m_AllocationCurrentCount--;

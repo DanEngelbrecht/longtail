@@ -56,10 +56,10 @@ static int ArchiveBlockStore_PutStoredBlock(
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
-    uint32_t* block_index_ptr = Longtail_LookupTable_Get(api->m_BlockIndexLookup, *stored_block->m_BlockIndex->m_BlockHash);
+    uint32_t* block_index_ptr = LongtailPrivate_LookupTable_Get(api->m_BlockIndexLookup, *stored_block->m_BlockIndex->m_BlockHash);
     if (!block_index_ptr)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_LookupTable_Get() failed with %d", ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Get() failed with %d", ENOENT)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         return ENOENT;
     }
@@ -170,10 +170,10 @@ static int ArchiveBlockStore_GetStoredBlock(
 
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
-    uint32_t* block_index_ptr = Longtail_LookupTable_Get(api->m_BlockIndexLookup, block_hash);
+    uint32_t* block_index_ptr = LongtailPrivate_LookupTable_Get(api->m_BlockIndexLookup, block_hash);
     if (!block_index_ptr)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_LookupTable_Get() failed with %d", ENOENT)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Get() failed with %d", ENOENT)
         return ENOENT;
     }
     int block_index = *block_index_ptr;
@@ -183,7 +183,7 @@ static int ArchiveBlockStore_GetStoredBlock(
 
 #if LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
     Longtail_LockSpinLock(api->m_Lock);
-    uint32_t* count_ptr = Longtail_LookupTable_PutUnique(api->m_BlockAccessLookup, block_hash, 1);
+    uint32_t* count_ptr = LongtailPrivate_LookupTable_PutUnique(api->m_BlockAccessLookup, block_hash, 1);
     if (count_ptr)
     {
         (*count_ptr)++;
@@ -401,7 +401,7 @@ static void ArchiveBlockStore_Dispose(struct Longtail_API* block_store_api)
     for (uint32_t b = 0; b < *api->m_ArchiveIndex->m_StoreIndex.m_BlockCount; ++b)
     {
         TLongtail_Hash block_hash = api->m_ArchiveIndex->m_StoreIndex.m_BlockHashes[b];
-        const uint32_t* count_ptr = Longtail_LookupTable_Get(api->m_BlockAccessLookup, block_hash);
+        const uint32_t* count_ptr = LongtailPrivate_LookupTable_Get(api->m_BlockAccessLookup, block_hash);
         if (count_ptr)
         {
             total_count += *count_ptr;
@@ -479,10 +479,10 @@ static int ArchiveBlockStore_Init(
     api->m_BlockBytesSize = 0;
     api->m_BlockBytes = 0;
     char* p = (char*)&api[1];
-    api->m_BlockIndexLookup = Longtail_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
+    api->m_BlockIndexLookup = LongtailPrivate_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
 #if LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
-    p += Longtail_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
-    api->m_BlockAccessLookup = Longtail_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
+    p += LongtailPrivate_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
+    api->m_BlockAccessLookup = LongtailPrivate_LookupTable_Create(p, *archive_index->m_StoreIndex.m_BlockCount, 0);
 #endif // LONGTAIL_ARCHIVE_MEASURE_BLOCK_ACCESS
 
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
@@ -492,7 +492,7 @@ static int ArchiveBlockStore_Init(
 
     for (uint32_t b = 0; b < *archive_index->m_StoreIndex.m_BlockCount; ++b)
     {
-        Longtail_LookupTable_Put(api->m_BlockIndexLookup, archive_index->m_StoreIndex.m_BlockHashes[b], b);
+        LongtailPrivate_LookupTable_Put(api->m_BlockIndexLookup, archive_index->m_StoreIndex.m_BlockHashes[b], b);
     }
 
     if (enable_write)
@@ -578,8 +578,8 @@ struct Longtail_BlockStoreAPI* Longtail_CreateArchiveBlockStore(
 
     size_t api_size = sizeof(struct ArchiveBlockStoreAPI);
 
-    api_size += Longtail_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
-    api_size += Longtail_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
+    api_size += LongtailPrivate_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
+    api_size += LongtailPrivate_LookupTable_GetSize(*archive_index->m_StoreIndex.m_BlockCount);
 
     void* mem = Longtail_Alloc("ArchiveBlockStoreAPI", api_size);
     if (!mem)
