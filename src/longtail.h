@@ -937,7 +937,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
  * @param[in] path_data_size          The size of the path data
  * @return                            The size in number of bytes of the version index
  */
-size_t Longtail_GetVersionIndexSize(
+LONGTAIL_EXPORT size_t Longtail_GetVersionIndexSize(
     uint32_t asset_count,
     uint32_t chunk_count,
     uint32_t asset_chunk_index_count,
@@ -962,7 +962,7 @@ size_t Longtail_GetVersionIndexSize(
  * @param[in] target_chunk_size        The target chunk size used when chunking the assets
  * @param[in] out_version_index        Pointer to a struct Longtail_VersionIndex* pointer which will be set on success
  */
-int Longtail_BuildVersionIndex(
+LONGTAIL_EXPORT int Longtail_BuildVersionIndex(
     void* mem,
     size_t mem_size,
     const struct Longtail_FileInfos* file_infos,
