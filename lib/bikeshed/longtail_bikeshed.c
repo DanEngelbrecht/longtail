@@ -364,6 +364,8 @@ static int Bikeshed_CreateJobs(
         ctxs[i] = job_wrapper;
     }
 
+    Longtail_AtomicAdd32(&bikeshed_job_group->m_PendingJobCount, (int)job_count);
+
     while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, funcs, ctxs, task_ids))
     {
         if (bikeshed_job_group->m_Cancelled == 0)
@@ -382,8 +384,6 @@ static int Bikeshed_CreateJobs(
         }
         Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
     }
-
-    Longtail_AtomicAdd32(&bikeshed_job_group->m_PendingJobCount, (int)job_count);
 
     *out_jobs = task_ids;
     err = 0;

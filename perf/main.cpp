@@ -42,7 +42,7 @@ static uint64_t Longtail_LookupTable_Size(struct Longtail_LookupTable* lut)
     return lut->m_Count;
 }
 
-static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
+static int LongtailPrivate_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint64_t value)
 {
     if (lut->m_NextFreeIndex == lut->m_Capacity)
     {
@@ -76,7 +76,7 @@ static int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t k
     return 0;
 }
 
-static uint64_t Longtail_LookupTable_Get(struct Longtail_LookupTable* lut, uint64_t key)
+static uint64_t LongtailPrivate_LookupTable_Get(struct Longtail_LookupTable* lut, uint64_t key)
 {
     uint64_t bucket_index = key & (lut->m_BucketCount - 1);
     uint64_t index = lut->m_Buckets[bucket_index];
@@ -91,7 +91,7 @@ static uint64_t Longtail_LookupTable_Get(struct Longtail_LookupTable* lut, uint6
     return 0xfffffffffffffffful;
 }
 
-static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity, struct Longtail_LookupTable* optional_source_entries)
+static struct Longtail_LookupTable* LongtailPrivate_LookupTable_Create(size_t capacity, struct Longtail_LookupTable* optional_source_entries)
 {
     size_t table_size = 1;
     while (table_size < (capacity / 2))
@@ -130,7 +130,7 @@ static struct Longtail_LookupTable* Longtail_LookupTable_Create(size_t capacity,
                 {
                     uint64_t key = optional_source_entries->m_Keys[index];
                     uint64_t value = optional_source_entries->m_Values[index];
-                    Longtail_LookupTable_Put(lut, key, value);
+                    LongtailPrivate_LookupTable_Put(lut, key, value);
                     index = optional_source_entries->m_NextIndex[index];
                 }
             }
@@ -252,17 +252,17 @@ uint64_t TestCreateBlockHashTableSpeed(struct Longtail_ContentIndex* content_ind
     uint32_t block_count = (uint32_t)*content_index->m_BlockCount;
     uint32_t chunk_count = (uint32_t)*content_index->m_ChunkCount;
 
-    *block_hash_table = Longtail_LookupTable_Create(block_count, 0);
-    *chunk_hash_table = Longtail_LookupTable_Create(chunk_count, 0);
+    *block_hash_table = LongtailPrivate_LookupTable_Create(block_count, 0);
+    *chunk_hash_table = LongtailPrivate_LookupTable_Create(chunk_count, 0);
 
     for (uint64_t b = 0; b < block_count; ++b)
     {
-        Longtail_LookupTable_Put(*block_hash_table, content_index->m_BlockHashes[b], b);
+        LongtailPrivate_LookupTable_Put(*block_hash_table, content_index->m_BlockHashes[b], b);
     }
 
     for (uint64_t c = 0; c < chunk_count; ++c)
     {
-        Longtail_LookupTable_Put(*chunk_hash_table, content_index->m_ChunkHashes[c], c);
+        LongtailPrivate_LookupTable_Put(*chunk_hash_table, content_index->m_ChunkHashes[c], c);
     }
     return stm_now() - start;
 }
@@ -279,7 +279,7 @@ uint64_t TestLookupBlockHashTableSpeed(
 
     for (uint64_t b = 0; b < block_count; ++b)
     {
-        uint64_t index = Longtail_LookupTable_Get(block_lookup_table, content_index->m_BlockHashes[b]);
+        uint64_t index = LongtailPrivate_LookupTable_Get(block_lookup_table, content_index->m_BlockHashes[b]);
         if (index == 0xfffffffffffffffful)
         {
             return (uint64_t)-1;
@@ -292,7 +292,7 @@ uint64_t TestLookupBlockHashTableSpeed(
 
     for (uint64_t c = 0; c < chunk_count; ++c)
     {
-        uint64_t index = Longtail_LookupTable_Get(chunk_lookup_table, content_index->m_ChunkHashes[c]);
+        uint64_t index = LongtailPrivate_LookupTable_Get(chunk_lookup_table, content_index->m_ChunkHashes[c]);
         if (index == 0xfffffffffffffffful)
         {
             return (uint64_t)-1;

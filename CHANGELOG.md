@@ -1,4 +1,9 @@
 ##
+- **FIX** Promoted `Longtail_GetVersionIndexSize` and `Longtail_BuildVersionIndex` to public API
+- **FIX** Renamed private/test function with LongtailPrivate prefix
+- **FIX** Removed `Longtail_FileInfos_GetPaths` and `struct Longtail_Paths`
+- **FIX** Properly calculate number of jobs for WriteAssets (fixes weird progress behaviour on ChangeVersion/WriteVersion)
+- **FIX** Increase PendingJobCount in bikeshed before successful create so we don't fall out of job loop while waiting for space
 - **FIX** Auto detect of pre-release flag from tag name
 - **CHANGE** Release notes are read from CHANGELOG in root
 

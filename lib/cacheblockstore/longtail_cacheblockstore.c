@@ -313,7 +313,7 @@ static void PreflightGet_PreflightStartedAPI_OnComplete(struct Longtail_AsyncPre
         return;
     }
 
-    struct Longtail_LookupTable* local_store_block_lookup = Longtail_LookupTable_Create(Longtail_Alloc("CacheBlockStore", Longtail_LookupTable_GetSize(get_existing_content_context->m_BlockCount)), get_existing_content_context->m_BlockCount, 0);
+    struct Longtail_LookupTable* local_store_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("CacheBlockStore", LongtailPrivate_LookupTable_GetSize(get_existing_content_context->m_BlockCount)), get_existing_content_context->m_BlockCount, 0);
     if (!local_store_block_lookup)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -335,14 +335,14 @@ static void PreflightGet_PreflightStartedAPI_OnComplete(struct Longtail_AsyncPre
     for (uint32_t b = 0; b < block_count; ++b)
     {
         TLongtail_Hash block_hash = block_hashes[b];
-        Longtail_LookupTable_PutUnique(local_store_block_lookup, block_hash, b);
+        LongtailPrivate_LookupTable_PutUnique(local_store_block_lookup, block_hash, b);
     }
 
     uint32_t missing_block_count = 0;
     for (uint32_t b = 0; b < get_existing_content_context->m_BlockCount; ++b)
     {
         TLongtail_Hash block_hash = get_existing_content_context->m_BlockHashes[b];
-        if (Longtail_LookupTable_PutUnique(local_store_block_lookup, block_hash, b))
+        if (LongtailPrivate_LookupTable_PutUnique(local_store_block_lookup, block_hash, b))
         {
             continue;
         }

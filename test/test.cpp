@@ -640,7 +640,7 @@ TEST(Longtail, Longtail_VersionIndex)
     const uint32_t asset_tags[5] = {0, 0, 0, 0, 0};
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
+    ASSERT_EQ(0, LongtailPrivate_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(0, version_index_size);
 
@@ -2447,7 +2447,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
     };
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
+    ASSERT_EQ(0, LongtailPrivate_MakeFileInfos(5, asset_paths, asset_sizes, asset_permissions, &file_infos));
     size_t version_index_size = Longtail_GetVersionIndexSize(5, 5, 5, file_infos->m_PathDataSize);
     void* version_index_mem = Longtail_Alloc(0, version_index_size);
 
@@ -5877,30 +5877,30 @@ TEST(Longtail, TestLongtailBlockFS)
     ASSERT_NE((Longtail_FileInfos*)0, block_store_storage_paths);
     ASSERT_EQ(version_paths->m_Count, block_store_storage_paths->m_Count);
 
-    struct Longtail_LookupTable* version_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(0, Longtail_LookupTable_GetSize(version_paths->m_Count)), version_paths->m_Count, 0);
+    struct Longtail_LookupTable* version_paths_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc(0, LongtailPrivate_LookupTable_GetSize(version_paths->m_Count)), version_paths->m_Count, 0);
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)
     {
         uint64_t hash;
         const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
-        Longtail_GetPathHash(hash_api, path, &hash);
-        Longtail_LookupTable_Put(version_paths_lookup, hash, f);
+        LongtailPrivate_GetPathHash(hash_api, path, &hash);
+        LongtailPrivate_LookupTable_Put(version_paths_lookup, hash, f);
     }
-    struct Longtail_LookupTable* block_store_storage_paths_lookup = Longtail_LookupTable_Create(Longtail_Alloc(0, Longtail_LookupTable_GetSize(block_store_storage_paths->m_Count)), block_store_storage_paths->m_Count, 0);
+    struct Longtail_LookupTable* block_store_storage_paths_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc(0, LongtailPrivate_LookupTable_GetSize(block_store_storage_paths->m_Count)), block_store_storage_paths->m_Count, 0);
     for (uint32_t f = 0; f <  block_store_storage_paths->m_Count; ++f)
     {
         uint64_t hash;
         const char* path = &block_store_storage_paths->m_PathData[block_store_storage_paths->m_PathStartOffsets[f]];
-        Longtail_GetPathHash(hash_api, path, &hash);
-        Longtail_LookupTable_Put(block_store_storage_paths_lookup, hash, f);
-        ASSERT_NE((uint32_t*)0, Longtail_LookupTable_Get(version_paths_lookup, hash));
+        LongtailPrivate_GetPathHash(hash_api, path, &hash);
+        LongtailPrivate_LookupTable_Put(block_store_storage_paths_lookup, hash, f);
+        ASSERT_NE((uint32_t*)0, LongtailPrivate_LookupTable_Get(version_paths_lookup, hash));
     }
 
     for (uint32_t f = 0; f < version_paths->m_Count; ++f)
     {
         uint64_t hash;
         const char* path = &version_paths->m_PathData[version_paths->m_PathStartOffsets[f]];
-        Longtail_GetPathHash(hash_api, path, &hash);
-        uint64_t i = *Longtail_LookupTable_Get(block_store_storage_paths_lookup, hash);
+        LongtailPrivate_GetPathHash(hash_api, path, &hash);
+        uint64_t i = *LongtailPrivate_LookupTable_Get(block_store_storage_paths_lookup, hash);
         ASSERT_EQ(version_paths->m_Sizes[f], block_store_storage_paths->m_Sizes[i]);
         ASSERT_EQ(version_paths->m_Permissions[f], block_store_storage_paths->m_Permissions[i]);
         ASSERT_STREQ(path, &block_store_storage_paths->m_PathData[block_store_storage_paths->m_PathStartOffsets[i]]);
@@ -6530,7 +6530,7 @@ static int CaptureBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_s
         Longtail_Free(api->m_PreflightLUT);
         api->m_PreflightLUT = 0;
     }
-    api->m_PreflightLUT = Longtail_LookupTable_Create(Longtail_Alloc(0, Longtail_LookupTable_GetSize(65536)), 65536, 0);
+    api->m_PreflightLUT = LongtailPrivate_LookupTable_Create(Longtail_Alloc(0, LongtailPrivate_LookupTable_GetSize(65536)), 65536, 0);
     return api->m_BackingStore->PreflightGet(api->m_BackingStore, block_count, block_hashes, optional_async_complete_api);
 }
 

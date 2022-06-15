@@ -21,7 +21,6 @@ extern "C" {
 
 typedef uint64_t TLongtail_Hash;
 struct Longtail_BlockIndex;
-struct Longtail_Paths;
 struct Longtail_FileInfos;
 struct Longtail_VersionIndex;
 struct Longtail_StoredBlock;
@@ -930,6 +929,57 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
+/*! @brief Get the size of a constructedV VersionIndex.
+ *
+ * @param[in] asset_count             The number of assets (files and directories) in the index
+ * @param[in] chunk_count             The number of chunks in the version index
+ * @param[in] asset_chunk_index_count The number of chunk indexes in the version index
+ * @param[in] path_data_size          The size of the path data
+ * @return                            The size in number of bytes of the version index
+ */
+LONGTAIL_EXPORT size_t Longtail_GetVersionIndexSize(
+    uint32_t asset_count,
+    uint32_t chunk_count,
+    uint32_t asset_chunk_index_count,
+    uint32_t path_data_size);
+
+/*! @brief Create a version index for a struct Longtail_FileInfos.
+ *
+ * @param[in] mem                      The memory buffer to write the version index to
+ * @param[in] mem_size                 The size of the memory buffer
+ * @param[in] file_infos               Pointer to am initialized Longtail_FileInfos structure
+ * @param[in] path_hashes              Array of hashes for each path in @p file_infos
+ * @param[in] content_hashes           The has of each asset in @p file_infos
+ * @param[in] asset_chunk_index_starts Array with offset into @p asset_chunk_indexes where each asset list of chunks indexes begins
+ * @param[in] asset_chunk_counts       Array with number of chunks for each asset
+ * @param[in] asset_chunk_index_count  Number of entires in @p asset_chunk_indexes
+ * @param[in] asset_chunk_indexes      Array of all assets list of chunk indexes
+ * @param[in] chunk_count              Total number of unique chunks for all assets
+ * @param[in] chunk_sizes              Array with sizes of each chunk
+ * @param[in] chunk_hashes             Array with hashes of each chunk
+ * @param[in] optional_chunk_tags      Optional pointer with tag for each chunk, used to determine compression algorithm per chunk
+ * @param[in] hash_api_identifier      Identifier for the hashing algorithm used when hashing chunks and paths
+ * @param[in] target_chunk_size        The target chunk size used when chunking the assets
+ * @param[in] out_version_index        Pointer to a struct Longtail_VersionIndex* pointer which will be set on success
+ */
+LONGTAIL_EXPORT int Longtail_BuildVersionIndex(
+    void* mem,
+    size_t mem_size,
+    const struct Longtail_FileInfos* file_infos,
+    const TLongtail_Hash* path_hashes,
+    const TLongtail_Hash* content_hashes,
+    const uint32_t* asset_chunk_index_starts,
+    const uint32_t* asset_chunk_counts,
+    uint32_t asset_chunk_index_count,
+    const uint32_t* asset_chunk_indexes,
+    uint32_t chunk_count,
+    const uint32_t* chunk_sizes,
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* optional_chunk_tags,
+    uint32_t hash_api_identifier,
+    uint32_t target_chunk_size,
+    struct Longtail_VersionIndex** out_version_index);
+
 /*! @brief Create a version index for a struct Longtail_FileInfos.
  *
  * All files are chunked and hashes to create a struct VersionIndex, allocated using Longtail_Alloc()
@@ -943,6 +993,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
  * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
  * @param[in] root_path             Root path for files in @p file_infos
+ * @param[in] file_infos            Pointer to am initialized Longtail_FileInfos structure
  * @param[in] optional_asset_tags   An array with a tag for each entry in @p file_infos, usually a compression tag, set to zero if no tags are wanted
  * @param[in] target_chunk_size     The target size of chunks, with minimum size set to @target_chunk_size / 8 and maximum size set to @p target_chunk_size * 2
  * @param[in] enable_file_map       Enable memory mapping when reading files, only has effect if storage_api supports memory mapping
@@ -1470,7 +1521,6 @@ struct Longtail_FileInfos
 
 LONGTAIL_EXPORT uint32_t Longtail_FileInfos_GetCount(const struct Longtail_FileInfos* file_infos);
 LONGTAIL_EXPORT const char* Longtail_FileInfos_GetPath(const struct Longtail_FileInfos* file_infos, uint32_t index);
-LONGTAIL_EXPORT const struct Longtail_Paths* Longtail_FileInfos_GetPaths(const struct Longtail_FileInfos* file_infos);
 LONGTAIL_EXPORT uint64_t Longtail_FileInfos_GetSize(const struct Longtail_FileInfos* file_infos, uint32_t index);
 LONGTAIL_EXPORT const uint16_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index);
 
@@ -1688,47 +1738,23 @@ struct Longtail_VersionDiff
     uint32_t* m_TargetPermissionsModifiedAssetIndexes;
 };
 
-int Longtail_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
+///////////// Longtail private functions
 
-size_t Longtail_LookupTable_GetSize(uint32_t capacity);
-struct Longtail_LookupTable* Longtail_LookupTable_Create(void* mem, uint32_t capacity, struct Longtail_LookupTable* optional_source_entries);
-int Longtail_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
-uint32_t* Longtail_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
-uint32_t* Longtail_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
-uint32_t Longtail_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
+int LongtailPrivate_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash);
 
-///////////// Test functions
+size_t LongtailPrivate_LookupTable_GetSize(uint32_t capacity);
+struct Longtail_LookupTable* LongtailPrivate_LookupTable_Create(void* mem, uint32_t capacity, struct Longtail_LookupTable* optional_source_entries);
+int LongtailPrivate_LookupTable_Put(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
+uint32_t* LongtailPrivate_LookupTable_PutUnique(struct Longtail_LookupTable* lut, uint64_t key, uint32_t value);
+uint32_t* LongtailPrivate_LookupTable_Get(const struct Longtail_LookupTable* lut, uint64_t key);
+uint32_t LongtailPrivate_LookupTable_GetSpaceLeft(const struct Longtail_LookupTable* lut);
 
-int Longtail_MakeFileInfos(
+int LongtailPrivate_MakeFileInfos(
     uint32_t path_count,
     const char* const* path_names,
     const uint64_t* file_sizes,
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos);
-
-size_t Longtail_GetVersionIndexSize(
-    uint32_t asset_count,
-    uint32_t chunk_count,
-    uint32_t asset_chunk_index_count,
-    uint32_t path_data_size);
-
-int Longtail_BuildVersionIndex(
-    void* mem,
-    size_t mem_size,
-    const struct Longtail_FileInfos* file_infos,
-    const TLongtail_Hash* path_hashes,
-    const TLongtail_Hash* content_hashes,
-    const uint32_t* asset_chunk_index_starts,
-    const uint32_t* asset_chunk_counts,
-    uint32_t asset_chunk_index_count,
-    const uint32_t* asset_chunk_indexes,
-    uint32_t chunk_count,
-    const uint32_t* chunk_sizes,
-    const TLongtail_Hash* chunk_hashes,
-    const uint32_t* optional_chunk_tags,
-    uint32_t hash_api_identifier,
-    uint32_t target_chunk_size,
-    struct Longtail_VersionIndex** out_version_index);
 
 #ifdef __cplusplus
 }
