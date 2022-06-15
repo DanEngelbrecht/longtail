@@ -21,7 +21,6 @@ extern "C" {
 
 typedef uint64_t TLongtail_Hash;
 struct Longtail_BlockIndex;
-struct Longtail_Paths;
 struct Longtail_FileInfos;
 struct Longtail_VersionIndex;
 struct Longtail_StoredBlock;
@@ -1522,7 +1521,6 @@ struct Longtail_FileInfos
 
 LONGTAIL_EXPORT uint32_t Longtail_FileInfos_GetCount(const struct Longtail_FileInfos* file_infos);
 LONGTAIL_EXPORT const char* Longtail_FileInfos_GetPath(const struct Longtail_FileInfos* file_infos, uint32_t index);
-LONGTAIL_EXPORT const struct Longtail_Paths* Longtail_FileInfos_GetPaths(const struct Longtail_FileInfos* file_infos);
 LONGTAIL_EXPORT uint64_t Longtail_FileInfos_GetSize(const struct Longtail_FileInfos* file_infos, uint32_t index);
 LONGTAIL_EXPORT const uint16_t* Longtail_FileInfos_GetPermissions(const struct Longtail_FileInfos* file_infos, uint32_t index);
 
