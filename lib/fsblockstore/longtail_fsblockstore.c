@@ -853,7 +853,7 @@ static int FSBlockStore_PreflightGet(
         LONGTAIL_LOGFIELD(block_count, "%u"),
         LONGTAIL_LOGFIELD(block_hashes, "%p"),
         LONGTAIL_LOGFIELD(optional_async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (block_count == 0) || (block_hashes != 0), return EINVAL)
@@ -1096,7 +1096,7 @@ static int FSBlockStore_GetExistingContent(
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
@@ -1143,7 +1143,7 @@ static int FSBlockStore_PruneBlocks(
         LONGTAIL_LOGFIELD(block_keep_count, "%u"),
         LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
@@ -1467,7 +1467,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(content_path, "%s"),
         LONGTAIL_LOGFIELD(optional_extension, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, content_path != 0, return 0)

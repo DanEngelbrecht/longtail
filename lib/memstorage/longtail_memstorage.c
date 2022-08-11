@@ -1233,7 +1233,7 @@ static int InMemStorageAPI_Init(
 
 struct Longtail_StorageAPI* Longtail_CreateInMemStorageAPI()
 {
-    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     void* mem = (struct InMemStorageAPI*)Longtail_Alloc("InMemStorageAPI", sizeof(struct InMemStorageAPI) + Longtail_GetSpinLockSize());
     if (!mem)

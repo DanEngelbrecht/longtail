@@ -29,7 +29,7 @@ static void FSStorageAPI_Dispose(struct Longtail_API* storage_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_FATAL_ASSERT(ctx, storage_api != 0, return);
     Longtail_Free(storage_api);
@@ -676,7 +676,7 @@ static int FSStorageAPI_Init(
 
 struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI()
 {
-    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     void* mem = (struct FSStorageAPI*)Longtail_Alloc("FSStorageAPI", sizeof(struct FSStorageAPI));
     if (!mem)

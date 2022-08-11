@@ -13,7 +13,7 @@ static int AtomicCancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Lo
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(cancel_api, "%p"),
         LONGTAIL_LOGFIELD(out_token, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
     LONGTAIL_VALIDATE_INPUT(ctx, out_token, return EINVAL )
@@ -34,7 +34,7 @@ static int AtomicCancelAPI_Cancel(struct Longtail_CancelAPI* cancel_api, Longtai
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(cancel_api, "%p"),
         LONGTAIL_LOGFIELD(token, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
     LONGTAIL_VALIDATE_INPUT(ctx, token, return EINVAL )
@@ -51,7 +51,7 @@ static int AtomicCancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, L
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(cancel_api, "%p"),
         LONGTAIL_LOGFIELD(token, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return EINVAL )
     LONGTAIL_VALIDATE_INPUT(ctx, token, return EINVAL )
@@ -88,7 +88,7 @@ static void AtomicCancelAPI_Dispose(struct Longtail_API* cancel_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(cancel_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, cancel_api, return)
     Longtail_Free(cancel_api);
@@ -110,7 +110,7 @@ static void AtomicCancelAPI_Init(struct AtomicCancelAPI* api)
 
 struct Longtail_CancelAPI* Longtail_CreateAtomicCancelAPI()
 {
-    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     struct AtomicCancelAPI* api = (struct AtomicCancelAPI*)Longtail_Alloc("AtomicCancel", sizeof(struct AtomicCancelAPI));
     if (!api)
