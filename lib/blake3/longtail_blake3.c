@@ -128,7 +128,7 @@ static void Blake3Hash_Init(struct Blake3HashAPI* hash_api)
 
 struct Longtail_HashAPI* Longtail_CreateBlake3HashAPI()
 {
-    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     struct Blake3HashAPI* blake3_hash = (struct Blake3HashAPI*)Longtail_Alloc("Blake 3", sizeof(struct Blake3HashAPI));
     if (!blake3_hash)
     {

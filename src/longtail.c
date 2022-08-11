@@ -84,7 +84,7 @@ uint64_t Longtail_GetCancelAPISize()
         LONGTAIL_LOGFIELD(cancel_func, "%p"),
         LONGTAIL_LOGFIELD(is_cancelled, "%p"),
         LONGTAIL_LOGFIELD(dispose_token_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_CancelAPI* api = (struct Longtail_CancelAPI*)mem;
@@ -115,7 +115,7 @@ struct Longtail_PathFilterAPI* Longtail_MakePathFilterAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(include_filter_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_PathFilterAPI* api = (struct Longtail_PathFilterAPI*)mem;
@@ -151,7 +151,7 @@ struct Longtail_HashAPI* Longtail_MakeHashAPI(
         LONGTAIL_LOGFIELD(hash_func, "%p"),
         LONGTAIL_LOGFIELD(end_context_func, "%p"),
         LONGTAIL_LOGFIELD(hash_buffer_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_HashAPI* api = (struct Longtail_HashAPI*)mem;
@@ -185,7 +185,7 @@ struct Longtail_HashRegistryAPI* Longtail_MakeHashRegistryAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(get_hash_api_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_HashRegistryAPI* api = (struct Longtail_HashRegistryAPI*)mem;
@@ -215,7 +215,7 @@ struct Longtail_CompressionAPI* Longtail_MakeCompressionAPI(
         LONGTAIL_LOGFIELD(get_max_compressed_size_func, "%p"),
         LONGTAIL_LOGFIELD(compress_func, "%p"),
         LONGTAIL_LOGFIELD(decompress_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_CompressionAPI* api = (struct Longtail_CompressionAPI*)mem;
@@ -246,7 +246,7 @@ struct Longtail_CompressionRegistryAPI* Longtail_MakeCompressionRegistryAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(get_compression_api_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_CompressionRegistryAPI* api = (struct Longtail_CompressionRegistryAPI*)mem;
@@ -323,7 +323,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
         LONGTAIL_LOGFIELD(get_parent_path_func, "%p"),
         LONGTAIL_LOGFIELD(map_file_func, "%p"),
         LONGTAIL_LOGFIELD(unmap_file_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_StorageAPI* api = (struct Longtail_StorageAPI*)mem;
@@ -398,7 +398,7 @@ struct Longtail_ProgressAPI* Longtail_MakeProgressAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(on_progress_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_ProgressAPI* api = (struct Longtail_ProgressAPI*)mem;
@@ -439,7 +439,7 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
         LONGTAIL_LOGFIELD(wait_for_all_jobs_func, "%p"),
         LONGTAIL_LOGFIELD(resume_job_func, "%p"),
         LONGTAIL_LOGFIELD(get_max_batch_count_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_JobAPI* api = (struct Longtail_JobAPI*)mem;
@@ -488,7 +488,7 @@ struct Longtail_ChunkerAPI* Longtail_MakeChunkerAPI(
         LONGTAIL_LOGFIELD(next_chunk_func, "%p"),
         LONGTAIL_LOGFIELD(dispose_chunker_func, "%p"),
         LONGTAIL_LOGFIELD(next_chunk_from_buffer, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_ChunkerAPI* api = (struct Longtail_ChunkerAPI*)mem;
@@ -523,7 +523,7 @@ struct Longtail_AsyncPutStoredBlockAPI* Longtail_MakeAsyncPutStoredBlockAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(on_complete_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_AsyncPutStoredBlockAPI* api = (struct Longtail_AsyncPutStoredBlockAPI*)mem;
@@ -550,7 +550,7 @@ struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetStoredBlockAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(on_complete_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_AsyncGetStoredBlockAPI* api = (struct Longtail_AsyncGetStoredBlockAPI*)mem;
@@ -577,7 +577,7 @@ struct Longtail_AsyncGetExistingContentAPI* Longtail_MakeAsyncGetExistingContent
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(on_complete_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_AsyncGetExistingContentAPI* api = (struct Longtail_AsyncGetExistingContentAPI*)mem;
@@ -604,7 +604,7 @@ struct Longtail_AsyncPruneBlocksAPI* Longtail_MakeAsyncPruneBlocksAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(on_complete_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_AsyncPruneBlocksAPI* api = (struct Longtail_AsyncPruneBlocksAPI*)mem;
@@ -631,7 +631,7 @@ struct Longtail_AsyncPreflightStartedAPI* Longtail_MakeAsyncPreflightStartedAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(on_complete_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_AsyncPreflightStartedAPI* api = (struct Longtail_AsyncPreflightStartedAPI*)mem;
@@ -659,7 +659,7 @@ struct Longtail_AsyncFlushAPI* Longtail_MakeAsyncFlushAPI(
         LONGTAIL_LOGFIELD(mem, "%p"),
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(on_complete_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_AsyncFlushAPI* api = (struct Longtail_AsyncFlushAPI*)mem;
@@ -698,7 +698,7 @@ struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
         LONGTAIL_LOGFIELD(prune_blocks_func, "%p"),
         LONGTAIL_LOGFIELD(get_stats_func, "%p"),
         LONGTAIL_LOGFIELD(flush_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_BlockStoreAPI* api = (struct Longtail_BlockStoreAPI*)mem;
@@ -736,7 +736,7 @@ void Longtail_DisposeAPI(struct Longtail_API* api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     if (api->Dispose)
     {
@@ -789,7 +789,7 @@ void Longtail_SetLog(Longtail_Log log_func, void* context)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(log_func, "%p"),
         LONGTAIL_LOGFIELD(context, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     Longtail_Log_private = log_func;
     Longtail_LogContext = context;
 }
@@ -798,7 +798,7 @@ void Longtail_SetLogLevel(int level)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(level, "%d")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     Longtail_LogLevel_private = level;
 }
 
@@ -1585,7 +1585,7 @@ int Longtail_GetFilesRecursively(
         LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
         LONGTAIL_LOGFIELD(root_path, "%s"),
         LONGTAIL_LOGFIELD(out_file_infos, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, root_path != 0, return EINVAL)
@@ -2563,7 +2563,7 @@ int Longtail_CreateVersionIndex(
         LONGTAIL_LOGFIELD(optional_asset_tags, "%u"),
         LONGTAIL_LOGFIELD(target_chunk_size, "%u"),
         LONGTAIL_LOGFIELD(out_version_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return EINVAL)
@@ -2755,7 +2755,7 @@ int Longtail_WriteVersionIndexToBuffer(
         LONGTAIL_LOGFIELD(version_index, "%p"),
         LONGTAIL_LOGFIELD(out_buffer, "%p"),
         LONGTAIL_LOGFIELD(out_size, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_buffer != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_size != 0, return EINVAL)
@@ -2781,7 +2781,7 @@ int Longtail_WriteVersionIndex(
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(version_index, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL)
@@ -2814,6 +2814,8 @@ int Longtail_WriteVersionIndex(
     storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
 
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "wrote %" PRIu64 " bytes", index_data_size)
+
     return 0;
 }
 
@@ -2826,7 +2828,7 @@ int Longtail_ReadVersionIndexFromBuffer(
         LONGTAIL_LOGFIELD(buffer, "%p"),
         LONGTAIL_LOGFIELD(size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_version_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     LONGTAIL_VALIDATE_INPUT(ctx, buffer != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, size != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_version_index != 0, return EINVAL)
@@ -2859,7 +2861,7 @@ int Longtail_ReadVersionIndex(
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_version_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_version_index != 0, return EINVAL)
@@ -2908,6 +2910,9 @@ int Longtail_ReadVersionIndex(
         *version_index->m_AssetCount, *version_index->m_ChunkCount)
 
     *out_version_index = version_index;
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "read %" PRIu64 " bytes", version_index_data_size)
+
     return 0;
 }
 
@@ -3209,6 +3214,8 @@ int Longtail_WriteBlockIndex(
     }
     storage_api->CloseFile(storage_api, file_handle);
 
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "wrote %" PRIu64 " bytes", index_data_size)
+
     return 0;
 }
 
@@ -3312,6 +3319,9 @@ int Longtail_ReadBlockIndex(
     }
     storage_api->CloseFile(storage_api, f);
     *out_block_index = block_index;
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "read %" PRIu64 " bytes", sizeof(struct Longtail_BlockIndexHeader) + block_index_data_size)
+
     return 0;
 }
 
@@ -3560,6 +3570,9 @@ int Longtail_WriteStoredBlock(
         return err;
     }
     storage_api->CloseFile(storage_api, block_file_handle);
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "wrote %u bytes", block_index_data_size + stored_block->m_BlockChunksDataSize)
+
     return 0;
 }
 
@@ -3627,6 +3640,9 @@ int Longtail_ReadStoredBlock(
     }
     stored_block->Dispose = ReadStoredBlock_Dispose;
     *out_stored_block = stored_block;
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "read %" PRIu64 " bytes", stored_block_data_size)
+
     return 0;
 }
 
@@ -3683,7 +3699,7 @@ int Longtail_GetRequiredChunkHashes(
         LONGTAIL_LOGFIELD(version_diff, "%p"),
         LONGTAIL_LOGFIELD(out_chunk_count, "%p"),
         LONGTAIL_LOGFIELD(out_chunk_hashes, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
@@ -5909,7 +5925,7 @@ int Longtail_WriteVersion(
         LONGTAIL_LOGFIELD(version_index, "%p"),
         LONGTAIL_LOGFIELD(version_path, "%s"),
         LONGTAIL_LOGFIELD(retain_permissions, "%d")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_storage_api != 0, return EINVAL)
@@ -6179,7 +6195,7 @@ int Longtail_CreateStoreIndex(
         LONGTAIL_LOGFIELD(max_block_size, "%u"),
         LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || hash_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunk_count == 0 || chunk_hashes != 0, return EINVAL)
@@ -6312,7 +6328,7 @@ int Longtail_CreateMissingContent(
         LONGTAIL_LOGFIELD(max_block_size, "%u"),
         LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
@@ -6428,7 +6444,7 @@ int Longtail_GetMissingChunks(
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(out_chunk_count, "%p"),
         LONGTAIL_LOGFIELD(out_missing_chunk_hashes, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
@@ -6515,7 +6531,7 @@ int Longtail_GetExistingStoreIndex(
         LONGTAIL_LOGFIELD(chunks, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunks != 0), return EINVAL)
@@ -6892,7 +6908,7 @@ int Longtail_CreateVersionDiff(
         LONGTAIL_LOGFIELD(source_version, "%p"),
         LONGTAIL_LOGFIELD(target_version, "%p"),
         LONGTAIL_LOGFIELD(out_version_diff, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
@@ -7144,7 +7160,7 @@ int Longtail_ChangeVersion(
         LONGTAIL_LOGFIELD(version_diff, "%p"),
         LONGTAIL_LOGFIELD(version_path, "%s"),
         LONGTAIL_LOGFIELD(retain_permissions, "%d")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_storage_api != 0, return EINVAL)
@@ -7580,7 +7596,7 @@ int Longtail_CreateStoreIndexFromBlocks(
         LONGTAIL_LOGFIELD(block_count, "%u"),
         LONGTAIL_LOGFIELD(block_indexes, "%p"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_count == 0 || block_indexes != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_store_index != 0, return EINVAL)
@@ -7643,7 +7659,7 @@ int Longtail_MakeBlockIndex(
         LONGTAIL_LOGFIELD(store_index, "%p"),
         LONGTAIL_LOGFIELD(block_index, "%u"),
         LONGTAIL_LOGFIELD(out_block_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, block_index < (*store_index->m_BlockCount), return EINVAL)
@@ -7667,7 +7683,7 @@ int Longtail_MergeStoreIndex(
         LONGTAIL_LOGFIELD(local_store_index, "%p"),
         LONGTAIL_LOGFIELD(remote_store_index, "%p"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, local_store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, local_store_index != 0, return EINVAL)
@@ -7805,7 +7821,7 @@ LONGTAIL_EXPORT int Longtail_PruneStoreIndex(
         LONGTAIL_LOGFIELD(keep_block_count, "%u"),
         LONGTAIL_LOGFIELD(keep_block_hashes, "%p"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, source_store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (keep_block_count == 0) || (keep_block_hashes != 0), return EINVAL)
@@ -7937,7 +7953,7 @@ LONGTAIL_EXPORT int Longtail_ValidateStore(
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(store_index, "%p"),
         LONGTAIL_LOGFIELD(version_index, "%p"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
@@ -8018,7 +8034,7 @@ struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* 
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(store_index, "%p"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return 0)
 
@@ -8050,7 +8066,7 @@ int Longtail_WriteStoreIndexToBuffer(
         LONGTAIL_LOGFIELD(store_index, "%p"),
         LONGTAIL_LOGFIELD(out_buffer, "%p"),
         LONGTAIL_LOGFIELD(out_size, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_buffer != 0, return EINVAL)
@@ -8077,7 +8093,7 @@ int Longtail_WriteStoreIndex(
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(store_index, "%p"),
         LONGTAIL_LOGFIELD(path, "%s")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
@@ -8110,6 +8126,8 @@ int Longtail_WriteStoreIndex(
     storage_api->CloseFile(storage_api, file_handle);
     file_handle = 0;
 
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "wrote %" PRIu64 " bytes", index_data_size)
+
     return 0;
 }
 
@@ -8122,7 +8140,7 @@ int Longtail_ReadStoreIndexFromBuffer(
         LONGTAIL_LOGFIELD(buffer, "%p"),
         LONGTAIL_LOGFIELD(size, "%" PRIu64),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, buffer != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, size != 0, return EINVAL)
@@ -8156,7 +8174,7 @@ int Longtail_ReadStoreIndex(
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL)
@@ -8205,6 +8223,9 @@ int Longtail_ReadStoreIndex(
         *store_index->m_ChunkCount, *store_index->m_BlockCount)
 
     *out_store_index = store_index;
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "read %" PRIu64 " bytes", store_index_data_size)
+
     return 0;
 }
 
@@ -8217,7 +8238,7 @@ LONGTAIL_EXPORT int Longtail_CreateArchiveIndex(
         LONGTAIL_LOGFIELD(store_index, "%p"),
         LONGTAIL_LOGFIELD(version_index, "%p"),
         LONGTAIL_LOGFIELD(out_archive_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_index != 0, return EINVAL)
@@ -8298,7 +8319,7 @@ LONGTAIL_EXPORT int Longtail_ReadArchiveIndex(
         LONGTAIL_LOGFIELD(storage_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
         LONGTAIL_LOGFIELD(out_archive_index, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     Longtail_StorageAPI_HOpenFile file_handle;
     int err = storage_api->OpenReadFile(storage_api, path, &file_handle);
@@ -8380,6 +8401,9 @@ LONGTAIL_EXPORT int Longtail_ReadArchiveIndex(
 
     storage_api->CloseFile(storage_api, file_handle);
     *out_archive_index = archive_index;
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "read %" PRIu64 " bytes", sizeof(uint32_t) * 2 + archive_index_data_size)
+
     return 0;
 }
 

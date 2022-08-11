@@ -3981,7 +3981,7 @@ int TestAsyncBlockStore::GetExistingContent(struct Longtail_BlockStoreAPI* block
         LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
@@ -4008,7 +4008,7 @@ int TestAsyncBlockStore::PruneBlocks(struct Longtail_BlockStoreAPI* block_store_
         LONGTAIL_LOGFIELD(block_keep_count, "%u"),
         LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_FATAL_ASSERT(ctx, block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, async_complete_api, return EINVAL)
@@ -5079,7 +5079,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
                 LONGTAIL_LOGFIELD(chunk_hashes, "%p"),
                 LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
                 LONGTAIL_LOGFIELD(async_complete_api, "%p")
-            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockStoreProxy_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
                 block_store_api, chunk_count, chunk_hashes, async_complete_api)
@@ -5096,7 +5096,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
                 LONGTAIL_LOGFIELD(block_keep_count, "%u"),
                 LONGTAIL_LOGFIELD(block_keep_hashes, "%p"),
                 LONGTAIL_LOGFIELD(async_complete_api, "%p")
-            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockStoreProxy_GetExistingContent(%p, %" PRIu64 ", %p, %p)",
                 block_store_api, block_keep_count, block_keep_hashes, async_complete_api)

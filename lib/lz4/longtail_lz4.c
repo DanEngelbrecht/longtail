@@ -111,7 +111,7 @@ static void LZ4CompressionAPI_Init(struct LZ4CompressionAPI* compression_api)
 
 struct Longtail_CompressionAPI* Longtail_CreateLZ4CompressionAPI()
 {
-    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
     struct LZ4CompressionAPI* compression_api = (struct LZ4CompressionAPI*)Longtail_Alloc("LZ4CompressionAPI", sizeof(struct LZ4CompressionAPI));
     if (!compression_api)
     {

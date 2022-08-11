@@ -134,7 +134,7 @@ static void Blake2Hash_Init(struct Blake2HashAPI* hash_api)
 
 struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
 {
-    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     struct Blake2HashAPI* blake2_hash = (struct Blake2HashAPI*)Longtail_Alloc("Blake2", sizeof(struct Blake2HashAPI));
     if (!blake2_hash)

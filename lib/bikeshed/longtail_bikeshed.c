@@ -648,7 +648,7 @@ struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count, int
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(worker_count, "%u"),
         LONGTAIL_LOGFIELD(worker_priority, "%d")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, worker_priority >= -1 && worker_priority <= 1, return 0)
     void* mem = Longtail_Alloc("Bikeshed", sizeof(struct BikeshedJobAPI));

@@ -509,7 +509,7 @@ static int HPCDCChunker_Init(
 
 struct Longtail_ChunkerAPI* Longtail_CreateHPCDCChunkerAPI()
 {
-    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_INFO)
+    MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     size_t api_size =
         sizeof(struct Longtail_HPCDCChunkerAPI);
