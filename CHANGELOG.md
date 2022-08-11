@@ -1,4 +1,9 @@
 ##
+- **CHANGED** Function entry logging change to DEBUG
+- **CHANGED** Added info-debugging of read/written files (with size)
+- **CHANGED** Add log context for Longtail_WriteStoredBlock and Longtail_WriteStoredBlock in non-debug build
+
+## v0.3.4
 - **FIX** Promoted `Longtail_GetVersionIndexSize` and `Longtail_BuildVersionIndex` to public API
 - **FIX** Renamed private/test function with LongtailPrivate prefix
 - **FIX** Removed `Longtail_FileInfos_GetPaths` and `struct Longtail_Paths`
