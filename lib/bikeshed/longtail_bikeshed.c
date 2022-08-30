@@ -89,10 +89,15 @@ static int32_t ThreadWorker_Execute(void* context)
     LONGTAIL_FATAL_ASSERT(ctx, thread_worker->stop, return 0)
     while (*thread_worker->stop == 0)
     {
-        if (!Bikeshed_ExecuteOne(thread_worker->shed, 0))
+        if (Bikeshed_ExecuteOne(thread_worker->shed, 0))
         {
-            Longtail_WaitSema(thread_worker->semaphore, LONGTAIL_TIMEOUT_INFINITE);
+            continue;
         }
+        if (Bikeshed_ExecuteOne(thread_worker->shed, 1))
+        {
+            continue;
+        }
+        Longtail_WaitSema(thread_worker->semaphore, LONGTAIL_TIMEOUT_INFINITE);
     }
     return 0;
 }
@@ -299,6 +304,7 @@ static int Bikeshed_CreateJobs(
     uint32_t job_count,
     Longtail_JobAPI_JobFunc job_funcs[],
     void* job_contexts[],
+    uint8_t job_channel,
     Longtail_JobAPI_Jobs* out_jobs)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -384,6 +390,7 @@ static int Bikeshed_CreateJobs(
         }
         Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
     }
+    Bikeshed_SetTasksChannel(bikeshed_job_api->m_Shed, job_count, task_ids, job_channel);
 
     *out_jobs = task_ids;
     err = 0;
@@ -481,6 +488,10 @@ static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_Job
             }
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
+        {
+            continue;
+        }
+        if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 1))
         {
             continue;
         }
@@ -607,7 +618,7 @@ static int Bikeshed_Init(
         return err;
     }
 
-    job_api->m_Shed = Bikeshed_Create(Longtail_Alloc("Bikeshed", BIKESHED_SIZE(BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 1)), BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 1, &job_api->m_ReadyCallback.cb);
+    job_api->m_Shed = Bikeshed_Create(Longtail_Alloc("Bikeshed", BIKESHED_SIZE(BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 1)), BIKESHED_MAX_TASK_COUNT, BIKESHED_MAX_DEPENDENCY_COUNT, 2, &job_api->m_ReadyCallback.cb);
     if (!job_api->m_Shed)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Bikeshed_Create() failed with %d", ENOMEM)
