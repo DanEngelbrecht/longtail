@@ -4392,6 +4392,21 @@ struct WritePartialAssetFromBlocksJob
 
 int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled);
 
+static uint32_t GetMaxParallelBlockReadJobs(struct Longtail_JobAPI* job_api)
+{
+    uint32_t worker_count = job_api->GetWorkerCount(job_api);
+    if (worker_count > 2)
+    {
+        worker_count--;
+    }
+    else if (worker_count == 0)
+    {
+        worker_count = 1;
+    }
+    const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
+    return max_parallell_block_read_jobs;
+}
+
 // Returns the write sync task, or the write task if there is no need for reading new blocks
 static int CreatePartialAssetWriteJob(
     struct Longtail_BlockStoreAPI* block_store_api,
@@ -4467,8 +4482,7 @@ static int CreatePartialAssetWriteJob(
     Longtail_JobAPI_JobFunc block_read_funcs[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
     void* block_read_ctx[MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE];
 
-    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
-    const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
+    const uint32_t max_parallell_block_read_jobs = GetMaxParallelBlockReadJobs(job_api);
 
     while (chunk_index_offset != chunk_index_end && job->m_BlockReaderJobCount <= max_parallell_block_read_jobs)
     {
@@ -5606,8 +5620,7 @@ static int WriteAssets(
     }
 #endif // defined(LONGTAIL_ASSERTS)
 
-    const uint32_t worker_count = job_api->GetWorkerCount(job_api) + 1;
-    const uint32_t max_parallell_block_read_jobs = worker_count < MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE ? worker_count : MAX_BLOCKS_PER_PARTIAL_ASSET_WRITE;
+    const uint32_t max_parallell_block_read_jobs = GetMaxParallelBlockReadJobs(job_api);
 
     uint32_t asset_job_count = 0;
     for (uint32_t a = 0; a < awl->m_AssetJobCount; ++a)
