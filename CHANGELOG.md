@@ -1,4 +1,9 @@
 ##
+- **CHANGED API** `Longtail_Job_CreateJobsFunc` now takes a `channel` parameter, can be either 0 or 1, 0 has higher priority than 1
+- **FIXED** Writing content to disk now has higher priority than reading blocks from store
+- **CHANGED** Reworked logic for calculating the number of blocks to read per write operation when writing multi-block assets
+
+## 0.3.5
 - **CHANGED** Function entry logging change to DEBUG
 - **CHANGED** Added info-debugging of read/written files (with size)
 - **CHANGED** Add log context for Longtail_WriteStoredBlock and Longtail_WriteStoredBlock in non-debug build

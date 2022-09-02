@@ -532,7 +532,7 @@ static int ReadContent(
         Longtail_JobAPI_JobFunc job_func[] = {ScanBlock};
         void* ctxs[] = {job};
         Longtail_JobAPI_Jobs jobs;
-        err = job_api->CreateJobs(job_api, job_group, 0, 0, 0, 1, job_func, ctxs, &jobs);
+        err = job_api->CreateJobs(job_api, job_group, 0, 0, 0, 1, job_func, ctxs, 0, &jobs);
         LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
         err = job_api->ReadyJobs(job_api, 1, jobs);
         LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
