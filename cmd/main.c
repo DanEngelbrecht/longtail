@@ -1048,7 +1048,7 @@ int ValidateVersionIndex(
         &block_store_store_index);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget store index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget store index for version index `%s` to `%s`, failed with %d", storage_uri_raw, version_index_path, err);
         Longtail_Free(version_index);
         SAFE_DISPOSE_API(store_block_api);
         SAFE_DISPOSE_API(storage_api);
@@ -1299,7 +1299,7 @@ int VersionIndex_cp(
         &block_store_store_index);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget store index for version index `%s` to `%s`", storage_uri_raw, version_index_path, err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget store index for version index `%s` to `%s`, failed with %d", storage_uri_raw, version_index_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);

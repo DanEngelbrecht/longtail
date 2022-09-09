@@ -2360,9 +2360,9 @@ static int InitVersionIndexFromData(
     version_index->m_Version = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
 
-    if ((*version_index->m_Version) != LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
+    if ((*version_index->m_Version) != Longtail_CurrentVersionIndexVersion)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Missmatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentVersionIndexVersion);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Mismatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)version_index->m_Version, Longtail_CurrentVersionIndexVersion);
         return EBADF;
     }
 
@@ -2387,10 +2387,10 @@ static int InitVersionIndexFromData(
 
     uint32_t asset_chunk_index_count = *version_index->m_AssetChunkIndexCount;
 
-    size_t versiom_index_data_size = Longtail_GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, 0);
-    if (versiom_index_data_size > data_size)
+    size_t version_index_data_size = Longtail_GetVersionIndexDataSize(asset_count, chunk_count, asset_chunk_index_count, 0);
+    if (version_index_data_size > data_size)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Version index data is truncated: %" PRIu64 " <= %" PRIu64, data_size, versiom_index_data_size)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Version index data is truncated: %" PRIu64 " <= %" PRIu64, data_size, version_index_data_size)
         return EBADF;
     }
 
@@ -3021,7 +3021,7 @@ int Longtail_InitBlockIndexFromData(
     size_t block_index_data_size = Longtail_GetBlockIndexDataSize(chunk_count);
     if (block_index_data_size > data_size)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Chunk count results in block index data %" PRIu64 " larger that data size (%" PRIu64 ")", block_index_data_size, data)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Chunk count results in block index data %" PRIu64 " larger that data size (%" PRIu64 ")", block_index_data_size, data_size)
         return EBADF;
     }
 
@@ -7550,10 +7550,12 @@ static int InitStoreIndexFromData(
     size_t store_index_data_size = Longtail_GetStoreIndexDataSize(block_count, chunk_count);
     if (store_index_data_size > data_size)
     {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Store index data is truncated: %" PRIu64 " <= %" PRIu64, data_size, store_index_data_size)
         return EBADF;
     }
-    if (*store_index->m_Version != LONGTAIL_STORE_INDEX_VERSION_1_0_0)
+    if (*store_index->m_Version != Longtail_CurrentStoreIndexVersion)
     {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Mismatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)store_index->m_Version, Longtail_CurrentStoreIndexVersion);
         return EBADF;
     }
 
