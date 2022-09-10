@@ -7555,7 +7555,7 @@ static int InitStoreIndexFromData(
     }
     if (*store_index->m_Version != Longtail_CurrentStoreIndexVersion)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Mismatching versions in version index data %" PRIu64 " != %" PRIu64 "", (void*)store_index->m_Version, Longtail_CurrentStoreIndexVersion);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Mismatching versions in store index data %" PRIu64 " != %" PRIu64 "", (void*)store_index->m_Version, Longtail_CurrentStoreIndexVersion);
         return EBADF;
     }
 
