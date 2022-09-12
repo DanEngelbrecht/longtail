@@ -1175,28 +1175,30 @@ static int FSBlockStore_PruneBlocks(
     }
     Longtail_LockSpinLock(api->m_Lock);
 
-    struct Longtail_StoreIndex* pruned_store_index;
-    err = Longtail_PruneStoreIndex(
-        store_index,
-        block_keep_count,
-        block_keep_hashes,
-        &pruned_store_index);
-    if (err != 0)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_PruneStoreIndex() failed with %d", err)
-        api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
-        Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
-        Longtail_Free(store_index);
-        Longtail_UnlockSpinLock(api->m_Lock);
-        return err;
-    }
+        struct Longtail_StoreIndex* pruned_store_index;
+        err = Longtail_PruneStoreIndex(
+            store_index,
+            block_keep_count,
+            block_keep_hashes,
+            &pruned_store_index);
+        if (err != 0)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_PruneStoreIndex() failed with %d", err)
+            api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
+            Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
+            Longtail_Free(store_index);
+            Longtail_UnlockSpinLock(api->m_Lock);
+            return err;
+        }
 
-    if (api->m_StoreIndex != pruned_store_index)
-    {
-        Longtail_Free(api->m_StoreIndex);
-        api->m_StoreIndex = pruned_store_index;
+        if (api->m_StoreIndex != pruned_store_index)
+        {
+            Longtail_Free(api->m_StoreIndex);
+            api->m_StoreIndex = pruned_store_index;
+        }
+        api->m_StoreIndexIsDirty = 0;
     }
-    api->m_StoreIndexIsDirty = 0;
 
     err = SafeWriteStoreIndex(api);
     if (err != 0) {
@@ -1209,7 +1211,7 @@ static int FSBlockStore_PruneBlocks(
     }
 
     uint32_t old_block_count = *store_index->m_BlockCount;
-    uint32_t block_count = *pruned_store_index->m_BlockCount;
+    uint32_t block_count = *api->m_StoreIndex->m_BlockCount;
     uint32_t pruned_count = *store_index->m_BlockCount - block_count;
     if (pruned_count > 0)
     {
@@ -1227,7 +1229,7 @@ static int FSBlockStore_PruneBlocks(
         struct Longtail_LookupTable* kept_block_lookup = LongtailPrivate_LookupTable_Create(kept_block_lookup_mem, block_count, 0);
         for (uint32_t b = 0; b < block_count; ++b)
         {
-            TLongtail_Hash block_hash = pruned_store_index->m_BlockHashes[b];
+            TLongtail_Hash block_hash = api->m_StoreIndex->m_BlockHashes[b];
             LongtailPrivate_LookupTable_PutUnique(kept_block_lookup, block_hash, b);
         }
 
