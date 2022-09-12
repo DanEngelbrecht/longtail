@@ -33,6 +33,223 @@
 #include <inttypes.h>
 #include <stdarg.h>
 
+struct SlowStorageAPI {
+    struct Longtail_StorageAPI m_Api;
+    struct Longtail_StorageAPI* m_BackingStorageAPI;
+    uint32_t m_SleepTime;
+};
+
+static void SlowStorageAPI_Dispose(struct Longtail_API* storage_api)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    api->m_BackingStorageAPI->m_API.Dispose(&api->m_BackingStorageAPI->m_API);
+    Longtail_Free(api);
+}
+
+int SlowStorageAPI_OpenReadFileFunc(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->OpenReadFile(api->m_BackingStorageAPI, path, out_open_file);
+}
+
+int SlowStorageAPI_GetSizeFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->GetSize(api->m_BackingStorageAPI, f, out_size);
+}
+
+int SlowStorageAPI_ReadFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->Read(api->m_BackingStorageAPI, f, offset, length, output);
+}
+
+int SlowStorageAPI_OpenWriteFileFunc(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->OpenWriteFile(api->m_BackingStorageAPI, path, initial_size, out_open_file);
+}
+
+int SlowStorageAPI_WriteFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->Write(api->m_BackingStorageAPI, f, offset, length, input);
+}
+
+int SlowStorageAPI_SetSizeFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->SetSize(api->m_BackingStorageAPI, f, length);
+}
+
+int SlowStorageAPI_SetPermissionsFunc(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t permissions)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->SetPermissions(api->m_BackingStorageAPI, path, permissions);
+}
+
+int SlowStorageAPI_GetPermissionsFunc(struct Longtail_StorageAPI* storage_api, const char* path, uint16_t* out_permissions)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->GetPermissions(api->m_BackingStorageAPI, path, out_permissions);
+}
+
+void SlowStorageAPI_CloseFileFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    api->m_BackingStorageAPI->CloseFile(api->m_BackingStorageAPI, f);
+}
+
+int SlowStorageAPI_CreateDirFunc(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->CreateDir(api->m_BackingStorageAPI, path);
+}
+
+int SlowStorageAPI_RenameFileFunc(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->RenameFile(api->m_BackingStorageAPI, source_path, target_path);
+}
+
+char* SlowStorageAPI_ConcatPathFunc(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    return api->m_BackingStorageAPI->ConcatPath(api->m_BackingStorageAPI, root_path, sub_path);
+}
+
+int SlowStorageAPI_IsDirFunc(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->IsDir(api->m_BackingStorageAPI, path);
+}
+
+int SlowStorageAPI_IsFileFunc(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->IsFile(api->m_BackingStorageAPI, path);
+}
+
+int SlowStorageAPI_RemoveDirFunc(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->RemoveDir(api->m_BackingStorageAPI, path);
+}
+
+int SlowStorageAPI_RemoveFileFunc(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->RemoveFile(api->m_BackingStorageAPI, path);
+}
+
+int SlowStorageAPI_StartFindFunc(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    return api->m_BackingStorageAPI->StartFind(api->m_BackingStorageAPI, path, out_iterator);
+}
+
+int SlowStorageAPI_FindNextFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    return api->m_BackingStorageAPI->FindNext(api->m_BackingStorageAPI, iterator);
+}
+
+void SlowStorageAPI_CloseFindFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    api->m_BackingStorageAPI->CloseFind(api->m_BackingStorageAPI, iterator);
+}
+
+int SlowStorageAPI_GetEntryPropertiesFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    return api->m_BackingStorageAPI->GetEntryProperties(api->m_BackingStorageAPI, iterator, out_properties);
+}
+
+int SlowStorageAPI_LockFileFunc(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HLockFile* out_lock_file)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->LockFile(api->m_BackingStorageAPI, path, out_lock_file);
+}
+
+int SlowStorageAPI_UnlockFileFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile file_lock)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    Longtail_Sleep(api->m_SleepTime);
+    return api->m_BackingStorageAPI->UnlockFile(api->m_BackingStorageAPI, file_lock);
+}
+
+char* SlowStorageAPI_GetParentPathFunc(struct Longtail_StorageAPI* storage_api, const char* path)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    return api->m_BackingStorageAPI->GetParentPath(api->m_BackingStorageAPI, path);
+}
+
+int SlowStorageAPI_MapFileFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    return api->m_BackingStorageAPI->MapFile(api->m_BackingStorageAPI, f, offset, length, out_file_map, out_data_ptr);
+}
+
+void SlowStorageAPI_UnMapFileFunc(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m)
+{
+    struct SlowStorageAPI* api = (struct SlowStorageAPI*)storage_api;
+    api->m_BackingStorageAPI->UnMapFile(api->m_BackingStorageAPI, m);
+}
+
+struct Longtail_StorageAPI* CreateSlowStorageAPI(uint32_t SleepTime)
+{
+    void* mem = Longtail_Alloc("CreateSlowStorageAPI", sizeof(struct SlowStorageAPI));
+    struct Longtail_StorageAPI* api = Longtail_MakeStorageAPI(
+    mem,
+    SlowStorageAPI_Dispose,
+    SlowStorageAPI_OpenReadFileFunc,
+    SlowStorageAPI_GetSizeFunc,
+    SlowStorageAPI_ReadFunc,
+    SlowStorageAPI_OpenWriteFileFunc,
+    SlowStorageAPI_WriteFunc,
+    SlowStorageAPI_SetSizeFunc,
+    SlowStorageAPI_SetPermissionsFunc,
+    SlowStorageAPI_GetPermissionsFunc,
+    SlowStorageAPI_CloseFileFunc,
+    SlowStorageAPI_CreateDirFunc,
+    SlowStorageAPI_RenameFileFunc,
+    SlowStorageAPI_ConcatPathFunc,
+    SlowStorageAPI_IsDirFunc,
+    SlowStorageAPI_IsFileFunc,
+    SlowStorageAPI_RemoveDirFunc,
+    SlowStorageAPI_RemoveFileFunc,
+    SlowStorageAPI_StartFindFunc,
+    SlowStorageAPI_FindNextFunc,
+    SlowStorageAPI_CloseFindFunc,
+    SlowStorageAPI_GetEntryPropertiesFunc,
+    SlowStorageAPI_LockFileFunc,
+    SlowStorageAPI_UnlockFileFunc,
+    SlowStorageAPI_GetParentPathFunc,
+    SlowStorageAPI_MapFileFunc,
+    SlowStorageAPI_UnMapFileFunc);
+    struct SlowStorageAPI* slow_storage_api = (struct SlowStorageAPI*)api;
+    slow_storage_api->m_BackingStorageAPI = Longtail_CreateFSStorageAPI();
+    slow_storage_api->m_SleepTime = SleepTime;
+    return api;
+}
+
 static void AssertFailure(const char* expression, const char* file, int line)
 {
     fprintf(stderr, "%s(%d): Assert failed `%s`\n", file, line, expression);
@@ -642,14 +859,16 @@ int DownSync(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
-    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, storage_path, 0, enable_mmap_block_store);
+    struct Longtail_StorageAPI* local_storage_api = CreateSlowStorageAPI(500);
+    struct Longtail_StorageAPI* remote_storage_api = Longtail_CreateFSStorageAPI();
+//    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+    struct Longtail_BlockStoreAPI* store_block_remotestore_api = Longtail_CreateFSBlockStoreAPI(job_api, remote_storage_api, storage_path, 0, enable_mmap_block_store);
     struct Longtail_BlockStoreAPI* store_block_localstore_api = 0;
     struct Longtail_BlockStoreAPI* store_block_cachestore_api = 0;
     struct Longtail_BlockStoreAPI* compress_block_store_api = 0;
     if (cache_path)
     {
-        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, cache_path, 0, enable_mmap_block_store);
+        store_block_localstore_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage_api, cache_path, 0, enable_mmap_block_store);
         store_block_cachestore_api = Longtail_CreateCacheBlockStoreAPI(job_api, store_block_localstore_api, store_block_remotestore_api);
         compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_cachestore_api, compression_registry);
     }
@@ -662,7 +881,7 @@ int DownSync(
     struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(lru_block_store_api);
 
     struct Longtail_VersionIndex* source_version_index = 0;
-    int err = Longtail_ReadVersionIndex(storage_api, source_path, &source_version_index);
+    int err = Longtail_ReadVersionIndex(remote_storage_api, source_path, &source_version_index);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_path, err);
@@ -672,7 +891,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -692,7 +912,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -710,7 +931,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -721,7 +943,7 @@ int DownSync(
     struct Longtail_VersionIndex* target_version_index = 0;
     if (optional_target_index_path)
     {
-        err = Longtail_ReadVersionIndex(storage_api, optional_target_index_path, &target_version_index);
+        err = Longtail_ReadVersionIndex(local_storage_api, optional_target_index_path, &target_version_index);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Failed to read version index from `%s`, %d", optional_target_index_path, err);
@@ -734,7 +956,7 @@ int DownSync(
     {
         struct Longtail_FileInfos* file_infos;
         err = Longtail_GetFilesRecursively(
-            storage_api,
+            local_storage_api,
             0,
             0,
             0,
@@ -751,7 +973,8 @@ int DownSync(
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
             SAFE_DISPOSE_API(store_block_remotestore_api);
-            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(remote_storage_api);
+            SAFE_DISPOSE_API(local_storage_api);
             SAFE_DISPOSE_API(compression_registry);
             SAFE_DISPOSE_API(hash_registry);
             SAFE_DISPOSE_API(job_api);
@@ -768,7 +991,7 @@ int DownSync(
         if (progress)
         {
             err = Longtail_CreateVersionIndex(
-                storage_api,
+                local_storage_api,
                 hash_api,
                 chunker_api,
                 job_api,
@@ -801,7 +1024,8 @@ int DownSync(
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
             SAFE_DISPOSE_API(store_block_remotestore_api);
-            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(remote_storage_api);
+            SAFE_DISPOSE_API(local_storage_api);
             SAFE_DISPOSE_API(compression_registry);
             SAFE_DISPOSE_API(hash_registry);
             SAFE_DISPOSE_API(job_api);
@@ -828,7 +1052,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -851,7 +1076,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -880,7 +1106,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -909,7 +1136,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -924,7 +1152,7 @@ int DownSync(
     {
         err = Longtail_ChangeVersion(
             store_block_store_api,
-            storage_api,
+            local_storage_api,
             hash_api,
             job_api,
             progress,
@@ -957,7 +1185,8 @@ int DownSync(
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
         SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
+        SAFE_DISPOSE_API(remote_storage_api);
+        SAFE_DISPOSE_API(local_storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(hash_registry);
         SAFE_DISPOSE_API(job_api);
@@ -976,7 +1205,8 @@ int DownSync(
     SAFE_DISPOSE_API(store_block_cachestore_api);
     SAFE_DISPOSE_API(store_block_localstore_api);
     SAFE_DISPOSE_API(store_block_remotestore_api);
-    SAFE_DISPOSE_API(storage_api);
+    SAFE_DISPOSE_API(remote_storage_api);
+    SAFE_DISPOSE_API(local_storage_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(hash_registry);
     SAFE_DISPOSE_API(job_api);
@@ -1816,7 +2046,8 @@ int Unpack(
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     struct Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    struct Longtail_StorageAPI* storage_api = Longtail_CreateFSStorageAPI();
+    struct Longtail_StorageAPI* storage_api = CreateSlowStorageAPI(0);
+    struct Longtail_StorageAPI* archive_storage_api = Longtail_CreateFSStorageAPI();
 
     struct Longtail_ArchiveIndex* archive_index;
     int err = Longtail_ReadArchiveIndex(
@@ -1835,6 +2066,7 @@ int Unpack(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create hashing api from `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1845,6 +2077,7 @@ int Unpack(
     if (chunker_api == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create chunking api from `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1866,6 +2099,7 @@ int Unpack(
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", target_path, err);
             SAFE_DISPOSE_API(chunker_api);
+            SAFE_DISPOSE_API(archive_storage_api);
             SAFE_DISPOSE_API(storage_api);
             SAFE_DISPOSE_API(compression_registry);
             SAFE_DISPOSE_API(job_api);
@@ -1908,6 +2142,7 @@ int Unpack(
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
             SAFE_DISPOSE_API(chunker_api);
+            SAFE_DISPOSE_API(archive_storage_api);
             SAFE_DISPOSE_API(storage_api);
             SAFE_DISPOSE_API(compression_registry);
             SAFE_DISPOSE_API(job_api);
@@ -1917,7 +2152,7 @@ int Unpack(
     }
 
     struct Longtail_BlockStoreAPI* archive_block_store_api = Longtail_CreateArchiveBlockStore(
-        storage_api,
+        archive_storage_api,
         source_path,
         archive_index,
         0,
@@ -1925,6 +2160,7 @@ int Unpack(
     if (archive_block_store_api == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive block store `%s`, %d", source_path, err);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1950,6 +2186,7 @@ int Unpack(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create lru block store `%s`, %d", source_path, err);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1964,6 +2201,7 @@ int Unpack(
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1984,6 +2222,7 @@ int Unpack(
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -2001,6 +2240,7 @@ int Unpack(
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -2040,6 +2280,7 @@ int Unpack(
         SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
+        SAFE_DISPOSE_API(archive_storage_api);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -2052,6 +2293,7 @@ int Unpack(
     SAFE_DISPOSE_API(lru_block_store_api);
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(archive_block_store_api);
+    SAFE_DISPOSE_API(archive_storage_api);
     SAFE_DISPOSE_API(storage_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(job_api);
