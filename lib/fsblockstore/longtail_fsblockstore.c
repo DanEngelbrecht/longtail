@@ -143,7 +143,7 @@ static char* GetTempBlockPath(
     return storage_api->ConcatPath(storage_api, store_path, file_name);
 }
 
-static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api)
+static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api, int merge_with_existing_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(api, "%p")
@@ -167,7 +167,7 @@ static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api)
     const char* store_index_path = storage_api->ConcatPath(storage_api, store_path, "store.lsi");
 
     struct Longtail_StoreIndex* store_index = api->m_StoreIndex;
-    if (storage_api->IsFile(storage_api, store_index_path))
+    if (merge_with_existing_index && storage_api->IsFile(storage_api, store_index_path))
     {
         struct Longtail_StoreIndex* existing_store_index = 0;
         err = Longtail_ReadStoreIndex(storage_api, store_index_path, &existing_store_index);
@@ -1200,7 +1200,7 @@ static int FSBlockStore_PruneBlocks(
         api->m_StoreIndexIsDirty = 0;
     }
 
-    err = SafeWriteStoreIndex(api);
+    err = SafeWriteStoreIndex(api, 0);
     if (err != 0) {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteStoreIndex() failed with %d", err)
         api->m_StorageAPI->UnlockFile(api->m_StorageAPI, store_index_lock_file);
@@ -1328,7 +1328,7 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
             {
                 if (new_block_count > 0 || (!api->m_StorageAPI->IsFile(api->m_StorageAPI, store_index_path)))
                 {
-                    err = SafeWriteStoreIndex(api);
+                    err = SafeWriteStoreIndex(api, 1);
                     if (err)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "SafeWriteStoreIndex() failed with %d", err);
