@@ -1,4 +1,5 @@
 ##
+- **CHANGED** Additional error/diagnostic logging when initialising store and version indexes from a buffer
 
 ## 0.3.6
 - **CHANGED API** `Longtail_Job_CreateJobsFunc` now takes a `channel` parameter, can be either 0 or 1, 0 has higher priority than 1
