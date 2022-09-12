@@ -1,5 +1,6 @@
 ##
 - **CHANGED** Additional error/diagnostic logging when initialising store and version indexes from a buffer
+- **FIX** Don't use potentally stale store index in `FSBlockStoreAPI` `PruneBlocks`
 
 ## 0.3.6
 - **CHANGED API** `Longtail_Job_CreateJobsFunc` now takes a `channel` parameter, can be either 0 or 1, 0 has higher priority than 1
