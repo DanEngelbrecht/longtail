@@ -7686,3 +7686,126 @@ TEST(Longtail, Longtail_BlockStoreMemMappedFS)
     Longtail_Free((void*)target_folder);
     Longtail_Free((void*)store_folder);
 }
+
+TEST(Longtail, Longtail_MergeVersionIndex)
+{
+    Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, target_storage, "chunks", 0, 0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
+
+    const char* BASE_TEST_FILENAMES[6] = {
+        "base/TheLongFile.txt",
+        "base/ShortString.txt",
+        "base/AnotherSample.txt",
+        "base/folder/ShortString.txt",
+        "base/AlsoShortString.txt",
+        "base/empty_folder"
+    };
+
+    const char* BASE_TEST_STRINGS[6] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "Short string",
+        0
+    };
+
+    auto CreateTestData = [](const char* file_names[], const char* file_content[], size_t count, Longtail_StorageAPI* storage)
+    {
+        for (uint32_t i = 0; i < count; ++i)
+        {
+            ASSERT_NE(0, CreateParentPath(storage, file_names[i]));
+            if (file_content[i])
+            {
+                Longtail_StorageAPI_HOpenFile w;
+                ASSERT_EQ(0, storage->OpenWriteFile(storage, file_names[i], 0, &w));
+                ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+                ASSERT_EQ(0, storage->Write(storage, w, 0, strlen(file_content[i]) + 1, file_content[i]));
+                storage->CloseFile(storage, w);
+                w = 0;
+            }
+            else
+            {
+                storage->CreateDir(storage, file_names[i]);
+            }
+        }
+    };
+
+    CreateTestData(BASE_TEST_FILENAMES, BASE_TEST_STRINGS, 6, source_storage);
+
+    const char* OVERLAY_TEST_FILENAMES[8] = {
+        "overlay/TheLongFile.txt",
+        "overlay/ANewFileInOverlay",
+        "overlay/empty_folder",
+        "overlay/overlayfolder/moreData",
+        "overlay/datainnewfolder",
+        "overlay/newfolder",
+        "overlay/anothernewfolder/datainanothernewfolder",
+        "overlay/anothernewoverlay/moredata"
+    };
+
+    const char* OVERLAY_TEST_STRINGS[8] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much, but it has been slightly changed",
+        "New file in local folder",
+        0,
+        "moreData overlayed in an existing folder but data in subfolder",
+        "more data in a new root folder",
+        0,
+        "data in another new folder in a new folder in a new root folder",
+        "moredata in anothernewoverlay root folder"
+    };
+
+    CreateTestData(OVERLAY_TEST_FILENAMES, OVERLAY_TEST_STRINGS, 8, source_storage);
+
+    auto CreateFileVersion = [hash_api, job_api, chunker_api](Longtail_StorageAPI* storage, const char* root_folder)
+    {
+        Longtail_FileInfos* version_paths;
+        Longtail_GetFilesRecursively(storage, 0, 0, 0, root_folder, &version_paths);
+        uint32_t* compression_types = GetAssetTags(storage, version_paths);
+        Longtail_VersionIndex* vindex;
+        Longtail_CreateVersionIndex(
+            storage,
+            hash_api,
+            chunker_api,
+            job_api,
+            0,
+            0,
+            0,
+            root_folder,
+            version_paths,
+            compression_types,
+            16,
+            0,
+            &vindex);
+        Longtail_Free(compression_types);
+        compression_types = 0;
+        Longtail_Free(version_paths);
+        version_paths = 0;
+        return vindex;
+    };
+    Longtail_VersionIndex* base_version_index = CreateFileVersion(source_storage, "base");
+    ASSERT_NE(base_version_index, (Longtail_VersionIndex*)0);
+    Longtail_VersionIndex* overlay_version_index = CreateFileVersion(source_storage, "overlay");
+    ASSERT_NE(overlay_version_index, (Longtail_VersionIndex*)0);
+
+    Longtail_VersionIndex* merged_version_index;
+    ASSERT_EQ(0, Longtail_MergeVersionIndex(base_version_index, overlay_version_index, &merged_version_index));
+
+    Longtail_Free(merged_version_index);
+    Longtail_Free(overlay_version_index);
+    Longtail_Free(base_version_index);
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(target_storage);
+    SAFE_DISPOSE_API(source_storage);
+}
