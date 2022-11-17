@@ -2828,12 +2828,12 @@ int Longtail_MergeVersionIndex(
     size_t overlay_asset_lookup_table_size = LongtailPrivate_LookupTable_GetSize(overlay_asset_count);
     size_t base_chunk_lookup_table_size = LongtailPrivate_LookupTable_GetSize(base_chunk_count);
     size_t overlay_chunk_lookup_table_size = LongtailPrivate_LookupTable_GetSize(overlay_chunk_count);
-    size_t asset_hashes_size = sizeof(TLongtail_Hash) * max_asset_count;
+    size_t path_hashes_size = sizeof(TLongtail_Hash) * max_asset_count;
     size_t chunk_hashes_size = sizeof(TLongtail_Hash) * max_chunk_count;
     size_t name_lengths_size = sizeof(uint32_t) * max_asset_count;
     size_t asset_indexes_size = sizeof(uint32_t) * max_asset_count;
 
-    size_t tmp_mem_size = base_asset_lookup_table_size + overlay_asset_lookup_table_size + base_chunk_lookup_table_size + overlay_chunk_lookup_table_size + asset_hashes_size + chunk_hashes_size + name_lengths_size + asset_indexes_size;
+    size_t tmp_mem_size = base_asset_lookup_table_size + overlay_asset_lookup_table_size + base_chunk_lookup_table_size + overlay_chunk_lookup_table_size + path_hashes_size + chunk_hashes_size + name_lengths_size + asset_indexes_size;
     void* tmp_mem = Longtail_Alloc("Longtail_MergeVersionIndex", tmp_mem_size);
     if (!tmp_mem)
     {
@@ -2856,8 +2856,8 @@ int Longtail_MergeVersionIndex(
     uint32_t* name_lengths = (uint32_t*)p;
     p += name_lengths_size;
 
-    TLongtail_Hash* asset_hashes = (TLongtail_Hash*)p;
-    p += asset_hashes_size;
+    TLongtail_Hash* path_hashes = (TLongtail_Hash*)p;
+    p += path_hashes_size;
     TLongtail_Hash* chunk_hashes = (TLongtail_Hash*)p;
     p += chunk_hashes_size;
 
@@ -2866,7 +2866,7 @@ int Longtail_MergeVersionIndex(
     for (uint32_t i = 0; i < base_asset_count; ++i)
     {
         TLongtail_Hash path_hash = base_version_index->m_PathHashes[i];
-        asset_hashes[i] = path_hash;
+        path_hashes[i] = path_hash;
         const char* path = &base_version_index->m_NameData[base_version_index->m_NameOffsets[i]];
         name_lengths[i] = (uint32_t)strlen(path);
         asset_indexes[i] = i;
@@ -2887,7 +2887,7 @@ int Longtail_MergeVersionIndex(
         }
         else
         {
-            asset_hashes[unique_asset_count] = path_hash;
+            path_hashes[unique_asset_count] = path_hash;
             const char* path = &overlay_version_index->m_NameData[overlay_version_index->m_NameOffsets[i]];
             name_lengths[unique_asset_count] = (uint32_t)strlen(path);
             asset_indexes[unique_asset_count] = (uint32_t)unique_asset_count;
@@ -2898,13 +2898,13 @@ int Longtail_MergeVersionIndex(
     }
     if (unique_asset_count > 0xffffffffu)
     {
-        // TODO: Log error
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Merged version index would contain to many assets (%" PRIu64 "), failed with %d", unique_asset_count, ENOMEM)
         Longtail_Free(tmp_mem);
         return ENOMEM;
     }
     if (asset_chunk_index_count > 0xffffffffu)
     {
-        // TODO: Log error
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Merged version index would reference to many asset chunk references (%" PRIu64 "), failed with %d", asset_chunk_index_count, ENOMEM)
         Longtail_Free(tmp_mem);
         return ENOMEM;
     }
@@ -2912,7 +2912,7 @@ int Longtail_MergeVersionIndex(
     size_t unique_chunk_count = 0;
     for (size_t i = 0; i < unique_asset_count; ++i)
     {
-        TLongtail_Hash path_hash = asset_hashes[i];
+        TLongtail_Hash path_hash = path_hashes[i];
 
         const uint32_t* overlay_it = LongtailPrivate_LookupTable_Get(overlay_asset_lut, path_hash);
         if (overlay_it)
@@ -2956,58 +2956,183 @@ int Longtail_MergeVersionIndex(
     }
     if (unique_chunk_count > 0xffffffffu)
     {
-        // TODO: Log error
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Merged version index contain to many chunks (%" PRIu64 "), failed with %d", unique_chunk_count, ENOMEM)
         Longtail_Free(tmp_mem);
         return ENOMEM;
     }
 
     QSORT(asset_indexes, unique_asset_count, sizeof(uint32_t), SortPathShortToLongVersionMerge, (void*)name_lengths);
 
-    size_t version_index_size = Longtail_GetVersionIndexSize((uint32_t)unique_asset_count, (uint32_t)unique_chunk_count, (uint32_t)asset_chunk_index_count, 0);
-    void* out_mem = Longtail_Alloc("Longtail_MergeVersionIndex", version_index_size);
-    if (out_mem == 0)
+    size_t path_name_size = 0;
+    for (uint32_t asset_index = 0; asset_index < (uint32_t)unique_asset_count; ++asset_index)
     {
-        // TODO: Log error
+        TLongtail_Hash path_hash = path_hashes[asset_index];
+        const struct Longtail_VersionIndex* source_version_index = 0;
+        uint32_t source_asset_index = 0;
+        const uint32_t* overlay_asset_index = LongtailPrivate_LookupTable_Get(overlay_asset_lut, path_hash);
+        if (overlay_asset_index)
+        {
+            source_version_index = overlay_version_index;
+            source_asset_index = *overlay_asset_index;
+        }
+        else
+        {
+            const uint32_t* base_asset_index = LongtailPrivate_LookupTable_Get(base_asset_lut, path_hash);
+            LONGTAIL_FATAL_ASSERT(ctx, base_asset_index != 0, return EINVAL)
+            source_version_index = base_version_index;
+            source_asset_index = *base_asset_index;
+        }
+        const char* path_name = &source_version_index->m_NameData[source_version_index->m_NameOffsets[source_asset_index]];
+        size_t path_name_length = strlen(path_name);
+        path_name_size += path_name_length + 1;
+    }
+
+    if (path_name_size > 0xffffffffu)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Merged version index would contain to much path name data (%" PRIu64 "), failed with %d", path_name_size, ENOMEM)
         Longtail_Free(tmp_mem);
         return ENOMEM;
     }
+
+    size_t chunk_lut_size = LongtailPrivate_LookupTable_GetSize((uint32_t)unique_chunk_count);
+    void* chunk_lut_mem = Longtail_Alloc("Longtail_MergeVersionIndex", chunk_lut_size);
+    if (chunk_lut_mem == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Merged version index would contain to much path name data (%" PRIu64 "), failed with %d", path_name_size, ENOMEM)
+        Longtail_Free(tmp_mem);
+        return ENOMEM;
+    }
+
+    struct Longtail_LookupTable* chunk_lut = LongtailPrivate_LookupTable_Create(chunk_lut_mem, (uint32_t)unique_chunk_count, 0);
+    for (uint32_t chunk_index = 0; chunk_index < (uint32_t)unique_chunk_count; ++chunk_index)
+    {
+        LongtailPrivate_LookupTable_Put(chunk_lut, chunk_hashes[chunk_index], chunk_index);
+    }
+
+    size_t version_index_size = Longtail_GetVersionIndexSize((uint32_t)unique_asset_count, (uint32_t)unique_chunk_count, (uint32_t)asset_chunk_index_count, (uint32_t)path_name_size);
+    void* out_mem = Longtail_Alloc("Longtail_MergeVersionIndex", version_index_size);
+    if (out_mem == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_Free(chunk_lut_mem);
+        Longtail_Free(tmp_mem);
+        return ENOMEM;
+    }
+
     struct Longtail_VersionIndex* merged_version_index = (struct Longtail_VersionIndex*)out_mem;
-    char* p = (char*)&merged_version_index[1];
+    {
+        char* p = (char*)&merged_version_index[1];
 
-    merged_version_index->m_Version = (uint32_t*)p;
-    p += sizeof(uint32_t);
-    merged_version_index->m_HashIdentifier = (uint32_t*)p;
-    p += sizeof(uint32_t);
-    merged_version_index->m_TargetChunkSize = (uint32_t*)p;
-    p += sizeof(uint32_t);
-    merged_version_index->m_AssetCount = (uint32_t*)p;
-    p += sizeof(uint32_t);
-    merged_version_index->m_ChunkCount = (uint32_t*)p;
-    p += sizeof(uint32_t);
-    merged_version_index->m_AssetChunkIndexCount = (uint32_t*)p;
-    p += sizeof(uint32_t);
-    merged_version_index->m_PathHashes = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * unique_asset_count;
-    merged_version_index->m_ContentHashes = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * unique_asset_count;
-    merged_version_index->m_AssetSizes = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * unique_asset_count;
-    merged_version_index->m_AssetChunkCounts = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * unique_asset_count;
-    merged_version_index->m_AssetChunkIndexStarts = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * unique_asset_count;
-    merged_version_index->m_AssetChunkIndexes = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * asset_chunk_index_count;
-    merged_version_index->m_AssetChunkIndexes = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * unique_chunk_count;
-    merged_version_index->m_AssetChunkIndexes = (uint32_t*)p;
-    p += sizeof(TLongtail_Hash) * unique_chunk_count;
+        merged_version_index->m_Version = (uint32_t*)p;
+        p += sizeof(uint32_t);
+        merged_version_index->m_HashIdentifier = (uint32_t*)p;
+        p += sizeof(uint32_t);
+        merged_version_index->m_TargetChunkSize = (uint32_t*)p;
+        p += sizeof(uint32_t);
+        merged_version_index->m_AssetCount = (uint32_t*)p;
+        p += sizeof(uint32_t);
+        merged_version_index->m_ChunkCount = (uint32_t*)p;
+        p += sizeof(uint32_t);
+        merged_version_index->m_AssetChunkIndexCount = (uint32_t*)p;
+        p += sizeof(uint32_t);
+        merged_version_index->m_PathHashes = (TLongtail_Hash*)p;
+        p += sizeof(TLongtail_Hash) * unique_asset_count;
+        merged_version_index->m_ContentHashes = (TLongtail_Hash*)p;
+        p += sizeof(TLongtail_Hash) * unique_asset_count;
+        merged_version_index->m_AssetSizes = (TLongtail_Hash*)p;
+        p += sizeof(TLongtail_Hash) * unique_asset_count;
+        merged_version_index->m_AssetChunkCounts = (uint32_t*)p;
+        p += sizeof(uint32_t) * unique_asset_count;
+        merged_version_index->m_AssetChunkIndexStarts = (uint32_t*)p;
+        p += sizeof(uint32_t) * unique_asset_count;
+        merged_version_index->m_AssetChunkIndexes = (uint32_t*)p;
+        p += sizeof(uint32_t) * asset_chunk_index_count;
+        merged_version_index->m_AssetChunkIndexes = (uint32_t*)p;
+        p += sizeof(uint32_t) * unique_chunk_count;
+        merged_version_index->m_AssetChunkIndexes = (uint32_t*)p;
+        p += sizeof(uint32_t) * unique_chunk_count;
+    }
+    *merged_version_index->m_Version = Longtail_CurrentVersionIndexVersion;
+    *merged_version_index->m_HashIdentifier = *base_version_index->m_HashIdentifier;
+    *merged_version_index->m_TargetChunkSize = *base_version_index->m_TargetChunkSize;
+    *merged_version_index->m_AssetCount = (uint32_t)unique_asset_count;
+    *merged_version_index->m_ChunkCount = (uint32_t)unique_chunk_count;
+    *merged_version_index->m_AssetChunkIndexCount = (uint32_t)asset_chunk_index_count;
+    memcpy(merged_version_index->m_PathHashes, path_hashes, sizeof(TLongtail_Hash) * unique_asset_count);
+    memcpy(merged_version_index->m_ChunkHashes, chunk_hashes, sizeof(TLongtail_Hash) * unique_chunk_count);
 
+    uint32_t asset_index_offset = 0;
+    uint32_t path_name_offset = 0;
+    for (uint32_t asset_index = 0; asset_index < (uint32_t)unique_asset_count; ++asset_index)
+    {
+        TLongtail_Hash path_hash = path_hashes[asset_index];
+        const struct Longtail_VersionIndex* source_version_index = 0;
+        uint32_t source_asset_index = 0;
+        const uint32_t* overlay_asset_index = LongtailPrivate_LookupTable_Get(overlay_asset_lut, path_hash);
+        if (overlay_asset_index)
+        {
+            source_version_index = overlay_version_index;
+            source_asset_index = *overlay_asset_index;
+        }
+        else
+        {
+            const uint32_t* base_asset_index = LongtailPrivate_LookupTable_Get(base_asset_lut, path_hash);
+            LONGTAIL_FATAL_ASSERT(ctx, base_asset_index != 0, return EINVAL)
+            source_version_index = base_version_index;
+            source_asset_index = *base_asset_index;
+        }
+
+        uint32_t asset_index_start = source_version_index->m_AssetChunkIndexStarts[source_asset_index];
+        const uint32_t* asset_chunk_indexes = &source_version_index->m_AssetChunkIndexes[asset_index_start];
+        uint32_t asset_chunk_count = source_version_index->m_AssetChunkCounts[source_asset_index];
+        const TLongtail_Hash* source_chunk_hashes = source_version_index->m_ChunkHashes;
+
+        merged_version_index->m_AssetChunkIndexStarts[asset_index] = asset_index_offset;
+        merged_version_index->m_AssetChunkCounts[asset_index] = asset_chunk_count;
+        for (uint32_t asset_chunk_index_offset = 0; asset_chunk_index_offset < asset_chunk_count; ++asset_chunk_index_offset)
+        {
+            uint32_t source_chunk_index = asset_chunk_indexes[asset_chunk_index_offset];
+            TLongtail_Hash chunk_hash = source_chunk_hashes[source_chunk_index];
+            const uint32_t* chunk_index = LongtailPrivate_LookupTable_Get(chunk_lut, chunk_hash);
+            LONGTAIL_FATAL_ASSERT(ctx, chunk_index != 0, return EINVAL)
+            source_version_index->m_AssetChunkIndexes[asset_index_offset] = *chunk_index;
+            asset_index_offset++;
+        }
+
+        const char* path_name = &source_version_index->m_NameData[source_version_index->m_NameOffsets[source_asset_index]];
+        size_t path_name_length = strlen(path_name);
+        memcpy(&merged_version_index->m_NameData[path_name_offset], path_name, path_name_length + 1);
+        path_name_offset += (uint32_t)(path_name_length + 1);
+    }
+
+    for (uint32_t chunk_index = 0; chunk_index < (uint32_t)unique_chunk_count; ++chunk_index)
+    {
+        TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
+        const struct Longtail_VersionIndex* source_version_index = 0;
+        uint32_t source_chunk_index = 0;
+        const uint32_t* overlay_chunk_index = LongtailPrivate_LookupTable_Get(overlay_chunk_lut, chunk_hash);
+        if (overlay_chunk_index)
+        {
+            source_version_index = overlay_version_index;
+            source_chunk_index = *overlay_chunk_index;
+        }
+        else
+        {
+            const uint32_t* base_chunk_index = LongtailPrivate_LookupTable_Get(base_chunk_lut, chunk_hash);
+            LONGTAIL_FATAL_ASSERT(ctx, base_chunk_index != 0, return EINVAL)
+            source_version_index = base_version_index;
+            source_chunk_index = *base_chunk_index;
+        }
+        merged_version_index->m_ChunkSizes[chunk_index] = source_version_index->m_ChunkSizes[source_chunk_index];
+        merged_version_index->m_ChunkTags[chunk_index] = source_version_index->m_ChunkTags[source_chunk_index];
+    }
+
+    Longtail_Free(chunk_lut_mem);
+    Longtail_Free(tmp_mem);
 
     *out_version_index = merged_version_index;
     return 0;
 }
-
 
 int Longtail_WriteVersionIndexToBuffer(
     const struct Longtail_VersionIndex* version_index,
