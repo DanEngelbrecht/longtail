@@ -142,7 +142,7 @@ static const wchar_t* MakeLongPath(const wchar_t* path)
     }
     static const wchar_t* LongPathPrefix = L"\\\\?\\";
     size_t long_path_len = wcslen(path) + 4 + 1;
-    wchar_t* long_path = (wchar_t*)Longtail_Alloc("MakeLongPath", long_path_len);
+    wchar_t* long_path = (wchar_t*)Longtail_Alloc("MakeLongPath", long_path_len * sizeof(wchar_t));
     wcsncpy(long_path, LongPathPrefix, 4);
     wcscpy(&long_path[4], path);
     return long_path;
