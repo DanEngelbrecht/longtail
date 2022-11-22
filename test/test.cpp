@@ -7715,8 +7715,16 @@ TEST(Longtail, Longtail_MergeVersionIndex)
         "Short string",
         0
     };
+    const uint16_t BASE_TEST_PERMISSIONS[6] = {
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess
+    };
 
-    auto CreateTestData = [](const char* file_names[], const char* file_content[], size_t count, Longtail_StorageAPI* storage)
+    auto CreateTestData = [](const char* file_names[], const char* file_content[], const uint16_t permissions[], size_t count, Longtail_StorageAPI* storage)
     {
         for (uint32_t i = 0; i < count; ++i)
         {
@@ -7734,10 +7742,11 @@ TEST(Longtail, Longtail_MergeVersionIndex)
             {
                 storage->CreateDir(storage, file_names[i]);
             }
+            storage->SetPermissions(storage, file_names[i], permissions[i]);
         }
     };
 
-    CreateTestData(BASE_TEST_FILENAMES, BASE_TEST_STRINGS, 6, source_storage);
+    CreateTestData(BASE_TEST_FILENAMES, BASE_TEST_STRINGS, BASE_TEST_PERMISSIONS, 6, source_storage);
 
     const char* OVERLAY_TEST_FILENAMES[8] = {
         "overlay/TheLongFile.txt",
@@ -7761,7 +7770,17 @@ TEST(Longtail, Longtail_MergeVersionIndex)
         "moredata in anothernewoverlay root folder"
     };
 
-    CreateTestData(OVERLAY_TEST_FILENAMES, OVERLAY_TEST_STRINGS, 8, source_storage);
+    const uint16_t OVERLAY_TEST_PERMISSIONS[8] = {
+        Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserReadAccess
+    };
+    CreateTestData(OVERLAY_TEST_FILENAMES, OVERLAY_TEST_STRINGS, OVERLAY_TEST_PERMISSIONS, 8, source_storage);
 
     auto CreateFileVersion = [hash_api, job_api, chunker_api](Longtail_StorageAPI* storage, const char* root_folder)
     {
@@ -7794,10 +7813,116 @@ TEST(Longtail, Longtail_MergeVersionIndex)
     Longtail_VersionIndex* overlay_version_index = CreateFileVersion(source_storage, "overlay");
     ASSERT_NE(overlay_version_index, (Longtail_VersionIndex*)0);
 
+    auto CreateStoreIndex = [hash_api, job_api](const Longtail_VersionIndex* version_index) -> Longtail_StoreIndex*
+    {
+        Longtail_StoreIndex* store_index = 0;
+        Longtail_CreateStoreIndex(hash_api, *version_index->m_ChunkCount, version_index->m_ChunkHashes, version_index->m_ChunkSizes, 0, 32u, 3u, &store_index);
+        return store_index;
+    };
+    Longtail_StoreIndex* base_store_index = CreateStoreIndex(base_version_index);
+    ASSERT_NE((Longtail_StoreIndex*)0, base_store_index);
+    ASSERT_EQ(0, Longtail_WriteContent(source_storage, block_store_api, job_api, 0, 0, 0, base_store_index, base_version_index, "base"));
+
+    struct Longtail_StoreIndex* block_store_store_index = SyncGetExistingContent(block_store_api, *overlay_version_index->m_ChunkCount, overlay_version_index->m_ChunkHashes, 0);
+
+    struct Longtail_StoreIndex* overlay_store_index;
+    ASSERT_EQ(0, Longtail_CreateMissingContent(
+        hash_api,
+        block_store_store_index,
+        overlay_version_index,
+        32u,
+        3u,
+        &overlay_store_index));
+
+    ASSERT_EQ(0, Longtail_WriteContent(source_storage, block_store_api, job_api, 0, 0, 0, overlay_store_index, overlay_version_index, "overlay"));
+
+    Longtail_StoreIndex* merged_store_index;
+    ASSERT_EQ(0, Longtail_MergeStoreIndex(base_store_index, overlay_store_index, &merged_store_index));
+
     Longtail_VersionIndex* merged_version_index;
     ASSERT_EQ(0, Longtail_MergeVersionIndex(base_version_index, overlay_version_index, &merged_version_index));
+    for (uint32_t asset_index = 0; asset_index < *merged_version_index->m_AssetCount; ++asset_index)
+    {
+        const char* path = &merged_version_index->m_NameData[merged_version_index->m_NameOffsets[asset_index]];
+        ASSERT_NE((const char*)0, path);
+    }
+
+    ASSERT_EQ(0, Longtail_WriteVersion(block_store_api, source_storage, job_api, 0, 0, 0, merged_store_index, merged_version_index, "merged", 1));
+    
+    const char* RESULT_TEST_FILENAMES[12] = {
+        "merged/TheLongFile.txt",
+        "merged/ShortString.txt",
+        "merged/AnotherSample.txt",
+        "merged/folder/ShortString.txt",
+        "merged/AlsoShortString.txt",
+        "merged/empty_folder",
+        "merged/ANewFileInOverlay",
+        "merged/overlayfolder/moreData",
+        "merged/datainnewfolder",
+        "merged/newfolder",
+        "merged/anothernewfolder/datainanothernewfolder",
+        "merged/anothernewoverlay/moredata"
+    };
+
+    const char* RESULT_TEST_STRINGS[12] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much, but it has been slightly changed",
+        "Short string",
+        "Another sample string that does not match any other string but -reconstructed properly, than you very much",
+        "Short string",
+        "Short string",
+        0,
+        "New file in local folder",
+        "moreData overlayed in an existing folder but data in subfolder",
+        "more data in a new root folder",
+        0,
+        "data in another new folder in a new folder in a new root folder",
+        "moredata in anothernewoverlay root folder"
+    };
+
+    const uint16_t RESULT_TEST_PERMISSIONS[12] = {
+        Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess,
+        Longtail_StorageAPI_UserReadAccess
+    };
+
+    for (uint32_t result_index = 0; result_index < 12; ++result_index)
+    {
+        const char* asset_path = RESULT_TEST_FILENAMES[result_index];
+        uint16_t permissions;
+        ASSERT_EQ(0, source_storage->GetPermissions(source_storage, asset_path, &permissions));
+        ASSERT_EQ((permissions & (Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserReadAccess)), RESULT_TEST_PERMISSIONS[result_index]);
+        if (RESULT_TEST_STRINGS[result_index] == 0)
+        {
+            ASSERT_EQ(source_storage->IsDir(source_storage, asset_path), 1);
+            continue;
+        }
+        ASSERT_EQ(source_storage->IsFile(source_storage, asset_path), 1);
+        Longtail_StorageAPI_HOpenFile r;
+        ASSERT_EQ(0, source_storage->OpenReadFile(source_storage, asset_path, &r));
+        uint64_t size;
+        ASSERT_EQ(0, source_storage->GetSize(source_storage, r, &size));
+        ASSERT_EQ(size, strlen(RESULT_TEST_STRINGS[result_index]) + 1);
+        char* buffer = (char*)Longtail_Alloc("Longtail.Longtail_MergeVersionIndex", size);
+        ASSERT_EQ(0, source_storage->Read(source_storage, r, 0, size, buffer));
+        ASSERT_EQ(memcmp(buffer, RESULT_TEST_STRINGS[result_index], size), 0);
+        Longtail_Free(buffer);
+        source_storage->CloseFile(source_storage, r);
+    }
 
     Longtail_Free(merged_version_index);
+    Longtail_Free(merged_store_index);
+    Longtail_Free(overlay_store_index);
+    Longtail_Free(block_store_store_index);
+    Longtail_Free(base_store_index);
     Longtail_Free(overlay_version_index);
     Longtail_Free(base_version_index);
     SAFE_DISPOSE_API(block_store_api);

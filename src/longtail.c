@@ -3086,10 +3086,11 @@ int Longtail_MergeVersionIndex(
             TLongtail_Hash chunk_hash = source_chunk_hashes[source_chunk_index];
             const uint32_t* chunk_index = LongtailPrivate_LookupTable_Get(chunk_lut, chunk_hash);
             LONGTAIL_FATAL_ASSERT(ctx, chunk_index != 0, return EINVAL)
-            source_version_index->m_AssetChunkIndexes[asset_index_offset] = *chunk_index;
+            merged_version_index->m_AssetChunkIndexes[asset_index_offset] = *chunk_index;
             asset_index_offset++;
         }
 
+        merged_version_index->m_NameOffsets[asset_index] = path_name_offset;
         const char* path_name = &source_version_index->m_NameData[source_version_index->m_NameOffsets[source_asset_index]];
         size_t path_name_length = strlen(path_name);
         memcpy(&merged_version_index->m_NameData[path_name_offset], path_name, path_name_length + 1);
