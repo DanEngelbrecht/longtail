@@ -1015,6 +1015,29 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     int enable_file_map,
     struct Longtail_VersionIndex** out_version_index);
 
+
+/*! @brief Merges (adds) the content of an version index on top of an existing version index.
+ *
+ * Creates a merged version of two version indexes. Matching file paths from @p overlay_version_index will
+ * replace entries in @p base_version_index and any non-matching file paths from @p overlay_version_index will
+ * be added.
+ * 
+ * No files or directories will be removed, so if @p overlay_version_index has one file named C in folder path "A/B/"
+ * and @p overlay_version_index has one file named D in the same folder path, the result will have both files in
+ * that folder.
+ * 
+ * The struct Longtail_VersionIndex @p out_version_index is allocated using Longtail_Alloc()
+ *
+ * @param[in] base_version_index    Pointer to an initialized struct Longtail_VersionIndex
+ * @param[in] overlay_version_index Pointer to an initialized struct Longtail_VersionIndex
+ * @param[out] out_version_index    Pointer to an struct Longtail_VersionIndex pointer
+ * @return                          Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_MergeVersionIndex(
+    const struct Longtail_VersionIndex* base_version_index,
+    const struct Longtail_VersionIndex* overlay_version_index,
+    struct Longtail_VersionIndex** out_version_index);
+
 /*! @brief Writes a struct Longtail_VersionIndex to a byte buffer.
  *
  * Serializes a struct Longtail_VersionIndex to a buffer which is allocated using Longtail_Alloc()
