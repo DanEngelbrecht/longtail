@@ -2839,7 +2839,7 @@ int Longtail_MergeVersionIndex(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
-    char* p = tmp_mem;
+    char* p = (char*)tmp_mem;
     struct Longtail_LookupTable* base_asset_lut = LongtailPrivate_LookupTable_Create(p, base_asset_count, 0);
     p += base_asset_lookup_table_size;
     struct Longtail_LookupTable* overlay_asset_lut = LongtailPrivate_LookupTable_Create(p, overlay_asset_count, 0);
