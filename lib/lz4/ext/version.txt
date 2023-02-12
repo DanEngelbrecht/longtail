@@ -1,1 +1,1 @@
-LZ4 1.9.3 https://github.com/lz4/lz4/releases/tag/v1.9.3
+LZ4 1.9.4 https://github.com/lz4/lz4/releases/tag/v1.9.4

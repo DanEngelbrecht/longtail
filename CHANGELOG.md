@@ -1,5 +1,7 @@
 ##
 - **UPDATED** Update of ZStd: 1.5.4 https://github.com/facebook/zstd/releases/tag/v1.5.4
+- **UPDATED** Update of LZ4: 1.9.4 https://github.com/lz4/lz4/releases/tag/v1.9.4
+- **UPDATED** Update of Blake3: 1.3.3 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.3.3
 
 ## 0.3.7
 - **NEW API** `Longtail_MergeVersionIndex` to merge a base and an overlay version index
