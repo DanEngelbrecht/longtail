@@ -1,4 +1,7 @@
 ##
+- **UPDATED** Update of ZStd: 1.5.4 https://github.com/facebook/zstd/releases/tag/v1.5.4
+
+## 0.3.7
 - **NEW API** `Longtail_MergeVersionIndex` to merge a base and an overlay version index
 - **CHANGED** Additional error/diagnostic logging when initialising store and version indexes from a buffer
 - **FIX** Allocated proper size when adding long file path prefix Issue #211
