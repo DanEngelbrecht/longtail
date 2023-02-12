@@ -10,14 +10,14 @@
 #elif defined(__GNUC__)
 #include <immintrin.h>
 #else
-#error "Unimplemented!"
+#undef IS_X86 /* Unimplemented! */
 #endif
 #endif
 
 #define MAYBE_UNUSED(x) (void)((x))
 
 #if defined(IS_X86)
-static uint64_t xgetbv() {
+static uint64_t xgetbv(void) {
 #if defined(_MSC_VER)
   return _xgetbv(0);
 #else
@@ -82,7 +82,7 @@ static /* Allow the variable to be controlled manually for testing */
 static
 #endif
     enum cpu_feature
-    get_cpu_features() {
+    get_cpu_features(void) {
 
   if (g_cpu_features != UNDEFINED) {
     return g_cpu_features;
@@ -91,7 +91,7 @@ static
     uint32_t regs[4] = {0};
     uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
     (void)edx;
-    int features = 0;
+    enum cpu_feature features = 0;
     cpuid(regs, 0);
     const int max_id = *eax;
     cpuid(regs, 1);
@@ -124,8 +124,8 @@ static
         }
       }
     }
-    g_cpu_features = (enum cpu_feature)features;
-    return (enum cpu_feature)features;
+    g_cpu_features = features;
+    return features;
 #else
     /* How to detect NEON? */
     return 0;
