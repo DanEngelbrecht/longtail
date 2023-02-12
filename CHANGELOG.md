@@ -1,4 +1,7 @@
 ##
+- **UPDATED** Update of Blake3: 1.3.3 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.3.3
+
+## 0.3.7
 - **NEW API** `Longtail_MergeVersionIndex` to merge a base and an overlay version index
 - **CHANGED** Additional error/diagnostic logging when initialising store and version indexes from a buffer
 - **FIX** Allocated proper size when adding long file path prefix Issue #211
