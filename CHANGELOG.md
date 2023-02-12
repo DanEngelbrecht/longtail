@@ -1,4 +1,7 @@
 ##
+- **UPDATED** Update of LZ4: 1.9.4 https://github.com/lz4/lz4/releases/tag/v1.9.4
+
+## 0.3.7
 - **NEW API** `Longtail_MergeVersionIndex` to merge a base and an overlay version index
 - **CHANGED** Additional error/diagnostic logging when initialising store and version indexes from a buffer
 - **FIX** Allocated proper size when adding long file path prefix Issue #211
