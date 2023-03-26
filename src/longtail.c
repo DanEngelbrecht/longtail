@@ -2344,6 +2344,12 @@ static int InitVersionIndexFromData(
 
     char* p = (char*)data;
 
+    if (data_size < (6 * sizeof(uint32_t)))
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Version index is invalid, not big enough for minimal header. Size %" PRIu64 " < %" PRIu64 "", data_size, (6 * sizeof(uint32_t)));
+        return EBADF;
+    }
+
     size_t version_index_data_start = (size_t)(uintptr_t)p;
 
     version_index->m_Version = (uint32_t*)(void*)p;
