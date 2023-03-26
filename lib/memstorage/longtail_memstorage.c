@@ -110,23 +110,12 @@ static void InMemStorageAPI_Dispose(struct Longtail_API* storage_api)
     Longtail_Free(storage_api);
 }
 
-static void InMemStorageAPI_ToLowerCase(char *str)
-{
-    for ( ; *str; ++str)
-    {
-        *str = tolower(*str);
-    }
-}
-
 static const uint32_t Seed  = 0x811C9DC5;
 
 static uint32_t InMemStorageAPI_GetPathHash(const char* path)
 {
     uint32_t pathlen = (uint32_t)strlen(path);
-    char* buf = (char*)alloca(pathlen + 1);
-    memcpy(buf, path, pathlen + 1);
-    InMemStorageAPI_ToLowerCase(buf);
-    return murmur3_32((const uint8_t*)buf, pathlen, Seed);
+    return murmur3_32((const uint8_t*)path, pathlen, Seed);
 }
 
 static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)

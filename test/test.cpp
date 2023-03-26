@@ -7934,3 +7934,97 @@ TEST(Longtail, Longtail_MergeVersionIndex)
     SAFE_DISPOSE_API(target_storage);
     SAFE_DISPOSE_API(source_storage);
 }
+
+TEST(Longtail, Longtail_ReadBrokenLSI)
+{
+    uint8_t data[11] = {8, 21, 141, 3, 1, 4, 124, 213, 1, 23, 123};
+    Longtail_StoreIndex* store_index;
+    int err = Longtail_ReadStoreIndexFromBuffer(data, 11, &store_index);
+    ASSERT_NE(err, 0);
+}
+
+TEST(Longtail, Longtail_CaseSensitivePaths)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 16u;
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+
+    Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake2HashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, target_storage, "chunks", 0, 0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
+
+    const char* TEST_FILENAMES1[2] = {
+        "local1/lowercase.txt",
+        "local1/UPPERCASE.txt",
+    };
+
+    const char* TEST_FILENAMES2[2] = {
+        "local2/LOWERCASE.txt",
+        "local2/uppercase.txt",
+    };
+
+    const char* TEST_STRINGS[2] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string"
+    };
+
+    for (uint32_t i = 0; i < 2; ++i)
+    {
+        ASSERT_NE(0, CreateParentPath(source_storage, TEST_FILENAMES1[i]));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, source_storage->OpenWriteFile(source_storage, TEST_FILENAMES1[i], 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        ASSERT_EQ(0, source_storage->Write(source_storage, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        source_storage->CloseFile(source_storage, w);
+        w = 0;
+    }
+
+    for (uint32_t i = 0; i < 2; ++i)
+    {
+        ASSERT_NE(0, CreateParentPath(source_storage, TEST_FILENAMES2[i]));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, source_storage->OpenWriteFile(source_storage, TEST_FILENAMES2[i], 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        ASSERT_EQ(0, source_storage->Write(source_storage, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        source_storage->CloseFile(source_storage, w);
+        w = 0;
+    }
+
+    ASSERT_EQ(0, UploadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "local1", "version1.lvi", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+    ASSERT_EQ(0, UploadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "local2", "version2.lvi", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+    ASSERT_EQ(0, DownloadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "version1.lvi", "target", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+    ASSERT_EQ(1, source_storage->IsFile(source_storage, "target/UPPERCASE.txt"));
+    ASSERT_EQ(1, source_storage->IsFile(source_storage, "target/lowercase.txt"));
+
+    ASSERT_EQ(0, source_storage->IsFile(source_storage, "target/uppercase.txt"));
+    ASSERT_EQ(0, source_storage->IsFile(source_storage, "target/LOWERCASE.txt"));
+
+    ASSERT_EQ(0, DownloadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "version2.lvi", "target", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+    Longtail_FileInfos* file_infos;
+    ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, 0, 0, 0, "target", &file_infos));
+    ASSERT_EQ(2u, file_infos->m_Count);
+    Longtail_Free(file_infos);
+
+    ASSERT_EQ(1, source_storage->IsFile(source_storage, "target/uppercase.txt"));
+    ASSERT_EQ(1, source_storage->IsFile(source_storage, "target/LOWERCASE.txt"));
+
+    ASSERT_EQ(0, source_storage->IsFile(source_storage, "target/UPPERCASE.txt"));
+    ASSERT_EQ(0, source_storage->IsFile(source_storage, "target/lowercase.txt"));
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(target_storage);
+    SAFE_DISPOSE_API(source_storage);
+}
