@@ -7899,10 +7899,22 @@ static int InitStoreIndexFromData(
     LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, data != 0, return EINVAL)
 
+    if (data_size < (4 * sizeof(uint32_t)))
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Store index is invalid, not big enough for minimal header. Size %" PRIu64 " < %" PRIu64 "", data_size, (4 * sizeof(uint32_t)));
+        return EBADF;
+    }
+
     char* p = (char*)data;
 
     store_index->m_Version = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
+
+    if (*store_index->m_Version != Longtail_CurrentStoreIndexVersion)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Mismatching versions in store index data %" PRIu64 " != %" PRIu64 "", (void*)store_index->m_Version, Longtail_CurrentStoreIndexVersion);
+        return EBADF;
+    }
 
     store_index->m_HashIdentifier = (uint32_t*)(void*)p;
     p += sizeof(uint32_t);
@@ -7920,11 +7932,6 @@ static int InitStoreIndexFromData(
     if (store_index_data_size > data_size)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Store index data is truncated: %" PRIu64 " <= %" PRIu64, data_size, store_index_data_size)
-        return EBADF;
-    }
-    if (*store_index->m_Version != Longtail_CurrentStoreIndexVersion)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Mismatching versions in store index data %" PRIu64 " != %" PRIu64 "", (void*)store_index->m_Version, Longtail_CurrentStoreIndexVersion);
         return EBADF;
     }
 
