@@ -1094,14 +1094,6 @@ struct Longtail_LookupTable* LongtailPrivate_LookupTable_Create(void* mem, uint3
     return lut;
 }
 
-static void Longtail_ToLowerCase(char *str)
-{
-    for ( ; *str; ++str)
-    {
-        *str = tolower(*str);
-    }
-}
-
 static int IsDirPath(const char* path)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -1132,11 +1124,8 @@ int LongtailPrivate_GetPathHash(struct Longtail_HashAPI* hash_api, const char* p
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, out_hash != 0, return EINVAL)
     uint32_t pathlen = (uint32_t)strlen(path);
-    char* buf = (char*)alloca(pathlen + 1);
-    memcpy(buf, path, pathlen + 1);
-    Longtail_ToLowerCase(buf);
     uint64_t hash;
-    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)buf, &hash);
+    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)path, &hash);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer() failed with %d", err)
