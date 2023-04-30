@@ -8505,7 +8505,7 @@ static int CreateStoreIndexFromRange(
             block_index->m_ChunkHashes[chunk_offset] = store_index->m_ChunkHashes[block_chunk_offset + chunk_offset];
             block_index->m_ChunkSizes[chunk_offset] = store_index->m_ChunkSizes[block_chunk_offset + chunk_offset];
         }
-        block_index_array[b] = block_index;
+        block_index_array[block_offset] = block_index;
         p += Longtail_GetBlockIndexSize(block_chunk_count);
     }
     int err = Longtail_CreateStoreIndexFromBlocks(block_range_count, (const struct Longtail_BlockIndex**)block_index_array, out_store_index);
@@ -8515,6 +8515,7 @@ static int CreateStoreIndexFromRange(
         Longtail_Free(work_mem);
         return err;
     }
+    Longtail_Free(work_mem);
     return 0;
 }
 
@@ -8562,18 +8563,21 @@ int Longtail_SplitStoreIndex(
         uint32_t block_range_start = 0;
         uint32_t block_range_end = 0;
         uint32_t block_range_chunk_count = 0;
+        size_t current_index_size = 0;
         while (block_range_end < block_count)
         {
             uint32_t block_chunk_count = store_index->m_BlockChunkCounts[block_range_end];
             size_t next_index_size = Longtail_GetStoreIndexSize(block_range_end - block_range_start + 1, block_range_chunk_count + block_chunk_count);
-            if (block_range_end > block_count && next_index_size > split_size)
+            if (block_range_end > block_range_start && next_index_size > split_size)
             {
                 result_count++;
                 block_range_start = block_range_end;
                 block_range_chunk_count = 0;
+                current_index_size = 0;
                 continue;
             }
             block_range_chunk_count += block_chunk_count;
+            current_index_size += next_index_size;
             ++block_range_end;
         }
         if (block_range_start < block_range_end)
@@ -8594,11 +8598,12 @@ int Longtail_SplitStoreIndex(
         uint32_t block_range_start = 0;
         uint32_t block_range_end = 0;
         uint32_t block_range_chunk_count = 0;
+        size_t current_index_size = 0;
         while (block_range_end < block_count)
         {
             uint32_t block_chunk_count = store_index->m_BlockChunkCounts[block_range_end];
             size_t next_index_size = Longtail_GetStoreIndexSize(block_range_end - block_range_start + 1, block_range_chunk_count + block_chunk_count);
-            if (block_range_end > block_count && next_index_size > split_size)
+            if (block_range_end > block_range_start && next_index_size > split_size)
             {
                 int err = CreateStoreIndexFromRange(
                     store_index,
@@ -8620,9 +8625,11 @@ int Longtail_SplitStoreIndex(
                 result_count++;
                 block_range_start = block_range_end;
                 block_range_chunk_count = 0;
+                current_index_size = 0;
                 continue;
             }
             block_range_chunk_count += block_chunk_count;
+            current_index_size += next_index_size;
             ++block_range_end;
         }
         if (block_range_start < block_range_end)
@@ -8648,6 +8655,8 @@ int Longtail_SplitStoreIndex(
             result_count++;
         }
     }
+    *out_store_indexes = result;
+    *out_count = result_count;
 
     return 0;
 }
