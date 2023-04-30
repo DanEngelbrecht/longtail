@@ -8508,7 +8508,7 @@ static int CreateStoreIndexFromRange(
         block_index_array[b] = block_index;
         p += Longtail_GetBlockIndexSize(block_chunk_count);
     }
-    int err = Longtail_CreateStoreIndexFromBlocks(block_range_count, block_index_array, out_store_index);
+    int err = Longtail_CreateStoreIndexFromBlocks(block_range_count, (const struct Longtail_BlockIndex**)block_index_array, out_store_index);
     if (err != 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateStoreIndexFromBlocks failed with %d", err)
