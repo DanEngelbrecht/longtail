@@ -8419,7 +8419,7 @@ LONGTAIL_EXPORT int Longtail_ValidateStore(
     return err;
 }
 
-struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* store_index)
+struct Longtail_StoreIndex* Longtail_CopyStoreIndex(const struct Longtail_StoreIndex* store_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(store_index, "%p"),

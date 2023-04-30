@@ -1555,7 +1555,7 @@ struct Longtail_StoreIndex
     uint32_t* m_ChunkCount;             // Total number of chunks across all blocks - chunk hashes may occur more than once
     TLongtail_Hash* m_BlockHashes;      // [] m_BlockHashes is the hash of each block
     TLongtail_Hash* m_ChunkHashes;      // [] For each m_BlockChunkCount[n] there are n consecutive chunk hashes in m_ChunkHashes[]
-    uint32_t* m_BlockChunksOffsets;     // [] m_BlockChunksOffsets[n] is the offset in m_ChunkBlockCount[] and m_ChunkHashes[]
+    uint32_t* m_BlockChunksOffsets;     // [] m_BlockChunksOffsets[n] is the offset in m_ChunkSizes[] and m_ChunkHashes[]
     uint32_t* m_BlockChunkCounts;       // [] m_BlockChunkCounts[n] is number of chunks in block m_BlockHash[n]
     uint32_t* m_BlockTags;              // [] m_BlockTags is the tag for each block
     uint32_t* m_ChunkSizes;             // [] m_ChunkSizes is the size of each chunk
@@ -1632,7 +1632,7 @@ LONGTAIL_EXPORT int Longtail_ValidateStore(
  * @param[in] store_index   The source index to copy from
  * @return                  An initialized struct Longtail_StoreIndex copied from @p store_index, or 0 on bad parameters / out of memory
  */
-LONGTAIL_EXPORT struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* store_index);
+LONGTAIL_EXPORT struct Longtail_StoreIndex* Longtail_CopyStoreIndex(const struct Longtail_StoreIndex* store_index);
 
 /*! @brief Writes a struct Longtail_StoreIndex to a byte buffer.
  *
