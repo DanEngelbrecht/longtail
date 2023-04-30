@@ -1634,6 +1634,18 @@ LONGTAIL_EXPORT int Longtail_ValidateStore(
  */
 LONGTAIL_EXPORT struct Longtail_StoreIndex* Longtail_CopyStoreIndex(const struct Longtail_StoreIndex* store_index);
 
+/*! @brief Splits a Longtail_StoreIndex into multiple store indexes
+ *
+ * Splits a Longtail_StoreIndex into multiple store indexes with each having a max size of split_size.
+ *  *
+ * @param[in] store_index   The source index to split from
+ * @param[in] split_size    The maximum size each resulting store index may have
+ * @param[out] split_size   A pointer to a pointer that will contain a pointer to an array of store index pointers
+ * @param[out] out_count    A pointer that will contain the number of store indexes in the resulting out_store_indexes array
+ * @return                  Return code (errno style), zero on success.
+ */
+LONGTAIL_EXPORT int Longtail_SplitStoreIndex(struct Longtail_StoreIndex* store_index, size_t split_size, struct Longtail_StoreIndex*** out_store_indexes, uint64_t* out_count);
+
 /*! @brief Writes a struct Longtail_StoreIndex to a byte buffer.
  *
  * Serializes a struct Longtail_StoreIndex to a buffer which is allocated using Longtail_Alloc()
