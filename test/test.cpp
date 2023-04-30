@@ -961,6 +961,79 @@ TEST(Longtail, Longtail_CreateStoreIndexFromContentIndex)
     SAFE_DISPOSE_API(hash_api);
 }
 
+TEST(Longtail, Longtail_SplitStoreIndex)
+{
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    const uint32_t chunk_indexes[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    const TLongtail_Hash chunk_hashes[8] = {0xdeadbeffeed5a17, 0xfeadbeffeed5a17, 0xaeed5a17deadbeea, 0xdaedbeeffeed5a57, 0x9eed5a17deadbeef, 0x8eed5a17deadbeea, 0x7aedbeeffeed5a57, 0x6eed5a17deadbeef};
+    const uint32_t chunk_sizes[8] = {4711, 1147, 1137, 3219, 1147, 1232, 5421, 955};
+    struct Longtail_BlockIndex* block_index[3];
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        2,
+        &chunk_indexes[0],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index[0]));
+
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        3,
+        &chunk_indexes[2],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index[1]));
+
+    ASSERT_EQ(0, Longtail_CreateBlockIndex(
+        hash_api,
+        0x3127841,
+        3,
+        &chunk_indexes[5],
+        chunk_hashes,
+        chunk_sizes,
+        &block_index[2]));
+
+    const struct Longtail_BlockIndex* block_indexes[3] = {block_index[0], block_index[1], block_index[2]};
+    struct Longtail_StoreIndex* store_index;
+    ASSERT_EQ(0, Longtail_CreateStoreIndexFromBlocks(
+        3,
+        block_indexes,
+        &store_index));
+
+    struct Longtail_StoreIndex** split_store_indexes;
+    uint64_t split_count;
+    ASSERT_EQ(0, Longtail_SplitStoreIndex(store_index, 200, &split_store_indexes, &split_count));
+    ASSERT_EQ(2u, split_count);
+
+    struct Longtail_StoreIndex* merged_store_index;
+    ASSERT_EQ(0, Longtail_MergeStoreIndex(split_store_indexes[0], split_store_indexes[1], &merged_store_index));
+
+    ASSERT_EQ(3u, *merged_store_index->m_BlockCount);
+    ASSERT_EQ(8u, *merged_store_index->m_ChunkCount);
+    for (uint32_t b = 0; b < 3; ++b)
+    {
+        ASSERT_EQ(*block_index[b]->m_BlockHash, merged_store_index->m_BlockHashes[b]);
+    }
+
+    Longtail_Free(merged_store_index);
+
+    for (uint32_t i = 0; i  < split_count; ++i)
+    {
+        Longtail_Free(split_store_indexes[split_count - i - 1]);
+    }
+    Longtail_Free(split_store_indexes);
+
+    Longtail_Free(store_index);
+    for (uint32_t i = 0; i  < 3; ++i)
+    {
+        Longtail_Free(block_index[2 - i]);
+    }
+    SAFE_DISPOSE_API(hash_api);
+}
+
 static struct Longtail_StoredBlock* TestCreateStoredBlock(
     struct Longtail_HashAPI* hash_api,
     uint8_t seed,
