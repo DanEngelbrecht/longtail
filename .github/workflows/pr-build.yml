@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Cancel Previous Runs
-      uses: styfle/cancel-workflow-action@0.9.1
+      uses: styfle/cancel-workflow-action@0.11.0
       with:
         access_token: ${{ github.token }}
 
@@ -23,7 +23,7 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.sh ${{matrix.config}}
@@ -44,7 +44,7 @@ jobs:
       matrix:
         config: [debug, release]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build test
       run: |
         test/build.sh ${{matrix.config}}
@@ -59,7 +59,7 @@ jobs:
     needs: build-linux
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
@@ -80,7 +80,7 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.sh ${{matrix.config}}
@@ -101,7 +101,7 @@ jobs:
       matrix:
         config: [debug, release]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build test
       run: |
         test/build.sh ${{matrix.config}}
@@ -116,7 +116,7 @@ jobs:
     needs: build-darwin
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
@@ -137,7 +137,7 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.bat ${{matrix.config}}
@@ -159,7 +159,7 @@ jobs:
       matrix:
         config: [debug, release]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build test
       run: |
         test/build.bat ${{matrix.config}}
@@ -174,7 +174,7 @@ jobs:
     needs: build-win32
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts

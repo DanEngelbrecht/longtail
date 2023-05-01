@@ -8419,7 +8419,7 @@ LONGTAIL_EXPORT int Longtail_ValidateStore(
     return err;
 }
 
-struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* store_index)
+struct Longtail_StoreIndex* Longtail_CopyStoreIndex(const struct Longtail_StoreIndex* store_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(store_index, "%p"),
@@ -8444,6 +8444,221 @@ struct Longtail_StoreIndex* Longtail_CopyStoreIndex(struct Longtail_StoreIndex* 
     memcpy(copy_store_index->m_BlockTags, store_index->m_BlockTags, sizeof(uint32_t) * block_count);
     memcpy(copy_store_index->m_ChunkSizes, store_index->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
     return copy_store_index;
+}
+
+static int CreateStoreIndexFromRange(
+    const struct Longtail_StoreIndex* store_index,
+    uint32_t block_range_start,
+    uint32_t block_range_end,
+    uint32_t block_range_chunk_count,
+    struct Longtail_StoreIndex** out_store_index)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(store_index, "%p"),
+        LONGTAIL_LOGFIELD(block_range_start, "%u"),
+        LONGTAIL_LOGFIELD(block_range_end, "%u"),
+        LONGTAIL_LOGFIELD(block_range_chunk_count, "%u"),
+        LONGTAIL_LOGFIELD(out_store_index, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_range_start < block_range_end, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, block_range_chunk_count > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_store_index != 0, return EINVAL)
+
+    uint32_t block_range_count = block_range_end - block_range_start;
+
+    size_t block_indexes_size = 0;
+    for (uint32_t block_offset = 0; block_offset < block_range_count; ++block_offset)
+    {
+        uint32_t b = block_offset + block_range_start;
+        block_indexes_size += Longtail_GetBlockIndexSize(store_index->m_BlockChunkCounts[b]);
+    }
+    size_t work_mem_size =
+        sizeof(struct Longtail_BlockIndex*) * block_range_count +
+        block_indexes_size;
+
+    void* work_mem = (uint8_t*)Longtail_Alloc("CreateStoreIndexFromRange", work_mem_size);
+    if (!work_mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return ENOMEM;
+    }
+
+    char* p = (char*)work_mem;
+    struct Longtail_BlockIndex** block_index_array = (struct Longtail_BlockIndex**)p;
+    p += sizeof(struct Longtail_BlockIndex*) * block_range_count;
+
+    for (uint32_t block_offset = 0; block_offset < block_range_count; ++block_offset)
+    {
+        uint32_t b = block_offset + block_range_start;
+        uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+        struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(p, block_chunk_count);
+
+        *block_index->m_BlockHash = store_index->m_BlockHashes[b];
+        *block_index->m_HashIdentifier = *store_index->m_HashIdentifier;
+        *block_index->m_ChunkCount = block_chunk_count;
+        *block_index->m_Tag = store_index->m_BlockTags[b];
+        uint32_t block_chunk_offset = store_index->m_BlockChunksOffsets[b];
+        for (uint32_t chunk_offset = 0; chunk_offset < block_chunk_count; ++chunk_offset)
+        {
+            block_index->m_ChunkHashes[chunk_offset] = store_index->m_ChunkHashes[block_chunk_offset + chunk_offset];
+            block_index->m_ChunkSizes[chunk_offset] = store_index->m_ChunkSizes[block_chunk_offset + chunk_offset];
+        }
+        block_index_array[block_offset] = block_index;
+        p += Longtail_GetBlockIndexSize(block_chunk_count);
+    }
+    int err = Longtail_CreateStoreIndexFromBlocks(block_range_count, (const struct Longtail_BlockIndex**)block_index_array, out_store_index);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateStoreIndexFromBlocks failed with %d", err)
+        Longtail_Free(work_mem);
+        return err;
+    }
+    Longtail_Free(work_mem);
+    return 0;
+}
+
+int Longtail_SplitStoreIndex(
+    struct Longtail_StoreIndex* store_index,
+    size_t split_size,
+    struct Longtail_StoreIndex*** out_store_indexes,
+    uint64_t* out_count)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(store_index, "%p"),
+        LONGTAIL_LOGFIELD(split_size, "%" PRIu64),
+        LONGTAIL_LOGFIELD(out_store_indexes, "%p"),
+        LONGTAIL_LOGFIELD(out_count, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, split_size > 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_store_indexes != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_count != 0, return EINVAL)
+
+    uint32_t block_count = *store_index->m_BlockCount;
+    if (block_count == 0)
+    {
+        struct Longtail_StoreIndex** result = (struct Longtail_StoreIndex**)Longtail_Alloc("Longtail_SplitStoreIndex", sizeof(struct Longtail_StoreIndex*));
+        if (!result)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            return ENOMEM;
+        }
+        int err = Longtail_CreateStoreIndexFromBlocks(0, 0, &result[0]);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateStoreIndexFromBlocks() failed with %d", err)
+            Longtail_Free((void*)result);
+            return err;
+        }
+        *out_store_indexes = result;
+        *out_count = 1;
+        return 0;
+    }
+
+    size_t result_count = 0;
+    {
+        uint32_t block_range_start = 0;
+        uint32_t block_range_end = 0;
+        uint32_t block_range_chunk_count = 0;
+        size_t current_index_size = 0;
+        while (block_range_end < block_count)
+        {
+            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[block_range_end];
+            size_t next_index_size = Longtail_GetStoreIndexSize(block_range_end - block_range_start + 1, block_range_chunk_count + block_chunk_count);
+            if (block_range_end > block_range_start && next_index_size > split_size)
+            {
+                result_count++;
+                block_range_start = block_range_end;
+                block_range_chunk_count = 0;
+                current_index_size = 0;
+                continue;
+            }
+            block_range_chunk_count += block_chunk_count;
+            current_index_size += next_index_size;
+            ++block_range_end;
+        }
+        if (block_range_start < block_range_end)
+        {
+            result_count++;
+        }
+    }
+    LONGTAIL_FATAL_ASSERT(ctx, result_count > 0, return EINVAL);
+
+    struct Longtail_StoreIndex** result = (struct Longtail_StoreIndex**)Longtail_Alloc("Longtail_SplitStoreIndex", sizeof(struct Longtail_StoreIndex*) * result_count);
+    if (!result)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return ENOMEM;
+    }
+    {
+        result_count = 0;
+        uint32_t block_range_start = 0;
+        uint32_t block_range_end = 0;
+        uint32_t block_range_chunk_count = 0;
+        size_t current_index_size = 0;
+        while (block_range_end < block_count)
+        {
+            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[block_range_end];
+            size_t next_index_size = Longtail_GetStoreIndexSize(block_range_end - block_range_start + 1, block_range_chunk_count + block_chunk_count);
+            if (block_range_end > block_range_start && next_index_size > split_size)
+            {
+                int err = CreateStoreIndexFromRange(
+                    store_index,
+                    block_range_start,
+                    block_range_end,
+                    block_range_chunk_count,
+                    &result[result_count]);
+                if (err != 0)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateStoreIndexFromRange failed with %d", err)
+                    while (result_count > 0)
+                    {
+                        --result_count;
+                        Longtail_Free((void*)result[result_count]);
+                    }
+                    Longtail_Free((void*)result);
+                    return err;
+                }
+                result_count++;
+                block_range_start = block_range_end;
+                block_range_chunk_count = 0;
+                current_index_size = 0;
+                continue;
+            }
+            block_range_chunk_count += block_chunk_count;
+            current_index_size += next_index_size;
+            ++block_range_end;
+        }
+        if (block_range_start < block_range_end)
+        {
+            LONGTAIL_FATAL_ASSERT(ctx, block_range_chunk_count > 0, return EINVAL);
+            int err = CreateStoreIndexFromRange(
+                store_index,
+                block_range_start,
+                block_range_end,
+                block_range_chunk_count,
+                &result[result_count]);
+            if (err != 0)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateStoreIndexFromRange failed with %d", err)
+                while (result_count > 0)
+                {
+                    --result_count;
+                    Longtail_Free((void*)result[result_count]);
+                }
+                Longtail_Free((void*)result);
+                return err;
+            }
+            result_count++;
+        }
+    }
+    *out_store_indexes = result;
+    *out_count = result_count;
+
+    return 0;
 }
 
 int Longtail_WriteStoreIndexToBuffer(
