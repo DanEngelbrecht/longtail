@@ -16,7 +16,7 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.sh ${{matrix.config}}
@@ -35,7 +35,7 @@ jobs:
     needs: build-linux
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
@@ -56,7 +56,7 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.sh ${{matrix.config}}
@@ -75,7 +75,7 @@ jobs:
     needs: build-darwin
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
@@ -96,7 +96,7 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.bat ${{matrix.config}}
@@ -116,7 +116,7 @@ jobs:
     needs: build-win32
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
@@ -185,9 +185,9 @@ jobs:
 
     - name: Read CHANGELOG.tmp
       id: read_changelog
-      uses: andstor/file-reader-action@v1
+      uses: juliangruber/read-file-action@v1
       with:
-        path: "CHANGELOG.tmp"
+        path: "./CHANGELOG.tmp"
 
     - name: Create Release
       id: create_release
@@ -197,7 +197,7 @@ jobs:
       with:
         tag_name: ${{github.ref.name}}
         body: |
-          ${{steps.read_changelog.outputs.contents}}
+          ${{steps.read_changelog.outputs.content}}
         draft: false
         prerelease: ${{steps.get-prerelease.outputs.value}}
         files: "*-x64.zip"
