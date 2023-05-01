@@ -1,4 +1,9 @@
 ##
+- **NEW API** `Longtail_SplitStoreIndex` added
+- **CHANGED** Make `Longtail_CopyStoreIndex` store_index arg const
+- **FIXED** Fixed `Longtail_StoreIndex m_BlockChunksOffsets` documentation
+
+## 0.3.8
 - **CHANGED** Paths in a version index is now stored with case sensitivity to avoid confusion when a file is renamed by changing casing only
 - **FIX** Changing case of a file name without changing name no longer causes EACCESS error form version index adding the same file twice with same casing
 - **UPDATED** Update of ZStd: 1.5.4 https://github.com/facebook/zstd/releases/tag/v1.5.4
