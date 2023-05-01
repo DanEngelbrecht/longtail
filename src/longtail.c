@@ -8495,7 +8495,7 @@ static int CreateStoreIndexFromRange(
         uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
         struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(p, block_chunk_count);
 
-        block_index->m_BlockHash[block_offset] = store_index->m_BlockHashes[b];
+        *block_index->m_BlockHash = store_index->m_BlockHashes[b];
         *block_index->m_HashIdentifier = *store_index->m_HashIdentifier;
         *block_index->m_ChunkCount = block_chunk_count;
         *block_index->m_Tag = store_index->m_BlockTags[b];
