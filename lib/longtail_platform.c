@@ -426,7 +426,7 @@ static DWORD NativeCreateDirectory(wchar_t* long_path)
             return ERROR_SUCCESS;
         }
         DWORD last_error = GetLastError();
-        if (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS)
+        if (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS || last_error == ERROR_ACCESS_DENIED)
         {
             return last_error;
         }
