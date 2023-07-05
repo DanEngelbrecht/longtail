@@ -11,11 +11,6 @@ endif()
 
 project ("longtail")
 
-if(MSVC)
-else()
-	add_compile_options(-fPIC -fvisibility=hidden)
-endif(MSVC)
-
 # Include sub-projects.
 add_subdirectory("lib")
 
@@ -23,7 +18,7 @@ add_subdirectory("src")
 
 add_subdirectory("static_lib")
 
-add_subdirectory("shared_lib")
+#add_subdirectory("shared_lib")
 
 add_subdirectory ("cmd")
 
