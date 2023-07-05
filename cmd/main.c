@@ -21,7 +21,7 @@
 #include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/ratelimitedprogress/longtail_ratelimitedprogress.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
-#include "../lib/brotli/longtail_brotli.h"
+//#include "../lib/brotli/longtail_brotli.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/zstd/longtail_zstd.h"
 #include "../lib/longtail_platform.h"
@@ -172,30 +172,30 @@ uint32_t ParseCompressionType(const char* compression_algorithm) {
     {
         return 0;
     }
-    if (strcmp("brotli", compression_algorithm) == 0)
-    {
-        return Longtail_GetBrotliGenericDefaultQuality();
-    }
-    if (strcmp("brotli_min", compression_algorithm) == 0)
-    {
-        return Longtail_GetBrotliGenericMinQuality();
-    }
-    if (strcmp("brotli_max", compression_algorithm) == 0)
-    {
-        return Longtail_GetBrotliGenericMaxQuality();
-    }
-    if (strcmp("brotli_text", compression_algorithm) == 0)
-    {
-        return Longtail_GetBrotliTextDefaultQuality();
-    }
-    if (strcmp("brotli_text_min", compression_algorithm) == 0)
-    {
-        return Longtail_GetBrotliTextMinQuality();
-    }
-    if (strcmp("brotli_text_max", compression_algorithm) == 0)
-    {
-        return Longtail_GetBrotliTextMaxQuality();
-    }
+//    if (strcmp("brotli", compression_algorithm) == 0)
+//    {
+//        return Longtail_GetBrotliGenericDefaultQuality();
+//    }
+//    if (strcmp("brotli_min", compression_algorithm) == 0)
+//    {
+//        return Longtail_GetBrotliGenericMinQuality();
+//    }
+//    if (strcmp("brotli_max", compression_algorithm) == 0)
+//    {
+//        return Longtail_GetBrotliGenericMaxQuality();
+//    }
+//    if (strcmp("brotli_text", compression_algorithm) == 0)
+//    {
+//        return Longtail_GetBrotliTextDefaultQuality();
+//    }
+//    if (strcmp("brotli_text_min", compression_algorithm) == 0)
+//    {
+//        return Longtail_GetBrotliTextMinQuality();
+//    }
+//    if (strcmp("brotli_text_max", compression_algorithm) == 0)
+//    {
+//        return Longtail_GetBrotliTextMaxQuality();
+//    }
     if (strcmp("lz4", compression_algorithm) == 0)
     {
         return Longtail_GetLZ4DefaultQuality();
