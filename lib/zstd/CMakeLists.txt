@@ -1,6 +1,6 @@
 ﻿if(MSVC)
 else()
-	set (zstd_platform_sources "ext/decompres/huf_decompress_amd64.S")
+	set (zstd_platform_sources "ext/decompress/huf_decompress_amd64.S")
 endif()
 
 
