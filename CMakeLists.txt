@@ -11,6 +11,8 @@ endif()
 
 project ("longtail")
 
+set(can_use_assembler TRUE)
+
 # Include sub-projects.
 add_subdirectory("lib")
 
