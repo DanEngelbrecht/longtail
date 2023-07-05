@@ -29,3 +29,8 @@
 	$<TARGET_OBJECTS:shareblockstore>
 	$<TARGET_OBJECTS:zstd>
 )
+
+if(MSVC)
+else()
+	target_compile_options(shared_lib PUBLIC -fPIC)
+endif(MSVC)
