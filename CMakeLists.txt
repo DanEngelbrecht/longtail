@@ -11,6 +11,11 @@ endif()
 
 project ("longtail")
 
+if(MSVC)
+else()
+	add_compile_options(-fPIC -fvisibility=hidden)
+endif(MSVC)
+
 # Include sub-projects.
 add_subdirectory("lib")
 
