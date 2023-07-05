@@ -6,7 +6,7 @@
 #include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
-#include "../lib/brotli/longtail_brotli.h"
+//#include "../lib/brotli/longtail_brotli.h"
 #include "../lib/archiveblockstore/longtail_archiveblockstore.h"
 #include "../lib/atomiccancel/longtail_atomiccancel.h"
 #include "../lib/blockstorestorage/longtail_blockstorestorage.h"
@@ -347,49 +347,49 @@ TEST(Longtail, Longtail_LZ4)
     Longtail_DisposeAPI(&compression_api->m_API);
 }
 
-TEST(Longtail, Longtail_Brotli)
-{
-    Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
-    ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
-    uint32_t compression_settings = Longtail_GetBrotliTextMaxQuality();
-
-    const char* raw_data =
-        "A very long file that should be able to be recreated"
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
-        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
-        "And in the end it is not the same, it is different, just because why not";
-
-    size_t data_len = strlen(raw_data) + 1;
-    size_t compressed_size = 0;
-    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
-    char* compressed_buffer = (char*)Longtail_Alloc(0, max_compressed_size);
-    ASSERT_NE((char*)0, compressed_buffer);
-    ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
-
-    char* decompressed_buffer = (char*)Longtail_Alloc(0, data_len);
-    ASSERT_NE((char*)0, decompressed_buffer);
-    size_t uncompressed_size;
-    ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
-    ASSERT_EQ(data_len, uncompressed_size);
-    ASSERT_STREQ(raw_data, decompressed_buffer);
-    Longtail_Free(decompressed_buffer);
-    Longtail_Free(compressed_buffer);
-
-    Longtail_DisposeAPI(&compression_api->m_API);
-}
+//TEST(Longtail, Longtail_Brotli)
+//{
+//    Longtail_CompressionAPI* compression_api = Longtail_CreateBrotliCompressionAPI();
+//    ASSERT_NE((Longtail_CompressionAPI*)0, compression_api);
+//    uint32_t compression_settings = Longtail_GetBrotliTextMaxQuality();
+//
+//    const char* raw_data =
+//        "A very long file that should be able to be recreated"
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 2 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 3 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 4 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 5 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 6 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 7 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 8 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 9 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 10 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 11 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 12 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 13 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 14 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 15 in a long sequence of stuff."
+//        "Lots of repeating stuff, some good, some bad but still it is repeating. This is the number 16 in a long sequence of stuff."
+//        "And in the end it is not the same, it is different, just because why not";
+//
+//    size_t data_len = strlen(raw_data) + 1;
+//    size_t compressed_size = 0;
+//    size_t max_compressed_size = compression_api->GetMaxCompressedSize(compression_api, compression_settings, data_len);
+//    char* compressed_buffer = (char*)Longtail_Alloc(0, max_compressed_size);
+//    ASSERT_NE((char*)0, compressed_buffer);
+//    ASSERT_EQ(0, compression_api->Compress(compression_api, compression_settings, raw_data, compressed_buffer, data_len, max_compressed_size, &compressed_size));
+//
+//    char* decompressed_buffer = (char*)Longtail_Alloc(0, data_len);
+//    ASSERT_NE((char*)0, decompressed_buffer);
+//    size_t uncompressed_size;
+//    ASSERT_EQ(0, compression_api->Decompress(compression_api, compressed_buffer, decompressed_buffer, compressed_size, data_len, &uncompressed_size));
+//    ASSERT_EQ(data_len, uncompressed_size);
+//    ASSERT_STREQ(raw_data, decompressed_buffer);
+//    Longtail_Free(decompressed_buffer);
+//    Longtail_Free(compressed_buffer);
+//
+//    Longtail_DisposeAPI(&compression_api->m_API);
+//}
 
 TEST(Longtail, Longtail_ZStd)
 {
@@ -1212,14 +1212,14 @@ static uint32_t* GetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* f
 {
     uint32_t count = file_infos->m_Count;
     uint32_t* result = (uint32_t*)Longtail_Alloc(0, sizeof(uint32_t) * count);
-    const uint32_t compression_types[4] = {
+    const uint32_t compression_types[3] = {
         0,
-        Longtail_GetBrotliGenericDefaultQuality(),
+//        Longtail_GetBrotliGenericDefaultQuality(),
         Longtail_GetLZ4DefaultQuality(),
         Longtail_GetZStdDefaultQuality()};
     for (uint32_t i = 0; i < count; ++i)
     {
-        result[i] = compression_types[i % 4];
+        result[i] = compression_types[i % 3];
     }
     return result;
 }
