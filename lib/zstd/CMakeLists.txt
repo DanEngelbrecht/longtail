@@ -1,4 +1,10 @@
-﻿add_library(
+﻿if(MSVC)
+else()
+	set ($zstd_platform_sources "ext/decompres/huf_decompress_amd64.S")
+endif()
+
+
+add_library(
 	zstd OBJECT
 	
 	"longtail_zstd.c"
@@ -69,4 +75,6 @@
 	"ext/zdict.h"
 	"ext/zstd.h"
 	"ext/zstd_errors.h"
+
+	${zstd_platform_sources}
 )
