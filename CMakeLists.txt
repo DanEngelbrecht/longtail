@@ -15,7 +15,7 @@ enable_language(C)
 enable_language(ASM)
 enable_language(CXX)
 
-add_compile_definitions(ZSTD_DISABLE_ASM)
+#add_compile_definitions(ZSTD_DISABLE_ASM)
 
 # Include sub-projects.
 add_subdirectory("lib")
