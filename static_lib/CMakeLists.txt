@@ -12,7 +12,7 @@
 	$<TARGET_OBJECTS:blake3_avx2>
 	$<TARGET_OBJECTS:blake3_avx512>
 	$<TARGET_OBJECTS:blockstorestorage>
-#	$<TARGET_OBJECTS:brotli>
+	$<TARGET_OBJECTS:brotli>
 	$<TARGET_OBJECTS:cacheblockstore>
 	$<TARGET_OBJECTS:compressblockstore>
 	$<TARGET_OBJECTS:compressionregistry_full>
