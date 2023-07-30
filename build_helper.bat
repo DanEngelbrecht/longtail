@@ -216,8 +216,7 @@ if "!TARGET_TYPE!" == "STATICLIB" (
     )
     cd static-lib 
     cl.exe /c %CXXFLAGS% %OPT% %SRC% %MAIN_SRC% /Fd:!TARGET!.pdb
-    cd ..
-    lib -nologo -out:!OUTPUT_TARGET! *.o !THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB!
+    lib -nologo -out:..\!OUTPUT_TARGET! *.obj !THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB!
 )
 
 set BUILD_ERROR=%ERRORLEVEL%
