@@ -2,6 +2,7 @@
 - **NEW API** `Longtail_SplitStoreIndex` added
 - **CHANGED** Make `Longtail_CopyStoreIndex` store_index arg const
 - **FIXED** Fixed `Longtail_StoreIndex m_BlockChunksOffsets` documentation
+- **FIXED** `Longtail_CreateDirectory` no longer ends up in an infinite loop when trying to create a folder when path is a root folder
 
 ## 0.3.8
 - **CHANGED** Paths in a version index is now stored with case sensitivity to avoid confusion when a file is renamed by changing casing only

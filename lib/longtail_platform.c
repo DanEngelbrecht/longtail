@@ -70,6 +70,8 @@ static int Win32ErrorToErrno(DWORD err)
         case ERROR_SEEK_ON_DEVICE:
         case ERROR_BAD_ARGUMENTS:
         case ERROR_BAD_PATHNAME:
+        case ERROR_BAD_NETPATH:
+        case ERROR_BAD_NET_NAME:
         case ERROR_SEM_NOT_FOUND:
         case ERROR_FILENAME_EXCED_RANGE:
         case ERROR_DIRECTORY:
@@ -122,6 +124,16 @@ static int Win32ErrorToErrno(DWORD err)
     }
 }
 
+static int IsUNCPath(const wchar_t* path)
+{
+    return path != 0 && (path[0] == '\\' && path[1] == '\\' && path[2] == '?' && path[3] == '\\');
+}
+
+static int IsNetworkPath(const wchar_t* path)
+{
+    return path != 0 && (path[0] == '\\' && path[1] == '\\' && path[2] != '?');
+}
+
 static const wchar_t* MakeLongPath(const wchar_t* path)
 {
     if (path[0] && (path[1] != ':'))
@@ -129,9 +141,14 @@ static const wchar_t* MakeLongPath(const wchar_t* path)
         // Don't add long path prefix if we don't specify a drive
         return path;
     }
-    if (path[0] == '\\' && path[1] == '\\' && path[2] == '?' && path[3] == '\\')
+    if (IsUNCPath(path))
     {
         // Don't add long path prefix if we aleady have an UNC path
+        return path;
+    }
+    if (IsNetworkPath(path))
+    {
+        // Don't add long path prefix if we aleady have a network path
         return path;
     }
     size_t path_len = wcslen(path);
@@ -420,13 +437,59 @@ static DWORD NativeCreateDirectory(wchar_t* long_path)
 {
     while (1)
     {
+        if (IsNetworkPath(long_path))
+        {
+            const wchar_t* net_device_end = wcschr(&long_path[2], '\\');
+            if (net_device_end == 0)
+            {
+                // No delimiter for network device - not a valid path
+                return ERROR_BAD_NETPATH;
+            }
+            if (net_device_end[1] == '\0')
+            {
+                // No root folder given for network path
+                return ERROR_BAD_NETPATH;
+            }
+            const wchar_t* net_root_folder_end = wcschr(&net_device_end[1], '\\');
+            if (net_root_folder_end == 0)
+            {
+                // Root folder given without trailing backslash
+                return ERROR_ALREADY_EXISTS;
+            }
+            if (net_root_folder_end[1] == '\0')
+            {
+                // Root folder has trailing backslash and nothing more
+                return ERROR_ALREADY_EXISTS;
+            }
+        }
+        else
+        {
+            wchar_t* root_path_test_start = long_path;
+            if (IsUNCPath(long_path))
+            {
+                root_path_test_start = &long_path[4];
+            }
+            // Check for regular drive path, with or without a trailing backslash
+            if (root_path_test_start[1] == ':')
+            {
+                if (root_path_test_start[2] == '\0')
+                {
+                    return ERROR_ALREADY_EXISTS;
+                }
+                if (root_path_test_start[2] == '\\' && root_path_test_start[3] == '\0')
+                {
+                    return ERROR_ALREADY_EXISTS;
+                }
+            }
+        }
+
         BOOL ok = CreateDirectoryW(long_path, NULL);
         if (ok)
         {
             return ERROR_SUCCESS;
         }
         DWORD last_error = GetLastError();
-        if (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS)
+        if (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS || last_error == ERROR_ACCESS_DENIED || last_error == ERROR_BAD_NET_NAME)
         {
             return last_error;
         }
