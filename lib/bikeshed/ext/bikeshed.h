@@ -395,7 +395,7 @@ struct Bikeshed_Shed_private
 #endif
 
 #if !defined(BIKESHED_CPU_YIELD)
-    #if defined(__clang__) || defined(__GNUC__)
+    #if !defined(__aarch64__) && (defined(__clang__) || defined(__GNUC__))
         #include <emmintrin.h>
         #define BIKESHED_CPU_YIELD_PRIVATE   _mm_pause();
     #elif defined(_MSC_VER)
@@ -405,6 +405,9 @@ struct Bikeshed_Shed_private
             #undef WIN32_LEAN_AND_MEAN
         #endif
         #define BIKESHED_CPU_YIELD_PRIVATE   YieldProcessor();
+    #elif defined(__aarch64__) && (defined(__APPLE__) || defined(__MACH__))
+        // NOTE (Edgar): Added support for arm64 here
+        #define BIKESHED_CPU_YIELD_PRIVATE   asm volatile ("yield");
     #else
         #define BIKESHED_CPU_YIELD_PRIVATE   void();
     #endif

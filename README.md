@@ -1,8 +1,16 @@
 |Branch      | Linux / Windows / MacOS |
 |------------|-------|
-|master      | [![Build Status](https://github.com/DanEngelbrecht/longtail/workflows/Build%20Master/badge.svg)](https://github.com/DanEngelbrecht/longtail/workflows/Build%20Master/badge.svg) |
+|master      | [![Build Status](https://github.com/goalsgame/longtail/workflows/Build%20Master/badge.svg)](https://github.com/goalsgame/longtail/workflows/Build%20Master/badge.svg) |
 
-# longtail
+# longtail (osx-arm64 compatible)
+### Known issues about osx-arm64 support
+ - Blake2 and meowhash HashAPIs were removed since they don't support arm64 architectures
+ - Blake3's hashmany function was removed as it was causing compilation issues
+ - Had to add supprot for arm64 on bikeshed's CPU Yield directive
+ - Unit tests were commented - will revisit this later
+   - Have to remove all tests related to meowhash and Blake2
+
+### Original description
 Incremental asset delivery format - closely related to the casync project by Lennart Poettering (https://github.com/systemd/casync). When I started tinkering with this I did not know of that project but has since learned from it but choosen different approaches to a few things. If casync does what you need there is no point in diving into this besides curiousity. If there are aspects of casync that does not work for you (you need in-place updating of folders, or you need all the performance using threading) then it might be interesting.
 
 Discord chat Discord chat at https://discord.com/invite/4VmZK9QBnv
@@ -59,9 +67,7 @@ Although the core does not have any platform dependent code there are pre-built 
 Currently there are:
 
 ### HashAPI
-* BLAKE2 - by BLAKE2 https://github.com/BLAKE2/BLAKE2
-* BLAKE3 - by BLAKE3 team  https://github.com/BLAKE2/BLAKE2
-* MeowHash - by Mollyrocket https://mollyrocket.com/meowhash
+* BLAKE3 - by BLAKE3 team https://github.com/BLAKE3-team/BLAKE3
 
 ### StorageAPI
 * In-memory storage - used for test etc

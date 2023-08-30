@@ -6,7 +6,6 @@
 #include "../src/longtail.h"
 #include "../lib/archiveblockstore/longtail_archiveblockstore.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
-#include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/blockstorestorage/longtail_blockstorestorage.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
@@ -18,7 +17,6 @@
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/memtracer/longtail_memtracer.h"
-#include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/ratelimitedprogress/longtail_ratelimitedprogress.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
 #include "../lib/brotli/longtail_brotli.h"
@@ -225,17 +223,9 @@ uint32_t ParseCompressionType(const char* compression_algorithm) {
 
 uint32_t ParseHashingType(const char* hashing_type)
 {
-    if (0 == hashing_type || (strcmp("blake3", hashing_type) == 0))
+    if (0 == hashing_type || (strcmp("blake3", hashing_type) == 0) || true)
     {
         return Longtail_GetBlake3HashType();
-    }
-    if (strcmp("blake2", hashing_type) == 0)
-    {
-        return Longtail_GetBlake2HashType();
-    }
-    if (strcmp("meow", hashing_type) == 0)
-    {
-        return Longtail_GetMeowHashType();
     }
     return 0xffffffff;
 }

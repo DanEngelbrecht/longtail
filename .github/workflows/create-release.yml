@@ -84,7 +84,7 @@ jobs:
         ./dist.sh
     - uses: actions/upload-artifact@master
       with:
-        name: dist-darwin-x64
+        name: dist-darwin-arm64
         path: dist
 
   build-win32:
@@ -153,8 +153,8 @@ jobs:
     - name: Download darwin artifacts
       uses: actions/download-artifact@v1
       with:
-        name: dist-darwin-x64
-        path: dist-darwin-x64
+        name: dist-darwin-arm64
+        path: dist-darwin-arm64
 
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
@@ -169,7 +169,7 @@ jobs:
     - name: Zip darwin artifacts
       uses: montudor/action-zip@v0.1.0
       with:
-        args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
+        args: zip -qq -r ./darwin-arm64.zip ./dist-darwin-arm64
 
     - name: Check prerelease
       id: get-prerelease

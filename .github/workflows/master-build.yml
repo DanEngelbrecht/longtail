@@ -116,7 +116,7 @@ jobs:
         ./dist.sh
     - uses: actions/upload-artifact@master
       with:
-        name: dist-darwin-x64
+        name: dist-darwin-arm64
         path: dist
 
   build-win32:

@@ -3,11 +3,12 @@ set -e
 
 if [ "$(uname)" == "Darwin" ]; then
     OS="darwin"
-    export COMPILER="clang"
+    ARCH=arm64
+#     export COMPILER="clang"
 else
     OS="linux"
-    export COMPILER="gcc"
+    ARCH=x64
 fi
 
-ARCH=x64
+export COMPILER="gcc"
 export PLATFORM="${OS}_${ARCH}"

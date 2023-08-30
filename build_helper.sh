@@ -64,7 +64,7 @@ if [ $TARGET_TYPE == "SHAREDLIB" ] || [ $TARGET_TYPE == "STATICLIB" ]; then
     # Keep third-party lib separate from other builds
     # Disable ASAN since it would force user of .so to enable ASAN
     export THIRD_PARTY_LIB="lib${THIRD_PARTY_LIB}"
-    export ASAN=""
+    export ASAN="-DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H"
     export OPT="$OPT -fPIC -fvisibility=hidden"
 fi
 
@@ -76,18 +76,18 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     cd ${THIRD_PARTY_OUTPUT_FOLDER}
     rm -rf ${THIRD_PARTY_OUTPUT_FOLDER}/*.o
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
+    clang -c $OPT $DISASSEMBLY $ARCH $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
     if [ -n "$THIRDPARTY_SRC_SSE42" ]; then
-        clang++ -c $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
+        clang -c $OPT -msse4.2 $DISASSEMBLY $ARCH $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42 -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
     fi
     if [ -n "$THIRDPARTY_SRC_AVX2" ]; then
-        clang++ -c $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
+        clang -c $OPT -mavx2 $DISASSEMBLY $ARCH $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2 -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
     fi
     if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
-        clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
+        clang -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512 -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
     fi
     if [ -n "$ZSTD_THIRDPARTY_GCC_SRC" ]; then
-        clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $ZSTD_THIRDPARTY_GCC_SRC
+        clang -c $OPT $DISASSEMBLY $ARCH $CXXFLAGS $ASAN -Isrc $ZSTD_THIRDPARTY_GCC_SRC -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
     fi
     ar rc ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB *.o
     cd $BASE_DIR
@@ -95,12 +95,12 @@ fi
 
 if [ $TARGET_TYPE == "EXECUTABLE" ]; then
     echo Building ${OUTPUT_FOLDER}/${TARGET}
-    clang++ -o ${OUTPUT_FOLDER}/${TARGET} $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
+    clang++ -o ${OUTPUT_FOLDER}/${TARGET} $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ]; then
     echo Building ${OUTPUT_FOLDER}/${TARGET}.so
-    clang++ -shared -o ${OUTPUT_FOLDER}/${TARGET}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
+    clang++ -shared -o ${OUTPUT_FOLDER}/${TARGET}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
 fi
 
 if [ $TARGET_TYPE == "STATICLIB" ]; then
@@ -108,7 +108,7 @@ if [ $TARGET_TYPE == "STATICLIB" ]; then
     mkdir -p ${BASE_DIR}build/static-lib-$RELEASE_MODE
     cd ${BASE_DIR}build/static-lib-$RELEASE_MODE
     rm -rf ${BASE_DIR}build/static-lib-$RELEASE_MODE/*.o
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC -DBLAKE3_USE_NEON=1 -DSDL_DISABLE_IMMINTRIN_H
     ar rc ${OUTPUT_FOLDER}.a *.o ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
     cd ..
 fi

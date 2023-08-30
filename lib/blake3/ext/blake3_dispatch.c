@@ -6,12 +6,39 @@
 
 #if defined(IS_X86)
 #if defined(_MSC_VER)
+#include <Windows.h>
 #include <intrin.h>
 #elif defined(__GNUC__)
 #include <immintrin.h>
 #else
 #undef IS_X86 /* Unimplemented! */
 #endif
+#endif
+
+#if !defined(BLAKE3_ATOMICS)
+#if defined(__has_include)
+#if __has_include(<stdatomic.h>) && !defined(_MSC_VER)
+#define BLAKE3_ATOMICS 1
+#else
+#define BLAKE3_ATOMICS 0
+#endif /* __has_include(<stdatomic.h>) && !defined(_MSC_VER) */
+#else
+#define BLAKE3_ATOMICS 0
+#endif /* defined(__has_include) */
+#endif /* BLAKE3_ATOMICS */
+
+#if BLAKE3_ATOMICS
+#define ATOMIC_INT _Atomic int
+#define ATOMIC_LOAD(x) x
+#define ATOMIC_STORE(x, y) x = y
+#elif defined(_MSC_VER)
+#define ATOMIC_INT LONG
+#define ATOMIC_LOAD(x) InterlockedOr(&x, 0)
+#define ATOMIC_STORE(x, y) InterlockedExchange(&x, y)
+#else
+#define ATOMIC_INT int
+#define ATOMIC_LOAD(x) x
+#define ATOMIC_STORE(x, y) x = y
 #endif
 
 #define MAYBE_UNUSED(x) (void)((x))
@@ -76,7 +103,7 @@ enum cpu_feature {
 #if !defined(BLAKE3_TESTING)
 static /* Allow the variable to be controlled manually for testing */
 #endif
-    enum cpu_feature g_cpu_features = UNDEFINED;
+    ATOMIC_INT g_cpu_features = UNDEFINED;
 
 #if !defined(BLAKE3_TESTING)
 static
@@ -84,14 +111,16 @@ static
     enum cpu_feature
     get_cpu_features(void) {
 
-  if (g_cpu_features != UNDEFINED) {
-    return g_cpu_features;
+  /* If TSAN detects a data race here, try compiling with -DBLAKE3_ATOMICS=1 */
+  enum cpu_feature features = ATOMIC_LOAD(g_cpu_features);
+  if (features != UNDEFINED) {
+    return features;
   } else {
 #if defined(IS_X86)
     uint32_t regs[4] = {0};
     uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
     (void)edx;
-    int features = 0;
+    features = 0;
     cpuid(regs, 0);
     const int max_id = *eax;
     cpuid(regs, 1);
@@ -101,7 +130,7 @@ static
     if (*edx & (1UL << 26))
       features |= SSE2;
 #endif
-    if (*ecx & (1UL << 0))
+    if (*ecx & (1UL << 9))
       features |= SSSE3;
     if (*ecx & (1UL << 19))
       features |= SSE41;
@@ -124,8 +153,8 @@ static
         }
       }
     }
-    g_cpu_features = (enum cpu_feature)features;
-    return (enum cpu_feature)features;
+    ATOMIC_STORE(g_cpu_features, features);
+    return features;
 #else
     /* How to detect NEON? */
     return 0;
@@ -191,57 +220,57 @@ void blake3_compress_xof(const uint32_t cv[8],
   blake3_compress_xof_portable(cv, block, block_len, counter, flags, out);
 }
 
-void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
-                      size_t blocks, const uint32_t key[8], uint64_t counter,
-                      bool increment_counter, uint8_t flags,
-                      uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
-#if defined(IS_X86)
-  const enum cpu_feature features = get_cpu_features();
-  MAYBE_UNUSED(features);
-#if !defined(BLAKE3_NO_AVX512)
-  if ((features & (AVX512F|AVX512VL)) == (AVX512F|AVX512VL)) {
-    blake3_hash_many_avx512(inputs, num_inputs, blocks, key, counter,
-                            increment_counter, flags, flags_start, flags_end,
-                            out);
-    return;
-  }
-#endif
-#if !defined(BLAKE3_NO_AVX2)
-  if (features & AVX2) {
-    blake3_hash_many_avx2(inputs, num_inputs, blocks, key, counter,
-                          increment_counter, flags, flags_start, flags_end,
-                          out);
-    return;
-  }
-#endif
-#if !defined(BLAKE3_NO_SSE41)
-  if (features & SSE41) {
-    blake3_hash_many_sse41(inputs, num_inputs, blocks, key, counter,
-                           increment_counter, flags, flags_start, flags_end,
-                           out);
-    return;
-  }
-#endif
-#if !defined(BLAKE3_NO_SSE2)
-  if (features & SSE2) {
-    blake3_hash_many_sse2(inputs, num_inputs, blocks, key, counter,
-                          increment_counter, flags, flags_start, flags_end,
-                          out);
-    return;
-  }
-#endif
-#endif
+// void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
+//                       size_t blocks, const uint32_t key[8], uint64_t counter,
+//                       bool increment_counter, uint8_t flags,
+//                       uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
+// #if defined(IS_X86)
+//   const enum cpu_feature features = get_cpu_features();
+//   MAYBE_UNUSED(features);
+// #if !defined(BLAKE3_NO_AVX512)
+//   if ((features & (AVX512F|AVX512VL)) == (AVX512F|AVX512VL)) {
+//     blake3_hash_many_avx512(inputs, num_inputs, blocks, key, counter,
+//                             increment_counter, flags, flags_start, flags_end,
+//                             out);
+//     return;
+//   }
+// #endif
+// #if !defined(BLAKE3_NO_AVX2)
+//   if (features & AVX2) {
+//     blake3_hash_many_avx2(inputs, num_inputs, blocks, key, counter,
+//                           increment_counter, flags, flags_start, flags_end,
+//                           out);
+//     return;
+//   }
+// #endif
+// #if !defined(BLAKE3_NO_SSE41)
+//   if (features & SSE41) {
+//     blake3_hash_many_sse41(inputs, num_inputs, blocks, key, counter,
+//                            increment_counter, flags, flags_start, flags_end,
+//                            out);
+//     return;
+//   }
+// #endif
+// #if !defined(BLAKE3_NO_SSE2)
+//   if (features & SSE2) {
+//     blake3_hash_many_sse2(inputs, num_inputs, blocks, key, counter,
+//                           increment_counter, flags, flags_start, flags_end,
+//                           out);
+//     return;
+//   }
+// #endif
+// #endif
 
-#if BLAKE3_USE_NEON == 1
-  blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
-                        increment_counter, flags, flags_start, flags_end, out);
-  return;
-#endif
+// #if BLAKE3_USE_NEON == 1
+//   blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
+//                         increment_counter, flags, flags_start, flags_end, out);
+//   return;
+// #endif
 
-  blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
-                            increment_counter, flags, flags_start, flags_end,
-                            out);
-}
+//   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
+//                             increment_counter, flags, flags_start, flags_end,
+//                             out);
+// }
 
 // The dynamically detected SIMD degree of the current platform.
 size_t blake3_simd_degree(void) {

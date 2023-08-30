@@ -183,9 +183,9 @@ INLINE size_t compress_chunks_parallel(const uint8_t *input, size_t input_len,
     chunks_array_len += 1;
   }
 
-  blake3_hash_many(chunks_array, chunks_array_len,
-                   BLAKE3_CHUNK_LEN / BLAKE3_BLOCK_LEN, key, chunk_counter,
-                   true, flags, CHUNK_START, CHUNK_END, out);
+  // blake3_hash_many(chunks_array, chunks_array_len,
+  //                  BLAKE3_CHUNK_LEN / BLAKE3_BLOCK_LEN, key, chunk_counter,
+  //                  true, flags, CHUNK_START, CHUNK_END, out);
 
   // Hash the remaining partial chunk, if there is one. Note that the empty
   // chunk (meaning the empty message) is a different codepath.
@@ -226,12 +226,12 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
     parents_array_len += 1;
   }
 
-  blake3_hash_many(parents_array, parents_array_len, 1, key,
-                   0, // Parents always use counter 0.
-                   false, flags | PARENT,
-                   0, // Parents have no start flags.
-                   0, // Parents have no end flags.
-                   out);
+  // blake3_hash_many(parents_array, parents_array_len, 1, key,
+  //                  0, // Parents always use counter 0.
+  //                  false, flags | PARENT,
+  //                  0, // Parents have no start flags.
+  //                  0, // Parents have no end flags.
+  //                  out);
 
   // If there's an odd child left over, it becomes an output.
   if (num_chaining_values > 2 * parents_array_len) {
@@ -254,7 +254,7 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
 // As a special case when the SIMD degree is 1, this function will still return
 // at least 2 outputs. This guarantees that this function doesn't perform the
 // root compression. (If it did, it would use the wrong flags, and also we
-// wouldn't be able to implement exendable output.) Note that this function is
+// wouldn't be able to implement extendable output.) Note that this function is
 // not used when the whole input is only 1 chunk long; that's a different
 // codepath.
 //
