@@ -4,25 +4,34 @@ set -e
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
 export SOURCE_FOLDER=$1
 
-. ${BASE_DIR}arch_helper.sh
-
-if [ "$2" = "build-third-party" ] || [ "$3" = "build-third-party" ] || [ "$4" = "build-third-party" ] ; then
-    BUILD_THIRD_PARTY="build-third-party"
-else
-    BUILD_THIRD_PARTY=""
+if [[ "$*" == *"arm64"* ]]
+then
+    ARCH="arm64"
 fi
 
-if [ "$2" = "release" ] || [ "$3" = "release" ] || [ "$4" = "release" ] ; then
+if [[ "$*" == *"x64"* ]]
+then
+    ARCH="x64"
+fi
+
+if [[ "$*" == *"build-third-party"* ]]
+then
+    BUILD_THIRD_PARTY="build-third-party"
+fi
+
+if [[ "$*" == *"release"* ]]
+then
     RELEASE_MODE="release"
 else
     RELEASE_MODE="debug"
 fi
 
-if [ "$2" = "run" ] || [ "$3" = "run" ] || [ "$4" = "run" ] ; then
+if [[ "$*" == *"run"* ]]
+then
     RUN="run"
-else
-    RUN=""
 fi
+
+. ${BASE_DIR}arch_helper.sh $ARCH
 
 export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
 
