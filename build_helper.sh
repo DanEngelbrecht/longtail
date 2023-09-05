@@ -14,9 +14,13 @@ then
     ARCH="x64"
 fi
 
+. ${BASE_DIR}arch_helper.sh $ARCH
+
 if [[ "$*" == *"build-third-party"* ]]
 then
     BUILD_THIRD_PARTY="build-third-party"
+else
+    BUILD_THIRD_PARTY=""
 fi
 
 if [[ "$*" == *"release"* ]]
@@ -29,9 +33,9 @@ fi
 if [[ "$*" == *"run"* ]]
 then
     RUN="run"
+else
+    RUN=""
 fi
-
-. ${BASE_DIR}arch_helper.sh $ARCH
 
 export BASE_CXXFLAGS="-Wno-sign-conversion -Wno-missing-prototypes -Wno-cast-align -Wno-unused-function -Wno-deprecated-register -Wno-deprecated -Wno-c++98-compat-pedantic -Wno-unused-parameter -Wno-unused-template -Wno-zero-as-null-pointer-constant -Wno-old-style-cast -Wno-global-constructors -Wno-padded"
 
