@@ -9,5 +9,10 @@ else
     export COMPILER="gcc"
 fi
 
-ARCH=x64
+ARCH="$2"
+
+if [ ! -z "$ARCH" ]; then
+    ARCH=x64
+fi
+
 export PLATFORM="${OS}_${ARCH}"

@@ -4,7 +4,7 @@ set -e
 SOURCEFOLDER="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/"
 BASE_DIR="$(dirname "$SOURCEFOLDER")/"
 
-. ${BASE_DIR}arch_helper.sh
+. ${BASE_DIR}arch_helper.sh $2
 
 CXXFLAGS="-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread"
 TARGET=longtail_static

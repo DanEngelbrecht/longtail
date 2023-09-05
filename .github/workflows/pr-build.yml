@@ -78,17 +78,18 @@ jobs:
       matrix:
         config: [debug, release]
         target: [static_lib, shared_lib, cmd]
+        arch: [x64, arm64]
 
     steps:
     - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
-        ${{matrix.target}}/build.sh ${{matrix.config}}
+        ${{matrix.target}}/build.sh ${{matrix.config}} ${{matrix.arch}}
 
     - uses: actions/upload-artifact@v3
       name: upload ${{matrix.target}}
       with:
-        name: darwin_x64-${{matrix.target}}-${{matrix.config}}
+        name: darwin_${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.o
