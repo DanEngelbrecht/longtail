@@ -69,17 +69,17 @@ jobs:
       matrix:
         config: [debug, release]
         target: [static_lib, shared_lib, cmd]
-
+        arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
-        ${{matrix.target}}/build.sh ${{matrix.config}}
+        ${{matrix.target}}/build.sh ${{matrix.config}} ${{matrix.arch}}
 
     - uses: actions/upload-artifact@v3
       name: upload ${{matrix.target}}
       with:
-        name: darwin_x64-${{matrix.target}}-${{matrix.config}}
+        name: darwin_${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.o
@@ -91,21 +91,25 @@ jobs:
     strategy:
       matrix:
         config: [debug, release]
+        arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
     - name: build test
       run: |
-        test/build.sh ${{matrix.config}}
+        test/build.sh ${{matrix.config}} ${{matrix.arch}}
     - name: run tests
       run: |
         cd ./test
-        ../build/darwin_x64/test/${{matrix.config}}/test
+        ../build/darwin_${{matrix.arch}}/test/${{matrix.config}}/test
         cd ..
 
   dist-darwin:
 
     needs: build-darwin
     runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
@@ -113,10 +117,10 @@ jobs:
         path: build/artifacts
     - name: build dist
       run: |
-        ./dist.sh
+        ./dist.sh ${{matrix.arch}}
     - uses: actions/upload-artifact@master
       with:
-        name: dist-darwin-x64
+        name: dist-darwin-${{matrix.arch}}
         path: dist
 
   build-win32:
