@@ -61,7 +61,7 @@ fi
 rm -rf ${OUTPUT_FOLDER}/*.o
 
 pushd ${OUTPUT_FOLDER}
-${COMPILER} -c ${CXXFLAGS} ${OPT} ${THIRDPARTY_SRC} ${SRC}
+${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC} ${SRC}
 
 echo ${ARCH}
 if [ $ARCH == "x64" ]; then
