@@ -78,7 +78,7 @@ if [ $ARCH == "x64" ]; then
 fi
 
 if [ $ARCH == "arm64" ]; then
-    export BASEARCH="-m64 -mfloat-abi=hard"
+    export BASEARCH="-m64"
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ] || [ $TARGET_TYPE == "STATICLIB" ]; then
@@ -114,7 +114,7 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     fi
     if [ $ARCH == "arm64" ]; then
         if [ -n "$THIRDPARTY_SRC_NEON" ]; then
-            clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_NEON
+            clang++ -c -mfloat-abi=hard $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_NEON
         fi
     fi
     if [ -n "$ZSTD_THIRDPARTY_GCC_SRC" ]; then

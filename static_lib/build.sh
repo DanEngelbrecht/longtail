@@ -46,7 +46,7 @@ if [ $ARCH == "x64" ]; then
 fi
 
 if [ $ARCH == "arm64" ]; then
-    export BASEARCH="-m64 -mfloat-abi=hard"
+    export BASEARCH="-m64"
 fi
 
 LIB_TARGET="${OUTPUT_FOLDER}/lib${TARGET}.a"
@@ -81,7 +81,7 @@ fi
 
 if [ $ARCH == "arm64" ]; then
     if [ -n "$THIRDPARTY_SRC_NEON" ]; then
-        ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_NEON}
+        ${COMPILER} -c -mfloat-abi=hard ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_NEON}
     fi
 fi
 
