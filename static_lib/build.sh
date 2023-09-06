@@ -61,6 +61,9 @@ fi
 rm -rf ${OUTPUT_FOLDER}/*.o
 
 pushd ${OUTPUT_FOLDER}
+
+${COMPILER} --version
+
 ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC} ${SRC}
 
 echo ${ARCH}

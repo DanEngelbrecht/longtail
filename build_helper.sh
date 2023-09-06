@@ -93,6 +93,8 @@ if [ ! -f "${THIRD_PARTY_OUTPUT_FOLDER}/${THIRD_PARTY_LIB}" ]; then
     BUILD_THIRD_PARTY="build-third-party"
 fi
 
+clang++ --version
+
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     cd ${THIRD_PARTY_OUTPUT_FOLDER}
