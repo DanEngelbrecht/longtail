@@ -2,7 +2,6 @@
 
 #include "longtail_hash_registry.h"
 
-#include "../blake2/longtail_blake2.h"
 #include "../blake3/longtail_blake3.h"
 #include "../meowhash/longtail_meowhash.h"
 

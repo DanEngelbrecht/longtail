@@ -30,7 +30,6 @@ mkdir dist/include/lib
 mkdir dist/include/lib/archiveblockstore
 mkdir dist/include/lib/atomiccancel
 mkdir dist/include/lib/bikeshed
-mkdir dist/include/lib/blake2
 mkdir dist/include/lib/blake3
 mkdir dist/include/lib/blockstorestorage
 mkdir dist/include/lib/brotli
@@ -53,7 +52,6 @@ cp src/*.h dist/include/src
 cp lib/archiveblockstore/*.h dist/include/lib/archiveblockstore
 cp lib/atomiccancel/*.h dist/include/lib/atomiccancel
 cp lib/bikeshed/*.h dist/include/lib/bikeshed
-cp lib/blake2/*.h dist/include/lib/blake2
 cp lib/blake3/*.h dist/include/lib/blake3
 cp lib/blockstorestorage/*.h dist/include/lib/blockstorestorage
 cp lib/brotli/*.h dist/include/lib/brotli
