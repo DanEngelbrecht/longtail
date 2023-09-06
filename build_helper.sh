@@ -97,8 +97,6 @@ if [ ! -f "${THIRD_PARTY_OUTPUT_FOLDER}/${THIRD_PARTY_LIB}" ]; then
     BUILD_THIRD_PARTY="build-third-party"
 fi
 
-clang++ --version
-
 if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     cd ${THIRD_PARTY_OUTPUT_FOLDER}
@@ -121,7 +119,7 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     if [ $ARCH == "arm64" ]; then
         if [ $COMPILER == "clang" ]; then
             if [ -n "$THIRDPARTY_SRC_NEON" ]; then
-                clang++ -c -mfloat-abi=hard $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_NEON
+                clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_NEON
             fi
         fi
     fi

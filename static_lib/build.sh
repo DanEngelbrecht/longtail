@@ -66,11 +66,8 @@ rm -rf ${OUTPUT_FOLDER}/*.o
 
 pushd ${OUTPUT_FOLDER}
 
-${COMPILER} --version
-
 ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC} ${SRC}
 
-echo ${ARCH}
 if [ $ARCH == "x64" ]; then
     if [ -n "${THIRDPARTY_SRC_SSE}" ]; then
         ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_SSE}
@@ -89,7 +86,7 @@ fi
 if [ $ARCH == "arm64" ]; then
     if [ $COMPILER == "clang" ]; then
         if [ -n "$THIRDPARTY_SRC_NEON" ]; then
-            ${COMPILER} -c -mfloat-abi=hard ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_NEON}
+            ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_NEON}
         fi
     fi
 fi
