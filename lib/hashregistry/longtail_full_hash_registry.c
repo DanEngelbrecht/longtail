@@ -23,12 +23,12 @@
          Longtail_GetBlake3HashType(),
          Longtail_GetMeowHashType()};
 
-    struct Longtail_HashAPI* hash_apis[3] = {
+    struct Longtail_HashAPI* hash_apis[2] = {
         blake3_hash,
         meow_hash};
 
     struct Longtail_HashRegistryAPI* registry = Longtail_CreateDefaultHashRegistry(
-        3,
+        2,
         (const uint32_t*)hash_types,
         (const struct Longtail_HashAPI**)hash_apis);
     if (!registry)
