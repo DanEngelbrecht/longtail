@@ -78,7 +78,7 @@ if [ $ARCH == "x64" ]; then
 fi
 
 if [ $ARCH == "arm64" ]; then
-    export BASEARCH="-m64"
+    export BASEARCH="-m64 -mfloat-abi=hard"
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ] || [ $TARGET_TYPE == "STATICLIB" ]; then
