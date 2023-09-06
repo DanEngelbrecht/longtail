@@ -40,7 +40,6 @@ mkdir dist\include\lib\hashregistry
 mkdir dist\include\lib\lz4
 mkdir dist\include\lib\memstorage
 mkdir dist\include\lib\memtracer
-mkdir dist\include\lib\meowhash
 mkdir dist\include\lib\ratelimitedprogress
 mkdir dist\include\lib\shareblockstore
 mkdir dist\include\lib\zstd
@@ -62,7 +61,6 @@ copy lib\hashregistry\*.h dist\include\lib\hashregistry
 copy lib\lz4\*.h dist\include\lib\lz4
 copy lib\memstorage\*.h dist\include\lib\memstorage
 copy lib\memtracer\*.h dist\include\lib\memtracer
-copy lib\meowhash\*.h dist\include\lib\meowhash
 copy lib\shareblockstore\*.h dist\include\lib\shareblockstore
 copy lib\ratelimitedprogress\*.h dist\include\lib\ratelimitedprogress
 copy lib\zstd\*.h dist\include\lib\zstd

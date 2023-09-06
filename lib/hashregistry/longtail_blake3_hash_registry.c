@@ -3,7 +3,6 @@
 #include "longtail_hash_registry.h"
 
 #include "../blake3/longtail_blake3.h"
-#include "../meowhash/longtail_meowhash.h"
 
  struct Longtail_HashRegistryAPI* Longtail_CreateBlake3HashRegistry()
  {
