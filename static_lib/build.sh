@@ -62,23 +62,30 @@ rm -rf ${OUTPUT_FOLDER}/*.o
 
 pushd ${OUTPUT_FOLDER}
 ${COMPILER} -c ${CXXFLAGS} ${OPT} ${THIRDPARTY_SRC} ${SRC}
+
+echo ${ARCH}
 if [ $ARCH == "x64" ]; then
-    if [ ! -z ${THIRDPARTY_SRC_SSE42} ]; then
+    if [ -n "${THIRDPARTY_SRC_SSE}" ]; then
+        ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_SSE}
+    fi
+    if [ -n "${THIRDPARTY_SRC_SSE42}" ]; then
         ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} -msse4.2 ${THIRDPARTY_SRC_SSE42}
     fi
-    if [ ! -z ${THIRDPARTY_SRC_AVX2} ]; then
+    if [ -n "${THIRDPARTY_SRC_AVX2}" ]; then
         ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} -msse4.2 -mavx2 ${THIRDPARTY_SRC_AVX2}
     fi
-    if [ ! -z ${THIRDPARTY_SRC_AVX512} ]; then
-        ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables ${THIRDPARTY_SRC_AVX512}
+    if [ -n "${THIRDPARTY_SRC_AVX512}" ]; then
+        ${COMPILER} -c ${THIRDPARTY_SRC_AVX512} ${OPT} ${BASEARCH} -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables ${THIRDPARTY_SRC_AVX512}
     fi
 fi
+
 if [ $ARCH == "arm64" ]; then
     if [ -n "$THIRDPARTY_SRC_NEON" ]; then
         ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_NEON}
     fi
 fi
-if [ ! -z ${ZSTD_THIRDPARTY_GCC_SRC} ]; then
+
+if [ -n ${ZSTD_THIRDPARTY_GCC_SRC} ]; then
     ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} -fno-asynchronous-unwind-tables ${ZSTD_THIRDPARTY_GCC_SRC}
 fi
 
