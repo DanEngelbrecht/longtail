@@ -176,7 +176,21 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo Compiling third party dependencies to library !THIRD_PARTY_LIB!
     del /q !THIRD_PARTY_OUTPUT_FOLDER!\*.obj >nul 2>&1
     cd !THIRD_PARTY_OUTPUT_FOLDER!
-    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% %THIRDPARTY_SRC% %THIRDPARTY_SRC_SSE42% %THIRDPARTY_SRC_AVX2% %THIRDPARTY_SRC_AVX512%
+
+    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC%
+    if NOT "!THIRDPARTY_SRC_SSE!" == "" (
+        cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC_SSE%
+    )
+    if NOT "!THIRDPARTY_SRC_SSE42!" == "" (
+        cl.exe /c %CXXFLAGS% %OPT% -msse4.2 %THIRDPARTY_SRC_SSE42%
+    )
+    if NOT "%THIRDPARTY_SRC_AVX2%" == "" (
+        cl.exe /c %CXXFLAGS% %OPT% -msse4.2 -mavx2 %THIRDPARTY_SRC_AVX2%
+    )
+    if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
+        cl.exe /c %CXXFLAGS% %OPT% -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
+    )
+
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
     echo Creating third party dependencies library !THIRD_PARTY_LIB!
     lib.exe /nologo *.obj /OUT:!THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB!
