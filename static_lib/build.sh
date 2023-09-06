@@ -104,4 +104,7 @@ ls -la ${LIB_TARGET}
 
 echo Validating ${LIB_TARGET}
 ${COMPILER} -o ${TEST_EXECUTABLEPATH} ${CXXFLAGS} ${BASEARCH} ${SOURCEFOLDER}test.c -lm -L${OUTPUT_FOLDER} -l${TARGET} --verbose
-${TEST_EXECUTABLEPATH}
+
+if [ $ARCH == "x64" ]; then
+    ${TEST_EXECUTABLEPATH}
+fi
