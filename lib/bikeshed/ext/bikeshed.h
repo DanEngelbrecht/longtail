@@ -396,8 +396,14 @@ struct Bikeshed_Shed_private
 
 #if !defined(BIKESHED_CPU_YIELD)
     #if defined(__clang__) || defined(__GNUC__)
-        #include <emmintrin.h>
-        #define BIKESHED_CPU_YIELD_PRIVATE   _mm_pause();
+        #if defined(__SSE2__)
+            #include <emmintrin.h>
+            #define BIKESHED_CPU_YIELD_PRIVATE   _mm_pause();
+        #elif defined(__arm__) || defined(__aarch64__)
+            #define BIKESHED_CPU_YIELD_PRIVATE   __asm__ __volatile__ ("yield" ::: "memory");
+        #else
+            #define BIKESHED_CPU_YIELD_PRIVATE   void();
+        #endif
     #elif defined(_MSC_VER)
         #if !defined(_WINDOWS_)
             #define WIN32_LEAN_AND_MEAN
