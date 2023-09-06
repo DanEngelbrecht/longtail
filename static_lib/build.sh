@@ -46,7 +46,7 @@ if [ $ARCH == "x64" ]; then
 fi
 
 if [ $ARCH == "arm64" ]; then
-    export BASEARCH="-m64"
+    export BASEARCH="-arch arm64"
 fi
 
 LIB_TARGET="${OUTPUT_FOLDER}/lib${TARGET}.a"
