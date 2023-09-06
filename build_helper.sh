@@ -65,14 +65,20 @@ if [ "$RELEASE_MODE" = "release" ]; then
     export OPT=-O3
     #DISASSEMBLY='-S -masm=intel'
     export ASAN=""
-    export ARCH="-m64 -maes -mssse3 -msse4.1"
     export CXXFLAGS="$BASE_CXXFLAGS $CXXFLAGS"
 else
     export OPT="-g"
     export ASAN="-fsanitize=address -fno-omit-frame-pointer"
     BASE_CXXFLAGS="$BASE_CXXFLAGS" # -Wall -Weverything"
-    export ARCH="-m64 -maes -mssse3 -msse4.1"
     export CXXFLAGS="$BASE_CXXFLAGS $CXXFLAGS_DEBUG"
+fi
+
+if [ $ARCH == "x64" ]; then
+    export BASEARCH="-m64 -maes -mssse3 -msse4.1"
+fi
+
+if [ $ARCH == "arm64" ]; then
+    export BASEARCH="-m64"
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ] || [ $TARGET_TYPE == "STATICLIB" ]; then
@@ -91,18 +97,25 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     echo "Compiling third party dependencies to library" $THIRD_PARTY_LIB
     cd ${THIRD_PARTY_OUTPUT_FOLDER}
     rm -rf ${THIRD_PARTY_OUTPUT_FOLDER}/*.o
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
-    if [ -n "$THIRDPARTY_SRC_SSE42" ]; then
-        clang++ -c $OPT -msse4.2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
+    clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
+    if [ $ARCH == "x64" ]; then
+        if [ -n "$THIRDPARTY_SRC_SSE42" ]; then
+            clang++ -c $OPT -msse4.2 $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
+        fi
+        if [ -n "$THIRDPARTY_SRC_AVX2" ]; then
+            clang++ -c $OPT -mavx2 $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
+        fi
+        if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
+            clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
+        fi
     fi
-    if [ -n "$THIRDPARTY_SRC_AVX2" ]; then
-        clang++ -c $OPT -mavx2 $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2
-    fi
-    if [ -n "$THIRDPARTY_SRC_AVX512" ]; then
-        clang++ -c $OPT -mavx512vl -mavx512f $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX512
+    if [ $ARCH == "arm64" ]; then
+        if [ -n "$THIRDPARTY_SRC_NEON" ]; then
+            clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_NEON
+        fi
     fi
     if [ -n "$ZSTD_THIRDPARTY_GCC_SRC" ]; then
-        clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $ZSTD_THIRDPARTY_GCC_SRC
+        clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $ZSTD_THIRDPARTY_GCC_SRC
     fi
     ar rc ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB *.o
     cd $BASE_DIR
@@ -110,12 +123,12 @@ fi
 
 if [ $TARGET_TYPE == "EXECUTABLE" ]; then
     echo Building ${OUTPUT_FOLDER}/${TARGET}
-    clang++ -o ${OUTPUT_FOLDER}/${TARGET} $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
+    clang++ -o ${OUTPUT_FOLDER}/${TARGET} $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
 fi
 
 if [ $TARGET_TYPE == "SHAREDLIB" ]; then
     echo Building ${OUTPUT_FOLDER}/${TARGET}.so
-    clang++ -shared -o ${OUTPUT_FOLDER}/${TARGET}.so $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
+    clang++ -shared -o ${OUTPUT_FOLDER}/${TARGET}.so $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
 fi
 
 if [ $TARGET_TYPE == "STATICLIB" ]; then
@@ -123,7 +136,7 @@ if [ $TARGET_TYPE == "STATICLIB" ]; then
     mkdir -p ${BASE_DIR}build/static-lib-$RELEASE_MODE
     cd ${BASE_DIR}build/static-lib-$RELEASE_MODE
     rm -rf ${BASE_DIR}build/static-lib-$RELEASE_MODE/*.o
-    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+    clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
     ar rc ${OUTPUT_FOLDER}.a *.o ${THIRD_PARTY_OUTPUT_FOLDER}/$THIRD_PARTY_LIB
     cd ..
 fi
@@ -138,11 +151,11 @@ fi
 #    mkdir -p ${BASE_DIR}build/lib-$RELEASE_MODE
 #    rm -rf ${BASE_DIR}build/lib-$RELEASE_MODE/*.o
 #    cd ${BASE_DIR}build/lib-$RELEASE_MODE
-#    clang++ -c $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
+#    clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC
 #    echo ${BASE_DIR}build/$TARGET
 #    ar rc ${BASE_DIR}build/$TARGET *.o ${BASE_DIR}build/third-party-$RELEASE_MODE/*.o
 #    cd $BASE_DIR
 #else
 #    echo Building $OUTPUT
-#    clang++ -o ${BASE_DIR}build/$OUTPUT $OPT $DISASSEMBLY $ARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${BASE_DIR}build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
+#    clang++ -o ${BASE_DIR}build/$OUTPUT $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $SRC $MAIN_SRC ${BASE_DIR}build/third-party-$RELEASE_MODE/$THIRD_PARTY_LIB
 #fi
