@@ -103,11 +103,11 @@ if [ "$BUILD_THIRD_PARTY" = "build-third-party" ]; then
     rm -rf ${THIRD_PARTY_OUTPUT_FOLDER}/*.o
     clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC
     if [ $ARCH == "x64" ]; then
-        if [ -n "$THIRDPARTY_SRC_SSE" ]; then
-            clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE
+        if [ -n "$THIRDPARTY_SSE" ]; then
+            clang++ -c $OPT $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SSE
         fi
-        if [ -n "$THIRDPARTY_SRC_SSE42" ]; then
-            clang++ -c $OPT -msse4.2 $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_SSE42
+        if [ -n "$THIRDPARTY_SSE42" ]; then
+            clang++ -c $OPT -msse4.2 $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SSE42
         fi
         if [ -n "$THIRDPARTY_SRC_AVX2" ]; then
             clang++ -c $OPT -mavx2 $DISASSEMBLY $BASEARCH -std=c++11 $CXXFLAGS $ASAN -Isrc $THIRDPARTY_SRC_AVX2

@@ -69,11 +69,11 @@ pushd ${OUTPUT_FOLDER}
 ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC} ${SRC}
 
 if [ $ARCH == "x64" ]; then
-    if [ -n "${THIRDPARTY_SRC_SSE}" ]; then
-        ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SRC_SSE}
+    if [ -n "${THIRDPARTY_SSE}" ]; then
+        ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} ${THIRDPARTY_SSE}
     fi
-    if [ -n "${THIRDPARTY_SRC_SSE42}" ]; then
-        ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} -msse4.2 ${THIRDPARTY_SRC_SSE42}
+    if [ -n "${THIRDPARTY_SSE42}" ]; then
+        ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} -msse4.2 ${THIRDPARTY_SSE42}
     fi
     if [ -n "${THIRDPARTY_SRC_AVX2}" ]; then
         ${COMPILER} -c ${CXXFLAGS} ${OPT} ${BASEARCH} -msse4.2 -mavx2 ${THIRDPARTY_SRC_AVX2}
