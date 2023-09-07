@@ -6,6 +6,7 @@
 #include "../src/longtail.h"
 #include "../lib/archiveblockstore/longtail_archiveblockstore.h"
 #include "../lib/bikeshed/longtail_bikeshed.h"
+#include "../lib/blake2/longtail_blake2.h"
 #include "../lib/blake3/longtail_blake3.h"
 #include "../lib/blockstorestorage/longtail_blockstorestorage.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
@@ -227,6 +228,10 @@ uint32_t ParseHashingType(const char* hashing_type)
     if (0 == hashing_type || (strcmp("blake3", hashing_type) == 0))
     {
         return Longtail_GetBlake3HashType();
+    }
+    if (strcmp("blake2", hashing_type) == 0)
+    {
+        return Longtail_GetBlake2HashType();
     }
     if (strcmp("meow", hashing_type) == 0)
     {
@@ -2096,7 +2101,7 @@ int main(int argc, char** argv)
         kgflags_string("storage-uri", 0, "URI for chunks and store index for store", true, &storage_uri_raw);
 
         const char* hasing_raw = 0;
-        kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake3, meow", false, &hasing_raw);
+        kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake2, blake3, meow", false, &hasing_raw);
 
         const char* source_path_raw = 0;
         kgflags_string("source-path", 0, "Source folder path", true, &source_path_raw);
@@ -2371,7 +2376,7 @@ int main(int argc, char** argv)
     else if (strcmp(command, "pack") == 0)
     {
         const char* hasing_raw = 0;
-        kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake3, meow", false, &hasing_raw);
+        kgflags_string("hash-algorithm", "blake3", "Hashing algorithm: blake2, blake3, meow", false, &hasing_raw);
 
         const char* source_path_raw = 0;
         kgflags_string("source-path", 0, "Source folder path", true, &source_path_raw);
