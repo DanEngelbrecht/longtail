@@ -9,6 +9,7 @@
 const uint32_t LONGTAIL_BLAKE2_HASH_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'l') << 16) + (((uint32_t)'k') << 8) + ((uint32_t)'2');
 const uint32_t Longtail_GetBlake2HashType() {return LONGTAIL_BLAKE2_HASH_TYPE; }
 
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
 static uint32_t Blake2Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -19,7 +20,6 @@ static uint32_t Blake2Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
     return LONGTAIL_BLAKE2_HASH_TYPE;
 }
 
-#if defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
 struct Blake2HashAPI
 {
     struct Longtail_HashAPI m_Blake2HashAPI;

@@ -4594,16 +4594,52 @@ TEST(Longtail, TestFullHashRegistry)
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
     ASSERT_NE((struct Longtail_HashRegistryAPI*)0, hash_registry);
     struct Longtail_HashAPI* blake2_hash_api = 0;
-    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake2HashType(), &blake2_hash_api));
-//    ASSERT_NE((struct Longtail_HashAPI*)0, blake2_hash_api);
+    int err = hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake2HashType(), &blake2_hash_api);
+    switch(err)
+    {
+        case 0:
+            ASSERT_NE((struct Longtail_HashAPI*)0, blake2_hash_api);
+            break;
+        case ENOTSUP:
+            ASSERT_EQ((struct Longtail_HashAPI*)0, blake2_hash_api);
+            break;
+        default:
+            ASSERT_EQ((struct Longtail_HashAPI*)0, blake2_hash_api);
+            ASSERT_EQ(0, err);
+            break;
+    }
 
     struct Longtail_HashAPI* blake3_hash_api = 0;
-    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake3HashType(), &blake3_hash_api));
-    ASSERT_NE((struct Longtail_HashAPI*)0, blake3_hash_api);
+    err = hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake3HashType(), &blake3_hash_api);
+    switch(err)
+    {
+        case 0:
+            ASSERT_NE((struct Longtail_HashAPI*)0, blake3_hash_api);
+            break;
+        case ENOTSUP:
+            ASSERT_EQ((struct Longtail_HashAPI*)0, blake3_hash_api);
+            break;
+        default:
+            ASSERT_EQ((struct Longtail_HashAPI*)0, blake3_hash_api);
+            ASSERT_EQ(0, err);
+            break;
+    }
 
     struct Longtail_HashAPI* meow_hash_api = 0;
-    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetMeowHashType(), &meow_hash_api));
-//    ASSERT_NE((struct Longtail_HashAPI*)0, meow_hash_api);
+    err = hash_registry->GetHashAPI(hash_registry, Longtail_GetMeowHashType(), &meow_hash_api);
+    switch(err)
+    {
+        case 0:
+            ASSERT_NE((struct Longtail_HashAPI*)0, meow_hash_api);
+            break;
+        case ENOTSUP:
+            ASSERT_EQ((struct Longtail_HashAPI*)0, meow_hash_api);
+            break;
+        default:
+            ASSERT_EQ((struct Longtail_HashAPI*)0, meow_hash_api);
+            ASSERT_EQ(0, err);
+            break;
+    }
 
     struct Longtail_HashAPI* error_hash_api = 0;
     ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, 0xdeadbeefu, &error_hash_api));
