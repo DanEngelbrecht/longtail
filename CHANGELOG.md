@@ -1,4 +1,9 @@
 ##
+- **NEW** Longtail can now build Arm64 flavours of all components
+  - `Longtail_CreateMeowHashAPI()` is not supported on Arm64 and will return 0 if called
+  - `Longtail_CreateBlake2HashAPI()` is not supported on Arm64 and will return 0 if called
+  - `darwin-arm64.zip` artifact is produced when creating a release
+- **CHANGED** `Longtail_HashRegistryAPI::GetHashAPI` may now return `ENOTSUP` error code for hash types that is not supported on the target platform
 - **NEW API** `Longtail_SplitStoreIndex` added
 - **CHANGED** Make `Longtail_CopyStoreIndex` store_index arg const
 - **FIXED** Fixed `Longtail_StoreIndex m_BlockChunksOffsets` documentation
