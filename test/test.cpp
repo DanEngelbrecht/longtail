@@ -20,6 +20,7 @@
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/memstorage/longtail_memstorage.h"
+#include "../lib/meowhash/longtail_meowhash.h"
 #include "../lib/shareblockstore/longtail_shareblockstore.h"
 #include "../lib/zstd/longtail_zstd.h"
 
@@ -444,9 +445,20 @@ TEST(Longtail, Longtail_Blake3)
     Longtail_DisposeAPI(&hash_api->m_API);
 }
 
+TEST(Longtail, Longtail_MeowHash)
+{
+    const char* test_string = "This is the first test string which is fairly long and should - reconstructed properly, than you very much";
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
+    ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
+    uint64_t hash;
+    ASSERT_EQ(0, hash_api->HashBuffer(hash_api, (uint32_t)(strlen(test_string) + 1), test_string, &hash));
+    ASSERT_EQ(0x4edc68dac105c4ee, hash);
+    Longtail_DisposeAPI(&hash_api->m_API);
+}
+
 TEST(Longtail, Longtail_CreateBlockIndex)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_indexes[2] = {0, 1};
     const TLongtail_Hash chunk_hashes[2] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef};
@@ -473,7 +485,7 @@ TEST(Longtail, Longtail_CreateBlockIndex)
 
 TEST(Longtail, Longtail_ReadWriteBlockIndexInBuffer)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_indexes[2] = {0, 1};
     const TLongtail_Hash chunk_hashes[2] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef};
@@ -656,7 +668,7 @@ TEST(Longtail, Longtail_VersionIndex)
 
 TEST(Longtail, Longtail_CreateStoreIndexFromBlocks)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_indexes[4] = {0, 1, 2, 3};
     const TLongtail_Hash chunk_hashes[4] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedbeeffeed5a57};
@@ -732,7 +744,7 @@ TEST(Longtail, Longtail_CreateStoreIndexFromBlocks)
 
 TEST(Longtail, Longtail_MergeStoreIndexWithEmpty)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_indexes[5] = {0, 1, 2, 3, 4};
     const TLongtail_Hash chunk_hashes[5] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedbeeffeed5a57, 0xfeed5a17deadbeef};
@@ -795,7 +807,7 @@ TEST(Longtail, Longtail_MergeStoreIndexWithEmpty)
 
 TEST(Longtail, Longtail_MergeStoreIndex)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_indexes[5] = {0, 1, 2, 3, 4};
     const TLongtail_Hash chunk_hashes[5] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedbeeffeed5a57, 0xfeed5a17deadbeef};
@@ -865,7 +877,7 @@ TEST(Longtail, Longtail_MergeStoreIndex)
 
 TEST(Longtail, Longtail_CreateStoreIndexFromContentIndex)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_indexes[4] = {0, 1, 2, 3};
     const TLongtail_Hash chunk_hashes[4] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedbeeffeed5a57};
@@ -939,7 +951,7 @@ TEST(Longtail, Longtail_CreateStoreIndexFromContentIndex)
 
 TEST(Longtail, Longtail_SplitStoreIndex)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_index_count = 15;
     const uint32_t chunk_indexes[chunk_index_count] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
@@ -1214,7 +1226,7 @@ static uint32_t* SetAssetTags(Longtail_StorageAPI* , const Longtail_FileInfos* f
 TEST(Longtail, CreateEmptyVersionIndex)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_FileInfos* version1_paths;
@@ -1250,7 +1262,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
 TEST(Longtail, CreateVersionIndexNoFileIndex)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     uint32_t* compression_types = 0;
@@ -2465,7 +2477,7 @@ TEST(Longtail, GetBlocksForAssets)
 
 TEST(Longtail, Longtail_CreateMissingContent)
 {
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
 
 //    const char* assets_path = "";
     const uint64_t asset_count = 5;
@@ -2555,7 +2567,7 @@ TEST(Longtail, Longtail_CreateMissingContent)
 TEST(Longtail, VersionIndexDirectories)
 {
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
 
@@ -2601,7 +2613,7 @@ TEST(Longtail, VersionIndexDirectories)
 TEST(Longtail, EmptyFolderGetRequiredChunkHashes)
 {
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     struct Longtail_FileInfos* file_infos;
@@ -2667,7 +2679,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage, "chunks", 0, 0);
@@ -4570,6 +4582,10 @@ TEST(Longtail, TestFullHashRegistry)
     ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake3HashType(), &blake3_hash_api));
     ASSERT_NE((struct Longtail_HashAPI*)0, blake3_hash_api);
 
+    struct Longtail_HashAPI* meow_hash_api = 0;
+    ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetMeowHashType(), &meow_hash_api));
+    ASSERT_NE((struct Longtail_HashAPI*)0, meow_hash_api);
+
     struct Longtail_HashAPI* error_hash_api = 0;
     ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, 0xdeadbeefu, &error_hash_api));
     ASSERT_EQ((struct Longtail_HashAPI*)0, error_hash_api);
@@ -4585,6 +4601,10 @@ TEST(Longtail, TestBlake3HashRegistry)
     struct Longtail_HashAPI* blake3_hash_api = 0;
     ASSERT_EQ(0, hash_registry->GetHashAPI(hash_registry, Longtail_GetBlake3HashType(), &blake3_hash_api));
     ASSERT_NE((struct Longtail_HashAPI*)0, blake3_hash_api);
+
+    struct Longtail_HashAPI* meow_hash_api = 0;
+    ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, Longtail_GetMeowHashType(), &meow_hash_api));
+    ASSERT_EQ((struct Longtail_HashAPI*)0, meow_hash_api);
 
     struct Longtail_HashAPI* error_hash_api = 0;
     ASSERT_EQ(ENOENT, hash_registry->GetHashAPI(hash_registry, 0xdeadbeefu, &error_hash_api));
@@ -4731,7 +4751,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
 
     Longtail_StorageAPI* storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(32, -1);
 
@@ -5385,7 +5405,7 @@ TEST(Longtail, VersionLocalContent)
     struct Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
     struct Longtail_BlockStoreAPI* block_store = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "store", 0, 0);
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
 
     static const uint32_t MAX_BLOCK_SIZE = 32u;
@@ -5638,7 +5658,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     Longtail_StorageAPI* local_storage = &failable_local_storage_api->m_API;
     Longtail_StorageAPI* remote_storage = &failable_remote_storage_api->m_API;
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* local_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, "cache", 0, 0);
@@ -5839,7 +5859,7 @@ TEST(Longtail, TestLongtailBlockFS)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 16u;
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();//Longtail_CreateFSStorageAPI();//
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
@@ -6116,7 +6136,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
     static const uint32_t MAX_CHUNKS_PER_BLOCK = 11u;
 
     Longtail_StorageAPI* mem_storage = Longtail_CreateInMemStorageAPI();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(8, 0);
 
@@ -6914,7 +6934,7 @@ TEST(Longtail, NestedStoreCancel)
 
 TEST(Longtail, Longtail_PruneStoreIndex)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     ASSERT_NE((struct Longtail_HashAPI*)0, hash_api);
     const uint32_t chunk_indexes[7] = {0, 1, 2, 3, 4, 5, 6};
     const TLongtail_Hash chunk_hashes[7] = {0xdeadbeeffeed5a17, 0xfeed5a17deadbeef, 0xaeed5a17deadbeea, 0xdaedb5effeed5a50, 0xfeed5a17deadbee1, 0xae3d5a17deadbee2, 0xdae1beeffeed5a53};
@@ -7026,7 +7046,7 @@ TEST(Longtail, Longtail_PruneStoreIndex)
 
 TEST(Longtail, Longtail_PruneFSBlockStore)
 {
-    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, storage_api, "cache/chunks", 0, 0);
@@ -7114,7 +7134,7 @@ TEST(Longtail, Longtail_Archive)
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
 //    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
 //    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, "store", 0, 0);
@@ -7241,7 +7261,7 @@ TEST(Longtail, Longtail_ArchiveMemMapped)
 
     Longtail_StorageAPI* local_storage = Longtail_CreateInMemStorageAPI();
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
 
@@ -7378,7 +7398,7 @@ TEST(Longtail, Longtail_ArchiveMemMappedFS)
     ASSERT_EQ(0, DeleteFolder(local_storage, target_folder));
     ASSERT_EQ(0, local_storage->CreateDir(local_storage, source_folder));
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
 
@@ -7516,7 +7536,7 @@ TEST(Longtail, Longtail_BlockStoreFS)
     ASSERT_EQ(0, DeleteFolder(local_storage, target_folder));
     ASSERT_EQ(0, local_storage->CreateDir(local_storage, source_folder));
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, store_folder, 0, 0);
@@ -7630,7 +7650,7 @@ TEST(Longtail, Longtail_BlockStoreMemMappedFS)
     ASSERT_EQ(0, DeleteFolder(local_storage, target_folder));
     ASSERT_EQ(0, local_storage->CreateDir(local_storage, source_folder));
     Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
-    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_HashAPI* hash_api = Longtail_CreateMeowHashAPI();
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_BlockStoreAPI* block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, local_storage, store_folder, 0, 1);
