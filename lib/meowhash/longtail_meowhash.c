@@ -1,19 +1,22 @@
 #include "longtail_meowhash.h"
 
-#include "ext/meow_hash_x64_aesni.h"
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
+    #include "ext/meow_hash_x64_aesni.h"
+#endif // defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
 
 const uint32_t LONGTAIL_MEOW_HASH_TYPE = (((uint32_t)'m') << 24) + (((uint32_t)'e') << 16) + (((uint32_t)'o') << 8) + ((uint32_t)'w');
 const uint32_t Longtail_GetMeowHashType() { return LONGTAIL_MEOW_HASH_TYPE; }
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
+static uint32_t MeowHash_GetIdentifier(struct Longtail_HashAPI* hash_api)
+{
+    return LONGTAIL_MEOW_HASH_TYPE;
+}
 
 struct MeowHashAPI
 {
     struct Longtail_HashAPI m_MeowHashAPI;
 };
-
-static uint32_t MeowHash_GetIdentifier(struct Longtail_HashAPI* hash_api)
-{
-    return LONGTAIL_MEOW_HASH_TYPE;
-}
 
 static int MeowHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
@@ -68,3 +71,11 @@ struct Longtail_HashAPI* Longtail_CreateMeowHashAPI()
     return &meow_hash->m_MeowHashAPI;
 }
 
+#else // defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
+
+struct Longtail_HashAPI* Longtail_CreateMeowHashAPI()
+{
+    return 0;
+}
+
+#endif // defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)

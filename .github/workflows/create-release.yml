@@ -54,17 +54,17 @@ jobs:
       matrix:
         config: [debug, release]
         target: [static_lib, shared_lib, cmd]
-
+        arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
     - name: build ${{matrix.target}}
       run: |
-        ${{matrix.target}}/build.sh ${{matrix.config}}
+        ${{matrix.target}}/build.sh ${{matrix.config}} ${{matrix.arch}}
 
     - uses: actions/upload-artifact@v3
       name: upload ${{matrix.target}}
       with:
-        name: darwin_x64-${{matrix.target}}-${{matrix.config}}
+        name: darwin_${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.o
@@ -74,6 +74,9 @@ jobs:
 
     needs: build-darwin
     runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
     - uses: actions/download-artifact@v3
@@ -81,10 +84,10 @@ jobs:
         path: build/artifacts
     - name: build dist
       run: |
-        ./dist.sh
+        ./dist.sh ${{matrix.arch}}
     - uses: actions/upload-artifact@master
       with:
-        name: dist-darwin-x64
+        name: dist-darwin-${{matrix.arch}}
         path: dist
 
   build-win32:
@@ -150,11 +153,17 @@ jobs:
         name: dist-win32-x64
         path: dist-win32-x64
 
-    - name: Download darwin artifacts
+    - name: Download darwin x64 artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-darwin-x64
         path: dist-darwin-x64
+
+    - name: Download darwin arm64 artifacts
+      uses: actions/download-artifact@v1
+      with:
+        name: dist-darwin-arm64
+        path: dist-darwin-arm64
 
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
@@ -166,10 +175,15 @@ jobs:
       with:
         args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
 
-    - name: Zip darwin artifacts
+    - name: Zip darwin x64 artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./darwin-x64.zip ./dist-darwin-x64
+
+    - name: Zip darwin arm64 artifacts
+      uses: montudor/action-zip@v0.1.0
+      with:
+        args: zip -qq -r ./darwin-arm64.zip ./dist-darwin-arm64
 
     - name: Check prerelease
       id: get-prerelease
@@ -200,4 +214,4 @@ jobs:
           ${{steps.read_changelog.outputs.content}}
         draft: false
         prerelease: ${{steps.get-prerelease.outputs.value}}
-        files: "*-x64.zip"
+        files: "*.zip"

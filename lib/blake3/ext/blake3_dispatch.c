@@ -128,7 +128,7 @@ static
     return (enum cpu_feature)features;
 #else
     /* How to detect NEON? */
-    return 0;
+    return (enum cpu_feature)0;
 #endif
   }
 }

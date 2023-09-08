@@ -1,16 +1,15 @@
 #include "longtail_blake2.h"
 
-#include "ext/blake2.h"
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
+    #include "ext/blake2.h"
+#endif // defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
+
 #include <errno.h>
 
 const uint32_t LONGTAIL_BLAKE2_HASH_TYPE = (((uint32_t)'b') << 24) + (((uint32_t)'l') << 16) + (((uint32_t)'k') << 8) + ((uint32_t)'2');
 const uint32_t Longtail_GetBlake2HashType() {return LONGTAIL_BLAKE2_HASH_TYPE; }
 
-struct Blake2HashAPI
-{
-    struct Longtail_HashAPI m_Blake2HashAPI;
-};
-
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
 static uint32_t Blake2Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -20,6 +19,11 @@ static uint32_t Blake2Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
     LONGTAIL_VALIDATE_INPUT(ctx, hash_api, return 0)
     return LONGTAIL_BLAKE2_HASH_TYPE;
 }
+
+struct Blake2HashAPI
+{
+    struct Longtail_HashAPI m_Blake2HashAPI;
+};
 
 static int Blake2Hash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
@@ -145,3 +149,12 @@ struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
     Blake2Hash_Init(blake2_hash);
     return &blake2_hash->m_Blake2HashAPI;
 }
+
+#else // defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)
+
+struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
+{
+    return 0;
+}
+
+#endif // defined(__SSE2__) || defined(__x86_64__) || defined(__amd64__)

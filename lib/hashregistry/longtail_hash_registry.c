@@ -25,6 +25,10 @@ static void DefaultHashRegistry_Dispose(struct Longtail_API* api)
     for (uint32_t c = 0; c < default_hash_registry->m_Count; ++c)
     {
         struct Longtail_HashAPI* hash_api = default_hash_registry->m_APIs[c];
+        if (hash_api == 0)
+        {
+            continue;
+        }
         if (hash_api != last_api)
         {
             hash_api->m_API.Dispose(&hash_api->m_API);
@@ -50,6 +54,10 @@ static int Default_GetHashAPI(struct Longtail_HashRegistryAPI* hash_registry, ui
     {
         if (default_hash_registry->m_Types[i] == hash_type)
         {
+            if (default_hash_registry->m_APIs[i] == 0)
+            {
+                return ENOTSUP;
+            }
             *out_hash_api = default_hash_registry->m_APIs[i];
             return 0;
         }

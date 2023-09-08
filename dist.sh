@@ -1,7 +1,17 @@
 #!/bin/bash
 set -e
 
-. arch_helper.sh
+if [[ "$*" == *"arm64"* ]]
+then
+    ARCH="arm64"
+fi
+
+if [[ "$*" == *"x64"* ]]
+then
+    ARCH="x64"
+fi
+
+. arch_helper.sh $ARCH
 
 mkdir -p dist
 

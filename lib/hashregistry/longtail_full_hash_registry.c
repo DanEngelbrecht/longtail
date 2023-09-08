@@ -9,23 +9,8 @@
  struct Longtail_HashRegistryAPI* Longtail_CreateFullHashRegistry()
  {
      struct Longtail_HashAPI* blake2_hash = Longtail_CreateBlake2HashAPI();
-     if (!blake2_hash)
-     {
-         return 0;
-     }
      struct Longtail_HashAPI* blake3_hash = Longtail_CreateBlake3HashAPI();
-     if (!blake3_hash)
-     {
-         SAFE_DISPOSE_API(blake2_hash);
-         return 0;
-     }
      struct Longtail_HashAPI* meow_hash = Longtail_CreateMeowHashAPI();
-     if (!meow_hash)
-     {
-         SAFE_DISPOSE_API(blake3_hash);
-         SAFE_DISPOSE_API(blake2_hash);
-         return 0;
-     }
 
      uint32_t hash_types[3] = {
          Longtail_GetBlake2HashType(),

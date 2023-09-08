@@ -3,6 +3,19 @@
 #include "../longtail_platform.h"
 
 #define BIKESHED_IMPLEMENTATION
+
+// Add yield implementation for ARM target and handle SSE missing scenario
+#if defined(__clang__) || defined(__GNUC__)
+    #if defined(__SSE2__)
+        #include <emmintrin.h>
+        #define BIKESHED_CPU_YIELD   _mm_pause();
+    #elif defined(__arm__) || defined(__aarch64__)
+            #define BIKESHED_CPU_YIELD   __asm__ __volatile__ ("yield" ::: "memory");
+    #else
+        #define BIKESHED_CPU_YIELD   void();
+    #endif
+#endif
+
 #include "ext/bikeshed.h"
 
 #include <errno.h>

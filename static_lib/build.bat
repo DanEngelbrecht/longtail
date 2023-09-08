@@ -48,18 +48,21 @@ if exist !LIB_TARGET! del !LIB_TARGET!
 del /q !OUTPUT_FOLDER!\*.o >nul 2>&1
 
 pushd !OUTPUT_FOLDER!
-gcc -c !CXXFLAGS! !OPT! !THIRDPARTY_SRC! !SRC!
-if NOT "!THIRDPARTY_SRC_SSE42!" == "" (
-    gcc -c !CXXFLAGS! !OPT! -msse4.2 %THIRDPARTY_SRC_SSE42%
+!COMPILER! -c !CXXFLAGS! !OPT! !THIRDPARTY_SRC! !SRC!
+if NOT "!THIRDPARTY_SSE!" == "" (
+    !COMPILER! -c !CXXFLAGS! !OPT! %THIRDPARTY_SSE%
+)
+if NOT "!THIRDPARTY_SSE42!" == "" (
+    !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 %THIRDPARTY_SSE42%
 )
 if NOT "%THIRDPARTY_SRC_AVX2%" == "" (
-    gcc -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 %THIRDPARTY_SRC_AVX2%
+    !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 %THIRDPARTY_SRC_AVX2%
 )
 if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
-    gcc -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
+    !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
 )
 if NOT "%ZSTD_THIRDPARTY_GCC_SRC%" == "" (
-    gcc -c !CXXFLAGS! !OPT! -fno-asynchronous-unwind-tables %ZSTD_THIRDPARTY_GCC_SRC%
+    !COMPILER! -c !CXXFLAGS! !OPT! -fno-asynchronous-unwind-tables %ZSTD_THIRDPARTY_GCC_SRC%
 )
 
 popd
@@ -70,5 +73,5 @@ ar cru -v !LIB_TARGET! !OUTPUT_FOLDER!\*.o
 ls -la ${LIB_TARGET}
 
 echo Validating !LIB_TARGET!
-gcc -o !TEST_EXECUTABLEPATH! !CXXFLAGS! !SOURCEFOLDER!test.c -lm -L!OUTPUT_FOLDER! -l!TARGET! --verbose
+!COMPILER! -o !TEST_EXECUTABLEPATH! !CXXFLAGS! !SOURCEFOLDER!test.c -lm -L!OUTPUT_FOLDER! -l!TARGET! --verbose
 !TEST_EXECUTABLEPATH!
