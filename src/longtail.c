@@ -7864,6 +7864,768 @@ int Longtail_ChangeVersion(
     return err;
 }
 
+
+struct Longtail_BlockChunkWriteInfo
+{
+    uint32_t ChunkIndex;
+    uint32_t AssetIndex;
+    uint64_t Offset;
+};
+
+struct Longtail_BlockWriteInfo
+{
+    TLongtail_Hash m_BlockHash;
+    struct Longtail_BlockChunkWriteInfo* m_WriteInfos;
+};
+
+struct ContentBlock2Job
+{
+    struct Longtail_AsyncGetStoredBlockAPI m_AsyncCompleteAPI;
+    const struct Longtail_VersionIndex* m_VersionIndex;
+    struct Longtail_BlockStoreAPI* m_BlockStoreAPI;
+    struct Longtail_BlockWriteInfo* m_BlockWriteInfo;
+    struct Longtail_ConcurrentChunkWriteAPI* m_ConcurrentChunkWriteApi;
+    const char* m_VersionPath;
+    struct Longtail_StoredBlock* m_StoredBlock;
+    struct Longtail_JobAPI* m_JobAPI;
+    int m_Err;
+    uint32_t m_JobID;
+};
+
+static SORTFUNC(SortBlockChunkWriteInfo)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(context, "%p"),
+        LONGTAIL_LOGFIELD(a_ptr, "%p"),
+        LONGTAIL_LOGFIELD(b_ptr, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    LONGTAIL_FATAL_ASSERT(ctx, context == 0, return 0)
+    LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
+
+    const struct Longtail_BlockChunkWriteInfo* a = (const struct Longtail_BlockChunkWriteInfo*)a_ptr;
+    const struct Longtail_BlockChunkWriteInfo* b = (const struct Longtail_BlockChunkWriteInfo*)b_ptr;
+    if (a->AssetIndex < b->AssetIndex)
+    {
+        return -1;
+    }
+    if (a->AssetIndex > b->AssetIndex)
+    {
+        return 1;
+    }
+    if (a->Offset < b->Offset)
+    {
+        return -1;
+    }
+    if (a->Offset > b->Offset)
+    {
+        return 1;
+    }
+    if (a->ChunkIndex < b->ChunkIndex)
+    {
+        return -1;
+    }
+    if (a->ChunkIndex > b->ChunkIndex)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+static void WriteContentBlock2GetStoredBlockComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(async_complete_api, "%p"),
+        LONGTAIL_LOGFIELD(stored_block, "%p"),
+        LONGTAIL_LOGFIELD(err, "%d")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "WriteContentBlock2GetStoredBlockComplete() failed with %d", err)
+    }
+    LONGTAIL_FATAL_ASSERT(ctx, async_complete_api != 0, return)
+    struct ContentBlock2Job* job = (struct ContentBlock2Job*)async_complete_api;
+    LONGTAIL_FATAL_ASSERT(ctx, job->m_AsyncCompleteAPI.OnComplete != 0, return);
+    job->m_Err = err;
+    job->m_StoredBlock = stored_block;
+    job->m_JobAPI->ResumeJob(job->m_JobAPI, job->m_JobID);
+}
+
+static int WriteContentBlock2Job(void* context, uint32_t job_id, int is_cancelled)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(context, "%p"),
+        LONGTAIL_LOGFIELD(job_id, "%u"),
+        LONGTAIL_LOGFIELD(is_cancelled, "%d")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
+
+    struct ContentBlock2Job* job = (struct ContentBlock2Job*)context;
+
+    if (is_cancelled)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteContentBlock was cancelled, failed with %d", ECANCELED)
+        job->m_Err = ECANCELED;
+        if (job->m_StoredBlock)
+        {
+            job->m_StoredBlock->Dispose(job->m_StoredBlock);
+        }
+        return 0;
+    }
+
+    if (job->m_BlockWriteInfo->m_BlockHash == 0)
+    {
+        ptrdiff_t block_write_chunk_info_count = arrlen(job->m_BlockWriteInfo->m_WriteInfos);
+        for (ptrdiff_t block_write_chunk_info_index = 0; block_write_chunk_info_index < block_write_chunk_info_count; ++block_write_chunk_info_index)
+        {
+            const struct Longtail_BlockChunkWriteInfo* block_chunk_write_info = &job->m_BlockWriteInfo->m_WriteInfos[block_write_chunk_info_index];
+            const uint32_t asset_index = block_chunk_write_info->AssetIndex;
+            const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
+            if (IsDirPath(asset_path))
+            {
+                int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_path);
+                if (err != 0 && err != EEXIST)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_VersionStorageAPI->CreateDir() failed with %d", err)
+                    job->m_Err = err;
+                    return 0;
+                }
+            }
+            else
+            {
+                Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
+                int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, 0, &asset_file_handle);
+                if (err)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "m_ConcurrentChunkWriteApi->Open() failed with %d", err)
+                    job->m_Err = err;
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    }
+
+    if (job->m_AsyncCompleteAPI.OnComplete == 0)
+    {
+        job->m_JobID = job_id;
+        job->m_StoredBlock = 0;
+        job->m_AsyncCompleteAPI.OnComplete = WriteContentBlock2GetStoredBlockComplete;
+
+        int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockWriteInfo->m_BlockHash, &job->m_AsyncCompleteAPI);
+        if (err == 0)
+        {
+            return EBUSY;
+        }
+        else
+        {
+            job->m_Err = err;
+            return 0;
+        }
+    }
+    if (job->m_Err != 0)
+    {
+        return 0;
+    }
+
+    struct Longtail_StoredBlock* stored_block = job->m_StoredBlock;
+
+    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
+    size_t chunk_hash_to_chunk_index_size = LongtailPrivate_LookupTable_GetSize(chunk_count);
+
+    uint32_t* chunk_offsets = (uint32_t*)Longtail_Alloc("WriteContentBlock2Job", sizeof(uint32_t) * chunk_count);
+
+    void* chunk_hash_to_chunk_index_mem = Longtail_Alloc("WriteContentBlock2Job", chunk_hash_to_chunk_index_size);
+    if (!chunk_hash_to_chunk_index_mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_Free(job->m_StoredBlock);
+        return ENOMEM;
+    }
+    struct Longtail_LookupTable* chunk_hash_to_chunk_index = LongtailPrivate_LookupTable_Create(chunk_hash_to_chunk_index_mem, chunk_count, 0);
+    
+    uint32_t chunk_offset = 0;
+    for (uint32_t chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
+    {
+        LongtailPrivate_LookupTable_PutUnique(chunk_hash_to_chunk_index, stored_block->m_BlockIndex->m_ChunkHashes[chunk_index], chunk_index);
+        chunk_offsets[chunk_index] = chunk_offset;
+        chunk_offset += stored_block->m_BlockIndex->m_ChunkSizes[chunk_index];
+    }
+
+    const uint8_t* block_data = stored_block->m_BlockData;
+
+    uint32_t last_asset_index = 0;
+    Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
+
+    ptrdiff_t block_write_chunk_info_count = arrlen(job->m_BlockWriteInfo->m_WriteInfos);
+
+    QSORT(job->m_BlockWriteInfo->m_WriteInfos, block_write_chunk_info_count, sizeof(struct Longtail_BlockChunkWriteInfo), SortBlockChunkWriteInfo, 0);
+
+    for (ptrdiff_t block_write_chunk_info_index = 0; block_write_chunk_info_index < block_write_chunk_info_count; ++block_write_chunk_info_index)
+    {
+        const struct Longtail_BlockChunkWriteInfo* block_chunk_write_info = &job->m_BlockWriteInfo->m_WriteInfos[block_write_chunk_info_index];
+        const uint32_t asset_index = block_chunk_write_info->AssetIndex;
+        const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
+
+        if (asset_file_handle != 0)
+        {
+            if (last_asset_index != asset_index)
+            {
+                asset_file_handle = 0;
+            }
+        }
+
+        if (asset_file_handle == 0)
+        {
+            uint32_t asset_chunk_count = job->m_VersionIndex->m_AssetChunkCounts[asset_index];
+
+            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, asset_chunk_count, &asset_file_handle);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "OpenWrite() failed for `%s` with %d", asset_path, err)
+                job->m_Err = err;
+                // TODO: Cleanup
+                return 0;
+            }
+            // TODO: Error handling
+            // TODO: Need to open file without wiping current content!
+            // TODO: First open *should* wipe content
+            // TODO: We need a registry for open files - both for performance and to handle multiple openers/writers to the same file
+
+            last_asset_index = asset_index;
+        }
+
+        uint32_t* chunk_index_in_block_ptr = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, job->m_VersionIndex->m_ChunkHashes[block_chunk_write_info->ChunkIndex]);
+        if (chunk_index_in_block_ptr == 0)
+        {
+            // TODO: 
+            Longtail_Free(job->m_StoredBlock);
+            return ENOENT;
+        }
+
+        uint32_t chunk_index_in_block = *chunk_index_in_block_ptr;
+        uint32_t chunk_size = stored_block->m_BlockIndex->m_ChunkSizes[chunk_index_in_block];
+        uint32_t chunk_offset = chunk_offsets[chunk_index_in_block];
+
+        int err = job->m_ConcurrentChunkWriteApi->Write(job->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_size, &block_data[chunk_offset]);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write() failed for `%s` with %d", asset_path, err)
+            job->m_Err = err;
+            // TODO: Cleanup
+            return 0;
+        }
+    }
+
+    Longtail_Free(chunk_offsets);
+    Longtail_Free(chunk_hash_to_chunk_index_mem);
+    Longtail_Free(job->m_StoredBlock);
+
+    return 0;
+}
+
+int Longtail_ChangeVersion2(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StorageAPI* version_storage_api,
+    struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    const struct Longtail_StoreIndex* store_index,
+    const struct Longtail_VersionIndex* source_version,
+    const struct Longtail_VersionIndex* target_version,
+    const struct Longtail_VersionDiff* version_diff,
+    const char* version_path,
+    int retain_permissions)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(version_storage_api, "%p"),
+        LONGTAIL_LOGFIELD(concurrent_chunk_write_api, "%p"),
+        LONGTAIL_LOGFIELD(hash_api, "%p"),
+        LONGTAIL_LOGFIELD(job_api, "%p"),
+        LONGTAIL_LOGFIELD(progress_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
+        LONGTAIL_LOGFIELD(store_index, "%p"),
+        LONGTAIL_LOGFIELD(source_version, "%p"),
+        LONGTAIL_LOGFIELD(target_version, "%p"),
+        LONGTAIL_LOGFIELD(version_diff, "%p"),
+        LONGTAIL_LOGFIELD(version_path, "%s"),
+        LONGTAIL_LOGFIELD(retain_permissions, "%d")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, hash_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, job_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, store_index != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
+
+    int err = EnsureParentPathExists(version_storage_api, version_path);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
+        return err;
+    }
+    err = version_storage_api->CreateDir(version_storage_api, version_path);
+    if (err == EEXIST)
+    {
+        err = 0;
+    }
+    if (err != 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->CreateDir() failed with %d", err)
+        return err;
+    }
+
+    uint32_t remove_count = *version_diff->m_SourceRemovedCount;
+    LONGTAIL_FATAL_ASSERT(ctx, remove_count <= *source_version->m_AssetCount, return EINVAL);
+    if (remove_count > 0)
+    {
+        uint32_t* remove_indexes = (uint32_t*)Longtail_Alloc("ChangeVersion", sizeof(uint32_t) * remove_count);
+        if (!remove_indexes)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            return ENOMEM;
+        }
+        memcpy(remove_indexes, version_diff->m_SourceRemovedAssetIndexes, sizeof(uint32_t) * remove_count);
+
+        uint32_t retry_count = 10;
+        uint32_t successful_remove_count = 0;
+        while (retry_count && (successful_remove_count < remove_count))
+        {
+            if (retry_count < 10)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", remove_count - successful_remove_count, version_path)
+            }
+            --retry_count;
+            if ((successful_remove_count & 0x7f) == 0x7f) {
+                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Opeation cancelled, failed with %d", ECANCELED)
+                    return ECANCELED;
+                }
+            }
+            for (uint32_t r = 0; r < remove_count; ++r)
+            {
+                uint32_t asset_index = remove_indexes[r];
+                if (asset_index == 0xffffffff)
+                {
+                    continue;
+                }
+                const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
+                char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+                if (IsDirPath(asset_path))
+                {
+                    full_asset_path[strlen(full_asset_path) - 1] = '\0';
+                    if (!version_storage_api->IsDir(version_storage_api, full_asset_path))
+                    {
+                        remove_indexes[r] = 0xffffffff;
+                        Longtail_Free(full_asset_path);
+                        continue;
+                    }
+                    uint16_t permissions = 0;
+                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                    if (err)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
+                    }
+                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                    {
+                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess));
+                        if (err)
+                        {
+                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                    }
+                    err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
+                    if (err && version_storage_api->IsDir(version_storage_api, full_asset_path))
+                    {
+                        if (!retry_count)
+                        {
+                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to remove dir `%s`, failed with %d", full_asset_path, err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                        Longtail_Free(full_asset_path);
+                        full_asset_path = 0;
+                        continue;
+                    }
+                }
+                else
+                {
+                    if (!version_storage_api->IsFile(version_storage_api, full_asset_path))
+                    {
+                        remove_indexes[r] = 0xffffffff;
+                        Longtail_Free(full_asset_path);
+                        continue;
+                    }
+                    uint16_t permissions = 0;
+                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                    if (err)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
+                    }
+                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                    {
+                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                        if (err)
+                        {
+                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                    }
+                    err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
+                    if (err && version_storage_api->IsFile(version_storage_api, full_asset_path))
+                    {
+                        if (!retry_count)
+                        {
+                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to file dir `%s`, failed with %d", full_asset_path, err)
+                            Longtail_Free(full_asset_path);
+                            Longtail_Free(remove_indexes);
+                            return err;
+                        }
+                        Longtail_Free(full_asset_path);
+                        full_asset_path = 0;
+                        continue;
+                    }
+                }
+                Longtail_Free(full_asset_path);
+                full_asset_path = 0;
+                remove_indexes[r] = 0xffffffff;
+                ++successful_remove_count;
+            }
+        }
+        Longtail_Free(remove_indexes);
+    }
+
+    err = concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Flush failed with %d", err)
+        return err;
+    }
+
+    uint32_t added_count = *version_diff->m_TargetAddedCount;
+    uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
+    uint32_t write_asset_count = added_count + modified_content_count;
+
+    LONGTAIL_FATAL_ASSERT(ctx, write_asset_count <= *target_version->m_AssetCount, return EINVAL);
+    if (write_asset_count > 0)
+    {
+        struct Longtail_BlockWriteInfo* block_write_infos = 0;
+
+        uint32_t chunk_count = *store_index->m_ChunkCount;
+        size_t chunk_hash_to_block_index_size = LongtailPrivate_LookupTable_GetSize(chunk_count);
+
+        void* chunk_hash_to_block_index_mem = Longtail_Alloc("ChangeVersion", chunk_hash_to_block_index_size);
+        if (!chunk_hash_to_block_index_mem)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            arrfree(block_write_infos);
+            return ENOMEM;
+        }
+        struct Longtail_LookupTable* chunk_hash_to_block_index = LongtailPrivate_LookupTable_Create(chunk_hash_to_block_index_mem, chunk_count, 0);
+
+        uint32_t block_count = *store_index->m_BlockCount;
+        for (uint32_t b = 0; b < block_count; ++b)
+        {
+            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+            uint32_t chunk_index_offset = store_index->m_BlockChunksOffsets[b];
+            for (uint32_t c = 0; c < block_chunk_count; ++c)
+            {
+                uint32_t chunk_index = chunk_index_offset + c;
+                TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_index];
+                LongtailPrivate_LookupTable_PutUnique(chunk_hash_to_block_index, chunk_hash, b);
+            }
+        }
+
+        size_t block_hash_to_block_write_index_size = LongtailPrivate_LookupTable_GetSize(block_count + 1);
+        void* block_hash_to_block_write_index_mem = Longtail_Alloc("ChangeVersion2", block_hash_to_block_write_index_size);
+        if (!block_hash_to_block_write_index_mem)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                Longtail_Free(chunk_hash_to_block_index_mem);
+            arrfree(block_write_infos);
+            return ENOMEM;
+        }
+        struct Longtail_LookupTable* block_hash_to_block_write_index = LongtailPrivate_LookupTable_Create(block_hash_to_block_write_index_mem, block_count + 1, 0);
+
+        size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
+        void* asset_indexes_mem = Longtail_Alloc("ChangeVersion2", asset_indexes_size);
+        if (!asset_indexes_mem)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                Longtail_Free(block_hash_to_block_write_index_mem);
+            Longtail_Free(chunk_hash_to_block_index_mem);
+            arrfree(block_write_infos);
+            return ENOMEM;
+        }
+        uint32_t* asset_indexes = (uint32_t*)asset_indexes_mem;
+
+        for (uint32_t i = 0; i < added_count; ++i)
+        {
+            asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
+        }
+        for (uint32_t i = 0; i < modified_content_count; ++i)
+        {
+            asset_indexes[added_count + i] = version_diff->m_TargetContentModifiedAssetIndexes[i];
+        }
+
+        uint32_t* name_offsets = target_version->m_NameOffsets;
+        const char* name_data = target_version->m_NameData;
+        const TLongtail_Hash* chunk_hashes = target_version->m_ChunkHashes;
+        const TLongtail_Hash* block_hashes = store_index->m_BlockHashes;
+        const uint32_t* asset_chunk_counts = target_version->m_AssetChunkCounts;
+        const uint32_t* asset_chunk_index_starts = target_version->m_AssetChunkIndexStarts;
+        const uint32_t* asset_chunk_indexes = target_version->m_AssetChunkIndexes;
+
+        {
+            struct Longtail_BlockWriteInfo new_block_write_info;
+            new_block_write_info.m_BlockHash = 0;
+            new_block_write_info.m_WriteInfos = 0;
+            uint32_t block_write_info_index = (uint32_t)arrlen(block_write_infos);
+            LongtailPrivate_LookupTable_Put(block_hash_to_block_write_index, 0, block_write_info_index);
+            arrput(block_write_infos, new_block_write_info);
+        }
+
+        for (uint32_t i = 0; i < write_asset_count; ++i)
+        {
+            uint32_t asset_index = asset_indexes[i];
+            const char* path = &name_data[name_offsets[asset_index]];
+            uint32_t chunk_count = asset_chunk_counts[asset_index];
+            uint32_t asset_chunk_offset = asset_chunk_index_starts[asset_index];
+            if (chunk_count == 0)
+            {
+                uint32_t* content_block_write_info_index = LongtailPrivate_LookupTable_Get(block_hash_to_block_write_index, 0);
+                LONGTAIL_FATAL_ASSERT(ctx, content_block_write_info_index != 0, return EINVAL)
+                struct Longtail_BlockWriteInfo* block_write_info = &block_write_infos[*content_block_write_info_index];
+
+                struct Longtail_BlockChunkWriteInfo chunk_write_info;
+                chunk_write_info.ChunkIndex = 0;
+                chunk_write_info.AssetIndex = asset_index;
+                chunk_write_info.Offset = 0;
+
+                arrput(block_write_info->m_WriteInfos, chunk_write_info);
+                continue;
+            }
+            uint64_t file_offset = 0;
+            for (uint32_t chunk_offset = 0; chunk_offset < chunk_count; ++chunk_offset)
+            {
+                uint32_t chunk_index = asset_chunk_indexes[asset_chunk_offset + chunk_offset];
+                TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
+                uint32_t* content_block_index = LongtailPrivate_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+                if (content_block_index == 0)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Get() failed with %d", ENOENT)
+                    // TODO: Clean up
+                    return ENOENT;
+                }
+                TLongtail_Hash block_hash = block_hashes[*content_block_index];
+
+                uint32_t* content_block_write_info_index = LongtailPrivate_LookupTable_Get(block_hash_to_block_write_index, block_hash);
+                struct Longtail_BlockWriteInfo* block_write_info = 0;
+                if (content_block_write_info_index == 0)
+                {
+                    struct Longtail_BlockWriteInfo new_block_write_info;
+                    new_block_write_info.m_BlockHash = block_hash;
+                    new_block_write_info.m_WriteInfos = 0;
+                    uint32_t block_write_info_index = (uint32_t)arrlen(block_write_infos);
+                    LongtailPrivate_LookupTable_Put(block_hash_to_block_write_index, block_hash, block_write_info_index);
+                    arrput(block_write_infos, new_block_write_info);
+                    block_write_info = &block_write_infos[block_write_info_index];
+                }
+                else
+                {
+                    block_write_info = &block_write_infos[*content_block_write_info_index];
+                }
+
+                struct Longtail_BlockChunkWriteInfo chunk_write_info;
+                chunk_write_info.ChunkIndex = chunk_index;
+                chunk_write_info.AssetIndex = asset_index;
+                chunk_write_info.Offset = file_offset;
+
+                arrput(block_write_info->m_WriteInfos, chunk_write_info);
+
+                file_offset += target_version->m_ChunkSizes[chunk_index];
+            }
+        }
+
+        ptrdiff_t block_write_info_count = arrlen(block_write_infos);
+        if (block_write_info_count > 1)
+        {
+            TLongtail_Hash* wanted_block_hashes = Longtail_Alloc("ChangeVersion2", sizeof(TLongtail_Hash) * (block_write_info_count - 1));
+            if (wanted_block_hashes == 0)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                // TODO: Clean up
+                return ENOMEM;
+            }
+            for (ptrdiff_t i = 1; i < block_write_info_count; ++i)
+            {
+                wanted_block_hashes[i - 1] = block_write_infos[i].m_BlockHash;
+            }
+
+            int err = block_store_api->PreflightGet(block_store_api, (uint32_t)(block_write_info_count - 1), wanted_block_hashes, 0);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "block_store_api->PreflightGet() failed with %d", err)
+                return err;
+            }
+
+            if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Cancelled, failed with %d", ECANCELED)
+                return ECANCELED;
+            }
+            Longtail_Free(wanted_block_hashes);
+        }
+
+        size_t job_mem_size =
+            sizeof(struct ContentBlock2Job) * block_write_info_count +
+            sizeof(Longtail_JobAPI_JobFunc) * block_write_info_count +
+            sizeof(void*) * block_write_info_count;
+        void* job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
+        if (job_mem == 0)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+            // TODO: Clean up
+            return ENOMEM;
+        }
+        uint8_t* p = (uint8_t*)job_mem;
+        struct ContentBlock2Job* jobs = (struct ContentBlock2Job*)p;
+        p += sizeof(struct ContentBlock2Job) * block_write_info_count;
+        Longtail_JobAPI_JobFunc* job_funcs = (Longtail_JobAPI_JobFunc*)p;
+        p += sizeof(Longtail_JobAPI_JobFunc) * block_write_info_count;
+        void** job_ctxs = (void**)p;
+
+        for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
+        {
+            struct ContentBlock2Job* job = &jobs[i];
+
+            job->m_AsyncCompleteAPI.m_API.Dispose = 0;
+            job->m_AsyncCompleteAPI.OnComplete = 0;
+            job->m_VersionIndex = target_version;
+            job->m_BlockStoreAPI = block_store_api;
+            job->m_BlockWriteInfo = &block_write_infos[i];
+            job->m_ConcurrentChunkWriteApi = concurrent_chunk_write_api;
+            job->m_VersionPath = version_path;
+            job->m_StoredBlock = 0;
+            job->m_JobAPI = job_api;
+            job->m_Err = 0;
+            job->m_JobID = 0;
+
+            job_funcs[i] = WriteContentBlock2Job;
+            job_ctxs[i] = job;
+        }
+
+        Longtail_JobAPI_Group job_group = 0;
+        err = job_api->ReserveJobs(job_api, (uint32_t)block_write_info_count, &job_group);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
+            // TODO: Cleanup
+            return err;
+        }
+
+        Longtail_JobAPI_Jobs write_job;
+        err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, (uint32_t)block_write_info_count, job_funcs, job_ctxs, 0, &write_job);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->CreateJobs() failed with %d", err)
+            // TODO: Cleanup
+            return err;
+        }
+        err = job_api->ReadyJobs(job_api, (uint32_t)block_write_info_count, write_job);
+        LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
+
+        err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
+        }
+
+        (void)concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
+
+        for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
+        {
+            if (err == 0 && jobs[i].m_Err != 0)
+            {
+                err = jobs[i].m_Err;
+            }
+            arrfree(block_write_infos[i].m_WriteInfos);
+        }
+
+        Longtail_Free(job_mem);
+
+        Longtail_Free(asset_indexes_mem);
+        Longtail_Free(block_hash_to_block_write_index_mem);
+        Longtail_Free(chunk_hash_to_block_index_mem);
+        arrfree(block_write_infos);
+    }
+
+    if (err == 0 && retain_permissions)
+    {
+        uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
+        for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
+        {
+            if ((i & 0x7f) == 0x7f) {
+                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", ECANCELED)
+                    return ECANCELED;
+                }
+            }
+            uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
+            const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
+            char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+            uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
+            err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                Longtail_Free(full_path);
+                return err;
+            }
+            Longtail_Free(full_path);
+        }
+    }
+    return err;
+}
+
+
 size_t Longtail_GetStoreIndexDataSize(uint32_t block_count, uint32_t chunk_count)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)

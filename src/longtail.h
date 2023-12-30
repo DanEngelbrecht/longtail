@@ -1300,6 +1300,22 @@ LONGTAIL_EXPORT int Longtail_ChangeVersion(
     const char* version_path,
     int retain_permissions);
 
+LONGTAIL_EXPORT int Longtail_ChangeVersion2(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StorageAPI* version_storage_api,
+    struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    const struct Longtail_StoreIndex* store_index,
+    const struct Longtail_VersionIndex* source_version,
+    const struct Longtail_VersionIndex* target_version,
+    const struct Longtail_VersionDiff* version_diff,
+    const char* version_path,
+    int retain_permissions);
+
 /*! @brief Get the size of the block index data.
  *
  * This size is just for the data of the block index excluding the struct Longtail_BlockIndex.
