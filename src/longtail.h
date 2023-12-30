@@ -447,6 +447,41 @@ LONGTAIL_EXPORT char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI*
 LONGTAIL_EXPORT int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
 LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
 
+////////////// Longtail_ConcurrentChunkWriteAPI
+
+struct Longtail_ConcurrentChunkWriteAPI;
+
+typedef struct Longtail_ConcurrentChunkWriteAPI_OpenFile* Longtail_ConcurrentChunkWriteAPI_HOpenFile;
+
+typedef int (*Longtail_ConcurrentChunkWrite_CreateDirFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
+typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, const void* input);
+typedef int (*Longtail_ConcurrentChunkWrite_FlushFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
+
+struct Longtail_ConcurrentChunkWriteAPI
+{
+    struct Longtail_API m_API;
+    Longtail_ConcurrentChunkWrite_CreateDirFunc CreateDir;
+    Longtail_ConcurrentChunkWrite_OpenFunc Open;
+    Longtail_ConcurrentChunkWrite_WriteFunc Write;
+    Longtail_ConcurrentChunkWrite_FlushFunc Flush;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetConcurrentChunkWriteAPISize();
+
+LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrentChunkWriteAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_ConcurrentChunkWrite_CreateDirFunc create_dir_func,
+    Longtail_ConcurrentChunkWrite_OpenFunc open_func,
+    Longtail_ConcurrentChunkWrite_WriteFunc write_func,
+    Longtail_ConcurrentChunkWrite_FlushFunc flush_func);
+
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, const void* input);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
+
 ////////////// Longtail_ProgressAPI
 
 struct Longtail_ProgressAPI;

@@ -382,6 +382,45 @@ char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, co
 int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
 void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { storage_api->UnMapFile(storage_api, m); }
 
+////////////// ConcurrentChunkWriteAPI
+
+LONGTAIL_EXPORT uint64_t Longtail_GetConcurrentChunkWriteAPISize()
+{
+    return sizeof(struct Longtail_ConcurrentChunkWriteAPI);
+}
+
+LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrentChunkWriteAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_ConcurrentChunkWrite_CreateDirFunc create_dir_func,
+    Longtail_ConcurrentChunkWrite_OpenFunc open_func,
+    Longtail_ConcurrentChunkWrite_WriteFunc write_func,
+    Longtail_ConcurrentChunkWrite_FlushFunc flush_func)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(dispose_func, "%p"),
+        LONGTAIL_LOGFIELD(create_dir_func, "%p"),
+        LONGTAIL_LOGFIELD(open_func, "%p"),
+        LONGTAIL_LOGFIELD(write_func, "%p"),
+        LONGTAIL_LOGFIELD(flush_func, "%p")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+    struct Longtail_ConcurrentChunkWriteAPI* api = (struct Longtail_ConcurrentChunkWriteAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->CreateDir = create_dir_func;
+    api->Open = open_func;
+    api->Write = write_func;
+    api->Flush = flush_func;
+    return api;
+}
+
+int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, path); }
+int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, chunk_write_count, out_open_file); }
+int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, const void* input) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, input); }
+int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api) { return concurrent_file_write_api->Flush(concurrent_file_write_api); }
+
 ////////////// ProgressAPI
 
 uint64_t Longtail_GetProgressAPISize()
