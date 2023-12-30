@@ -78,13 +78,44 @@ void Longtail_MemTracer_Init() {
     Longtail_CreateSpinLock(&((char*)gMemTracer_Context->m_ContextLookup)[lookupSize], &gMemTracer_Context->m_Spinlock);
 }
 
-static const char* Denoms[] = {
-    "b",
-    "kb",
-    "mb",
-    "gb",
-    "tb"
+static const char* SizeDenoms[] = {
+    "B",
+    "KB",
+    "MB",
+    "GB",
+    "TB"
 };
+
+static const char* CountDenoms[] = {
+    "",
+    "t",
+    "m",
+    "b",
+    "t"
+};
+
+static int MemTracer_PrintNumber(char* b, uint64_t size, uint64_t increments, const char** Denoms)
+{
+    if (size < increments * 100) {
+        return sprintf(b, "%" PRIu64, size);
+    }
+    int denom = 0;
+    uint64_t factor = 1;
+    while ((size / factor) > increments) {
+        factor *= increments;
+        denom++;
+    }
+    return sprintf(b, "%.2f %s (%" PRIu64 ")", (float)size / (float)factor, Denoms[denom], size);
+}
+
+static int MemTracer_PrintSize(char* b, uint64_t size) {
+    return MemTracer_PrintNumber(b, size, 1024, SizeDenoms);
+}
+
+static int MemTracer_PrintCount(char* b, uint64_t size) {
+    return MemTracer_PrintNumber(b, size, 1000, CountDenoms);
+}
+
 
 const char* StatsDumpFileName = "memstats.csv";
 
@@ -165,19 +196,6 @@ int Longtail_MemTracer_DumpStats(const char* name)
     return 0;
 }
 
-static int MemTracer_PrintSize(char* b, uint64_t size) {
-    if (size < 1024 * 100) {
-        return sprintf(b, "%" PRIu64, size);
-    }
-    int denom = 0;
-    uint64_t factor = 1;
-    while ((size / factor) > 1024) {
-        factor *= 1024;
-        denom++;
-    }
-    return sprintf(b, "%.2f %s (%" PRIu64 ")", (float)size / (float)factor, Denoms[denom], size);
-}
-
 char* Longtail_MemTracer_GetStats(uint32_t log_level) {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -202,13 +220,13 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
             LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
             l += sprintf(&wptr[l], "  peak_mem:          "); l += MemTracer_PrintSize(&wptr[l], stats->peak_mem);           l += sprintf(&wptr[l], "\n");
             LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
-            l += sprintf(&wptr[l], "  total_count:       "); l += MemTracer_PrintSize(&wptr[l], stats->total_count);        l += sprintf(&wptr[l], "\n");
+            l += sprintf(&wptr[l], "  total_count:       "); l += MemTracer_PrintCount(&wptr[l], stats->total_count);        l += sprintf(&wptr[l], "\n");
             LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
-            l += sprintf(&wptr[l], "  current_count:     "); l += MemTracer_PrintSize(&wptr[l], stats->current_count);      l += sprintf(&wptr[l], "\n");
+            l += sprintf(&wptr[l], "  current_count:     "); l += MemTracer_PrintCount(&wptr[l], stats->current_count);      l += sprintf(&wptr[l], "\n");
             LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
-            l += sprintf(&wptr[l], "  peak_count:        "); l += MemTracer_PrintSize(&wptr[l], stats->peak_count);         l += sprintf(&wptr[l], "\n");
+            l += sprintf(&wptr[l], "  peak_count:        "); l += MemTracer_PrintCount(&wptr[l], stats->peak_count);         l += sprintf(&wptr[l], "\n");
             LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
-            l += sprintf(&wptr[l], "  global_peak_count: "); l += MemTracer_PrintSize(&wptr[l], stats->global_peak_count);  l += sprintf(&wptr[l], "\n");
+            l += sprintf(&wptr[l], "  global_peak_count: "); l += MemTracer_PrintCount(&wptr[l], stats->global_peak_count);  l += sprintf(&wptr[l], "\n");
             LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
             l += sprintf(&wptr[l], "  global_peak_mem:   "); l += MemTracer_PrintSize(&wptr[l], stats->global_peak_mem);    l += sprintf(&wptr[l], "\n");
             LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
@@ -222,11 +240,11 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
         LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
         l += sprintf(&wptr[l], "peak_mem:      "); l += MemTracer_PrintSize(&wptr[l], gMemTracer_Context->m_AllocationPeakMem);       l += sprintf(&wptr[l], "\n");
         LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
-        l += sprintf(&wptr[l], "total_count:   "); l += MemTracer_PrintSize(&wptr[l], gMemTracer_Context->m_AllocationTotalCount);    l += sprintf(&wptr[l], "\n");
+        l += sprintf(&wptr[l], "total_count:   "); l += MemTracer_PrintCount(&wptr[l], gMemTracer_Context->m_AllocationTotalCount);    l += sprintf(&wptr[l], "\n");
         LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
-        l += sprintf(&wptr[l], "current_count: "); l += MemTracer_PrintSize(&wptr[l], gMemTracer_Context->m_AllocationCurrentCount);  l += sprintf(&wptr[l], "\n");
+        l += sprintf(&wptr[l], "current_count: "); l += MemTracer_PrintCount(&wptr[l], gMemTracer_Context->m_AllocationCurrentCount);  l += sprintf(&wptr[l], "\n");
         LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
-        l += sprintf(&wptr[l], "peak_count:    "); l += MemTracer_PrintSize(&wptr[l], gMemTracer_Context->m_AllocationPeakCount);     l += sprintf(&wptr[l], "\n");
+        l += sprintf(&wptr[l], "peak_count:    "); l += MemTracer_PrintCount(&wptr[l], gMemTracer_Context->m_AllocationPeakCount);     l += sprintf(&wptr[l], "\n");
         LONGTAIL_FATAL_ASSERT(ctx, l < 65536 - 1024, return 0)
     }
     Longtail_UnlockSpinLock(gMemTracer_Context->m_Spinlock);
