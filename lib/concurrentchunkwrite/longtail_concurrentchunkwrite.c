@@ -301,6 +301,10 @@ static int ConcurrentChunkWriteAPI_CreateDir(struct Longtail_ConcurrentChunkWrit
     LONGTAIL_VALIDATE_INPUT(ctx, concurrent_file_write_api != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
     int err = api->m_StorageAPI->CreateDir(api->m_StorageAPI, full_asset_path);
+    if (err == EEXIST)
+    {
+        err = 0;
+    }
     Longtail_Free(full_asset_path);
     return err;
 }
