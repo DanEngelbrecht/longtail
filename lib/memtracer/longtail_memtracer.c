@@ -254,6 +254,25 @@ char* Longtail_MemTracer_GetStats(uint32_t log_level) {
     return result;
 }
 
+LONGTAIL_EXPORT uint64_t Longtail_MemTracer_GetAllocationCount(const char* context)
+{
+    uint64_t result = 0;
+    Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
+    if (context)
+    {
+        uint32_t context_id = context[0] != '\0' ? MemTracer_ContextIdHash(context) : 0;
+        uint32_t* context_index_ptr = LongtailPrivate_LookupTable_Get(gMemTracer_Context->m_ContextLookup, context_id);
+        struct MemTracer_ContextStats* contextStats = &gMemTracer_Context->m_ContextStats[*context_index_ptr];
+        result = contextStats->current_count;
+    }
+    else
+    {
+        result = gMemTracer_Context->m_AllocationCurrentCount;
+    }
+    Longtail_UnlockSpinLock(gMemTracer_Context->m_Spinlock);
+    return result;
+}
+
 void Longtail_MemTracer_Dispose() {
     Longtail_DeleteSpinLock(gMemTracer_Context->m_Spinlock);
     free(gMemTracer_Context);

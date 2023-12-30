@@ -17,6 +17,8 @@ LONGTAIL_EXPORT void Longtail_MemTracer_Free(void* p);
 
 LONGTAIL_EXPORT int Longtail_MemTracer_DumpStats(const char* name);
 
+LONGTAIL_EXPORT uint64_t Longtail_MemTracer_GetAllocationCount(const char* context);
+
 #ifdef __cplusplus
 }
 #endif

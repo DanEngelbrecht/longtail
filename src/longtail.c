@@ -8199,7 +8199,6 @@ cleanup:
     if (work_mem)
     {
         Longtail_Free(work_mem);
-        work_mem = 0;
     }
     if (job->m_StoredBlock)
     {
@@ -8287,25 +8286,36 @@ int Longtail_ChangeVersion2(
     uint32_t added_count = *version_diff->m_TargetAddedCount;
     uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
     uint32_t write_asset_count = added_count + modified_content_count;
+    struct Longtail_BlockWriteInfo* block_write_infos = 0;
+    void* work_mem = 0;
+    void* job_mem = 0;
+    void* wanted_block_hashes_mem = 0;
 
     LONGTAIL_FATAL_ASSERT(ctx, write_asset_count <= *target_version->m_AssetCount, return EINVAL);
     if (write_asset_count > 0)
     {
-        struct Longtail_BlockWriteInfo* block_write_infos = 0;
-
         uint32_t chunk_count = *store_index->m_ChunkCount;
         size_t chunk_hash_to_block_index_size = LongtailPrivate_LookupTable_GetSize(chunk_count);
 
-        void* chunk_hash_to_block_index_mem = Longtail_Alloc("ChangeVersion", chunk_hash_to_block_index_size);
-        if (!chunk_hash_to_block_index_mem)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            arrfree(block_write_infos);
-            return ENOMEM;
-        }
-        struct Longtail_LookupTable* chunk_hash_to_block_index = LongtailPrivate_LookupTable_Create(chunk_hash_to_block_index_mem, chunk_count, 0);
-
         uint32_t block_count = *store_index->m_BlockCount;
+        size_t block_hash_to_block_write_index_size = LongtailPrivate_LookupTable_GetSize(block_count + 1);
+        size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
+        size_t work_mem_size = chunk_hash_to_block_index_size + block_hash_to_block_write_index_size + asset_indexes_size;
+        work_mem = Longtail_Alloc("ChangeVersion2", work_mem_size);
+        if (!work_mem)
+        {
+            err = ENOMEM;
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                goto cleanup;
+        }
+        uint8_t* work_mem_ptr = (uint8_t*)work_mem;
+
+        struct Longtail_LookupTable* chunk_hash_to_block_index = LongtailPrivate_LookupTable_Create(work_mem_ptr, chunk_count, 0);
+        work_mem_ptr += chunk_hash_to_block_index_size;
+        struct Longtail_LookupTable* block_hash_to_block_write_index = LongtailPrivate_LookupTable_Create(work_mem_ptr, block_count + 1, 0);
+        work_mem_ptr += block_hash_to_block_write_index_size;
+        uint32_t* asset_indexes = (uint32_t*)work_mem_ptr;
+
         for (uint32_t b = 0; b < block_count; ++b)
         {
             uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
@@ -8317,29 +8327,6 @@ int Longtail_ChangeVersion2(
                 LongtailPrivate_LookupTable_PutUnique(chunk_hash_to_block_index, chunk_hash, b);
             }
         }
-
-        size_t block_hash_to_block_write_index_size = LongtailPrivate_LookupTable_GetSize(block_count + 1);
-        void* block_hash_to_block_write_index_mem = Longtail_Alloc("ChangeVersion2", block_hash_to_block_write_index_size);
-        if (!block_hash_to_block_write_index_mem)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-                Longtail_Free(chunk_hash_to_block_index_mem);
-            arrfree(block_write_infos);
-            return ENOMEM;
-        }
-        struct Longtail_LookupTable* block_hash_to_block_write_index = LongtailPrivate_LookupTable_Create(block_hash_to_block_write_index_mem, block_count + 1, 0);
-
-        size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
-        void* asset_indexes_mem = Longtail_Alloc("ChangeVersion2", asset_indexes_size);
-        if (!asset_indexes_mem)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-                Longtail_Free(block_hash_to_block_write_index_mem);
-            Longtail_Free(chunk_hash_to_block_index_mem);
-            arrfree(block_write_infos);
-            return ENOMEM;
-        }
-        uint32_t* asset_indexes = (uint32_t*)asset_indexes_mem;
 
         for (uint32_t i = 0; i < added_count; ++i)
         {
@@ -8395,9 +8382,9 @@ int Longtail_ChangeVersion2(
                 uint32_t* content_block_index = LongtailPrivate_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
                 if (content_block_index == 0)
                 {
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Get() failed with %d", ENOENT)
-                    // TODO: Clean up
-                    return ENOENT;
+                    err = ENOENT;
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Get() failed with %d", err)
+                    goto cleanup;
                 }
                 TLongtail_Hash block_hash = block_hashes[*content_block_index];
 
@@ -8432,50 +8419,53 @@ int Longtail_ChangeVersion2(
         ptrdiff_t block_write_info_count = arrlen(block_write_infos);
         if (block_write_info_count > 1)
         {
-            TLongtail_Hash* wanted_block_hashes = Longtail_Alloc("ChangeVersion2", sizeof(TLongtail_Hash) * (block_write_info_count - 1));
-            if (wanted_block_hashes == 0)
+            wanted_block_hashes_mem = Longtail_Alloc("ChangeVersion2", sizeof(TLongtail_Hash) * (block_write_info_count - 1));
+            if (wanted_block_hashes_mem == 0)
             {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-                // TODO: Clean up
-                return ENOMEM;
+                err = ENOMEM;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
+                goto cleanup;
             }
+            TLongtail_Hash* wanted_block_hashes = (TLongtail_Hash*)wanted_block_hashes_mem;
             for (ptrdiff_t i = 1; i < block_write_info_count; ++i)
             {
                 wanted_block_hashes[i - 1] = block_write_infos[i].m_BlockHash;
             }
 
-            int err = block_store_api->PreflightGet(block_store_api, (uint32_t)(block_write_info_count - 1), wanted_block_hashes, 0);
+            err = block_store_api->PreflightGet(block_store_api, (uint32_t)(block_write_info_count - 1), wanted_block_hashes, 0);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "block_store_api->PreflightGet() failed with %d", err)
-                return err;
+                goto cleanup;
             }
 
             if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
             {
+                err = ECANCELED;
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Cancelled, failed with %d", ECANCELED)
-                return ECANCELED;
+                goto cleanup;
             }
-            Longtail_Free(wanted_block_hashes);
+            Longtail_Free(wanted_block_hashes_mem);
+            wanted_block_hashes_mem = 0;
         }
 
         size_t job_mem_size =
             sizeof(struct ContentBlock2Job) * block_write_info_count +
             sizeof(Longtail_JobAPI_JobFunc) * block_write_info_count +
             sizeof(void*) * block_write_info_count;
-        void* job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
+        job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
         if (job_mem == 0)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            // TODO: Clean up
-            return ENOMEM;
+            err = ENOMEM;
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
+            goto cleanup;
         }
-        uint8_t* p = (uint8_t*)job_mem;
-        struct ContentBlock2Job* jobs = (struct ContentBlock2Job*)p;
-        p += sizeof(struct ContentBlock2Job) * block_write_info_count;
-        Longtail_JobAPI_JobFunc* job_funcs = (Longtail_JobAPI_JobFunc*)p;
-        p += sizeof(Longtail_JobAPI_JobFunc) * block_write_info_count;
-        void** job_ctxs = (void**)p;
+        uint8_t* job_mem_ptr = (uint8_t*)job_mem;
+        struct ContentBlock2Job* jobs = (struct ContentBlock2Job*)job_mem_ptr;
+        job_mem_ptr += sizeof(struct ContentBlock2Job) * block_write_info_count;
+        Longtail_JobAPI_JobFunc* job_funcs = (Longtail_JobAPI_JobFunc*)job_mem_ptr;
+        job_mem_ptr += sizeof(Longtail_JobAPI_JobFunc) * block_write_info_count;
+        void** job_ctxs = (void**)job_mem_ptr;
 
         for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
         {
@@ -8502,8 +8492,7 @@ int Longtail_ChangeVersion2(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-            // TODO: Cleanup
-            return err;
+            goto cleanup;
         }
 
         Longtail_JobAPI_Jobs write_job;
@@ -8511,19 +8500,17 @@ int Longtail_ChangeVersion2(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->CreateJobs() failed with %d", err)
-            // TODO: Cleanup
-            return err;
+            goto cleanup;
         }
         err = job_api->ReadyJobs(job_api, (uint32_t)block_write_info_count, write_job);
-        LONGTAIL_FATAL_ASSERT(ctx, !err, return err)
+        LONGTAIL_FATAL_ASSERT(ctx, !err, goto cleanup)
 
         err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
         if (err)
         {
             LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
+            goto cleanup;
         }
-
-        (void)concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
 
         for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
         {
@@ -8533,13 +8520,11 @@ int Longtail_ChangeVersion2(
             }
             arrfree(block_write_infos[i].m_WriteInfos);
         }
-
-        Longtail_Free(job_mem);
-
-        Longtail_Free(asset_indexes_mem);
-        Longtail_Free(block_hash_to_block_write_index_mem);
-        Longtail_Free(chunk_hash_to_block_index_mem);
         arrfree(block_write_infos);
+        Longtail_Free(job_mem);
+        job_mem = 0;
+        Longtail_Free(work_mem);
+        work_mem = 0;
     }
 
     if (err == 0 && retain_permissions)
@@ -8548,11 +8533,31 @@ int Longtail_ChangeVersion2(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "RetainPermissions() failed with %d", err)
+            goto cleanup;
         }
     }
+cleanup:
+    (void)concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
+    if (job_mem)
+    {
+        Longtail_Free(job_mem);
+    }
+    if (wanted_block_hashes_mem)
+    {
+        Longtail_Free(wanted_block_hashes_mem);
+    }
+    if (work_mem)
+    {
+        Longtail_Free(work_mem);
+    }
+    ptrdiff_t c = arrlen(block_write_infos);
+    for (ptrdiff_t i = 0; i < c; ++i)
+    {
+        arrfree(block_write_infos[i].m_WriteInfos);
+    }
+    arrfree(block_write_infos);
     return err;
 }
-
 
 size_t Longtail_GetStoreIndexDataSize(uint32_t block_count, uint32_t chunk_count)
 {
