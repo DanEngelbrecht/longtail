@@ -11,6 +11,7 @@
 #include "../lib/blockstorestorage/longtail_blockstorestorage.h"
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
+#include "../lib/concurrentchunkwrite/longtail_concurrentchunkwrite.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/hpcdcchunker/longtail_hpcdcchunker.h"
 #include "../lib/filestorage/longtail_filestorage.h"
@@ -922,20 +923,30 @@ int DownSync(
     struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
     if (progress)
     {
-        err = Longtail_ChangeVersion(
-            store_block_store_api,
-            storage_api,
-            hash_api,
-            job_api,
-            progress,
-            0,
-            0,
-            required_version_store_index,
-            target_version_index,
-            source_version_index,
-            version_diff,
-            target_path,
-            retain_permissions ? 1 : 0);
+        struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
+        if (concurrent_chunk_write)
+        {
+            err = Longtail_ChangeVersion2(
+                store_block_store_api,
+                storage_api,
+                concurrent_chunk_write,
+                hash_api,
+                job_api,
+                progress,
+                0,
+                0,
+                required_version_store_index,
+                target_version_index,
+                source_version_index,
+                version_diff,
+                target_path,
+                retain_permissions ? 1 : 0);
+            SAFE_DISPOSE_API(concurrent_chunk_write);
+        }
+        else
+        {
+            err = ENOMEM;
+        }
         SAFE_DISPOSE_API(progress);
     }
     else
@@ -946,23 +957,6 @@ int DownSync(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
-        Longtail_Free(version_diff);
-        Longtail_Free(target_version_index);
-        Longtail_Free(required_version_store_index);
-        Longtail_Free(source_version_index);
-        SAFE_DISPOSE_API(chunker_api);
-        SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(store_block_cachestore_api);
-        SAFE_DISPOSE_API(store_block_localstore_api);
-        SAFE_DISPOSE_API(store_block_remotestore_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(hash_registry);
-        SAFE_DISPOSE_API(job_api);
-        Longtail_Free((void*)storage_path);
-        return err;
     }
 
     Longtail_Free(version_diff);
@@ -2011,20 +2005,30 @@ int Unpack(
     struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
     if (progress)
     {
-        err = Longtail_ChangeVersion(
-            store_block_store_api,
-            storage_api,
-            hash_api,
-            job_api,
-            progress,
-            0,
-            0,
-            &archive_index->m_StoreIndex,
-            target_version_index,
-            &archive_index->m_VersionIndex,
-            version_diff,
-            target_path,
-            retain_permissions ? 1 : 0);
+        struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
+        if (concurrent_chunk_write)
+        {
+            err = Longtail_ChangeVersion2(
+                store_block_store_api,
+                storage_api,
+                concurrent_chunk_write,
+                hash_api,
+                job_api,
+                progress,
+                0,
+                0,
+                &archive_index->m_StoreIndex,
+                target_version_index,
+                &archive_index->m_VersionIndex,
+                version_diff,
+                target_path,
+                retain_permissions ? 1 : 0);
+            SAFE_DISPOSE_API(concurrent_chunk_write);
+        }
+        else
+        {
+            err = ENOMEM;
+        }
         SAFE_DISPOSE_API(progress);
     }
     else
@@ -2035,16 +2039,6 @@ int Unpack(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s`, %d", target_path, source_path, err);
-        Longtail_Free(version_diff);
-        SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(archive_block_store_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(job_api);
-        SAFE_DISPOSE_API(hash_registry);
-        return err;
     }
 
     Longtail_Free(version_diff);
