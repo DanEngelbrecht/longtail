@@ -374,6 +374,38 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
     ReleaseSRWLockExclusive(&spin_lock->m_Lock);
 }
 
+struct Longtail_Mutex
+{
+    CRITICAL_SECTION m_CriticalSection;
+};
+
+size_t Longtail_GetMutexSize()
+{
+    return sizeof(struct Longtail_Mutex);
+}
+
+int Longtail_CreateMutex(void* mem, HLongtail_Mutex* out_mutex)
+{
+    HLongtail_Mutex mutex = (HLongtail_Mutex)mem;
+    InitializeCriticalSection(&mutex->m_CriticalSection);
+    *out_mutex = mutex;
+    return 0;
+}
+
+void Longtail_DeleteMutex(HLongtail_Mutex mutex)
+{
+    DeleteCriticalSection(&mutex->m_CriticalSection);
+}
+
+void Longtail_LockMutex(HLongtail_Mutex mutex)
+{
+    EnterCriticalSection(&mutex->m_CriticalSection);
+}
+
+void Longtail_UnlockMutex(HLongtail_Mutex mutex)
+{
+    LeaveCriticalSection(&mutex->m_CriticalSection);
+}
 
 static wchar_t* MakeWCharString(const char* s)
 {
