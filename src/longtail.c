@@ -7550,6 +7550,220 @@ int Longtail_CreateVersionDiff(
     return 0;
 }
 
+static int CleanUpRemoveAssets(
+    struct Longtail_StorageAPI* version_storage_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    const struct Longtail_VersionIndex* source_version,
+    const struct Longtail_VersionDiff* version_diff,
+    const char* version_path)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(version_storage_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
+        LONGTAIL_LOGFIELD(source_version, "%p"),
+        LONGTAIL_LOGFIELD(version_diff, "%p"),
+        LONGTAIL_LOGFIELD(version_path, "%s")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+        LONGTAIL_VALIDATE_INPUT(ctx, version_storage_api != 0, return EINVAL)
+        LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
+        LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
+        LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
+
+        uint32_t remove_count = *version_diff->m_SourceRemovedCount;
+    LONGTAIL_FATAL_ASSERT(ctx, remove_count <= *source_version->m_AssetCount, return EINVAL);
+    if (remove_count == 0)
+    {
+        return 0;
+    }
+
+    int err = 0;
+    char* full_asset_path = 0;
+    uint32_t* remove_indexes = (uint32_t*)Longtail_Alloc("ChangeVersion", sizeof(uint32_t) * remove_count);
+    if (!remove_indexes)
+    {
+        err = ENOMEM;
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
+            goto cleanup;
+    }
+    memcpy(remove_indexes, version_diff->m_SourceRemovedAssetIndexes, sizeof(uint32_t) * remove_count);
+
+    uint32_t retry_count = 10;
+    uint32_t successful_remove_count = 0;
+    while (retry_count && (successful_remove_count < remove_count))
+    {
+        if (retry_count < 10)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", remove_count - successful_remove_count, version_path)
+        }
+        --retry_count;
+        if ((successful_remove_count & 0x7f) == 0x7f) {
+            if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+            {
+                err = ECANCELED;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
+                    goto cleanup;
+            }
+        }
+        for (uint32_t r = 0; r < remove_count; ++r)
+        {
+            uint32_t asset_index = remove_indexes[r];
+            if (asset_index == 0xffffffff)
+            {
+                continue;
+            }
+            const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
+            char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+            if (IsDirPath(asset_path))
+            {
+                full_asset_path[strlen(full_asset_path) - 1] = '\0';
+                if (!version_storage_api->IsDir(version_storage_api, full_asset_path))
+                {
+                    remove_indexes[r] = 0xffffffff;
+                    goto cleanup;
+                }
+                uint16_t permissions = 0;
+                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                if (err)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                        goto cleanup;
+                }
+                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                {
+                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess));
+                    if (err)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                            goto cleanup;
+                    }
+                }
+                err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
+                if (err && version_storage_api->IsDir(version_storage_api, full_asset_path))
+                {
+                    if (!retry_count)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to remove dir `%s`, failed with %d", full_asset_path, err)
+                            goto cleanup;
+                    }
+                    Longtail_Free(full_asset_path);
+                    full_asset_path = 0;
+                    continue;
+                }
+            }
+            else
+            {
+                if (!version_storage_api->IsFile(version_storage_api, full_asset_path))
+                {
+                    remove_indexes[r] = 0xffffffff;
+                    Longtail_Free(full_asset_path);
+                    continue;
+                }
+                uint16_t permissions = 0;
+                err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
+                if (err)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                        goto cleanup;
+                }
+                if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
+                {
+                    err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
+                    if (err)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                            goto cleanup;
+                    }
+                }
+                err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
+                if (err && version_storage_api->IsFile(version_storage_api, full_asset_path))
+                {
+                    if (!retry_count)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to file dir `%s`, failed with %d", full_asset_path, err)
+                            goto cleanup;
+                    }
+                    Longtail_Free(full_asset_path);
+                    full_asset_path = 0;
+                    continue;
+                }
+            }
+            Longtail_Free(full_asset_path);
+            full_asset_path = 0;
+            remove_indexes[r] = 0xffffffff;
+            ++successful_remove_count;
+        }
+    }
+cleanup:
+    if (full_asset_path)
+    {
+        Longtail_Free(full_asset_path);
+    }
+    if (remove_indexes)
+    {
+        Longtail_Free(remove_indexes);
+    }
+    return err;
+}
+
+static int RetainPermissions(
+    struct Longtail_StorageAPI* version_storage_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    const struct Longtail_VersionIndex* target_version,
+    const struct Longtail_VersionDiff* version_diff,
+    const char* version_path)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(version_storage_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_api, "%p"),
+        LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
+        LONGTAIL_LOGFIELD(target_version, "%p"),
+        LONGTAIL_LOGFIELD(version_diff, "%p"),
+        LONGTAIL_LOGFIELD(version_path, "%s")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, version_storage_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
+
+    int err = 0;
+    char* full_path = 0;
+
+    uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
+    for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
+    {
+        if ((i & 0x7f) == 0x7f) {
+            if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+            {
+                err = ECANCELED;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", ECANCELED)
+                goto cleanup;
+            }
+        }
+        uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
+        const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
+        char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+        uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
+        int err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed for `%s` with %d", full_path, err)
+            goto cleanup;
+        }
+        Longtail_Free(full_path);
+    }
+cleanup:
+    if (full_path)
+    {
+        Longtail_Free(full_path);
+    }
+    return err;
+}
+
 int Longtail_ChangeVersion(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
@@ -7589,6 +7803,7 @@ int Longtail_ChangeVersion(
     LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
 
     int err = EnsureParentPathExists(version_storage_api, version_path);
     if (err)
@@ -7607,137 +7822,11 @@ int Longtail_ChangeVersion(
         return err;
     }
 
-    uint32_t remove_count = *version_diff->m_SourceRemovedCount;
-    LONGTAIL_FATAL_ASSERT(ctx, remove_count <= *source_version->m_AssetCount, return EINVAL);
-    if (remove_count > 0)
+    err = CleanUpRemoveAssets(version_storage_api, optional_cancel_api, optional_cancel_token, source_version, version_diff, version_path);
+    if (err != 0)
     {
-        uint32_t* remove_indexes = (uint32_t*)Longtail_Alloc("ChangeVersion", sizeof(uint32_t) * remove_count);
-        if (!remove_indexes)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            return ENOMEM;
-        }
-        memcpy(remove_indexes, version_diff->m_SourceRemovedAssetIndexes, sizeof(uint32_t) * remove_count);
-
-        uint32_t retry_count = 10;
-        uint32_t successful_remove_count = 0;
-        while (retry_count && (successful_remove_count < remove_count))
-        {
-            if (retry_count < 10)
-            {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", remove_count - successful_remove_count, version_path)
-            }
-            --retry_count;
-            if ((successful_remove_count & 0x7f) == 0x7f) {
-                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-                {
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Opeation cancelled, failed with %d", ECANCELED)
-                    return ECANCELED;
-                }
-            }
-            for (uint32_t r = 0; r < remove_count; ++r)
-            {
-                uint32_t asset_index = remove_indexes[r];
-                if (asset_index == 0xffffffff)
-                {
-                    continue;
-                }
-                const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
-                char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-                if (IsDirPath(asset_path))
-                {
-                    full_asset_path[strlen(full_asset_path) - 1] = '\0';
-                    if (!version_storage_api->IsDir(version_storage_api, full_asset_path))
-                    {
-                        remove_indexes[r] = 0xffffffff;
-                        Longtail_Free(full_asset_path);
-                        continue;
-                    }
-                    uint16_t permissions = 0;
-                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
-                    if (err)
-                    {
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
-                        Longtail_Free(full_asset_path);
-                        Longtail_Free(remove_indexes);
-                        return err;
-                    }
-                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
-                    {
-                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess));
-                        if (err)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                    }
-                    err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
-                    if (err && version_storage_api->IsDir(version_storage_api, full_asset_path))
-                    {
-                        if (!retry_count)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to remove dir `%s`, failed with %d", full_asset_path, err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                        Longtail_Free(full_asset_path);
-                        full_asset_path = 0;
-                        continue;
-                    }
-                }
-                else
-                {
-                    if (!version_storage_api->IsFile(version_storage_api, full_asset_path))
-                    {
-                        remove_indexes[r] = 0xffffffff;
-                        Longtail_Free(full_asset_path);
-                        continue;
-                    }
-                    uint16_t permissions = 0;
-                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
-                    if (err)
-                    {
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
-                        Longtail_Free(full_asset_path);
-                        Longtail_Free(remove_indexes);
-                        return err;
-                    }
-                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
-                    {
-                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
-                        if (err)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                    }
-                    err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
-                    if (err && version_storage_api->IsFile(version_storage_api, full_asset_path))
-                    {
-                        if (!retry_count)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to file dir `%s`, failed with %d", full_asset_path, err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                        Longtail_Free(full_asset_path);
-                        full_asset_path = 0;
-                        continue;
-                    }
-                }
-                Longtail_Free(full_asset_path);
-                full_asset_path = 0;
-                remove_indexes[r] = 0xffffffff;
-                ++successful_remove_count;
-            }
-        }
-        Longtail_Free(remove_indexes);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CleanUpRemoveAssets() failed with %d", err)
+        return err;
     }
 
     uint32_t added_count = *version_diff->m_TargetAddedCount;
@@ -7834,30 +7923,12 @@ int Longtail_ChangeVersion(
         work_mem = 0;
     }
 
-    if (retain_permissions)
+    if (err == 0 && retain_permissions)
     {
-        uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
-        for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
+        err = RetainPermissions(version_storage_api, optional_cancel_api, optional_cancel_token, target_version, version_diff, version_path);
+        if (err)
         {
-            if ((i & 0x7f) == 0x7f) {
-                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-                {
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", ECANCELED)
-                    return ECANCELED;
-                }
-            }
-            uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
-            const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
-            char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-            uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
-            err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
-            if (err)
-            {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                Longtail_Free(full_path);
-                return err;
-            }
-            Longtail_Free(full_path);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "RetainPermissions() failed with %d", err)
         }
     }
 
@@ -8180,6 +8251,7 @@ int Longtail_ChangeVersion2(
     LONGTAIL_VALIDATE_INPUT(ctx, source_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, target_version != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
 
     int err = EnsureParentPathExists(version_storage_api, version_path);
     if (err)
@@ -8198,137 +8270,11 @@ int Longtail_ChangeVersion2(
         return err;
     }
 
-    uint32_t remove_count = *version_diff->m_SourceRemovedCount;
-    LONGTAIL_FATAL_ASSERT(ctx, remove_count <= *source_version->m_AssetCount, return EINVAL);
-    if (remove_count > 0)
+    err = CleanUpRemoveAssets(version_storage_api, optional_cancel_api, optional_cancel_token, source_version, version_diff, version_path);
+    if (err != 0)
     {
-        uint32_t* remove_indexes = (uint32_t*)Longtail_Alloc("ChangeVersion", sizeof(uint32_t) * remove_count);
-        if (!remove_indexes)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-            return ENOMEM;
-        }
-        memcpy(remove_indexes, version_diff->m_SourceRemovedAssetIndexes, sizeof(uint32_t) * remove_count);
-
-        uint32_t retry_count = 10;
-        uint32_t successful_remove_count = 0;
-        while (retry_count && (successful_remove_count < remove_count))
-        {
-            if (retry_count < 10)
-            {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ChangeVersion: Retrying removal of remaning %u assets in %s", remove_count - successful_remove_count, version_path)
-            }
-            --retry_count;
-            if ((successful_remove_count & 0x7f) == 0x7f) {
-                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-                {
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Opeation cancelled, failed with %d", ECANCELED)
-                    return ECANCELED;
-                }
-            }
-            for (uint32_t r = 0; r < remove_count; ++r)
-            {
-                uint32_t asset_index = remove_indexes[r];
-                if (asset_index == 0xffffffff)
-                {
-                    continue;
-                }
-                const char* asset_path = &source_version->m_NameData[source_version->m_NameOffsets[asset_index]];
-                char* full_asset_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-                if (IsDirPath(asset_path))
-                {
-                    full_asset_path[strlen(full_asset_path) - 1] = '\0';
-                    if (!version_storage_api->IsDir(version_storage_api, full_asset_path))
-                    {
-                        remove_indexes[r] = 0xffffffff;
-                        Longtail_Free(full_asset_path);
-                        continue;
-                    }
-                    uint16_t permissions = 0;
-                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
-                    if (err)
-                    {
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
-                        Longtail_Free(full_asset_path);
-                        Longtail_Free(remove_indexes);
-                        return err;
-                    }
-                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
-                    {
-                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_GroupWriteAccess | Longtail_StorageAPI_OtherWriteAccess));
-                        if (err)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                    }
-                    err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
-                    if (err && version_storage_api->IsDir(version_storage_api, full_asset_path))
-                    {
-                        if (!retry_count)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to remove dir `%s`, failed with %d", full_asset_path, err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                        Longtail_Free(full_asset_path);
-                        full_asset_path = 0;
-                        continue;
-                    }
-                }
-                else
-                {
-                    if (!version_storage_api->IsFile(version_storage_api, full_asset_path))
-                    {
-                        remove_indexes[r] = 0xffffffff;
-                        Longtail_Free(full_asset_path);
-                        continue;
-                    }
-                    uint16_t permissions = 0;
-                    err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
-                    if (err)
-                    {
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
-                        Longtail_Free(full_asset_path);
-                        Longtail_Free(remove_indexes);
-                        return err;
-                    }
-                    if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
-                    {
-                        err = version_storage_api->SetPermissions(version_storage_api, full_asset_path, permissions | (Longtail_StorageAPI_UserWriteAccess));
-                        if (err)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                    }
-                    err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
-                    if (err && version_storage_api->IsFile(version_storage_api, full_asset_path))
-                    {
-                        if (!retry_count)
-                        {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to file dir `%s`, failed with %d", full_asset_path, err)
-                            Longtail_Free(full_asset_path);
-                            Longtail_Free(remove_indexes);
-                            return err;
-                        }
-                        Longtail_Free(full_asset_path);
-                        full_asset_path = 0;
-                        continue;
-                    }
-                }
-                Longtail_Free(full_asset_path);
-                full_asset_path = 0;
-                remove_indexes[r] = 0xffffffff;
-                ++successful_remove_count;
-            }
-        }
-        Longtail_Free(remove_indexes);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CleanUpRemoveAssets() failed with %d", err)
+        return err;
     }
 
     err = concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
@@ -8598,28 +8544,10 @@ int Longtail_ChangeVersion2(
 
     if (err == 0 && retain_permissions)
     {
-        uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
-        for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
+        err = RetainPermissions(version_storage_api, optional_cancel_api, optional_cancel_token, target_version, version_diff, version_path);
+        if (err)
         {
-            if ((i & 0x7f) == 0x7f) {
-                if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-                {
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", ECANCELED)
-                    return ECANCELED;
-                }
-            }
-            uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
-            const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
-            char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
-            uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
-            err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
-            if (err)
-            {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                Longtail_Free(full_path);
-                return err;
-            }
-            Longtail_Free(full_path);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "RetainPermissions() failed with %d", err)
         }
     }
     return err;
