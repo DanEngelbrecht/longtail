@@ -185,25 +185,43 @@ static int ConcurrentChunkWriteAPI_Write(
     struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_file_write_api;
     uint32_t path_hash = (uint32_t)(uintptr_t)in_open_file;
 
-    Longtail_LockMutex(api->m_Mutex);
-
-    intptr_t i = hmgeti(api->m_PathHashToOpenFile, path_hash);
-    if (i == -1)
+    Longtail_StorageAPI_HOpenFile file_handle = 0;
     {
+        Longtail_LockMutex(api->m_Mutex);
+
+        intptr_t i = hmgeti(api->m_PathHashToOpenFile, path_hash);
+        if (i == -1)
+        {
+            Longtail_UnlockMutex(api->m_Mutex);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ConcurrentChunkWriteAPI_Write() (0x%08x) file not open, error %d", path_hash, EINVAL)
+                return EINVAL;
+        }
+        struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
+        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
+        file_handle = open_file_entry->m_FileHandle;
         Longtail_UnlockMutex(api->m_Mutex);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ConcurrentChunkWriteAPI_Write() (0x%08x) file not open, error %d", path_hash, EINVAL)
-        return EINVAL;
     }
-    struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
-    LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
-    --open_file_entry->m_PendingWriteCount;
-    int close_on_completion = open_file_entry->m_PendingWriteCount == 0;
-    Longtail_StorageAPI_HOpenFile file_handle = open_file_entry->m_FileHandle;
-    Longtail_UnlockMutex(api->m_Mutex);
 
     int err = api->m_StorageAPI->Write(api->m_StorageAPI, file_handle, offset, size, input);
 
-    if (close_on_completion)
+    int close_on_write = 0;
+    {
+        Longtail_LockMutex(api->m_Mutex);
+        intptr_t i = hmgeti(api->m_PathHashToOpenFile, path_hash);
+        if (i == -1)
+        {
+            Longtail_UnlockMutex(api->m_Mutex);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ConcurrentChunkWriteAPI_Write() (0x%08x) file not open, error %d", path_hash, EINVAL)
+                return EINVAL;
+        }
+        struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
+        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
+        --open_file_entry->m_PendingWriteCount;
+        close_on_write = open_file_entry->m_PendingWriteCount == 0;
+        Longtail_UnlockMutex(api->m_Mutex);
+    }
+
+    if (close_on_write)
     {
         api->m_StorageAPI->CloseFile(api->m_StorageAPI, file_handle);
     }
