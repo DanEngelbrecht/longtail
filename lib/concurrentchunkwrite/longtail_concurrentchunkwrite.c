@@ -5,22 +5,6 @@
 #include <inttypes.h>
 #include <errno.h>
 
-#if !defined(alloca)
-    #if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__)
-        #include <alloca.h>     // alloca
-    #elif defined(_WIN32)
-        #include <malloc.h>     // alloca
-        #if !defined(alloca)
-            #define alloca _alloca  // for clang with MS Codegen
-        #endif
-        #define CompareIgnoreCase _stricmp
-    #else
-        #include <stdlib.h>     // alloca
-    #endif
-#endif
-
-#include <string.h>
-
 static inline uint32_t murmur_32_scramble(uint32_t k) {
     k *= 0xcc9e2d51;
     k = (k << 15) | (k >> 17);
@@ -34,7 +18,7 @@ static uint32_t murmur3_32(const uint8_t* key, size_t len, uint32_t seed)
     uint32_t k;
     /* Read in groups of 4. */
     for (size_t i = len >> 2; i; i--) {
-        // Here is a source of differing results across endiannesses.
+        // Here is a source of differing results across endianness.
         // A swap here has no effects on hash properties though.
         memcpy(&k, key, sizeof(uint32_t));
         key += sizeof(uint32_t);
@@ -69,8 +53,6 @@ static uint32_t ConcurrentChunkWriteAPI_GetPathHash(const char* path)
     uint32_t pathlen = (uint32_t)strlen(path);
     return murmur3_32((const uint8_t*)path, pathlen, Seed);
 }
-
-// TODO: This caching does not work - if a file is closed in between writes it will truncate on next open :(
 
 struct OpenFileEntry
 {
@@ -127,7 +109,6 @@ static int ConcurrentChunkWriteAPI_Open(
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_TotalWriteCount == chunk_write_count, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
         *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)(uintptr_t)path_hash;
-//        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "reopened: `%s` (0x%08x) TotalWriteChunks: %d, PendingWriteCount: %d", path, path_hash, open_file_entry->m_TotalWriteCount, open_file_entry->m_PendingWriteCount);
         Longtail_UnlockMutex(api->m_Mutex);
         return 0;
     }
@@ -171,7 +152,6 @@ static int ConcurrentChunkWriteAPI_Open(
     ptrdiff_t entry_index = arrlen(api->m_OpenFileEntries);
     arrput(api->m_OpenFileEntries, entry);
     hmput(api->m_PathHashToOpenFile, path_hash, entry_index);
-//    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "opened: `%s` (0x%08x) TotalWriteChunks: %d, PendingWriteCount: %d", path, path_hash, chunk_write_count, chunk_write_count);
     Longtail_UnlockMutex(api->m_Mutex);
     Longtail_Free(full_asset_path);
     *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)(uintptr_t)path_hash;
@@ -216,14 +196,9 @@ static int ConcurrentChunkWriteAPI_Write(
     }
     struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
     LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
-//    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "write: (0x%08x) TotalWriteChunks: %d, PendingWriteCount: %d", path_hash, open_file_entry->m_TotalWriteCount, open_file_entry->m_PendingWriteCount);
     --open_file_entry->m_PendingWriteCount;
     int close_on_completion = open_file_entry->m_PendingWriteCount == 0;
     Longtail_StorageAPI_HOpenFile file_handle = open_file_entry->m_FileHandle;
-    if (close_on_completion)
-    {
-//        hmdel(api->m_PathHashToOpenFile, path_hash);
-    }
     Longtail_UnlockMutex(api->m_Mutex);
 
     int err = api->m_StorageAPI->Write(api->m_StorageAPI, file_handle, offset, size, input);
@@ -231,7 +206,6 @@ static int ConcurrentChunkWriteAPI_Write(
     if (close_on_completion)
     {
         api->m_StorageAPI->CloseFile(api->m_StorageAPI, file_handle);
-//        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "closed (0x%08x)", path_hash);
     }
     return err;
 }
