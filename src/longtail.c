@@ -7572,7 +7572,7 @@ static int CleanUpRemoveAssets(
         LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
         LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
 
-        uint32_t remove_count = *version_diff->m_SourceRemovedCount;
+    uint32_t remove_count = *version_diff->m_SourceRemovedCount;
     LONGTAIL_FATAL_ASSERT(ctx, remove_count <= *source_version->m_AssetCount, return EINVAL);
     if (remove_count == 0)
     {
@@ -7586,7 +7586,7 @@ static int CleanUpRemoveAssets(
     {
         err = ENOMEM;
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
-            goto cleanup;
+        return err;
     }
     memcpy(remove_indexes, version_diff->m_SourceRemovedAssetIndexes, sizeof(uint32_t) * remove_count);
 
@@ -7604,7 +7604,8 @@ static int CleanUpRemoveAssets(
             {
                 err = ECANCELED;
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
-                    goto cleanup;
+                Longtail_Free(remove_indexes);
+                return err;
             }
         }
         for (uint32_t r = 0; r < remove_count; ++r)
@@ -7622,14 +7623,18 @@ static int CleanUpRemoveAssets(
                 if (!version_storage_api->IsDir(version_storage_api, full_asset_path))
                 {
                     remove_indexes[r] = 0xffffffff;
-                    goto cleanup;
+                    Longtail_Free(full_asset_path);
+                    Longtail_Free(remove_indexes);
+                    return err;
                 }
                 uint16_t permissions = 0;
                 err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
                 if (err)
                 {
                     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
-                        goto cleanup;
+                    Longtail_Free(full_asset_path);
+                    Longtail_Free(remove_indexes);
+                    return err;
                 }
                 if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
                 {
@@ -7637,7 +7642,9 @@ static int CleanUpRemoveAssets(
                     if (err)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                            goto cleanup;
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
                     }
                 }
                 err = version_storage_api->RemoveDir(version_storage_api, full_asset_path);
@@ -7646,7 +7653,9 @@ static int CleanUpRemoveAssets(
                     if (!retry_count)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to remove dir `%s`, failed with %d", full_asset_path, err)
-                            goto cleanup;
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
                     }
                     Longtail_Free(full_asset_path);
                     full_asset_path = 0;
@@ -7666,7 +7675,9 @@ static int CleanUpRemoveAssets(
                 if (err)
                 {
                     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
-                        goto cleanup;
+                    Longtail_Free(full_asset_path);
+                    Longtail_Free(remove_indexes);
+                    return err;
                 }
                 if (!(permissions & Longtail_StorageAPI_UserWriteAccess))
                 {
@@ -7674,7 +7685,9 @@ static int CleanUpRemoveAssets(
                     if (err)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
-                            goto cleanup;
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
                     }
                 }
                 err = version_storage_api->RemoveFile(version_storage_api, full_asset_path);
@@ -7683,7 +7696,9 @@ static int CleanUpRemoveAssets(
                     if (!retry_count)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to file dir `%s`, failed with %d", full_asset_path, err)
-                            goto cleanup;
+                        Longtail_Free(full_asset_path);
+                        Longtail_Free(remove_indexes);
+                        return err;
                     }
                     Longtail_Free(full_asset_path);
                     full_asset_path = 0;
@@ -7696,15 +7711,7 @@ static int CleanUpRemoveAssets(
             ++successful_remove_count;
         }
     }
-cleanup:
-    if (full_asset_path)
-    {
-        Longtail_Free(full_asset_path);
-    }
-    if (remove_indexes)
-    {
-        Longtail_Free(remove_indexes);
-    }
+    Longtail_Free(remove_indexes);
     return err;
 }
 
@@ -7730,7 +7737,6 @@ static int RetainPermissions(
     LONGTAIL_VALIDATE_INPUT(ctx, version_diff != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, version_path != 0, return EINVAL)
 
-    int err = 0;
     char* full_path = 0;
 
     uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
@@ -7739,9 +7745,9 @@ static int RetainPermissions(
         if ((i & 0x7f) == 0x7f) {
             if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
             {
-                err = ECANCELED;
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", ECANCELED)
-                goto cleanup;
+                int err = ECANCELED;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
+                return err;
             }
         }
         uint32_t asset_index = version_diff->m_TargetPermissionsModifiedAssetIndexes[i];
@@ -7752,16 +7758,12 @@ static int RetainPermissions(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed for `%s` with %d", full_path, err)
-            goto cleanup;
+            Longtail_Free(full_path);
+            return err;
         }
         Longtail_Free(full_path);
     }
-cleanup:
-    if (full_path)
-    {
-        Longtail_Free(full_path);
-    }
-    return err;
+    return 0;
 }
 
 int Longtail_ChangeVersion(
@@ -8047,13 +8049,13 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int is_cancelle
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
 
     struct ContentBlock2Job* job = (struct ContentBlock2Job*)context;
-    void* work_mem = 0;
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteContentBlock was cancelled, failed with %d", ECANCELED)
         job->m_Err = ECANCELED;
-        goto cleanup;
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteContentBlock was cancelled, failed with %d", job->m_Err)
+        SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
+        return 0;
     }
 
     if (job->m_BlockWriteInfo->m_BlockHash == 0)
@@ -8105,109 +8107,122 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int is_cancelle
             return 0;
         }
     }
+
     if (job->m_Err != 0)
     {
-        goto cleanup;
+        SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
+        return 0;
     }
 
-    LONGTAIL_FATAL_ASSERT(ctx, job->m_StoredBlock != 0, job->m_Err = EINVAL; return 0)
-    struct Longtail_StoredBlock* stored_block = job->m_StoredBlock;
-
-    uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
-    size_t chunk_hash_to_chunk_index_size = LongtailPrivate_LookupTable_GetSize(chunk_count);
-    size_t chunk_offsets_size = sizeof(uint32_t) * chunk_count;
-
-    size_t work_mem_size = chunk_hash_to_chunk_index_size + chunk_offsets_size;
-    work_mem = Longtail_Alloc("WriteContentBlock2Job", work_mem_size);
-    if (!work_mem)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        job->m_Err = ENOMEM;
-        goto cleanup;
-    }
-    uint8_t* data_ptr = (uint8_t*)work_mem;
+        LONGTAIL_FATAL_ASSERT(ctx, job->m_StoredBlock != 0, job->m_Err = EINVAL; return 0)
+        struct Longtail_StoredBlock* stored_block = job->m_StoredBlock;
 
-    struct Longtail_LookupTable* chunk_hash_to_chunk_index = LongtailPrivate_LookupTable_Create(data_ptr, chunk_count, 0);
-    data_ptr += chunk_hash_to_chunk_index_size;
-    uint32_t* chunk_offsets = (uint32_t*)data_ptr;
+        uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
+        size_t chunk_hash_to_chunk_index_size = LongtailPrivate_LookupTable_GetSize(chunk_count);
+        size_t chunk_offsets_size = sizeof(uint32_t) * chunk_count;
 
-    uint32_t chunk_offset = 0;
-    for (uint32_t chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
-    {
-        uint32_t* existing_ptr = LongtailPrivate_LookupTable_PutUnique(chunk_hash_to_chunk_index, stored_block->m_BlockIndex->m_ChunkHashes[chunk_index], chunk_index);
-        LONGTAIL_FATAL_ASSERT(ctx, !existing_ptr, job->m_Err = EINVAL; return 0)
-        chunk_offsets[chunk_index] = chunk_offset;
-        chunk_offset += stored_block->m_BlockIndex->m_ChunkSizes[chunk_index];
-    }
-
-    const uint8_t* block_data = stored_block->m_BlockData;
-
-    uint32_t last_asset_index = 0;
-    Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
-
-    ptrdiff_t block_write_chunk_info_count = arrlen(job->m_BlockWriteInfo->m_WriteInfos);
-
-    QSORT(job->m_BlockWriteInfo->m_WriteInfos, block_write_chunk_info_count, sizeof(struct Longtail_BlockChunkWriteInfo), SortBlockChunkWriteInfo, 0);
-
-    for (ptrdiff_t block_write_chunk_info_index = 0; block_write_chunk_info_index < block_write_chunk_info_count; ++block_write_chunk_info_index)
-    {
-        const struct Longtail_BlockChunkWriteInfo* block_chunk_write_info = &job->m_BlockWriteInfo->m_WriteInfos[block_write_chunk_info_index];
-        const uint32_t asset_index = block_chunk_write_info->AssetIndex;
-        const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
-
-        if (asset_file_handle != 0)
+        size_t work_mem_size = chunk_hash_to_chunk_index_size + chunk_offsets_size;
+        void* work_mem = Longtail_Alloc("WriteContentBlock2Job", work_mem_size);
+        if (!work_mem)
         {
-            if (last_asset_index != asset_index)
-            {
-                asset_file_handle = 0;
-            }
+            job->m_Err = ENOMEM;
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", job->m_Err)
+            SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
+            return 0;
+        }
+        uint8_t* data_ptr = (uint8_t*)work_mem;
+
+        struct Longtail_LookupTable* chunk_hash_to_chunk_index = LongtailPrivate_LookupTable_Create(data_ptr, chunk_count, 0);
+        data_ptr += chunk_hash_to_chunk_index_size;
+        uint32_t* chunk_offsets = (uint32_t*)data_ptr;
+
+        uint32_t chunk_offset = 0;
+        for (uint32_t chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
+        {
+            uint32_t* existing_ptr = LongtailPrivate_LookupTable_PutUnique(chunk_hash_to_chunk_index, stored_block->m_BlockIndex->m_ChunkHashes[chunk_index], chunk_index);
+            LONGTAIL_FATAL_ASSERT(ctx, !existing_ptr, job->m_Err = EINVAL; return 0)
+            chunk_offsets[chunk_index] = chunk_offset;
+            chunk_offset += stored_block->m_BlockIndex->m_ChunkSizes[chunk_index];
         }
 
-        if (asset_file_handle == 0)
-        {
-            uint32_t asset_chunk_count = job->m_VersionIndex->m_AssetChunkCounts[asset_index];
+        const uint8_t* block_data = stored_block->m_BlockData;
 
-            job->m_Err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, asset_chunk_count, &asset_file_handle);
+        uint32_t last_asset_index = 0;
+        Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
+
+        ptrdiff_t block_write_chunk_info_count = arrlen(job->m_BlockWriteInfo->m_WriteInfos);
+
+        QSORT(job->m_BlockWriteInfo->m_WriteInfos, block_write_chunk_info_count, sizeof(struct Longtail_BlockChunkWriteInfo), SortBlockChunkWriteInfo, 0);
+
+        for (ptrdiff_t block_write_chunk_info_index = 0; block_write_chunk_info_index < block_write_chunk_info_count; ++block_write_chunk_info_index)
+        {
+            const struct Longtail_BlockChunkWriteInfo* block_chunk_write_info = &job->m_BlockWriteInfo->m_WriteInfos[block_write_chunk_info_index];
+            const uint32_t asset_index = block_chunk_write_info->AssetIndex;
+            const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
+
+            if (asset_file_handle != 0)
+            {
+                if (last_asset_index != asset_index)
+                {
+                    asset_file_handle = 0;
+                }
+            }
+
+            if (asset_file_handle == 0)
+            {
+                uint32_t asset_chunk_count = job->m_VersionIndex->m_AssetChunkCounts[asset_index];
+
+                job->m_Err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, asset_chunk_count, &asset_file_handle);
+                if (job->m_Err)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "OpenWrite() failed for `%s` with %d", asset_path, job->m_Err)
+                    Longtail_Free(work_mem);
+                    SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
+                    return 0;
+                }
+                last_asset_index = asset_index;
+            }
+
+            uint32_t* chunk_index_in_block_ptr = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, job->m_VersionIndex->m_ChunkHashes[block_chunk_write_info->ChunkIndex]);
+            if (chunk_index_in_block_ptr == 0)
+            {
+                job->m_Err = ENOENT;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, job->m_Err)
+                Longtail_Free(work_mem);
+                SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
+                return 0;
+            }
+
+            uint32_t chunk_index_in_block = *chunk_index_in_block_ptr;
+            uint32_t chunk_size = stored_block->m_BlockIndex->m_ChunkSizes[chunk_index_in_block];
+            uint32_t chunk_offset = chunk_offsets[chunk_index_in_block];
+
+            job->m_Err = job->m_ConcurrentChunkWriteApi->Write(job->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_size, &block_data[chunk_offset]);
             if (job->m_Err)
             {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "OpenWrite() failed for `%s` with %d", asset_path, job->m_Err)
-                goto cleanup;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write() failed for `%s` with %d", asset_path, job->m_Err)
+                Longtail_Free(work_mem);
+                SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
+                return 0;
             }
-            last_asset_index = asset_index;
         }
-
-        uint32_t* chunk_index_in_block_ptr = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, job->m_VersionIndex->m_ChunkHashes[block_chunk_write_info->ChunkIndex]);
-        if (chunk_index_in_block_ptr == 0)
-        {
-            job->m_Err = ENOENT;
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, job->m_Err)
-            goto cleanup;
-        }
-
-        uint32_t chunk_index_in_block = *chunk_index_in_block_ptr;
-        uint32_t chunk_size = stored_block->m_BlockIndex->m_ChunkSizes[chunk_index_in_block];
-        uint32_t chunk_offset = chunk_offsets[chunk_index_in_block];
-
-        job->m_Err = job->m_ConcurrentChunkWriteApi->Write(job->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_size, &block_data[chunk_offset]);
-        if (job->m_Err)
-        {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write() failed for `%s` with %d", asset_path, job->m_Err)
-            goto cleanup;
-        }
-    }
-cleanup:
-    if (work_mem)
-    {
         Longtail_Free(work_mem);
     }
-    if (job->m_StoredBlock)
-    {
-        job->m_StoredBlock->Dispose(job->m_StoredBlock);
-        job->m_StoredBlock = 0;
-    }
-
     return 0;
 }
+
+static void FreeBlockWriteInfos(struct Longtail_BlockWriteInfo* block_write_infos)
+{
+    ptrdiff_t c = arrlen(block_write_infos);
+    for (ptrdiff_t i = 0; i < c; ++i)
+    {
+        arrfree(block_write_infos[i].m_WriteInfos);
+    }
+    arrfree(block_write_infos);
+}
+
+#define SAVE_FREE_BLOCK_WRITE_INFOS(i) if (i) {FreeBlockWriteInfos(i); i = 0;}
 
 int Longtail_ChangeVersion2(
     struct Longtail_BlockStoreAPI* block_store_api,
@@ -8286,145 +8301,149 @@ int Longtail_ChangeVersion2(
     uint32_t added_count = *version_diff->m_TargetAddedCount;
     uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
     uint32_t write_asset_count = added_count + modified_content_count;
-    struct Longtail_BlockWriteInfo* block_write_infos = 0;
-    void* work_mem = 0;
-    void* job_mem = 0;
-    void* wanted_block_hashes_mem = 0;
 
     LONGTAIL_FATAL_ASSERT(ctx, write_asset_count <= *target_version->m_AssetCount, return EINVAL);
     if (write_asset_count > 0)
     {
         uint32_t chunk_count = *store_index->m_ChunkCount;
-        size_t chunk_hash_to_block_index_size = LongtailPrivate_LookupTable_GetSize(chunk_count);
-
         uint32_t block_count = *store_index->m_BlockCount;
-        size_t block_hash_to_block_write_index_size = LongtailPrivate_LookupTable_GetSize(block_count + 1);
-        size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
-        size_t work_mem_size = chunk_hash_to_block_index_size + block_hash_to_block_write_index_size + asset_indexes_size;
-        work_mem = Longtail_Alloc("ChangeVersion2", work_mem_size);
-        if (!work_mem)
+        struct Longtail_BlockWriteInfo* block_write_infos = 0;
         {
-            err = ENOMEM;
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-                goto cleanup;
-        }
-        uint8_t* work_mem_ptr = (uint8_t*)work_mem;
-
-        struct Longtail_LookupTable* chunk_hash_to_block_index = LongtailPrivate_LookupTable_Create(work_mem_ptr, chunk_count, 0);
-        work_mem_ptr += chunk_hash_to_block_index_size;
-        struct Longtail_LookupTable* block_hash_to_block_write_index = LongtailPrivate_LookupTable_Create(work_mem_ptr, block_count + 1, 0);
-        work_mem_ptr += block_hash_to_block_write_index_size;
-        uint32_t* asset_indexes = (uint32_t*)work_mem_ptr;
-
-        for (uint32_t b = 0; b < block_count; ++b)
-        {
-            uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-            uint32_t chunk_index_offset = store_index->m_BlockChunksOffsets[b];
-            for (uint32_t c = 0; c < block_chunk_count; ++c)
+            size_t chunk_hash_to_block_index_size = LongtailPrivate_LookupTable_GetSize(chunk_count);
+            size_t block_hash_to_block_write_index_size = LongtailPrivate_LookupTable_GetSize(block_count + 1);
+            size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
+            size_t work_mem_size = chunk_hash_to_block_index_size + block_hash_to_block_write_index_size + asset_indexes_size;
+            void* work_mem = Longtail_Alloc("ChangeVersion2", work_mem_size);
+            if (!work_mem)
             {
-                uint32_t chunk_index = chunk_index_offset + c;
-                TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_index];
-                LongtailPrivate_LookupTable_PutUnique(chunk_hash_to_block_index, chunk_hash, b);
+                err = ENOMEM;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
+                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                return err;
             }
-        }
+            uint8_t* work_mem_ptr = (uint8_t*)work_mem;
 
-        for (uint32_t i = 0; i < added_count; ++i)
-        {
-            asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
-        }
-        for (uint32_t i = 0; i < modified_content_count; ++i)
-        {
-            asset_indexes[added_count + i] = version_diff->m_TargetContentModifiedAssetIndexes[i];
-        }
+            struct Longtail_LookupTable* chunk_hash_to_block_index = LongtailPrivate_LookupTable_Create(work_mem_ptr, chunk_count, 0);
+            work_mem_ptr += chunk_hash_to_block_index_size;
+            struct Longtail_LookupTable* block_hash_to_block_write_index = LongtailPrivate_LookupTable_Create(work_mem_ptr, block_count + 1, 0);
+            work_mem_ptr += block_hash_to_block_write_index_size;
+            uint32_t* asset_indexes = (uint32_t*)work_mem_ptr;
 
-        uint32_t* name_offsets = target_version->m_NameOffsets;
-        const char* name_data = target_version->m_NameData;
-        const TLongtail_Hash* chunk_hashes = target_version->m_ChunkHashes;
-        const TLongtail_Hash* block_hashes = store_index->m_BlockHashes;
-        const uint32_t* asset_chunk_counts = target_version->m_AssetChunkCounts;
-        const uint32_t* asset_chunk_index_starts = target_version->m_AssetChunkIndexStarts;
-        const uint32_t* asset_chunk_indexes = target_version->m_AssetChunkIndexes;
-
-        {
-            struct Longtail_BlockWriteInfo new_block_write_info;
-            new_block_write_info.m_BlockHash = 0;
-            new_block_write_info.m_WriteInfos = 0;
-            uint32_t block_write_info_index = (uint32_t)arrlen(block_write_infos);
-            LongtailPrivate_LookupTable_Put(block_hash_to_block_write_index, 0, block_write_info_index);
-            arrput(block_write_infos, new_block_write_info);
-        }
-
-        for (uint32_t i = 0; i < write_asset_count; ++i)
-        {
-            uint32_t asset_index = asset_indexes[i];
-            const char* path = &name_data[name_offsets[asset_index]];
-            uint32_t chunk_count = asset_chunk_counts[asset_index];
-            uint32_t asset_chunk_offset = asset_chunk_index_starts[asset_index];
-            if (chunk_count == 0)
+            for (uint32_t b = 0; b < block_count; ++b)
             {
-                uint32_t* content_block_write_info_index = LongtailPrivate_LookupTable_Get(block_hash_to_block_write_index, 0);
-                LONGTAIL_FATAL_ASSERT(ctx, content_block_write_info_index != 0, return EINVAL)
-                struct Longtail_BlockWriteInfo* block_write_info = &block_write_infos[*content_block_write_info_index];
-
-                struct Longtail_BlockChunkWriteInfo chunk_write_info;
-                chunk_write_info.ChunkIndex = 0;
-                chunk_write_info.AssetIndex = asset_index;
-                chunk_write_info.Offset = 0;
-
-                arrput(block_write_info->m_WriteInfos, chunk_write_info);
-                continue;
+                uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+                uint32_t chunk_index_offset = store_index->m_BlockChunksOffsets[b];
+                for (uint32_t c = 0; c < block_chunk_count; ++c)
+                {
+                    uint32_t chunk_index = chunk_index_offset + c;
+                    TLongtail_Hash chunk_hash = store_index->m_ChunkHashes[chunk_index];
+                    LongtailPrivate_LookupTable_PutUnique(chunk_hash_to_block_index, chunk_hash, b);
+                }
             }
-            uint64_t file_offset = 0;
-            for (uint32_t chunk_offset = 0; chunk_offset < chunk_count; ++chunk_offset)
+
+            for (uint32_t i = 0; i < added_count; ++i)
             {
-                uint32_t chunk_index = asset_chunk_indexes[asset_chunk_offset + chunk_offset];
-                TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
-                uint32_t* content_block_index = LongtailPrivate_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
-                if (content_block_index == 0)
-                {
-                    err = ENOENT;
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Get() failed with %d", err)
-                    goto cleanup;
-                }
-                TLongtail_Hash block_hash = block_hashes[*content_block_index];
-
-                uint32_t* content_block_write_info_index = LongtailPrivate_LookupTable_Get(block_hash_to_block_write_index, block_hash);
-                struct Longtail_BlockWriteInfo* block_write_info = 0;
-                if (content_block_write_info_index == 0)
-                {
-                    struct Longtail_BlockWriteInfo new_block_write_info;
-                    new_block_write_info.m_BlockHash = block_hash;
-                    new_block_write_info.m_WriteInfos = 0;
-                    uint32_t block_write_info_index = (uint32_t)arrlen(block_write_infos);
-                    LongtailPrivate_LookupTable_Put(block_hash_to_block_write_index, block_hash, block_write_info_index);
-                    arrput(block_write_infos, new_block_write_info);
-                    block_write_info = &block_write_infos[block_write_info_index];
-                }
-                else
-                {
-                    block_write_info = &block_write_infos[*content_block_write_info_index];
-                }
-
-                struct Longtail_BlockChunkWriteInfo chunk_write_info;
-                chunk_write_info.ChunkIndex = chunk_index;
-                chunk_write_info.AssetIndex = asset_index;
-                chunk_write_info.Offset = file_offset;
-
-                arrput(block_write_info->m_WriteInfos, chunk_write_info);
-
-                file_offset += target_version->m_ChunkSizes[chunk_index];
+                asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
             }
+            for (uint32_t i = 0; i < modified_content_count; ++i)
+            {
+                asset_indexes[added_count + i] = version_diff->m_TargetContentModifiedAssetIndexes[i];
+            }
+
+            uint32_t* name_offsets = target_version->m_NameOffsets;
+            const char* name_data = target_version->m_NameData;
+            const TLongtail_Hash* chunk_hashes = target_version->m_ChunkHashes;
+            const TLongtail_Hash* block_hashes = store_index->m_BlockHashes;
+            const uint32_t* asset_chunk_counts = target_version->m_AssetChunkCounts;
+            const uint32_t* asset_chunk_index_starts = target_version->m_AssetChunkIndexStarts;
+            const uint32_t* asset_chunk_indexes = target_version->m_AssetChunkIndexes;
+
+            {
+                struct Longtail_BlockWriteInfo new_block_write_info;
+                new_block_write_info.m_BlockHash = 0;
+                new_block_write_info.m_WriteInfos = 0;
+                uint32_t block_write_info_index = (uint32_t)arrlen(block_write_infos);
+                LongtailPrivate_LookupTable_Put(block_hash_to_block_write_index, 0, block_write_info_index);
+                arrput(block_write_infos, new_block_write_info);
+            }
+
+            for (uint32_t i = 0; i < write_asset_count; ++i)
+            {
+                uint32_t asset_index = asset_indexes[i];
+                const char* path = &name_data[name_offsets[asset_index]];
+                uint32_t chunk_count = asset_chunk_counts[asset_index];
+                uint32_t asset_chunk_offset = asset_chunk_index_starts[asset_index];
+                if (chunk_count == 0)
+                {
+                    uint32_t* content_block_write_info_index = LongtailPrivate_LookupTable_Get(block_hash_to_block_write_index, 0);
+                    LONGTAIL_FATAL_ASSERT(ctx, content_block_write_info_index != 0, return EINVAL)
+                    struct Longtail_BlockWriteInfo* block_write_info = &block_write_infos[*content_block_write_info_index];
+
+                    struct Longtail_BlockChunkWriteInfo chunk_write_info;
+                    chunk_write_info.ChunkIndex = 0;
+                    chunk_write_info.AssetIndex = asset_index;
+                    chunk_write_info.Offset = 0;
+
+                    arrput(block_write_info->m_WriteInfos, chunk_write_info);
+                    continue;
+                }
+                uint64_t file_offset = 0;
+                for (uint32_t chunk_offset = 0; chunk_offset < chunk_count; ++chunk_offset)
+                {
+                    uint32_t chunk_index = asset_chunk_indexes[asset_chunk_offset + chunk_offset];
+                    TLongtail_Hash chunk_hash = chunk_hashes[chunk_index];
+                    uint32_t* content_block_index = LongtailPrivate_LookupTable_Get(chunk_hash_to_block_index, chunk_hash);
+                    if (content_block_index == 0)
+                    {
+                        err = ENOENT;
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Get() failed with %d", err)
+                        SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                        Longtail_Free(work_mem);
+                        return err;
+                    }
+                    TLongtail_Hash block_hash = block_hashes[*content_block_index];
+
+                    uint32_t* content_block_write_info_index = LongtailPrivate_LookupTable_Get(block_hash_to_block_write_index, block_hash);
+                    struct Longtail_BlockWriteInfo* block_write_info = 0;
+                    if (content_block_write_info_index == 0)
+                    {
+                        struct Longtail_BlockWriteInfo new_block_write_info;
+                        new_block_write_info.m_BlockHash = block_hash;
+                        new_block_write_info.m_WriteInfos = 0;
+                        uint32_t block_write_info_index = (uint32_t)arrlen(block_write_infos);
+                        LongtailPrivate_LookupTable_Put(block_hash_to_block_write_index, block_hash, block_write_info_index);
+                        arrput(block_write_infos, new_block_write_info);
+                        block_write_info = &block_write_infos[block_write_info_index];
+                    }
+                    else
+                    {
+                        block_write_info = &block_write_infos[*content_block_write_info_index];
+                    }
+
+                    struct Longtail_BlockChunkWriteInfo chunk_write_info;
+                    chunk_write_info.ChunkIndex = chunk_index;
+                    chunk_write_info.AssetIndex = asset_index;
+                    chunk_write_info.Offset = file_offset;
+
+                    arrput(block_write_info->m_WriteInfos, chunk_write_info);
+
+                    file_offset += target_version->m_ChunkSizes[chunk_index];
+                }
+            }
+            Longtail_Free(work_mem);
+            work_mem = 0;
         }
 
         ptrdiff_t block_write_info_count = arrlen(block_write_infos);
         if (block_write_info_count > 1)
         {
-            wanted_block_hashes_mem = Longtail_Alloc("ChangeVersion2", sizeof(TLongtail_Hash) * (block_write_info_count - 1));
+            void* wanted_block_hashes_mem = Longtail_Alloc("ChangeVersion2", sizeof(TLongtail_Hash) * (block_write_info_count - 1));
             if (wanted_block_hashes_mem == 0)
             {
                 err = ENOMEM;
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
-                goto cleanup;
+                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                return err;
             }
             TLongtail_Hash* wanted_block_hashes = (TLongtail_Hash*)wanted_block_hashes_mem;
             for (ptrdiff_t i = 1; i < block_write_info_count; ++i)
@@ -8436,14 +8455,18 @@ int Longtail_ChangeVersion2(
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "block_store_api->PreflightGet() failed with %d", err)
-                goto cleanup;
+                Longtail_Free(wanted_block_hashes_mem);
+                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                return err;
             }
 
             if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
             {
                 err = ECANCELED;
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Cancelled, failed with %d", ECANCELED)
-                goto cleanup;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Cancelled, failed with %d", err)
+                Longtail_Free(wanted_block_hashes_mem);
+                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                return err;
             }
             Longtail_Free(wanted_block_hashes_mem);
             wanted_block_hashes_mem = 0;
@@ -8453,12 +8476,13 @@ int Longtail_ChangeVersion2(
             sizeof(struct ContentBlock2Job) * block_write_info_count +
             sizeof(Longtail_JobAPI_JobFunc) * block_write_info_count +
             sizeof(void*) * block_write_info_count;
-        job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
+        void* job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
         if (job_mem == 0)
         {
             err = ENOMEM;
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
-            goto cleanup;
+            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            return err;
         }
         uint8_t* job_mem_ptr = (uint8_t*)job_mem;
         struct ContentBlock2Job* jobs = (struct ContentBlock2Job*)job_mem_ptr;
@@ -8492,7 +8516,9 @@ int Longtail_ChangeVersion2(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-            goto cleanup;
+            Longtail_Free(job_mem);
+            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            return err;
         }
 
         Longtail_JobAPI_Jobs write_job;
@@ -8500,63 +8526,65 @@ int Longtail_ChangeVersion2(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->CreateJobs() failed with %d", err)
-            goto cleanup;
+            Longtail_Free(job_mem);
+            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            return err;
         }
         err = job_api->ReadyJobs(job_api, (uint32_t)block_write_info_count, write_job);
-        LONGTAIL_FATAL_ASSERT(ctx, !err, goto cleanup)
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReadyJobs() failed with %d", err)
+            Longtail_Free(job_mem);
+            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            return err;
+        }
 
         err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
         if (err)
         {
             LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
-            goto cleanup;
+            Longtail_Free(job_mem);
+            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            return err;
         }
 
         for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
         {
-            if (err == 0 && jobs[i].m_Err != 0)
+            if (jobs[i].m_Err)
             {
                 err = jobs[i].m_Err;
+                break;
             }
-            arrfree(block_write_infos[i].m_WriteInfos);
         }
-        arrfree(block_write_infos);
+
+        SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
         Longtail_Free(job_mem);
         job_mem = 0;
-        Longtail_Free(work_mem);
-        work_mem = 0;
     }
 
-    if (err == 0 && retain_permissions)
+    if (err)
+    {
+        (void)concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
+        return err;
+    }
+
+    if (retain_permissions)
     {
         err = RetainPermissions(version_storage_api, optional_cancel_api, optional_cancel_token, target_version, version_diff, version_path);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "RetainPermissions() failed with %d", err)
-            goto cleanup;
+            (void)concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
+            return err;
         }
     }
-cleanup:
-    (void)concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
-    if (job_mem)
+    err = concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
+    if (err)
     {
-        Longtail_Free(job_mem);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Flush() failed with %d", err)
+        return err;
     }
-    if (wanted_block_hashes_mem)
-    {
-        Longtail_Free(wanted_block_hashes_mem);
-    }
-    if (work_mem)
-    {
-        Longtail_Free(work_mem);
-    }
-    ptrdiff_t c = arrlen(block_write_infos);
-    for (ptrdiff_t i = 0; i < c; ++i)
-    {
-        arrfree(block_write_infos[i].m_WriteInfos);
-    }
-    arrfree(block_write_infos);
-    return err;
+    return 0;
 }
 
 size_t Longtail_GetStoreIndexDataSize(uint32_t block_count, uint32_t chunk_count)

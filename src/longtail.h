@@ -1578,6 +1578,8 @@ struct Longtail_StoredBlock
     uint32_t m_BlockChunksDataSize;
 };
 
+#define SAFE_DISPOSE_STORED_BLOCK(stored_block) if (stored_block && stored_block->Dispose) { stored_block->Dispose(stored_block); stored_block = 0; }
+
 LONGTAIL_EXPORT void Longtail_StoredBlock_Dispose(struct Longtail_StoredBlock* stored_block);
 LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_StoredBlock_GetBlockIndex(struct Longtail_StoredBlock* stored_block);
 LONGTAIL_EXPORT void* Longtail_BlockIndex_BlockData(struct Longtail_StoredBlock* stored_block);

@@ -95,22 +95,6 @@ struct ConcurrentChunkWriteAPI
     char* m_BasePath;
 };
 
-static void ConcurrentChunkWriteAPI_Dispose(struct Longtail_API* concurrent_file_write_api)
-{
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(concurrent_file_write_api, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
-
-    LONGTAIL_FATAL_ASSERT(ctx, concurrent_file_write_api != 0, return);
-    struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_file_write_api;
-    // TODO: Flush explicit?
-    Longtail_Free(api->m_BasePath);
-    hmfree(api->m_PathHashToOpenFile);
-    arrfree(api->m_OpenFileEntries);
-    Longtail_DeleteMutex(api->m_Mutex);
-    Longtail_Free(concurrent_file_write_api);
-}
-
 static int ConcurrentChunkWriteAPI_Open(
     struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api,
     const char* path,
@@ -312,6 +296,27 @@ static int ConcurrentChunkWriteAPI_CreateDir(struct Longtail_ConcurrentChunkWrit
     }
     Longtail_Free(full_asset_path);
     return err;
+}
+
+static void ConcurrentChunkWriteAPI_Dispose(struct Longtail_API* concurrent_file_write_api)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(concurrent_file_write_api, "%p")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+        LONGTAIL_FATAL_ASSERT(ctx, concurrent_file_write_api != 0, return);
+    struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_file_write_api;
+
+    int err = ConcurrentChunkWriteAPI_Flush(&api->m_ConcurrentChunkWriteAPI);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ConcurrentChunkWriteAPI_Flush() failed with %d", err)
+    }
+    Longtail_Free(api->m_BasePath);
+    hmfree(api->m_PathHashToOpenFile);
+    arrfree(api->m_OpenFileEntries);
+    Longtail_DeleteMutex(api->m_Mutex);
+    Longtail_Free(concurrent_file_write_api);
 }
 
 static int ConcurrentChunkWriteAPI_Init(
