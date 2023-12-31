@@ -60,6 +60,7 @@ cp lib/brotli/*.h dist/include/lib/brotli
 cp lib/cacheblockstore/*.h dist/include/lib/cacheblockstore
 cp lib/compressblockstore/*.h dist/include/lib/compressblockstore
 cp lib/compressionregistry/*.h dist/include/lib/compressionregistry
+cp lib/concurrentchunkwrite/*.h dist/include/lib/concurrentchunkwrite
 cp lib/filestorage/*.h dist/include/lib/filestorage
 cp lib/fsblockstore/*.h dist/include/lib/fsblockstore
 cp lib/hpcdcchunker/*.h dist/include/lib/hpcdcchunker
