@@ -131,7 +131,7 @@ int Longtail_HPCDCCreateChunker(
     LONGTAIL_FATAL_ASSERT(ctx, params->min <= params->avg, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, params->avg <= params->max, return EINVAL)
 
-    size_t max_feed = params->max * 4;
+    size_t max_feed = ((size_t)params->max) * 4;
     if (max_feed >= 0xffffffffu)
     {
         max_feed = 0xffffffffu;

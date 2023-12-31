@@ -869,7 +869,7 @@ static uint32_t Longtail_MakeLogFields(struct Longtail_LogContextFmt_Private* lo
         }
         chars_left -= chars_used;
         field->value = char_buffer;
-        char_buffer += chars_used + 1;
+        char_buffer += ((int64_t)chars_used) + 1;
         --fields_left;
         ++count;
         ++field;
@@ -2108,7 +2108,7 @@ static int ChunkAssets(
 
     uint32_t asset_count = file_infos->m_Count;
 
-    uint64_t max_hash_size = target_chunk_size * 1024;
+    uint64_t max_hash_size = ((uint64_t)target_chunk_size) * 1024;
     uint32_t job_count = 0;
 
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
@@ -2904,7 +2904,7 @@ int Longtail_MergeVersionIndex(
         const char* path = &base_version_index->m_NameData[base_version_index->m_NameOffsets[i]];
         uint32_t path_length = (uint32_t)strlen(path);
         name_lengths[i] = path_length;
-        path_name_size += path_length + 1;
+        path_name_size += ((size_t)path_length) + 1;
         asset_indexes[i] = i;
         LongtailPrivate_LookupTable_Put(base_asset_lut, path_hash, i);
         asset_chunk_index_count += base_version_index->m_AssetChunkCounts[i];
@@ -2925,7 +2925,7 @@ int Longtail_MergeVersionIndex(
             const char* path = &overlay_version_index->m_NameData[overlay_version_index->m_NameOffsets[i]];
             uint32_t path_length = (uint32_t)strlen(path);
             name_lengths[unique_asset_count] = path_length;
-            path_name_size += path_length + 1;
+            path_name_size += ((size_t)path_length) + 1;
             asset_indexes[unique_asset_count] = (uint32_t)unique_asset_count;
             unique_asset_count++;
         }
@@ -3878,7 +3878,7 @@ int Longtail_WriteStoredBlockToBuffer(
     uint32_t chunk_count = *stored_block->m_BlockIndex->m_ChunkCount;
     uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
 
-    size_t size = block_index_data_size + stored_block->m_BlockChunksDataSize;
+    size_t size = ((size_t)block_index_data_size) + stored_block->m_BlockChunksDataSize;
 
     void* mem = (uint8_t*)Longtail_Alloc("WriteStoredBlockToBuffer", size);
     if (!mem)
@@ -8899,7 +8899,7 @@ int Longtail_MergeStoreIndex(
     }
     size_t local_block_hash_to_index_size = LongtailPrivate_LookupTable_GetSize(local_block_count);
     size_t remote_block_hash_to_index_size = LongtailPrivate_LookupTable_GetSize(remote_block_count);
-    size_t block_hashes_size = sizeof(TLongtail_Hash) * (local_block_count + remote_block_count);
+    size_t block_hashes_size = sizeof(TLongtail_Hash) * ((size_t)local_block_count + (size_t)remote_block_count);
     size_t work_mem_size = local_block_hash_to_index_size + remote_block_hash_to_index_size + block_hashes_size;
 
     void* work_mem = Longtail_Alloc("MergeStoreIndex", work_mem_size);

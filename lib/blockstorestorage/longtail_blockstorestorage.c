@@ -136,8 +136,8 @@ struct BlockStoreStorageAPI_PathLookup
 size_t GetPathEntriesSize(uint32_t asset_count)
 {
     size_t path_lookup_size = sizeof(struct BlockStoreStorageAPI_PathLookup) +
-        sizeof(struct BlockStoreStorageAPI_PathEntry) * (asset_count + 1) +
-        LongtailPrivate_LookupTable_GetSize(asset_count + 1);
+        sizeof(struct BlockStoreStorageAPI_PathEntry) * (((size_t)asset_count) + 1) +
+        LongtailPrivate_LookupTable_GetSize(((size_t)asset_count) + 1);
     return path_lookup_size;
 }
 
@@ -580,7 +580,7 @@ static int BlockStoreStorageAPI_ReadFile(
         }
         if (LongtailPrivate_LookupTable_GetSpaceLeft(block_range_map) == 0)
         {
-            uint64_t new_capacity = estimated_block_count + (estimated_block_count >> 2) + 2;
+            uint64_t new_capacity = ((size_t)estimated_block_count) + (estimated_block_count >> 2) + 2;
             estimated_block_count = new_capacity > max_block_count ? max_block_count : (uint32_t)new_capacity;
             block_range_map_size = LongtailPrivate_LookupTable_GetSize(estimated_block_count);
             struct Longtail_LookupTable* new_block_range_map = LongtailPrivate_LookupTable_Create(Longtail_Alloc("BlockStoreStorageAPI", block_range_map_size), estimated_block_count, block_range_map);
