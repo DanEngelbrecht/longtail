@@ -387,7 +387,7 @@ size_t Longtail_GetMutexSize()
 int Longtail_CreateMutex(void* mem, HLongtail_Mutex* out_mutex)
 {
     HLongtail_Mutex mutex = (HLongtail_Mutex)mem;
-    InitializeCriticalSection(&mutex->m_CriticalSection);
+    InitializeCriticalSectionEx(&mutex->m_CriticalSection, 200, 0);
     *out_mutex = mutex;
     return 0;
 }
@@ -1791,10 +1791,6 @@ void Longtail_UnlockMutex(HLongtail_Mutex mutex)
 {
     pthread_mutex_unlock(mutex->m_Mutex);
 }
-
-
-
-
 
 int Longtail_CreateDirectory(const char* path)
 {
