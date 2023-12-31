@@ -1755,6 +1755,42 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
 
 #endif
 
+struct Longtail_Mutex
+{
+    pthread_mutex_t m_Mutex;
+};
+
+size_t Longtail_GetMutexSize()
+{
+    return sizeof(struct Longtail_Mutex);
+}
+
+int Longtail_CreateMutex(void* mem, HLongtail_Mutex* out_mutex)
+{
+    HLongtail_Mutex mutex = (HLongtail_Mutex)mem;
+    int err = pthread_mutex_init(&mutex->m_Mutex, NULL);
+    if (err)
+    {
+        return err;
+    }
+    *out_mutex = mutex;
+    return 0;
+}
+
+void Longtail_DeleteMutex(HLongtail_Mutex mutex)
+{
+    pthread_mutex_destroy(&mutex->m_Mutex);
+}
+
+void Longtail_LockMutex(HLongtail_Mutex mutex)
+{
+    pthread_mutex_lock(mutex->m_Mutex);
+}
+
+void Longtail_UnlockMutex(HLongtail_Mutex mutex)
+{
+    pthread_mutex_unlock(mutex->m_Mutex);
+}
 
 
 
