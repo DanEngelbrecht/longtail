@@ -37,6 +37,7 @@ mkdir dist/include/lib/brotli
 mkdir dist/include/lib/cacheblockstore
 mkdir dist/include/lib/compressblockstore
 mkdir dist/include/lib/compressionregistry
+mkdir dist/include/lib/concurrentchunkwrite
 mkdir dist/include/lib/filestorage
 mkdir dist/include/lib/fsblockstore
 mkdir dist/include/lib/hpcdcchunker
