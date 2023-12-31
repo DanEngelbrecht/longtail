@@ -2,15 +2,18 @@
 
 //#define CUSTOM_STB_ALLOC
 
-#if CUSTOM_STB_ALLOC
+#ifdef STBDS_REALLOC
 
+#define CUSTOM_STB_ALLOC 1
 extern void* Longtail_STBRealloc(void* old_ptr, size_t size);
 extern void Longtail_STBFree(void* ptr);
 
-#define STBDS_REALLOC(context,ptr,size) Longtail_STBRealloc((ptr), (size))
-#define STBDS_FREE(context,ptr)         Longtail_STBFree((ptr))
 
-#endif // CUSTOM_STB_ALLOC
+// TODO These needs to be defined at a global level!
+//#define STBDS_REALLOC(context,ptr,size) Longtail_STBRealloc((ptr), (size))
+//#define STBDS_FREE(context,ptr)         Longtail_STBFree((ptr))
+
+#endif // STBDS_REALLOC
 
 #include "stb_ds.h"
 
