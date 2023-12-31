@@ -659,8 +659,8 @@ int DownSync(
         compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_remotestore_api, compression_registry);
     }
 
-    struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
-    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(lru_block_store_api);
+//    struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);// lru_block_store_api);
 
     struct Longtail_VersionIndex* source_version_index = 0;
     int err = Longtail_ReadVersionIndex(storage_api, source_path, &source_version_index);
@@ -668,7 +668,7 @@ int DownSync(
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", source_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -688,7 +688,7 @@ int DownSync(
     {
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -706,7 +706,7 @@ int DownSync(
     {
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -747,7 +747,7 @@ int DownSync(
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
-            SAFE_DISPOSE_API(lru_block_store_api);
+//            SAFE_DISPOSE_API(lru_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
@@ -797,7 +797,7 @@ int DownSync(
             Longtail_Free(source_version_index);
             SAFE_DISPOSE_API(chunker_api);
             SAFE_DISPOSE_API(store_block_store_api);
-            SAFE_DISPOSE_API(lru_block_store_api);
+//            SAFE_DISPOSE_API(lru_block_store_api);
             SAFE_DISPOSE_API(compress_block_store_api);
             SAFE_DISPOSE_API(store_block_cachestore_api);
             SAFE_DISPOSE_API(store_block_localstore_api);
@@ -824,7 +824,7 @@ int DownSync(
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -847,7 +847,7 @@ int DownSync(
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -876,7 +876,7 @@ int DownSync(
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -905,7 +905,7 @@ int DownSync(
         Longtail_Free(source_version_index);
         SAFE_DISPOSE_API(chunker_api);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -965,7 +965,7 @@ int DownSync(
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(store_block_store_api);
-    SAFE_DISPOSE_API(lru_block_store_api);
+//    SAFE_DISPOSE_API(lru_block_store_api);
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(store_block_cachestore_api);
     SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1243,8 +1243,8 @@ int VersionIndex_cp(
         compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(store_block_remotestore_api, compression_registry);
     }
 
-    struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
-    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(lru_block_store_api);
+//    struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);// lru_block_store_api);
 
     struct Longtail_VersionIndex* version_index = 0;
     int err = Longtail_ReadVersionIndex(storage_api, version_index_path, &version_index);
@@ -1252,7 +1252,7 @@ int VersionIndex_cp(
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to read version index from `%s`, %d", version_index_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1271,7 +1271,7 @@ int VersionIndex_cp(
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can not create hashing API for version index `%s`, failed with %d", version_index_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1295,7 +1295,7 @@ int VersionIndex_cp(
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create retarget store index for version index `%s` to `%s`, failed with %d", storage_uri_raw, version_index_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1314,7 +1314,7 @@ int VersionIndex_cp(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Store `%s` does not contain all the chunks needed for this version `%s`, Longtail_ValidateStore failed with %d", storage_uri_raw, source_path, err);
         Longtail_Free(block_store_store_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1338,7 +1338,7 @@ int VersionIndex_cp(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create file system for version index `%s`, failed with %d", version_index_path, err);
         Longtail_Free(block_store_store_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1359,7 +1359,7 @@ int VersionIndex_cp(
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_store_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1380,7 +1380,7 @@ int VersionIndex_cp(
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_store_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1401,7 +1401,7 @@ int VersionIndex_cp(
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_store_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1437,7 +1437,7 @@ int VersionIndex_cp(
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_store_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1457,7 +1457,7 @@ int VersionIndex_cp(
         SAFE_DISPOSE_API(block_store_fs);
         Longtail_Free(block_store_store_index);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(store_block_cachestore_api);
         SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1473,7 +1473,7 @@ int VersionIndex_cp(
     SAFE_DISPOSE_API(block_store_fs);
     Longtail_Free(block_store_store_index);
     SAFE_DISPOSE_API(store_block_store_api);
-    SAFE_DISPOSE_API(lru_block_store_api);
+//    SAFE_DISPOSE_API(lru_block_store_api);
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(store_block_cachestore_api);
     SAFE_DISPOSE_API(store_block_localstore_api);
@@ -1938,24 +1938,24 @@ int Unpack(
         return ENOMEM;
     }
 
-    struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
-    if (lru_block_store_api == 0)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create lru block store `%s`, %d", source_path, err);
-        SAFE_DISPOSE_API(compress_block_store_api);
-        SAFE_DISPOSE_API(archive_block_store_api);
-        SAFE_DISPOSE_API(storage_api);
-        SAFE_DISPOSE_API(compression_registry);
-        SAFE_DISPOSE_API(job_api);
-        SAFE_DISPOSE_API(hash_registry);
-        return ENOMEM;
-    }
+//    struct Longtail_BlockStoreAPI* lru_block_store_api = Longtail_CreateLRUBlockStoreAPI(compress_block_store_api, 32);
+//    if (lru_block_store_api == 0)
+//    {
+//        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create lru block store `%s`, %d", source_path, err);
+//        SAFE_DISPOSE_API(compress_block_store_api);
+//        SAFE_DISPOSE_API(archive_block_store_api);
+//        SAFE_DISPOSE_API(storage_api);
+//        SAFE_DISPOSE_API(compression_registry);
+//        SAFE_DISPOSE_API(job_api);
+//        SAFE_DISPOSE_API(hash_registry);
+//        return ENOMEM;
+//    }
 
-    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(lru_block_store_api);
+    struct Longtail_BlockStoreAPI* store_block_store_api = Longtail_CreateShareBlockStoreAPI(compress_block_store_api);// lru_block_store_api);
     if (store_block_store_api == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create share block store `%s`, %d", source_path, err);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
         SAFE_DISPOSE_API(storage_api);
@@ -1975,7 +1975,7 @@ int Unpack(
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create diff between `%s` and `%s`, %d", source_path, target_path, err);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
         SAFE_DISPOSE_API(storage_api);
@@ -1992,7 +1992,7 @@ int Unpack(
     {
         Longtail_Free(version_diff);
         SAFE_DISPOSE_API(store_block_store_api);
-        SAFE_DISPOSE_API(lru_block_store_api);
+//        SAFE_DISPOSE_API(lru_block_store_api);
         SAFE_DISPOSE_API(compress_block_store_api);
         SAFE_DISPOSE_API(archive_block_store_api);
         SAFE_DISPOSE_API(storage_api);
@@ -2043,7 +2043,7 @@ int Unpack(
 
     Longtail_Free(version_diff);
     SAFE_DISPOSE_API(store_block_store_api);
-    SAFE_DISPOSE_API(lru_block_store_api);
+//    SAFE_DISPOSE_API(lru_block_store_api);
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(archive_block_store_api);
     SAFE_DISPOSE_API(storage_api);
