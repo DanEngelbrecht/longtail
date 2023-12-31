@@ -8146,7 +8146,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int is_cancelle
             chunk_offset += stored_block->m_BlockIndex->m_ChunkSizes[chunk_index];
         }
 
-        const uint8_t* block_data = stored_block->m_BlockData;
+        const uint8_t* block_data = (const uint8_t*)stored_block->m_BlockData;
 
         uint32_t last_asset_index = 0;
         Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
