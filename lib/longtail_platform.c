@@ -1784,12 +1784,12 @@ void Longtail_DeleteMutex(HLongtail_Mutex mutex)
 
 void Longtail_LockMutex(HLongtail_Mutex mutex)
 {
-    pthread_mutex_lock(mutex->m_Mutex);
+    pthread_mutex_lock(&mutex->m_Mutex);
 }
 
 void Longtail_UnlockMutex(HLongtail_Mutex mutex)
 {
-    pthread_mutex_unlock(mutex->m_Mutex);
+    pthread_mutex_unlock(&mutex->m_Mutex);
 }
 
 int Longtail_CreateDirectory(const char* path)
