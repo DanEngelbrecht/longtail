@@ -374,37 +374,46 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
     ReleaseSRWLockExclusive(&spin_lock->m_Lock);
 }
 
-struct Longtail_Mutex
+struct Longtail_RWLock
 {
-    CRITICAL_SECTION m_CriticalSection;
+    SRWLOCK m_RWLock;
 };
 
-size_t Longtail_GetMutexSize()
+size_t  Longtail_GetRWLockSize()
 {
-    return sizeof(struct Longtail_Mutex);
+    return sizeof(struct Longtail_RWLock);
 }
 
-int Longtail_CreateMutex(void* mem, HLongtail_Mutex* out_mutex)
+int Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock)
 {
-    HLongtail_Mutex mutex = (HLongtail_Mutex)mem;
-    InitializeCriticalSectionEx(&mutex->m_CriticalSection, 200, 0);
-    *out_mutex = mutex;
+    HLongtail_RWLock rwlock = (HLongtail_RWLock)mem;
+    InitializeSRWLock(&rwlock->m_RWLock);
+    *out_rwlock = rwlock;
     return 0;
 }
 
-void Longtail_DeleteMutex(HLongtail_Mutex mutex)
+void Longtail_DeleteRWLock(HLongtail_RWLock rwlock)
 {
-    DeleteCriticalSection(&mutex->m_CriticalSection);
 }
 
-void Longtail_LockMutex(HLongtail_Mutex mutex)
+void Longtail_LockRWLockRead(HLongtail_RWLock rwlock)
 {
-    EnterCriticalSection(&mutex->m_CriticalSection);
+    AcquireSRWLockShared(&rwlock->m_RWLock);
 }
 
-void Longtail_UnlockMutex(HLongtail_Mutex mutex)
+void Longtail_LockRWLockWrite(HLongtail_RWLock rwlock)
 {
-    LeaveCriticalSection(&mutex->m_CriticalSection);
+    AcquireSRWLockExclusive(&rwlock->m_RWLock);
+}
+
+void Longtail_UnlockRWLockRead(HLongtail_RWLock rwlock)
+{
+    ReleaseSRWLockShared(&rwlock->m_RWLock);
+}
+
+void Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock)
+{
+    ReleaseSRWLockExclusive(&rwlock->m_RWLock);
 }
 
 static wchar_t* MakeWCharString(const char* s)
@@ -1754,43 +1763,6 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
 }
 
 #endif
-
-struct Longtail_Mutex
-{
-    pthread_mutex_t m_Mutex;
-};
-
-size_t Longtail_GetMutexSize()
-{
-    return sizeof(struct Longtail_Mutex);
-}
-
-int Longtail_CreateMutex(void* mem, HLongtail_Mutex* out_mutex)
-{
-    HLongtail_Mutex mutex = (HLongtail_Mutex)mem;
-    int err = pthread_mutex_init(&mutex->m_Mutex, NULL);
-    if (err)
-    {
-        return err;
-    }
-    *out_mutex = mutex;
-    return 0;
-}
-
-void Longtail_DeleteMutex(HLongtail_Mutex mutex)
-{
-    pthread_mutex_destroy(&mutex->m_Mutex);
-}
-
-void Longtail_LockMutex(HLongtail_Mutex mutex)
-{
-    pthread_mutex_lock(&mutex->m_Mutex);
-}
-
-void Longtail_UnlockMutex(HLongtail_Mutex mutex)
-{
-    pthread_mutex_unlock(&mutex->m_Mutex);
-}
 
 int Longtail_CreateDirectory(const char* path)
 {

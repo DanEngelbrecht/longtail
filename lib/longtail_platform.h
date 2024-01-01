@@ -42,12 +42,14 @@ void    Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock);
 void    Longtail_LockSpinLock(HLongtail_SpinLock spin_lock);
 void    Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock);
 
-typedef struct Longtail_Mutex* HLongtail_Mutex;
-size_t  Longtail_GetMutexSize();
-int     Longtail_CreateMutex(void* mem, HLongtail_Mutex* out_mutex);
-void    Longtail_DeleteMutex(HLongtail_Mutex mutex);
-void    Longtail_LockMutex(HLongtail_Mutex mutex);
-void    Longtail_UnlockMutex(HLongtail_Mutex mutex);
+typedef struct Longtail_RWLock* HLongtail_RWLock;
+size_t  Longtail_GetRWLockSize();
+int     Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock);
+void    Longtail_DeleteRWLock(HLongtail_RWLock rwlock);
+void    Longtail_LockRWLockRead(HLongtail_RWLock rwlock);
+void    Longtail_LockRWLockWrite(HLongtail_RWLock rwlock);
+void    Longtail_UnlockRWLockRead(HLongtail_RWLock rwlock);
+void    Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock);
 
 typedef struct Longtail_FSIterator_private* HLongtail_FSIterator;
 
