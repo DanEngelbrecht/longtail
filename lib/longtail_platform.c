@@ -1777,7 +1777,7 @@ size_t  Longtail_GetRWLockSize()
 int Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock)
 {
     HLongtail_RWLock rwlock = (HLongtail_RWLock)mem;
-    int err = pthread_rwlock_init(&rwlock->m_RWLock);
+    int err = pthread_rwlock_init(&rwlock->m_RWLock, 0);
     if (err)
     {
         return err;
