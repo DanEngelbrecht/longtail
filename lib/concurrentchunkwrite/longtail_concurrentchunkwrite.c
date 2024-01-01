@@ -246,6 +246,7 @@ static int ConcurrentChunkWriteAPI_Write(
     Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file,
     uint64_t offset,
     uint32_t size,
+    uint32_t chunk_count,
     const void* input)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -254,6 +255,7 @@ static int ConcurrentChunkWriteAPI_Write(
         LONGTAIL_LOGFIELD(in_open_file, "%p"),
         LONGTAIL_LOGFIELD(offset, "%" PRIu64),
         LONGTAIL_LOGFIELD(size, "%u"),
+        LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(input, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 #else
@@ -279,7 +281,7 @@ static int ConcurrentChunkWriteAPI_Write(
             return EINVAL;
         }
         struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
-        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
+        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount >= chunk_count, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_FileHandle != 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
         file_handle = open_file_entry->m_FileHandle;
         Longtail_UnlockMutex(api->m_Mutex);
@@ -298,9 +300,9 @@ static int ConcurrentChunkWriteAPI_Write(
             return EINVAL;
         }
         struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
-        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
+        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount >= chunk_count, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_FileHandle == file_handle, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
-        --open_file_entry->m_PendingWriteCount;
+        open_file_entry->m_PendingWriteCount -= chunk_count;
         close_on_write = open_file_entry->m_PendingWriteCount == 0;
         if (close_on_write)
         {
