@@ -1764,6 +1764,101 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
 
 #endif
 
+struct Longtail_RWLock
+{
+    pthread_rwlock_t m_RWLock;
+};
+
+size_t  Longtail_GetRWLockSize()
+{
+    return sizeof(struct Longtail_RWLock);
+}
+
+int Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock)
+{
+    HLongtail_RWLock rwlock = (HLongtail_RWLock)mem;
+    int err = pthread_rwlock_init(&rwlock->m_RWLock);
+    if (err)
+    {
+        return err;
+    }
+    *out_rwlock = rwlock;
+    return 0;
+}
+
+void Longtail_DeleteRWLock(HLongtail_RWLock rwlock)
+{
+    pthread_rwlock_destroy(&rwlock->m_RWLock);
+}
+
+void Longtail_LockRWLockRead(HLongtail_RWLock rwlock)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(rwlock, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    int err = pthread_rwlock_rdlock(&rwlock->m_RWLock);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to acquire read lock, reason: %d", err)
+    }
+}
+
+void Longtail_LockRWLockWrite(HLongtail_RWLock rwlock)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(rwlock, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    int err = pthread_rwlock_wrlock(&rwlock->m_RWLock);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to acquire write lock, reason: %d", err)
+    }
+}
+
+void Longtail_UnlockRWLockRead(HLongtail_RWLock rwlock)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(rwlock, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    int err = pthread_rwlock_unlock(&rwlock->m_RWLock);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to unlock read lock, reason: %d", err)
+    }
+}
+
+void Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(rwlock, "%p"),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    int err = pthread_rwlock_unlock(&rwlock->m_RWLock);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to unlock write lock, reason: %d", err)
+    }
+}
+
 int Longtail_CreateDirectory(const char* path)
 {
     int err = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
