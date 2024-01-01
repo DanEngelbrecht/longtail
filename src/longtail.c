@@ -8175,7 +8175,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int is_cancelle
             job->m_Err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, asset_chunk_count, &asset_file_handle);
             if (job->m_Err)
             {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "OpenWrite() failed for `%s` with %d", asset_path, job->m_Err)
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Open() failed for `%s` with %d", asset_path, job->m_Err)
                 Longtail_Free(work_mem);
                 SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
                 return 0;

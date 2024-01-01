@@ -5,53 +5,136 @@
 #include <inttypes.h>
 #include <errno.h>
 
-static inline uint32_t murmur_32_scramble(uint32_t k) {
-    k *= 0xcc9e2d51;
-    k = (k << 15) | (k >> 17);
-    k *= 0x1b873593;
+#if defined(_MSC_VER)
+
+#define FORCE_INLINE	__forceinline
+
+#include <stdlib.h>
+
+#define ROTL32(x,y)	_rotl(x,y)
+#define ROTL64(x,y)	_rotl64(x,y)
+
+#define BIG_CONSTANT(x) (x)
+
+// Other compilers
+
+#else	// defined(_MSC_VER)
+
+#define	FORCE_INLINE inline __attribute__((always_inline))
+
+inline uint32_t rotl32(uint32_t x, int8_t r)
+{
+    return (x << r) | (x >> (32 - r));
+}
+
+inline uint64_t rotl64(uint64_t x, int8_t r)
+{
+    return (x << r) | (x >> (64 - r));
+}
+
+#define	ROTL32(x,y)	rotl32(x,y)
+#define ROTL64(x,y)	rotl64(x,y)
+
+#define BIG_CONSTANT(x) (x##LLU)
+
+#endif // !defined(_MSC_VER)
+
+FORCE_INLINE uint64_t getblock64(const uint64_t* p, size_t i)
+{
+    return p[i];
+}
+
+FORCE_INLINE uint64_t fmix64(uint64_t k)
+{
+    k ^= k >> 33;
+    k *= BIG_CONSTANT(0xff51afd7ed558ccd);
+    k ^= k >> 33;
+    k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
+    k ^= k >> 33;
+
     return k;
 }
 
-static uint32_t murmur3_32(const uint8_t* key, size_t len, uint32_t seed)
-{
-    uint32_t h = seed;
-    uint32_t k;
-    /* Read in groups of 4. */
-    for (size_t i = len >> 2; i; i--) {
-        // Here is a source of differing results across endianness.
-        // A swap here has no effects on hash properties though.
-        memcpy(&k, key, sizeof(uint32_t));
-        key += sizeof(uint32_t);
-        h ^= murmur_32_scramble(k);
-        h = (h << 13) | (h >> 19);
-        h = h * 5 + 0xe6546b64;
+uint64_t hashmurmur3_64(const void* key, size_t len) {
+    const uint8_t* data = (const uint8_t*)key;
+    const size_t nblocks = len / 16;
+
+    uint64_t h1 = BIG_CONSTANT(0xf12c4da7f12c4da7);
+    uint64_t h2 = BIG_CONSTANT(0x4da7f12c4da7f12c);
+
+    const uint64_t c1 = BIG_CONSTANT(0x87c37b91114253d5);
+    const uint64_t c2 = BIG_CONSTANT(0x4cf5ad432745937f);
+
+    //----------
+    // body
+
+    const uint64_t* blocks = (const uint64_t*)(data);
+
+    for (size_t i = 0; i < nblocks; i++)
+    {
+        uint64_t k1 = getblock64(blocks, i * 2 + 0);
+        uint64_t k2 = getblock64(blocks, i * 2 + 1);
+
+        k1 *= c1; k1 = ROTL64(k1, 31); k1 *= c2; h1 ^= k1;
+
+        h1 = ROTL64(h1, 27); h1 += h2; h1 = h1 * 5 + 0x52dce729;
+
+        k2 *= c2; k2 = ROTL64(k2, 33); k2 *= c1; h2 ^= k2;
+
+        h2 = ROTL64(h2, 31); h2 += h1; h2 = h2 * 5 + 0x38495ab5;
     }
-    /* Read the rest. */
-    k = 0;
-    for (size_t i = len & 3; i; i--) {
-        k <<= 8;
-        k |= key[i - 1];
-    }
-    // A swap is *not* necessary here because the preceding loop already
-    // places the low bytes in the low places according to whatever endianness
-    // we use. Swaps only apply when the memory is copied in a chunk.
-    h ^= murmur_32_scramble(k);
-    /* Finalize. */
-    h ^= len;
-    h ^= h >> 16;
-    h *= 0x85ebca6b;
-    h ^= h >> 13;
-    h *= 0xc2b2ae35;
-    h ^= h >> 16;
-    return h;
+
+    //----------
+    // tail
+
+    const uint8_t* tail = (const uint8_t*)(data + nblocks * 16);
+
+    uint64_t k1 = 0;
+    uint64_t k2 = 0;
+
+    switch (len & 15)
+    {
+    case 15: k2 ^= ((uint64_t)tail[14]) << 48;
+    case 14: k2 ^= ((uint64_t)tail[13]) << 40;
+    case 13: k2 ^= ((uint64_t)tail[12]) << 32;
+    case 12: k2 ^= ((uint64_t)tail[11]) << 24;
+    case 11: k2 ^= ((uint64_t)tail[10]) << 16;
+    case 10: k2 ^= ((uint64_t)tail[9]) << 8;
+    case  9: k2 ^= ((uint64_t)tail[8]) << 0;
+        k2 *= c2; k2 = ROTL64(k2, 33); k2 *= c1; h2 ^= k2;
+
+    case  8: k1 ^= ((uint64_t)tail[7]) << 56;
+    case  7: k1 ^= ((uint64_t)tail[6]) << 48;
+    case  6: k1 ^= ((uint64_t)tail[5]) << 40;
+    case  5: k1 ^= ((uint64_t)tail[4]) << 32;
+    case  4: k1 ^= ((uint64_t)tail[3]) << 24;
+    case  3: k1 ^= ((uint64_t)tail[2]) << 16;
+    case  2: k1 ^= ((uint64_t)tail[1]) << 8;
+    case  1: k1 ^= ((uint64_t)tail[0]) << 0;
+        k1 *= c1; k1 = ROTL64(k1, 31); k1 *= c2; h1 ^= k1;
+    };
+
+    //----------
+    // finalization
+
+    h1 ^= len; h2 ^= len;
+
+    h1 += h2;
+    h2 += h1;
+
+    h1 = fmix64(h1);
+    h2 = fmix64(h2);
+
+    h1 += h2;
+    h2 += h1;
+
+    return h2;
 }
 
-static const uint32_t Seed = 0xF12C4DA7;
-
-static uint32_t ConcurrentChunkWriteAPI_GetPathHash(const char* path)
+static uint64_t ConcurrentChunkWriteAPI_GetPathHash(const char* path)
 {
     uint32_t pathlen = (uint32_t)strlen(path);
-    return murmur3_32((const uint8_t*)path, pathlen, Seed);
+    return hashmurmur3_64((const void*)path, pathlen);
 }
 
 struct OpenFileEntry
@@ -63,7 +146,7 @@ struct OpenFileEntry
 
 struct Lookup
 {
-    uint32_t key;       // path_hash
+    uint64_t key;       // path_hash
     ptrdiff_t value;    // index into ConcurrentChunkWriteAPI::m_OpenFileEntries
 };
 
@@ -99,7 +182,7 @@ static int ConcurrentChunkWriteAPI_Open(
     LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return EINVAL);
 
     struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_file_write_api;
-    uint32_t path_hash = ConcurrentChunkWriteAPI_GetPathHash(path);
+    uint64_t path_hash = ConcurrentChunkWriteAPI_GetPathHash(path);
 
     Longtail_LockMutex(api->m_Mutex);
     intptr_t i = hmgeti(api->m_PathHashToOpenFile, path_hash);
@@ -178,26 +261,26 @@ static int ConcurrentChunkWriteAPI_Write(
 #endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, concurrent_file_write_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(ctx, (uintptr_t)in_open_file <= 0xffffffffu, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, (uintptr_t)in_open_file != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, size != 0, return EINVAL);
     LONGTAIL_VALIDATE_INPUT(ctx, input != 0, return EINVAL);
 
     struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_file_write_api;
-    uint32_t path_hash = (uint32_t)(uintptr_t)in_open_file;
+    uint64_t path_hash = (uint64_t)(uintptr_t)in_open_file;
 
     Longtail_StorageAPI_HOpenFile file_handle = 0;
     {
         Longtail_LockMutex(api->m_Mutex);
-
         intptr_t i = hmgeti(api->m_PathHashToOpenFile, path_hash);
         if (i == -1)
         {
             Longtail_UnlockMutex(api->m_Mutex);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ConcurrentChunkWriteAPI_Write() (0x%08x) file not open, error %d", path_hash, EINVAL)
-                return EINVAL;
+            return EINVAL;
         }
         struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
+        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_FileHandle != 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
         file_handle = open_file_entry->m_FileHandle;
         Longtail_UnlockMutex(api->m_Mutex);
     }
@@ -212,12 +295,17 @@ static int ConcurrentChunkWriteAPI_Write(
         {
             Longtail_UnlockMutex(api->m_Mutex);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ConcurrentChunkWriteAPI_Write() (0x%08x) file not open, error %d", path_hash, EINVAL)
-                return EINVAL;
+            return EINVAL;
         }
         struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[api->m_PathHashToOpenFile[i].value];
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount > 0, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
+        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_FileHandle == file_handle, Longtail_UnlockMutex(api->m_Mutex); return EINVAL);
         --open_file_entry->m_PendingWriteCount;
         close_on_write = open_file_entry->m_PendingWriteCount == 0;
+        if (close_on_write)
+        {
+            open_file_entry->m_FileHandle = 0;
+        }
         Longtail_UnlockMutex(api->m_Mutex);
     }
 
@@ -248,7 +336,10 @@ static int ConcurrentChunkWriteAPI_Flush(
         if (api->m_OpenFileEntries[i].m_PendingWriteCount > 0)
         {
             Longtail_StorageAPI_HOpenFile file_handle = api->m_OpenFileEntries[i].m_FileHandle;
-            api->m_StorageAPI->CloseFile(api->m_StorageAPI, file_handle);
+            if (file_handle)
+            {
+                api->m_StorageAPI->CloseFile(api->m_StorageAPI, file_handle);
+            }
         }
     }
     hmfree(api->m_PathHashToOpenFile);
