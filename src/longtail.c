@@ -1187,12 +1187,27 @@ int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* 
     char* parent_path = storage_api->GetParentPath(storage_api, path);
     if (parent_path == 0)
     {
+        Longtail_Free(parent_path);
         return 0;
     }
 
-    int err = storage_api->CreateDir(storage_api, parent_path);
+    if (storage_api->IsDir(storage_api, parent_path))
+    {
+        Longtail_Free(parent_path);
+        return 0;
+    }
+
+    int err = EnsureParentPathExists(storage_api, parent_path);
+    if (err != 0 && err != EEXIST)
+    {
+        Longtail_Free(parent_path);
+        return err;
+    }
+
+    err = storage_api->CreateDir(storage_api, parent_path);
     Longtail_Free(parent_path);
-    if (err == 0 || err == EEXIST) {
+    if (err == 0 || err == EEXIST)
+    {
         return 0;
     }
     return err;
