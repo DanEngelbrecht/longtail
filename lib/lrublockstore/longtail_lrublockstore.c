@@ -188,7 +188,7 @@ int LRUStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
         // We dipped down to just our LRU ref count - see if it is still around and refresh LRU position if so
         Longtail_LockSpinLock(api->m_Lock);
         intptr_t tmp;
-        intptr_t find_ptr = hmgeti_ts(api->m_BlockHashToLRUStoredBlock, block_hash, tmp);
+        intptr_t find_ptr = api->m_BlockHashToLRUStoredBlock ? hmgeti_ts(api->m_BlockHashToLRUStoredBlock, block_hash, tmp) : -1;
         if (find_ptr == -1)
         {
             Longtail_UnlockSpinLock(api->m_Lock);
@@ -246,7 +246,7 @@ struct LRUStoredBlock* GetLRUBlock(struct LRUBlockStoreAPI* api, TLongtail_Hash 
 #endif // defined(LONGTAIL_ASSERTS)
 
     intptr_t tmp;
-    intptr_t find_ptr = hmgeti_ts(api->m_BlockHashToLRUStoredBlock, block_hash, tmp);
+    intptr_t find_ptr = api->m_BlockHashToLRUStoredBlock ? hmgeti_ts(api->m_BlockHashToLRUStoredBlock, block_hash, tmp) : -1;
     if (find_ptr == -1)
     {
         return 0;
