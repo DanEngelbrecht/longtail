@@ -36,13 +36,13 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4.1
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v4
       with:
         name: dist-linux-x64
         path: dist
@@ -79,13 +79,13 @@ jobs:
         arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4.1
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh ${{matrix.arch}}
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v4
       with:
         name: dist-darwin-${{matrix.arch}}
         path: dist
@@ -120,13 +120,13 @@ jobs:
     runs-on: windows-2019
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4.1
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.bat
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v4
       with:
         name: dist-win32-x64
         path: dist
@@ -139,7 +139,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@master
+      uses: actions/checkout@3
 
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
