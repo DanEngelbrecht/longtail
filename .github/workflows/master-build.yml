@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4.1
+    - uses: actions/download-artifact@v4
       with:
         path: build/artifacts
     - name: build dist
@@ -113,7 +113,7 @@ jobs:
         arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4.1
+    - uses: actions/download-artifact@v4
       with:
         path: build/artifacts
     - name: build dist
@@ -171,7 +171,7 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4.1
+    - uses: actions/download-artifact@v4
       with:
         path: build/artifacts
     - name: build dist
