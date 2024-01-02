@@ -31,7 +31,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       name: upload ${{matrix.target}}
       with:
-        name: linux_x64-${{matrix.target}}-${{matrix.config}}
+        name: linux_x64_${{matrix.target}}_${{matrix.config}}
         path: |
           build/**
           !build/**/*.o
@@ -68,7 +68,7 @@ jobs:
         ./dist.sh
     - uses: actions/upload-artifact@v4
       with:
-        name: dist-linux-x64
+        name: dist_linux_x64
         path: dist
 
   build-darwin:
@@ -131,7 +131,7 @@ jobs:
         ./dist.sh ${{matrix.arch}}
     - uses: actions/upload-artifact@v4
       with:
-        name: dist-darwin-${{matrix.arch}}
+        name: dist_darwin_${{matrix.arch}}
         path: dist
 
   build-win32:
@@ -151,7 +151,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       name: upload ${{matrix.target}}
       with:
-        name: win32_x64-${{matrix.target}}-${{matrix.config}}
+        name: win32_x64_${{matrix.target}}_${{matrix.config}}
         path: |
           build/**
           !build/**/*.obj
@@ -189,5 +189,5 @@ jobs:
         ./dist.bat
     - uses: actions/upload-artifact@v4
       with:
-        name: dist-win32-x64
+        name: dist_win32_x64
         path: dist
