@@ -1,4 +1,27 @@
 ##
+- **NEW API** `Longtail_ChangeVersion2` added
+- **NEW API** `Longtail_ConcurrentChunkWriteAPI` added
+- **NEW API** `Longtail_CreateConcurrentChunkWriteAPI` added
+- **NEW API** Added `Longtail_MemTracer_GetAllocationCount` to check the number of current memory allocations
+- **NEW API** Added platform api for Read/Write mutex
+  - `Longtail_GetRWLockSize`
+  - `Longtail_CreateRWLock`
+  - `Longtail_DeleteRWLock`
+  - `Longtail_LockRWLockRead`
+  - `Longtail_LockRWLockWrite`
+  - `Longtail_UnlockRWLockRead`
+  - `Longtail_UnlockRWLockWrite`
+- **ADDED** `SAFE_DISPOSE_STORED_BLOCK` macro for easy dispose of stored blocks
+- **ADDED** Check at test run exit that no memory allocations are left
+- **FIXED** Updated premake5.lua to set the correct defines for debug vs release builds
+- **FIXED** Use non-binary units for mem tracer counts
+- **FIXED** Added workaround for calling hmgeti_ts on an empty hash map as that is not thread safe
+- **FIXED** Use fixed v3 of `actions/upload-artifact`/`actions/download-artifact`
+- **FIXED** Propagate error from `FSStorageAPI_Write` to caller
+- **FIXED** Make sure `EnsureParentPathExists` can create a folder structure and not just parent path
+- **FIXED** Fixed potential `uint32` arithmetic overflow issues
+- **CHANGED** Command tool uses `Longtail_ChangeVersion2` instead of `Longtail_ChangeVersion2`
+- **CHANGED** Command tool no longer uses LRU block store layer (obsolete with `Longtail_ChangeVersion2`)
 
 ## 0.4.0
 - **NEW** added builds for Arm64 flavours of all components
