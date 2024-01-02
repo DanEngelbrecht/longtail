@@ -210,7 +210,7 @@ static int ConcurrentChunkWriteAPI_Open(
     {
         Longtail_LockRWLockRead(api->m_RWLock);
         ptrdiff_t tmp;
-        intptr_t i = hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp);
+        intptr_t i = api->m_PathHashToOpenFile ? hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp) : -1;
         if (i != -1)
         {
             intptr_t open_file_index = api->m_PathHashToOpenFile[i].value;
@@ -229,7 +229,7 @@ static int ConcurrentChunkWriteAPI_Open(
     {
         Longtail_LockRWLockWrite(api->m_RWLock);
         ptrdiff_t tmp;
-        intptr_t i = hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp);
+        intptr_t i = api->m_PathHashToOpenFile ? hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp) : -1;
         if (i != -1)
         {
             intptr_t open_file_index = api->m_PathHashToOpenFile[i].value;
@@ -312,7 +312,7 @@ static int ConcurrentChunkWriteAPI_Write(
     {
         Longtail_LockRWLockRead(api->m_RWLock);
         ptrdiff_t tmp;
-        intptr_t i = hmgeti_ts(api->m_FileHandleToOpenFile, file_handle, tmp);
+        intptr_t i = api->m_PathHashToOpenFile ? hmgeti_ts(api->m_FileHandleToOpenFile, file_handle, tmp) : -1;
         if (i == -1)
         {
             Longtail_UnlockRWLockRead(api->m_RWLock);
