@@ -31,7 +31,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       name: upload ${{matrix.target}}
       with:
-        name: linux_x64_${{matrix.target}}_${{matrix.config}}
+        name: linux_x64-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.o
@@ -60,15 +60,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v3
       with:
-        name: dist_linux_x64
+        name: dist-linux-x64
         path: dist
 
   build-darwin:
@@ -123,15 +123,15 @@ jobs:
         arch: [x64, arm64]
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh ${{matrix.arch}}
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v3
       with:
-        name: dist_darwin_${{matrix.arch}}
+        name: dist-darwin-${{matrix.arch}}
         path: dist
 
   build-win32:
@@ -151,7 +151,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       name: upload ${{matrix.target}}
       with:
-        name: win32_x64_${{matrix.target}}_${{matrix.config}}
+        name: win32_x64-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.obj
@@ -181,13 +181,13 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.bat
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v3
       with:
-        name: dist_win32_x64
+        name: dist-win32-x64
         path: dist

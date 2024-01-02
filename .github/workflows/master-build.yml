@@ -51,13 +51,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v3
       with:
         name: dist-linux-x64
         path: dist
@@ -113,13 +113,13 @@ jobs:
         arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh ${{matrix.arch}}
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-${{matrix.arch}}
         path: dist
@@ -171,13 +171,13 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.bat
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v3
       with:
         name: dist-win32-x64
         path: dist
