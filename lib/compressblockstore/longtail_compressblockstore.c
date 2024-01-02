@@ -232,7 +232,7 @@ static int CompressBlockStore_PutStoredBlock(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "block_store->m_BackingBlockStore->PutStoredBlock() failed with %d", err)
         Longtail_AtomicAdd64(&block_store->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         Longtail_Free(on_put_backing_store_async_api);
-        compressed_stored_block->Dispose(compressed_stored_block);
+        SAFE_DISPOSE_STORED_BLOCK(compressed_stored_block);
         CompressBlockStore_CompleteRequest(block_store);
     }
     return err;
@@ -331,7 +331,7 @@ static int DecompressBlock(
         Longtail_Free(uncompressed_stored_block);
         return EBADF;
     }
-    compressed_stored_block->Dispose(compressed_stored_block);
+    SAFE_DISPOSE_STORED_BLOCK(compressed_stored_block);
     uncompressed_stored_block->Dispose = CompressedStoredBlock_Dispose;
     *out_stored_block = uncompressed_stored_block;
     return 0;
@@ -392,7 +392,7 @@ static void OnGetBackingStoreComplete(struct Longtail_AsyncGetStoredBlockAPI* as
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "DecompressBlock() failed with %d", err)
         Longtail_AtomicAdd64(&blockstore->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-        stored_block->Dispose(stored_block);
+        SAFE_DISPOSE_STORED_BLOCK(stored_block);
         async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, 0, err);
         Longtail_Free(async_block_store);
         CompressBlockStore_CompleteRequest(blockstore);

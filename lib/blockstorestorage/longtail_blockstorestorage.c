@@ -411,10 +411,7 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock() failed with %d", data->m_Err)
     }
-    if (data->m_StoredBlock->Dispose)
-    {
-        data->m_StoredBlock->Dispose(data->m_StoredBlock);
-    }
+    SAFE_DISPOSE_STORED_BLOCK(data->m_StoredBlock);
     return 0;
 }
 

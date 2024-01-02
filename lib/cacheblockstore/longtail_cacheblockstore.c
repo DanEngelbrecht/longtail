@@ -72,7 +72,7 @@ int CachedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
     }
     struct Longtail_StoredBlock* original_stored_block = b->m_OriginalStoredBlock;
     Longtail_Free(b);
-    original_stored_block->Dispose(original_stored_block);
+    SAFE_DISPOSE_STORED_BLOCK(original_stored_block);
     return 0;
 }
 
@@ -449,7 +449,7 @@ static void OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlock
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockPutLocalComplete called with error", err)
     }
-    api->m_StoredBlock->Dispose(api->m_StoredBlock);
+    SAFE_DISPOSE_STORED_BLOCK(api->m_StoredBlock);
     Longtail_Free(api);
     CacheBlockStore_CompleteRequest(cacheblockstore_api);
 }
@@ -531,7 +531,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "CachedStoredBlock_CreateBlock() failed with %d", ENOMEM)
         Longtail_AtomicAdd64(&cacheblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-        stored_block->Dispose(stored_block);
+        SAFE_DISPOSE_STORED_BLOCK(stored_block);
         api->async_complete_api->OnComplete(api->async_complete_api, 0, ENOMEM);
         Longtail_Free(api);
         CacheBlockStore_CompleteRequest(cacheblockstore_api);
@@ -544,7 +544,7 @@ static void OnGetStoredBlockGetRemoteComplete(struct Longtail_AsyncGetStoredBloc
     if (store_err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "StoreBlockCopyToLocalCache() failed with %d", store_err)
-        cached_stored_block->Dispose(cached_stored_block);
+        SAFE_DISPOSE_STORED_BLOCK(cached_stored_block);
     }
     Longtail_Free(api);
     CacheBlockStore_CompleteRequest(cacheblockstore_api);

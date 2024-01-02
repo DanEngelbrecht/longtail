@@ -99,7 +99,7 @@ int SharedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 
     struct Longtail_StoredBlock* original_stored_block = b->m_OriginalStoredBlock;
     Longtail_Free(b);
-    original_stored_block->Dispose(original_stored_block);
+    SAFE_DISPOSE_STORED_BLOCK(original_stored_block);
     return 0;
 }
 
@@ -263,7 +263,7 @@ static void ShareBlockStore_AsyncGetStoredBlockAPI_OnComplete(struct Longtail_As
             list[i]->OnComplete(list[i], 0, ENOMEM);
         }
         arrfree(list);
-        stored_block->Dispose(stored_block);
+        SAFE_DISPOSE_STORED_BLOCK(stored_block);
         SharedBlockStore_CompleteRequest(api);
         return;
     }

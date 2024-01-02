@@ -4299,8 +4299,7 @@ static void BlockWriterJobOnComplete(struct Longtail_AsyncPutStoredBlockAPI* asy
     LONGTAIL_FATAL_ASSERT(ctx, job->m_StoredBlock != 0, return);
     LONGTAIL_FATAL_ASSERT(ctx, job->m_JobID != 0, return);
     uint32_t job_id = job->m_JobID;
-    job->m_StoredBlock->Dispose(job->m_StoredBlock);
-    job->m_StoredBlock = 0;
+    SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
     job->m_JobID = 0;
     job->m_Err = err;
     job->m_JobAPI->ResumeJob(job->m_JobAPI, job_id);
@@ -4502,8 +4501,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int is_cancelled
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "block_store_api->PutStoredBlock() failed with %d", err);
-        job->m_StoredBlock->Dispose(job->m_StoredBlock);
-        job->m_StoredBlock = 0;
+        SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
         job->m_JobID = 0;
         job->m_Err = err;
         return 0;
@@ -5008,12 +5006,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
             context, job_id, is_cancelled)
         for (uint32_t d = 0; d < block_reader_job_count; ++d)
         {
-            struct Longtail_StoredBlock* stored_block = job->m_BlockReaderJobs[d].m_StoredBlock;
-            if (stored_block && stored_block->Dispose)
-            {
-                stored_block->Dispose(stored_block);
-            }
-            job->m_BlockReaderJobs[d].m_StoredBlock = 0;
+            SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReaderJobs[d].m_StoredBlock);
         }
         return 0;
     }
@@ -5024,12 +5017,7 @@ int WritePartialAssetFromBlocks(void* context, uint32_t job_id, int is_cancelled
 
         for (uint32_t d = 0; d < block_reader_job_count; ++d)
         {
-            struct Longtail_StoredBlock* stored_block = job->m_BlockReaderJobs[d].m_StoredBlock;
-            if (stored_block && stored_block->Dispose)
-            {
-                stored_block->Dispose(stored_block);
-            }
-            job->m_BlockReaderJobs[d].m_StoredBlock = 0;
+            SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReaderJobs[d].m_StoredBlock);
         }
         if (job->m_AssetOutputFile)
         {
@@ -5547,8 +5535,8 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
 
     if (is_cancelled)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteAssetsFromBlock was cancelled, failed with %d", job->m_BlockReadJob.m_Err)
-       job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
+       LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "WriteAssetsFromBlock was cancelled, failed with %d", job->m_BlockReadJob.m_Err)
+       SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
        job->m_Err = ECANCELED;
        return 0;
     }
@@ -5568,8 +5556,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
     if (!tmp_mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-        job->m_BlockReadJob.m_StoredBlock = 0;
+        SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
         job->m_Err = ENOMEM;
         return 0;
     }
@@ -5601,8 +5588,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
             Longtail_Free(full_asset_path);
-            job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-            job->m_BlockReadJob.m_StoredBlock = 0;
+            SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
             job->m_Err = err;
             Longtail_Free(tmp_mem);
             return 0;
@@ -5614,8 +5600,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
             Longtail_Free(full_asset_path);
-            job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-            job->m_BlockReadJob.m_StoredBlock = 0;
+            SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
             job->m_Err = err;
             Longtail_Free(tmp_mem);
             return 0;
@@ -5630,8 +5615,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 {
                     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
                     Longtail_Free(full_asset_path);
-                    job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-                    job->m_BlockReadJob.m_StoredBlock = 0;
+                    SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
                     job->m_Err = err;
                     Longtail_Free(tmp_mem);
                     return 0;
@@ -5646,8 +5630,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->OpenWriteFile() failed with %d", err)
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
-            job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-            job->m_BlockReadJob.m_StoredBlock = 0;
+            SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
             job->m_Err = err;
             Longtail_Free(tmp_mem);
             return 0;
@@ -5669,8 +5652,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 asset_file = 0;
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
-                job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-                job->m_BlockReadJob.m_StoredBlock = 0;
+                SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
                 job->m_Err = err;
                 Longtail_Free(tmp_mem);
                 return 0;
@@ -5691,8 +5673,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                     asset_file = 0;
                     Longtail_Free(full_asset_path);
                     full_asset_path = 0;
-                    job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-                    job->m_BlockReadJob.m_StoredBlock = 0;
+                    SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
                     job->m_Err = err;
                     Longtail_Free(tmp_mem);
                     return 0;
@@ -5716,8 +5697,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 asset_file = 0;
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
-                job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-                job->m_BlockReadJob.m_StoredBlock = 0;
+                SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
                 job->m_Err = err;
                 Longtail_Free(tmp_mem);
                 return 0;
@@ -5736,8 +5716,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
                 Longtail_Free(full_asset_path);
                 full_asset_path = 0;
-                job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-                job->m_BlockReadJob.m_StoredBlock = 0;
+                SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
                 job->m_Err = err;
                 Longtail_Free(tmp_mem);
                 return 0;
@@ -5748,8 +5727,7 @@ static int WriteAssetsFromBlock(void* context, uint32_t job_id, int is_cancelled
     }
     Longtail_Free(tmp_mem);
 
-    job->m_BlockReadJob.m_StoredBlock->Dispose(job->m_BlockReadJob.m_StoredBlock);
-    job->m_BlockReadJob.m_StoredBlock = 0;
+    SAFE_DISPOSE_STORED_BLOCK(job->m_BlockReadJob.m_StoredBlock);
     job->m_Err = 0;
     return 0;
 }
