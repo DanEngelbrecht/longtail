@@ -7,7 +7,7 @@ on:
 jobs:
   build-linux:
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         config: [debug, release]
@@ -30,7 +30,7 @@ jobs:
 
   test-linux:
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         config: [debug, release]
@@ -48,7 +48,7 @@ jobs:
   dist-linux:
 
     needs: build-linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - uses: actions/download-artifact@v4.1
@@ -64,7 +64,7 @@ jobs:
 
   build-darwin:
 
-    runs-on: macos-11
+    runs-on: macos-latest
     strategy:
       matrix:
         config: [debug, release]
@@ -87,7 +87,7 @@ jobs:
 
   test-darwin:
 
-    runs-on: macos-11
+    runs-on: macos-latest
     strategy:
       matrix:
         config: [debug, release]
@@ -107,7 +107,7 @@ jobs:
   dist-darwin:
 
     needs: build-darwin
-    runs-on: macos-11
+    runs-on: macos-latest
     strategy:
       matrix:
         arch: [arm64, x64]
@@ -126,7 +126,7 @@ jobs:
 
   build-win32:
 
-    runs-on: windows-2019
+    runs-on: windows-latest
     strategy:
       matrix:
         config: [debug, release]
@@ -150,7 +150,7 @@ jobs:
 
   test-win32:
 
-    runs-on: windows-2019
+    runs-on: windows-latest
     strategy:
       matrix:
         config: [debug, release]
@@ -168,7 +168,7 @@ jobs:
   dist-win32:
 
     needs: build-win32
-    runs-on: windows-2019
+    runs-on: windows-latest
     steps:
     - uses: actions/checkout@v3
     - uses: actions/download-artifact@v4.1
