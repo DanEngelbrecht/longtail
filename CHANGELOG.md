@@ -1,5 +1,21 @@
 ##
 - **NEW API** `Longtail_ChangeVersion2` added
+
+  Implements a new strategy for decompressing/writing version assets which is significantly faster for files that spans multiple blocks while retaining the same speed for assets smaller than a block. It removes redundant decompression of blocks (so the LRU block store is no longer needed) at the expense of doing random access when writing files.
+  
+  It uses significantly **less** memory and **less** CPU while avoiding redundant reads from source data so it is an overall win*.
+  If your main target devices are SSD drives I **highly** recommend switching to `Longtail_ChangeVersion2`.
+  
+  | Version | Files | Raw Size | Compressed Size | Unpack Time | Peak Memory |
+  |-|-|-|-|-|-|
+  |0.4.0|1024|736 GB|178 GB|2h47m39s|9.5 GB|
+  |0.4.1|1024|736 GB|178 GB|0h12m02s|3.5 GB|
+  |0.4.0|239 340|60 GB|17 GB|0h03m34s|1.3 GB|
+  |0.4.1|239 340|60 GB|17 GB|0h01m37s|0.4 GB|
+
+  *This strategy is well suited for storage mediums with fast random access time (such as SDD drives) but will suffer when seek times are higher (such as mechanical drives).
+  `Longtail_ChangeVersion` is still available if you need to cater for mediums with slower seek times.
+
 - **NEW API** `Longtail_ConcurrentChunkWriteAPI` added
 - **NEW API** `Longtail_CreateConcurrentChunkWriteAPI` added
 - **NEW API** Added `Longtail_MemTracer_GetAllocationCount` to check the number of current memory allocations
