@@ -13,7 +13,7 @@
   |0.4.0|239 340|60 GB|17 GB|0h03m34s|1.3 GB|
   |0.4.1|239 340|60 GB|17 GB|0h01m37s|0.4 GB|
 
-  *This strategy is well suited for storage mediums with fast random access time (such as SDD drives) but will suffer when seek times are higher (such as mechanical drives).
+  *This strategy is well suited for target storage mediums with fast random access time (such as SDD drives) but will suffer when seek times are higher (such as mechanical drives).
   `Longtail_ChangeVersion` is still available if you need to cater for mediums with slower seek times.
 
 - **NEW API** `Longtail_ConcurrentChunkWriteAPI` added
@@ -30,13 +30,13 @@
 - **ADDED** `SAFE_DISPOSE_STORED_BLOCK` macro for easy dispose of stored blocks
 - **ADDED** Check at test run exit that no memory allocations are left
 - **FIXED** Updated premake5.lua to set the correct defines for debug vs release builds
-- **FIXED** Use non-binary units for mem tracer counts
+- **FIXED** Use non-binary units for memtracer counts
 - **FIXED** Added workaround for calling hmgeti_ts on an empty hash map as that is not thread safe
 - **FIXED** Use fixed v3 of `actions/upload-artifact`/`actions/download-artifact`
 - **FIXED** Propagate error from `FSStorageAPI_Write` to caller
 - **FIXED** Make sure `EnsureParentPathExists` can create a folder structure and not just parent path
 - **FIXED** Fixed potential `uint32` arithmetic overflow issues
-- **CHANGED** Command tool uses `Longtail_ChangeVersion2` instead of `Longtail_ChangeVersion2`
+- **CHANGED** Command tool uses `Longtail_ChangeVersion2` instead of `Longtail_ChangeVersion`
 - **CHANGED** Command tool no longer uses LRU block store layer (obsolete with `Longtail_ChangeVersion2`)
 
 ## 0.4.0
