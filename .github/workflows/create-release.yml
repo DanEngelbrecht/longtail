@@ -42,7 +42,7 @@ jobs:
     - name: build dist
       run: |
         ./dist.sh
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v3
       with:
         name: dist-linux-x64
         path: dist
@@ -85,7 +85,7 @@ jobs:
     - name: build dist
       run: |
         ./dist.sh ${{matrix.arch}}
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-${{matrix.arch}}
         path: dist
@@ -126,7 +126,7 @@ jobs:
     - name: build dist
       run: |
         ./dist.bat
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v3
       with:
         name: dist-win32-x64
         path: dist
@@ -139,7 +139,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@master
+      uses: actions/checkout@v3
 
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1

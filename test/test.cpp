@@ -13,6 +13,7 @@
 #include "../lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "../lib/compressblockstore/longtail_compressblockstore.h"
 #include "../lib/compressionregistry/longtail_full_compression_registry.h"
+#include "../lib/concurrentchunkwrite/longtail_concurrentchunkwrite.h"
 #include "../lib/filestorage/longtail_filestorage.h"
 #include "../lib/fsblockstore/longtail_fsblockstore.h"
 #include "../lib/hpcdcchunker/longtail_hpcdcchunker.h"
@@ -3016,9 +3017,11 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_Free(required_chunk_hashes);
     required_chunk_hashes = 0;
 
-    ASSERT_EQ(0, Longtail_ChangeVersion(
+    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+    ASSERT_EQ(0, Longtail_ChangeVersion2(
         block_store_api,
         storage,
+        concurrent_chunk_write_api,
         hash_api,
         job_api,
         0,
@@ -3030,6 +3033,7 @@ TEST(Longtail, Longtail_VersionDiff)
         version_diff,
         "old",
         1));
+    SAFE_DISPOSE_API(concurrent_chunk_write_api);
 
     Longtail_Free(version_diff);
     version_diff = 0;
@@ -3054,9 +3058,11 @@ TEST(Longtail, Longtail_VersionDiff)
 
     store_index = SyncGetExistingContent(block_store_api, required_chunk_count, required_chunk_hashes, 0);
 
-    ASSERT_EQ(0, Longtail_ChangeVersion(
+    concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+    ASSERT_EQ(0, Longtail_ChangeVersion2(
         block_store_api,
         storage,
+        concurrent_chunk_write_api,
         hash_api,
         job_api,
         0,
@@ -3068,6 +3074,7 @@ TEST(Longtail, Longtail_VersionDiff)
         version_diff,
         "old",
         1));
+    SAFE_DISPOSE_API(concurrent_chunk_write_api);
 
     Longtail_Free(required_chunk_hashes);
     Longtail_Free(store_index);
@@ -5254,9 +5261,11 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         ASSERT_EQ(0, cancel_api->CreateToken(cancel_api, &cancel_token));
         ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
 
-        ASSERT_EQ(ECANCELED, Longtail_ChangeVersion(
+        Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+        ASSERT_EQ(ECANCELED, Longtail_ChangeVersion2(
             block_store_proxy,
             storage,
+            concurrent_chunk_write_api,
             hash_api,
             job_api,
             0,
@@ -5268,6 +5277,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             version_diff,
             "old",
             1));
+        SAFE_DISPOSE_API(concurrent_chunk_write_api);
         cancel_api->DisposeToken(cancel_api, cancel_token);
     }
 
@@ -5328,9 +5338,11 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
 
         blockStoreProxy.m_FailCounter = 0x7fffffff;
-        int err = Longtail_ChangeVersion(
+        Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+        int err = Longtail_ChangeVersion2(
             block_store_proxy,
             storage,
+            concurrent_chunk_write_api,
             hash_api,
             job_api,
             0,
@@ -5342,6 +5354,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
             version_diff,
             "old",
             1);
+        SAFE_DISPOSE_API(concurrent_chunk_write_api);
         testCancelAPI.m_API.DisposeToken(&testCancelAPI.m_API, cancel_token);
         if (err == ECANCELED)
         {
@@ -5874,9 +5887,11 @@ TEST(Longtail, TestChangeVersionDiskFull)
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_OFF);
     failable_local_storage_api->m_PassCount = 3;
     failable_local_storage_api->m_WriteError = ENOSPC;
-    ASSERT_EQ(ENOSPC, Longtail_ChangeVersion(
+    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(local_storage, "old");
+    ASSERT_EQ(ENOSPC, Longtail_ChangeVersion2(
         cached_compress_store_api,
         local_storage,
+        concurrent_chunk_write_api,
         hash_api,
         job_api,
         0,
@@ -5888,6 +5903,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
         version_diff,
         "old",
         1));
+    SAFE_DISPOSE_API(concurrent_chunk_write_api);
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_ERROR);
 
     Longtail_Free(block_store_store_index);
@@ -5908,8 +5924,6 @@ TEST(Longtail, TestChangeVersionDiskFull)
     SAFE_DISPOSE_API(&failable_local_storage_api->m_API);
     SAFE_DISPOSE_API(mem_storage);
 }
-
-
 
 TEST(Longtail, TestLongtailBlockFS)
 {
@@ -6508,7 +6522,9 @@ static int DownloadFolder(
     }
     Longtail_Free(required_chunk_hashes);
 
-    err = Longtail_ChangeVersion(block_store_api, storage_api, hash_api, job_api, 0, 0, 0, store_index, current_version_index, version_index, version_diff, target_path, 1);
+    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
+    err = Longtail_ChangeVersion2(block_store_api, storage_api, concurrent_chunk_write_api, hash_api, job_api, 0, 0, 0, store_index, current_version_index, version_index, version_diff, target_path, 1);
+    SAFE_DISPOSE_API(concurrent_chunk_write_api);
     if (err)
     {
         return err;

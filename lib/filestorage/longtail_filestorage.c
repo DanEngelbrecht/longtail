@@ -180,7 +180,6 @@ static int FSStorageAPI_Write(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Write() failed with %d", err)
-        return 0;
     }
     return err;
 }

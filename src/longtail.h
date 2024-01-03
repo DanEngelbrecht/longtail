@@ -447,6 +447,41 @@ LONGTAIL_EXPORT char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI*
 LONGTAIL_EXPORT int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
 LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
 
+////////////// Longtail_ConcurrentChunkWriteAPI
+
+struct Longtail_ConcurrentChunkWriteAPI;
+
+typedef struct Longtail_ConcurrentChunkWriteAPI_OpenFile* Longtail_ConcurrentChunkWriteAPI_HOpenFile;
+
+typedef int (*Longtail_ConcurrentChunkWrite_CreateDirFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
+typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input);
+typedef int (*Longtail_ConcurrentChunkWrite_FlushFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
+
+struct Longtail_ConcurrentChunkWriteAPI
+{
+    struct Longtail_API m_API;
+    Longtail_ConcurrentChunkWrite_CreateDirFunc CreateDir;
+    Longtail_ConcurrentChunkWrite_OpenFunc Open;
+    Longtail_ConcurrentChunkWrite_WriteFunc Write;
+    Longtail_ConcurrentChunkWrite_FlushFunc Flush;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetConcurrentChunkWriteAPISize();
+
+LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrentChunkWriteAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_ConcurrentChunkWrite_CreateDirFunc create_dir_func,
+    Longtail_ConcurrentChunkWrite_OpenFunc open_func,
+    Longtail_ConcurrentChunkWrite_WriteFunc write_func,
+    Longtail_ConcurrentChunkWrite_FlushFunc flush_func);
+
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
+
 ////////////// Longtail_ProgressAPI
 
 struct Longtail_ProgressAPI;
@@ -1265,6 +1300,22 @@ LONGTAIL_EXPORT int Longtail_ChangeVersion(
     const char* version_path,
     int retain_permissions);
 
+LONGTAIL_EXPORT int Longtail_ChangeVersion2(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StorageAPI* version_storage_api,
+    struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    const struct Longtail_StoreIndex* store_index,
+    const struct Longtail_VersionIndex* source_version,
+    const struct Longtail_VersionIndex* target_version,
+    const struct Longtail_VersionDiff* version_diff,
+    const char* version_path,
+    int retain_permissions);
+
 /*! @brief Get the size of the block index data.
  *
  * This size is just for the data of the block index excluding the struct Longtail_BlockIndex.
@@ -1526,6 +1577,8 @@ struct Longtail_StoredBlock
     void* m_BlockData;
     uint32_t m_BlockChunksDataSize;
 };
+
+#define SAFE_DISPOSE_STORED_BLOCK(stored_block) if (stored_block && stored_block->Dispose) { stored_block->Dispose(stored_block); stored_block = 0; }
 
 LONGTAIL_EXPORT void Longtail_StoredBlock_Dispose(struct Longtail_StoredBlock* stored_block);
 LONGTAIL_EXPORT struct Longtail_BlockIndex* Longtail_StoredBlock_GetBlockIndex(struct Longtail_StoredBlock* stored_block);

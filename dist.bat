@@ -33,6 +33,7 @@ mkdir dist\include\lib\brotli
 mkdir dist\include\lib\cacheblockstore
 mkdir dist\include\lib\compressblockstore
 mkdir dist\include\lib\compressionregistry
+mkdir dist\include\lib\concurrentchunkwrite
 mkdir dist\include\lib\filestorage
 mkdir dist\include\lib\fsblockstore
 mkdir dist\include\lib\hpcdcchunker
@@ -56,6 +57,7 @@ copy lib\brotli\*.h dist\include\lib\brotli
 copy lib\cacheblockstore\*.h dist\include\lib\cacheblockstore
 copy lib\compressblockstore\*.h dist\include\lib\compressblockstore
 copy lib\compressionregistry\*.h dist\include\lib\compressionregistry
+copy lib\concurrentchunkwrite\*.h dist\include\lib\concurrentchunkwrite
 copy lib\filestorage\*.h dist\include\lib\filestorage
 copy lib\fsblockstore\*.h dist\include\lib\fsblockstore
 copy lib\hpcdcchunker\*.h dist\include\lib\hpcdcchunker

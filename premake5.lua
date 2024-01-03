@@ -14,15 +14,15 @@ workspace "longtail"
    vectorextensions "AVX2"
    symbols "On"
    exceptionhandling ("off")
-   defines { '_CRT_SECURE_NO_DEPRECATE', '_CRT_SECURE_NO_WARNINGS', '_CRT_NONSTDC_NO_WARNINGS', '/D_HAS_EXCEPTIONS=0' }
+   defines { '_CRT_SECURE_NO_DEPRECATE', '_CRT_SECURE_NO_WARNINGS', '_CRT_NONSTDC_NO_WARNINGS', '_HAS_EXCEPTIONS=0' }
 
    filter "configurations:Debug"
       runtime "Debug"
-      defines { "DEBUG" }
+      defines { "DEBUG", "BIKESHED_ASSERTS",  "LONGTAIL_ASSERTS", "LONGTAIL_LOG_LEVEL=3", "__SSE2__",  "LONGTAIL_EXPORT_SYMBOLS"}
 
    filter "configurations:Release"
       runtime "Release"
-      defines { "NDEBUG" }
+      defines { "NDEBUG", "__SSE2__", "LONGTAIL_LOG_LEVEL=5" }
       optimize "On"
 
 project "longtail-src"

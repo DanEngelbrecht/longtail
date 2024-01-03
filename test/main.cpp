@@ -56,6 +56,14 @@ int main(int argc, char** argv)
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_ERROR);
     Longtail_SetLog(LogStdErr, 0);
     int result = jc_test_run_all();
+    if (result == 0)
+    {
+        uint64_t allocation_count = Longtail_MemTracer_GetAllocationCount(0);
+        if (allocation_count != 0)
+        {
+            result = 1;
+        }
+    }
     Longtail_SetAssert(0);
     Longtail_MemTracer_DumpStats("test.csv");
     char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerSummary());
