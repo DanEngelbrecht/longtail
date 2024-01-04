@@ -51,7 +51,7 @@ int main(int argc, char** argv)
 #endif
     jc_test_init(&argc, argv);
     Longtail_MemTracer_Init();
-    Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+    Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
     Longtail_SetAssert(TestAssert);
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_ERROR);
     Longtail_SetLog(LogStdErr, 0);

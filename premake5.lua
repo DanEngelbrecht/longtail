@@ -18,7 +18,7 @@ workspace "longtail"
 
    filter "configurations:Debug"
       runtime "Debug"
-      defines { "DEBUG", "BIKESHED_ASSERTS",  "LONGTAIL_ASSERTS", "LONGTAIL_LOG_LEVEL=3", "__SSE2__",  "LONGTAIL_EXPORT_SYMBOLS"}
+      defines { "DEBUG", "BIKESHED_ASSERTS",  "LONGTAIL_ASSERTS", "LONGTAIL_LOG_LEVEL=3", "__SSE2__",  "LONGTAIL_EXPORT_SYMBOLS", "STBDS_REALLOC=Longtail_STBRealloc", "STBDS_FREE=Longtail_STBFree"}
 
    filter "configurations:Release"
       runtime "Release"
