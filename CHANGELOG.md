@@ -1,4 +1,11 @@
 ##
+- **ADDED** Longtail_SetReAllocAndFree
+- **ADDED** Longtail_ReAlloc
+- **ADDED** Longtail_MemTracer_ReAlloc
+- **ADDED** memtracer now tracks allocations in stb_ds
+- **ADDED** memtracer now tracks allocations in zstd
+
+## 0.4.1
 - **NEW API** `Longtail_ChangeVersion2` added
 
   Implements a new strategy for decompressing/writing version assets which is significantly faster for files that spans multiple blocks while retaining the same speed for assets smaller than a block. It removes redundant decompression of blocks (so the LRU block store is no longer needed) at the expense of doing random access when writing files.

@@ -7,40 +7,11 @@
 #include "ext/stb_ds.h"
 
 #include <ctype.h>
-#include <stdio.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <stdarg.h>
-#include <errno.h>
-
-#if !defined(alloca)
-    #if defined(__GLIBC__) || defined(__sun) || defined(__CYGWIN__)
-        #include <alloca.h>     // alloca
-    #elif defined(_WIN32)
-        #include <malloc.h>     // alloca
-        #if !defined(alloca)
-            #define alloca _alloca  // for clang with MS Codegen
-        #endif
-        #define CompareIgnoreCase _stricmp
-    #else
-        #include <stdlib.h>     // alloca
-    #endif
-#endif
-
-/*
-#if defined(LONGTAIL_ASSERTS)
-void* Longtail_NukeMalloc(size_t s);
-void Longtail_NukeFree(void* p);
-#    define Longtail_Alloc(s) \
-        Longtail_NukeMalloc(s)
-#    define Longtail_Free(p) \
-        Longtail_NukeFree(p)
-#else
-#    define Longtail_Alloc(s) \
-        malloc(s)
-#    define Longtail_Free(p) \
-        Longtail_Free(p)
-#endif // defined(LONGTAIL_ASSERTS)
-*/
+#include <stdio.h>
+#include <stdlib.h>
 
 #define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
 #define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
@@ -784,11 +755,24 @@ void Longtail_DisposeAPI(struct Longtail_API* api)
 }
 
 static Longtail_Alloc_Func Longtail_Alloc_private = 0;
+static Longtail_ReAlloc_Func Longtail_ReAlloc_private = 0;
 static Longtail_Free_Func Free_private = 0;
 
 void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func Longtail_Free)
 {
     Longtail_Alloc_private = alloc;
+    Free_private = Longtail_Free;
+}
+
+static void* Longtail_SetAllocWrapper_private(const char* context, size_t s)
+{
+    return Longtail_ReAlloc_private(context, 0, s);
+}
+
+void Longtail_SetReAllocAndFree(Longtail_ReAlloc_Func alloc, Longtail_Free_Func Longtail_Free)
+{
+    Longtail_ReAlloc_private = alloc;
+    Longtail_Alloc_private = Longtail_SetAllocWrapper_private;
     Free_private = Longtail_Free;
 }
 
@@ -805,6 +789,25 @@ void* Longtail_Alloc(const char* context, size_t s)
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "%s failed with %d", Longtail_Alloc_private ? "Longtail_Alloc_private" : "malloc()", ENOMEM);
+        return 0;
+    }
+    return mem;
+}
+
+void* Longtail_ReAlloc(const char* context, void* old, size_t s)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(s, "%" PRIu64),
+        LONGTAIL_LOGFIELD(old, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+    void* mem = Longtail_ReAlloc_private ? Longtail_ReAlloc_private(context, old, s) : realloc(old, s);
+    if (!mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "%s failed with %d", Longtail_ReAlloc_private ? "Longtail_ReAlloc_private" : "realloc()", ENOMEM);
         return 0;
     }
     return mem;

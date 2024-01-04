@@ -916,12 +916,22 @@ LONGTAIL_EXPORT int Longtail_GetLogLevel();
     }
 #endif // defined(LONGTAIL_ASSERTS)
 
+#ifdef STBDS_REALLOC
+    extern void* Longtail_STBRealloc(void* context, void* old_ptr, size_t size);
+    extern void Longtail_STBFree(void* context, void* ptr);
+#endif // STBDS_REALLOC
 
 typedef void* (*Longtail_Alloc_Func)(const char* context, size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
 LONGTAIL_EXPORT void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free);
 
 LONGTAIL_EXPORT void* Longtail_Alloc(const char* context, size_t s);
+
+typedef void* (*Longtail_ReAlloc_Func)(const char* context, void* old, size_t s);
+LONGTAIL_EXPORT void Longtail_SetReAllocAndFree(Longtail_ReAlloc_Func alloc, Longtail_Free_Func free);
+
+LONGTAIL_EXPORT void* Longtail_ReAlloc(const char* context, void* old, size_t s);
+
 LONGTAIL_EXPORT void Longtail_Free(void* p);
 
 /*! @brief Ensures the full parent path exists.

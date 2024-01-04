@@ -13,6 +13,7 @@ LONGTAIL_EXPORT void Longtail_MemTracer_Init();
 LONGTAIL_EXPORT char* Longtail_MemTracer_GetStats(uint32_t log_level);
 LONGTAIL_EXPORT void Longtail_MemTracer_Dispose();
 LONGTAIL_EXPORT void* Longtail_MemTracer_Alloc(const char* context, size_t s);
+LONGTAIL_EXPORT void* Longtail_MemTracer_ReAlloc(const char* context, void* old, size_t s);
 LONGTAIL_EXPORT void Longtail_MemTracer_Free(void* p);
 
 LONGTAIL_EXPORT int Longtail_MemTracer_DumpStats(const char* name);
