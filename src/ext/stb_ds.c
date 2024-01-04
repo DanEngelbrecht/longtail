@@ -1,5 +1,7 @@
 #define STB_DS_IMPLEMENTATION
 
+#include <stddef.h>
+
 #ifdef STBDS_REALLOC
 
 extern void* Longtail_STBRealloc(void* context, void* old_ptr, size_t size);
