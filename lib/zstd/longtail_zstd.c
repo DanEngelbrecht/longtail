@@ -74,6 +74,36 @@ static size_t ZStdCompressionAPI_GetMaxCompressedSize(struct Longtail_Compressio
     return ZSTD_COMPRESSBOUND(size);
 }
 
+static void* alloc(void* opaque, size_t size)
+{
+    return Longtail_Alloc("ZStdCompressionAPI", size);
+}
+
+static void  free(void* opaque, void* address)
+{
+    Longtail_Free(address);
+}
+
+ZSTD_CCtx* ZSTD_CreateCompressContext()
+{
+    ZSTD_customMem customMem;
+    customMem.customAlloc = alloc;
+    customMem.customFree = free;
+    customMem.opaque = 0;
+    ZSTD_CCtx* ctx = ZSTD_createCCtx_advanced(customMem);
+    return ctx;
+}
+
+ZSTD_DCtx* ZSTD_CreateDecompressContext()
+{
+    ZSTD_customMem customMem;
+    customMem.customAlloc = alloc;
+    customMem.customFree = free;
+    customMem.opaque = 0;
+    ZSTD_DCtx* ctx = ZSTD_createDCtx_advanced(customMem);
+    return ctx;
+}
+
 int ZStdCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, uint32_t settings_id, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -89,16 +119,24 @@ int ZStdCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api,
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
-
+    ZSTD_CCtx* zstd_ctx = ZSTD_CreateCompressContext();
+    if (!zstd_ctx)
+    {
+        int err = ENOMEM;
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_CreateContext() failed with %d", err);
+        return err;
+    }
     int compression_setting = SettingsIDToCompressionSetting(settings_id);
-    size_t size = ZSTD_compress(compressed, max_compressed_size, uncompressed, uncompressed_size, compression_setting);
+    size_t size = ZSTD_compressCCtx(zstd_ctx, compressed, max_compressed_size, uncompressed, uncompressed_size, compression_setting);
     if (ZSTD_isError(size))
     {
         int err = ZSTD_getErrorCode(size);
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_compress() failed with %d", err);
+        ZSTD_freeCCtx(zstd_ctx);
         return EINVAL;
     }
     *out_compressed_size = size;
+    ZSTD_freeCCtx(zstd_ctx);
     return 0;
 }
 
@@ -117,15 +155,24 @@ int ZStdCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_ap
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
+    ZSTD_DCtx* zstd_ctx = ZSTD_CreateDecompressContext();
+    if (!zstd_ctx)
+    {
+        int err = ENOMEM;
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_CreateContext() failed with %d", err);
+        return err;
+    }
 
-    size_t size = ZSTD_decompress(uncompressed, max_uncompressed_size, compressed, compressed_size);
+    size_t size = ZSTD_decompressDCtx(zstd_ctx, uncompressed, max_uncompressed_size, compressed, compressed_size);
     if (ZSTD_isError(size))
     {
         int err = ZSTD_getErrorCode(size);
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ZSTD_decompress() failed with %d", err);
+        ZSTD_freeDCtx(zstd_ctx);
         return EINVAL;
     }
     *out_uncompressed_size = size;
+    ZSTD_freeDCtx(zstd_ctx);
     return 0;
 }
 
