@@ -279,80 +279,6 @@ void Longtail_MemTracer_Dispose() {
     gMemTracer_Context = 0;
 }
 
-void* Longtail_MemTracer_Alloc(const char* context, size_t s)
-{
-#if defined(LONGTAIL_ASSERTS)
-    const char* context_safe = context ? context : "";
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(context_safe, "%s"),
-        LONGTAIL_LOGFIELD(s, "%" PRIu64)
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-    uint32_t context_id = context ? MemTracer_ContextIdHash(context) : 0;
-
-    struct MemTracer_ContextStats* contextStats = 0;
-    Longtail_LockSpinLock(gMemTracer_Context->m_Spinlock);
-    uint32_t* context_index_ptr = LongtailPrivate_LookupTable_PutUnique(gMemTracer_Context->m_ContextLookup, context_id, gMemTracer_Context->m_ContextCount);
-    if (context_index_ptr == 0) {
-        LONGTAIL_FATAL_ASSERT(ctx, gMemTracer_Context->m_ContextCount < MEMTRACER_MAXCONTEXTCOUNT, return 0)
-        contextStats = &gMemTracer_Context->m_ContextStats[gMemTracer_Context->m_ContextCount];
-        memset(contextStats, 0, sizeof(struct MemTracer_ContextStats));
-        contextStats->context_name = context;
-        gMemTracer_Context->m_ContextCount++;
-    }
-    else
-    {
-        contextStats = &gMemTracer_Context->m_ContextStats[*context_index_ptr];
-    }
-
-    contextStats->total_count++;
-    contextStats->current_count++;
-    contextStats->total_mem += s;
-    contextStats->current_mem += s;
-    if (contextStats->current_mem > contextStats->peak_mem)
-    {
-        contextStats->peak_mem = contextStats->current_mem;
-    }
-    if (contextStats->current_count > contextStats->peak_count)
-    {
-        contextStats->peak_count = contextStats->current_count;
-    }
-    
-    gMemTracer_Context->m_AllocationTotalCount++;
-    gMemTracer_Context->m_AllocationCurrentCount++;
-    gMemTracer_Context->m_AllocationTotalMem += s;
-    gMemTracer_Context->m_AllocationCurrentMem += s;
-    if (gMemTracer_Context->m_AllocationCurrentMem > gMemTracer_Context->m_AllocationPeakMem)
-    {
-        gMemTracer_Context->m_AllocationPeakMem = gMemTracer_Context->m_AllocationCurrentMem;
-        for (size_t i = 0; i < gMemTracer_Context->m_ContextCount; i++)
-        {
-            contextStats = &gMemTracer_Context->m_ContextStats[i];
-            contextStats->global_peak_mem = contextStats->current_mem;
-        }
-    }
-    if (gMemTracer_Context->m_AllocationCurrentCount > gMemTracer_Context->m_AllocationPeakCount)
-    {
-        gMemTracer_Context->m_AllocationPeakCount = gMemTracer_Context->m_AllocationCurrentCount;
-        for (size_t i = 0; i < gMemTracer_Context->m_ContextCount; i++)
-        {
-            contextStats = &gMemTracer_Context->m_ContextStats[i];
-            contextStats->global_peak_count = contextStats->current_count;
-        }
-    }
-
-    Longtail_UnlockSpinLock(gMemTracer_Context->m_Spinlock);
-
-    size_t padded_size = sizeof(struct MemTracer_Header) + s;
-    void* mem = malloc(padded_size);
-    struct MemTracer_Header* header_ptr = (struct MemTracer_Header*)mem;
-    header_ptr->id = context_id;
-    header_ptr->size = s;
-    return &header_ptr[1];
-}
-
 void* Longtail_MemTracer_ReAlloc(const char* context, void* old, size_t s)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -361,7 +287,7 @@ void* Longtail_MemTracer_ReAlloc(const char* context, void* old, size_t s)
         LONGTAIL_LOGFIELD(context_safe, "%s"),
         LONGTAIL_LOGFIELD(s, "%" PRIu64),
         LONGTAIL_LOGFIELD(old, "%p")
-        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
@@ -446,6 +372,20 @@ void* Longtail_MemTracer_ReAlloc(const char* context, void* old, size_t s)
     header_ptr->id = context_id;
     header_ptr->size = s;
     return &header_ptr[1];
+}
+
+void* Longtail_MemTracer_Alloc(const char* context, size_t s)
+{
+#if defined(LONGTAIL_ASSERTS)
+    const char* context_safe = context ? context : "";
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(context_safe, "%s"),
+        LONGTAIL_LOGFIELD(s, "%" PRIu64),
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+    return Longtail_MemTracer_ReAlloc(context, 0, s);
 }
 
 void Longtail_MemTracer_Free(void* p)

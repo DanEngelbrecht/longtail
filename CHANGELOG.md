@@ -3,7 +3,7 @@
 - **ADDED** Longtail_ReAlloc
 - **ADDED** Longtail_MemTracer_ReAlloc
 - **ADDED** memtracer now tracks allocations in stb_ds
-- - **ADDED** memtracer now tracks allocations in zstd
+- **ADDED** memtracer now tracks allocations in zstd
 
 ## 0.4.1
 - **NEW API** `Longtail_ChangeVersion2` added
