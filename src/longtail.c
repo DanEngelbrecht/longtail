@@ -1494,6 +1494,7 @@ int LongtailPrivate_MakeFileInfos(
 static int AppendPath(
     struct Longtail_FileInfos** file_infos,
     const char* path,
+    int is_dir,
     uint64_t file_size,
     uint16_t file_permissions,
     uint32_t* max_path_count,
@@ -1520,7 +1521,8 @@ static int AppendPath(
     LONGTAIL_FATAL_ASSERT(ctx, max_data_size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path_count_increment > 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, data_size_increment > 0, return EINVAL)
-    uint32_t path_size = (uint32_t)(strlen(path) + 1);
+    size_t path_length = strlen(path);
+    uint32_t path_size = (uint32_t)(path_length + 1) + (is_dir ? 1 : 0);
 
     int out_of_path_data = (*file_infos)->m_PathDataSize + path_size > *max_data_size;
     int out_of_path_count = (*file_infos)->m_Count >= *max_path_count;
@@ -1551,7 +1553,17 @@ static int AppendPath(
         *file_infos = new_file_infos;
     }
 
-    memmove(&(*file_infos)->m_PathData[(*file_infos)->m_PathDataSize], path, path_size);
+    char* path_write_ptr = &(*file_infos)->m_PathData[(*file_infos)->m_PathDataSize];
+    memmove(path_write_ptr, path, path_length);
+    if (is_dir)
+    {
+        path_write_ptr[path_length] = '/';
+        path_write_ptr[path_length + 1] = '\0';
+    }
+    else
+    {
+        path_write_ptr[path_length] = '\0';
+    }
     (*file_infos)->m_PathStartOffsets[(*file_infos)->m_Count] = (*file_infos)->m_PathDataSize;
     (*file_infos)->m_PathDataSize += path_size;
     (*file_infos)->m_Sizes[(*file_infos)->m_Count] = file_size;
@@ -1588,30 +1600,11 @@ static int AddFile(void* context, const char* root_path, const char* asset_path,
     struct AddFile_Context* paths_context = (struct AddFile_Context*)context;
     struct Longtail_StorageAPI* storage_api = paths_context->m_StorageAPI;
 
-    char* full_path = (char*)asset_path;
-    if (properties->m_IsDir)
-    {
-        size_t asset_path_length = strlen(asset_path);
-        full_path = (char*)Longtail_Alloc("GetFilesRecursively", asset_path_length + 1 + 1);
-        strcpy(full_path, asset_path);
-        full_path[asset_path_length] = '/';
-        full_path[asset_path_length + 1] = 0;
-    }
-
-    int err = AppendPath(&paths_context->m_FileInfos, full_path, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 1024, 1024 * 32);
+    int err = AppendPath(&paths_context->m_FileInfos, asset_path, properties->m_IsDir, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 1024, 1024 * 32);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AppendPath() failed with %d", err)
-        if (full_path != asset_path)
-        {
-            Longtail_Free(full_path);
-        }
         return err;
-    }
-
-    if (full_path != asset_path)
-    {
-        Longtail_Free(full_path);
     }
     return 0;
 }
