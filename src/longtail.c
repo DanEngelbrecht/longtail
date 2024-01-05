@@ -1307,6 +1307,7 @@ static int RecurseTree(
             break;
         }
         LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_DEBUG, "Scanning `%s`", full_search_path)
+        char asset_path_buffer[1024];
         while(err == 0)
         {
             struct Longtail_StorageAPI_EntryProperties properties;
@@ -1326,11 +1327,18 @@ static int RecurseTree(
                 {
                     size_t current_relative_path_length = strlen(relative_parent_path);
                     size_t new_parent_path_length = current_relative_path_length + 1 + strlen(properties.m_Name);
-                    asset_path = (char*)Longtail_Alloc("GetFilesRecursively", new_parent_path_length + 1);
-                    if (!asset_path)
+                    if (new_parent_path_length < sizeof(asset_path_buffer))
                     {
-                        LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
-                        break;
+                        asset_path = asset_path_buffer;
+                    }
+                    else
+                    {
+                        asset_path = (char*)Longtail_Alloc("GetFilesRecursively", new_parent_path_length + 1);
+                        if (!asset_path)
+                        {
+                            LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
+                                break;
+                        }
                     }
                     strcpy(asset_path, relative_parent_path);
                     asset_path[current_relative_path_length] = '/';
@@ -1359,7 +1367,10 @@ static int RecurseTree(
                     {
                         LONGTAIL_LOG(ctx3, LONGTAIL_LOG_LEVEL_WARNING, "entry_processor() failed with %d",
                             err)
-                        Longtail_Free(asset_path);
+                        if (asset_path != asset_path_buffer)
+                        {
+                            Longtail_Free(asset_path);
+                        }
                         asset_path = 0;
                         break;
                     }
@@ -1378,11 +1389,21 @@ static int RecurseTree(
                             }
                         }
                         arrput(full_search_paths, storage_api->ConcatPath(storage_api, full_search_path, properties.m_Name));
-                        arrput(relative_parent_paths, asset_path);
-                        asset_path = 0;
+                        if (asset_path != asset_path_buffer)
+                        {
+                            arrput(relative_parent_paths, asset_path);
+                            asset_path = 0;
+                        }
+                        else
+                        {
+                            arrput(relative_parent_paths, Longtail_Strdup(asset_path));
+                        }
                     }
                 }
-                Longtail_Free(asset_path);
+                if (asset_path != asset_path_buffer)
+                {
+                    Longtail_Free(asset_path);
+                }
             }
             err = storage_api->FindNext(storage_api, fs_iterator);
             if (err == ENOENT)
@@ -1425,7 +1446,7 @@ static struct Longtail_FileInfos* CreateFileInfos(uint32_t path_count, uint32_t 
 
     LONGTAIL_FATAL_ASSERT(ctx, (path_count == 0 && path_data_size == 0) || (path_count > 0 && path_data_size > path_count), return 0)
     size_t file_infos_size = GetFileInfosSize(path_count, path_data_size);
-    struct Longtail_FileInfos* file_infos = (struct Longtail_FileInfos*)Longtail_Alloc("GetFilesRecursively", file_infos_size);
+    struct Longtail_FileInfos* file_infos = (struct Longtail_FileInfos*)Longtail_Alloc("CreateFileInfos", file_infos_size);
     if (!file_infos)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1494,6 +1515,7 @@ int LongtailPrivate_MakeFileInfos(
 static int AppendPath(
     struct Longtail_FileInfos** file_infos,
     const char* path,
+    int is_dir,
     uint64_t file_size,
     uint16_t file_permissions,
     uint32_t* max_path_count,
@@ -1520,7 +1542,8 @@ static int AppendPath(
     LONGTAIL_FATAL_ASSERT(ctx, max_data_size != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, path_count_increment > 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, data_size_increment > 0, return EINVAL)
-    uint32_t path_size = (uint32_t)(strlen(path) + 1);
+    size_t path_length = strlen(path);
+    uint32_t path_size = (uint32_t)(path_length + 1) + (is_dir ? 1 : 0);
 
     int out_of_path_data = (*file_infos)->m_PathDataSize + path_size > *max_data_size;
     int out_of_path_count = (*file_infos)->m_Count >= *max_path_count;
@@ -1551,7 +1574,17 @@ static int AppendPath(
         *file_infos = new_file_infos;
     }
 
-    memmove(&(*file_infos)->m_PathData[(*file_infos)->m_PathDataSize], path, path_size);
+    char* path_write_ptr = &(*file_infos)->m_PathData[(*file_infos)->m_PathDataSize];
+    memmove(path_write_ptr, path, path_length);
+    if (is_dir)
+    {
+        path_write_ptr[path_length] = '/';
+        path_write_ptr[path_length + 1] = '\0';
+    }
+    else
+    {
+        path_write_ptr[path_length] = '\0';
+    }
     (*file_infos)->m_PathStartOffsets[(*file_infos)->m_Count] = (*file_infos)->m_PathDataSize;
     (*file_infos)->m_PathDataSize += path_size;
     (*file_infos)->m_Sizes[(*file_infos)->m_Count] = file_size;
@@ -1588,30 +1621,11 @@ static int AddFile(void* context, const char* root_path, const char* asset_path,
     struct AddFile_Context* paths_context = (struct AddFile_Context*)context;
     struct Longtail_StorageAPI* storage_api = paths_context->m_StorageAPI;
 
-    char* full_path = (char*)asset_path;
-    if (properties->m_IsDir)
-    {
-        size_t asset_path_length = strlen(asset_path);
-        full_path = (char*)Longtail_Alloc("GetFilesRecursively", asset_path_length + 1 + 1);
-        strcpy(full_path, asset_path);
-        full_path[asset_path_length] = '/';
-        full_path[asset_path_length + 1] = 0;
-    }
-
-    int err = AppendPath(&paths_context->m_FileInfos, full_path, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 1024, 1024 * 32);
+    int err = AppendPath(&paths_context->m_FileInfos, asset_path, properties->m_IsDir, properties->m_Size, properties->m_Permissions, &paths_context->m_ReservedPathCount, &paths_context->m_ReservedPathSize, 1024, 1024 * 32);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AppendPath() failed with %d", err)
-        if (full_path != asset_path)
-        {
-            Longtail_Free(full_path);
-        }
         return err;
-    }
-
-    if (full_path != asset_path)
-    {
-        Longtail_Free(full_path);
     }
     return 0;
 }
@@ -1712,6 +1726,8 @@ static int StorageChunkFeederFunc(void* context, Longtail_ChunkerAPI_HChunker ch
     return 0;
 }
 
+#define HASHJOB_INLINE_CHUNK_HASH_COUNT 16
+
 struct HashJob
 {
     struct Longtail_StorageAPI* m_StorageAPI;
@@ -1729,6 +1745,9 @@ struct HashJob
     uint32_t m_TargetChunkSize;
     int m_EnableFileMap;
     int m_Err;
+
+    TLongtail_Hash m_InlineChunkHashes[HASHJOB_INLINE_CHUNK_HASH_COUNT];
+    uint32_t m_InlineChunkSizes[HASHJOB_INLINE_CHUNK_HASH_COUNT];
 };
 
 #define MIN_CHUNKER_SIZE(min_chunk_size, target_chunk_size) (((target_chunk_size / 8) < min_chunk_size) ? min_chunk_size : (target_chunk_size / 8))
@@ -1799,29 +1818,39 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             hash_job->m_Err = err;
             return 0;
         }
+        hash_job->m_ChunkHashes = hash_job->m_InlineChunkHashes;
+        hash_job->m_ChunkSizes = hash_job->m_InlineChunkSizes;
         if (hash_size <= chunker_min_size)
         {
-            void* output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) + sizeof(uint32_t));
-            hash_job->m_ChunkHashes = (TLongtail_Hash*)output_mem;
-            hash_job->m_ChunkSizes = (uint32_t*)&hash_job->m_ChunkHashes[1];
-
-            char* buffer = (char*)Longtail_Alloc("DynamicChunking", (size_t)hash_size);
-            if (!buffer)
+            char* buffer = 0;
+            void* heap_buffer = 0;
+            char stack_buffer[2048];
+            if (chunker_min_size > sizeof(stack_buffer))
             {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-                storage_api->CloseFile(storage_api, file_handle);
-                file_handle = 0;
-                Longtail_Free(path);
-                path = 0;
-                hash_job->m_Err = ENOMEM;
-                return 0;
+                heap_buffer = Longtail_Alloc("DynamicChunking", (size_t)hash_size);
+                if (!buffer)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                        storage_api->CloseFile(storage_api, file_handle);
+                    file_handle = 0;
+                    Longtail_Free(path);
+                    path = 0;
+                    hash_job->m_Err = ENOMEM;
+                    return 0;
+                }
+                buffer = (char*)heap_buffer;
             }
+            else
+            {
+                buffer = stack_buffer;
+            }
+
             err = storage_api->Read(storage_api, file_handle, hash_job->m_StartRange, hash_size, buffer);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->Read() failed with %d", err)
-                Longtail_Free(buffer);
-                buffer = 0;
+                Longtail_Free(heap_buffer);
+                heap_buffer = 0;
                 storage_api->CloseFile(storage_api, file_handle);
                 file_handle = 0;
                 Longtail_Free(path);
@@ -1834,8 +1863,8 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_job->m_HashAPI->HashBuffer() failed with %d", err)
-                Longtail_Free(buffer);
-                buffer = 0;
+                Longtail_Free(heap_buffer);
+                heap_buffer = 0;
                 storage_api->CloseFile(storage_api, file_handle);
                 file_handle = 0;
                 Longtail_Free(path);
@@ -1844,8 +1873,8 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                 return 0;
             }
 
-            Longtail_Free(buffer);
-            buffer = 0;
+            Longtail_Free(heap_buffer);
+            heap_buffer = 0;
 
             hash_job->m_ChunkSizes[0] = (uint32_t)hash_size;
 
@@ -1857,7 +1886,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             uint32_t avg_chunk_size = AVG_CHUNKER_SIZE(chunker_min_size, hash_job->m_TargetChunkSize);
             uint32_t max_chunk_size = MAX_CHUNKER_SIZE(chunker_min_size, hash_job->m_TargetChunkSize);
 
-            uint32_t chunk_capacity = 0;
+            uint32_t chunk_capacity = HASHJOB_INLINE_CHUNK_HASH_COUNT;
 
             Longtail_ChunkerAPI_HChunker chunker;
             err = hash_job->m_ChunkerAPI->CreateChunker(hash_job->m_ChunkerAPI, min_chunk_size, avg_chunk_size, max_chunk_size, &chunker);
@@ -1888,7 +1917,9 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         uint64_t bytes_left = buffer_end_ptr - chunk_start_ptr;
                         if (chunk_capacity == chunk_count)
                         {
-                            uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_chunk_size);
+                            uint64_t bytes_read = chunk_start_ptr - mapped_ptr;
+                            uint64_t avg_size = bytes_read / chunk_count;
+                            uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_size);
 
                             void* new_output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) * new_chunk_capacity + sizeof(uint32_t) * new_chunk_capacity);
                             if (!new_output_mem)
@@ -1912,7 +1943,10 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                             {
                                 memcpy(new_chunk_hashes, hash_job->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
                                 memcpy(new_chunk_sizes, hash_job->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
-                                Longtail_Free(hash_job->m_ChunkHashes);
+                                if (hash_job->m_ChunkHashes != hash_job->m_InlineChunkHashes)
+                                {
+                                    Longtail_Free(hash_job->m_ChunkHashes);
+                                }
                             }
                             hash_job->m_ChunkHashes = new_chunk_hashes;
                             hash_job->m_ChunkSizes = new_chunk_sizes;
@@ -1977,7 +2011,8 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                     if (chunk_capacity == chunk_count)
                     {
                         uint64_t bytes_left = hash_size - (chunk_range.offset);
-                        uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_chunk_size);
+                        uint64_t avg_size = chunk_range.offset / chunk_count;
+                        uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_size);
 
                         void* new_output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) * new_chunk_capacity + sizeof(uint32_t) * new_chunk_capacity);
                         if (!new_output_mem)
@@ -2000,7 +2035,10 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         {
                             memcpy(new_chunk_hashes, hash_job->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
                             memcpy(new_chunk_sizes, hash_job->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
-                            Longtail_Free(hash_job->m_ChunkHashes);
+                            if (hash_job->m_ChunkHashes != hash_job->m_InlineChunkHashes)
+                            {
+                                Longtail_Free(hash_job->m_ChunkHashes);
+                            }
                         }
                         hash_job->m_ChunkHashes = new_chunk_hashes;
                         hash_job->m_ChunkSizes = new_chunk_sizes;
@@ -2248,7 +2286,10 @@ static int ChunkAssets(
     {
         for (uint32_t i = 0; i < jobs_submitted; ++i)
         {
-            Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+            if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
+            {
+                Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+            }
         }
         Longtail_Free(work_mem);
         return err;
@@ -2278,7 +2319,10 @@ static int ChunkAssets(
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AllocChunkAssetsData() failed with %d", ENOMEM)
             for (uint32_t i = 0; i < jobs_submitted; ++i)
             {
-                Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+                if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
+                {
+                    Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+                }
             }
             Longtail_Free(work_mem);
             return ENOMEM;
@@ -2314,7 +2358,10 @@ static int ChunkAssets(
                 Longtail_Free(cad);
                 for (uint32_t i = 0; i < jobs_submitted; ++i)
                 {
-                    Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+                    if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
+                    {
+                        Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+                    }
                 }
                 Longtail_Free(work_mem);
                 return err;
@@ -2325,7 +2372,10 @@ static int ChunkAssets(
 
     for (uint32_t i = 0; i < jobs_submitted; ++i)
     {
-        Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+        if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
+        {
+            Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
+        }
     }
     Longtail_Free(work_mem);
     return err;

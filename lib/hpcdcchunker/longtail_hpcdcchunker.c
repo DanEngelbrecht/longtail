@@ -2,6 +2,8 @@
 
 #include "longtail_hpcdcchunker.h"
 
+#include "../longtail_platform.h"
+
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -97,6 +99,16 @@ struct HPCDCArray
     uint32_t len;
 };
 
+#define HPCDCCHUNKER_MAX_CACHED_CHUNKER_COUNT 232
+
+struct Longtail_HPCDCChunkerAPI
+{
+    struct Longtail_ChunkerAPI m_API;
+    HLongtail_SpinLock m_Lock;
+    struct Longtail_HPCDCChunker* m_CachedChunkers[HPCDCCHUNKER_MAX_CACHED_CHUNKER_COUNT];
+    uint32_t m_CachedChunkerCount;
+};
+
 struct Longtail_HPCDCChunker
 {
     struct Longtail_HPCDCChunkerParams params;
@@ -116,12 +128,16 @@ static uint32_t HPCDCDiscriminatorFromAvg(double avg)
     return (uint32_t)(avg / (-1.42888852e-7*avg + 1.33237515));
 }
 
+// TODO: Create a cache for chunkers?
+
 int Longtail_HPCDCCreateChunker(
     struct Longtail_HPCDCChunkerParams* params,
+    struct Longtail_HPCDCChunker* optional_cached_chunker,
     struct Longtail_HPCDCChunker** out_chunker)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(params, "%p"),
+        LONGTAIL_LOGFIELD(optional_cached_chunker, "%p"),
         LONGTAIL_LOGFIELD(out_chunker, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
@@ -137,17 +153,26 @@ int Longtail_HPCDCCreateChunker(
         max_feed = 0xffffffffu;
     }
 
-    size_t chunker_size = sizeof(struct Longtail_HPCDCChunker) + max_feed;
-    struct Longtail_HPCDCChunker* c = (struct Longtail_HPCDCChunker*)Longtail_Alloc("HPCDCCreateChunker", chunker_size);
-    if (!c)
+    struct Longtail_HPCDCChunker* c = optional_cached_chunker;
+    if (c == 0 || c->max_feed < max_feed)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        return ENOMEM;
+        if (optional_cached_chunker)
+        {
+            Longtail_Free(optional_cached_chunker);
+            optional_cached_chunker = 0;
+        }
+        size_t chunker_size = sizeof(struct Longtail_HPCDCChunker) + max_feed;
+        c = (struct Longtail_HPCDCChunker*)Longtail_Alloc("HPCDCCreateChunker", chunker_size);
+        if (!c)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+                return ENOMEM;
+        }
+        c->buf.data = (uint8_t*)&c[1];
+        c->max_feed = (uint32_t)max_feed;
     }
     c->params = *params;
-    c->buf.data = (uint8_t*)&c[1];
     c->buf.len = 0;
-    c->max_feed = (uint32_t)max_feed;
     c->off = 0;
     c->hValue = 0;
     c->hDiscriminator = HPCDCDiscriminatorFromAvg((double)params->avg);
@@ -286,12 +311,6 @@ struct Longtail_Chunker_ChunkRange Longtail_HPCDCNextChunk(
     return r;
 }
 
-struct Longtail_HPCDCChunkerAPI
-{
-    struct Longtail_ChunkerAPI m_API;
-	uint32_t m_TargetChunkSize;
-};
-
 void HPCDCChunker_Dispose(struct Longtail_API* base_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -300,6 +319,15 @@ void HPCDCChunker_Dispose(struct Longtail_API* base_api)
 
     LONGTAIL_FATAL_ASSERT(ctx, base_api, return)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)base_api;
+    Longtail_LockSpinLock(api->m_Lock);
+    while (api->m_CachedChunkerCount > 0)
+    {
+        api->m_CachedChunkerCount--;
+        Longtail_Free(api->m_CachedChunkers[api->m_CachedChunkerCount]);
+        api->m_CachedChunkers[api->m_CachedChunkerCount] = 0;
+    }
+    Longtail_UnlockSpinLock(api->m_Lock);
+    Longtail_DeleteSpinLock(api->m_Lock);
 	Longtail_Free(api);
 }
 
@@ -338,14 +366,23 @@ int HPCDCChunker_CreateChunker(
     LONGTAIL_VALIDATE_INPUT(ctx, out_chunker, return EINVAL)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
 
-
-	struct Longtail_HPCDCChunkerParams chunker_params;
+    struct Longtail_HPCDCChunkerParams chunker_params;
     chunker_params.min = min_chunk_size;
     chunker_params.avg = avg_chunk_size;
     chunker_params.max = max_chunk_size;
 
+    struct Longtail_HPCDCChunker* cached_chunker = 0;
+    Longtail_LockSpinLock(api->m_Lock);
+    if (api->m_CachedChunkerCount > 0)
+    {
+        api->m_CachedChunkerCount--;
+        cached_chunker = api->m_CachedChunkers[api->m_CachedChunkerCount];
+        api->m_CachedChunkers[api->m_CachedChunkerCount] = 0;
+    }
+    Longtail_UnlockSpinLock(api->m_Lock);
+
 	struct Longtail_HPCDCChunker* chunker;
-	Longtail_HPCDCCreateChunker(&chunker_params, &chunker);
+	Longtail_HPCDCCreateChunker(&chunker_params, cached_chunker, &chunker);
 
 	*out_chunker = (Longtail_ChunkerAPI_HChunker)chunker;
 
@@ -399,7 +436,18 @@ int HPCDCChunker_DisposeChunker(struct Longtail_ChunkerAPI* chunker_api, Longtai
     LONGTAIL_VALIDATE_INPUT(ctx, chunker_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, chunker, return EINVAL)
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
-	Longtail_Free(chunker);
+    Longtail_LockSpinLock(api->m_Lock);
+    if (api->m_CachedChunkerCount == HPCDCCHUNKER_MAX_CACHED_CHUNKER_COUNT)
+    {
+        Longtail_UnlockSpinLock(api->m_Lock);
+        Longtail_Free(chunker);
+    }
+    else
+    {
+        api->m_CachedChunkers[api->m_CachedChunkerCount] = (struct Longtail_HPCDCChunker*)chunker;
+        api->m_CachedChunkerCount++;
+        Longtail_UnlockSpinLock(api->m_Lock);
+    }
 	return 0;
 }
 
@@ -502,6 +550,13 @@ static int HPCDCChunker_Init(
     }
 
 	struct Longtail_HPCDCChunkerAPI* api = (struct Longtail_HPCDCChunkerAPI*)chunker_api;
+    int err = Longtail_CreateSpinLock(&api[1], &api->m_Lock);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateSpinLock() failed with %d", err)
+        return err;
+    }
+    api->m_CachedChunkerCount = 0;
 
 	*out_chunker_api = chunker_api;
 	return 0;
@@ -512,7 +567,8 @@ struct Longtail_ChunkerAPI* Longtail_CreateHPCDCChunkerAPI()
     MAKE_LOG_CONTEXT(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     size_t api_size =
-        sizeof(struct Longtail_HPCDCChunkerAPI);
+        sizeof(struct Longtail_HPCDCChunkerAPI)+
+        Longtail_GetSpinLockSize();
 
     void* mem = Longtail_Alloc("HPCDCCreateChunker", api_size);
     if (!mem)

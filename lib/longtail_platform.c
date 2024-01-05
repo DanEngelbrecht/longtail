@@ -416,25 +416,45 @@ void Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock)
     ReleaseSRWLockExclusive(&rwlock->m_RWLock);
 }
 
-static wchar_t* MakeWCharString(const char* s)
+static wchar_t* MakeWCharString(const char* s, wchar_t* buffer, size_t buffer_size)
 {
+    struct Longtail_LogContextFmt_Private* ctx = 0;
     int l = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
-    wchar_t* r = (wchar_t*)Longtail_Alloc("MakeWCharString", l * sizeof(wchar_t));
+    if (l <= 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "MultiByteToWideChar for path `%s`: failed with %d", s, Win32ErrorToErrno(GetLastError()))
+        return 0;
+    }
+    wchar_t* r = buffer;
+    if ((size_t)l > buffer_size)
+    {
+        r = (wchar_t*)Longtail_Alloc("MakeWCharString", l * sizeof(wchar_t));
+    }
     MultiByteToWideChar(CP_UTF8, 0, s, -1, r, l);
     return r;
 }
 
-static char* MakeUTF8String(const wchar_t* s)
+static char* MakeUTF8String(const wchar_t* s, char* buffer, size_t buffer_size)
 {
+    struct Longtail_LogContextFmt_Private* ctx = 0;
     int l = WideCharToMultiByte(CP_UTF8, 0, s, -1, 0, 0, NULL ,NULL);
-    char* r = (char*)Longtail_Alloc("MakeUTF8String", l * sizeof(char));
+    if (l <= 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "MakeUTF8String for path `%ls`: failed with %d", s, Win32ErrorToErrno(GetLastError()))
+        return 0;
+    }
+    char* r = buffer;
+    if ((size_t)l > buffer_size)
+    {
+        r = (char*)Longtail_Alloc("MakeUTF8String", l * sizeof(char));
+    }
     WideCharToMultiByte(CP_UTF8, 0, s, -1, r, l, NULL ,NULL);
     return r;
 }
 
-static wchar_t* MakePlatformPath(const char* path)
+static wchar_t* MakePlatformPath(const char* path, wchar_t* buffer, size_t buffer_size)
 {
-    wchar_t* r = MakeWCharString(path);
+    wchar_t* r = MakeWCharString(path, buffer, buffer_size);
     wchar_t* p = r;
     while (*p)
     {
@@ -444,13 +464,16 @@ static wchar_t* MakePlatformPath(const char* path)
     return r;
 }
 
-static wchar_t* MakeLongPlatformPath(const char* path)
+static wchar_t* MakeLongPlatformPath(const char* path, wchar_t* buffer, size_t buffer_size)
 {
-    wchar_t* platform_path = MakePlatformPath(path);
+    wchar_t* platform_path = MakePlatformPath(path, buffer, buffer_size);
     const wchar_t* r = MakeLongPath(platform_path);
     if (r != platform_path)
     {
-        Longtail_Free(platform_path);
+        if (platform_path != buffer)
+        {
+            Longtail_Free(platform_path);
+        }
     }
     return (wchar_t*)r;
 }
@@ -574,16 +597,20 @@ static DWORD NativeCreateDirectory(wchar_t* long_path)
 
 int Longtail_CreateDirectory(const char* path)
 {
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     DWORD error = NativeCreateDirectory(long_path);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     return Win32ErrorToErrno(error);
 }
 
 int Longtail_MoveFile(const char* source, const char* target)
 {
-    wchar_t* long_source_path = MakeLongPlatformPath(source);
-    wchar_t* long_target_path = MakeLongPlatformPath(target);
+    wchar_t* long_source_path = MakeLongPlatformPath(source, 0, 0);
+    wchar_t* long_target_path = MakeLongPlatformPath(target, 0, 0);
     BOOL ok = MoveFileW(long_source_path, long_target_path);
     Longtail_Free(long_source_path);
     Longtail_Free(long_target_path);
@@ -604,9 +631,13 @@ int Longtail_IsDir(const char* path)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     DWORD attrs = GetFileAttributesW(long_path);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
@@ -630,9 +661,13 @@ int Longtail_IsFile(const char* path)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     DWORD attrs = GetFileAttributesW(long_path);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
@@ -648,9 +683,13 @@ int Longtail_IsFile(const char* path)
 
 int Longtail_RemoveDir(const char* path)
 {
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     BOOL ok = RemoveDirectoryW(long_path);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     if (ok)
     {
         return 0;
@@ -660,9 +699,13 @@ int Longtail_RemoveDir(const char* path)
 
 int Longtail_RemoveFile(const char* path)
 {
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     BOOL ok = DeleteFileW(long_path);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     if (ok)
     {
         return 0;
@@ -670,12 +713,15 @@ int Longtail_RemoveFile(const char* path)
     return Win32ErrorToErrno(GetLastError());
 }
 
+#define LONGTAIL_FSITERATOR_PRIVATE_ITEM_BUFFER_SIZE (1024 - sizeof(WIN32_FIND_DATAW) - sizeof(HANDLE) - sizeof(wchar_t*) - sizeof(char*))
+
 struct Longtail_FSIterator_private
 {
     WIN32_FIND_DATAW m_FindData;
     HANDLE m_Handle;
     wchar_t* m_Path;
     char* m_ItemPath;
+    char m_ItemPathBuffer[LONGTAIL_FSITERATOR_PRIVATE_ITEM_BUFFER_SIZE];
 };
 
 size_t Longtail_GetFSIteratorSize()
@@ -719,7 +765,7 @@ static int Skip(HLongtail_FSIterator fs_iterator)
 
 int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
 {
-    fs_iterator->m_Path = MakeLongPlatformPath(path);
+    fs_iterator->m_Path = MakeLongPlatformPath(path, 0, 0);
     wchar_t* scan_pattern = ConcatPlatformPath(fs_iterator->m_Path, L"*.*");
     fs_iterator->m_ItemPath = 0;
     fs_iterator->m_Handle = FindFirstFileW(scan_pattern, &fs_iterator->m_FindData);
@@ -749,7 +795,10 @@ int Longtail_FindNext(HLongtail_FSIterator fs_iterator)
 
 void Longtail_CloseFind(HLongtail_FSIterator fs_iterator)
 {
-    Longtail_Free(fs_iterator->m_ItemPath);
+    if (fs_iterator->m_ItemPath != fs_iterator->m_ItemPathBuffer)
+    {
+        Longtail_Free(fs_iterator->m_ItemPath);
+    }
     Longtail_Free(fs_iterator->m_Path);
     FindClose(fs_iterator->m_Handle);
     fs_iterator->m_Handle = INVALID_HANDLE_VALUE;
@@ -761,8 +810,11 @@ const char* Longtail_GetFileName(HLongtail_FSIterator fs_iterator)
     {
         return 0;
     }
-    Longtail_Free(fs_iterator->m_ItemPath);
-    fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName);
+    if (fs_iterator->m_ItemPath != fs_iterator->m_ItemPathBuffer)
+    {
+        Longtail_Free(fs_iterator->m_ItemPath);
+    }
+    fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName, fs_iterator->m_ItemPathBuffer, sizeof(fs_iterator->m_ItemPathBuffer));
     return fs_iterator->m_ItemPath;
 }
 
@@ -770,8 +822,11 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
 {
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-        Longtail_Free(fs_iterator->m_ItemPath);
-        fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName);
+        if (fs_iterator->m_ItemPath != fs_iterator->m_ItemPathBuffer)
+        {
+            Longtail_Free(fs_iterator->m_ItemPath);
+        }
+        fs_iterator->m_ItemPath = MakeUTF8String(fs_iterator->m_FindData.cFileName, fs_iterator->m_ItemPathBuffer, sizeof(fs_iterator->m_ItemPathBuffer));
         return fs_iterator->m_ItemPath;
     }
     return 0;
@@ -829,10 +884,14 @@ DWORD NativeOpenReadFileWithRetry(wchar_t* long_path, HANDLE* out_handle)
 
 int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
 {
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     HANDLE handle;
     DWORD error = NativeOpenReadFileWithRetry(long_path, &handle);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     if (error != ERROR_SUCCESS)
     {
         return Win32ErrorToErrno(error);
@@ -870,10 +929,14 @@ DWORD NativeOpenWriteFileWithRetry(wchar_t* long_path, DWORD create_disposition,
 
 int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file)
 {
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     HANDLE handle;
     DWORD error = NativeOpenWriteFileWithRetry(long_path, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, &handle);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     if (error != ERROR_SUCCESS)
     {
         return Win32ErrorToErrno(error);
@@ -928,12 +991,16 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
 
     DWORD attrs = GetFileAttributesW(long_path);
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
-        Longtail_Free(long_path);
+        if (long_path != long_path_buffer)
+        {
+            Longtail_Free(long_path);
+        }
         int e = Win32ErrorToErrno(GetLastError());
         if (e == ENOENT)
         {
@@ -956,7 +1023,10 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
         }
         if (FALSE == SetFileAttributesW(long_path, attrs))
         {
-            Longtail_Free(long_path);
+            if (long_path != long_path_buffer)
+            {
+                Longtail_Free(long_path);
+            }
             int e = Win32ErrorToErrno(GetLastError());
             if (e == ENOENT)
             {
@@ -966,7 +1036,10 @@ int Longtail_SetFilePermissions(const char* path, uint16_t permissions)
             return e;
         }
     }
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     return 0;
 }
 
@@ -981,9 +1054,13 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     DWORD attrs = GetFileAttributesW(long_path);
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         int e = Win32ErrorToErrno(GetLastError());
@@ -1163,7 +1240,8 @@ size_t Longtail_GetFileLockSize()
 
 int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_lock)
 {
-    wchar_t* long_path = MakeLongPlatformPath(path);
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
 
     *out_file_lock = (HLongtail_FileLock)mem;
     (*out_file_lock)->handle = INVALID_HANDLE_VALUE;
@@ -1183,7 +1261,10 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
     {
         if (--try_count == 0)
         {
-            Longtail_Free(long_path);
+            if (long_path != long_path_buffer)
+            {
+                Longtail_Free(long_path);
+            }
             return EACCES;
         }
         Longtail_Sleep(retry_delay);
@@ -1213,12 +1294,19 @@ int Longtail_LockFile(void* mem, const char* path, HLongtail_FileLock* out_file_
             case ERROR_OPLOCK_NOT_GRANTED:
                 break;
             default:
-                Longtail_Free(long_path);
+                if (long_path != long_path_buffer)
+                {
+                    Longtail_Free(long_path);
+                }
+                (long_path);
                 return Win32ErrorToErrno(error);
         }
         retry_delay += 2000;
     }
-    Longtail_Free(long_path);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
     (*out_file_lock)->handle = handle;
     return 0;
 }
