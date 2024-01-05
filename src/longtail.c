@@ -1425,7 +1425,7 @@ static struct Longtail_FileInfos* CreateFileInfos(uint32_t path_count, uint32_t 
 
     LONGTAIL_FATAL_ASSERT(ctx, (path_count == 0 && path_data_size == 0) || (path_count > 0 && path_data_size > path_count), return 0)
     size_t file_infos_size = GetFileInfosSize(path_count, path_data_size);
-    struct Longtail_FileInfos* file_infos = (struct Longtail_FileInfos*)Longtail_Alloc("GetFilesRecursively", file_infos_size);
+    struct Longtail_FileInfos* file_infos = (struct Longtail_FileInfos*)Longtail_Alloc("CreateFileInfos", file_infos_size);
     if (!file_infos)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1705,6 +1705,8 @@ static int StorageChunkFeederFunc(void* context, Longtail_ChunkerAPI_HChunker ch
     return 0;
 }
 
+#define HASHJOB_INLINE_CHUNK_HASH_COUNT 16
+
 struct HashJob
 {
     struct Longtail_StorageAPI* m_StorageAPI;
@@ -1723,8 +1725,8 @@ struct HashJob
     int m_EnableFileMap;
     int m_Err;
 
-    TLongtail_Hash m_SingleChunkHash;
-    uint32_t m_SingleChunkSize;
+    TLongtail_Hash m_InlineChunkHashes[HASHJOB_INLINE_CHUNK_HASH_COUNT];
+    uint32_t m_InlineChunkSizes[HASHJOB_INLINE_CHUNK_HASH_COUNT];
 };
 
 #define MIN_CHUNKER_SIZE(min_chunk_size, target_chunk_size) (((target_chunk_size / 8) < min_chunk_size) ? min_chunk_size : (target_chunk_size / 8))
@@ -1795,11 +1797,10 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             hash_job->m_Err = err;
             return 0;
         }
+        hash_job->m_ChunkHashes = hash_job->m_InlineChunkHashes;
+        hash_job->m_ChunkSizes = hash_job->m_InlineChunkSizes;
         if (hash_size <= chunker_min_size)
         {
-            hash_job->m_ChunkHashes = &hash_job->m_SingleChunkHash;
-            hash_job->m_ChunkSizes = &hash_job->m_SingleChunkSize;
-
             char* buffer = 0;
             void* heap_buffer = 0;
             char stack_buffer[2048];
@@ -1864,7 +1865,7 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
             uint32_t avg_chunk_size = AVG_CHUNKER_SIZE(chunker_min_size, hash_job->m_TargetChunkSize);
             uint32_t max_chunk_size = MAX_CHUNKER_SIZE(chunker_min_size, hash_job->m_TargetChunkSize);
 
-            uint32_t chunk_capacity = 0;
+            uint32_t chunk_capacity = HASHJOB_INLINE_CHUNK_HASH_COUNT;
 
             Longtail_ChunkerAPI_HChunker chunker;
             err = hash_job->m_ChunkerAPI->CreateChunker(hash_job->m_ChunkerAPI, min_chunk_size, avg_chunk_size, max_chunk_size, &chunker);
@@ -1895,7 +1896,9 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         uint64_t bytes_left = buffer_end_ptr - chunk_start_ptr;
                         if (chunk_capacity == chunk_count)
                         {
-                            uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)((2 * bytes_left) / avg_chunk_size);
+                            uint64_t bytes_read = chunk_start_ptr - mapped_ptr;
+                            uint64_t avg_size = bytes_read / chunk_count;
+                            uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_size);
 
                             void* new_output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) * new_chunk_capacity + sizeof(uint32_t) * new_chunk_capacity);
                             if (!new_output_mem)
@@ -1919,7 +1922,10 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                             {
                                 memcpy(new_chunk_hashes, hash_job->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
                                 memcpy(new_chunk_sizes, hash_job->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
-                                Longtail_Free(hash_job->m_ChunkHashes);
+                                if (hash_job->m_ChunkHashes != hash_job->m_InlineChunkHashes)
+                                {
+                                    Longtail_Free(hash_job->m_ChunkHashes);
+                                }
                             }
                             hash_job->m_ChunkHashes = new_chunk_hashes;
                             hash_job->m_ChunkSizes = new_chunk_sizes;
@@ -1984,7 +1990,8 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                     if (chunk_capacity == chunk_count)
                     {
                         uint64_t bytes_left = hash_size - (chunk_range.offset);
-                        uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)((2 * bytes_left) / avg_chunk_size);
+                        uint64_t avg_size = chunk_range.offset / chunk_count;
+                        uint32_t new_chunk_capacity = chunk_count + 1 + (uint32_t)(bytes_left / avg_size);
 
                         void* new_output_mem = Longtail_Alloc("DynamicChunking", sizeof(TLongtail_Hash) * new_chunk_capacity + sizeof(uint32_t) * new_chunk_capacity);
                         if (!new_output_mem)
@@ -2007,7 +2014,10 @@ static int DynamicChunking(void* context, uint32_t job_id, int is_cancelled)
                         {
                             memcpy(new_chunk_hashes, hash_job->m_ChunkHashes, sizeof(TLongtail_Hash) * chunk_count);
                             memcpy(new_chunk_sizes, hash_job->m_ChunkSizes, sizeof(uint32_t) * chunk_count);
-                            Longtail_Free(hash_job->m_ChunkHashes);
+                            if (hash_job->m_ChunkHashes != hash_job->m_InlineChunkHashes)
+                            {
+                                Longtail_Free(hash_job->m_ChunkHashes);
+                            }
                         }
                         hash_job->m_ChunkHashes = new_chunk_hashes;
                         hash_job->m_ChunkSizes = new_chunk_sizes;
@@ -2255,7 +2265,7 @@ static int ChunkAssets(
     {
         for (uint32_t i = 0; i < jobs_submitted; ++i)
         {
-            if (tmp_hash_jobs[i].m_ChunkHashes != &tmp_hash_jobs[i].m_SingleChunkHash)
+            if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
             {
                 Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
             }
@@ -2288,7 +2298,7 @@ static int ChunkAssets(
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "AllocChunkAssetsData() failed with %d", ENOMEM)
             for (uint32_t i = 0; i < jobs_submitted; ++i)
             {
-                if (tmp_hash_jobs[i].m_ChunkHashes != &tmp_hash_jobs[i].m_SingleChunkHash)
+                if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
                 {
                     Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
                 }
@@ -2327,7 +2337,7 @@ static int ChunkAssets(
                 Longtail_Free(cad);
                 for (uint32_t i = 0; i < jobs_submitted; ++i)
                 {
-                    if (tmp_hash_jobs[i].m_ChunkHashes != &tmp_hash_jobs[i].m_SingleChunkHash)
+                    if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
                     {
                         Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
                     }
@@ -2341,7 +2351,7 @@ static int ChunkAssets(
 
     for (uint32_t i = 0; i < jobs_submitted; ++i)
     {
-        if (tmp_hash_jobs[i].m_ChunkHashes != &tmp_hash_jobs[i].m_SingleChunkHash)
+        if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
         {
             Longtail_Free(tmp_hash_jobs[i].m_ChunkHashes);
         }
