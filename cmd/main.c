@@ -2140,7 +2140,7 @@ int main(int argc, char** argv)
 
         if (enable_mem_tracer_raw) {
             Longtail_MemTracer_Init();
-            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+            Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
         uint32_t compression = ParseCompressionType(compression_raw);
@@ -2218,7 +2218,7 @@ int main(int argc, char** argv)
 
         if (enable_mem_tracer_raw) {
             Longtail_MemTracer_Init();
-            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+            Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
         const char* cache_path = cache_path_raw ? NormalizePath(cache_path_raw) : 0;
@@ -2266,7 +2266,7 @@ int main(int argc, char** argv)
 
         if (enable_mem_tracer_raw) {
             Longtail_MemTracer_Init();
-            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+            Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
         const char* version_index_path = NormalizePath(version_index_path_raw);
@@ -2294,7 +2294,7 @@ int main(int argc, char** argv)
 
         if (enable_mem_tracer_raw) {
             Longtail_MemTracer_Init();
-            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+            Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
         if (kgflags_get_non_flag_args_count() < 2)
@@ -2348,7 +2348,7 @@ int main(int argc, char** argv)
 
         if (enable_mem_tracer_raw) {
             Longtail_MemTracer_Init();
-            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+            Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
         const char* source_path_raw = kgflags_get_non_flag_arg(1);
@@ -2409,7 +2409,7 @@ int main(int argc, char** argv)
 
         if (enable_mem_tracer_raw) {
             Longtail_MemTracer_Init();
-            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+            Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
         uint32_t compression = ParseCompressionType(compression_raw);
@@ -2474,7 +2474,7 @@ int main(int argc, char** argv)
 
         if (enable_mem_tracer_raw) {
             Longtail_MemTracer_Init();
-            Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+            Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
         const char* source_path = NormalizePath(source_path_raw);
