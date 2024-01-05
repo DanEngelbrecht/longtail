@@ -1307,6 +1307,7 @@ static int RecurseTree(
             break;
         }
         LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_DEBUG, "Scanning `%s`", full_search_path)
+        char asset_path_buffer[1024];
         while(err == 0)
         {
             struct Longtail_StorageAPI_EntryProperties properties;
@@ -1326,11 +1327,18 @@ static int RecurseTree(
                 {
                     size_t current_relative_path_length = strlen(relative_parent_path);
                     size_t new_parent_path_length = current_relative_path_length + 1 + strlen(properties.m_Name);
-                    asset_path = (char*)Longtail_Alloc("GetFilesRecursively", new_parent_path_length + 1);
-                    if (!asset_path)
+                    if (new_parent_path_length < sizeof(asset_path_buffer))
                     {
-                        LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
-                        break;
+                        asset_path = asset_path_buffer;
+                    }
+                    else
+                    {
+                        asset_path = (char*)Longtail_Alloc("GetFilesRecursively", new_parent_path_length + 1);
+                        if (!asset_path)
+                        {
+                            LONGTAIL_LOG(ctx2, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
+                                break;
+                        }
                     }
                     strcpy(asset_path, relative_parent_path);
                     asset_path[current_relative_path_length] = '/';
@@ -1359,7 +1367,10 @@ static int RecurseTree(
                     {
                         LONGTAIL_LOG(ctx3, LONGTAIL_LOG_LEVEL_WARNING, "entry_processor() failed with %d",
                             err)
-                        Longtail_Free(asset_path);
+                        if (asset_path != asset_path_buffer)
+                        {
+                            Longtail_Free(asset_path);
+                        }
                         asset_path = 0;
                         break;
                     }
@@ -1378,11 +1389,21 @@ static int RecurseTree(
                             }
                         }
                         arrput(full_search_paths, storage_api->ConcatPath(storage_api, full_search_path, properties.m_Name));
-                        arrput(relative_parent_paths, asset_path);
-                        asset_path = 0;
+                        if (asset_path != asset_path_buffer)
+                        {
+                            arrput(relative_parent_paths, asset_path);
+                            asset_path = 0;
+                        }
+                        else
+                        {
+                            arrput(relative_parent_paths, Longtail_Strdup(asset_path));
+                        }
                     }
                 }
-                Longtail_Free(asset_path);
+                if (asset_path != asset_path_buffer)
+                {
+                    Longtail_Free(asset_path);
+                }
             }
             err = storage_api->FindNext(storage_api, fs_iterator);
             if (err == ENOENT)
