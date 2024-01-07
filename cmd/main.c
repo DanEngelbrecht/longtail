@@ -1806,6 +1806,7 @@ int Unpack(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create hashing api from `%s`, %d", source_path, err);
+        Longtail_Free(archive_index);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1816,6 +1817,7 @@ int Unpack(
     if (chunker_api == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create chunking api from `%s`, %d", source_path, err);
+        Longtail_Free(archive_index);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1837,6 +1839,7 @@ int Unpack(
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to scan version content from `%s`, %d", target_path, err);
             SAFE_DISPOSE_API(chunker_api);
+            Longtail_Free(archive_index);
             SAFE_DISPOSE_API(storage_api);
             SAFE_DISPOSE_API(compression_registry);
             SAFE_DISPOSE_API(job_api);
@@ -1879,6 +1882,7 @@ int Unpack(
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create version index for `%s`, %d", target_path, err);
             SAFE_DISPOSE_API(chunker_api);
+            Longtail_Free(archive_index);
             SAFE_DISPOSE_API(storage_api);
             SAFE_DISPOSE_API(compression_registry);
             SAFE_DISPOSE_API(job_api);
@@ -1898,6 +1902,7 @@ int Unpack(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create archive block store `%s`, %d", source_path, err);
         Longtail_Free(target_version_index);
         SAFE_DISPOSE_API(chunker_api);
+        Longtail_Free(archive_index);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1912,6 +1917,7 @@ int Unpack(
         SAFE_DISPOSE_API(archive_block_store_api);
         Longtail_Free(target_version_index);
         SAFE_DISPOSE_API(chunker_api);
+        Longtail_Free(archive_index);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1927,6 +1933,7 @@ int Unpack(
         SAFE_DISPOSE_API(archive_block_store_api);
         Longtail_Free(target_version_index);
         SAFE_DISPOSE_API(chunker_api);
+        Longtail_Free(archive_index);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1948,6 +1955,7 @@ int Unpack(
         SAFE_DISPOSE_API(archive_block_store_api);
         Longtail_Free(target_version_index);
         SAFE_DISPOSE_API(chunker_api);
+        Longtail_Free(archive_index);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -1966,6 +1974,7 @@ int Unpack(
         SAFE_DISPOSE_API(archive_block_store_api);
         Longtail_Free(target_version_index);
         SAFE_DISPOSE_API(chunker_api);
+        Longtail_Free(archive_index);
         SAFE_DISPOSE_API(storage_api);
         SAFE_DISPOSE_API(compression_registry);
         SAFE_DISPOSE_API(job_api);
@@ -2018,6 +2027,7 @@ int Unpack(
     SAFE_DISPOSE_API(archive_block_store_api);
     Longtail_Free(target_version_index);
     SAFE_DISPOSE_API(chunker_api);
+    Longtail_Free(archive_index);
     SAFE_DISPOSE_API(storage_api);
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(job_api);
