@@ -8,6 +8,7 @@
 - **ADDED** memtracer now tracks allocations in stb_ds
 - **ADDED** memtracer now tracks allocations in zstd
 - **NEW API** `Longtail_CompareAndSwap` compare and swap with platform implementations
+- **FIXED** Fixed memory leaks in command tool
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
 
 ## 0.4.1
