@@ -342,7 +342,7 @@ struct BlockStoreStorageAPI_ReadFromBlockJobData
     char* m_Buffer;
     const uint32_t* m_ChunkIndexes;
     struct Longtail_StoredBlock* m_StoredBlock;
-    int m_Err;
+    int m_BlockReadError;
 };
 
 static void BlockStoreStorageAPI_ReadBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
@@ -359,27 +359,33 @@ static void BlockStoreStorageAPI_ReadBlock_OnComplete(struct Longtail_AsyncGetSt
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadBlock_OnComplete() caller failed with %d", err)
     }
-    cb->m_Data->m_Err = err;
+    cb->m_Data->m_BlockReadError = err;
     cb->m_Data->m_StoredBlock = stored_block;
     job_api->ResumeJob(job_api, cb->m_JobID);
 }
 
-static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id, int is_cancelled)
+static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id, int detected_error)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(job_id, "%u"),
-        LONGTAIL_LOGFIELD(is_cancelled, "%d")
+        LONGTAIL_LOGFIELD(detected_error, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     struct BlockStoreStorageAPI_ReadFromBlockJobData* data = (struct BlockStoreStorageAPI_ReadFromBlockJobData*)context;
+    if (detected_error)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "BlockStoreStorageAPI_ReadFromBlockJob aborted due to previous error %d", data->m_BlockReadError)
+        SAFE_DISPOSE_STORED_BLOCK(data->m_StoredBlock);
+        return 0;
+    }
 
     if (!data->m_StoredBlock)
     {
-        if (data->m_Err)
+        if (data->m_BlockReadError)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "read from block failed with %d", data->m_Err)
-            return 0;
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "read from block failed with %d", data->m_BlockReadError)
+            return data->m_BlockReadError;
         }
         // Don't need dynamic alloc, could be part of struct BlockStoreStorageAPI_ReadFromBlockJobData since it covers the lifetime of struct BlockStoreStorageAPI_ReadBlock_OnComplete
         struct BlockStoreStorageAPI_ReadBlock_OnCompleteAPI* complete_cb = &data->m_OnReadBlockCompleteAPI;
@@ -391,15 +397,13 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "data->m_BlockStoreFS->m_BlockStore->GetStoredBlock() failed with %d",
-                context, job_id, is_cancelled,
-                err)
-            data->m_Err = err;
-            return 0;
+                context, err)
+            return err;
         }
         return EBUSY;
     }
 
-    data->m_Err = BlockStoreStorageAPI_ReadFromBlock(
+    int err = BlockStoreStorageAPI_ReadFromBlock(
         data->m_StoredBlock,
         data->m_Range,
         data->m_BlockStoreFS,
@@ -408,12 +412,12 @@ static int BlockStoreStorageAPI_ReadFromBlockJob(void* context, uint32_t job_id,
         data->m_Size,
         data->m_Buffer,
         data->m_ChunkIndexes);
-    if (data->m_Err)
+    if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock() failed with %d", data->m_Err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "BlockStoreStorageAPI_ReadFromBlock() failed with %d", err)
     }
     SAFE_DISPOSE_STORED_BLOCK(data->m_StoredBlock);
-    return 0;
+    return err;
 }
 
 static uint32_t BlockStoreStorageAPI_FindStartChunk(const uint64_t* a, uint32_t n, uint64_t val) {
@@ -621,23 +625,43 @@ static int BlockStoreStorageAPI_ReadFile(
         job_datas[b].m_Buffer = buffer;
         job_datas[b].m_ChunkIndexes = chunk_indexes;
         job_datas[b].m_StoredBlock = 0;
-        job_datas[b].m_Err = 0;
+        job_datas[b].m_BlockReadError = 0;
 
         funcs[b] = BlockStoreStorageAPI_ReadFromBlockJob;
         ctxs[b] = &job_datas[b];
     }
     Longtail_JobAPI_Jobs jobs;
     err = job_api->CreateJobs(job_api, job_group, 0, 0, 0, block_count, funcs, ctxs, 0, &jobs);
-    LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->CreateJobs() failed with %d", err)
+        Longtail_Free(work_mem);
+        Longtail_Free(block_range_map);
+        arrfree(chunk_ranges);
+        return err;
+    }
     err = job_api->ReadyJobs(job_api, block_count, jobs);
-    LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReadyJobs() failed with %d", err)
+        Longtail_Free(work_mem);
+        Longtail_Free(block_range_map);
+        arrfree(chunk_ranges);
+        return err;
+    }
     err = job_api->WaitForAllJobs(job_api, job_group, 0, 0, 0);
-    LONGTAIL_FATAL_ASSERT(ctx, err == 0, return err)
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
+        Longtail_Free(work_mem);
+        Longtail_Free(block_range_map);
+        arrfree(chunk_ranges);
+        return err;
+    }
     Longtail_Free(work_mem);
-
     Longtail_Free(block_range_map);
     arrfree(chunk_ranges);
-    return 0;
+    return err;
 }
 
 static int BlockStoreStorageAPI_OpenReadFile(

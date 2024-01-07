@@ -379,7 +379,6 @@ struct ScanBlockJob
     const char* m_BlockPath;
     const char* m_BlockExtension;
     struct Longtail_BlockIndex* m_BlockIndex;
-    int m_Err;
 };
 
 int EndsWith(const char *str, const char *suffix)
@@ -393,26 +392,26 @@ int EndsWith(const char *str, const char *suffix)
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
-static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
+static int ScanBlock(void* context, uint32_t job_id, int detected_error)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(context, "%p"),
         LONGTAIL_LOGFIELD(job_id, "%u"),
-        LONGTAIL_LOGFIELD(is_cancelled, "%d")
+        LONGTAIL_LOGFIELD(detected_error, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return 0)
     struct ScanBlockJob* job = (struct ScanBlockJob*)context;
-    if (is_cancelled)
+    if (detected_error)
     {
-        job->m_Err = ECANCELED;
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "ScanBlock aborted due to previous error %d", detected_error)
         return 0;
     }
 
     const char* block_path = job->m_BlockPath;
     if (!EndsWith(block_path, job->m_BlockExtension))
     {
-        job->m_Err = ENOENT;
+        // Not a block, skip it
         return 0;
     }
 
@@ -420,12 +419,12 @@ static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
     const char* chunks_path = job->m_ChunksPath;
     char* full_block_path = storage_api->ConcatPath(storage_api, chunks_path, block_path);
 
-    job->m_Err = Longtail_ReadBlockIndex(
+    int err = Longtail_ReadBlockIndex(
         storage_api,
         full_block_path,
         &job->m_BlockIndex);
 
-    if (job->m_Err == 0)
+    if (err == 0)
     {
         TLongtail_Hash block_hash = *job->m_BlockIndex->m_BlockHash;
         char* validate_file_name = GetBlockPath(storage_api, job->m_StorePath, job->m_BlockExtension, block_hash);
@@ -433,14 +432,14 @@ static int ScanBlock(void* context, uint32_t job_id, int is_cancelled)
         {
             Longtail_Free(job->m_BlockIndex);
             job->m_BlockIndex = 0;
-            job->m_Err = EBADF;
+            err = EBADF;
         }
         Longtail_Free(validate_file_name);
     }
 
     Longtail_Free(full_block_path);
     full_block_path = 0;
-    return 0;
+    return err;
 }
 
 static int ReadContent(
@@ -519,15 +518,12 @@ static int ReadContent(
     {
         struct ScanBlockJob* job = &scan_jobs[path_index];
         const char* block_path = &file_infos->m_PathData[file_infos->m_PathStartOffsets[path_index]];
-        job->m_BlockIndex = 0;
-
         job->m_StorageAPI = storage_api;
         job->m_StorePath = store_path;
         job->m_ChunksPath = chunks_path;
         job->m_BlockPath = block_path;
         job->m_BlockExtension = block_extension;
         job->m_BlockIndex = 0;
-        job->m_Err = EINVAL;
 
         Longtail_JobAPI_JobFunc job_func[] = {ScanBlock};
         void* ctxs[] = {job};
@@ -542,6 +538,11 @@ static int ReadContent(
     if (err)
     {
         LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
+        for (uint32_t path_index = 0; path_index < path_count; ++path_index)
+        {
+            struct ScanBlockJob* job = &scan_jobs[path_index];
+            Longtail_Free(job->m_BlockIndex);
+        }
         Longtail_Free(scan_jobs);
         Longtail_Free(file_infos);
         Longtail_Free((void*)chunks_path);
@@ -553,6 +554,11 @@ static int ReadContent(
     if (!block_indexes)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        for (uint32_t path_index = 0; path_index < path_count; ++path_index)
+        {
+            struct ScanBlockJob* job = &scan_jobs[path_index];
+            Longtail_Free(job->m_BlockIndex);
+        }
         Longtail_Free(scan_jobs);
         Longtail_Free(file_infos);
         Longtail_Free((void*)chunks_path);
@@ -563,12 +569,13 @@ static int ReadContent(
     for (uint32_t path_index = 0; path_index < path_count; ++path_index)
     {
         struct ScanBlockJob* job = &scan_jobs[path_index];
-        if (job->m_Err == 0)
+        if (job->m_BlockIndex)
         {
             block_indexes[block_count] = job->m_BlockIndex;
             ++block_count;
         }
     }
+
     Longtail_Free(scan_jobs);
     scan_jobs = 0;
 

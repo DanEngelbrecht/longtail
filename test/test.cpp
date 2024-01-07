@@ -4745,15 +4745,25 @@ TEST(Longtail, TestCreateVersionCancelOperation)
         const char* root_path;
         Longtail_FileInfos* file_infos;
         Longtail_VersionIndex** vindex;
-        int err;
         HLongtail_Sema sema;
 
-        static int JobFunc(void* context, uint32_t job_id, int is_cancelled)
+        static int JobFunc(void* context, uint32_t job_id, int detected_error)
         {
+            MAKE_LOG_CONTEXT_FIELDS(ctx)
+                LONGTAIL_LOGFIELD(context, "%p"),
+                LONGTAIL_LOGFIELD(job_id, "%u"),
+                LONGTAIL_LOGFIELD(detected_error, "%d")
+            MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+            if (detected_error)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "TestCreateVersionCancelOperation::JobFunc aborted due to previous error %d", detected_error)
+                return 0;
+            }
             struct JobContext* job = (struct JobContext*)context;
             Longtail_WaitSema(job->sema, LONGTAIL_TIMEOUT_INFINITE);
 
-            job->err = Longtail_CreateVersionIndex(
+            int err = Longtail_CreateVersionIndex(
                 job->storage_api,
                 job->hash_api,
                 job->chunker_api,
@@ -4767,7 +4777,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
                 16384,
                 0,
                 job->vindex);
-            return 0;
+            return err;
         }
     } job_context;
     job_context.storage_api = storage_api;
@@ -4793,7 +4803,6 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     ASSERT_EQ(0, Longtail_PostSema(sema, 1));
     ASSERT_EQ(ECANCELED, job_api->WaitForAllJobs(job_api, job_group, 0, cancel_api, cancel_token));
 
-    ASSERT_EQ(ECANCELED, job_context.err);
     ASSERT_EQ((Longtail_VersionIndex*)0, vindex);
 
     Longtail_DeleteSema(sema);
