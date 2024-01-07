@@ -4,6 +4,7 @@
 - **ADDED** Longtail_MemTracer_ReAlloc
 - **ADDED** memtracer now tracks allocations in stb_ds
 - **ADDED** memtracer now tracks allocations in zstd
+- **NEW API** `Longtail_CompareAndSwap` compare and swap with platform implementations
 
 ## 0.4.1
 - **NEW API** `Longtail_ChangeVersion2` added
