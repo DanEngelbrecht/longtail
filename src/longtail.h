@@ -507,7 +507,7 @@ LONGTAIL_EXPORT void Longtail_Progress_OnProgress(struct Longtail_ProgressAPI* p
 
 struct Longtail_JobAPI;
 typedef void* Longtail_JobAPI_Jobs;
-typedef int (*Longtail_JobAPI_JobFunc)(void* context, uint32_t job_id, int is_cancelled);
+typedef int (*Longtail_JobAPI_JobFunc)(void* context, uint32_t job_id, int detected_error);
 typedef void* Longtail_JobAPI_Group;
 
 typedef uint32_t (*Longtail_Job_GetWorkerCountFunc)(struct Longtail_JobAPI* job_api);

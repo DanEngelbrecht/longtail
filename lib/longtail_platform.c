@@ -192,6 +192,11 @@ int64_t Longtail_AtomicAdd64(TLongtail_Atomic64* value, int64_t amount)
     return (int64_t)_InterlockedAdd64((LONG64 volatile*)value, (LONG64)amount);
 }
 
+int Longtail_CompareAndSwap(TLongtail_Atomic32* value, int32_t expected, int32_t wanted)
+{
+    return _InterlockedCompareExchange((volatile LONG*)value, wanted, expected) == expected;
+}
+
 struct Longtail_Thread
 {
     HANDLE              m_Handle;
@@ -1404,6 +1409,11 @@ int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount)
 int64_t Longtail_AtomicAdd64(TLongtail_Atomic64* value, int64_t amount)
 {
     return __sync_fetch_and_add(value, amount) + amount;
+}
+
+int Longtail_CompareAndSwap(TLongtail_Atomic32* value, int32_t expected, int32_t wanted)
+{
+    return __sync_val_compare_and_swap(value, expected, wanted) == expected;
 }
 
 struct Longtail_Thread
