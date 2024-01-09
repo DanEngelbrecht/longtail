@@ -529,7 +529,7 @@ struct Longtail_JobAPI
     Longtail_Job_ReadyJobsFunc ReadyJobs;
     Longtail_Job_WaitForAllJobsFunc WaitForAllJobs;
     Longtail_Job_ResumeJobFunc ResumeJob;
-    Longtail_Job_GetMaxBatchCountFunc GetMaxBatchCountFunc;
+    Longtail_Job_GetMaxBatchCountFunc GetMaxBatchCount;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetJobAPISize();
@@ -952,6 +952,30 @@ LONGTAIL_EXPORT int EnsureParentPathExists(struct Longtail_StorageAPI* storage_a
  * @return                  Pointer to newly allocated string, zero if out of memory or invalid input parameter
  */
 LONGTAIL_EXPORT char* Longtail_Strdup(const char* str);
+
+/*! @brief Runs jobs in batched mode.
+ *
+ * Runs the jobs using the job_api submitting the jobs in batches to handle job counts that exceeds Longtail_JobAPI::GetMaxBatchCount()
+ *
+ * @param[in] job_api               An implementation of struct Longtail_JobAPI interface
+ * @param[in] progress_api          An implementation of struct Longtail_JobAPI interface or null if no progress indication is required
+ * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
+ * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
+ * @param[in] total_job_count       Total number of jobs to execute
+ * @param[in] job_funcs             Array of job functions to execute, array must be at least of size @p total_job_count
+ * @param[in] job_ctxs              Array of job contexts for job functions, array must be at least of size @p total_job_count
+ * @param[out] out_jobs_submitted   Number of jobs submitted (and executed), this may be less than @p total_job_count if an error occurs
+ * @return                          Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_RunJobsBatched(
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    uint32_t total_job_count,
+    Longtail_JobAPI_JobFunc * job_funcs,
+    void** job_ctxs,
+    uint32_t * out_jobs_submitted);
 
 /*! @brief Get all files and directories in a path recursivley.
  *
