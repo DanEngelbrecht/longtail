@@ -960,6 +960,7 @@ int Longtail_RunJobsBatched(
 
     LONGTAIL_VALIDATE_INPUT(ctx, job_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, job_funcs != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, total_job_count > 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, job_ctxs != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_jobs_submitted != 0, return EINVAL)
 
@@ -2264,22 +2265,12 @@ static int ChunkAssets(
         uint64_t asset_size = file_infos->m_Sizes[asset_index];
         uint64_t asset_part_count = 1 + (asset_size / max_hash_size);
         job_count += (uint32_t)asset_part_count;
-        }
+    }
 
     if (job_count == 0)
     {
         return 0;
     }
-
-//    uint32_t max_job_batch_count = 0;
-//    int err = job_api->GetMaxBatchCount(job_api, &max_job_batch_count, 0);
-//    if (err)
-//    {
-//        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->GetMaxBatchCount() failed with %d", err)
-//        return err;
-//    }
-//    // Adjust how many we submit each time so we get some overlap when tasks free up so we don't stall on each batch
-//    max_job_batch_count /= 2;
 
     size_t work_mem_size = (sizeof(uint32_t) * job_count) +
         (sizeof(struct HashJob) * job_count) +
