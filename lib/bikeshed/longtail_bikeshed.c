@@ -416,8 +416,9 @@ static int Bikeshed_CreateJobs(
 
     Longtail_AtomicAdd32(&bikeshed_job_group->m_PendingJobCount, (int)job_count);
 
+    int detected_error = bikeshed_job_group->m_DetectedError;
     *out_jobs = task_ids;
-    err = 0;
+    err = detected_error;
 end:
     Longtail_Free(work_mem);
     return err;
