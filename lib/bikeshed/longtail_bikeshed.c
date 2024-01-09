@@ -386,8 +386,6 @@ static int Bikeshed_CreateJobs(
         ctxs[i] = job_wrapper;
     }
 
-    Longtail_AtomicAdd32(&bikeshed_job_group->m_PendingJobCount, (int)job_count);
-
     while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, funcs, ctxs, task_ids))
     {
         if (bikeshed_job_group->m_DetectedError == 0)
@@ -404,9 +402,19 @@ static int Bikeshed_CreateJobs(
                 }
             }
         }
-        Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
+        if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
+        {
+            continue;
+        }
+        if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 1))
+        {
+            continue;
+        }
+        Longtail_WaitSema(bikeshed_job_api->m_ReadyCallback.m_Semaphore, 100);
     }
     Bikeshed_SetTasksChannel(bikeshed_job_api->m_Shed, job_count, task_ids, job_channel);
+
+    Longtail_AtomicAdd32(&bikeshed_job_group->m_PendingJobCount, (int)job_count);
 
     *out_jobs = task_ids;
     err = 0;
@@ -439,7 +447,15 @@ static int Bikeshed_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     while (!Bikeshed_AddDependencies(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs, dependency_job_count, (Bikeshed_TaskID*)dependency_jobs))
     {
-        Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
+        if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
+        {
+            continue;
+        }
+        if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 1))
+        {
+            continue;
+        }
+        Longtail_WaitSema(bikeshed_job_api->m_ReadyCallback.m_Semaphore, 100);
     }
     return 0;
 }

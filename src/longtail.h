@@ -529,7 +529,7 @@ struct Longtail_JobAPI
     Longtail_Job_ReadyJobsFunc ReadyJobs;
     Longtail_Job_WaitForAllJobsFunc WaitForAllJobs;
     Longtail_Job_ResumeJobFunc ResumeJob;
-    Longtail_Job_GetMaxBatchCountFunc GetMaxBatchCountFunc;
+    Longtail_Job_GetMaxBatchCountFunc GetMaxBatchCount;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetJobAPISize();

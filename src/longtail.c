@@ -461,7 +461,7 @@ struct Longtail_JobAPI* Longtail_MakeJobAPI(
     api->ReadyJobs = ready_jobs_func;
     api->WaitForAllJobs = wait_for_all_jobs_func;
     api->ResumeJob = resume_job_func;
-    api->GetMaxBatchCountFunc = get_max_batch_count_func;
+    api->GetMaxBatchCount = get_max_batch_count_func;
     return api;
 }
 
@@ -472,7 +472,7 @@ int Longtail_Job_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job_co
 int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs) { return job_api->ReadyJobs(job_api, job_count, jobs); }
 int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, Longtail_JobAPI_Group job_group, struct Longtail_ProgressAPI* progressAPI, struct Longtail_CancelAPI* optional_cancel_api, Longtail_CancelAPI_HCancelToken optional_cancel_token) { return job_api->WaitForAllJobs(job_api, job_group, progressAPI, optional_cancel_api, optional_cancel_token); }
 int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id) { return job_api->ResumeJob(job_api, job_id); }
-int Longtail_Job_GetMaxBatchCount(struct Longtail_JobAPI* job_api, uint32_t* out_max_job_batch_count, uint32_t* out_max_dependency_batch_count) { return job_api->GetMaxBatchCountFunc(job_api, out_max_job_batch_count, out_max_dependency_batch_count); }
+int Longtail_Job_GetMaxBatchCount(struct Longtail_JobAPI* job_api, uint32_t* out_max_job_batch_count, uint32_t* out_max_dependency_batch_count) { return job_api->GetMaxBatchCount(job_api, out_max_job_batch_count, out_max_dependency_batch_count); }
 
 ////////////// ChunkerAPI
 
@@ -2176,7 +2176,7 @@ static int ChunkAssets(
     }
 
     uint32_t max_job_batch_count = 0;
-    int err = job_api->GetMaxBatchCountFunc(job_api, &max_job_batch_count, 0);
+    int err = job_api->GetMaxBatchCount(job_api, &max_job_batch_count, 0);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->GetMaxBatchCountFunc() failed with %d", err)
@@ -4586,7 +4586,7 @@ int Longtail_WriteContent(
     size_t ctxs_size = sizeof(void*) * block_count;
 
     uint32_t max_job_batch_count = 0;
-    int err = job_api->GetMaxBatchCountFunc(job_api, &max_job_batch_count, 0);
+    int err = job_api->GetMaxBatchCount(job_api, &max_job_batch_count, 0);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->GetMaxBatchCountFunc() failed with %d", err)
@@ -8344,20 +8344,6 @@ static int CreateBlockWriteInfos(
     return 0;
 }
 
-struct BatchProgressAPI
-{
-    struct Longtail_ProgressAPI m_API;
-    struct Longtail_ProgressAPI* m_UnbatchedProgressAPI;
-    uint32_t m_TotalCount;
-    uint32_t m_CompletedCount;
-};
-
-void BatchProgressAPI_OnProgressFunc(struct Longtail_ProgressAPI* progressAPI, uint32_t total_count, uint32_t done_count)
-{
-    struct BatchProgressAPI* api = (struct BatchProgressAPI*)progressAPI;
-    api->m_UnbatchedProgressAPI->OnProgress(api->m_UnbatchedProgressAPI, api->m_TotalCount, api->m_CompletedCount + done_count);
-}
-
 int Longtail_ChangeVersion2(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
@@ -8525,7 +8511,7 @@ int Longtail_ChangeVersion2(
         }
 
         uint32_t max_job_batch_count = 0;
-        int err = job_api->GetMaxBatchCountFunc(job_api, &max_job_batch_count, 0);
+        int err = job_api->GetMaxBatchCount(job_api, &max_job_batch_count, 0);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->GetMaxBatchCountFunc() failed with %d", err)
@@ -8533,24 +8519,28 @@ int Longtail_ChangeVersion2(
             SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
             return err;
         }
-
-        struct BatchProgressAPI batch_progress;
-        struct Longtail_ProgressAPI* batch_progress_api = 0;
-        if (progress_api)
-        {
-            batch_progress_api = Longtail_MakeProgressAPI(&batch_progress.m_API, 0, BatchProgressAPI_OnProgressFunc);
-            batch_progress.m_UnbatchedProgressAPI = progress_api;
-            batch_progress.m_CompletedCount = 0;
-            batch_progress.m_TotalCount = (uint32_t)block_write_info_count;
-        }
+        // Adjust how many we submit each time so we get some overlap when tasks free so we don't stall on each batch
+        max_job_batch_count /= 2;
 
         ptrdiff_t submitted_count = 0;
+
+        Longtail_JobAPI_Group job_group = 0;
+        err = job_api->ReserveJobs(job_api, (uint32_t)block_write_info_count, &job_group);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
+            Longtail_Free(job_mem);
+            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            return err;
+        }
+
         while (submitted_count < block_write_info_count)
         {
             if (optional_cancel_api)
             {
                 if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
                 {
+                    job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
                     Longtail_Free(job_mem);
                     SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
                     return ECANCELED;
@@ -8562,21 +8552,12 @@ int Longtail_ChangeVersion2(
                 submit_count = max_job_batch_count;
             }
 
-            Longtail_JobAPI_Group job_group = 0;
-            err = job_api->ReserveJobs(job_api, (uint32_t)submit_count, &job_group);
-            if (err)
-            {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReserveJobs() failed with %d", err)
-                Longtail_Free(job_mem);
-                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
-                return err;
-            }
-
             Longtail_JobAPI_Jobs write_job;
-            err = job_api->CreateJobs(job_api, job_group, batch_progress_api, optional_cancel_api, optional_cancel_token, (uint32_t)submit_count, &job_funcs[submitted_count], &job_ctxs[submitted_count], 0, &write_job);
+            err = job_api->CreateJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token, (uint32_t)submit_count, &job_funcs[submitted_count], &job_ctxs[submitted_count], 0, &write_job);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job_api->CreateJobs() failed with %d", err)
+                job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
                 Longtail_Free(job_mem);
                 SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
                 return err;
@@ -8585,21 +8566,22 @@ int Longtail_ChangeVersion2(
             if (err)
             {
                 LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->ReadyJobs() failed with %d", err)
+                job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
                 Longtail_Free(job_mem);
                 SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
                 return err;
             }
 
-            err = job_api->WaitForAllJobs(job_api, job_group, batch_progress_api, optional_cancel_api, optional_cancel_token);
-            if (err)
-            {
-                LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
-                Longtail_Free(job_mem);
-                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
-                return err;
-            }
             submitted_count += submit_count;
-            batch_progress.m_CompletedCount = (uint32_t)submitted_count;
+        }
+
+        err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->WaitForAllJobs() failed with %d", err)
+            Longtail_Free(job_mem);
+            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            return err;
         }
 
         SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
