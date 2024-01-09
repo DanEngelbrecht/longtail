@@ -2042,6 +2042,7 @@ int Unpack(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s`, %d", target_path, source_path, err);
     }
 
+    Longtail_Free(required_version_store_index);
     Longtail_Free(version_diff);
     SAFE_DISPOSE_API(compress_block_store_api);
     SAFE_DISPOSE_API(archive_block_store_api);
