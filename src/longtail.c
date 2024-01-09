@@ -937,14 +937,15 @@ char* Longtail_Strdup(const char* path)
     return r;
 }
 
-static int RunJobsBatched(
+int Longtail_RunJobsBatched(
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_CancelAPI* optional_cancel_api,
     Longtail_CancelAPI_HCancelToken optional_cancel_token,
     uint32_t total_job_count,
     Longtail_JobAPI_JobFunc* job_funcs,
-    void** job_ctxs)
+    void** job_ctxs,
+    uint32_t* out_jobs_submitted)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(job_api, "%p"),
@@ -953,13 +954,16 @@ static int RunJobsBatched(
         LONGTAIL_LOGFIELD(optional_cancel_token, "%p"),
         LONGTAIL_LOGFIELD(total_job_count, "%u"),
         LONGTAIL_LOGFIELD(job_funcs, "%p"),
-        LONGTAIL_LOGFIELD(job_ctxs, "%p")
+        LONGTAIL_LOGFIELD(job_ctxs, "%p"),
+        LONGTAIL_LOGFIELD(out_jobs_submitted, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, job_api != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, job_funcs != 0, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, job_ctxs != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_jobs_submitted != 0, return EINVAL)
 
+    * out_jobs_submitted = 0;
     uint32_t max_job_batch_count = 0;
     int err = job_api->GetMaxBatchCount(job_api, &max_job_batch_count, 0);
     if (err)
@@ -1017,6 +1021,7 @@ static int RunJobsBatched(
         }
 
         submitted_count += submit_count;
+        *out_jobs_submitted = submitted_count;
     }
 
     err = job_api->WaitForAllJobs(job_api, job_group, progress_api, optional_cancel_api, optional_cancel_token);
@@ -2326,11 +2331,12 @@ static int ChunkAssets(
     }
 
     LONGTAIL_FATAL_ASSERT(ctx, jobs_prepared == job_count, return ENOMEM);
-    int err = RunJobsBatched(job_api, progress_api, optional_cancel_api, optional_cancel_token, job_count, funcs, ctxs);
+    uint32_t jobs_submitted = 0;
+    int err = Longtail_RunJobsBatched(job_api, progress_api, optional_cancel_api, optional_cancel_token, job_count, funcs, ctxs, &jobs_submitted);
     if (err)
     {
-        LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "job_api->RunJobsBatched() failed with %d", err)
-        for (uint32_t i = 0; i < job_count; ++i)
+        LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RunJobsBatched() failed with %d", err)
+        for (uint32_t i = 0; i < jobs_submitted; ++i)
         {
             if (tmp_hash_jobs[i].m_ChunkHashes != tmp_hash_jobs[i].m_InlineChunkHashes)
             {
@@ -4713,17 +4719,19 @@ int Longtail_WriteContent(
         ++job_count;
     }
 
-    err = RunJobsBatched(
+    uint32_t jobs_submitted = 0;
+    err = Longtail_RunJobsBatched(
         job_api,
         progress_api,
         optional_cancel_api,
         optional_cancel_token,
         job_count,
         funcs,
-        ctxs);
+        ctxs,
+        &jobs_submitted);
     if (err)
     {
-        LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "RunJobsBatched() failed with %d", err)
+        LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RunJobsBatched() failed with %d", err)
         Longtail_Free(asset_part_lookup);
         Longtail_Free(work_mem);
         return err;
@@ -8552,17 +8560,19 @@ int Longtail_ChangeVersion2(
             job_ctxs[i] = job;
         }
 
-        err = RunJobsBatched(
+        uint32_t jobs_submitted = 0;
+        err = Longtail_RunJobsBatched(
             job_api,
             progress_api,
             optional_cancel_api,
             optional_cancel_token,
             (uint32_t)block_write_info_count,
             job_funcs,
-            job_ctxs);
+            job_ctxs,
+            &jobs_submitted);
         if (err)
         {
-            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "RunJobsBatched() failed with %d", err)
+            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RunJobsBatched() failed with %d", err)
             Longtail_Free(job_mem);
             SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
             return err;

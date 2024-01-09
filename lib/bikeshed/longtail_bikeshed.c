@@ -388,18 +388,20 @@ static int Bikeshed_CreateJobs(
 
     while (!Bikeshed_CreateTasks(bikeshed_job_api->m_Shed, job_count, funcs, ctxs, task_ids))
     {
-        if (bikeshed_job_group->m_DetectedError == 0)
+        err = bikeshed_job_group->m_DetectedError;
+        if (err)
         {
-            if (progressAPI && is_reserve_thread)
+            goto on_error;
+        }
+        if (progressAPI && is_reserve_thread)
+        {
+            progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_group->m_ReservedJobCount, (uint32_t)bikeshed_job_group->m_JobsCompleted);
+        }
+        if (optional_cancel_api && optional_cancel_token)
+        {
+            if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
             {
-                progressAPI->OnProgress(progressAPI,(uint32_t)bikeshed_job_group->m_ReservedJobCount, (uint32_t)bikeshed_job_group->m_JobsCompleted);
-            }
-            if (optional_cancel_api && optional_cancel_token)
-            {
-                if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
-                {
-                    Longtail_CompareAndSwap(&bikeshed_job_group->m_DetectedError, 0, ECANCELED);
-                }
+                Longtail_CompareAndSwap(&bikeshed_job_group->m_DetectedError, 0, ECANCELED);
             }
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
@@ -412,13 +414,12 @@ static int Bikeshed_CreateJobs(
         }
         Longtail_WaitSema(bikeshed_job_api->m_ReadyCallback.m_Semaphore, 100);
     }
-    Bikeshed_SetTasksChannel(bikeshed_job_api->m_Shed, job_count, task_ids, job_channel);
 
+    Bikeshed_SetTasksChannel(bikeshed_job_api->m_Shed, job_count, task_ids, job_channel);
     Longtail_AtomicAdd32(&bikeshed_job_group->m_PendingJobCount, (int)job_count);
 
-    int detected_error = bikeshed_job_group->m_DetectedError;
+    err = 0;
     *out_jobs = task_ids;
-    err = detected_error;
 end:
     Longtail_Free(work_mem);
     return err;
