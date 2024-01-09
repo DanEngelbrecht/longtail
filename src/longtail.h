@@ -953,7 +953,7 @@ LONGTAIL_EXPORT int EnsureParentPathExists(struct Longtail_StorageAPI* storage_a
  */
 LONGTAIL_EXPORT char* Longtail_Strdup(const char* str);
 
-/*! @brief Runs jobs in batched more.
+/*! @brief Runs jobs in batched mode.
  *
  * Runs the jobs using the job_api submitting the jobs in batches to handle job counts that exceeds Longtail_JobAPI::GetMaxBatchCount()
  *

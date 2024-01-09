@@ -8,7 +8,11 @@
 - **ADDED** memtracer now tracks allocations in stb_ds
 - **ADDED** memtracer now tracks allocations in zstd
 - **NEW API** `Longtail_CompareAndSwap` compare and swap with platform implementations
+- **NEW API** `Longtail_RunJobsBatched` runs jobs in batched mode to handle a job count larger than Longtail_JobAPI::GetMaxBatchCount()
 - **FIXED** Fixed memory leaks in command tool
+- **FIXED** `Longtail_ChangeVersion2()` can now handle workloads with a block count larger than 65535
+- **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full
+- **FIXED** Bikeshed JobAPI::CreateJobs implementation now properly drains both task channels when task queue is full
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
 
 ## 0.4.1
