@@ -816,6 +816,18 @@ LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* blo
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);
 
+typedef void (*Longtail_MonitorGetStoredBlockLoading)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
+typedef void (*Longtail_MonitorGetStoredBlockLoaded)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
+typedef void (*Longtail_MonitorGetStoredBlockComplete)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
+typedef void (*Longtail_MonitorWriteAsset)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset);
+typedef void (*Longtail_MonitorReadChunk)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block);
+
+LONGTAIL_EXPORT void Longtail_SetMonitorGetStoredBlockLoading(Longtail_MonitorGetStoredBlockLoading get_stored_block_loading_func);
+LONGTAIL_EXPORT void Longtail_SetMonitorGetStoredBlockLoaded(Longtail_MonitorGetStoredBlockLoaded get_stored_block_loaded_func);
+LONGTAIL_EXPORT void Longtail_SetMonitorGetStoredBlockComplete(Longtail_MonitorGetStoredBlockComplete get_stored_block_complete_func);
+LONGTAIL_EXPORT void Longtail_SetMonitorWriteAsset(Longtail_MonitorWriteAsset write_asset_func);
+LONGTAIL_EXPORT void Longtail_SetMonitorReadChunk(Longtail_MonitorReadChunk read_chunk_func);
+
 struct Longtail_LogField {
     const char* name;
     const char* value;
