@@ -8128,7 +8128,7 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         const TBlockChunkWriteArray block_chunk_write_info = &block_write_infos[block_write_chunk_info_index];
         const uint32_t asset_index = block_chunk_write_info->AssetIndex;
         const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
-        Longtail_MonitorWriteAsset_private(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, asset_index, 0, 0, 0, 0, 0, 0, 0);
+        Longtail_MonitorWriteAsset_private(job->m_StoreIndex, job->m_VersionIndex, asset_index, 0, 0, 0, 0, 0, 0, 0);
         if (IsDirPath(asset_path))
         {
             int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_path);
