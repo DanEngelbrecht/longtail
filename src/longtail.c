@@ -973,12 +973,10 @@ int Longtail_RunJobsBatched(
         return err;
     }
 
+    uint32_t batch_adjust_count = job_api->GetWorkerCount(job_api) + 1;
+
     // Adjust how many we submit each time so we get some overlap when tasks free up so we don't stall on each batch
-    max_job_batch_count /= 2;
-    if (max_job_batch_count < 1)
-    {
-        max_job_batch_count++;
-    }
+    uint32_t smaller_job_batch_count = batch_adjust_count < max_job_batch_count ? max_job_batch_count - batch_adjust_count : max_job_batch_count;
 
     Longtail_JobAPI_Group job_group = 0;
     err = job_api->ReserveJobs(job_api, (uint32_t)total_job_count, &job_group);
@@ -1000,9 +998,10 @@ int Longtail_RunJobsBatched(
             }
         }
         uint32_t submit_count = total_job_count - submitted_count;
-        if (submit_count > max_job_batch_count)
+        uint32_t max_submit_count = submitted_count == 0 ? max_job_batch_count : smaller_job_batch_count;
+        if (submit_count > max_submit_count)
         {
-            submit_count = max_job_batch_count;
+            submit_count = max_submit_count;
         }
 
         Longtail_JobAPI_Jobs write_job;
