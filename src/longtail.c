@@ -8035,7 +8035,7 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
 
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return EINVAL)
 
-    struct ContentBlock2Job* job = (struct ContentBlock2Job*)context;
+    struct ContentBlock2JobContext* job = (struct ContentBlock2JobContext*)context;
 
     if (detected_error)
     {
@@ -8043,16 +8043,16 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         return 0;
     }
 
-    TBlockChunkWriteArray block_write_infos = job->m_Context->m_BlockWriteInfos->m_ZeroSizeWriteInfoArray;
+    TBlockChunkWriteArray block_write_infos = job->m_BlockWriteInfos->m_ZeroSizeWriteInfoArray;
     ptrdiff_t block_write_chunk_info_count = arrlen(block_write_infos);
     for (ptrdiff_t block_write_chunk_info_index = 0; block_write_chunk_info_index < block_write_chunk_info_count; ++block_write_chunk_info_index)
     {
         const TBlockChunkWriteArray block_chunk_write_info = &block_write_infos[block_write_chunk_info_index];
         const uint32_t asset_index = block_chunk_write_info->AssetIndex;
-        const char* asset_path = &job->m_Context->m_VersionIndex->m_NameData[job->m_Context->m_VersionIndex->m_NameOffsets[asset_index]];
+        const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
         if (IsDirPath(asset_path))
         {
-            int err = job->m_Context->m_ConcurrentChunkWriteApi->CreateDir(job->m_Context->m_ConcurrentChunkWriteApi, asset_path);
+            int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_path);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_ConcurrentChunkWriteApi->CreateDir() failed with %d", err)
@@ -8062,7 +8062,7 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         else
         {
             Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
-            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_path, 0, &asset_file_handle);
+            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, 0, &asset_file_handle);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "m_ConcurrentChunkWriteApi->Open() failed with %d", err)
@@ -8514,7 +8514,7 @@ int Longtail_ChangeVersion2(
     if (job_count > 0)
     {
         size_t job_mem_size =
-            sizeof(struct ContentBlock2Job) * job_count +
+            sizeof(struct ContentBlock2Job) * block_write_info_count +
             sizeof(Longtail_JobAPI_JobFunc) * job_count +
             sizeof(void*) * job_count;
         void* job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
@@ -8527,7 +8527,7 @@ int Longtail_ChangeVersion2(
         }
         uint8_t* job_mem_ptr = (uint8_t*)job_mem;
         struct ContentBlock2Job* jobs = (struct ContentBlock2Job*)job_mem_ptr;
-        job_mem_ptr += sizeof(struct ContentBlock2Job) * job_count;
+        job_mem_ptr += sizeof(struct ContentBlock2Job) * block_write_info_count;
         Longtail_JobAPI_JobFunc* job_funcs = (Longtail_JobAPI_JobFunc*)job_mem_ptr;
         job_mem_ptr += sizeof(Longtail_JobAPI_JobFunc) * job_count;
         void** job_ctxs = (void**)job_mem_ptr;
@@ -8543,21 +8543,13 @@ int Longtail_ChangeVersion2(
 
         if (zero_size_job_count)
         {
-            struct ContentBlock2Job* job = &jobs[0];
-            job->m_AsyncCompleteAPI.m_API.Dispose = 0;
-            job->m_AsyncCompleteAPI.OnComplete = 0;
-            job->m_Context = &context;
-            job->m_BlockIndex = (uint32_t)block_write_info_count;
-            job->m_StoredBlock = 0;
-            job->m_JobID = 0;
-
-            job_funcs[block_write_info_count] = WriteNonBlockAssetsJob;
-            job_ctxs[block_write_info_count] = job;
+            job_funcs[0] = WriteNonBlockAssetsJob;
+            job_ctxs[0] = &context;
         }
 
         for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
         {
-            struct ContentBlock2Job* job = &jobs[i + zero_size_job_count];
+            struct ContentBlock2Job* job = &jobs[i];
             job->m_AsyncCompleteAPI.m_API.Dispose = 0;
             job->m_AsyncCompleteAPI.OnComplete = 0;
             job->m_Context = &context;
@@ -8565,8 +8557,8 @@ int Longtail_ChangeVersion2(
             job->m_StoredBlock = 0;
             job->m_JobID = 0;
 
-            job_funcs[i] = WriteContentBlock2Job;
-            job_ctxs[i] = job;
+            job_funcs[i + zero_size_job_count] = WriteContentBlock2Job;
+            job_ctxs[i + zero_size_job_count] = job;
         }
 
         uint32_t jobs_submitted = 0;
