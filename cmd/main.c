@@ -93,6 +93,7 @@ struct MonitorBlockInfo
     TLongtail_Atomic64 m_AccessCount;
     uint32_t m_ChunkCount;
     TLongtail_Atomic64* m_ChunkAccessCount;
+    TLongtail_Atomic32 m_ActivityIndicator;
 };
 
 uint32_t MonitorBlockInfosCount = 0;
@@ -103,6 +104,7 @@ void MonitorGetStoredBlockLoading(const struct Longtail_StoreIndex* store_index,
     if (MonitorBlockInfos)
     {
         MonitorBlockInfos[block_index].m_State = BlockFetching;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
     }
 }
 
@@ -111,6 +113,7 @@ void MonitorGetStoredBlockLoaded(const struct Longtail_StoreIndex* store_index, 
     if (MonitorBlockInfos)
     {
         MonitorBlockInfos[block_index].m_State = err == 0 ? BlockFetchedSuccess : BlockFetchedFailed;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
     }
 }
 
@@ -119,6 +122,7 @@ void MonitorGetStoredBlockComplete(const struct Longtail_StoreIndex* store_index
     if (MonitorBlockInfos)
     {
         MonitorBlockInfos[block_index].m_State = err == 0 ? BlockCompletedSuccess : BlockCompletedFailed;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
     }
 }
 
@@ -128,6 +132,7 @@ struct AssetInfo
     uint32_t m_TotalChunkCount;
     TLongtail_Atomic64 m_WriteCount;
     TLongtail_Atomic64 m_PendingChunkCount;
+    TLongtail_Atomic32 m_ActivityIndicator;
 };
 
 uint32_t MonitorAssetInfosCount = 0;
@@ -189,9 +194,146 @@ void GetConsoleSize(uint32_t* columns, uint32_t* rows)
 #endif
 }
 
+static TLongtail_Atomic32 MonitorWindowReady = 0;
 struct Longtail_FrameBufferAPI* FrameBufferAPI = 0;
 Longtail_StorageAPI_HFrameBuffer FrameBuffer = 0;
 static uint32_t* MonitorWindowBuffer = 0;
+
+#define MFB_RGB(r, g, b)        (((uint32_t) r) << 16) | (((uint32_t) g) << 8) | ((uint32_t) b)
+
+static const uint32_t Black = MFB_RGB(0x00, 0x00, 0x00);
+static const uint32_t Grey = MFB_RGB(0x60, 0x60, 0x60);
+static const uint32_t White = MFB_RGB(0xff, 0xff, 0xff);
+static const uint32_t Green = MFB_RGB(0x40, 0xff, 0x40);
+static const uint32_t Yellow = MFB_RGB(0xff, 0xff, 0x40);
+static const uint32_t Blue = MFB_RGB(0x40, 0x40, 0xff);
+static const uint32_t Red = MFB_RGB(0xff, 0x40, 0x40);
+
+static void SetBlock(uint32_t b, uint32_t c)
+{
+    uint32_t width = 800 / 2;
+    uint32_t height = 600 / 2;
+    uint32_t y = (b / width);
+    uint32_t x = b - (y * width);
+    uint32_t yoffset = 0;
+    y += yoffset;
+    if (y < height)
+    {
+        x *= 2;
+        y *= 2;
+        MonitorWindowBuffer[(y + 0) * 800 + (x + 0)] = c;
+        MonitorWindowBuffer[(y + 0) * 800 + (x + 1)] = c;
+        MonitorWindowBuffer[(y + 1) * 800 + (x + 0)] = c;
+        MonitorWindowBuffer[(y + 1) * 800 + (x + 1)] = c;
+    }
+}
+
+static void SetAsset(uint32_t a, uint32_t c)
+{
+    uint32_t width = 800;
+    uint32_t height = 600;
+    uint32_t y = (a / width);
+    uint32_t x = a - (y * width);
+    uint32_t yoffset = (MonitorBlockInfosCount / (width / 2)) * 2 + 8;
+    y += yoffset;
+    if (y < height)
+    {
+        MonitorWindowBuffer[(y + 0) * 800 + (x + 0)] = c;
+    }
+}
+
+// TODO: Must be done on main thread!
+static int UpdateProgressWindow()
+{
+    if (MonitorWindowReady == 0)
+    {
+        return 0;
+    }
+    else if (MonitorWindowReady == 1)
+    {
+        FrameBufferAPI->Open(FrameBufferAPI, "Monitor", 800, 600, &FrameBuffer);
+        MonitorWindowBuffer = (uint32_t*)Longtail_Alloc("Monitor", 800 * 600 * sizeof(uint32_t));
+        memset(MonitorWindowBuffer, 0, 800 * 600 * sizeof(uint32_t));
+        Longtail_AtomicAdd32(&MonitorWindowReady, 1);
+    }
+    if (FrameBufferAPI && FrameBuffer)
+    {
+        for (uint32_t b = 0; b < MonitorBlockInfosCount; b++)
+        {
+            int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
+            if (access_count > 0)
+            {
+                Longtail_AtomicAdd64(&MonitorBlockInfos[b].m_AccessCount, -access_count);
+                MonitorBlockInfos[b].m_ActivityIndicator = 10;
+            }
+            if (MonitorBlockInfos[b].m_ActivityIndicator > 0)
+            {
+                SetBlock(b, White);
+                Longtail_AtomicAdd32(&MonitorBlockInfos[b].m_ActivityIndicator, -1);
+                continue;
+            }
+
+            switch (MonitorBlockInfos[b].m_State)
+            {
+            case BlockIdle:
+                SetBlock(b, Grey);
+                break;
+            case BlockFetching:
+                SetBlock(b, Yellow);
+                break;
+            case BlockFetchedSuccess:
+                SetBlock(b, Blue);
+                break;
+            case BlockFetchedFailed:
+                SetBlock(b, Red);
+                break;
+            case BlockCompletedSuccess:
+                SetBlock(b, Green);
+                break;
+            case BlockCompletedFailed:
+                SetBlock(b, Red);
+                break;
+            }
+        }
+
+        for (uint32_t a = 0; a < MonitorAssetInfosCount; a++)
+        {
+            int64_t access_count = MonitorAssetInfos[a].m_AccessCount;
+
+            if (access_count > 0)
+            {
+                Longtail_AtomicAdd64(&MonitorAssetInfos[a].m_AccessCount, -access_count);
+                MonitorAssetInfos[a].m_ActivityIndicator = 10;
+            }
+            if (MonitorAssetInfos[a].m_ActivityIndicator > 0)
+            {
+                SetAsset(a, White);
+                Longtail_AtomicAdd32(&MonitorAssetInfos[a].m_ActivityIndicator, -1);
+                continue;
+            }
+            if (MonitorAssetInfos[a].m_WriteCount == 0)
+            {
+                SetAsset(a, Grey);
+            }
+            else if (MonitorAssetInfos[a].m_PendingChunkCount > 0)
+            {
+                SetAsset(a, Blue);
+            }
+            else
+            {
+                SetAsset(a, Green);
+            }
+        }
+
+        int err = FrameBufferAPI->Update(FrameBufferAPI, FrameBuffer, MonitorWindowBuffer);
+        if (err != 0)
+        {
+            FrameBuffer = 0;
+            return 0;
+        }
+    }
+    return 1;
+}
 
 void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_VersionIndex* version_index, struct Longtail_VersionDiff* version_diff)
 {
@@ -212,13 +354,6 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
     size_t MonitorAssetInfosSize = sizeof(struct AssetInfo) * MonitorAssetInfosCount;
     MonitorAssetInfos = (struct AssetInfo*)Longtail_Alloc("Monitor", MonitorAssetInfosSize);
     memset(MonitorAssetInfos, 0, MonitorAssetInfosSize);
-
-    for (uint32_t a = 0; a < MonitorAssetInfosCount; a++)
-    {
-        MonitorAssetInfos[a].m_TotalChunkCount = 0;
-        MonitorAssetInfos[a].m_PendingChunkCount = 0;
-        MonitorAssetInfos[a].m_WriteCount = 1;
-    }
 
     for (uint32_t m = 0; m < *version_diff->m_ModifiedContentCount; m++)
     {
@@ -246,31 +381,43 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
     Longtail_SetMonitorReadChunk(MonitorReadChunk);
 
     FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
-    FrameBufferAPI->Open(FrameBufferAPI, "Monitor", 800, 600, &FrameBuffer);
-    MonitorWindowBuffer = (uint32_t*)Longtail_Alloc("Monitor", 800 * 600 * sizeof(uint32_t));
-    memset(MonitorWindowBuffer, 0, 800 * 600 * sizeof(uint32_t));
+    Longtail_AtomicAdd32(&MonitorWindowReady, 1);
 }
 
 void DisposeMonitor()
 {
     if (FrameBufferAPI)
     {
-        FrameBufferAPI->Close(FrameBufferAPI, FrameBuffer);
+        if (FrameBuffer)
+        {
+            FrameBufferAPI->Close(FrameBufferAPI, FrameBuffer);
+            FrameBuffer = 0;
+        }
+        SAFE_DISPOSE_API(FrameBufferAPI);
     }
     Longtail_Free(MonitorWindowBuffer);
+    MonitorWindowBuffer = 0;
     Longtail_Free(MonitorAssetInfos);
+    MonitorAssetInfos = 0;
     Longtail_Free((void*)MonitorChunkInfos);
+    MonitorChunkInfos = 0;
     for (uint32_t b = MonitorBlockInfosCount; b > 0; b--)
     {
         Longtail_Free((void*)MonitorBlockInfos[b - 1].m_ChunkAccessCount);
     }
     Longtail_Free((void*)MonitorBlockInfos);
+    MonitorBlockInfos = 0;
+    MonitorBlockInfosCount = 0;
 }
 
 static TLongtail_Atomic32 progress_lines = 0;
 
 static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
 {
+    if (MonitorWindowReady)
+    {
+        return;
+    }
     if (MonitorBlockInfos || MonitorAssetInfos)
     {
         int32_t backup_lines = progress_lines;
@@ -412,14 +559,6 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
             if ((complete_row_count > (1 +(rows / 5))) && asset_offset < MonitorAssetInfosCount)
             {
                 skip_row_count += complete_row_count;
-            }
-        }
-        if (FrameBufferAPI)
-        {
-            int err = FrameBufferAPI->Update(FrameBufferAPI, FrameBuffer, MonitorWindowBuffer);
-            if (err != 0)
-            {
-                FrameBuffer = 0;
             }
         }
         return;
@@ -1295,15 +1434,7 @@ int DownSync(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
     }
 
-    DisposeMonitor();
-
-    Longtail_Free(MonitorAssetInfos);
-    Longtail_Free((void*)MonitorChunkInfos);
-    for (uint32_t b = MonitorBlockInfosCount; b > 0; b--)
-    {
-        Longtail_Free((void*)MonitorBlockInfos[b - 1].m_ChunkAccessCount);
-    }
-    Longtail_Free((void*)MonitorBlockInfos);
+//    DisposeMonitor();
 
     Longtail_Free(version_diff);
     Longtail_Free(target_version_index);
@@ -2412,15 +2543,7 @@ int Unpack(
         err = ENOMEM;
     }
 
-    DisposeMonitor();
-
-    Longtail_Free(MonitorAssetInfos);
-    Longtail_Free((void*)MonitorChunkInfos);
-    for (uint32_t b = MonitorBlockInfosCount; b > 0; b--)
-    {
-        Longtail_Free((void*)MonitorBlockInfos[b - 1].m_ChunkAccessCount);
-    }
-    Longtail_Free((void*)MonitorBlockInfos);
+//    DisposeMonitor();
 
     if (err)
     {
@@ -2438,6 +2561,66 @@ int Unpack(
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_registry);
+    return err;
+}
+
+struct UnpackArgs
+{
+    const char* source_path;
+    const char* target_path;
+    int retain_permissions;
+    int enable_mmap_indexing;
+    int enable_mmap_unpacking;
+    int enable_detailed_progress;
+};
+
+static int UnpackWorker(void* context)
+{
+    struct UnpackArgs* Args = (struct UnpackArgs*)context;
+    int res = Unpack(
+        Args->source_path,
+        Args->target_path,
+        Args->retain_permissions,
+        Args->enable_mmap_indexing,
+        Args->enable_mmap_unpacking,
+        Args->enable_detailed_progress);
+    return res;
+}
+
+void* UnpackThreadedMem = 0;
+
+static HLongtail_Thread UnpackThreaded(
+    const char* source_path,
+    const char* target_path,
+    int retain_permissions,
+    int enable_mmap_indexing,
+    int enable_mmap_unpacking,
+    int enable_detailed_progress)
+{
+    struct UnpackArgs Args;
+    Args.source_path = source_path;
+    Args.target_path = target_path;
+    Args.retain_permissions = retain_permissions;
+    Args.enable_mmap_indexing = enable_mmap_indexing;
+    Args.enable_mmap_unpacking = enable_mmap_unpacking;
+    Args.enable_detailed_progress = enable_detailed_progress;
+
+    size_t thread_size = Longtail_GetThreadSize();
+
+    HLongtail_Thread MonitorThread = 0;
+    UnpackThreadedMem = Longtail_Alloc("Monitor", thread_size);
+    int err = Longtail_CreateThread(UnpackThreadedMem, UnpackWorker, 0, &Args, 0, &MonitorThread);
+    return MonitorThread;
+}
+
+static int TryEndThreadedUnpack(HLongtail_Thread thread)
+{
+    int err = Longtail_JoinThread(thread, 1000);
+    if (err == 0)
+    {
+        Longtail_Free(UnpackThreadedMem);
+        UnpackThreadedMem = 0;
+    }
     return err;
 }
 
@@ -2875,13 +3058,27 @@ int main(int argc, char** argv)
         const char* source_path = NormalizePath(source_path_raw);
         const char* target_path = NormalizePath(target_path_raw);
 
-        err = Unpack(
-            source_path,
+        size_t thread_size = Longtail_GetThreadSize();
+
+        HLongtail_Thread thread = UnpackThreaded(source_path,
             target_path,
             retain_permission_raw,
             enable_mmap_indexing_raw,
             enable_mmap_unpacking_raw,
             enable_detailed_progress_raw);
+        while (TryEndThreadedUnpack(thread))
+        {
+            UpdateProgressWindow();
+        }
+        DisposeMonitor();
+
+//        err = Unpack(
+//            source_path,
+//            target_path,
+//            retain_permission_raw,
+//            enable_mmap_indexing_raw,
+//            enable_mmap_unpacking_raw,
+//            enable_detailed_progress_raw);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_path);
