@@ -215,7 +215,7 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
         {
             if (MonitorAssetInfos)
             {
-                rows--;
+                rows-=2;
             }
 
             uint32_t block_offset = 0;
