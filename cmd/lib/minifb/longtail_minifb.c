@@ -85,6 +85,7 @@ static int MiniFBUpdate(struct Longtail_FrameBufferAPI* frame_buffer_api, Longta
         // TODO: What error?
         return ENOTCONN;
     }
+    mfb_wait_sync(window);
     return 0;
 }
 
