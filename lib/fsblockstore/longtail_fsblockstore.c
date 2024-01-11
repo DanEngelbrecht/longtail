@@ -16,11 +16,152 @@ struct BlockHashToBlockState
 
 #define TMP_EXTENSION_LENGTH (1 + 16)
 
+typedef struct Longtail_ThreadPoolWork* HLongtail_ThreadPoolWork;
+typedef struct Longtail_ThreadPool* HLongtail_ThreadPool;
+
+struct Longtail_ThreadPoolWork
+{
+    Longtail_ThreadFunc m_WorkFunction;
+    void* m_ContextData;
+};
+
+struct Longtail_ThreadPool
+{
+    HLongtail_Sema m_PendingWorkSema;
+    HLongtail_Thread* m_Threads;
+    size_t m_ThreadCount;
+    TLongtail_Atomic32 m_ExitFlag;
+    HLongtail_SpinLock m_WorkLock;
+    ptrdiff_t m_PickedUpWorkCount;
+    struct Longtail_ThreadPoolWork* m_PendingWork;
+};
+
+static int ThreadPoolWorker(void* context)
+{
+    struct Longtail_ThreadPool* thread_pool = (struct Longtail_ThreadPool*)context;
+    while (1)
+    {
+        int err = Longtail_WaitSema(thread_pool->m_PendingWorkSema, LONGTAIL_TIMEOUT_INFINITE);
+        if (err)
+        {
+            // TODO: Report error
+            continue;
+        }
+        Longtail_LockSpinLock(thread_pool->m_WorkLock);
+        if (arrlen(thread_pool->m_PendingWork) > thread_pool->m_PickedUpWorkCount)
+        {
+            struct Longtail_ThreadPoolWork work = thread_pool->m_PendingWork[thread_pool->m_PickedUpWorkCount];
+            thread_pool->m_PickedUpWorkCount++;
+            if (thread_pool->m_PickedUpWorkCount == arrlen(thread_pool->m_PendingWork))
+            {
+                arrfree(thread_pool->m_PendingWork);
+                thread_pool->m_PickedUpWorkCount = 0;
+            }
+            Longtail_UnlockSpinLock(thread_pool->m_WorkLock);
+
+            int worker_err = work.m_WorkFunction(work.m_ContextData);
+            if (worker_err)
+            {
+                // TODO: Report error?
+            }
+            continue;
+        }
+        Longtail_UnlockSpinLock(thread_pool->m_WorkLock);
+        if (thread_pool->m_ExitFlag)
+        {
+            break;
+        }
+    }
+    return 0;
+}
+
+int Longtail_CreateThreadPool(uint32_t worker_count, HLongtail_ThreadPool* out_thread_pool)
+{
+    size_t thread_pool_mem_size = 
+        sizeof(struct Longtail_ThreadPool) +
+        Longtail_GetSemaSize() +
+        sizeof(HLongtail_Thread) * worker_count +
+        Longtail_GetSpinLockSize() +
+        Longtail_GetThreadSize() * worker_count;
+    void* thread_pool_mem = Longtail_Alloc("Longtail_ThreadPool", thread_pool_mem_size);
+    if (!thread_pool_mem)
+    {
+        return ENOMEM;
+    }
+    struct Longtail_ThreadPool* thread_pool = (struct Longtail_ThreadPool*)thread_pool_mem;
+    uint8_t* p = (uint8_t*)&thread_pool[1];
+    int err = Longtail_CreateSema(p, 0, &thread_pool->m_PendingWorkSema);
+    if (err)
+    {
+        Longtail_Free(thread_pool_mem);
+        return err;
+    }
+    p += Longtail_GetSemaSize();
+    thread_pool->m_Threads = (HLongtail_Thread*)p;
+    p += sizeof(HLongtail_Thread) * worker_count;
+    err = Longtail_CreateSpinLock(p, &thread_pool->m_WorkLock);
+    if (err)
+    {
+        Longtail_DeleteSema(thread_pool->m_PendingWorkSema);
+        Longtail_Free(thread_pool_mem);
+        return err;
+    }
+    p += Longtail_GetSemaSize();
+    thread_pool->m_ExitFlag = 0;
+    thread_pool->m_ThreadCount = 0;
+    thread_pool->m_PendingWork = 0;
+    thread_pool->m_PickedUpWorkCount = 0;
+
+    for (uint32_t t = 0; t < worker_count; t++)
+    {
+        err = Longtail_CreateThread(p, ThreadPoolWorker, 0, thread_pool, 0, &thread_pool->m_Threads[t]);
+        if (err)
+        {
+            // TODO: Cleanup
+            return err;
+        }
+        p += Longtail_GetThreadSize();
+        thread_pool->m_ThreadCount++;
+    }
+    *out_thread_pool = thread_pool;
+    return 0;
+}
+
+int Longtail_DestroyThreadPool(HLongtail_ThreadPool thread_pool)
+{
+    Longtail_AtomicAdd32(&thread_pool->m_ExitFlag, 1);
+    Longtail_PostSema(thread_pool->m_PendingWorkSema, (unsigned int)thread_pool->m_ThreadCount);
+    for (uint32_t t = 0; t < thread_pool->m_ThreadCount; t++)
+    {
+        Longtail_JoinThread(thread_pool->m_Threads[t], LONGTAIL_TIMEOUT_INFINITE);
+    }
+    for (uint32_t t = 0; t < thread_pool->m_ThreadCount; t++)
+    {
+        Longtail_DeleteThread(thread_pool->m_Threads[t]);
+    }
+    Longtail_Free((void*)thread_pool);
+    return 0;
+}
+
+int Longtail_ThreadPool_PostWork(HLongtail_ThreadPool thread_pool, Longtail_ThreadFunc work_func, void* context)
+{
+    struct Longtail_ThreadPoolWork work;
+    work.m_WorkFunction = work_func;
+    work.m_ContextData = context;
+    Longtail_LockSpinLock(thread_pool->m_WorkLock);
+    arrput(thread_pool->m_PendingWork, work);
+    Longtail_UnlockSpinLock(thread_pool->m_WorkLock);
+    Longtail_PostSema(thread_pool->m_PendingWorkSema, 1);
+    return 0;
+}
+
+
 struct FSBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
+    HLongtail_ThreadPool m_ThreadPool;
     char* m_StorePath;
 
     TLongtail_Atomic64 m_StatU64[Longtail_BlockStoreAPI_StatU64_Count];
@@ -849,6 +990,86 @@ static int FSBlockStore_PutStoredBlock(
     return 0;
 }
 
+struct AsyncPreflightGetContext
+{
+    struct FSBlockStoreAPI* fsblockstore_api;
+    uint32_t block_count;
+    TLongtail_Hash* block_hashes;
+    struct Longtail_AsyncPreflightStartedAPI* async_complete_api;
+};
+
+static int AsyncPreflightGet(const* context)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(context, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, context != 0, return EINVAL)
+
+    struct AsyncPreflightGetContext* async_context = (struct AsyncPreflightGetContext*)context;
+    struct FSBlockStoreAPI* fsblockstore_api = async_context->fsblockstore_api;
+    uint32_t block_count = async_context->block_count;
+    const TLongtail_Hash* block_hashes = async_context->block_hashes;
+    struct Longtail_AsyncPreflightStartedAPI* async_complete_api = async_context->async_complete_api;
+
+    struct Longtail_StoreIndex* store_index;
+    int err = FSBlockStore_GetIndexSync(fsblockstore_api, &store_index);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync() failed with %d", err)
+        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
+        Longtail_Free(async_context);
+        async_complete_api->OnComplete(async_complete_api, 0, 0, err);
+        return 0;
+    }
+
+    struct Longtail_LookupTable* requested_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("FSBlockStore", LongtailPrivate_LookupTable_GetSize(block_count)), block_count, 0);
+    if (!requested_block_lookup)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_LookupTable_Create() failed with %d", ENOMEM)
+        Longtail_Free(store_index);
+        Longtail_Free(async_context);
+        async_complete_api->OnComplete(async_complete_api, 0, 0, ENOMEM);
+        return 0;
+    }
+
+    TLongtail_Hash* found_block_hashes = (TLongtail_Hash*)Longtail_Alloc("FSBlockStore", sizeof(TLongtail_Hash) * block_count);
+    if (!found_block_hashes)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_Free(requested_block_lookup);
+        Longtail_Free(store_index);
+        Longtail_Free(async_context);
+        async_complete_api->OnComplete(async_complete_api, 0, 0, ENOMEM);
+        return 0;
+    }
+
+    uint32_t found_block_count = 0;
+    for (uint32_t b = 0; b < block_count; ++b)
+    {
+        TLongtail_Hash block_hash = block_hashes[b];
+        LongtailPrivate_LookupTable_PutUnique(requested_block_lookup, block_hash, b);
+    }
+
+    for (uint32_t b = 0; b < *store_index->m_BlockCount; ++b)
+    {
+        TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
+        if (LongtailPrivate_LookupTable_Get(requested_block_lookup, block_hash))
+        {
+            found_block_hashes[found_block_count++] = block_hash;
+        }
+    }
+    Longtail_Free(store_index);
+    store_index = 0;
+    Longtail_Free(requested_block_lookup);
+    Longtail_Free(async_context);
+
+    async_complete_api->OnComplete(async_complete_api, found_block_count, found_block_hashes, 0);
+
+    Longtail_Free(found_block_hashes);
+    return 0;
+}
+
 static int FSBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint32_t block_count,
@@ -872,55 +1093,29 @@ static int FSBlockStore_PreflightGet(
         return 0;
     }
 
-    struct Longtail_StoreIndex* store_index;
-    int err = FSBlockStore_GetIndexSync(fsblockstore_api, &store_index);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync() failed with %d", err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
-        return err;
-    }
-
-    struct Longtail_LookupTable* requested_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("FSBlockStore", LongtailPrivate_LookupTable_GetSize(block_count)), block_count, 0);
-    if (!requested_block_lookup)
+    size_t async_preflight_get_context_size = sizeof(struct AsyncPreflightGetContext) + sizeof(TLongtail_Hash) * block_count;
+    void* async_preflight_get_context_mem = Longtail_Alloc("FSBlockStore", async_preflight_get_context_size);
+    if (async_preflight_get_context_mem == 0)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(store_index);
+        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
         return ENOMEM;
     }
 
-    TLongtail_Hash* found_block_hashes = (TLongtail_Hash*)Longtail_Alloc("CacheBlockStore", sizeof(TLongtail_Hash) * block_count);
-    if (!found_block_hashes)
+    struct AsyncPreflightGetContext* async_preflight_get_context = (struct AsyncPreflightGetContext*)async_preflight_get_context_mem;
+    async_preflight_get_context->fsblockstore_api = fsblockstore_api;
+    async_preflight_get_context->block_count = block_count;
+    async_preflight_get_context->block_hashes = (TLongtail_Hash*)&async_preflight_get_context[1];
+    async_preflight_get_context->async_complete_api = optional_async_complete_api;
+    memcpy(async_preflight_get_context->block_hashes, block_hashes, sizeof(TLongtail_Hash) * block_count);
+    int err = Longtail_ThreadPool_PostWork(fsblockstore_api->m_ThreadPool, AsyncPreflightGet, async_preflight_get_context);
+    if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_Free(requested_block_lookup);
-        Longtail_Free(store_index);
-        return ENOMEM;
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ThreadPool_PostWork() failed with %d", err)
+        Longtail_Free(async_preflight_get_context);
+        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
+        return err;
     }
-
-    uint32_t found_block_count = 0;
-    for (uint32_t b = 0; b < block_count; ++b)
-    {
-        TLongtail_Hash block_hash = block_hashes[b];
-        LongtailPrivate_LookupTable_PutUnique(requested_block_lookup, block_hash, b);
-    }
-
-    for (uint32_t b = 0; b < *store_index->m_BlockCount; ++b)
-    {
-        TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
-        if (LongtailPrivate_LookupTable_Get(requested_block_lookup, block_hash))
-        {
-            found_block_hashes[found_block_count++] = block_hash;
-        }
-    }
-    Longtail_Free(store_index);
-    store_index = 0;
-    Longtail_Free(requested_block_lookup);
-
-    optional_async_complete_api->OnComplete(optional_async_complete_api, found_block_count, found_block_hashes, 0);
-
-    Longtail_Free(found_block_hashes);
-
     return 0;
 }
 
@@ -952,27 +1147,27 @@ static int MappedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
     return 0;
 }
 
-
-static int FSBlockStore_GetStoredBlock(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t block_hash,
-    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
+struct AsyncGetStoredBlockContext
 {
-#if defined(LONGTAIL_ASSERTS)
+    struct FSBlockStoreAPI* fsblockstore_api;
+    uint64_t block_hash;
+    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api;
+};
+
+int AsyncGetStoredBlock(void* context)
+{
     MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(block_store_api, "%p"),
-        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
-        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+        LONGTAIL_LOGFIELD(context, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
 
-    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
-    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, context != 0, return EINVAL)
 
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
+    struct AsyncGetStoredBlockContext* async_context = (struct AsyncGetStoredBlockContext*)context;
+    struct FSBlockStoreAPI* fsblockstore_api = async_context->fsblockstore_api;
+    uint64_t block_hash = async_context->block_hash;
+    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api = async_context->async_complete_api;
+    Longtail_Free(async_context);
+    async_context = 0;
 
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
     intptr_t block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
@@ -983,7 +1178,8 @@ static int FSBlockStore_GetStoredBlock(
         {
             Longtail_Free((void*)block_path);
             Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
-            return ENOENT;
+            async_complete_api->OnComplete(async_complete_api, 0, ENOENT);
+            return 0;
         }
         Longtail_Free((void*)block_path);
         hmput(fsblockstore_api->m_BlockState, block_hash, 1);
@@ -1010,7 +1206,8 @@ static int FSBlockStore_GetStoredBlock(
             LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->OpenReadFile() failed with %d", err)
             Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             Longtail_Free((char*)block_path);
-            return err;
+            async_complete_api->OnComplete(async_complete_api, 0, err);
+            return 0;
         }
         uint64_t block_size;
         err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, file_handle, &block_size);
@@ -1020,7 +1217,8 @@ static int FSBlockStore_GetStoredBlock(
             Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
             Longtail_Free((char*)block_path);
-            return err;
+            async_complete_api->OnComplete(async_complete_api, 0, err);
+            return 0;
         }
         void* block_data;
         Longtail_StorageAPI_HFileMap file_map;
@@ -1036,7 +1234,8 @@ static int FSBlockStore_GetStoredBlock(
                 fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
                 fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
                 Longtail_Free((char*)block_path);
-                return ENOMEM;
+                async_complete_api->OnComplete(async_complete_api, 0, ENOMEM);
+                return 0;
             }
             int err = Longtail_InitStoredBlockFromData(
                 stored_block,
@@ -1045,12 +1244,13 @@ static int FSBlockStore_GetStoredBlock(
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
-                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+                    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
                 Longtail_Free(stored_block);
                 fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
                 fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
                 Longtail_Free((char*)block_path);
-                return err;
+                async_complete_api->OnComplete(async_complete_api, 0, err);
+                return 0;
             }
             char* p = (char*)stored_block;
             p += Longtail_GetStoredBlockSize(0);
@@ -1064,10 +1264,11 @@ static int FSBlockStore_GetStoredBlock(
         else if (err != ENOTSUP)
         {
             LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->MapFile() failed with %d", err)
-            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
             Longtail_Free((char*)block_path);
-            return err;
+            async_complete_api->OnComplete(async_complete_api, 0, err);
+            return 0;
         }
     }
     if (stored_block == 0)
@@ -1078,7 +1279,8 @@ static int FSBlockStore_GetStoredBlock(
             LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadStoredBlock() failed with %d", err)
             Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             Longtail_Free((char*)block_path);
-            return err;
+            async_complete_api->OnComplete(async_complete_api, 0, err);
+            return 0;
         }
     }
     Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
@@ -1087,6 +1289,166 @@ static int FSBlockStore_GetStoredBlock(
     Longtail_Free(block_path);
 
     async_complete_api->OnComplete(async_complete_api, stored_block, 0);
+    return 0;
+}
+
+static int FSBlockStore_GetStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint64_t block_hash,
+    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_store_api, "%p"),
+        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64),
+        LONGTAIL_LOGFIELD(async_complete_api, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
+
+    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
+
+
+    size_t async_get_stored_block_context_size = sizeof(struct AsyncPreflightGetContext);
+    void* async_get_stored_block_context_mem = Longtail_Alloc("FSBlockStore", async_get_stored_block_context_size);
+    if (async_get_stored_block_context_mem == 0)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+        return ENOMEM;
+    }
+
+    struct AsyncGetStoredBlockContext* async_get_stored_block_context = (struct AsyncGetStoredBlockContext*)async_get_stored_block_context_mem;
+    async_get_stored_block_context->fsblockstore_api = fsblockstore_api;
+    async_get_stored_block_context->block_hash = block_hash;
+    async_get_stored_block_context->async_complete_api = async_complete_api;
+    int err = Longtail_ThreadPool_PostWork(fsblockstore_api->m_ThreadPool, AsyncGetStoredBlock, async_get_stored_block_context);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ThreadPool_PostWork() failed with %d", err)
+        Longtail_Free(async_get_stored_block_context);
+        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+        return err;
+    }
+
+//    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+//    intptr_t block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
+//    if (block_ptr == -1)
+//    {
+//        char* block_path = GetBlockPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_StorePath, fsblockstore_api->m_BlockExtension, block_hash);
+//        if (!fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
+//        {
+//            Longtail_Free((void*)block_path);
+//            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+//            return ENOENT;
+//        }
+//        Longtail_Free((void*)block_path);
+//        hmput(fsblockstore_api->m_BlockState, block_hash, 1);
+//        block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
+//    }
+//    uint32_t state = fsblockstore_api->m_BlockState[block_ptr].value;
+//    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+//    while (state == 0)
+//    {
+//        Longtail_Sleep(1000);
+//        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
+//        state = hmget(fsblockstore_api->m_BlockState, block_hash);
+//        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+//    }
+//    char* block_path = GetBlockPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_StorePath, fsblockstore_api->m_BlockExtension, block_hash);
+//
+//    struct Longtail_StoredBlock* stored_block = 0;
+//    if (fsblockstore_api->m_EnableFileMapping)
+//    {
+//        Longtail_StorageAPI_HOpenFile file_handle;
+//        int err = fsblockstore_api->m_StorageAPI->OpenReadFile(fsblockstore_api->m_StorageAPI, block_path, &file_handle);
+//        if (err)
+//        {
+//            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->OpenReadFile() failed with %d", err)
+//            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+//            Longtail_Free((char*)block_path);
+//            return err;
+//        }
+//        uint64_t block_size;
+//        err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, file_handle, &block_size);
+//        if (err)
+//        {
+//            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->GetSize() failed with %d", err)
+//            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+//            fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+//            Longtail_Free((char*)block_path);
+//            return err;
+//        }
+//        void* block_data;
+//        Longtail_StorageAPI_HFileMap file_map;
+//        err = fsblockstore_api->m_StorageAPI->MapFile(fsblockstore_api->m_StorageAPI, file_handle, 0, block_size, &file_map, (const void**)&block_data);
+//        if (!err)
+//        {
+//            size_t block_mem_size = Longtail_GetStoredBlockSize(0) + sizeof(struct Longtail_StorageAPI*) + sizeof(Longtail_StorageAPI_HOpenFile) + sizeof(Longtail_StorageAPI_HFileMap);
+//            stored_block = (struct Longtail_StoredBlock*)Longtail_Alloc("ArchiveBlockStore_GetStoredBlock", block_mem_size);
+//            if (!stored_block)
+//            {
+//                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+//                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+//                fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
+//                fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+//                Longtail_Free((char*)block_path);
+//                return ENOMEM;
+//            }
+//            int err = Longtail_InitStoredBlockFromData(
+//                stored_block,
+//                block_data,
+//                block_size);
+//            if (err)
+//            {
+//                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
+//                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+//                Longtail_Free(stored_block);
+//                fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
+//                fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+//                Longtail_Free((char*)block_path);
+//                return err;
+//            }
+//            char* p = (char*)stored_block;
+//            p += Longtail_GetStoredBlockSize(0);
+//            *(struct Longtail_StorageAPI**)p = fsblockstore_api->m_StorageAPI;
+//            p += sizeof(struct Longtail_StorageAPI*);
+//            *(Longtail_StorageAPI_HOpenFile*)p = file_handle;
+//            p += sizeof(Longtail_StorageAPI_HOpenFile);
+//            *(Longtail_StorageAPI_HFileMap*)p = file_map;
+//            stored_block->Dispose = MappedStoredBlock_Dispose;
+//        }
+//        else if (err != ENOTSUP)
+//        {
+//            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->MapFile() failed with %d", err)
+//            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+//            fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+//            Longtail_Free((char*)block_path);
+//            return err;
+//        }
+//    }
+//    if (stored_block == 0)
+//    {
+//        int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
+//        if (err)
+//        {
+//            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadStoredBlock() failed with %d", err)
+//            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+//            Longtail_Free((char*)block_path);
+//            return err;
+//        }
+//    }
+//    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+//    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
+//
+//    Longtail_Free(block_path);
+//
+//    async_complete_api->OnComplete(async_complete_api, stored_block, 0);
     return 0;
 }
 
@@ -1378,6 +1740,8 @@ static void FSBlockStore_Dispose(struct Longtail_API* api)
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_Flush() failed with %d", err);
     }
 
+    Longtail_DestroyThreadPool(fsblockstore_api->m_ThreadPool);
+
     hmfree(fsblockstore_api->m_BlockState);
     fsblockstore_api->m_BlockState = 0;
     Longtail_DeleteSpinLock(fsblockstore_api->m_Lock);
@@ -1458,8 +1822,22 @@ static int FSBlockStore_Init(
         api->m_BlockState = 0;
         Longtail_Free(api->m_StoreIndex);
         api->m_StoreIndex = 0;
+        Longtail_Free(api->m_StorePath);
         return err;
     }
+
+    err = Longtail_CreateThreadPool(api->m_JobAPI->GetWorkerCount(api->m_JobAPI), &api->m_ThreadPool);
+    if (err)
+    {
+        Longtail_DeleteSpinLock(api->m_Lock);
+        hmfree(api->m_BlockState);
+        api->m_BlockState = 0;
+        Longtail_Free(api->m_StoreIndex);
+        api->m_StoreIndex = 0;
+        Longtail_Free(api->m_StorePath);
+        return err;
+    }
+
     *out_block_store_api = block_store_api;
     return 0;
 }
