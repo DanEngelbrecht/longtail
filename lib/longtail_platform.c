@@ -165,11 +165,73 @@ static const wchar_t* MakeLongPath(const wchar_t* path)
     return long_path;
 }
 
-uint32_t Longtail_GetCPUCount()
+static DWORD CountSetBits(ULONG_PTR bitMask)
+{
+    DWORD LSHIFT = sizeof(ULONG_PTR) * 8 - 1;
+    DWORD bitSetCount = 0;
+    ULONG_PTR bitTest = (ULONG_PTR)1 << LSHIFT;
+
+    for (DWORD i = 0; i <= LSHIFT; ++i)
+    {
+        bitSetCount += ((bitMask & bitTest) ? 1 : 0);
+        bitTest /= 2;
+    }
+
+    return bitSetCount;
+}
+
+static uint32_t GetFallbackCPUCount()
 {
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
     return (uint32_t)sysinfo.dwNumberOfProcessors;
+}
+
+uint32_t Longtail_GetCPUCount()
+{
+    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX buffer = NULL;
+    DWORD returnLength = 0;
+
+    GetLogicalProcessorInformationEx(RelationProcessorCore, buffer, &returnLength);
+    if (returnLength == 0)
+    {
+        return GetFallbackCPUCount();
+    }
+    buffer = Longtail_Alloc("Longtail_GetCPUCount", returnLength);
+    if (!buffer)
+    {
+        return GetFallbackCPUCount();
+    }
+    BOOL rc = GetLogicalProcessorInformationEx(RelationProcessorCore, buffer, &returnLength);
+    if (rc == FALSE)
+    {
+        Longtail_Free(buffer);
+        return GetFallbackCPUCount();
+    }
+
+    uint8_t* raw_ptr = (uint8_t*)buffer;
+
+    DWORD logicalProcessorCount = 0;
+    DWORD byteOffset = 0;
+    while (byteOffset + sizeof(PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) <= returnLength)
+    {
+        PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX ptr = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)(raw_ptr + byteOffset);
+        if (ptr->Processor.Flags & LTP_PC_SMT)
+        {
+            for (WORD group = 0; group < ptr->Processor.GroupCount; group++)
+            {
+                logicalProcessorCount += CountSetBits(ptr->Processor.GroupMask[group].Mask);
+            }
+        }
+        else
+        {
+            logicalProcessorCount++;
+        }
+        byteOffset += ptr->Size;
+    }
+
+    Longtail_Free(buffer);
+    return logicalProcessorCount;
 }
 
 void Longtail_Sleep(uint64_t timeout_us)
