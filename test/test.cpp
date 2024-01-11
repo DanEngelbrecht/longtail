@@ -1508,8 +1508,10 @@ TEST(Longtail, Longtail_FSBlockStore)
     put_block.m_BlockData = 0;
 
     TestAsyncGetBlockComplete getCB;
-    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, &getCB.m_API));
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 4711, &getCB.m_API));
+    getCB.Wait();
     struct Longtail_StoredBlock* get_block = getCB.m_StoredBlock;
+    ASSERT_EQ(ENOENT, getCB.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
     void* block_index_mem = Longtail_Alloc(0, block_index_size);
@@ -1589,8 +1591,10 @@ TEST(Longtail, Longtail_FSBlockStoreReadContent)
     put_block.m_BlockData = 0;
 
     TestAsyncGetBlockComplete getCB;
-    ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, 4711, &getCB.m_API));
+    ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 4711, &getCB.m_API));
+    getCB.Wait();
     struct Longtail_StoredBlock* get_block = getCB.m_StoredBlock;
+    ASSERT_EQ(ENOENT, getCB.m_Err);
 
     size_t block_index_size = Longtail_GetBlockIndexSize(2);
     void* block_index_mem = Longtail_Alloc(0, block_index_size);
@@ -2050,8 +2054,10 @@ TEST(Longtail, Longtail_CompressBlockStore)
     Longtail_BlockStoreAPI* compress_block_store_api = Longtail_CreateCompressBlockStoreAPI(local_block_store_api, compression_registry);
 
     struct TestAsyncGetBlockComplete getCB0;
-    ASSERT_EQ(ENOENT, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, &getCB0.m_API));
+    ASSERT_EQ(0, compress_block_store_api->GetStoredBlock(compress_block_store_api, 4711, &getCB0.m_API));
+    getCB0.Wait();
     struct Longtail_StoredBlock* get_block = getCB0.m_StoredBlock;
+    ASSERT_EQ(ENOENT, getCB0.m_Err);
 
     Longtail_StoredBlock* put_block;
 
@@ -7189,7 +7195,9 @@ TEST(Longtail, Longtail_PruneFSBlockStore)
 
     {
         struct TestAsyncGetBlockComplete getCB1;
-        ASSERT_EQ(ENOENT, block_store_api->GetStoredBlock(block_store_api, block_hashes[1], &getCB1.m_API));
+        ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, block_hashes[1], &getCB1.m_API));
+        getCB1.Wait();
+        ASSERT_EQ(ENOENT, getCB1.m_Err);
     }
 
     {
