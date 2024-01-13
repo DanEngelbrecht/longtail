@@ -281,7 +281,8 @@ static int ConcurrentChunkWriteAPI_Write(
     uint64_t offset,
     uint32_t size,
     uint32_t chunk_count,
-    const void* input)
+    const void* input,
+    uint32_t* out_chunks_remaining)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -290,7 +291,8 @@ static int ConcurrentChunkWriteAPI_Write(
         LONGTAIL_LOGFIELD(offset, "%" PRIu64),
         LONGTAIL_LOGFIELD(size, "%u"),
         LONGTAIL_LOGFIELD(chunk_count, "%u"),
-        LONGTAIL_LOGFIELD(input, "%p")
+        LONGTAIL_LOGFIELD(input, "%p"),
+        LONGTAIL_LOGFIELD(out_chunks_remaining, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
@@ -305,6 +307,19 @@ static int ConcurrentChunkWriteAPI_Write(
     Longtail_StorageAPI_HOpenFile file_handle = (Longtail_StorageAPI_HOpenFile)in_open_file;
 
     int err = api->m_StorageAPI->Write(api->m_StorageAPI, file_handle, offset, size, input);
+    if (err)
+    {
+        {
+            Longtail_LockRWLockWrite(api->m_RWLock);
+            ptrdiff_t open_file_index = 0;
+            struct OpenFileEntry* open_file_entry = &api->m_OpenFileEntries[open_file_index];
+            open_file_entry->m_FileHandle = 0;
+            hmdel(api->m_FileHandleToOpenFile, file_handle);
+            Longtail_UnlockRWLockWrite(api->m_RWLock);
+        }
+        api->m_StorageAPI->CloseFile(api->m_StorageAPI, file_handle);
+        return err;
+    }
 
     ptrdiff_t open_file_index = 0;
     int close_on_write = 0;
@@ -323,8 +338,9 @@ static int ConcurrentChunkWriteAPI_Write(
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_PendingWriteCount >= (int64_t)chunk_count, Longtail_UnlockRWLockRead(api->m_RWLock); return EINVAL);
         LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_FileHandle == file_handle, Longtail_UnlockRWLockRead(api->m_RWLock); return EINVAL);
         int64_t pending_count = Longtail_AtomicAdd64(&open_file_entry->m_PendingWriteCount, -(int64_t)chunk_count);
-        close_on_write = (pending_count == 0);
         Longtail_UnlockRWLockRead(api->m_RWLock);
+        close_on_write = (pending_count == 0);
+        *out_chunks_remaining = (uint32_t)pending_count;
     }
 
     if (close_on_write)
