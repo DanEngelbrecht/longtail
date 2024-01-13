@@ -138,13 +138,40 @@ struct AssetInfo
 uint32_t MonitorAssetInfosCount = 0;
 struct AssetInfo* MonitorAssetInfos = 0;
 
-void MonitorWriteAsset(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset)
+void MonitorAssetRemove(const struct Longtail_VersionIndex* version_index, uint32_t asset_index)
+{
+    if (MonitorAssetInfos)
+    {
+//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
+    }
+}
+
+void MonitorAssetOpen(const struct Longtail_VersionIndex* version_index, uint32_t asset_index)
+{
+    if (MonitorAssetInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
+    }
+}
+
+void MonitorAssetWrite(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset)
 {
     if (MonitorAssetInfos)
     {
         Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
         Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
         Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_PendingChunkCount, -((int64_t)chunk_count_in_block));
+    }
+}
+
+void MonitorAssetComplete(const struct Longtail_VersionIndex* version_index, uint32_t asset_index, int err)
+{
+    if (MonitorAssetInfos)
+    {
+//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
     }
 }
 
@@ -156,7 +183,7 @@ struct MonitorChunkInfo
 uint32_t MonitorChunkInfosCount = 0;
 struct MonitorChunkInfo* MonitorChunkInfos = 0;
 
-void MonitorReadChunk(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block)
+void MonitorChunkRead(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block)
 {
     if (MonitorBlockInfos)
     {
@@ -374,11 +401,17 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
     MonitorChunkInfos = (struct MonitorChunkInfo*)Longtail_Alloc("Monitor", MonitorChunkInfosSize);
     memset(MonitorChunkInfos, 0, MonitorChunkInfosSize);
 
-    Longtail_SetMonitorGetStoredBlockLoading(MonitorGetStoredBlockLoading);
-    Longtail_SetMonitorGetStoredBlockLoaded(MonitorGetStoredBlockLoaded);
-    Longtail_SetMonitorGetStoredBlockComplete(MonitorGetStoredBlockComplete);
-    Longtail_SetMonitorWriteAsset(MonitorWriteAsset);
-    Longtail_SetMonitorReadChunk(MonitorReadChunk);
+    struct Longtail_Monitor monitor = {
+        MonitorGetStoredBlockLoading,
+        MonitorGetStoredBlockLoaded,
+        MonitorGetStoredBlockComplete,
+        MonitorAssetRemove,
+        MonitorAssetOpen,
+        MonitorAssetWrite,
+        MonitorChunkRead,
+        MonitorAssetComplete
+    };
+    Longtail_SetMonitor(&monitor);
 
     FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
     Longtail_AtomicAdd32(&MonitorWindowReady, 1);
