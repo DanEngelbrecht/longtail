@@ -2652,19 +2652,16 @@ static HLongtail_Thread UnpackThreaded(
     int enable_mmap_unpacking,
     int enable_detailed_progress)
 {
-    struct UnpackArgs Args;
-    Args.source_path = source_path;
-    Args.target_path = target_path;
-    Args.retain_permissions = retain_permissions;
-    Args.enable_mmap_indexing = enable_mmap_indexing;
-    Args.enable_mmap_unpacking = enable_mmap_unpacking;
-    Args.enable_detailed_progress = enable_detailed_progress;
-
-    size_t thread_size = Longtail_GetThreadSize();
-
+    void* UnpackThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
+    struct UnpackArgs* Args = (struct UnpackArgs*)UnpackThreadedMem;
+    Args->source_path = source_path;
+    Args->target_path = target_path;
+    Args->retain_permissions = retain_permissions;
+    Args->enable_mmap_indexing = enable_mmap_indexing;
+    Args->enable_mmap_unpacking = enable_mmap_unpacking;
+    Args->enable_detailed_progress = enable_detailed_progress;
     HLongtail_Thread MonitorThread = 0;
-    UnpackThreadedMem = Longtail_Alloc("Monitor", thread_size);
-    int err = Longtail_CreateThread(UnpackThreadedMem, UnpackWorker, 0, &Args, 0, &MonitorThread);
+    int err = Longtail_CreateThread(&Args[1], UnpackWorker, 0, Args, 0, &MonitorThread);
     return MonitorThread;
 }
 
