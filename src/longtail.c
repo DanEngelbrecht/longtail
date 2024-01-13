@@ -731,9 +731,10 @@ int Longtail_BlockStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_a
 int Longtail_BlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats) { return block_store_api->GetStats(block_store_api, out_stats); }
 int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api) {return block_store_api->Flush(block_store_api, async_complete_api); }
 
-static struct Longtail_Monitor Monitor_private = { 0, 0, 0, 0, 0, 0, 0, 0 };
+static struct Longtail_Monitor Monitor_private = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
-#define LONGTAIL_MONTITOR_BLOCK_LOADING(store_index, block_index) if (Monitor_private.BlockLoading) {Monitor_private.BlockLoading(store_index, block_index);}
+#define LONGTAIL_MONTITOR_BLOCK_PREPARE(store_index, block_index) if (Monitor_private.BlockPrepare) {Monitor_private.BlockPrepare(store_index, block_index);}
+#define LONGTAIL_MONTITOR_BLOCK_LOAD(store_index, block_index) if (Monitor_private.BlockLoad) {Monitor_private.BlockLoad(store_index, block_index);}
 #define LONGTAIL_MONTITOR_BLOCK_LOADED(store_index, block_index, err) if (Monitor_private.BlockLoaded) {Monitor_private.BlockLoaded(store_index, block_index, err);}
 #define LONGTAIL_MONTITOR_BLOCK_COMPLETE(store_index, block_index, err) if (Monitor_private.BlockLoadComplete) {Monitor_private.BlockLoadComplete(store_index, block_index, err);}
 
@@ -8138,7 +8139,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         job->m_JobID = job_id;
         job->m_AsyncCompleteAPI.OnComplete = WriteContentBlock2GetStoredBlockComplete;
 
-        LONGTAIL_MONTITOR_BLOCK_LOADING(job->m_Context->m_StoreIndex, block_index);
+        LONGTAIL_MONTITOR_BLOCK_LOAD(job->m_Context->m_StoreIndex, block_index);
         int err = job->m_Context->m_BlockStoreAPI->GetStoredBlock(job->m_Context->m_BlockStoreAPI, block_hash, &job->m_AsyncCompleteAPI);
         if (err == 0)
         {
@@ -8391,6 +8392,7 @@ static int CreateBlockWriteInfos(
 
     for (uint32_t b = 0; b < block_count; ++b)
     {
+        LONGTAIL_MONTITOR_BLOCK_PREPARE(store_index, b);
         uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
         uint32_t chunk_index_offset = store_index->m_BlockChunksOffsets[b];
         for (uint32_t c = 0; c < block_chunk_count; ++c)
@@ -8448,6 +8450,7 @@ static int CreateBlockWriteInfos(
                 Longtail_Free(work_mem);
                 return err;
             }
+            LONGTAIL_MONTITOR_BLOCK_PREPARE(store_index, *content_block_index);
             TBlockChunkWriteArray* block_write_info = &block_write_infos->m_BlockWritesArrays[*content_block_index];
 
             struct Longtail_BlockChunkWriteInfo chunk_write_info;

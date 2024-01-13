@@ -80,6 +80,7 @@ static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
 enum MonitorBlockInfoState
 {
     BlockIdle = 0,
+    BlockPrepare,
     BlockFetching,
     BlockFetchedSuccess,
     BlockFetchedFailed,
@@ -99,7 +100,16 @@ struct MonitorBlockInfo
 uint32_t MonitorBlockInfosCount = 0;
 struct MonitorBlockInfo* MonitorBlockInfos = 0;
 
-void MonitorGetStoredBlockLoading(const struct Longtail_StoreIndex* store_index, uint32_t block_index)
+void MonitorGetStoredBlockPrepare(const struct Longtail_StoreIndex* store_index, uint32_t block_index)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = BlockPrepare;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+void MonitorGetStoredBlockLoad(const struct Longtail_StoreIndex* store_index, uint32_t block_index)
 {
     if (MonitorBlockInfos)
     {
@@ -170,7 +180,7 @@ void MonitorAssetComplete(const struct Longtail_VersionIndex* version_index, uin
 {
     if (MonitorAssetInfos)
     {
-//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
 //        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
     }
 }
@@ -229,7 +239,8 @@ static uint32_t* MonitorWindowBuffer = 0;
 #define MFB_RGB(r, g, b)        (((uint32_t) r) << 16) | (((uint32_t) g) << 8) | ((uint32_t) b)
 
 static const uint32_t Black = MFB_RGB(0x00, 0x00, 0x00);
-static const uint32_t Grey = MFB_RGB(0x60, 0x60, 0x60);
+static const uint32_t DarkGrey = MFB_RGB(0x40, 0x40, 0x40);
+static const uint32_t Grey = MFB_RGB(0x80, 0x80, 0x80);
 static const uint32_t White = MFB_RGB(0xff, 0xff, 0xff);
 static const uint32_t Green = MFB_RGB(0x40, 0xff, 0x40);
 static const uint32_t Yellow = MFB_RGB(0xff, 0xff, 0x40);
@@ -295,7 +306,14 @@ static int UpdateProgressWindow()
             }
             if (MonitorBlockInfos[b].m_ActivityIndicator > 0)
             {
-                SetBlock(b, White);
+                if (MonitorBlockInfos[b].m_State == BlockPrepare)
+                {
+                    SetBlock(b, Grey);
+                }
+                else
+                {
+                    SetBlock(b, White);
+                }
                 Longtail_AtomicAdd32(&MonitorBlockInfos[b].m_ActivityIndicator, -1);
                 continue;
             }
@@ -303,7 +321,10 @@ static int UpdateProgressWindow()
             switch (MonitorBlockInfos[b].m_State)
             {
             case BlockIdle:
-                SetBlock(b, Grey);
+                SetBlock(b, DarkGrey);
+                break;
+            case BlockPrepare:
+                SetBlock(b, DarkGrey);
                 break;
             case BlockFetching:
                 SetBlock(b, Yellow);
@@ -402,7 +423,8 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
     memset(MonitorChunkInfos, 0, MonitorChunkInfosSize);
 
     struct Longtail_Monitor monitor = {
-        MonitorGetStoredBlockLoading,
+        MonitorGetStoredBlockPrepare,
+        MonitorGetStoredBlockLoad,
         MonitorGetStoredBlockLoaded,
         MonitorGetStoredBlockComplete,
         MonitorAssetRemove,

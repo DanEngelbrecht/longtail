@@ -816,7 +816,8 @@ LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* blo
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);
 
-typedef void (*Longtail_MonitorGetStoredBlockLoading)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
+typedef void (*Longtail_MonitorGetStoredBlockPrepare)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
+typedef void (*Longtail_MonitorGetStoredBlockLoad)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
 typedef void (*Longtail_MonitorGetStoredBlockLoaded)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
 typedef void (*Longtail_MonitorGetStoredBlockComplete)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
 typedef void (*Longtail_MonitorAssetRemove)(const struct Longtail_VersionIndex* source_version_index, uint32_t asset_index);
@@ -827,7 +828,8 @@ typedef void (*Longtail_MonitorAssetComplete)(const struct Longtail_VersionIndex
 
 struct Longtail_Monitor
 {
-    Longtail_MonitorGetStoredBlockLoading   BlockLoading;
+    Longtail_MonitorGetStoredBlockPrepare   BlockPrepare;
+    Longtail_MonitorGetStoredBlockLoad      BlockLoad;
     Longtail_MonitorGetStoredBlockLoaded    BlockLoaded;
     Longtail_MonitorGetStoredBlockComplete  BlockLoadComplete;
     Longtail_MonitorAssetRemove             AssetRemove;
