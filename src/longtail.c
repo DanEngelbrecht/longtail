@@ -7056,7 +7056,7 @@ int Longtail_GetExistingStoreIndex(
                 out_store_index);
         }
 
-        // Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
+        // Favour blocks we use more data out of - if a chunk is in multiple blocks we want to pick
         // the blocks that has highest ratio of use inside the block.
         // This does not guarantee a perfect block match as one block can be a 100% match which
         // could lead to skipping part or whole of another 100% match block resulting in us
