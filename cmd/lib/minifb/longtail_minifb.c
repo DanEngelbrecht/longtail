@@ -60,6 +60,7 @@ static void MiniFBDispose(struct Longtail_API* api)
 
 static int MiniFBOpen(struct Longtail_FrameBufferAPI* frame_buffer_api, const char *title, unsigned width, unsigned height, Longtail_StorageAPI_HFrameBuffer* out_frame_buffer)
 {
+#if defined(_WIN32)
     struct mfb_window* window = mfb_open_ex("longtail", 800, 600, WF_RESIZABLE);
     if (window == 0)
     {
@@ -67,17 +68,25 @@ static int MiniFBOpen(struct Longtail_FrameBufferAPI* frame_buffer_api, const ch
     }
     *out_frame_buffer = (Longtail_StorageAPI_HFrameBuffer)window;
     return 0;
+#else
+    return ENOTSUP;
+#endif
 }
 
 static int MiniFBClose(struct Longtail_FrameBufferAPI* frame_buffer_api, Longtail_StorageAPI_HFrameBuffer frame_buffer)
 {
+#if defined(_WIN32)
     struct mfb_window* window = (struct mfb_window*)frame_buffer;
     mfb_close(window);
     return 0;
+#else
+    return ENOTSUP;
+#endif
 }
 
 static int MiniFBUpdate(struct Longtail_FrameBufferAPI* frame_buffer_api, Longtail_StorageAPI_HFrameBuffer frame_buffer, uint32_t* buffer)
 {
+#if defined(_WIN32)
     struct mfb_window* window = (struct mfb_window*)frame_buffer;
     int state = mfb_update(window, buffer);
     if (state < 0)
@@ -87,6 +96,9 @@ static int MiniFBUpdate(struct Longtail_FrameBufferAPI* frame_buffer_api, Longta
     }
     mfb_wait_sync(window);
     return 0;
+#else
+    return ENOTSUP;
+#endif
 }
 
 static int MiniFBFrameBufferAPI_Init(

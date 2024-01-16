@@ -280,22 +280,29 @@ static void SetAsset(uint32_t a, uint32_t c)
     }
 }
 
-// TODO: Must be done on main thread!
+static TLongtail_Atomic32 progress_lines = 0;
+
 static int UpdateProgressWindow()
 {
-    if (MonitorWindowReady == 0)
+    if (FrameBufferAPI)
     {
-        return 0;
-    }
-    else if (MonitorWindowReady == 1)
-    {
-        FrameBufferAPI->Open(FrameBufferAPI, "Monitor", 800, 600, &FrameBuffer);
-        MonitorWindowBuffer = (uint32_t*)Longtail_Alloc("Monitor", 800 * 600 * sizeof(uint32_t));
-        memset(MonitorWindowBuffer, 0, 800 * 600 * sizeof(uint32_t));
-        Longtail_AtomicAdd32(&MonitorWindowReady, 1);
-    }
-    if (FrameBufferAPI && FrameBuffer)
-    {
+        if (MonitorWindowReady == 0)
+        {
+            return 0;
+        }
+        if (MonitorWindowReady == 1)
+        {
+            if (0 == FrameBufferAPI->Open(FrameBufferAPI, "Monitor", 800, 600, &FrameBuffer))
+            {
+                MonitorWindowBuffer = (uint32_t*)Longtail_Alloc("Monitor", 800 * 600 * sizeof(uint32_t));
+                memset(MonitorWindowBuffer, 0, 800 * 600 * sizeof(uint32_t));
+                Longtail_AtomicAdd32(&MonitorWindowReady, 1);
+            }
+            else
+            {
+                Longtail_AtomicAdd32(&MonitorWindowReady, -1);
+            }
+        }
         for (uint32_t b = 0; b < MonitorBlockInfosCount; b++)
         {
             int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
@@ -380,100 +387,7 @@ static int UpdateProgressWindow()
             return 0;
         }
     }
-    return 1;
-}
-
-void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_VersionIndex* version_index, struct Longtail_VersionDiff* version_diff)
-{
-    MonitorBlockInfosCount = (*store_index->m_BlockCount);
-    size_t MonitorBlockInfosSize = sizeof(struct MonitorBlockInfo) * MonitorBlockInfosCount;
-    MonitorBlockInfos = (struct MonitorBlockInfo*)Longtail_Alloc("Monitor", MonitorBlockInfosSize);
-    memset(MonitorBlockInfos, 0, MonitorBlockInfosSize);
-
-    for (uint32_t b = 0; b < *store_index->m_BlockCount; b++)
-    {
-        uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
-        MonitorBlockInfos[b].m_ChunkCount = block_chunk_count;
-        MonitorBlockInfos[b].m_ChunkAccessCount = (TLongtail_Atomic64*)Longtail_Alloc("Monitor", sizeof(TLongtail_Atomic64) * block_chunk_count);
-        memset((void*)MonitorBlockInfos[b].m_ChunkAccessCount, 0, sizeof(TLongtail_Atomic64));
-    }
-
-    MonitorAssetInfosCount = (*version_index->m_AssetCount);
-    size_t MonitorAssetInfosSize = sizeof(struct AssetInfo) * MonitorAssetInfosCount;
-    MonitorAssetInfos = (struct AssetInfo*)Longtail_Alloc("Monitor", MonitorAssetInfosSize);
-    memset(MonitorAssetInfos, 0, MonitorAssetInfosSize);
-
-    for (uint32_t m = 0; m < *version_diff->m_ModifiedContentCount; m++)
-    {
-        uint32_t a = version_diff->m_TargetContentModifiedAssetIndexes[m];
-        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
-        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
-    }
-
-    for (uint32_t m = 0; m < *version_diff->m_TargetAddedCount; m++)
-    {
-        uint32_t a = version_diff->m_TargetAddedAssetIndexes[m];
-        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
-        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
-    }
-
-    MonitorChunkInfosCount = (*version_index->m_ChunkCount);
-    size_t MonitorChunkInfosSize = sizeof(struct MonitorChunkInfo) * MonitorChunkInfosCount;
-    MonitorChunkInfos = (struct MonitorChunkInfo*)Longtail_Alloc("Monitor", MonitorChunkInfosSize);
-    memset(MonitorChunkInfos, 0, MonitorChunkInfosSize);
-
-    struct Longtail_Monitor monitor = {
-        MonitorGetStoredBlockPrepare,
-        MonitorGetStoredBlockLoad,
-        MonitorGetStoredBlockLoaded,
-        MonitorGetStoredBlockComplete,
-        MonitorAssetRemove,
-        MonitorAssetOpen,
-        MonitorAssetWrite,
-        MonitorChunkRead,
-        MonitorAssetComplete
-    };
-    Longtail_SetMonitor(&monitor);
-
-    FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
-    Longtail_AtomicAdd32(&MonitorWindowReady, 1);
-}
-
-void DisposeMonitor()
-{
-    if (FrameBufferAPI)
-    {
-        if (FrameBuffer)
-        {
-            FrameBufferAPI->Close(FrameBufferAPI, FrameBuffer);
-            FrameBuffer = 0;
-        }
-        SAFE_DISPOSE_API(FrameBufferAPI);
-    }
-    Longtail_Free(MonitorWindowBuffer);
-    MonitorWindowBuffer = 0;
-    Longtail_Free(MonitorAssetInfos);
-    MonitorAssetInfos = 0;
-    Longtail_Free((void*)MonitorChunkInfos);
-    MonitorChunkInfos = 0;
-    for (uint32_t b = MonitorBlockInfosCount; b > 0; b--)
-    {
-        Longtail_Free((void*)MonitorBlockInfos[b - 1].m_ChunkAccessCount);
-    }
-    Longtail_Free((void*)MonitorBlockInfos);
-    MonitorBlockInfos = 0;
-    MonitorBlockInfosCount = 0;
-}
-
-static TLongtail_Atomic32 progress_lines = 0;
-
-static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
-{
-    if (MonitorWindowReady)
-    {
-        return;
-    }
-    if (MonitorBlockInfos || MonitorAssetInfos)
+    else
     {
         int32_t backup_lines = progress_lines;
         Longtail_AtomicAdd32(&progress_lines, -backup_lines);
@@ -491,13 +405,13 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
             columns = 1023;
         }
 
-        char tmp_buffer[1023+1];
+        char tmp_buffer[1023 + 1];
 
         if (MonitorBlockInfos)
         {
             if (MonitorAssetInfos)
             {
-                rows-=2;
+                rows -= 2;
             }
 
             uint32_t block_offset = 0;
@@ -513,6 +427,9 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
                     {
                     case BlockIdle:
                         tmp_buffer[u] = ' ';
+                        break;
+                    case BlockPrepare:
+                        tmp_buffer[u] = '-';
                         break;
                     case BlockFetching:
                         tmp_buffer[u] = '+';
@@ -611,11 +528,106 @@ static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint3
                     complete_row_count++;
                 }
             }
-            if ((complete_row_count > (1 +(rows / 5))) && asset_offset < MonitorAssetInfosCount)
+            if ((complete_row_count > (1 + (rows / 5))) && asset_offset < MonitorAssetInfosCount)
             {
                 skip_row_count += complete_row_count;
             }
         }
+    }
+    return 1;
+}
+
+void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_VersionIndex* version_index, struct Longtail_VersionDiff* version_diff)
+{
+    MonitorBlockInfosCount = (*store_index->m_BlockCount);
+    size_t MonitorBlockInfosSize = sizeof(struct MonitorBlockInfo) * MonitorBlockInfosCount;
+    MonitorBlockInfos = (struct MonitorBlockInfo*)Longtail_Alloc("Monitor", MonitorBlockInfosSize);
+    memset(MonitorBlockInfos, 0, MonitorBlockInfosSize);
+
+    for (uint32_t b = 0; b < *store_index->m_BlockCount; b++)
+    {
+        uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+        MonitorBlockInfos[b].m_ChunkCount = block_chunk_count;
+        MonitorBlockInfos[b].m_ChunkAccessCount = (TLongtail_Atomic64*)Longtail_Alloc("Monitor", sizeof(TLongtail_Atomic64) * block_chunk_count);
+        memset((void*)MonitorBlockInfos[b].m_ChunkAccessCount, 0, sizeof(TLongtail_Atomic64));
+    }
+
+    MonitorAssetInfosCount = (*version_index->m_AssetCount);
+    size_t MonitorAssetInfosSize = sizeof(struct AssetInfo) * MonitorAssetInfosCount;
+    MonitorAssetInfos = (struct AssetInfo*)Longtail_Alloc("Monitor", MonitorAssetInfosSize);
+    memset(MonitorAssetInfos, 0, MonitorAssetInfosSize);
+
+    for (uint32_t m = 0; m < *version_diff->m_ModifiedContentCount; m++)
+    {
+        uint32_t a = version_diff->m_TargetContentModifiedAssetIndexes[m];
+        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
+        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
+    }
+
+    for (uint32_t m = 0; m < *version_diff->m_TargetAddedCount; m++)
+    {
+        uint32_t a = version_diff->m_TargetAddedAssetIndexes[m];
+        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
+        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
+    }
+
+    MonitorChunkInfosCount = (*version_index->m_ChunkCount);
+    size_t MonitorChunkInfosSize = sizeof(struct MonitorChunkInfo) * MonitorChunkInfosCount;
+    MonitorChunkInfos = (struct MonitorChunkInfo*)Longtail_Alloc("Monitor", MonitorChunkInfosSize);
+    memset(MonitorChunkInfos, 0, MonitorChunkInfosSize);
+
+    struct Longtail_Monitor monitor = {
+        MonitorGetStoredBlockPrepare,
+        MonitorGetStoredBlockLoad,
+        MonitorGetStoredBlockLoaded,
+        MonitorGetStoredBlockComplete,
+        MonitorAssetRemove,
+        MonitorAssetOpen,
+        MonitorAssetWrite,
+        MonitorChunkRead,
+        MonitorAssetComplete
+    };
+    Longtail_SetMonitor(&monitor);
+
+    if (FrameBufferAPI)
+    {
+        Longtail_AtomicAdd32(&MonitorWindowReady, 1);
+    }
+}
+
+void DisposeMonitor()
+{
+    if (FrameBufferAPI)
+    {
+        if (FrameBuffer)
+        {
+            FrameBufferAPI->Close(FrameBufferAPI, FrameBuffer);
+            FrameBuffer = 0;
+        }
+    }
+    Longtail_Free(MonitorWindowBuffer);
+    MonitorWindowBuffer = 0;
+    Longtail_Free(MonitorAssetInfos);
+    MonitorAssetInfos = 0;
+    Longtail_Free((void*)MonitorChunkInfos);
+    MonitorChunkInfos = 0;
+    for (uint32_t b = MonitorBlockInfosCount; b > 0; b--)
+    {
+        Longtail_Free((void*)MonitorBlockInfos[b - 1].m_ChunkAccessCount);
+    }
+    Longtail_Free((void*)MonitorBlockInfos);
+    MonitorBlockInfos = 0;
+    MonitorBlockInfosCount = 0;
+}
+
+static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
+{
+    if (MonitorWindowReady)
+    {
+        return;
+    }
+    if (MonitorBlockInfos || MonitorAssetInfos)
+    {
         return;
     }
 
@@ -2652,7 +2664,7 @@ static HLongtail_Thread UnpackThreaded(
     int enable_mmap_unpacking,
     int enable_detailed_progress)
 {
-    void* UnpackThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
+    UnpackThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
     struct UnpackArgs* Args = (struct UnpackArgs*)UnpackThreadedMem;
     Args->source_path = source_path;
     Args->target_path = target_path;
@@ -3107,6 +3119,11 @@ int main(int argc, char** argv)
             Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
+        if (enable_detailed_progress_raw)
+        {
+            FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
+        }
+
         const char* source_path = NormalizePath(source_path_raw);
         const char* target_path = NormalizePath(target_path_raw);
 
@@ -3124,13 +3141,7 @@ int main(int argc, char** argv)
         }
         DisposeMonitor();
 
-//        err = Unpack(
-//            source_path,
-//            target_path,
-//            retain_permission_raw,
-//            enable_mmap_indexing_raw,
-//            enable_mmap_unpacking_raw,
-//            enable_detailed_progress_raw);
+        SAFE_DISPOSE_API(FrameBufferAPI);
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_path);
@@ -3140,7 +3151,7 @@ int main(int argc, char** argv)
 #endif
     if (enable_mem_tracer_raw) {
         Longtail_MemTracer_DumpStats("longtail.csv");
-        char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerDetailed());
+        char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerSummary());
         printf("%s", memtrace_stats);
         Longtail_Free(memtrace_stats);
         Longtail_MemTracer_Dispose();
