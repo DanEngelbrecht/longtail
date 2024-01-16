@@ -1,4 +1,4 @@
-#ifdef ANDROID
+#ifdef __ANDROID__
 
 #include <android_native_app_glue.h>
 #include <android/log.h>
@@ -155,4 +155,4 @@ main(int argc, char *argv[]) {
         }
     } while(mfb_wait_sync(window));}
 
-#endif // ANDROID
+#endif // __ANDROID__

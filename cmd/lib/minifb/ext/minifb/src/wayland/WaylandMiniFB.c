@@ -1,4 +1,4 @@
-#ifdef WAYLAND
+#ifdef __WAYLAND__
 
 #include <MiniFB.h>
 #include "MiniFB_internal.h"
@@ -1031,4 +1031,4 @@ mfb_get_monitor_scale(struct mfb_window *window, float *scale_x, float *scale_y)
     }
 }
 
-#endif // WAYLAND
+#endif // __WAYLAND__

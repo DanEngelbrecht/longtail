@@ -1,4 +1,4 @@
-#ifdef WEB
+#ifdef __EMSCRIPTEN__
 
 #include <MiniFB.h>
 #include <MiniFB_internal.h>
@@ -550,4 +550,4 @@ uint64_t mfb_timer_tick(void) {
     return now;
 }
 
-#endif // WEB
+#endif // __EMSCRIPTEN__

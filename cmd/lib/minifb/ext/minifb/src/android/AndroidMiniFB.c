@@ -1,4 +1,4 @@
-#ifdef ANDROID
+#ifdef __ANDROID__
 
 #include <android_native_app_glue.h>
 #include <android/log.h>
@@ -499,4 +499,4 @@ mfb_set_viewport(struct mfb_window *window, unsigned offset_x, unsigned offset_y
     return true;
 }
 
-#endif // ANDROID
+#endif // __ANDROID__
