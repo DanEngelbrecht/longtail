@@ -13,6 +13,7 @@
 - **FIXED** `Longtail_ChangeVersion2()` can now handle workloads with a block count larger than 65535
 - **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full
 - **FIXED** Bikeshed JobAPI::CreateJobs implementation now properly drains both task channels when task queue is full
+- **FIXED** Make sure we retain order of assets with equal length when sorting them
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
 
 ## 0.4.1

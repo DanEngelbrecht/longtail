@@ -2900,7 +2900,23 @@ static SORTFUNC(SortPathShortToLongVersionMerge)
     uint32_t b = *(const uint32_t*)b_ptr;
     uint32_t a_len = path_lengths[a];
     uint32_t b_len = path_lengths[b];
-    return (a_len > b_len) ? 1 : (a_len < b_len) ? -1 : 0;
+    if (a_len < b_len)
+    {
+        return -1;
+    }
+    if (a_len > b_len)
+    {
+        return 1;
+    }
+    if (a < b)
+    {
+        return -1;
+    }
+    if (a > b)
+    {
+        return 1;
+    }
+    return 0;
 }
 
 int Longtail_MergeVersionIndex(
@@ -7196,7 +7212,23 @@ static SORTFUNC(SortPathShortToLong)
     const char* b_path = &version_index->m_NameData[version_index->m_NameOffsets[b]];
     size_t a_len = strlen(a_path);
     size_t b_len = strlen(b_path);
-    return (a_len > b_len) ? 1 : (a_len < b_len) ? -1 : 0;
+    if (a_len < b_len)
+    {
+        return -1;
+    }
+    if (a_len > b_len)
+    {
+        return 1;
+    }
+    if (a < b)
+    {
+        return -1;
+    }
+    if (a > b)
+    {
+        return 1;
+    }
+    return 0;
 }
 
 static SORTFUNC(SortPathLongToShort)
