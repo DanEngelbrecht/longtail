@@ -1,7 +1,7 @@
 ##
 - **CHANGED API** `Longtail_JobAPI_JobFunc` renamed `is_cancelled` to `detected_error`, now contains first error returned from a job task in the same job group (if any) or ECANCELLED if job group was cancelled
     If `detected_error` is non-zero, try to exit (and cleanup) your task directly and return `0`.
-- **CHANGED_API** JobAPI `ReadyJobs` now returns first error encountered in a job group for a task as well as any error in the job api itself, removing the need to book keep the error for tasks separately
+- **CHANGED_API** JobAPI `WaitForAllJobs` now returns first error encountered in a job group for a task as well as any error in the job api itself, removing the need to book keep the error for tasks separately
 - **ADDED** memtracer now tracks allocations in stb_ds
 - **ADDED** memtracer now tracks allocations in zstd
 - **NEW API** `Longtail_SetReAllocAndFree`
