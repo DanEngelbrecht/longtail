@@ -11,12 +11,14 @@
 - **NEW API** `Longtail_RunJobsBatched` runs jobs in batched mode to handle a job count larger than Longtail_JobAPI::GetMaxBatchCount()
 - **REMOVED API** `Longtail_SetAllocAndFree` is replaced by `Longtail_SetReAllocAndFree`
 - **REMOVED API** `Longtail_MemTracer_Alloc` is replaced by `Longtail_MemTracer_ReAlloc`
+- **CHANGED API** `Longtail_ConcurrentChunkWriteAPI::Write` has new parameter `out_chunks_remaining` which is set to the remaining number of chunks to write to asset after call completes
 - **FIXED** Fixed memory leaks in command tool
 - **FIXED** `Longtail_ChangeVersion2()` can now handle workloads with a block count larger than 65535
 - **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full
 - **FIXED** Bikeshed JobAPI::CreateJobs implementation now properly drains both task channels when task queue is full
 - **FIXED** Make sure we retain order of assets with equal length when sorting them
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
+- **EXPERIMENTAL** **NEW API** `Longtail_SetMonitor` to enable more detailed feedback on `Longtail_ChangeVersion2`. Includes simple progress UI using MiniFB and console output for downsync/unpack via `--detailed-progress` option. MiniFB only works on Windows so far, other platforms fall back to console text output.
 
 ## 0.4.1
 - **NEW API** `Longtail_ChangeVersion2` added
