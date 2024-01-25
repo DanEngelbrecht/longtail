@@ -30,9 +30,18 @@
 #define KGFLAGS_IMPLEMENTATION
 #include "ext/kgflags.h"
 
+#include "lib/minifb/longtail_minifb.h"
+
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdarg.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <sys/ioctl.h>
+#include <unistd.h>
+#endif
 
 static void AssertFailure(const char* expression, const char* file, int line)
 {
@@ -68,6 +77,137 @@ static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
     fprintf(stderr, "%s", buffer);
 }
 
+enum MonitorBlockInfoState
+{
+    BlockIdle = 0,
+    BlockPrepare,
+    BlockFetching,
+    BlockFetchedSuccess,
+    BlockFetchedFailed,
+    BlockCompletedSuccess,
+    BlockCompletedFailed,
+};
+
+struct MonitorBlockInfo
+{
+    enum MonitorBlockInfoState m_State;
+    TLongtail_Atomic64 m_AccessCount;
+    uint32_t m_ChunkCount;
+    TLongtail_Atomic64* m_ChunkAccessCount;
+    TLongtail_Atomic32 m_ActivityIndicator;
+};
+
+uint32_t MonitorBlockInfosCount = 0;
+struct MonitorBlockInfo* MonitorBlockInfos = 0;
+
+void MonitorGetStoredBlockPrepare(const struct Longtail_StoreIndex* store_index, uint32_t block_index)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = BlockPrepare;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+void MonitorGetStoredBlockLoad(const struct Longtail_StoreIndex* store_index, uint32_t block_index)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = BlockFetching;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+void MonitorGetStoredBlockLoaded(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = err == 0 ? BlockFetchedSuccess : BlockFetchedFailed;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+void MonitorGetStoredBlockComplete(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = err == 0 ? BlockCompletedSuccess : BlockCompletedFailed;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+struct AssetInfo
+{
+    TLongtail_Atomic64 m_AccessCount;
+    uint32_t m_TotalChunkCount;
+    TLongtail_Atomic64 m_WriteCount;
+    TLongtail_Atomic64 m_PendingChunkCount;
+    TLongtail_Atomic32 m_ActivityIndicator;
+};
+
+uint32_t MonitorAssetInfosCount = 0;
+struct AssetInfo* MonitorAssetInfos = 0;
+
+void MonitorAssetRemove(const struct Longtail_VersionIndex* version_index, uint32_t asset_index)
+{
+    if (MonitorAssetInfos)
+    {
+//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
+    }
+}
+
+void MonitorAssetOpen(const struct Longtail_VersionIndex* version_index, uint32_t asset_index)
+{
+    if (MonitorAssetInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
+    }
+}
+
+void MonitorAssetWrite(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset)
+{
+    if (MonitorAssetInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_PendingChunkCount, -((int64_t)chunk_count_in_block));
+    }
+}
+
+void MonitorAssetComplete(const struct Longtail_VersionIndex* version_index, uint32_t asset_index, int err)
+{
+    if (MonitorAssetInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
+    }
+}
+
+struct MonitorChunkInfo
+{
+    TLongtail_Atomic64 m_AccessCount;
+};
+
+uint32_t MonitorChunkInfosCount = 0;
+struct MonitorChunkInfo* MonitorChunkInfos = 0;
+
+void MonitorChunkRead(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block)
+{
+    if (MonitorBlockInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_ChunkAccessCount[chunk_index_in_block], 1);
+    }
+    if (MonitorChunkInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorChunkInfos[chunk_index].m_AccessCount, 1);
+    }
+}
+
+
+
 struct Progress
 {
     struct Longtail_ProgressAPI m_API;
@@ -76,8 +216,421 @@ struct Progress
     uint32_t m_UpdateCount;
 };
 
+void GetConsoleSize(uint32_t* columns, uint32_t* rows)
+{
+#if defined(_WIN32)
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    *columns = (uint32_t)(csbi.srWindow.Right - csbi.srWindow.Left + 1);
+    *rows = (uint32_t)(csbi.srWindow.Bottom - csbi.srWindow.Top + 1);
+#else
+    struct winsize w;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+    *columns = (uint32_t)w.ws_col;
+    *rows = (uint32_t)w.ws_row;
+#endif
+}
+
+static TLongtail_Atomic32 MonitorWindowReady = 0;
+struct Longtail_FrameBufferAPI* FrameBufferAPI = 0;
+Longtail_StorageAPI_HFrameBuffer FrameBuffer = 0;
+static uint32_t* MonitorWindowBuffer = 0;
+
+#define MFB_RGB(r, g, b)        (((uint32_t) r) << 16) | (((uint32_t) g) << 8) | ((uint32_t) b)
+
+static const uint32_t Black = MFB_RGB(0x00, 0x00, 0x00);
+static const uint32_t DarkGrey = MFB_RGB(0x40, 0x40, 0x40);
+static const uint32_t Grey = MFB_RGB(0x80, 0x80, 0x80);
+static const uint32_t White = MFB_RGB(0xff, 0xff, 0xff);
+static const uint32_t Green = MFB_RGB(0x40, 0xff, 0x40);
+static const uint32_t Yellow = MFB_RGB(0xff, 0xff, 0x40);
+static const uint32_t Blue = MFB_RGB(0x40, 0x40, 0xff);
+static const uint32_t Red = MFB_RGB(0xff, 0x40, 0x40);
+
+static void SetBlock(uint32_t b, uint32_t c)
+{
+    uint32_t width = 800 / 2;
+    uint32_t height = 600 / 2;
+    uint32_t y = (b / width);
+    uint32_t x = b - (y * width);
+    uint32_t yoffset = 0;
+    y += yoffset;
+    if (y < height)
+    {
+        x *= 2;
+        y *= 2;
+        MonitorWindowBuffer[(y + 0) * 800 + (x + 0)] = c;
+        MonitorWindowBuffer[(y + 0) * 800 + (x + 1)] = c;
+        MonitorWindowBuffer[(y + 1) * 800 + (x + 0)] = c;
+        MonitorWindowBuffer[(y + 1) * 800 + (x + 1)] = c;
+    }
+}
+
+static void SetAsset(uint32_t a, uint32_t c)
+{
+    uint32_t width = 800;
+    uint32_t height = 600;
+    uint32_t y = (a / width);
+    uint32_t x = a - (y * width);
+    uint32_t yoffset = (MonitorBlockInfosCount / (width / 2)) * 2 + 8;
+    y += yoffset;
+    if (y < height)
+    {
+        MonitorWindowBuffer[(y + 0) * 800 + (x + 0)] = c;
+    }
+}
+
+static TLongtail_Atomic32 progress_lines = 0;
+
+static int UpdateProgressWindow()
+{
+    if (FrameBufferAPI)
+    {
+        if (MonitorWindowReady == 0)
+        {
+            return 0;
+        }
+        if (MonitorWindowReady == 1)
+        {
+            if (0 == FrameBufferAPI->Open(FrameBufferAPI, "Monitor", 800, 600, &FrameBuffer))
+            {
+                MonitorWindowBuffer = (uint32_t*)Longtail_Alloc("Monitor", 800 * 600 * sizeof(uint32_t));
+                memset(MonitorWindowBuffer, 0, 800 * 600 * sizeof(uint32_t));
+                Longtail_AtomicAdd32(&MonitorWindowReady, 1);
+            }
+            else
+            {
+                Longtail_AtomicAdd32(&MonitorWindowReady, -1);
+            }
+        }
+        for (uint32_t b = 0; b < MonitorBlockInfosCount; b++)
+        {
+            int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
+            if (access_count > 0)
+            {
+                Longtail_AtomicAdd64(&MonitorBlockInfos[b].m_AccessCount, -access_count);
+                MonitorBlockInfos[b].m_ActivityIndicator = 10;
+            }
+            if (MonitorBlockInfos[b].m_ActivityIndicator > 0)
+            {
+                if (MonitorBlockInfos[b].m_State == BlockPrepare)
+                {
+                    SetBlock(b, Grey);
+                }
+                else
+                {
+                    SetBlock(b, White);
+                }
+                Longtail_AtomicAdd32(&MonitorBlockInfos[b].m_ActivityIndicator, -1);
+                continue;
+            }
+
+            switch (MonitorBlockInfos[b].m_State)
+            {
+            case BlockIdle:
+                SetBlock(b, DarkGrey);
+                break;
+            case BlockPrepare:
+                SetBlock(b, DarkGrey);
+                break;
+            case BlockFetching:
+                SetBlock(b, Yellow);
+                break;
+            case BlockFetchedSuccess:
+                SetBlock(b, Blue);
+                break;
+            case BlockFetchedFailed:
+                SetBlock(b, Red);
+                break;
+            case BlockCompletedSuccess:
+                SetBlock(b, Green);
+                break;
+            case BlockCompletedFailed:
+                SetBlock(b, Red);
+                break;
+            }
+        }
+
+        for (uint32_t a = 0; a < MonitorAssetInfosCount; a++)
+        {
+            int64_t access_count = MonitorAssetInfos[a].m_AccessCount;
+
+            if (access_count > 0)
+            {
+                Longtail_AtomicAdd64(&MonitorAssetInfos[a].m_AccessCount, -access_count);
+                MonitorAssetInfos[a].m_ActivityIndicator = 10;
+            }
+            if (MonitorAssetInfos[a].m_ActivityIndicator > 0)
+            {
+                SetAsset(a, White);
+                Longtail_AtomicAdd32(&MonitorAssetInfos[a].m_ActivityIndicator, -1);
+                continue;
+            }
+            if (MonitorAssetInfos[a].m_WriteCount == 0)
+            {
+                SetAsset(a, Grey);
+            }
+            else if (MonitorAssetInfos[a].m_PendingChunkCount > 0)
+            {
+                SetAsset(a, Blue);
+            }
+            else
+            {
+                SetAsset(a, Green);
+            }
+        }
+
+        int err = FrameBufferAPI->Update(FrameBufferAPI, FrameBuffer, MonitorWindowBuffer);
+        if (err != 0)
+        {
+            FrameBuffer = 0;
+            return 0;
+        }
+    }
+    else
+    {
+        int32_t backup_lines = progress_lines;
+        Longtail_AtomicAdd32(&progress_lines, -backup_lines);
+        for (int32_t backup = 0; backup < backup_lines; ++backup)
+        {
+            fprintf(stderr, "\033[A");
+        }
+
+        uint32_t columns = 80, rows = 40;
+        GetConsoleSize(&columns, &rows);
+
+        uint32_t row = 0;
+        if (columns > 1023)
+        {
+            columns = 1023;
+        }
+
+        char tmp_buffer[1023 + 1];
+
+        if (MonitorBlockInfos)
+        {
+            if (MonitorAssetInfos)
+            {
+                rows -= 2;
+            }
+
+            uint32_t block_offset = 0;
+            while (block_offset < MonitorBlockInfosCount && row < rows)
+            {
+                uint32_t blocks_left = MonitorBlockInfosCount - block_offset;
+                uint32_t blocks_in_line = blocks_left > columns ? columns : blocks_left;
+
+                for (uint32_t u = 0; u < blocks_in_line; u++)
+                {
+                    uint32_t b = block_offset + u;
+                    switch (MonitorBlockInfos[b].m_State)
+                    {
+                    case BlockIdle:
+                        tmp_buffer[u] = ' ';
+                        break;
+                    case BlockPrepare:
+                        tmp_buffer[u] = '-';
+                        break;
+                    case BlockFetching:
+                        tmp_buffer[u] = '+';
+                        break;
+                    case BlockFetchedSuccess:
+                    {
+                        int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
+                        if (access_count > 0)
+                        {
+                            tmp_buffer[u] = '*';
+                            Longtail_AtomicAdd64(&MonitorBlockInfos[b].m_AccessCount, -access_count);
+                        }
+                        else
+                        {
+                            tmp_buffer[u] = '=';
+                        }
+                    }
+                    break;
+                    case BlockFetchedFailed:
+                        tmp_buffer[u] = '?';
+                        break;
+                    case BlockCompletedSuccess:
+                        tmp_buffer[u] = '.';
+                        break;
+                    case BlockCompletedFailed:
+                        tmp_buffer[u] = '!';
+                        break;
+                    }
+                }
+                tmp_buffer[blocks_in_line] = '\0';
+                fprintf(stderr, "\r%s\n", tmp_buffer);
+                block_offset += blocks_in_line;
+                Longtail_AtomicAdd32(&progress_lines, 1);
+                row++;
+            }
+        }
+
+        if (MonitorAssetInfos)
+        {
+            if (MonitorBlockInfos)
+            {
+                memset(tmp_buffer, '#', columns);
+                tmp_buffer[columns] = 0;
+                fprintf(stderr, "%s\r\n", tmp_buffer);
+                Longtail_AtomicAdd32(&progress_lines, 1);
+                row++;
+            }
+            static uint32_t skip_row_count = 0;
+
+            uint32_t incomplete_asset_count = 0;
+            uint32_t complete_row_count = 0;
+
+            uint32_t asset_offset = skip_row_count * columns;
+            while (asset_offset < MonitorAssetInfosCount && row < rows)
+            {
+                uint32_t assets_left = MonitorAssetInfosCount - asset_offset;
+                uint32_t assets_in_line = assets_left > columns ? columns : assets_left;
+
+                for (uint32_t u = 0; u < assets_in_line; u++)
+                {
+                    uint32_t a = asset_offset + u;
+                    int64_t access_count = MonitorAssetInfos[a].m_AccessCount;
+
+                    if (access_count > 0)
+                    {
+                        tmp_buffer[u] = '*';
+                        Longtail_AtomicAdd64(&MonitorAssetInfos[a].m_AccessCount, -access_count);
+                        incomplete_asset_count++;
+                    }
+                    else
+                    {
+                        if (MonitorAssetInfos[a].m_WriteCount == 0)
+                        {
+                            tmp_buffer[u] = ' ';
+                            incomplete_asset_count++;
+                        }
+                        else if (MonitorAssetInfos[a].m_PendingChunkCount > 0)
+                        {
+                            tmp_buffer[u] = '+';
+                            incomplete_asset_count++;
+                        }
+                        else
+                        {
+                            tmp_buffer[u] = '=';
+                        }
+                    }
+                }
+
+                tmp_buffer[assets_in_line] = '\0';
+                fprintf(stderr, "\r%s\n", tmp_buffer);
+                asset_offset += assets_in_line;
+                Longtail_AtomicAdd32(&progress_lines, 1);
+                row++;
+                if (incomplete_asset_count == 0)
+                {
+                    complete_row_count++;
+                }
+            }
+            if ((complete_row_count > (1 + (rows / 5))) && asset_offset < MonitorAssetInfosCount)
+            {
+                skip_row_count += complete_row_count;
+            }
+        }
+    }
+    return 1;
+}
+
+void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_VersionIndex* version_index, struct Longtail_VersionDiff* version_diff)
+{
+    MonitorBlockInfosCount = (*store_index->m_BlockCount);
+    size_t MonitorBlockInfosSize = sizeof(struct MonitorBlockInfo) * MonitorBlockInfosCount;
+    MonitorBlockInfos = (struct MonitorBlockInfo*)Longtail_Alloc("Monitor", MonitorBlockInfosSize);
+    memset(MonitorBlockInfos, 0, MonitorBlockInfosSize);
+
+    for (uint32_t b = 0; b < *store_index->m_BlockCount; b++)
+    {
+        uint32_t block_chunk_count = store_index->m_BlockChunkCounts[b];
+        MonitorBlockInfos[b].m_ChunkCount = block_chunk_count;
+        MonitorBlockInfos[b].m_ChunkAccessCount = (TLongtail_Atomic64*)Longtail_Alloc("Monitor", sizeof(TLongtail_Atomic64) * block_chunk_count);
+        memset((void*)MonitorBlockInfos[b].m_ChunkAccessCount, 0, sizeof(TLongtail_Atomic64));
+    }
+
+    MonitorAssetInfosCount = (*version_index->m_AssetCount);
+    size_t MonitorAssetInfosSize = sizeof(struct AssetInfo) * MonitorAssetInfosCount;
+    MonitorAssetInfos = (struct AssetInfo*)Longtail_Alloc("Monitor", MonitorAssetInfosSize);
+    memset(MonitorAssetInfos, 0, MonitorAssetInfosSize);
+
+    for (uint32_t m = 0; m < *version_diff->m_ModifiedContentCount; m++)
+    {
+        uint32_t a = version_diff->m_TargetContentModifiedAssetIndexes[m];
+        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
+        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
+    }
+
+    for (uint32_t m = 0; m < *version_diff->m_TargetAddedCount; m++)
+    {
+        uint32_t a = version_diff->m_TargetAddedAssetIndexes[m];
+        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
+        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
+    }
+
+    MonitorChunkInfosCount = (*version_index->m_ChunkCount);
+    size_t MonitorChunkInfosSize = sizeof(struct MonitorChunkInfo) * MonitorChunkInfosCount;
+    MonitorChunkInfos = (struct MonitorChunkInfo*)Longtail_Alloc("Monitor", MonitorChunkInfosSize);
+    memset(MonitorChunkInfos, 0, MonitorChunkInfosSize);
+
+    struct Longtail_Monitor monitor = {
+        MonitorGetStoredBlockPrepare,
+        MonitorGetStoredBlockLoad,
+        MonitorGetStoredBlockLoaded,
+        MonitorGetStoredBlockComplete,
+        MonitorAssetRemove,
+        MonitorAssetOpen,
+        MonitorAssetWrite,
+        MonitorChunkRead,
+        MonitorAssetComplete
+    };
+    Longtail_SetMonitor(&monitor);
+
+    if (FrameBufferAPI)
+    {
+        Longtail_AtomicAdd32(&MonitorWindowReady, 1);
+    }
+}
+
+void DisposeMonitor()
+{
+    if (FrameBufferAPI)
+    {
+        if (FrameBuffer)
+        {
+            FrameBufferAPI->Close(FrameBufferAPI, FrameBuffer);
+            FrameBuffer = 0;
+        }
+    }
+    Longtail_Free(MonitorWindowBuffer);
+    MonitorWindowBuffer = 0;
+    Longtail_Free(MonitorAssetInfos);
+    MonitorAssetInfos = 0;
+    Longtail_Free((void*)MonitorChunkInfos);
+    MonitorChunkInfos = 0;
+    for (uint32_t b = MonitorBlockInfosCount; b > 0; b--)
+    {
+        Longtail_Free((void*)MonitorBlockInfos[b - 1].m_ChunkAccessCount);
+    }
+    Longtail_Free((void*)MonitorBlockInfos);
+    MonitorBlockInfos = 0;
+    MonitorBlockInfosCount = 0;
+}
+
 static void Progress_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total, uint32_t jobs_done)
 {
+    if (MonitorWindowReady)
+    {
+        return;
+    }
+    if (MonitorBlockInfos || MonitorAssetInfos)
+    {
+        return;
+    }
+
     struct Progress* p = (struct Progress*)progress_api;
     if (jobs_done < total)
     {
@@ -106,7 +659,7 @@ static void Progress_Dispose(struct Longtail_API* api)
     Longtail_Free(me);
 }
 
-struct Longtail_ProgressAPI* MakeProgressAPI(const char* task)
+struct Longtail_ProgressAPI* MakeProgressAPI(const char* task, uint32_t percent_rate_limits)
 {
     void* mem = Longtail_Alloc(0, sizeof(struct Progress));
     if (!mem)
@@ -120,7 +673,7 @@ struct Longtail_ProgressAPI* MakeProgressAPI(const char* task)
         return 0;
     }
     struct Progress* me = (struct Progress*)progress_api;
-    me->m_RateLimitedProgressAPI = Longtail_CreateRateLimitedProgress(progress_api, 5);
+    me->m_RateLimitedProgressAPI = Longtail_CreateRateLimitedProgress(progress_api, percent_rate_limits);
     me->m_Task = task;
     me->m_UpdateCount = 0;
     return me->m_RateLimitedProgressAPI;
@@ -438,7 +991,7 @@ int UpSync(
             tags[i] = compression_type;
         }
 
-        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version", 5);
         if (progress)
         {
             err = Longtail_CreateVersionIndex(
@@ -525,7 +1078,7 @@ int UpSync(
         return err;
     }
 
-    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks");
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks", 5);
     if (progress)
     {
         err = Longtail_WriteContent(
@@ -628,7 +1181,8 @@ int DownSync(
     const char* optional_target_index_path,
     int retain_permissions,
     int enable_mmap_indexing,
-    int enable_mmap_block_store)
+    int enable_mmap_block_store,
+    int enable_detailed_progress)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -636,7 +1190,10 @@ int DownSync(
         LONGTAIL_LOGFIELD(source_path, "%s"),
         LONGTAIL_LOGFIELD(target_path, "%s"),
         LONGTAIL_LOGFIELD(optional_target_index_path, "%p"),
-        LONGTAIL_LOGFIELD(retain_permissions, "%d")
+        LONGTAIL_LOGFIELD(retain_permissions, "%d"),
+        LONGTAIL_LOGFIELD(enable_mmap_indexing, "%d"),
+        LONGTAIL_LOGFIELD(enable_mmap_block_store, "%d"),
+        LONGTAIL_LOGFIELD(enable_detailed_progress, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     const char* storage_path = NormalizePath(storage_uri_raw);
@@ -754,7 +1311,7 @@ int DownSync(
             tags[i] = 0;
         }
 
-        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version", 5);
         if (progress)
         {
             err = Longtail_CreateVersionIndex(
@@ -900,7 +1457,12 @@ int DownSync(
     Longtail_Free(required_chunk_hashes);
     required_chunk_hashes = 0;
 
-    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
+    if (enable_detailed_progress)
+    {
+        InitMonitor(required_version_store_index, source_version_index, version_diff);
+    }
+
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version", enable_detailed_progress ? 0 : 5);
     if (progress)
     {
         struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
@@ -939,9 +1501,9 @@ int DownSync(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
     }
 
+    Longtail_Free(required_version_store_index);
     Longtail_Free(version_diff);
     Longtail_Free(target_version_index);
-    Longtail_Free(required_version_store_index);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(compress_block_store_api);
@@ -1563,7 +2125,7 @@ int Pack(
             tags[i] = compression_type;
         }
 
-        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version", 5);
         if (progress)
         {
             err = Longtail_CreateVersionIndex(
@@ -1678,7 +2240,7 @@ int Pack(
         return ENOMEM;
     }
 
-    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks");
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks", 5);
     if (progress)
     {
         err = Longtail_WriteContent(
@@ -1766,12 +2328,16 @@ int Unpack(
     const char* target_path,
     int retain_permissions,
     int enable_mmap_indexing,
-    int enable_mmap_unpacking)
+    int enable_mmap_unpacking,
+    int enable_detailed_progress)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(source_path, "%s"),
         LONGTAIL_LOGFIELD(target_path, "%s"),
-        LONGTAIL_LOGFIELD(retain_permissions, "%d")
+        LONGTAIL_LOGFIELD(retain_permissions, "%d"),
+        LONGTAIL_LOGFIELD(enable_mmap_indexing, "%d"),
+        LONGTAIL_LOGFIELD(enable_mmap_unpacking, "%d"),
+        LONGTAIL_LOGFIELD(enable_detailed_progress, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     struct Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(Longtail_GetCPUCount(), 0);
@@ -1842,7 +2408,7 @@ int Unpack(
             tags[i] = 0;
         }
 
-        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version");
+        struct Longtail_ProgressAPI* progress = MakeProgressAPI("Indexing version", 5);
         if (progress)
         {
             err = Longtail_CreateVersionIndex(
@@ -2003,7 +2569,12 @@ int Unpack(
     Longtail_Free(required_chunk_hashes);
     required_chunk_hashes = 0;
 
-    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version");
+    if (enable_detailed_progress)
+    {
+        InitMonitor(required_version_store_index, &archive_index->m_VersionIndex, version_diff);
+    }
+
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version", enable_detailed_progress ? 0 : 5);
     if (progress)
     {
         struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
@@ -2053,6 +2624,119 @@ int Unpack(
     SAFE_DISPOSE_API(compression_registry);
     SAFE_DISPOSE_API(job_api);
     SAFE_DISPOSE_API(hash_registry);
+    return err;
+}
+
+struct UnpackArgs
+{
+    const char* source_path;
+    const char* target_path;
+    int retain_permissions;
+    int enable_mmap_indexing;
+    int enable_mmap_unpacking;
+    int enable_detailed_progress;
+};
+
+static int UnpackWorker(void* context)
+{
+    struct UnpackArgs* Args = (struct UnpackArgs*)context;
+    int res = Unpack(
+        Args->source_path,
+        Args->target_path,
+        Args->retain_permissions,
+        Args->enable_mmap_indexing,
+        Args->enable_mmap_unpacking,
+        Args->enable_detailed_progress);
+    return res;
+}
+
+void* AsyncThreadedMem = 0;
+
+static HLongtail_Thread UnpackThreaded(
+    const char* source_path,
+    const char* target_path,
+    int retain_permissions,
+    int enable_mmap_indexing,
+    int enable_mmap_unpacking,
+    int enable_detailed_progress)
+{
+    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
+    struct UnpackArgs* Args = (struct UnpackArgs*)AsyncThreadedMem;
+    Args->source_path = source_path;
+    Args->target_path = target_path;
+    Args->retain_permissions = retain_permissions;
+    Args->enable_mmap_indexing = enable_mmap_indexing;
+    Args->enable_mmap_unpacking = enable_mmap_unpacking;
+    Args->enable_detailed_progress = enable_detailed_progress;
+    HLongtail_Thread MonitorThread = 0;
+    int err = Longtail_CreateThread(&Args[1], UnpackWorker, 0, Args, 0, &MonitorThread);
+    return MonitorThread;
+}
+
+struct DownSyncArgs
+{
+    const char* storage_uri_raw;
+    const char* cache_path;
+    const char* source_path;
+    const char* target_path;
+    const char* optional_target_index_path;
+    int retain_permissions;
+    int enable_mmap_indexing;
+    int enable_mmap_block_store;
+    int enable_detailed_progress;
+};
+
+static int DownSyncWorker(void* context)
+{
+    struct DownSyncArgs* Args = (struct DownSyncArgs*)context;
+    int res = DownSync(
+        Args->storage_uri_raw,
+        Args->cache_path,
+        Args->source_path,
+        Args->target_path,
+        Args->optional_target_index_path,
+        Args->retain_permissions,
+        Args->enable_mmap_indexing,
+        Args->enable_mmap_block_store,
+        Args->enable_detailed_progress);
+    return res;
+}
+
+static HLongtail_Thread DownSyncThreaded(
+    const char* storage_uri_raw,
+    const char* cache_path,
+    const char* source_path,
+    const char* target_path,
+    const char* optional_target_index_path,
+    int retain_permissions,
+    int enable_mmap_indexing,
+    int enable_mmap_block_store,
+    int enable_detailed_progress)
+{
+    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct DownSyncArgs) + Longtail_GetThreadSize());
+    struct DownSyncArgs* Args = (struct DownSyncArgs*)AsyncThreadedMem;
+    Args->storage_uri_raw = storage_uri_raw;
+    Args->cache_path = cache_path;
+    Args->source_path = source_path;
+    Args->target_path = target_path;
+    Args->optional_target_index_path = optional_target_index_path;
+    Args->retain_permissions = retain_permissions;
+    Args->enable_mmap_indexing = enable_mmap_indexing;
+    Args->enable_mmap_block_store = enable_mmap_block_store;
+    Args->enable_detailed_progress = enable_detailed_progress;
+    HLongtail_Thread MonitorThread = 0;
+    int err = Longtail_CreateThread(&Args[1], DownSyncWorker, 0, Args, 0, &MonitorThread);
+    return MonitorThread;
+}
+
+static int TryEndAsyncThread(HLongtail_Thread thread)
+{
+    int err = Longtail_JoinThread(thread, 1000);
+    if (err == 0)
+    {
+        Longtail_Free(AsyncThreadedMem);
+        AsyncThreadedMem = 0;
+    }
     return err;
 }
 
@@ -2208,6 +2892,9 @@ int main(int argc, char** argv)
         bool enable_mmap_block_store_raw = 0;
         kgflags_bool("mmap-block-store", false, "Enable memory mapping of files in block store", false, &enable_mmap_block_store_raw);
 
+        bool enable_detailed_progress_raw = 0;
+        kgflags_bool("detailed-progress", false, "Enable visual activity of blocks and assets", false, &enable_detailed_progress_raw);
+
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
@@ -2224,13 +2911,18 @@ int main(int argc, char** argv)
             Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
+        if (enable_detailed_progress_raw)
+        {
+            FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
+        }
+
         const char* cache_path = cache_path_raw ? NormalizePath(cache_path_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
         const char* target_index = target_index_raw ? NormalizePath(target_index_raw) : 0;
         const char* source_path = NormalizePath(source_path_raw);
 
         // Downsync!
-        err = DownSync(
+        HLongtail_Thread thread = DownSyncThreaded(
             storage_uri_raw,
             cache_path,
             source_path,
@@ -2238,12 +2930,20 @@ int main(int argc, char** argv)
             target_index,
             retain_permission_raw,
             enable_mmap_indexing_raw,
-            enable_mmap_block_store_raw);
+            enable_mmap_block_store_raw,
+            enable_detailed_progress_raw);
+        while (TryEndAsyncThread(thread))
+        {
+            UpdateProgressWindow();
+        }
+        DisposeMonitor();
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_index);
         Longtail_Free((void*)target_path);
         Longtail_Free((void*)cache_path);
+
+        SAFE_DISPOSE_API(FrameBufferAPI);
     }
     else if (strcmp(command, "validate") == 0)
     {
@@ -2464,6 +3164,9 @@ int main(int argc, char** argv)
         bool enable_mmap_unpacking_raw = 0;
         kgflags_bool("mmap-unpacking", false, "Enable memory mapping of files unpacking", false, &enable_mmap_unpacking_raw);
 
+        bool enable_detailed_progress_raw = 0;
+        kgflags_bool("detailed-progress", false, "Enable visual activity of blocks and assets", false, &enable_detailed_progress_raw);
+
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
@@ -2480,25 +3183,37 @@ int main(int argc, char** argv)
             Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
+        if (enable_detailed_progress_raw)
+        {
+            FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
+        }
+
         const char* source_path = NormalizePath(source_path_raw);
         const char* target_path = NormalizePath(target_path_raw);
 
-        err = Unpack(
-            source_path,
+        HLongtail_Thread thread = UnpackThreaded(source_path,
             target_path,
             retain_permission_raw,
             enable_mmap_indexing_raw,
-            enable_mmap_unpacking_raw);
+            enable_mmap_unpacking_raw,
+            enable_detailed_progress_raw);
+        while (TryEndAsyncThread(thread))
+        {
+            UpdateProgressWindow();
+        }
+        DisposeMonitor();
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_path);
+
+        SAFE_DISPOSE_API(FrameBufferAPI);
     }
 #if defined(_CRTDBG_MAP_ALLOC)
     _CrtDumpMemoryLeaks();
 #endif
     if (enable_mem_tracer_raw) {
         Longtail_MemTracer_DumpStats("longtail.csv");
-        char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerDetailed());
+        char* memtrace_stats = Longtail_MemTracer_GetStats(Longtail_GetMemTracerSummary());
         printf("%s", memtrace_stats);
         Longtail_Free(memtrace_stats);
         Longtail_MemTracer_Dispose();

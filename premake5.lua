@@ -15,6 +15,7 @@ workspace "longtail"
    symbols "On"
    exceptionhandling ("off")
    defines { '_CRT_SECURE_NO_DEPRECATE', '_CRT_SECURE_NO_WARNINGS', '_CRT_NONSTDC_NO_WARNINGS', '_HAS_EXCEPTIONS=0' }
+   characterset("MBCS")
 
    filter "configurations:Debug"
       runtime "Debug"
@@ -48,7 +49,7 @@ project "longtail-cli"
    kind "ConsoleApp"
    language ("C")
    warnings "Default"
-   files { 'cmd/*.c', 'cmd/*.h', 'cmd/ext/*.h' }
+   files { 'cmd/*.c', 'cmd/*.h', 'cmd/ext/*.h', 'cmd/lib/**/*.c', 'cmd/lib/**/*.h', 'cmd/lib/*.c', 'cmd/lib/*.h' }
    links { "longtail-src" }
    links { "longtail-lib" }
    links { "longtail-lib-ext" }
