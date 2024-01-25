@@ -1462,7 +1462,7 @@ int DownSync(
         InitMonitor(required_version_store_index, source_version_index, version_diff);
     }
 
-    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version", 5);
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version", enable_detailed_progress ? 0 : 5);
     if (progress)
     {
         struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
@@ -1501,11 +1501,9 @@ int DownSync(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s` using `%s`, %d", target_path, source_path, storage_uri_raw, err);
     }
 
-//    DisposeMonitor();
-
+    Longtail_Free(required_version_store_index);
     Longtail_Free(version_diff);
     Longtail_Free(target_version_index);
-    Longtail_Free(required_version_store_index);
     Longtail_Free(source_version_index);
     SAFE_DISPOSE_API(chunker_api);
     SAFE_DISPOSE_API(compress_block_store_api);
@@ -2610,8 +2608,6 @@ int Unpack(
         err = ENOMEM;
     }
 
-//    DisposeMonitor();
-
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to update version `%s` from `%s`, %d", target_path, source_path, err);
@@ -2654,7 +2650,7 @@ static int UnpackWorker(void* context)
     return res;
 }
 
-void* UnpackThreadedMem = 0;
+void* AsyncThreadedMem = 0;
 
 static HLongtail_Thread UnpackThreaded(
     const char* source_path,
@@ -2664,8 +2660,8 @@ static HLongtail_Thread UnpackThreaded(
     int enable_mmap_unpacking,
     int enable_detailed_progress)
 {
-    UnpackThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
-    struct UnpackArgs* Args = (struct UnpackArgs*)UnpackThreadedMem;
+    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
+    struct UnpackArgs* Args = (struct UnpackArgs*)AsyncThreadedMem;
     Args->source_path = source_path;
     Args->target_path = target_path;
     Args->retain_permissions = retain_permissions;
@@ -2677,13 +2673,69 @@ static HLongtail_Thread UnpackThreaded(
     return MonitorThread;
 }
 
-static int TryEndThreadedUnpack(HLongtail_Thread thread)
+struct DownSyncArgs
+{
+    const char* storage_uri_raw;
+    const char* cache_path;
+    const char* source_path;
+    const char* target_path;
+    const char* optional_target_index_path;
+    int retain_permissions;
+    int enable_mmap_indexing;
+    int enable_mmap_block_store;
+    int enable_detailed_progress;
+};
+
+static int DownSyncWorker(void* context)
+{
+    struct DownSyncArgs* Args = (struct DownSyncArgs*)context;
+    int res = DownSync(
+        Args->storage_uri_raw,
+        Args->cache_path,
+        Args->source_path,
+        Args->target_path,
+        Args->optional_target_index_path,
+        Args->retain_permissions,
+        Args->enable_mmap_indexing,
+        Args->enable_mmap_block_store,
+        Args->enable_detailed_progress);
+    return res;
+}
+
+static HLongtail_Thread DownSyncThreaded(
+    const char* storage_uri_raw,
+    const char* cache_path,
+    const char* source_path,
+    const char* target_path,
+    const char* optional_target_index_path,
+    int retain_permissions,
+    int enable_mmap_indexing,
+    int enable_mmap_block_store,
+    int enable_detailed_progress)
+{
+    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct DownSyncArgs) + Longtail_GetThreadSize());
+    struct DownSyncArgs* Args = (struct DownSyncArgs*)AsyncThreadedMem;
+    Args->storage_uri_raw = storage_uri_raw;
+    Args->cache_path = cache_path;
+    Args->source_path = source_path;
+    Args->target_path = target_path;
+    Args->optional_target_index_path = optional_target_index_path;
+    Args->retain_permissions = retain_permissions;
+    Args->enable_mmap_indexing = enable_mmap_indexing;
+    Args->enable_mmap_block_store = enable_mmap_block_store;
+    Args->enable_detailed_progress = enable_detailed_progress;
+    HLongtail_Thread MonitorThread = 0;
+    int err = Longtail_CreateThread(&Args[1], DownSyncWorker, 0, Args, 0, &MonitorThread);
+    return MonitorThread;
+}
+
+static int TryEndAsyncThread(HLongtail_Thread thread)
 {
     int err = Longtail_JoinThread(thread, 1000);
     if (err == 0)
     {
-        Longtail_Free(UnpackThreadedMem);
-        UnpackThreadedMem = 0;
+        Longtail_Free(AsyncThreadedMem);
+        AsyncThreadedMem = 0;
     }
     return err;
 }
@@ -2859,13 +2911,18 @@ int main(int argc, char** argv)
             Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
         }
 
+        if (enable_detailed_progress_raw)
+        {
+            FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
+        }
+
         const char* cache_path = cache_path_raw ? NormalizePath(cache_path_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
         const char* target_index = target_index_raw ? NormalizePath(target_index_raw) : 0;
         const char* source_path = NormalizePath(source_path_raw);
 
         // Downsync!
-        err = DownSync(
+        HLongtail_Thread thread = DownSyncThreaded(
             storage_uri_raw,
             cache_path,
             source_path,
@@ -2875,11 +2932,18 @@ int main(int argc, char** argv)
             enable_mmap_indexing_raw,
             enable_mmap_block_store_raw,
             enable_detailed_progress_raw);
+        while (TryEndAsyncThread(thread))
+        {
+            UpdateProgressWindow();
+        }
+        DisposeMonitor();
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_index);
         Longtail_Free((void*)target_path);
         Longtail_Free((void*)cache_path);
+
+        SAFE_DISPOSE_API(FrameBufferAPI);
     }
     else if (strcmp(command, "validate") == 0)
     {
@@ -3127,24 +3191,22 @@ int main(int argc, char** argv)
         const char* source_path = NormalizePath(source_path_raw);
         const char* target_path = NormalizePath(target_path_raw);
 
-        size_t thread_size = Longtail_GetThreadSize();
-
         HLongtail_Thread thread = UnpackThreaded(source_path,
             target_path,
             retain_permission_raw,
             enable_mmap_indexing_raw,
             enable_mmap_unpacking_raw,
             enable_detailed_progress_raw);
-        while (TryEndThreadedUnpack(thread))
+        while (TryEndAsyncThread(thread))
         {
             UpdateProgressWindow();
         }
         DisposeMonitor();
 
-        SAFE_DISPOSE_API(FrameBufferAPI);
-
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_path);
+
+        SAFE_DISPOSE_API(FrameBufferAPI);
     }
 #if defined(_CRTDBG_MAP_ALLOC)
     _CrtDumpMemoryLeaks();
