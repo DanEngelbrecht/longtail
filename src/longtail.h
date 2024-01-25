@@ -921,9 +921,7 @@ LONGTAIL_EXPORT int Longtail_GetLogLevel();
     extern void Longtail_STBFree(void* context, void* ptr);
 #endif // STBDS_REALLOC
 
-typedef void* (*Longtail_Alloc_Func)(const char* context, size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
-LONGTAIL_EXPORT void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free);
 
 LONGTAIL_EXPORT void* Longtail_Alloc(const char* context, size_t s);
 

@@ -754,15 +754,8 @@ void Longtail_DisposeAPI(struct Longtail_API* api)
     }
 }
 
-static Longtail_Alloc_Func Longtail_Alloc_private = 0;
 static Longtail_ReAlloc_Func Longtail_ReAlloc_private = 0;
 static Longtail_Free_Func Free_private = 0;
-
-void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func Longtail_Free)
-{
-    Longtail_Alloc_private = alloc;
-    Free_private = Longtail_Free;
-}
 
 static void* Longtail_SetAllocWrapper_private(const char* context, size_t s)
 {
@@ -772,26 +765,12 @@ static void* Longtail_SetAllocWrapper_private(const char* context, size_t s)
 void Longtail_SetReAllocAndFree(Longtail_ReAlloc_Func alloc, Longtail_Free_Func Longtail_Free)
 {
     Longtail_ReAlloc_private = alloc;
-    Longtail_Alloc_private = Longtail_SetAllocWrapper_private;
     Free_private = Longtail_Free;
 }
 
 void* Longtail_Alloc(const char* context, size_t s)
 {
-#if defined(LONGTAIL_ASSERTS)
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(s, "%" PRIu64)
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-    void* mem = Longtail_Alloc_private ? Longtail_Alloc_private(context, s) : malloc(s);
-    if (!mem)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "%s failed with %d", Longtail_Alloc_private ? "Longtail_Alloc_private" : "malloc()", ENOMEM);
-        return 0;
-    }
-    return mem;
+    return Longtail_ReAlloc(context, 0, s);
 }
 
 void* Longtail_ReAlloc(const char* context, void* old, size_t s)

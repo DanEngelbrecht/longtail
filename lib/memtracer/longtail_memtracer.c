@@ -374,20 +374,6 @@ void* Longtail_MemTracer_ReAlloc(const char* context, void* old, size_t s)
     return &header_ptr[1];
 }
 
-void* Longtail_MemTracer_Alloc(const char* context, size_t s)
-{
-#if defined(LONGTAIL_ASSERTS)
-    const char* context_safe = context ? context : "";
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(context_safe, "%s"),
-        LONGTAIL_LOGFIELD(s, "%" PRIu64),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-    return Longtail_MemTracer_ReAlloc(context, 0, s);
-}
-
 void Longtail_MemTracer_Free(void* p)
 {
 #if defined(LONGTAIL_ASSERTS)
