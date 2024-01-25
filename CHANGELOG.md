@@ -2,13 +2,15 @@
 - **CHANGED API** `Longtail_JobAPI_JobFunc` renamed `is_cancelled` to `detected_error`, now contains first error returned from a job task in the same job group (if any) or ECANCELLED if job group was cancelled
     If `detected_error` is non-zero, try to exit (and cleanup) your task directly and return `0`.
 - **CHANGED_API** JobAPI `ReadyJobs` now returns first error encountered in a job group for a task as well as any error in the job api itself, removing the need to book keep the error for tasks separately
-- **ADDED** Longtail_SetReAllocAndFree
-- **ADDED** Longtail_ReAlloc
-- **ADDED** Longtail_MemTracer_ReAlloc
 - **ADDED** memtracer now tracks allocations in stb_ds
 - **ADDED** memtracer now tracks allocations in zstd
+- **NEW API** `Longtail_SetReAllocAndFree`
+- **NEW API** `Longtail_ReAlloc`
+- **NEW API** `Longtail_MemTracer_ReAlloc`
 - **NEW API** `Longtail_CompareAndSwap` compare and swap with platform implementations
 - **NEW API** `Longtail_RunJobsBatched` runs jobs in batched mode to handle a job count larger than Longtail_JobAPI::GetMaxBatchCount()
+- **REMOVED API** `Longtail_SetAllocAndFree` is replaced by `Longtail_SetReAllocAndFree`
+- **REMOVED API** `Longtail_MemTracer_Alloc` is replaced by `Longtail_MemTracer_ReAlloc`
 - **FIXED** Fixed memory leaks in command tool
 - **FIXED** `Longtail_ChangeVersion2()` can now handle workloads with a block count larger than 65535
 - **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full
