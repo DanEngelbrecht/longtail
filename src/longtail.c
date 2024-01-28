@@ -753,6 +753,13 @@ static struct Longtail_Monitor Monitor_private = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 void Longtail_SetMonitor(struct Longtail_Monitor* monitor)
 {
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(monitor, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, monitor != 0, return)
+    LONGTAIL_VALIDATE_INPUT(ctx, monitor->StructSize == (uint64_t)sizeof(struct Longtail_Monitor), return)
+
     Monitor_private = *monitor;
 }
 

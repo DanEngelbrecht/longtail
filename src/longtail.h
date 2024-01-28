@@ -835,6 +835,7 @@ typedef void (*Longtail_MonitorAssetClose)(const struct Longtail_VersionIndex* v
 
 struct Longtail_Monitor
 {
+    uint64_t StructSize;
     Longtail_MonitorGetStoredBlockPrepare   BlockPrepare;
     Longtail_MonitorGetStoredBlockLoad      BlockLoad;
     Longtail_MonitorGetStoredBlockLoaded    BlockLoaded;

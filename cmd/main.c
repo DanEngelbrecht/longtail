@@ -577,6 +577,7 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
     memset(MonitorChunkInfos, 0, MonitorChunkInfosSize);
 
     struct Longtail_Monitor monitor = {
+        sizeof(struct Longtail_Monitor),
         MonitorGetStoredBlockPrepare,
         MonitorGetStoredBlockLoad,
         MonitorGetStoredBlockLoaded,
@@ -585,7 +586,12 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
         MonitorAssetOpen,
         MonitorAssetWrite,
         MonitorChunkRead,
-        MonitorAssetComplete
+        MonitorAssetComplete,
+        0,
+        0,
+        0,
+        0,
+        0
     };
     Longtail_SetMonitor(&monitor);
 
