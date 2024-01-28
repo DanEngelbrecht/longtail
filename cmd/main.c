@@ -557,18 +557,21 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
     MonitorAssetInfos = (struct AssetInfo*)Longtail_Alloc("Monitor", MonitorAssetInfosSize);
     memset(MonitorAssetInfos, 0, MonitorAssetInfosSize);
 
-    for (uint32_t m = 0; m < *version_diff->m_ModifiedContentCount; m++)
+    if (version_diff)
     {
-        uint32_t a = version_diff->m_TargetContentModifiedAssetIndexes[m];
-        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
-        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
-    }
+        for (uint32_t m = 0; m < *version_diff->m_ModifiedContentCount; m++)
+        {
+            uint32_t a = version_diff->m_TargetContentModifiedAssetIndexes[m];
+            MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
+            MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
+        }
 
-    for (uint32_t m = 0; m < *version_diff->m_TargetAddedCount; m++)
-    {
-        uint32_t a = version_diff->m_TargetAddedAssetIndexes[m];
-        MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
-        MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
+        for (uint32_t m = 0; m < *version_diff->m_TargetAddedCount; m++)
+        {
+            uint32_t a = version_diff->m_TargetAddedAssetIndexes[m];
+            MonitorAssetInfos[a].m_TotalChunkCount = version_index->m_AssetChunkCounts[a];
+            MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
+        }
     }
 
     MonitorChunkInfosCount = (*version_index->m_ChunkCount);
@@ -905,7 +908,8 @@ int UpSync(
     uint32_t hashing_type,
     uint32_t compression_type,
     int enable_mmap_indexing,
-    int enable_mmap_block_store)
+    int enable_mmap_block_store,
+    int enable_detailed_progress)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(storage_uri_raw, "%s"),
@@ -917,7 +921,10 @@ int UpSync(
         LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(hashing_type, "%u"),
-        LONGTAIL_LOGFIELD(compression_type, "%u")
+        LONGTAIL_LOGFIELD(compression_type, "%u"),
+        LONGTAIL_LOGFIELD(enable_mmap_indexing, "%d"),
+        LONGTAIL_LOGFIELD(enable_mmap_block_store, "%d"),
+        LONGTAIL_LOGFIELD(enable_detailed_progress, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     const char* storage_path = NormalizePath(storage_uri_raw);
@@ -1085,7 +1092,12 @@ int UpSync(
         return err;
     }
 
-    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks", 5);
+    if (enable_detailed_progress)
+    {
+        InitMonitor(remote_missing_store_index, source_version_index, 0);
+    }
+
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks", enable_detailed_progress ? 0 : 5);
     if (progress)
     {
         err = Longtail_WriteContent(
@@ -2069,7 +2081,8 @@ int Pack(
     uint32_t min_block_usage_percent,
     uint32_t hashing_type,
     uint32_t compression_type,
-    int enable_mmap_indexing)
+    int enable_mmap_indexing,
+    int enable_detailed_progress)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(source_path, "%s"),
@@ -2079,7 +2092,9 @@ int Pack(
         LONGTAIL_LOGFIELD(max_chunks_per_block, "%u"),
         LONGTAIL_LOGFIELD(min_block_usage_percent, "%u"),
         LONGTAIL_LOGFIELD(hashing_type, "%u"),
-        LONGTAIL_LOGFIELD(compression_type, "%u")
+        LONGTAIL_LOGFIELD(compression_type, "%u"),
+        LONGTAIL_LOGFIELD(enable_mmap_indexing, "%d"),
+        LONGTAIL_LOGFIELD(enable_detailed_progress, "%d")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     struct Longtail_HashRegistryAPI* hash_registry = Longtail_CreateFullHashRegistry();
@@ -2249,7 +2264,12 @@ int Pack(
         return ENOMEM;
     }
 
-    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks", 5);
+    if (enable_detailed_progress)
+    {
+        InitMonitor(store_index, source_version_index, 0);
+    }
+
+    struct Longtail_ProgressAPI* progress = MakeProgressAPI("Writing blocks", enable_detailed_progress ? 0 : 5);
     if (progress)
     {
         err = Longtail_WriteContent(
@@ -2637,49 +2657,77 @@ int Unpack(
     return err;
 }
 
-struct UnpackArgs
+void* AsyncThreadedMem = 0;
+
+struct UpSyncArgs
 {
+    const char* storage_uri_raw;
     const char* source_path;
-    const char* target_path;
-    int retain_permissions;
+    const char* optional_source_index_path;
+    const char* target_index_path;
+    uint32_t target_chunk_size;
+    uint32_t target_block_size;
+    uint32_t max_chunks_per_block;
+    uint32_t min_block_usage_percent;
+    uint32_t hashing_type;
+    uint32_t compression_type;
     int enable_mmap_indexing;
-    int enable_mmap_unpacking;
+    int enable_mmap_block_store;
     int enable_detailed_progress;
 };
 
-static int UnpackWorker(void* context)
+static int UpSyncWorker(void* context)
 {
-    struct UnpackArgs* Args = (struct UnpackArgs*)context;
-    int res = Unpack(
+    struct UpSyncArgs* Args = (struct UpSyncArgs*)context;
+    int res = UpSync(
+        Args->storage_uri_raw,
         Args->source_path,
-        Args->target_path,
-        Args->retain_permissions,
+        Args->optional_source_index_path,
+        Args->target_index_path,
+        Args->target_chunk_size,
+        Args->target_block_size,
+        Args->max_chunks_per_block,
+        Args->min_block_usage_percent,
+        Args->hashing_type,
+        Args->compression_type,
         Args->enable_mmap_indexing,
-        Args->enable_mmap_unpacking,
+        Args->enable_mmap_block_store,
         Args->enable_detailed_progress);
     return res;
 }
 
-void* AsyncThreadedMem = 0;
-
-static HLongtail_Thread UnpackThreaded(
+static HLongtail_Thread UpSyncThreaded(
+    const char* storage_uri_raw,
     const char* source_path,
-    const char* target_path,
-    int retain_permissions,
+    const char* optional_source_index_path,
+    const char* target_index_path,
+    uint32_t target_chunk_size,
+    uint32_t target_block_size,
+    uint32_t max_chunks_per_block,
+    uint32_t min_block_usage_percent,
+    uint32_t hashing_type,
+    uint32_t compression_type,
     int enable_mmap_indexing,
-    int enable_mmap_unpacking,
+    int enable_mmap_block_store,
     int enable_detailed_progress)
 {
-    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
-    struct UnpackArgs* Args = (struct UnpackArgs*)AsyncThreadedMem;
+    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UpSyncArgs) + Longtail_GetThreadSize());
+    struct UpSyncArgs* Args = (struct UpSyncArgs*)AsyncThreadedMem;
+    Args->storage_uri_raw = storage_uri_raw;
     Args->source_path = source_path;
-    Args->target_path = target_path;
-    Args->retain_permissions = retain_permissions;
+    Args->optional_source_index_path = optional_source_index_path;
+    Args->target_index_path = target_index_path;
+    Args->target_chunk_size = target_chunk_size;
+    Args->target_block_size = target_block_size;
+    Args->max_chunks_per_block = max_chunks_per_block;
+    Args->min_block_usage_percent = min_block_usage_percent;
+    Args->hashing_type = hashing_type;
+    Args->compression_type = compression_type;
     Args->enable_mmap_indexing = enable_mmap_indexing;
-    Args->enable_mmap_unpacking = enable_mmap_unpacking;
+    Args->enable_mmap_block_store = enable_mmap_block_store;
     Args->enable_detailed_progress = enable_detailed_progress;
     HLongtail_Thread MonitorThread = 0;
-    int err = Longtail_CreateThread(&Args[1], UnpackWorker, 0, Args, 0, &MonitorThread);
+    int err = Longtail_CreateThread(&Args[1], UpSyncWorker, 0, Args, 0, &MonitorThread);
     return MonitorThread;
 }
 
@@ -2736,6 +2784,110 @@ static HLongtail_Thread DownSyncThreaded(
     Args->enable_detailed_progress = enable_detailed_progress;
     HLongtail_Thread MonitorThread = 0;
     int err = Longtail_CreateThread(&Args[1], DownSyncWorker, 0, Args, 0, &MonitorThread);
+    return MonitorThread;
+}
+
+struct PackArgs
+{
+    const char* source_path;
+    const char* target_path;
+    uint32_t target_chunk_size;
+    uint32_t target_block_size;
+    uint32_t max_chunks_per_block;
+    uint32_t min_block_usage_percent;
+    uint32_t hashing_type;
+    uint32_t compression_type;
+    int enable_mmap_indexing;
+    int enable_detailed_progress;
+};
+
+static int PackWorker(void* context)
+{
+    struct PackArgs* Args = (struct PackArgs*)context;
+    int res = Pack(
+        Args->source_path,
+        Args->target_path,
+        Args->target_chunk_size,
+        Args->target_block_size,
+        Args->max_chunks_per_block,
+        Args->min_block_usage_percent,
+        Args->hashing_type,
+        Args->compression_type,
+        Args->enable_mmap_indexing,
+        Args->enable_detailed_progress);
+    return res;
+}
+
+static HLongtail_Thread PackThreaded(
+    const char* source_path,
+    const char* target_path,
+    uint32_t target_chunk_size,
+    uint32_t target_block_size,
+    uint32_t max_chunks_per_block,
+    uint32_t min_block_usage_percent,
+    uint32_t hashing_type,
+    uint32_t compression_type,
+    int enable_mmap_indexing,
+    int enable_detailed_progress)
+{
+    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct PackArgs) + Longtail_GetThreadSize());
+    struct PackArgs* Args = (struct PackArgs*)AsyncThreadedMem;
+    Args->source_path = source_path;
+    Args->target_path = target_path;
+    Args->target_chunk_size = target_chunk_size;
+    Args->target_block_size = target_block_size;
+    Args->max_chunks_per_block = max_chunks_per_block;
+    Args->min_block_usage_percent = min_block_usage_percent;
+    Args->hashing_type = hashing_type;
+    Args->compression_type = compression_type;
+    Args->enable_mmap_indexing = enable_mmap_indexing;
+    Args->enable_detailed_progress = enable_detailed_progress;
+    HLongtail_Thread MonitorThread = 0;
+    int err = Longtail_CreateThread(&Args[1], PackWorker, 0, Args, 0, &MonitorThread);
+    return MonitorThread;
+}
+
+struct UnpackArgs
+{
+    const char* source_path;
+    const char* target_path;
+    int retain_permissions;
+    int enable_mmap_indexing;
+    int enable_mmap_unpacking;
+    int enable_detailed_progress;
+};
+
+static int UnpackWorker(void* context)
+{
+    struct UnpackArgs* Args = (struct UnpackArgs*)context;
+    int res = Unpack(
+        Args->source_path,
+        Args->target_path,
+        Args->retain_permissions,
+        Args->enable_mmap_indexing,
+        Args->enable_mmap_unpacking,
+        Args->enable_detailed_progress);
+    return res;
+}
+
+static HLongtail_Thread UnpackThreaded(
+    const char* source_path,
+    const char* target_path,
+    int retain_permissions,
+    int enable_mmap_indexing,
+    int enable_mmap_unpacking,
+    int enable_detailed_progress)
+{
+    AsyncThreadedMem = Longtail_Alloc("Monitor", sizeof(struct UnpackArgs) + Longtail_GetThreadSize());
+    struct UnpackArgs* Args = (struct UnpackArgs*)AsyncThreadedMem;
+    Args->source_path = source_path;
+    Args->target_path = target_path;
+    Args->retain_permissions = retain_permissions;
+    Args->enable_mmap_indexing = enable_mmap_indexing;
+    Args->enable_mmap_unpacking = enable_mmap_unpacking;
+    Args->enable_detailed_progress = enable_detailed_progress;
+    HLongtail_Thread MonitorThread = 0;
+    int err = Longtail_CreateThread(&Args[1], UnpackWorker, 0, Args, 0, &MonitorThread);
     return MonitorThread;
 }
 
@@ -2824,6 +2976,9 @@ int main(int argc, char** argv)
         bool enable_mmap_block_store_raw = 0;
         kgflags_bool("mmap-block-store", false, "Enable memory mapping of files in block store", false, &enable_mmap_block_store_raw);
 
+        bool enable_detailed_progress_raw = 0;
+        kgflags_bool("detailed-progress", false, "Enable visual activity of blocks and assets", false, &enable_detailed_progress_raw);
+
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
@@ -2854,11 +3009,16 @@ int main(int argc, char** argv)
             return 1;
         }
 
+        if (enable_detailed_progress_raw)
+        {
+            FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
+        }
+
         const char* source_path = NormalizePath(source_path_raw);
         const char* source_index = source_index_raw ? NormalizePath(source_index_raw) : 0;
         const char* target_path = NormalizePath(target_path_raw);
 
-        err = UpSync(
+        HLongtail_Thread thread = UpSyncThreaded(
             storage_uri_raw,
             source_path,
             source_index,
@@ -2870,11 +3030,19 @@ int main(int argc, char** argv)
             hashing,
             compression,
             enable_mmap_indexing_raw,
-            enable_mmap_block_store_raw);
+            enable_mmap_block_store_raw,
+            enable_detailed_progress_raw);
+        while (TryEndAsyncThread(thread))
+        {
+            UpdateProgressWindow();
+        }
+        DisposeMonitor();
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)source_index);
         Longtail_Free((void*)target_path);
+
+        SAFE_DISPOSE_API(FrameBufferAPI);
     }
     else if (strcmp(command, "downsync") == 0)
     {
@@ -3109,6 +3277,9 @@ int main(int argc, char** argv)
         bool enable_mmap_indexing_raw = 0;
         kgflags_bool("mmap-indexing", false, "Enable memory mapping of files while indexing", false, &enable_mmap_indexing_raw);
 
+        bool enable_detailed_progress_raw = 0;
+        kgflags_bool("detailed-progress", false, "Enable visual activity of blocks and assets", false, &enable_detailed_progress_raw);
+
         if (!kgflags_parse(argc, argv)) {
             kgflags_print_errors();
             kgflags_print_usage();
@@ -3139,11 +3310,15 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        const char* source_path = NormalizePath(source_path_raw);
+        if (enable_detailed_progress_raw)
+        {
+            FrameBufferAPI = Longtail_CreateMiniFBFrameBufferAPI();
+        }
 
+        const char* source_path = NormalizePath(source_path_raw);
         const char* target_path = NormalizePath(target_path_raw);
 
-        err = Pack(
+        HLongtail_Thread thread = PackThreaded(
             source_path,
             target_path,
             target_chunk_size,
@@ -3152,10 +3327,18 @@ int main(int argc, char** argv)
             min_block_usage_percent,
             hashing,
             compression,
-            enable_mmap_indexing_raw);
+            enable_mmap_indexing_raw,
+            enable_detailed_progress_raw);
+        while (TryEndAsyncThread(thread))
+        {
+            UpdateProgressWindow();
+        }
+        DisposeMonitor();
 
         Longtail_Free((void*)source_path);
         Longtail_Free((void*)target_path);
+
+        SAFE_DISPOSE_API(FrameBufferAPI);
     }
     if (strcmp(command, "unpack") == 0)
     {
