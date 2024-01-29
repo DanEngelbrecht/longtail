@@ -4370,7 +4370,7 @@ int Longtail_GetRequiredChunkHashes(
 struct AssetPartLookup
 {
     uint64_t* m_AssetOffsets;
-    uint32_t* m_PathNameOffsets;
+    uint32_t* m_AssetIndexes;
     uint32_t* m_ChunkIndexes;
     uint32_t* m_Tags;
     struct Longtail_LookupTable* m_ChunkHashToIndex;
@@ -4407,7 +4407,7 @@ static int CreateAssetPartLookup(
     asset_part_lookup->m_AssetOffsets = (uint64_t*)p;
     p += sizeof(uint64_t) * asset_chunk_index_count;
 
-    asset_part_lookup->m_PathNameOffsets = (uint32_t*)p;
+    asset_part_lookup->m_AssetIndexes = (uint32_t*)p;
     p += sizeof(uint32_t) * asset_chunk_index_count;
 
     asset_part_lookup->m_ChunkIndexes = (uint32_t*)p;
@@ -4437,7 +4437,7 @@ static int CreateAssetPartLookup(
             if (0 == LongtailPrivate_LookupTable_PutUnique(asset_part_lookup->m_ChunkHashToIndex, chunk_hash, unique_chunk_count))
             {
                 asset_part_lookup->m_AssetOffsets[unique_chunk_count] = asset_chunk_offset;
-                asset_part_lookup->m_PathNameOffsets[unique_chunk_count] = version_index->m_NameOffsets[asset_index];
+                asset_part_lookup->m_AssetIndexes[unique_chunk_count] = asset_index;
                 asset_part_lookup->m_ChunkIndexes[unique_chunk_count] = unique_chunk_count;
                 asset_part_lookup->m_Tags[unique_chunk_count] = tag;
                 unique_chunk_count++;
@@ -4608,7 +4608,8 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
             tag = next_tag;
         }
 
-        uint32_t next_path_name_offset = job->m_AssetPartLookup->m_PathNameOffsets[next_asset_index];
+        uint32_t asset_index = job->m_AssetPartLookup->m_AssetIndexes[next_asset_index];
+        uint32_t next_path_name_offset = job->m_VersionIndex->m_NameOffsets[asset_index];
         if (next_path_name_offset != path_name_offset)
         {
             if (file_handle)
@@ -4620,7 +4621,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
             const char* asset_path = &job->m_VersionIndex->m_NameData[next_path_name_offset];
             LONGTAIL_FATAL_ASSERT(ctx, !IsDirPath(asset_path), return EINVAL)
 
-            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, last_asset_index);
+            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index);
             char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
             int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
             Longtail_Free(full_path);
@@ -4631,7 +4632,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
                 Longtail_Free(put_block_mem);
                 return err;
             }
-            last_asset_index = next_asset_index;
+            last_asset_index = asset_index;
             uint64_t next_asset_file_size = 0;
             err = source_storage_api->GetSize(source_storage_api, file_handle, &next_asset_file_size);
             if (err)
@@ -4653,10 +4654,10 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
                 asset_file_size, (asset_offset + chunk_size))
             Longtail_Free(put_block_mem);
             source_storage_api->CloseFile(source_storage_api, file_handle);
-            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, EBADF);
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index, EBADF);
             return EBADF;
         }
-        LONGTAIL_MONTITOR_ASSET_READ(job->m_StoreIndex, job->m_VersionIndex, next_asset_index, asset_offset, chunk_size, chunk_hash, job->m_BlockIndex, write_offset);
+        LONGTAIL_MONTITOR_ASSET_READ(job->m_StoreIndex, job->m_VersionIndex, asset_index, asset_offset, chunk_size, chunk_hash, job->m_BlockIndex, write_offset);
         int err = source_storage_api->Read(source_storage_api, file_handle, asset_offset, chunk_size, write_buffer + write_offset);
         if (err)
         {

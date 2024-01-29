@@ -80,12 +80,16 @@ static void LogStdErr(struct Longtail_LogContext* log_context, const char* log)
 enum MonitorBlockInfoState
 {
     BlockIdle = 0,
-    BlockPrepare,
-    BlockFetching,
-    BlockFetchedSuccess,
-    BlockFetchedFailed,
-    BlockCompletedSuccess,
-    BlockCompletedFailed,
+    BlockPrepare = 1,
+    BlockFetching = 2,
+    BlockFetchedSuccess = 3,
+    BlockFetchedFailed = 4,
+    BlockCompletedSuccess = 5,
+    BlockCompletedFailed = 6,
+    BlockComposing = BlockPrepare,
+    BlockSaving = BlockFetching,
+    BlockSavedSuccess = BlockCompletedSuccess,
+    BlockSavedFailed = BlockCompletedFailed
 };
 
 struct MonitorBlockInfo
@@ -206,6 +210,51 @@ void MonitorChunkRead(const struct Longtail_StoreIndex* store_index, const struc
     }
 }
 
+void MonitorBlockCompose(const struct Longtail_StoreIndex* store_index, uint32_t block_index)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = BlockComposing;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+void MonitorBlockSave(const struct Longtail_StoreIndex* store_index, uint32_t block_index, uint64_t block_size)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = BlockSaving;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+void MonitorBlockSaved(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err)
+{
+    if (MonitorBlockInfos)
+    {
+        MonitorBlockInfos[block_index].m_State = err == 0 ? BlockSavedSuccess : BlockSavedFailed;
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+    }
+}
+
+void MonitorAssetRead(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t read_offset, uint32_t size, TLongtail_Hash chunk_hash, uint32_t block_index, uint32_t block_data_offset)
+{
+    if (MonitorAssetInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorBlockInfos[block_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
+    }
+}
+
+void MonitorAssetClose(const struct Longtail_VersionIndex* version_index, uint32_t asset_index, int err)
+{
+    if (MonitorAssetInfos)
+    {
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
+        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_PendingChunkCount, -MonitorAssetInfos[asset_index].m_PendingChunkCount);
+    }
+}
 
 
 struct Progress
@@ -573,6 +622,13 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
             MonitorAssetInfos[a].m_PendingChunkCount = version_index->m_AssetChunkCounts[a];
         }
     }
+    else
+    {
+        for (uint32_t a = 0; a < MonitorAssetInfosCount; a++)
+        {
+            MonitorAssetInfos[a].m_PendingChunkCount = 1;
+        }
+    }
 
     MonitorChunkInfosCount = (*version_index->m_ChunkCount);
     size_t MonitorChunkInfosSize = sizeof(struct MonitorChunkInfo) * MonitorChunkInfosCount;
@@ -590,11 +646,11 @@ void InitMonitor(struct Longtail_StoreIndex* store_index, struct Longtail_Versio
         MonitorAssetWrite,
         MonitorChunkRead,
         MonitorAssetComplete,
-        0,
-        0,
-        0,
-        0,
-        0
+        MonitorBlockCompose,
+        MonitorBlockSave,
+        MonitorBlockSaved,
+        MonitorAssetClose,
+        MonitorAssetRead
     };
     Longtail_SetMonitor(&monitor);
 
