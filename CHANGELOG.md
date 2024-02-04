@@ -19,6 +19,8 @@
 - **FIXED** Bikeshed JobAPI::CreateJobs implementation now properly drains both task channels when task queue is full
 - **FIXED** Make sure we retain order of assets with equal length when sorting them
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
+- **UPDATED** Update of ZStd: 1.5.5 https://github.com/facebook/zstd/releases/tag/v1.5.5
+- **UPDATED** Update of Blake3: 1.5.0 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.0
 - **EXPERIMENTAL** **NEW API** `Longtail_SetMonitor` to enable more detailed feedback on `Longtail_ChangeVersion2`. Includes simple progress UI using MiniFB and console output for downsync/unpack via `--detailed-progress` option. MiniFB only works on Windows so far, other platforms fall back to console text output.
 
 ## 0.4.1
