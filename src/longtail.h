@@ -1000,7 +1000,7 @@ LONGTAIL_EXPORT int Longtail_RunJobsBatched(
     void** job_ctxs,
     uint32_t * out_jobs_submitted);
 
-/*! @brief Get all files and directories in a path recursivley.
+/*! @brief Get all files and directories in a path recursively.
  *
  * Gets all the files and directories and allocates a struct Longtail_FileInfos structure with the details.
  * Free the struct Longtail_FileInfos using Longtail_Free()
@@ -1021,12 +1021,13 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
-/*! @brief Get all files and directories in a path recursivley.
+/*! @brief Get all files and directories in a path recursively.
  *
  * Gets all the files and directories and allocates a struct Longtail_FileInfos structure with the details.
  * Free the struct Longtail_FileInfos using Longtail_Free()
  *
  * @param[in] storage_api           An implementation of struct Longtail_StorageAPI interface.
+ * @param[in] optional_job_api      An implementation of struct Longtail_JobAPI interface or null if multithreading should not be used
  * @param[in] path_filter_api       An implementation of struct Longtail_PathFilter interface or null if no filtering is required
  * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
  * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
@@ -1043,8 +1044,7 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively2(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
-
-/*! @brief Get the size of a constructedV VersionIndex.
+/*! @brief Get the size of a constructed VersionIndex.
  *
  * @param[in] asset_count             The number of assets (files and directories) in the index
  * @param[in] chunk_count             The number of chunks in the version index
