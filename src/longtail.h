@@ -825,9 +825,15 @@ typedef void (*Longtail_MonitorAssetOpen)(const struct Longtail_VersionIndex* ta
 typedef void (*Longtail_MonitorAssetWrite)(const struct Longtail_StoreIndex* target_store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset);
 typedef void (*Longtail_MonitorChunkRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* target_version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block);
 typedef void (*Longtail_MonitorAssetComplete)(const struct Longtail_VersionIndex* target_version_index, uint32_t asset_index, int err);
+typedef void (*Longtail_MonitorBlockCompose)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
+typedef void (*Longtail_MonitorBlockSave)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, uint64_t block_size);
+typedef void (*Longtail_MonitorBlockSaved)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
+typedef void (*Longtail_MonitorAssetRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t read_offset, uint32_t size, TLongtail_Hash chunk_hash, uint32_t block_index, uint32_t block_data_offset);
+typedef void (*Longtail_MonitorAssetClose)(const struct Longtail_VersionIndex* version_index, uint32_t asset_index, int err);
 
 struct Longtail_Monitor
 {
+    uint64_t StructSize;
     Longtail_MonitorGetStoredBlockPrepare   BlockPrepare;
     Longtail_MonitorGetStoredBlockLoad      BlockLoad;
     Longtail_MonitorGetStoredBlockLoaded    BlockLoaded;
@@ -837,6 +843,11 @@ struct Longtail_Monitor
     Longtail_MonitorAssetWrite              AssetWrite;
     Longtail_MonitorChunkRead               ChunkRead;
     Longtail_MonitorAssetComplete           AssetComplete;
+    Longtail_MonitorBlockCompose            BlockCompose;
+    Longtail_MonitorBlockSave               BlockSave;
+    Longtail_MonitorBlockSaved              BlockSaved;
+    Longtail_MonitorAssetClose              AssetClose;
+    Longtail_MonitorAssetRead               AssetRead;
 };
 
 LONGTAIL_EXPORT void Longtail_SetMonitor(struct Longtail_Monitor* monitor);

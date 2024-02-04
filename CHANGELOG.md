@@ -22,7 +22,7 @@
 - **UPDATED** Update of ZStd: 1.5.5 https://github.com/facebook/zstd/releases/tag/v1.5.5
 - **UPDATED** Update of Blake3: 1.5.0 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.0
 - **UPDATED** Update of Brotli: 1.1.0 https://github.com/google/brotli/releases/tag/v1.1.0
-- **EXPERIMENTAL** **NEW API** `Longtail_SetMonitor` to enable more detailed feedback on `Longtail_ChangeVersion2`. Includes simple progress UI using MiniFB and console output for downsync/unpack via `--detailed-progress` option. MiniFB only works on Windows so far, other platforms fall back to console text output.
+- **EXPERIMENTAL** **NEW API** `Longtail_SetMonitor` to enable more detailed feedback on `Longtail_ChangeVersion2` and `Longtail_WriteContent`. Includes simple progress UI using MiniFB and console output for upsync/downsync/pack/unpack via `--detailed-progress` option. MiniFB version only works on Windows so far, other platforms fall back to console text output.
 
 ## 0.4.1
 - **NEW API** `Longtail_ChangeVersion2` added
