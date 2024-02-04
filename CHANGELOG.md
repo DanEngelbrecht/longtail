@@ -9,6 +9,7 @@
 - **NEW API** `Longtail_MemTracer_ReAlloc`
 - **NEW API** `Longtail_CompareAndSwap` compare and swap with platform implementations
 - **NEW API** `Longtail_RunJobsBatched` runs jobs in batched mode to handle a job count larger than Longtail_JobAPI::GetMaxBatchCount()
+- **NEW API** `Longtail_GetFilesRecursively2` that executes using parallel jobs improving execution speed for large file trees significantly
 - **REMOVED API** `Longtail_SetAllocAndFree` is replaced by `Longtail_SetReAllocAndFree`
 - **REMOVED API** `Longtail_MemTracer_Alloc` is replaced by `Longtail_MemTracer_ReAlloc`
 - **CHANGED API** `Longtail_ConcurrentChunkWriteAPI::Write` has new parameter `out_chunks_remaining` which is set to the remaining number of chunks to write to asset after call completes

@@ -965,8 +965,9 @@ int UpSync(
     if (source_version_index == 0)
     {
         struct Longtail_FileInfos* file_infos;
-        err = Longtail_GetFilesRecursively(
+        err = Longtail_GetFilesRecursively2(
             storage_api,
+            job_api,
             0,
             0,
             0,
@@ -1282,8 +1283,9 @@ int DownSync(
     if (target_version_index == 0)
     {
         struct Longtail_FileInfos* file_infos;
-        err = Longtail_GetFilesRecursively(
+        err = Longtail_GetFilesRecursively2(
             storage_api,
+            job_api,
             0,
             0,
             0,
@@ -2102,8 +2104,9 @@ int Pack(
     struct Longtail_VersionIndex* source_version_index = 0;
     {
         struct Longtail_FileInfos* file_infos;
-        err = Longtail_GetFilesRecursively(
+        err = Longtail_GetFilesRecursively2(
             storage_api,
+            job_api,
             0,
             0,
             0,
@@ -2384,8 +2387,9 @@ int Unpack(
     struct Longtail_VersionIndex* target_version_index = 0;
     {
         struct Longtail_FileInfos* file_infos;
-        err = Longtail_GetFilesRecursively(
+        err = Longtail_GetFilesRecursively2(
             storage_api,
+            job_api,
             0,
             0,
             0,

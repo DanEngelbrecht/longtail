@@ -469,8 +469,9 @@ static int ReadContent(
     }
 
     struct Longtail_FileInfos* file_infos;
-    int err = Longtail_GetFilesRecursively(
+    int err = Longtail_GetFilesRecursively2(
         storage_api,
+        job_api,
         0,
         0,
         0,

@@ -1247,7 +1247,7 @@ TEST(Longtail, CreateEmptyVersionIndex)
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "data/non-existent", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, "data/non-existent", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -2295,7 +2295,7 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     }
 
     Longtail_FileInfos* all_file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "", &all_file_infos));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, 0, 0, 0, 0, "", &all_file_infos));
     ASSERT_NE((Longtail_FileInfos*)0, all_file_infos);
     ASSERT_EQ(19u, all_file_infos->m_Count);
     Longtail_Free(all_file_infos);
@@ -2322,7 +2322,7 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     test_filter.m_API.Include = TestFileFilter::IncludeFunc;
 
     Longtail_FileInfos* filtered_file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, &test_filter.m_API, 0, 0, "", &filtered_file_infos));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, 0, &test_filter.m_API, 0, 0, "", &filtered_file_infos));
     ASSERT_NE((Longtail_FileInfos*)0, filtered_file_infos);
     ASSERT_EQ(12u, filtered_file_infos->m_Count);
     Longtail_Free(filtered_file_infos);
@@ -2372,7 +2372,7 @@ TEST(Longtail, Longtail_WriteContent)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, 0, 0, 0, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(source_storage, job_api, 0, 0, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetAssetTags(source_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -2455,7 +2455,7 @@ TEST(Longtail, TestVeryLargeFile)
     const char* assets_path = "C:\\Temp\\longtail\\local\\WinClient\\CL6332_WindowsClient\\WindowsClient\\PioneerGame\\Content\\Paks";
 
     Longtail_FileInfos* paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, assets_path, &paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, assets_path, &paths));
     Longtail_VersionIndex* version_index;
     ASSERT_EQ(0, Longtail_CreateVersionIndex(
         storage_api,
@@ -2594,7 +2594,7 @@ TEST(Longtail, VersionIndexDirectories)
     ASSERT_EQ(1, MakePath(local_storage, "deep/folders/with/nothing/in/menoexists.nop"));
 
     Longtail_FileInfos* local_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "", &local_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, "", &local_paths));
     ASSERT_NE((Longtail_FileInfos*)0, local_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, local_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -2634,8 +2634,9 @@ TEST(Longtail, EmptyFolderGetRequiredChunkHashes)
     Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     struct Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(
         storage_api,
+        job_api,
         0,
         0,
         0,
@@ -2911,7 +2912,7 @@ TEST(Longtail, Longtail_VersionDiff)
     }
 
     Longtail_FileInfos* old_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "old", &old_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, job_api, 0, 0, 0, "old", &old_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, old_version_paths);
     uint32_t* old_compression_types = GetAssetTags(storage, old_version_paths);
     ASSERT_NE((uint32_t*)0, old_compression_types);
@@ -2937,7 +2938,7 @@ TEST(Longtail, Longtail_VersionDiff)
     old_version_paths = 0;
 
     Longtail_FileInfos* new_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "new", &new_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, job_api, 0, 0, 0, "new", &new_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, new_version_paths);
     uint32_t* new_compression_types = GetAssetTags(storage, new_version_paths);
     ASSERT_NE((uint32_t*)0, new_compression_types);
@@ -3085,7 +3086,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     // Verify that our old folder now matches the new folder data
     Longtail_FileInfos* updated_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "old", &updated_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, job_api, 0, 0, 0, "old", &updated_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, updated_version_paths);
     const uint32_t NEW_ASSET_FOLDER_EXTRA_COUNT = 9u;
     ASSERT_EQ(NEW_ASSET_COUNT + NEW_ASSET_FOLDER_EXTRA_COUNT, updated_version_paths->m_Count);
@@ -3232,7 +3233,7 @@ TEST(Longtail, Longtail_WriteVersion)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetAssetTags(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
@@ -3588,7 +3589,7 @@ TEST(Longtail, FileSystemStorage)
     const char* root_path = "testdata/sample_folder";
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, root_path, &file_infos));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage_api, 0, 0, 0, 0, root_path, &file_infos));
     ASSERT_EQ(20u, file_infos->m_Count);
     Longtail_Free(file_infos);
 
@@ -4246,7 +4247,7 @@ TEST(Longtail, AsyncBlockStore)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetAssetTags(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
@@ -4485,7 +4486,7 @@ TEST(Longtail, Longtail_WriteVersionShareBlocks)
     }
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, 0, 0, "local", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, "local", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* version1_compression_types = GetAssetTags(storage_api, version1_paths);
     ASSERT_NE((uint32_t*)0, version1_compression_types);
@@ -4706,7 +4707,7 @@ TEST(Longtail, TestFileScanCancelOperation)
 
     Longtail_FileInfos* file_infos;
     ASSERT_EQ(0, cancel_api->Cancel(cancel_api, cancel_token));
-    ASSERT_EQ(ECANCELED, Longtail_GetFilesRecursively(storage_api, 0, cancel_api, cancel_token, "testdata", &file_infos));
+    ASSERT_EQ(ECANCELED, Longtail_GetFilesRecursively2(storage_api, 0, 0, cancel_api, cancel_token, "testdata", &file_infos));
     ASSERT_EQ(0, cancel_api->DisposeToken(cancel_api, cancel_token));
     SAFE_DISPOSE_API(cancel_api);
     SAFE_DISPOSE_API(storage_api);
@@ -4726,7 +4727,7 @@ TEST(Longtail, TestCreateVersionCancelOperation)
     ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage_api, 0, cancel_api, cancel_token, "testdata", &file_infos));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage_api, job_api, 0, cancel_api, cancel_token, "testdata", &file_infos));
     ASSERT_NE(0, file_infos->m_Count);
 
     Longtail_VersionIndex* vindex = 0;
@@ -5081,7 +5082,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     }
 
     Longtail_FileInfos* version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, job_api, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
     uint32_t* compression_types = SetAssetTags(storage, version_paths, Longtail_GetLZ4DefaultQuality());
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -5107,7 +5108,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
     version_paths = 0;
 
     Longtail_FileInfos* current_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(storage, 0, 0, 0, "current", &current_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, job_api, 0, 0, 0, "current", &current_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, current_version_paths);
     uint32_t* current_compression_types = GetAssetTags(storage, current_version_paths);
     ASSERT_NE((uint32_t*)0, current_compression_types);
@@ -5498,8 +5499,9 @@ TEST(Longtail, VersionLocalContent)
         7,
         5371);
     struct Longtail_FileInfos* version1_file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(
         storage_api,
+        job_api,
         0,
         0,
         0,
@@ -5561,8 +5563,9 @@ TEST(Longtail, VersionLocalContent)
     // Add additional content
     CreateRandomContent(storage_api, "version", 31, 91, 19377);
     struct Longtail_FileInfos* version2_file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(
         storage_api,
+        job_api,
         0,
         0,
         0,
@@ -5797,7 +5800,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     }
 
     Longtail_FileInfos* version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, version_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -5849,7 +5852,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     block_store_store_index = 0;
 
     Longtail_FileInfos* current_version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "current", &current_version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, "current", &current_version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, current_version_paths);
     uint32_t* current_compression_types = GetAssetTags(local_storage, current_version_paths);
     ASSERT_NE((uint32_t*)0, current_compression_types);
@@ -5952,7 +5955,7 @@ TEST(Longtail, TestLongtailBlockFS)
     CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, MAX_BLOCK_SIZE * 7);
 
     Longtail_FileInfos* version_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(mem_storage, job_api, 0, 0, 0, "source", &version_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version_paths);
 
     uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);//Longtail_GetZStdMinQuality());
@@ -6015,7 +6018,7 @@ TEST(Longtail, TestLongtailBlockFS)
     ASSERT_NE((struct Longtail_StorageAPI*)0, block_store_fs);
 
     Longtail_FileInfos* block_store_storage_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(block_store_fs, 0, 0, 0, "", &block_store_storage_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(block_store_fs, job_api, 0, 0, 0, "", &block_store_storage_paths));
     ASSERT_NE((Longtail_FileInfos*)0, block_store_storage_paths);
     ASSERT_EQ(version_paths->m_Count, block_store_storage_paths->m_Count);
 
@@ -6226,7 +6229,7 @@ TEST(Longtail, TestLongtailFSBlockStoreSync)
         CreateRandomContent(mem_storage, "source", MAX_CHUNKS_PER_BLOCK * 3, 0, (MAX_BLOCK_SIZE * 3) >> 1);
 
         Longtail_FileInfos* version_paths;
-        ASSERT_EQ(0, Longtail_GetFilesRecursively(mem_storage, 0, 0, 0, "source", &version_paths));
+        ASSERT_EQ(0, Longtail_GetFilesRecursively2(mem_storage, job_api, 0, 0, 0, "source", &version_paths));
         ASSERT_NE((Longtail_FileInfos*)0, version_paths);
 
         uint32_t* compression_types = SetAssetTags(mem_storage, version_paths, 0);
@@ -6301,7 +6304,7 @@ static int CopyDir(
 {
     int err = 0;
     struct Longtail_FileInfos* version_file_infos;
-    Longtail_GetFilesRecursively(storage_api, 0, 0, 0, source_path, &version_file_infos);
+    Longtail_GetFilesRecursively2(storage_api, 0, 0, 0, 0, source_path, &version_file_infos);
     for (uint32_t f = 0; !err && f < version_file_infos->m_Count; ++f)
     {
         const char* asset_path = &version_file_infos->m_PathData[version_file_infos->m_PathStartOffsets[f]];
@@ -6394,7 +6397,7 @@ static int UploadFolder(
     uint32_t MAX_CHUNKS_PER_BLOCK)
 {
     struct Longtail_FileInfos* version_file_infos;
-    int err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, source_path, &version_file_infos);
+    int err = Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, source_path, &version_file_infos);
     if (err)
     {
         return err;
@@ -6479,7 +6482,7 @@ static int DownloadFolder(
     }
 
     struct Longtail_FileInfos* version_file_infos;
-    err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, target_path, &version_file_infos);
+    err = Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, target_path, &version_file_infos);
     if (err)
     {
         return err;
@@ -6557,14 +6560,14 @@ static int ValidateVersion(
     uint32_t TARGET_CHUNK_SIZE)
 {
     struct Longtail_FileInfos* expected_file_infos;
-    int err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, expected_content_path, &expected_file_infos);
+    int err = Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, expected_content_path, &expected_file_infos);
     if (err)
     {
         return err;
     }
 
     struct Longtail_FileInfos* file_infos;
-    err = Longtail_GetFilesRecursively(storage_api, 0, 0, 0, content_path, &file_infos);
+    err = Longtail_GetFilesRecursively2(storage_api, job_api, 0, 0, 0, content_path, &file_infos);
     if (err)
     {
         return err;
@@ -7225,7 +7228,7 @@ TEST(Longtail, Longtail_Archive)
     ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 2));
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "two_items", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, "two_items", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -7351,7 +7354,7 @@ TEST(Longtail, Longtail_ArchiveMemMapped)
     ASSERT_EQ(1, CreateFakeContent(local_storage, "two_items", 22));
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, "two_items", &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, "two_items", &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -7488,7 +7491,7 @@ TEST(Longtail, Longtail_ArchiveMemMappedFS)
     ASSERT_EQ(1, CreateFakeContent(local_storage, source_folder, 22));
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, source_folder, &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, source_folder, &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -7627,7 +7630,7 @@ TEST(Longtail, Longtail_BlockStoreFS)
     ASSERT_EQ(1, CreateFakeContent(local_storage, source_folder, 22));
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, source_folder, &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, source_folder, &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -7741,7 +7744,7 @@ TEST(Longtail, Longtail_BlockStoreMemMappedFS)
     ASSERT_EQ(1, CreateFakeContent(local_storage, source_folder, 22));
 
     Longtail_FileInfos* version1_paths;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(local_storage, 0, 0, 0, source_folder, &version1_paths));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(local_storage, job_api, 0, 0, 0, source_folder, &version1_paths));
     ASSERT_NE((Longtail_FileInfos*)0, version1_paths);
     uint32_t* compression_types = GetAssetTags(local_storage, version1_paths);
     ASSERT_NE((uint32_t*)0, compression_types);
@@ -7929,7 +7932,7 @@ TEST(Longtail, Longtail_MergeVersionIndex)
     auto CreateFileVersion = [hash_api, job_api, chunker_api](Longtail_StorageAPI* storage, const char* root_folder)
     {
         Longtail_FileInfos* version_paths;
-        Longtail_GetFilesRecursively(storage, 0, 0, 0, root_folder, &version_paths);
+        Longtail_GetFilesRecursively2(storage, job_api, 0, 0, 0, root_folder, &version_paths);
         uint32_t* compression_types = GetAssetTags(storage, version_paths);
         Longtail_VersionIndex* vindex;
         Longtail_CreateVersionIndex(
@@ -8153,7 +8156,7 @@ TEST(Longtail, Longtail_CaseSensitivePaths)
     ASSERT_EQ(0, DownloadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "version2.lvi", "target", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
 
     Longtail_FileInfos* file_infos;
-    ASSERT_EQ(0, Longtail_GetFilesRecursively(source_storage, 0, 0, 0, "target", &file_infos));
+    ASSERT_EQ(0, Longtail_GetFilesRecursively2(source_storage, job_api, 0, 0, 0, "target", &file_infos));
     ASSERT_EQ(2u, file_infos->m_Count);
     Longtail_Free(file_infos);
 
