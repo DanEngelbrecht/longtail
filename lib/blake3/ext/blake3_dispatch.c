@@ -112,9 +112,9 @@ static
     get_cpu_features(void) {
 
   /* If TSAN detects a data race here, try compiling with -DBLAKE3_ATOMICS=1 */
-  enum cpu_feature features = ATOMIC_LOAD(g_cpu_features);
+  int features = ATOMIC_LOAD((int)g_cpu_features);
   if (features != UNDEFINED) {
-    return features;
+    return (enum cpu_feature)features;
   } else {
 #if defined(IS_X86)
     uint32_t regs[4] = {0};
@@ -154,7 +154,7 @@ static
       }
     }
     ATOMIC_STORE(g_cpu_features, features);
-    return features;
+    return (enum cpu_feature)features;
 #else
     /* How to detect NEON? */
     return (enum cpu_feature)0;
