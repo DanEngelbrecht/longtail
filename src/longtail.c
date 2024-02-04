@@ -1422,7 +1422,9 @@ static int ScanFolder(
     LONGTAIL_FATAL_ASSERT(ctx, root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, out_result != 0, return EINVAL)
 
-    const char* full_path = folder_sub_path == 0 ? root_path : storage_api->ConcatPath(storage_api, root_path, folder_sub_path);
+    int IsEmptySubFolderPath = (folder_sub_path == 0) || (strlen(folder_sub_path) == 0) || (strcmp(folder_sub_path, ".") == 0);
+
+    const char* full_path = IsEmptySubFolderPath ? root_path : storage_api->ConcatPath(storage_api, root_path, folder_sub_path);
     if (full_path == 0)
     {
         return ENOMEM;
@@ -1470,7 +1472,7 @@ static int ScanFolder(
             break;
         }
 
-        char* path = folder_sub_path == 0 ? Longtail_Strdup(properties.m_Name) : storage_api->ConcatPath(storage_api, folder_sub_path, properties.m_Name);
+        char* path = IsEmptySubFolderPath ? Longtail_Strdup(properties.m_Name) : storage_api->ConcatPath(storage_api, folder_sub_path, properties.m_Name);
         if (path == 0)
         {
             err = ENOMEM;
