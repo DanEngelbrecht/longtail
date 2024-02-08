@@ -5689,7 +5689,8 @@ struct FailableStorageAPI
     static int UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnlockFile(api->m_BackingAPI, lock_file);}
     static char* GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetParentPath(api->m_BackingAPI, path);}
     static int MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->MapFile(api->m_BackingAPI, f, offset, length, out_file_map, out_data_ptr);}
-    static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m);}
+    static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m); }
+    static int OpenAppendFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->OpenAppendFile(api->m_BackingAPI, path, out_open_file); }
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5722,7 +5723,8 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
         FailableStorageAPI::UnlockFile,
         FailableStorageAPI::GetParentPath,
         FailableStorageAPI::MapFile,
-        FailableStorageAPI::UnmapFile);
+        FailableStorageAPI::UnmapFile,
+        FailableStorageAPI::OpenAppendFile);
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;
     failable_storage_api->m_PassCount = 0x7fffffff;

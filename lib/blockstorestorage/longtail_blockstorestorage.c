@@ -776,6 +776,25 @@ static int BlockStoreStorageAPI_OpenWriteFile(
     return ENOTSUP;
 }
 
+static int BlockStoreStorageAPI_OpenAppendFile(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_open_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return 0)
+    LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return 0)
+
+    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Unsupported, failed with %d", ENOTSUP)
+    return ENOTSUP;
+}
+
 static int BlockStoreStorageAPI_Write(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HOpenFile f,
@@ -1407,7 +1426,8 @@ static int BlockStoreStorageAPI_Init(
         BlockStoreStorageAPI_UnlockFile,
         BlockStoreStorageAPI_GetParentPath,
         BlockStoreStorageAPI_MapFile,
-        BlockStoreStorageAPI_UnmapFile);
+        BlockStoreStorageAPI_UnmapFile,
+        BlockStoreStorageAPI_OpenAppendFile);
 
     struct BlockStoreStorageAPI* block_store_fs = (struct BlockStoreStorageAPI*)api;
 

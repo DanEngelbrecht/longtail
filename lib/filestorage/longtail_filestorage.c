@@ -154,6 +154,35 @@ static int FSStorageAPI_OpenWriteFile(
     return 0;
 }
 
+static int FSStorageAPI_OpenAppendFile(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    Longtail_StorageAPI_HOpenFile* out_open_file)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(storage_api, "%p"),
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(out_open_file, "%p")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, path != 0, return EINVAL);
+    LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return EINVAL);
+    HLongtail_OpenFile r;
+    int err = Longtail_OpenAppendFile(path, &r);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_OpenWriteFile() failed with %d", err)
+            return err;
+    }
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)r;
+    return 0;
+}
+
 static int FSStorageAPI_Write(
     struct Longtail_StorageAPI* storage_api,
     Longtail_StorageAPI_HOpenFile f,
@@ -667,7 +696,8 @@ static int FSStorageAPI_Init(
         FSStorageAPI_UnlockFile,
         FSStorageAPI_GetParentPath,
         FSStorageAPI_MapFile,
-        FSStorageAPI_UnmapFile);
+        FSStorageAPI_UnmapFile,
+        FSStorageAPI_OpenAppendFile);
     *out_storage_api = api;
     return 0;
 }

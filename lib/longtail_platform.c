@@ -905,12 +905,12 @@ int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
     return 0;
 }
 
-DWORD NativeOpenWriteFileWithRetry(wchar_t* long_path, DWORD create_disposition, HANDLE* out_handle)
+DWORD NativeOpenWriteFileWithRetry(wchar_t* long_path, DWORD desired_access, DWORD create_disposition, HANDLE* out_handle)
 {
     int retry_count = 10;
     while (1)
     {
-        HANDLE handle = CreateFileW(long_path, GENERIC_READ | GENERIC_WRITE, 0, 0, create_disposition, 0, 0);
+        HANDLE handle = CreateFileW(long_path, desired_access, 0, 0, create_disposition, 0, 0);
         if (handle == INVALID_HANDLE_VALUE)
         {
             DWORD error = GetLastError();
@@ -937,7 +937,7 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
     wchar_t long_path_buffer[512];
     wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     HANDLE handle;
-    DWORD error = NativeOpenWriteFileWithRetry(long_path, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, &handle);
+    DWORD error = NativeOpenWriteFileWithRetry(long_path, GENERIC_WRITE, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, &handle);
     if (long_path != long_path_buffer)
     {
         Longtail_Free(long_path);
@@ -963,6 +963,25 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
             CloseHandle(handle);
             return e;
         }
+    }
+
+    *out_write_file = (HLongtail_OpenFile)handle;
+    return 0;
+}
+
+int Longtail_OpenAppendFile(const char* path, HLongtail_OpenFile* out_write_file)
+{
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
+    HANDLE handle;
+    DWORD error = NativeOpenWriteFileWithRetry(long_path, GENERIC_WRITE, OPEN_ALWAYS, &handle);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
+    if (error != ERROR_SUCCESS)
+    {
+        return Win32ErrorToErrno(error);
     }
 
     *out_write_file = (HLongtail_OpenFile)handle;
@@ -2259,7 +2278,7 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
         int e = errno;
         return e;
     }
-    if  (initial_size > 0)
+    if (initial_size > 0)
     {
         int err = ftruncate64(fileno(f), (off64_t)initial_size);
         if (err != 0)
@@ -2268,6 +2287,18 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
             fclose(f);
             return e;
         }
+    }
+    *out_write_file = (HLongtail_OpenFile)f;
+    return 0;
+}
+
+int Longtail_OpenAppendFile(const char* path, HLongtail_OpenFile* out_write_file)
+{
+    FILE* f = fopen(path, "ab");
+    if (!f)
+    {
+        int e = errno;
+        return e;
     }
     *out_write_file = (HLongtail_OpenFile)f;
     return 0;

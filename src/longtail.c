@@ -264,7 +264,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_UnlockFileFunc unlock_file_func,
     Longtail_Storage_GetParentPathFunc get_parent_path_func,
     Longtail_Storage_MapFileFunc map_file_func,
-    Longtail_Storage_UnmapFileFunc unmap_file_func)
+    Longtail_Storage_UnmapFileFunc unmap_file_func,
+    Longtail_Storage_OpenAppendFileFunc open_append_file_func)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -293,7 +294,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
         LONGTAIL_LOGFIELD(unlock_file_func, "%p"),
         LONGTAIL_LOGFIELD(get_parent_path_func, "%p"),
         LONGTAIL_LOGFIELD(map_file_func, "%p"),
-        LONGTAIL_LOGFIELD(unmap_file_func, "%p")
+        LONGTAIL_LOGFIELD(unmap_file_func, "%p"),
+        LONGTAIL_LOGFIELD(open_append_file_func, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -324,6 +326,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->GetParentPath = get_parent_path_func;
     api->MapFile = map_file_func;
     api->UnMapFile = unmap_file_func;
+    api->OpenAppendFile = open_append_file_func;
     return api;
 }
 
@@ -352,6 +355,7 @@ int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtai
 char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
 int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
 void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { storage_api->UnMapFile(storage_api, m); }
+void Longtail_Storage_OpenAppendfile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file) { storage_api->OpenAppendFile(storage_api, path, out_open_file); }
 
 ////////////// ConcurrentChunkWriteAPI
 
@@ -365,6 +369,7 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
     Longtail_DisposeFunc dispose_func,
     Longtail_ConcurrentChunkWrite_CreateDirFunc create_dir_func,
     Longtail_ConcurrentChunkWrite_OpenFunc open_func,
+    Longtail_ConcurrentChunkWrite_CloseFunc close_func,
     Longtail_ConcurrentChunkWrite_WriteFunc write_func,
     Longtail_ConcurrentChunkWrite_FlushFunc flush_func)
 {
@@ -373,15 +378,17 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(create_dir_func, "%p"),
         LONGTAIL_LOGFIELD(open_func, "%p"),
+        LONGTAIL_LOGFIELD(close_func, "%p"),
         LONGTAIL_LOGFIELD(write_func, "%p"),
         LONGTAIL_LOGFIELD(flush_func, "%p")
-        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_ConcurrentChunkWriteAPI* api = (struct Longtail_ConcurrentChunkWriteAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->CreateDir = create_dir_func;
     api->Open = open_func;
+    api->Close = close_func;
     api->Write = write_func;
     api->Flush = flush_func;
     return api;
@@ -389,6 +396,7 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
 
 int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, path); }
 int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, chunk_write_count, out_open_file); }
+void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file) { concurrent_file_write_api->Close(concurrent_file_write_api, in_open_file); }
 int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, chunk_count, input, out_chunks_remaining); }
 int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api) { return concurrent_file_write_api->Flush(concurrent_file_write_api); }
 
@@ -8315,6 +8323,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         {
             if (last_asset_index != asset_index)
             {
+                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
                 asset_file_handle = 0;
             }
         }
@@ -8341,6 +8350,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         uint32_t* chunk_index_in_block_ptr = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, chunk_hash);
         if (chunk_index_in_block_ptr == 0)
         {
+            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
             Longtail_Free(work_mem);
             SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
@@ -8372,6 +8382,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
             uint32_t* chunk_index_in_block_ptr_next = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, chunk_hash_next);
             if (chunk_index_in_block_ptr_next == 0)
             {
+                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
                 Longtail_Free(work_mem);
                 SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
@@ -8396,6 +8407,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         int err = job->m_Context->m_ConcurrentChunkWriteApi->Write(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_run_size, chunk_run_count, &block_data[chunk_offset_in_block], &pending_chunk_count);
         if (err)
         {
+            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write() failed for `%s` with %d", asset_path, err)
             Longtail_Free(work_mem);
             SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
@@ -8409,6 +8421,12 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         }
         block_write_chunk_info_index += chunk_run_count;
     }
+    if (asset_file_handle != 0)
+    {
+        job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+        asset_file_handle = 0;
+    }
+
     Longtail_Free(work_mem);
     SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
     LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, 0);

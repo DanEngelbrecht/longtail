@@ -359,6 +359,7 @@ typedef int (*Longtail_Storage_UnlockFileFunc)(struct Longtail_StorageAPI* stora
 typedef char* (*Longtail_Storage_GetParentPathFunc)(struct Longtail_StorageAPI* storage_api, const char* path);
 typedef int (*Longtail_Storage_MapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
 typedef void (*Longtail_Storage_UnmapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
+typedef int (*Longtail_Storage_OpenAppendFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 
 struct Longtail_StorageAPI
 {
@@ -388,6 +389,7 @@ struct Longtail_StorageAPI
     Longtail_Storage_GetParentPathFunc GetParentPath;
     Longtail_Storage_MapFileFunc MapFile;
     Longtail_Storage_UnmapFileFunc UnMapFile;
+    Longtail_Storage_OpenAppendFileFunc OpenAppendFile;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize();
@@ -419,7 +421,8 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_UnlockFileFunc unlock_file_func,
     Longtail_Storage_GetParentPathFunc get_parent_path_func,
     Longtail_Storage_MapFileFunc map_file_func,
-    Longtail_Storage_UnmapFileFunc unmap_file_func);
+    Longtail_Storage_UnmapFileFunc unmap_file_func,
+    Longtail_Storage_OpenAppendFileFunc open_append_file_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 LONGTAIL_EXPORT int Longtail_Storage_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
@@ -446,6 +449,7 @@ LONGTAIL_EXPORT int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* stor
 LONGTAIL_EXPORT char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
 LONGTAIL_EXPORT int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
 LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
+LONGTAIL_EXPORT void Longtail_Storage_OpenAppendfile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 
 ////////////// Longtail_ConcurrentChunkWriteAPI
 
@@ -455,6 +459,7 @@ typedef struct Longtail_ConcurrentChunkWriteAPI_OpenFile* Longtail_ConcurrentChu
 
 typedef int (*Longtail_ConcurrentChunkWrite_CreateDirFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
 typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+typedef void (*Longtail_ConcurrentChunkWrite_CloseFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file);
 typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining);
 typedef int (*Longtail_ConcurrentChunkWrite_FlushFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
 
@@ -463,6 +468,7 @@ struct Longtail_ConcurrentChunkWriteAPI
     struct Longtail_API m_API;
     Longtail_ConcurrentChunkWrite_CreateDirFunc CreateDir;
     Longtail_ConcurrentChunkWrite_OpenFunc Open;
+    Longtail_ConcurrentChunkWrite_CloseFunc Close;
     Longtail_ConcurrentChunkWrite_WriteFunc Write;
     Longtail_ConcurrentChunkWrite_FlushFunc Flush;
 };
@@ -474,11 +480,14 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
     Longtail_DisposeFunc dispose_func,
     Longtail_ConcurrentChunkWrite_CreateDirFunc create_dir_func,
     Longtail_ConcurrentChunkWrite_OpenFunc open_func,
+    Longtail_ConcurrentChunkWrite_CloseFunc close_func,
     Longtail_ConcurrentChunkWrite_WriteFunc write_func,
-    Longtail_ConcurrentChunkWrite_FlushFunc flush_func);
+    Longtail_ConcurrentChunkWrite_FlushFunc flush_func
+);
 
 LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
 LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+LONGTAIL_EXPORT void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file);
 LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_total_chunks_written);
 LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
 

@@ -75,6 +75,7 @@ typedef struct Longtail_OpenFile_private* HLongtail_OpenFile;
 
 int     Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file);
 int     Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file);
+int     Longtail_OpenAppendFile(const char* path, HLongtail_OpenFile* out_write_file);
 int     Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length);
 int     Longtail_SetFilePermissions(const char* path, uint16_t permissions);
 int     Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions);
