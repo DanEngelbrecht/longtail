@@ -395,9 +395,11 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
 }
 
 int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, path); }
-int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, chunk_write_count, out_open_file); }
+//int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, chunk_write_count, out_open_file); }
+int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, out_open_file); }
 void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file) { concurrent_file_write_api->Close(concurrent_file_write_api, in_open_file); }
-int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, chunk_count, input, out_chunks_remaining); }
+//int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, chunk_count, input, out_chunks_remaining); }
+int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, const void* input) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, input); }
 int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api) { return concurrent_file_write_api->Flush(concurrent_file_write_api); }
 
 ////////////// ProgressAPI
@@ -746,16 +748,16 @@ static struct Longtail_Monitor Monitor_private = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #define LONGTAIL_MONTITOR_BLOCK_LOADED(store_index, block_index, err) if (Monitor_private.BlockLoaded) {Monitor_private.BlockLoaded(store_index, block_index, err);}
 #define LONGTAIL_MONTITOR_BLOCK_COMPLETE(store_index, block_index, err) if (Monitor_private.BlockLoadComplete) {Monitor_private.BlockLoadComplete(store_index, block_index, err);}
 
-#define LONGTAIL_MONITOR_ASSET_REMOVE(version_index, asset_index) if (Monitor_private.AssetRemove) {Monitor_private.AssetRemove(version_index, asset_index);}
-#define LONGTAIL_MONTITOR_ASSET_OPEN(version_index, asset_index) if (Monitor_private.AssetOpen) {Monitor_private.AssetOpen(version_index, asset_index);}
-#define LONGTAIL_MONTITOR_ASSET_WRITE(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset) if (Monitor_private.AssetWrite) {Monitor_private.AssetWrite(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset);}
-#define LONGTAIL_MONTITOR_ASSET_COMPLETE(version_index, asset_index, err) if (Monitor_private.AssetComplete) {Monitor_private.AssetComplete(version_index, asset_index, err);};
+#define LONGTAIL_MONITOR_ASSET_REMOVE(version_index, asset_index, err) if (Monitor_private.AssetRemove) {Monitor_private.AssetRemove(version_index, asset_index, err);}
+#define LONGTAIL_MONTITOR_ASSET_OPEN(version_index, asset_index, err) if (Monitor_private.AssetOpen) {Monitor_private.AssetOpen(version_index, asset_index, err);}
+#define LONGTAIL_MONTITOR_ASSET_WRITE(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset, err) if (Monitor_private.AssetWrite) {Monitor_private.AssetWrite(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset, err);}
+//#define LONGTAIL_MONTITOR_ASSET_COMPLETE(version_index, asset_index, err) if (Monitor_private.AssetComplete) {Monitor_private.AssetComplete(version_index, asset_index, err);};
 
-#define LONGTAIL_MONTITOR_CHUNK_READ(store_index, version_index, block_index, chunk_index, chunk_index_in_block) if (Monitor_private.ChunkRead) {Monitor_private.ChunkRead(store_index, version_index, block_index, chunk_index, chunk_index_in_block);}
+#define LONGTAIL_MONTITOR_CHUNK_READ(store_index, version_index, block_index, chunk_index, chunk_index_in_block, err) if (Monitor_private.ChunkRead) {Monitor_private.ChunkRead(store_index, version_index, block_index, chunk_index, chunk_index_in_block, err);}
 
 #define LONGTAIL_MONTITOR_BLOCK_COMPOSE(store_index, block_index) if (Monitor_private.BlockCompose) {Monitor_private.BlockCompose(store_index, block_index);}
-#define LONGTAIL_MONTITOR_ASSET_READ(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset) if (Monitor_private.AssetRead) {Monitor_private.AssetRead(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset);}
-#define LONGTAIL_MONTITOR_ASSET_CLOSE(version_index, asset_index, err) if (Monitor_private.AssetClose) {Monitor_private.AssetClose(version_index, asset_index, err);}
+#define LONGTAIL_MONTITOR_ASSET_READ(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset, err) if (Monitor_private.AssetRead) {Monitor_private.AssetRead(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset, err);}
+#define LONGTAIL_MONTITOR_ASSET_CLOSE(version_index, asset_index) if (Monitor_private.AssetClose) {Monitor_private.AssetClose(version_index, asset_index);}
 #define LONGTAIL_MONITOR_BLOCK_SAVE(store_index, block_index, block_size) if (Monitor_private.BlockSave) {Monitor_private.BlockSave(store_index, block_index, block_size);}
 #define LONGTAIL_MONITOR_BLOCK_SAVED(store_index, block_index, err) if (Monitor_private.BlockSaved) {Monitor_private.BlockSaved(store_index, block_index, err);}
 
@@ -4624,14 +4626,14 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
             {
                 source_storage_api->CloseFile(source_storage_api, file_handle);
                 file_handle = 0;
-                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, 0);
+                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
             }
             const char* asset_path = &job->m_VersionIndex->m_NameData[next_path_name_offset];
             LONGTAIL_FATAL_ASSERT(ctx, !IsDirPath(asset_path), return EINVAL)
 
-            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index);
             char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
             int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
+            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index, err);
             Longtail_Free(full_path);
             full_path = 0;
             if (err)
@@ -4647,7 +4649,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "source_storage_api->GetSize() failed with %d", err);
                 Longtail_Free(put_block_mem);
-                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, err);
+                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
                 source_storage_api->CloseFile(source_storage_api, file_handle);
                 return err;
             }
@@ -4662,17 +4664,17 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
                 asset_file_size, (asset_offset + chunk_size))
             Longtail_Free(put_block_mem);
             source_storage_api->CloseFile(source_storage_api, file_handle);
-            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index, EBADF);
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index);
             return EBADF;
         }
-        LONGTAIL_MONTITOR_ASSET_READ(job->m_StoreIndex, job->m_VersionIndex, asset_index, asset_offset, chunk_size, chunk_hash, job->m_BlockIndex, write_offset);
         int err = source_storage_api->Read(source_storage_api, file_handle, asset_offset, chunk_size, write_buffer + write_offset);
+        LONGTAIL_MONTITOR_ASSET_READ(job->m_StoreIndex, job->m_VersionIndex, asset_index, asset_offset, chunk_size, chunk_hash, job->m_BlockIndex, write_offset, err);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "source_storage_api->Read() failed with %d", err);
             Longtail_Free(put_block_mem);
             source_storage_api->CloseFile(source_storage_api, file_handle);
-            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, err);
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
             return err;
         }
         write_offset += chunk_size;
@@ -4682,7 +4684,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
     {
         source_storage_api->CloseFile(source_storage_api, file_handle);
         file_handle = 0;
-        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, 0);
+        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
     }
 
     Longtail_InitBlockIndex(block_index_ptr, chunk_count);
@@ -7748,12 +7750,12 @@ static int CleanUpRemoveAssets(
                     Longtail_Free(remove_indexes);
                     return err;
                 }
-                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index)
                 uint16_t permissions = 0;
                 err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
                 if (err)
                 {
                     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                    LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                     Longtail_Free(full_asset_path);
                     Longtail_Free(remove_indexes);
                     return err;
@@ -7764,6 +7766,7 @@ static int CleanUpRemoveAssets(
                     if (err)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
                         return err;
@@ -7777,12 +7780,14 @@ static int CleanUpRemoveAssets(
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to remove dir `%s`, failed with %d", full_asset_path, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         return err;
                     }
                     Longtail_Free(full_asset_path);
                     full_asset_path = 0;
                     continue;
                 }
+                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, 0)
             }
             else
             {
@@ -7792,12 +7797,12 @@ static int CleanUpRemoveAssets(
                     Longtail_Free(full_asset_path);
                     continue;
                 }
-                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index)
                 uint16_t permissions = 0;
                 err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
                 if (err)
                 {
                     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                    LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                     Longtail_Free(full_asset_path);
                     Longtail_Free(remove_indexes);
                     return err;
@@ -7808,6 +7813,7 @@ static int CleanUpRemoveAssets(
                     if (err)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
                         return err;
@@ -7819,6 +7825,7 @@ static int CleanUpRemoveAssets(
                     if (!retry_count)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to file dir `%s`, failed with %d", full_asset_path, err)
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
                         return err;
@@ -7827,6 +7834,7 @@ static int CleanUpRemoveAssets(
                     full_asset_path = 0;
                     continue;
                 }
+                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, 0)
             }
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
@@ -8197,26 +8205,29 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         const TBlockChunkWriteArray block_chunk_write_info = &block_write_infos[block_write_chunk_info_index];
         const uint32_t asset_index = block_chunk_write_info->AssetIndex;
         const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
-        LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index);
         if (IsDirPath(asset_path))
         {
             int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_path);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_ConcurrentChunkWriteApi->CreateDir() failed with %d", err)
+                LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index, err);
                 return err;
             }
         }
         else
         {
             Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
-            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, 0, &asset_file_handle);
+            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, &asset_file_handle);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "m_ConcurrentChunkWriteApi->Open() failed with %d", err)
                 return err;
             }
+            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index, err);
+            job->m_ConcurrentChunkWriteApi->Close(job->m_ConcurrentChunkWriteApi, asset_file_handle);
         }
+        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index);
     }
     return 0;
 }
@@ -8331,14 +8342,14 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         if (asset_file_handle == 0)
         {
             uint32_t asset_chunk_count = job->m_Context->m_VersionIndex->m_AssetChunkCounts[asset_index];
-            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_Context->m_VersionIndex, asset_index);
-            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_path, asset_chunk_count, &asset_file_handle);
+            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_path, &asset_file_handle);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Open() failed for `%s` with %d", asset_path, err)
+                LONGTAIL_MONTITOR_ASSET_OPEN(job->m_Context->m_VersionIndex, asset_index, err);
                 Longtail_Free(work_mem);
                 SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-                LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, err);
+//                LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, err);
                 LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, err);
                 return err;
             }
@@ -8351,10 +8362,10 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         if (chunk_index_in_block_ptr == 0)
         {
             job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
             Longtail_Free(work_mem);
             SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-            LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, ENOENT);
             LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, ENOENT);
             return ENOENT;
         }
@@ -8362,7 +8373,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         uint32_t chunk_index_in_block = *chunk_index_in_block_ptr;
         uint32_t chunk_size = stored_block->m_BlockIndex->m_ChunkSizes[chunk_index_in_block];
         uint32_t chunk_offset_in_block = chunk_offsets_in_block[chunk_index_in_block];
-        LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index, chunk_index_in_block);
+        LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index, chunk_index_in_block, 0);
 
         uint32_t chunk_run_count = 1;
         uint32_t chunk_run_size = chunk_size;
@@ -8383,10 +8394,10 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
             if (chunk_index_in_block_ptr_next == 0)
             {
                 job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
                 Longtail_Free(work_mem);
                 SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-                LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, ENOENT);
                 LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, ENOENT);
                 return ENOENT;
             }
@@ -8396,40 +8407,37 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
                 break;
             }
             uint32_t chunk_size_next = stored_block->m_BlockIndex->m_ChunkSizes[chunk_index_in_block_next];
-            LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index_next, chunk_index_in_block_next);
+            LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index_next, chunk_index_in_block_next, 0);
 
             chunk_run_size += chunk_size_next;
             chunk_run_count++;
         }
 
-        LONGTAIL_MONTITOR_ASSET_WRITE(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, asset_index, block_chunk_write_info->Offset, chunk_run_size, chunk_index, chunk_index_in_block, chunk_run_count, block_index, chunk_offset_in_block);
-        uint32_t pending_chunk_count = 0;
-        int err = job->m_Context->m_ConcurrentChunkWriteApi->Write(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_run_size, chunk_run_count, &block_data[chunk_offset_in_block], &pending_chunk_count);
+        int err = job->m_Context->m_ConcurrentChunkWriteApi->Write(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_run_size, &block_data[chunk_offset_in_block]);
+        LONGTAIL_MONTITOR_ASSET_WRITE(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, asset_index, block_chunk_write_info->Offset, chunk_run_size, chunk_index, chunk_index_in_block, chunk_run_count, block_index, chunk_offset_in_block, err);
         if (err)
         {
             job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write() failed for `%s` with %d", asset_path, err)
             Longtail_Free(work_mem);
             SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-            LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, err);
             LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, err);
             return err;
-        }
-        if (pending_chunk_count == 0)
-        {
-            LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, 0);
         }
         block_write_chunk_info_index += chunk_run_count;
     }
     if (asset_file_handle != 0)
     {
         job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, last_asset_index);
         asset_file_handle = 0;
     }
 
     Longtail_Free(work_mem);
     SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
     LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, 0);
+    job->m_Context->m_ConcurrentChunkWriteApi->Flush(job->m_Context->m_ConcurrentChunkWriteApi);
     return 0;
 }
 

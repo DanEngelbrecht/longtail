@@ -458,9 +458,11 @@ struct Longtail_ConcurrentChunkWriteAPI;
 typedef struct Longtail_ConcurrentChunkWriteAPI_OpenFile* Longtail_ConcurrentChunkWriteAPI_HOpenFile;
 
 typedef int (*Longtail_ConcurrentChunkWrite_CreateDirFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
-typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+//typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
 typedef void (*Longtail_ConcurrentChunkWrite_CloseFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file);
-typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining);
+//typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining);
+typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, const void* input);
 typedef int (*Longtail_ConcurrentChunkWrite_FlushFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
 
 struct Longtail_ConcurrentChunkWriteAPI
@@ -486,9 +488,11 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
 );
 
 LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
-LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+//LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
 LONGTAIL_EXPORT void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file);
-LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_total_chunks_written);
+//LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_total_chunks_written);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, const void* input);
 LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
 
 ////////////// Longtail_ProgressAPI
@@ -829,16 +833,16 @@ typedef void (*Longtail_MonitorGetStoredBlockPrepare)(const struct Longtail_Stor
 typedef void (*Longtail_MonitorGetStoredBlockLoad)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
 typedef void (*Longtail_MonitorGetStoredBlockLoaded)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
 typedef void (*Longtail_MonitorGetStoredBlockComplete)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
-typedef void (*Longtail_MonitorAssetRemove)(const struct Longtail_VersionIndex* source_version_index, uint32_t asset_index);
-typedef void (*Longtail_MonitorAssetOpen)(const struct Longtail_VersionIndex* target_version_index, uint32_t asset_index);
-typedef void (*Longtail_MonitorAssetWrite)(const struct Longtail_StoreIndex* target_store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset);
-typedef void (*Longtail_MonitorChunkRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* target_version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block);
-typedef void (*Longtail_MonitorAssetComplete)(const struct Longtail_VersionIndex* target_version_index, uint32_t asset_index, int err);
+typedef void (*Longtail_MonitorAssetRemove)(const struct Longtail_VersionIndex* source_version_index, uint32_t asset_index, int err);
+typedef void (*Longtail_MonitorAssetOpen)(const struct Longtail_VersionIndex* target_version_index, uint32_t asset_index, int err);
+typedef void (*Longtail_MonitorAssetWrite)(const struct Longtail_StoreIndex* target_store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset, int err);
+typedef void (*Longtail_MonitorChunkRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* target_version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block, int err);
+//typedef void (*Longtail_MonitorAssetComplete)(const struct Longtail_VersionIndex* target_version_index, uint32_t asset_index, int err);
 typedef void (*Longtail_MonitorBlockCompose)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
 typedef void (*Longtail_MonitorBlockSave)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, uint64_t block_size);
 typedef void (*Longtail_MonitorBlockSaved)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
-typedef void (*Longtail_MonitorAssetRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t read_offset, uint32_t size, TLongtail_Hash chunk_hash, uint32_t block_index, uint32_t block_data_offset);
-typedef void (*Longtail_MonitorAssetClose)(const struct Longtail_VersionIndex* version_index, uint32_t asset_index, int err);
+typedef void (*Longtail_MonitorAssetRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t read_offset, uint32_t size, TLongtail_Hash chunk_hash, uint32_t block_index, uint32_t block_data_offset, int err);
+typedef void (*Longtail_MonitorAssetClose)(const struct Longtail_VersionIndex* version_index, uint32_t asset_index);
 
 struct Longtail_Monitor
 {
@@ -851,7 +855,7 @@ struct Longtail_Monitor
     Longtail_MonitorAssetOpen               AssetOpen;
     Longtail_MonitorAssetWrite              AssetWrite;
     Longtail_MonitorChunkRead               ChunkRead;
-    Longtail_MonitorAssetComplete           AssetComplete;
+//    Longtail_MonitorAssetComplete           AssetComplete;
     Longtail_MonitorBlockCompose            BlockCompose;
     Longtail_MonitorBlockSave               BlockSave;
     Longtail_MonitorBlockSaved              BlockSaved;

@@ -169,14 +169,14 @@ struct ConcurrentChunkWriteAPI
 static int ConcurrentChunkWriteAPI_Open(
     struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api,
     const char* path,
-    uint32_t chunk_write_count,
+//    uint32_t chunk_write_count,
     Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(concurrent_file_write_api, "%p"),
         LONGTAIL_LOGFIELD(path, "%s"),
-        LONGTAIL_LOGFIELD(chunk_write_count, "%u"),
+//        LONGTAIL_LOGFIELD(chunk_write_count, "%u"),
         LONGTAIL_LOGFIELD(out_open_file, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 #else
@@ -201,9 +201,8 @@ static int ConcurrentChunkWriteAPI_Open(
             struct OpenFileEntry* open_file_entry = api->m_OpenFileEntries[open_file_index];
             if (open_file_entry->m_FileHandle != 0)
             {
-                LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_FileHandle != 0, Longtail_UnlockRWLockRead(api->m_RWLock); return EINVAL);
-                *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
                 Longtail_AtomicAdd32(&open_file_entry->m_OpenCount, 1);
+                *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
                 Longtail_UnlockRWLockRead(api->m_RWLock);
                 return 0;
             }
@@ -211,7 +210,10 @@ static int ConcurrentChunkWriteAPI_Open(
         Longtail_UnlockRWLockRead(api->m_RWLock);
     }
 
+    struct OpenFileEntry* open_file_entry = 0;
+
     Longtail_LockRWLockWrite(api->m_RWLock);
+
     ptrdiff_t tmp;
     intptr_t i = api->m_PathHashToOpenFile ? hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp) : -1;
     if (i == -1)
@@ -233,11 +235,40 @@ static int ConcurrentChunkWriteAPI_Open(
             return err;
         }
 
-        Longtail_LockRWLockWrite(api->m_RWLock);
-        i = api->m_PathHashToOpenFile ? hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp) : -1;
-        if (i == -1)
         {
-            struct OpenFileEntry* open_file_entry = (struct OpenFileEntry*)Longtail_Alloc("ConcurrentChunkWriteAPI_Open", sizeof(struct OpenFileEntry));
+            Longtail_LockRWLockRead(api->m_RWLock);
+            ptrdiff_t tmp;
+            intptr_t i = api->m_PathHashToOpenFile ? hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp) : -1;
+            if (i != -1)
+            {
+                intptr_t open_file_index = api->m_PathHashToOpenFile[i].value;
+                open_file_entry = api->m_OpenFileEntries[open_file_index];
+                if (open_file_entry->m_FileHandle != 0)
+                {
+                    Longtail_AtomicAdd32(&open_file_entry->m_OpenCount, 1);
+                    *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
+                    Longtail_UnlockRWLockRead(api->m_RWLock);
+                    Longtail_Free(full_asset_path);
+                    return 0;
+                }
+            }
+            Longtail_UnlockRWLockRead(api->m_RWLock);
+        }
+
+        Longtail_LockRWLockWrite(api->m_RWLock);
+        if (open_file_entry == 0)
+        {
+            i = api->m_PathHashToOpenFile ? hmgeti_ts(api->m_PathHashToOpenFile, path_hash, tmp) : -1;
+            if (i != -1)
+            {
+                intptr_t open_file_index = api->m_PathHashToOpenFile[i].value;
+                open_file_entry = api->m_OpenFileEntries[open_file_index];
+            }
+        }
+
+        if (open_file_entry == 0)
+        {
+            open_file_entry = (struct OpenFileEntry*)Longtail_Alloc("ConcurrentChunkWriteAPI_Open", sizeof(struct OpenFileEntry));
             if (open_file_entry == 0)
             {
                 err = ENOMEM;
@@ -269,14 +300,16 @@ static int ConcurrentChunkWriteAPI_Open(
         }
         Longtail_Free(full_asset_path);
     }
+    else
+    {
+        intptr_t open_file_index = api->m_PathHashToOpenFile[i].value;
+        open_file_entry = api->m_OpenFileEntries[open_file_index];
+    }
 
-    intptr_t open_file_index = api->m_PathHashToOpenFile[i].value;
-    struct OpenFileEntry* open_file_entry = api->m_OpenFileEntries[open_file_index];
     if (open_file_entry->m_FileHandle != 0)
     {
-        LONGTAIL_FATAL_ASSERT(ctx, open_file_entry->m_FileHandle != 0, Longtail_UnlockRWLockRead(api->m_RWLock); return EINVAL);
-        *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
         Longtail_AtomicAdd32(&open_file_entry->m_OpenCount, 1);
+        *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
         Longtail_UnlockRWLockWrite(api->m_RWLock);
         return 0;
     }
@@ -298,9 +331,10 @@ static int ConcurrentChunkWriteAPI_Write(
     Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file,
     uint64_t offset,
     uint32_t size,
-    uint32_t chunk_count,
-    const void* input,
-    uint32_t* out_chunks_remaining)
+//    uint32_t chunk_count,
+    const void* input//,
+//    uint32_t* out_chunks_remaining
+)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -308,9 +342,9 @@ static int ConcurrentChunkWriteAPI_Write(
         LONGTAIL_LOGFIELD(in_open_file, "%p"),
         LONGTAIL_LOGFIELD(offset, "%" PRIu64),
         LONGTAIL_LOGFIELD(size, "%u"),
-        LONGTAIL_LOGFIELD(chunk_count, "%u"),
+//        LONGTAIL_LOGFIELD(chunk_count, "%u"),
         LONGTAIL_LOGFIELD(input, "%p"),
-        LONGTAIL_LOGFIELD(out_chunks_remaining, "%p")
+//        LONGTAIL_LOGFIELD(out_chunks_remaining, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
@@ -352,7 +386,8 @@ static void ConcurrentChunkWriteAPI_Close(
 
     struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_file_write_api;
     struct OpenFileEntry* open_file_entry = (struct OpenFileEntry*)in_open_file;
-
+    Longtail_AtomicAdd32(&open_file_entry->m_OpenCount, -1);
+#if 0
     {
         Longtail_LockRWLockRead(api->m_RWLock);
         int32_t OpenCount = Longtail_AtomicAdd32(&open_file_entry->m_OpenCount, -1);
@@ -376,6 +411,7 @@ static void ConcurrentChunkWriteAPI_Close(
         }
         Longtail_UnlockRWLockWrite(api->m_RWLock);
     }
+#endif // 0
 }
 
 static int ConcurrentChunkWriteAPI_Flush(
@@ -396,16 +432,17 @@ static int ConcurrentChunkWriteAPI_Flush(
     for (ptrdiff_t i = 0; i < entry_count; ++i)
     {
         struct OpenFileEntry* open_file_entry = api->m_OpenFileEntries[i];
+        if (open_file_entry->m_OpenCount > 0)
+        {
+            continue;
+        }
         Longtail_StorageAPI_HOpenFile file_handle = open_file_entry->m_FileHandle;
         if (file_handle)
         {
             api->m_StorageAPI->CloseFile(api->m_StorageAPI, file_handle);
+            open_file_entry->m_FileHandle = 0;
         }
-        Longtail_Free((void*)open_file_entry->m_FullPath);
-        Longtail_Free((void*)open_file_entry);
     }
-    hmfree(api->m_PathHashToOpenFile);
-    arrfree(api->m_OpenFileEntries);
     Longtail_UnlockRWLockWrite(api->m_RWLock);
     return 0;
 }
@@ -470,6 +507,17 @@ static void ConcurrentChunkWriteAPI_Dispose(struct Longtail_API* concurrent_file
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ConcurrentChunkWriteAPI_Flush() failed with %d", err)
     }
+
+    ptrdiff_t entry_count = arrlen(api->m_OpenFileEntries);
+    for (ptrdiff_t i = 0; i < entry_count; ++i)
+    {
+        struct OpenFileEntry* open_file_entry = api->m_OpenFileEntries[i];
+        Longtail_Free((void*)open_file_entry->m_FullPath);
+        Longtail_Free((void*)open_file_entry);
+    }
+    hmfree(api->m_PathHashToOpenFile);
+    arrfree(api->m_OpenFileEntries);
+
     Longtail_Free(api->m_BasePath);
     Longtail_DeleteRWLock(api->m_RWLock);
     Longtail_Free(concurrent_file_write_api);
