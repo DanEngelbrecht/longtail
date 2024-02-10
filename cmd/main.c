@@ -1535,7 +1535,7 @@ int DownSync(
     struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version", enable_detailed_progress ? 0 : 5);
     if (progress)
     {
-        struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
+        struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, source_version_index, version_diff, target_path);
         if (concurrent_chunk_write)
         {
             err = Longtail_ChangeVersion2(
@@ -2657,7 +2657,7 @@ int Unpack(
     struct Longtail_ProgressAPI* progress = MakeProgressAPI("Updating version", enable_detailed_progress ? 0 : 5);
     if (progress)
     {
-        struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
+        struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write = Longtail_CreateConcurrentChunkWriteAPI(storage_api, &archive_index->m_VersionIndex, version_diff, target_path);
         if (concurrent_chunk_write)
         {
             err = Longtail_ChangeVersion2(

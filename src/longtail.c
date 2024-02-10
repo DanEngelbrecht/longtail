@@ -394,12 +394,12 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
     return api;
 }
 
-int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, path); }
+int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, asset_index); }
 //int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, chunk_write_count, out_open_file); }
-int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, out_open_file); }
+int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, asset_index, out_open_file); }
 void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file) { concurrent_file_write_api->Close(concurrent_file_write_api, in_open_file); }
 //int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, chunk_count, input, out_chunks_remaining); }
-int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, const void* input) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, input); }
+int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index, uint64_t offset, uint32_t size, const void* input) { return concurrent_file_write_api->Write(concurrent_file_write_api, asset_index, offset, size, input); }
 int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api) { return concurrent_file_write_api->Flush(concurrent_file_write_api); }
 
 ////////////// ProgressAPI
@@ -8207,7 +8207,7 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
         if (IsDirPath(asset_path))
         {
-            int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_path);
+            int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_index);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_ConcurrentChunkWriteApi->CreateDir() failed with %d", err)
@@ -8218,7 +8218,7 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         else
         {
             Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
-            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, &asset_file_handle);
+            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_index, &asset_file_handle);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "m_ConcurrentChunkWriteApi->Open() failed with %d", err)
@@ -8342,7 +8342,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         if (asset_file_handle == 0)
         {
             uint32_t asset_chunk_count = job->m_Context->m_VersionIndex->m_AssetChunkCounts[asset_index];
-            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_path, &asset_file_handle);
+            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_index, &asset_file_handle);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Open() failed for `%s` with %d", asset_path, err)
@@ -8413,7 +8413,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
             chunk_run_count++;
         }
 
-        int err = job->m_Context->m_ConcurrentChunkWriteApi->Write(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_run_size, &block_data[chunk_offset_in_block]);
+        int err = job->m_Context->m_ConcurrentChunkWriteApi->Write(job->m_Context->m_ConcurrentChunkWriteApi, asset_index, block_chunk_write_info->Offset, chunk_run_size, &block_data[chunk_offset_in_block]);
         LONGTAIL_MONTITOR_ASSET_WRITE(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, asset_index, block_chunk_write_info->Offset, chunk_run_size, chunk_index, chunk_index_in_block, chunk_run_count, block_index, chunk_offset_in_block, err);
         if (err)
         {
