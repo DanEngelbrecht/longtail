@@ -12,7 +12,15 @@
 - **NEW API** `Longtail_GetFilesRecursively2` that executes using parallel jobs improving execution speed for large file trees significantly
 - **REMOVED API** `Longtail_SetAllocAndFree` is replaced by `Longtail_SetReAllocAndFree`
 - **REMOVED API** `Longtail_MemTracer_Alloc` is replaced by `Longtail_MemTracer_ReAlloc`
-- **CHANGED API** `Longtail_ConcurrentChunkWriteAPI::Write` has new parameter `out_chunks_remaining` which is set to the remaining number of chunks to write to asset after call completes
+- **REMOVED API** Remove platform api for Read/Write mutex
+  - `Longtail_GetRWLockSize`
+  - `Longtail_CreateRWLock`
+  - `Longtail_DeleteRWLock`
+  - `Longtail_LockRWLockRead`
+  - `Longtail_LockRWLockWrite`
+  - `Longtail_UnlockRWLockRead`
+  - `Longtail_UnlockRWLockWrite`
+- **CHANGED API** `Longtail_ConcurrentChunkWriteAPI***`
 - **FIXED** Fixed memory leaks in command tool
 - **FIXED** `Longtail_ChangeVersion2()` can now handle workloads with a block count larger than 65535
 - **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full

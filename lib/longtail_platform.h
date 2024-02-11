@@ -44,15 +44,6 @@ void    Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock);
 void    Longtail_LockSpinLock(HLongtail_SpinLock spin_lock);
 void    Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock);
 
-typedef struct Longtail_RWLock* HLongtail_RWLock;
-size_t  Longtail_GetRWLockSize();
-int     Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock);
-void    Longtail_DeleteRWLock(HLongtail_RWLock rwlock);
-void    Longtail_LockRWLockRead(HLongtail_RWLock rwlock);
-void    Longtail_LockRWLockWrite(HLongtail_RWLock rwlock);
-void    Longtail_UnlockRWLockRead(HLongtail_RWLock rwlock);
-void    Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock);
-
 typedef struct Longtail_FSIterator_private* HLongtail_FSIterator;
 
 size_t Longtail_GetFSIteratorSize();
