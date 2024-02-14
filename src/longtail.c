@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 #define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
+#define LONGTAIL_VERSION_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
 #define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
 #define LONGTAIL_STORE_INDEX_VERSION_1_0_0    LONGTAIL_VERSION(1,0,0)
 #define LONGTAIL_ARCHIVE_VERSION_0_0_1        LONGTAIL_VERSION(0,0,1)
@@ -1220,6 +1221,7 @@ struct Longtail_LookupTable* LongtailPrivate_LookupTable_Create(void* mem, uint3
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     struct Longtail_LookupTable* lut = (struct Longtail_LookupTable*)mem;
+    memset(lut, 0xff, LongtailPrivate_LookupTable_GetSize(capacity));
     uint32_t table_size = GetLookupTableSize(capacity);
     lut->m_BucketCount = table_size;
     lut->m_Capacity = capacity;
@@ -1229,8 +1231,8 @@ struct Longtail_LookupTable* LongtailPrivate_LookupTable_Create(void* mem, uint3
     lut->m_Values = (uint32_t*)&lut->m_Keys[capacity];
     lut->m_NextIndex = &lut->m_Values[capacity];
 
-    memset(lut->m_Buckets, 0xff, sizeof(uint32_t) * table_size);
-    memset(lut->m_NextIndex, 0xff, sizeof(uint32_t) * capacity);
+//    memset(lut->m_Buckets, 0xff, sizeof(uint32_t) * table_size);
+//    memset(lut->m_NextIndex, 0xff, sizeof(uint32_t) * capacity);
 
     if (optional_source_entries == 0)
     {
@@ -1267,6 +1269,18 @@ static int IsDirPath(const char* path)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 
+static int GetPathHashWithLength(struct Longtail_HashAPI* hash_api, const char* path, uint32_t pathlen, TLongtail_Hash* out_hash)
+{
+    uint64_t hash;
+    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)path, &hash);
+    if (err)
+    {
+        return err;
+    }
+    *out_hash = (TLongtail_Hash)hash;
+    return 0;
+}
+
 int LongtailPrivate_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -1283,14 +1297,12 @@ int LongtailPrivate_GetPathHash(struct Longtail_HashAPI* hash_api, const char* p
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, out_hash != 0, return EINVAL)
     uint32_t pathlen = (uint32_t)strlen(path);
-    uint64_t hash;
-    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)path, &hash);
+    int err = GetPathHashWithLength(hash_api, path, pathlen, out_hash);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer() failed with %d", err)
         return err;
     }
-    *out_hash = (TLongtail_Hash)hash;
     return 0;
 }
 
@@ -1972,12 +1984,12 @@ static int DynamicChunking(void* context, uint32_t job_id, int detected_error)
             return err;
         }
     }
-
-    if (IsDirPath(hash_job->m_Path))
+    if (hash_job->m_SizeRange == 0)
     {
         *hash_job->m_AssetChunkCount = 0;
         return 0;
     }
+
     uint32_t chunk_count = 0;
 
     struct Longtail_StorageAPI* storage_api = hash_job->m_StorageAPI;
@@ -7319,13 +7331,11 @@ static SORTFUNC(SortPathShortToLong)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
 
-    const struct Longtail_VersionIndex* version_index = (const struct Longtail_VersionIndex*)context;
+        const uint32_t* asset_path_lengths = (const uint32_t*)context;
     uint32_t a = *(const uint32_t*)a_ptr;
     uint32_t b = *(const uint32_t*)b_ptr;
-    const char* a_path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
-    const char* b_path = &version_index->m_NameData[version_index->m_NameOffsets[b]];
-    size_t a_len = strlen(a_path);
-    size_t b_len = strlen(b_path);
+    uint32_t a_len = asset_path_lengths[a];
+    uint32_t b_len = asset_path_lengths[b];
     if (a_len < b_len)
     {
         return -1;
@@ -7360,15 +7370,28 @@ static SORTFUNC(SortPathLongToShort)
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
-
-    const struct Longtail_VersionIndex* version_index = (const struct Longtail_VersionIndex*)context;
+    const uint32_t* asset_path_lengths = (const uint32_t*)context;
     uint32_t a = *(const uint32_t*)a_ptr;
     uint32_t b = *(const uint32_t*)b_ptr;
-    const char* a_path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
-    const char* b_path = &version_index->m_NameData[version_index->m_NameOffsets[b]];
-    size_t a_len = strlen(a_path);
-    size_t b_len = strlen(b_path);
-    return (a_len < b_len) ? 1 : (a_len > b_len) ? -1 : 0;
+    uint32_t a_len = asset_path_lengths[a];
+    uint32_t b_len = asset_path_lengths[b];
+    if (a_len < b_len)
+    {
+        return 1;
+    }
+    if (a_len > b_len)
+    {
+        return -1;
+    }
+    if (a < b)
+    {
+        return 1;
+    }
+    if (a > b)
+    {
+        return -1;
+    }
+    return 0;
 }
 
 static size_t GetVersionDiffDataSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_content_count, uint32_t modified_permission_count)
@@ -7475,6 +7498,8 @@ int Longtail_CreateVersionDiff(
         sizeof(uint32_t) * source_asset_count +
         sizeof(uint32_t) * target_asset_count +
         sizeof(uint32_t) * source_asset_count +
+        sizeof(uint32_t) * target_asset_count +
+        sizeof(uint32_t) * source_asset_count +
         sizeof(uint32_t) * target_asset_count;
     void* work_mem = Longtail_Alloc("CreateVersionDiff", work_mem_size);
     uint8_t* p = (uint8_t*)work_mem;
@@ -7496,32 +7521,63 @@ int Longtail_CreateVersionDiff(
     uint32_t* modified_source_permissions_indexes = &modified_target_content_indexes[target_asset_count];
     uint32_t* modified_target_permissions_indexes = &modified_source_permissions_indexes[source_asset_count];
 
-    for (uint32_t i = 0; i < source_asset_count; ++i)
+    uint32_t* source_assets_path_lengths = &modified_target_permissions_indexes[target_asset_count];
+    uint32_t* target_assets_path_lengths = &source_assets_path_lengths[source_asset_count];
+
+    if (*source_version->m_Version < LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
         // We are re-hashing since we might have an older version hash that is incompatible
-        const char* path = &source_version->m_NameData[source_version->m_NameOffsets[i]];
-        int err = LongtailPrivate_GetPathHash(hash_api, path, &source_path_hashes[i]);
-        if (err)
+        for (uint32_t i = 0; i < source_asset_count; ++i)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
-            Longtail_Free(work_mem);
-            return err;
+            const char* path = &source_version->m_NameData[source_version->m_NameOffsets[i]];
+            source_assets_path_lengths[i] = (uint32_t)strlen(path);
+            int err = GetPathHashWithLength(hash_api, path, source_assets_path_lengths[i], &source_path_hashes[i]);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
+                Longtail_Free(work_mem);
+                return err;
+            }
+            LongtailPrivate_LookupTable_Put(source_path_hash_to_index, source_path_hashes[i], i);
         }
-        LongtailPrivate_LookupTable_Put(source_path_hash_to_index, source_path_hashes[i], i);
+    }
+    else
+    {
+        memcpy(source_path_hashes, source_version->m_PathHashes, sizeof(TLongtail_Hash) * source_asset_count);
+        for (uint32_t i = 0; i < source_asset_count; ++i)
+        {
+            const char* path = &source_version->m_NameData[source_version->m_NameOffsets[i]];
+            source_assets_path_lengths[i] = (uint32_t)strlen(path);
+            LongtailPrivate_LookupTable_Put(source_path_hash_to_index, source_version->m_PathHashes[i], i);
+        }
     }
 
-    for (uint32_t i = 0; i < target_asset_count; ++i)
+    if (*target_version->m_Version < LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
         // We are re-hashing since we might have an older version hash that is incompatible
-        const char* path = &target_version->m_NameData[target_version->m_NameOffsets[i]];
-        int err = LongtailPrivate_GetPathHash(hash_api, path, &target_path_hashes[i]);
-        if (err)
+        for (uint32_t i = 0; i < target_asset_count; ++i)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
-            Longtail_Free(work_mem);
-            return err;
+            const char* path = &target_version->m_NameData[target_version->m_NameOffsets[i]];
+            target_assets_path_lengths[i] = (uint32_t)strlen(path);
+            int err = GetPathHashWithLength(hash_api, path, target_assets_path_lengths[i], &target_path_hashes[i]);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
+                Longtail_Free(work_mem);
+                return err;
+            }
+            LongtailPrivate_LookupTable_Put(target_path_hash_to_index, target_path_hashes[i], i);
         }
-        LongtailPrivate_LookupTable_Put(target_path_hash_to_index, target_path_hashes[i], i);
+    }
+    else
+    {
+        memcpy(target_path_hashes, target_version->m_PathHashes, sizeof(TLongtail_Hash) * target_asset_count);
+        for (uint32_t i = 0; i < target_asset_count; ++i)
+        {
+            const char* path = &target_version->m_NameData[target_version->m_NameOffsets[i]];
+            target_assets_path_lengths[i] = (uint32_t)strlen(path);
+            LongtailPrivate_LookupTable_Put(target_path_hash_to_index, target_version->m_PathHashes[i], i);
+        }
     }
 
     qsort(source_path_hashes, source_asset_count, sizeof(TLongtail_Hash), CompareHashes);
@@ -7665,8 +7721,8 @@ int Longtail_CreateVersionDiff(
     memmove(version_diff->m_SourcePermissionsModifiedAssetIndexes, modified_source_permissions_indexes, sizeof(uint32_t) * modified_permissions_count);
     memmove(version_diff->m_TargetPermissionsModifiedAssetIndexes, modified_target_permissions_indexes, sizeof(uint32_t) * modified_permissions_count);
 
-    QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
-    QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
+    QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_assets_path_lengths);
+    QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_assets_path_lengths);
 
     Longtail_Free(work_mem);
     *out_version_diff = version_diff;
