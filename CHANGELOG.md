@@ -21,11 +21,19 @@
   - `Longtail_UnlockRWLockRead`
   - `Longtail_UnlockRWLockWrite`
 - **CHANGED API** `Longtail_ConcurrentChunkWriteAPI***`
+- **CHANGED API** `Longtail_StorageAPI.OpenAppend` added to `Longtail_StorageAPI` to open files without truncating existing data
+- **CHANGED API** `Longtail_CreateConcurrentChunkWriteAPI` changed to take `source_version_index` and `version_diff`
+- **CHANGED API** `Longtail_ConcurrentChunkWriteAPI` refactored to use asset index and open/close files instead of keeping all open during entire lifetime
+  - `Longtail_ConcurrentChunkWriteAPI.CreateDir` now takes asset index instead of version local path
+  - `Longtail_ConcurrentChunkWriteAPI.Open` now takes asset index instead of version local path and dropping `chunk_write_count` parameter
+  - `Longtail_ConcurrentChunkWriteAPI.Write` now takes asset index instead of version local path and dropping `chunk_write_count` parameter
+- **CHANGED API** `Longtail_SetMonitor` callback functions refactored to accomodate changes in `Longtail_ConcurrentChunkWriteAPI`
 - **FIXED** Fixed memory leaks in command tool
 - **FIXED** `Longtail_ChangeVersion2()` can now handle workloads with a block count larger than 65535
 - **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full
 - **FIXED** Bikeshed JobAPI::CreateJobs implementation now properly drains both task channels when task queue is full
 - **FIXED** Make sure we retain order of assets with equal length when sorting them
+- **FIXED** Fixed excessive "Disk Used" increase during `Longtail_ChangeVersion2` execution causing Out Of Disk space errors
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
 - **UPDATED** Update of ZStd: 1.5.5 https://github.com/facebook/zstd/releases/tag/v1.5.5
 - **UPDATED** Update of Blake3: 1.5.0 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.0
