@@ -33,7 +33,17 @@
 - **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full
 - **FIXED** Bikeshed JobAPI::CreateJobs implementation now properly drains both task channels when task queue is full
 - **FIXED** Make sure we retain order of assets with equal length when sorting them
-- **FIXED** Fixed excessive "Disk Used" increase during `Longtail_ChangeVersion2` execution causing Out Of Disk space errors
+- **FIXED** Fixed excessive "Disk Used" increase during `Longtail_ChangeVersion2` execution causing Out Of Disk space errors.
+  The changes also improves performance for more common cases with smaller archive sizes (60 Gb raw data/many files) but causes a small regression compared to 0.4.1 for archives with many very large files. It is still performing much more reasonable than 0.4.0 for these cases.
+  | Version | Files | Raw Size | Compressed Size | Unpack Time | Peak Memory |
+  |-|-|-|-|-|-|
+  |0.4.0|1019|735 GB|214 GB|2h44m26s|7.9 GB|
+  |0.4.1|1019|735 GB|214 GB|0h12m14s|1.9 GB|
+  |0.4.2|1019|735 GB|214 GB|0h14m04s|2.2 GB|
+  |0.4.0|239 340|60 GB|17 GB|0h01m24s|4.2 GB|
+  |0.4.1|239 340|60 GB|17 GB|0h02m48s|0.9 GB|
+  |0.4.2|239 340|60 GB|17 GB|0h01m12s|0.9 GB|
+
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
 - **UPDATED** Update of ZStd: 1.5.5 https://github.com/facebook/zstd/releases/tag/v1.5.5
 - **UPDATED** Update of Blake3: 1.5.0 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.0
