@@ -181,15 +181,6 @@ void MonitorAssetWrite(const struct Longtail_StoreIndex* store_index, const stru
     }
 }
 
-//void MonitorAssetComplete(const struct Longtail_VersionIndex* version_index, uint32_t asset_index, int err)
-//{
-//    if (MonitorAssetInfos)
-//    {
-//        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_AccessCount, 1);
-////        Longtail_AtomicAdd64(&MonitorAssetInfos[asset_index].m_WriteCount, 1);
-//    }
-//}
-
 struct MonitorChunkInfo
 {
     TLongtail_Atomic64 m_AccessCount;
