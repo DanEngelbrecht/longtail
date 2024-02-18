@@ -396,10 +396,8 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
 }
 
 int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, asset_index); }
-//int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, chunk_write_count, out_open_file); }
-int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, asset_index, out_open_file); }
-void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file) { concurrent_file_write_api->Close(concurrent_file_write_api, in_open_file); }
-//int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, chunk_count, input, out_chunks_remaining); }
+int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index) { return concurrent_file_write_api->Open(concurrent_file_write_api, asset_index); }
+void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index) { concurrent_file_write_api->Close(concurrent_file_write_api, asset_index); }
 int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index, uint64_t offset, uint32_t size, const void* input) { return concurrent_file_write_api->Write(concurrent_file_write_api, asset_index, offset, size, input); }
 int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api) { return concurrent_file_write_api->Flush(concurrent_file_write_api); }
 
@@ -8273,15 +8271,14 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         }
         else
         {
-            Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
-            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_index, &asset_file_handle);
+            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_index);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "m_ConcurrentChunkWriteApi->Open() failed with %d", err)
                 return err;
             }
             LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index, err);
-            job->m_ConcurrentChunkWriteApi->Close(job->m_ConcurrentChunkWriteApi, asset_file_handle);
+            job->m_ConcurrentChunkWriteApi->Close(job->m_ConcurrentChunkWriteApi, asset_index);
         }
         LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index);
     }
@@ -8371,8 +8368,8 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
 
     const uint8_t* block_data = (const uint8_t*)stored_block->m_BlockData;
 
+    int asset_is_open = 0;
     uint32_t last_asset_index = 0;
-    Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
 
     TBlockChunkWriteArray write_infos = job->m_Context->m_BlockWriteInfos->m_BlockWritesArrays[block_index];
     ptrdiff_t block_write_chunk_info_count = arrlen(write_infos);
@@ -8386,30 +8383,30 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         const uint32_t asset_index = block_chunk_write_info->AssetIndex;
         const char* asset_path = &job->m_Context->m_VersionIndex->m_NameData[job->m_Context->m_VersionIndex->m_NameOffsets[asset_index]];
 
-        if (asset_file_handle != 0)
+        if (asset_is_open)
         {
             if (last_asset_index != asset_index)
             {
-                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
-                asset_file_handle = 0;
+                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, last_asset_index);
+                asset_is_open = 0;
             }
         }
 
-        if (asset_file_handle == 0)
+        if (asset_is_open == 0)
         {
             uint32_t asset_chunk_count = job->m_Context->m_VersionIndex->m_AssetChunkCounts[asset_index];
-            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_index, &asset_file_handle);
+            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Open() failed for `%s` with %d", asset_path, err)
                 LONGTAIL_MONTITOR_ASSET_OPEN(job->m_Context->m_VersionIndex, asset_index, err);
                 Longtail_Free(work_mem);
                 SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-//                LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, err);
                 LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, err);
                 return err;
             }
             last_asset_index = asset_index;
+            asset_is_open = 1;
         }
 
         uint32_t chunk_index = block_chunk_write_info->ChunkIndex;
@@ -8417,7 +8414,8 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         uint32_t* chunk_index_in_block_ptr = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, chunk_hash);
         if (chunk_index_in_block_ptr == 0)
         {
-            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
+            asset_is_open = 0;
             LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
             Longtail_Free(work_mem);
@@ -8449,7 +8447,8 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
             uint32_t* chunk_index_in_block_ptr_next = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, chunk_hash_next);
             if (chunk_index_in_block_ptr_next == 0)
             {
-                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
+                asset_is_open = 0;
                 LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
                 Longtail_Free(work_mem);
@@ -8473,7 +8472,8 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         LONGTAIL_MONTITOR_ASSET_WRITE(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, asset_index, block_chunk_write_info->Offset, chunk_run_size, chunk_index, chunk_index_in_block, chunk_run_count, block_index, chunk_offset_in_block, err);
         if (err)
         {
-            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
+            asset_is_open = 0;
             LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write() failed for `%s` with %d", asset_path, err)
             Longtail_Free(work_mem);
@@ -8483,11 +8483,11 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         }
         block_write_chunk_info_index += chunk_run_count;
     }
-    if (asset_file_handle != 0)
+    if (asset_is_open != 0)
     {
-        job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle);
+        job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, last_asset_index);
+        asset_is_open = 0;
         LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, last_asset_index);
-        asset_file_handle = 0;
     }
 
     Longtail_Free(work_mem);

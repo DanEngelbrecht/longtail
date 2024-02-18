@@ -54,22 +54,18 @@ static int OpenFileEntry(struct ConcurrentChunkWriteAPI* api, struct OpenFileEnt
 
 static int ConcurrentChunkWriteAPI_Open(
     struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api,
-    uint32_t asset_index,
-    Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file)
+    uint32_t asset_index)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(concurrent_chunk_write_api, "%p"),
-        LONGTAIL_LOGFIELD(asset_index, "%u"),
-        //        LONGTAIL_LOGFIELD(chunk_write_count, "%u"),
-        LONGTAIL_LOGFIELD(out_open_file, "%p")
+        LONGTAIL_LOGFIELD(asset_index, "%u")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 #else
     struct Longtail_LogContextFmt_Private* ctx = 0;
 #endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, concurrent_chunk_write_api != 0, return EINVAL);
-    LONGTAIL_VALIDATE_INPUT(ctx, out_open_file != 0, return EINVAL);
 
     struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_chunk_write_api;
     LONGTAIL_VALIDATE_INPUT(ctx, asset_index < *api->m_VersionIndex->m_AssetCount, return EINVAL);
@@ -90,7 +86,6 @@ static int ConcurrentChunkWriteAPI_Open(
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenFileEntry() failed with %d", err)
             return err;
         }
-        *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
         return 0;
     }
 
@@ -98,7 +93,6 @@ static int ConcurrentChunkWriteAPI_Open(
     if (open_file_entry->m_FileHandle != 0)
     {
         Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, 1);
-        *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
         Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
         return 0;
     }
@@ -115,7 +109,6 @@ static int ConcurrentChunkWriteAPI_Open(
     if (open_file_entry->m_FileHandle != 0)
     {
         Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, 1);
-        *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
         Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
         return 0;
     }
@@ -127,7 +120,6 @@ static int ConcurrentChunkWriteAPI_Open(
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenFileEntry() failed with %d", err)
         return err;
     }
-    *out_open_file = (Longtail_ConcurrentChunkWriteAPI_HOpenFile)open_file_entry;
     Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
 
     return 0;
@@ -176,7 +168,7 @@ static int ConcurrentChunkWriteAPI_Write(
 
 static void ConcurrentChunkWriteAPI_Close(
     struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api,
-    Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file)
+    uint32_t asset_index)
 {
 #if defined(LONGTAIL_ASSERTS)
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -187,10 +179,11 @@ static void ConcurrentChunkWriteAPI_Close(
 #endif // defined(LONGTAIL_ASSERTS)
 
     LONGTAIL_VALIDATE_INPUT(ctx, concurrent_chunk_write_api != 0, return);
-    LONGTAIL_VALIDATE_INPUT(ctx, in_open_file != 0, return);
 
     struct ConcurrentChunkWriteAPI* api = (struct ConcurrentChunkWriteAPI*)concurrent_chunk_write_api;
-    struct OpenFileEntry* open_file_entry = (struct OpenFileEntry*)in_open_file;
+    LONGTAIL_VALIDATE_INPUT(ctx, asset_index < *api->m_VersionIndex->m_AssetCount, return );
+    struct OpenFileEntry* open_file_entry = api->m_AssetEntries[asset_index];
+
     int32_t OpenCount = Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, -1);
     if (open_file_entry->m_SpinLock == 0)
     {
