@@ -24,7 +24,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
-        name: linux_x64-${{matrix.target}}-${{matrix.config}}
+        name: linux-x64-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.o
@@ -64,7 +64,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
-        name: darwin_${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
+        name: darwin-${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.o
@@ -107,7 +107,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
-        name: win32_x64-${{matrix.target}}-${{matrix.config}}
+        name: win32-x64-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.obj
