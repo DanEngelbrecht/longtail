@@ -20,37 +20,9 @@ struct ConcurrentChunkWriteAPI
     struct Longtail_ConcurrentChunkWriteAPI m_ConcurrentChunkWriteAPI;
     struct Longtail_StorageAPI* m_StorageAPI;
     const struct Longtail_VersionIndex* m_VersionIndex;
-//    uint32_t m_MaxOpenFileEntryCount;
     struct OpenFileEntry** m_AssetEntries;
     char* m_BasePath;
 };
-
-static int OpenFileEntry(struct ConcurrentChunkWriteAPI* api, struct OpenFileEntry* open_file_entry)
-{
-    if (open_file_entry->m_FileHandle == 0)
-    {
-        if (open_file_entry->m_OpenCount == 0)
-        {
-            int err = api->m_StorageAPI->OpenWriteFile(api->m_StorageAPI, open_file_entry->m_FullPath, 0, &open_file_entry->m_FileHandle);
-            if (err != 0)
-            {
-                return err;
-            }
-        }
-        else
-        {
-            int err = api->m_StorageAPI->OpenAppendFile(api->m_StorageAPI, open_file_entry->m_FullPath, &open_file_entry->m_FileHandle);
-            if (err != 0)
-            {
-                return err;
-            }
-        }
-
-        open_file_entry->m_OpenCount++;
-    }
-    Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, 1);
-    return 0;
-}
 
 static int ConcurrentChunkWriteAPI_Open(
     struct Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api,
@@ -80,18 +52,35 @@ static int ConcurrentChunkWriteAPI_Open(
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "EnsureParentPathExists() failed with %d", err)
             return err;
         }
-        err = OpenFileEntry(api, open_file_entry);
+        err = api->m_StorageAPI->OpenWriteFile(api->m_StorageAPI, open_file_entry->m_FullPath, 0, &open_file_entry->m_FileHandle);
         if (err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenFileEntry() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenWriteFile() failed with %d", err)
             return err;
         }
+        open_file_entry->m_OpenCount++;
+        Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, 1);
         return 0;
     }
 
     Longtail_LockSpinLock(open_file_entry->m_SpinLock);
     if (open_file_entry->m_FileHandle != 0)
     {
+        Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, 1);
+        Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
+        return 0;
+    }
+    if (open_file_entry->m_OpenCount > 0)
+    {
+        int err = api->m_StorageAPI->OpenAppendFile(api->m_StorageAPI, open_file_entry->m_FullPath, &open_file_entry->m_FileHandle);
+        if (err != 0)
+        {
+            Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenAppendFile() failed with %d", err)
+            return err;
+        }
+
+        open_file_entry->m_OpenCount++;
         Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, 1);
         Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
         return 0;
@@ -113,13 +102,22 @@ static int ConcurrentChunkWriteAPI_Open(
         return 0;
     }
 
-    err = OpenFileEntry(api, open_file_entry);
+    if (open_file_entry->m_OpenCount == 0)
+    {
+        err = api->m_StorageAPI->OpenWriteFile(api->m_StorageAPI, open_file_entry->m_FullPath, 0, &open_file_entry->m_FileHandle);
+    }
+    else
+    {
+        err = api->m_StorageAPI->OpenAppendFile(api->m_StorageAPI, open_file_entry->m_FullPath, &open_file_entry->m_FileHandle);
+    }
     if (err)
     {
         Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenFileEntry() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenWriteFile/OpenAppendFile() failed with %d", err)
         return err;
     }
+    open_file_entry->m_OpenCount++;
+    Longtail_AtomicAdd32(&open_file_entry->m_ActiveOpenCount, 1);
     Longtail_UnlockSpinLock(open_file_entry->m_SpinLock);
 
     return 0;
@@ -388,7 +386,7 @@ static int AllocateFileEntry(
     if (new_open_file_entry_mem == 0)
     {
         Longtail_Free(full_asset_path);
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenWriteFile() failed with %d", ENOMEM)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_Alloc() failed with %d", ENOMEM)
         return ENOMEM;
     }
     char* p = (char*)new_open_file_entry_mem;
@@ -401,7 +399,7 @@ static int AllocateFileEntry(
         {
             Longtail_Free((void*)new_open_file_entry);
             Longtail_Free(full_asset_path);
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "OpenWriteFile() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateSpinLock() failed with %d", err)
             return err;
         }
         p += Longtail_GetSpinLockSize();
