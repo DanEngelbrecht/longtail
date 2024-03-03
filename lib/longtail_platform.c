@@ -379,48 +379,6 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
     ReleaseSRWLockExclusive(&spin_lock->m_Lock);
 }
 
-struct Longtail_RWLock
-{
-    SRWLOCK m_RWLock;
-};
-
-size_t  Longtail_GetRWLockSize()
-{
-    return sizeof(struct Longtail_RWLock);
-}
-
-int Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock)
-{
-    HLongtail_RWLock rwlock = (HLongtail_RWLock)mem;
-    InitializeSRWLock(&rwlock->m_RWLock);
-    *out_rwlock = rwlock;
-    return 0;
-}
-
-void Longtail_DeleteRWLock(HLongtail_RWLock rwlock)
-{
-}
-
-void Longtail_LockRWLockRead(HLongtail_RWLock rwlock)
-{
-    AcquireSRWLockShared(&rwlock->m_RWLock);
-}
-
-void Longtail_LockRWLockWrite(HLongtail_RWLock rwlock)
-{
-    AcquireSRWLockExclusive(&rwlock->m_RWLock);
-}
-
-void Longtail_UnlockRWLockRead(HLongtail_RWLock rwlock)
-{
-    ReleaseSRWLockShared(&rwlock->m_RWLock);
-}
-
-void Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock)
-{
-    ReleaseSRWLockExclusive(&rwlock->m_RWLock);
-}
-
 static wchar_t* MakeWCharString(const char* s, wchar_t* buffer, size_t buffer_size)
 {
     struct Longtail_LogContextFmt_Private* ctx = 0;
@@ -905,12 +863,12 @@ int Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file)
     return 0;
 }
 
-DWORD NativeOpenWriteFileWithRetry(wchar_t* long_path, DWORD create_disposition, HANDLE* out_handle)
+DWORD NativeOpenWriteFileWithRetry(wchar_t* long_path, DWORD desired_access, DWORD create_disposition, HANDLE* out_handle)
 {
     int retry_count = 10;
     while (1)
     {
-        HANDLE handle = CreateFileW(long_path, GENERIC_READ | GENERIC_WRITE, 0, 0, create_disposition, 0, 0);
+        HANDLE handle = CreateFileW(long_path, desired_access, 0, 0, create_disposition, 0, 0);
         if (handle == INVALID_HANDLE_VALUE)
         {
             DWORD error = GetLastError();
@@ -937,7 +895,7 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
     wchar_t long_path_buffer[512];
     wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     HANDLE handle;
-    DWORD error = NativeOpenWriteFileWithRetry(long_path, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, &handle);
+    DWORD error = NativeOpenWriteFileWithRetry(long_path, GENERIC_WRITE, initial_size == 0 ? CREATE_ALWAYS : OPEN_ALWAYS, &handle);
     if (long_path != long_path_buffer)
     {
         Longtail_Free(long_path);
@@ -963,6 +921,25 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
             CloseHandle(handle);
             return e;
         }
+    }
+
+    *out_write_file = (HLongtail_OpenFile)handle;
+    return 0;
+}
+
+int Longtail_OpenAppendFile(const char* path, HLongtail_OpenFile* out_write_file)
+{
+    wchar_t long_path_buffer[512];
+    wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
+    HANDLE handle;
+    DWORD error = NativeOpenWriteFileWithRetry(long_path, GENERIC_WRITE, OPEN_ALWAYS, &handle);
+    if (long_path != long_path_buffer)
+    {
+        Longtail_Free(long_path);
+    }
+    if (error != ERROR_SUCCESS)
+    {
+        return Win32ErrorToErrno(error);
     }
 
     *out_write_file = (HLongtail_OpenFile)handle;
@@ -1862,101 +1839,6 @@ void Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock)
 
 #endif
 
-struct Longtail_RWLock
-{
-    pthread_rwlock_t m_RWLock;
-};
-
-size_t  Longtail_GetRWLockSize()
-{
-    return sizeof(struct Longtail_RWLock);
-}
-
-int Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock)
-{
-    HLongtail_RWLock rwlock = (HLongtail_RWLock)mem;
-    int err = pthread_rwlock_init(&rwlock->m_RWLock, 0);
-    if (err)
-    {
-        return err;
-    }
-    *out_rwlock = rwlock;
-    return 0;
-}
-
-void Longtail_DeleteRWLock(HLongtail_RWLock rwlock)
-{
-    pthread_rwlock_destroy(&rwlock->m_RWLock);
-}
-
-void Longtail_LockRWLockRead(HLongtail_RWLock rwlock)
-{
-#if defined(LONGTAIL_ASSERTS)
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(rwlock, "%p"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-
-    int err = pthread_rwlock_rdlock(&rwlock->m_RWLock);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to acquire read lock, reason: %d", err)
-    }
-}
-
-void Longtail_LockRWLockWrite(HLongtail_RWLock rwlock)
-{
-#if defined(LONGTAIL_ASSERTS)
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(rwlock, "%p"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-
-    int err = pthread_rwlock_wrlock(&rwlock->m_RWLock);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to acquire write lock, reason: %d", err)
-    }
-}
-
-void Longtail_UnlockRWLockRead(HLongtail_RWLock rwlock)
-{
-#if defined(LONGTAIL_ASSERTS)
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(rwlock, "%p"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-
-    int err = pthread_rwlock_unlock(&rwlock->m_RWLock);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to unlock read lock, reason: %d", err)
-    }
-}
-
-void Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock)
-{
-#if defined(LONGTAIL_ASSERTS)
-    MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(rwlock, "%p"),
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
-#else
-    struct Longtail_LogContextFmt_Private* ctx = 0;
-#endif // defined(LONGTAIL_ASSERTS)
-
-    int err = pthread_rwlock_unlock(&rwlock->m_RWLock);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to unlock write lock, reason: %d", err)
-    }
-}
-
 int Longtail_CreateDirectory(const char* path)
 {
     int err = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -2259,7 +2141,7 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
         int e = errno;
         return e;
     }
-    if  (initial_size > 0)
+    if (initial_size > 0)
     {
         int err = ftruncate64(fileno(f), (off64_t)initial_size);
         if (err != 0)
@@ -2268,6 +2150,18 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
             fclose(f);
             return e;
         }
+    }
+    *out_write_file = (HLongtail_OpenFile)f;
+    return 0;
+}
+
+int Longtail_OpenAppendFile(const char* path, HLongtail_OpenFile* out_write_file)
+{
+    FILE* f = fopen(path, "ab");
+    if (!f)
+    {
+        int e = errno;
+        return e;
     }
     *out_write_file = (HLongtail_OpenFile)f;
     return 0;

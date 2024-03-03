@@ -128,9 +128,7 @@ static uint32_t HPCDCDiscriminatorFromAvg(double avg)
     return (uint32_t)(avg / (-1.42888852e-7*avg + 1.33237515));
 }
 
-// TODO: Create a cache for chunkers?
-
-int Longtail_HPCDCCreateChunker(
+static int Longtail_HPCDCCreateChunker(
     struct Longtail_HPCDCChunkerParams* params,
     struct Longtail_HPCDCChunker* optional_cached_chunker,
     struct Longtail_HPCDCChunker** out_chunker)

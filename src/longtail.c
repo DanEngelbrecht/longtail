@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 #define LONGTAIL_VERSION(major, minor, patch)  ((((uint32_t)major) << 24) | ((uint32_t)minor << 16) | ((uint32_t)patch))
+#define LONGTAIL_VERSION_INDEX_VERSION_0_0_1  LONGTAIL_VERSION(0,0,1)
 #define LONGTAIL_VERSION_INDEX_VERSION_0_0_2  LONGTAIL_VERSION(0,0,2)
 #define LONGTAIL_STORE_INDEX_VERSION_1_0_0    LONGTAIL_VERSION(1,0,0)
 #define LONGTAIL_ARCHIVE_VERSION_0_0_1        LONGTAIL_VERSION(0,0,1)
@@ -264,7 +265,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_UnlockFileFunc unlock_file_func,
     Longtail_Storage_GetParentPathFunc get_parent_path_func,
     Longtail_Storage_MapFileFunc map_file_func,
-    Longtail_Storage_UnmapFileFunc unmap_file_func)
+    Longtail_Storage_UnmapFileFunc unmap_file_func,
+    Longtail_Storage_OpenAppendFileFunc open_append_file_func)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -293,7 +295,8 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
         LONGTAIL_LOGFIELD(unlock_file_func, "%p"),
         LONGTAIL_LOGFIELD(get_parent_path_func, "%p"),
         LONGTAIL_LOGFIELD(map_file_func, "%p"),
-        LONGTAIL_LOGFIELD(unmap_file_func, "%p")
+        LONGTAIL_LOGFIELD(unmap_file_func, "%p"),
+        LONGTAIL_LOGFIELD(open_append_file_func, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
@@ -324,6 +327,7 @@ struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     api->GetParentPath = get_parent_path_func;
     api->MapFile = map_file_func;
     api->UnMapFile = unmap_file_func;
+    api->OpenAppendFile = open_append_file_func;
     return api;
 }
 
@@ -352,6 +356,7 @@ int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtai
 char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
 int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
 void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { storage_api->UnMapFile(storage_api, m); }
+void Longtail_Storage_OpenAppendfile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file) { storage_api->OpenAppendFile(storage_api, path, out_open_file); }
 
 ////////////// ConcurrentChunkWriteAPI
 
@@ -365,6 +370,7 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
     Longtail_DisposeFunc dispose_func,
     Longtail_ConcurrentChunkWrite_CreateDirFunc create_dir_func,
     Longtail_ConcurrentChunkWrite_OpenFunc open_func,
+    Longtail_ConcurrentChunkWrite_CloseFunc close_func,
     Longtail_ConcurrentChunkWrite_WriteFunc write_func,
     Longtail_ConcurrentChunkWrite_FlushFunc flush_func)
 {
@@ -373,23 +379,26 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
         LONGTAIL_LOGFIELD(dispose_func, "%p"),
         LONGTAIL_LOGFIELD(create_dir_func, "%p"),
         LONGTAIL_LOGFIELD(open_func, "%p"),
+        LONGTAIL_LOGFIELD(close_func, "%p"),
         LONGTAIL_LOGFIELD(write_func, "%p"),
         LONGTAIL_LOGFIELD(flush_func, "%p")
-        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
     struct Longtail_ConcurrentChunkWriteAPI* api = (struct Longtail_ConcurrentChunkWriteAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->CreateDir = create_dir_func;
     api->Open = open_func;
+    api->Close = close_func;
     api->Write = write_func;
     api->Flush = flush_func;
     return api;
 }
 
-int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, path); }
-int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file) { return concurrent_file_write_api->Open(concurrent_file_write_api, path, chunk_write_count, out_open_file); }
-int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input, uint32_t* out_chunks_remaining) { return concurrent_file_write_api->Write(concurrent_file_write_api, in_open_file, offset, size, chunk_count, input, out_chunks_remaining); }
+int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index) { return concurrent_file_write_api->CreateDir(concurrent_file_write_api, asset_index); }
+int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index) { return concurrent_file_write_api->Open(concurrent_file_write_api, asset_index); }
+void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index) { concurrent_file_write_api->Close(concurrent_file_write_api, asset_index); }
+int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index, uint64_t offset, uint32_t size, const void* input) { return concurrent_file_write_api->Write(concurrent_file_write_api, asset_index, offset, size, input); }
 int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api) { return concurrent_file_write_api->Flush(concurrent_file_write_api); }
 
 ////////////// ProgressAPI
@@ -738,16 +747,16 @@ static struct Longtail_Monitor Monitor_private = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #define LONGTAIL_MONTITOR_BLOCK_LOADED(store_index, block_index, err) if (Monitor_private.BlockLoaded) {Monitor_private.BlockLoaded(store_index, block_index, err);}
 #define LONGTAIL_MONTITOR_BLOCK_COMPLETE(store_index, block_index, err) if (Monitor_private.BlockLoadComplete) {Monitor_private.BlockLoadComplete(store_index, block_index, err);}
 
-#define LONGTAIL_MONITOR_ASSET_REMOVE(version_index, asset_index) if (Monitor_private.AssetRemove) {Monitor_private.AssetRemove(version_index, asset_index);}
-#define LONGTAIL_MONTITOR_ASSET_OPEN(version_index, asset_index) if (Monitor_private.AssetOpen) {Monitor_private.AssetOpen(version_index, asset_index);}
-#define LONGTAIL_MONTITOR_ASSET_WRITE(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset) if (Monitor_private.AssetWrite) {Monitor_private.AssetWrite(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset);}
-#define LONGTAIL_MONTITOR_ASSET_COMPLETE(version_index, asset_index, err) if (Monitor_private.AssetComplete) {Monitor_private.AssetComplete(version_index, asset_index, err);};
+#define LONGTAIL_MONITOR_ASSET_REMOVE(version_index, asset_index, err) if (Monitor_private.AssetRemove) {Monitor_private.AssetRemove(version_index, asset_index, err);}
+#define LONGTAIL_MONTITOR_ASSET_OPEN(version_index, asset_index, err) if (Monitor_private.AssetOpen) {Monitor_private.AssetOpen(version_index, asset_index, err);}
+#define LONGTAIL_MONTITOR_ASSET_WRITE(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset, err) if (Monitor_private.AssetWrite) {Monitor_private.AssetWrite(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset, err);}
+//#define LONGTAIL_MONTITOR_ASSET_COMPLETE(version_index, asset_index, err) if (Monitor_private.AssetComplete) {Monitor_private.AssetComplete(version_index, asset_index, err);};
 
-#define LONGTAIL_MONTITOR_CHUNK_READ(store_index, version_index, block_index, chunk_index, chunk_index_in_block) if (Monitor_private.ChunkRead) {Monitor_private.ChunkRead(store_index, version_index, block_index, chunk_index, chunk_index_in_block);}
+#define LONGTAIL_MONTITOR_CHUNK_READ(store_index, version_index, block_index, chunk_index, chunk_index_in_block, err) if (Monitor_private.ChunkRead) {Monitor_private.ChunkRead(store_index, version_index, block_index, chunk_index, chunk_index_in_block, err);}
 
 #define LONGTAIL_MONTITOR_BLOCK_COMPOSE(store_index, block_index) if (Monitor_private.BlockCompose) {Monitor_private.BlockCompose(store_index, block_index);}
-#define LONGTAIL_MONTITOR_ASSET_READ(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset) if (Monitor_private.AssetRead) {Monitor_private.AssetRead(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset);}
-#define LONGTAIL_MONTITOR_ASSET_CLOSE(version_index, asset_index, err) if (Monitor_private.AssetClose) {Monitor_private.AssetClose(version_index, asset_index, err);}
+#define LONGTAIL_MONTITOR_ASSET_READ(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset, err) if (Monitor_private.AssetRead) {Monitor_private.AssetRead(store_index, version_index, asset_index, read_offset, size, chunk_hash, block_index, block_data_offset, err);}
+#define LONGTAIL_MONTITOR_ASSET_CLOSE(version_index, asset_index) if (Monitor_private.AssetClose) {Monitor_private.AssetClose(version_index, asset_index);}
 #define LONGTAIL_MONITOR_BLOCK_SAVE(store_index, block_index, block_size) if (Monitor_private.BlockSave) {Monitor_private.BlockSave(store_index, block_index, block_size);}
 #define LONGTAIL_MONITOR_BLOCK_SAVED(store_index, block_index, err) if (Monitor_private.BlockSaved) {Monitor_private.BlockSaved(store_index, block_index, err);}
 
@@ -1210,6 +1219,7 @@ struct Longtail_LookupTable* LongtailPrivate_LookupTable_Create(void* mem, uint3
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
 
     struct Longtail_LookupTable* lut = (struct Longtail_LookupTable*)mem;
+    memset(lut, 0xff, LongtailPrivate_LookupTable_GetSize(capacity));
     uint32_t table_size = GetLookupTableSize(capacity);
     lut->m_BucketCount = table_size;
     lut->m_Capacity = capacity;
@@ -1219,8 +1229,8 @@ struct Longtail_LookupTable* LongtailPrivate_LookupTable_Create(void* mem, uint3
     lut->m_Values = (uint32_t*)&lut->m_Keys[capacity];
     lut->m_NextIndex = &lut->m_Values[capacity];
 
-    memset(lut->m_Buckets, 0xff, sizeof(uint32_t) * table_size);
-    memset(lut->m_NextIndex, 0xff, sizeof(uint32_t) * capacity);
+//    memset(lut->m_Buckets, 0xff, sizeof(uint32_t) * table_size);
+//    memset(lut->m_NextIndex, 0xff, sizeof(uint32_t) * capacity);
 
     if (optional_source_entries == 0)
     {
@@ -1257,6 +1267,18 @@ static int IsDirPath(const char* path)
     return path[0] ? path[strlen(path) - 1] == '/' : 0;
 }
 
+static int GetPathHashWithLength(struct Longtail_HashAPI* hash_api, const char* path, uint32_t pathlen, TLongtail_Hash* out_hash)
+{
+    uint64_t hash;
+    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)path, &hash);
+    if (err)
+    {
+        return err;
+    }
+    *out_hash = (TLongtail_Hash)hash;
+    return 0;
+}
+
 int LongtailPrivate_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path, TLongtail_Hash* out_hash)
 {
 #if defined(LONGTAIL_ASSERTS)
@@ -1273,14 +1295,12 @@ int LongtailPrivate_GetPathHash(struct Longtail_HashAPI* hash_api, const char* p
     LONGTAIL_FATAL_ASSERT(ctx, path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, out_hash != 0, return EINVAL)
     uint32_t pathlen = (uint32_t)strlen(path);
-    uint64_t hash;
-    int err = hash_api->HashBuffer(hash_api, pathlen, (void*)path, &hash);
+    int err = GetPathHashWithLength(hash_api, path, pathlen, out_hash);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "hash_api->HashBuffer() failed with %d", err)
         return err;
     }
-    *out_hash = (TLongtail_Hash)hash;
     return 0;
 }
 
@@ -1962,12 +1982,12 @@ static int DynamicChunking(void* context, uint32_t job_id, int detected_error)
             return err;
         }
     }
-
-    if (IsDirPath(hash_job->m_Path))
+    if (hash_job->m_SizeRange == 0)
     {
         *hash_job->m_AssetChunkCount = 0;
         return 0;
     }
+
     uint32_t chunk_count = 0;
 
     struct Longtail_StorageAPI* storage_api = hash_job->m_StorageAPI;
@@ -4616,14 +4636,14 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
             {
                 source_storage_api->CloseFile(source_storage_api, file_handle);
                 file_handle = 0;
-                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, 0);
+                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
             }
             const char* asset_path = &job->m_VersionIndex->m_NameData[next_path_name_offset];
             LONGTAIL_FATAL_ASSERT(ctx, !IsDirPath(asset_path), return EINVAL)
 
-            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index);
             char* full_path = source_storage_api->ConcatPath(source_storage_api, job->m_AssetsFolder, asset_path);
             int err = source_storage_api->OpenReadFile(source_storage_api, full_path, &file_handle);
+            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index, err);
             Longtail_Free(full_path);
             full_path = 0;
             if (err)
@@ -4639,7 +4659,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "source_storage_api->GetSize() failed with %d", err);
                 Longtail_Free(put_block_mem);
-                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, err);
+                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
                 source_storage_api->CloseFile(source_storage_api, file_handle);
                 return err;
             }
@@ -4654,17 +4674,17 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
                 asset_file_size, (asset_offset + chunk_size))
             Longtail_Free(put_block_mem);
             source_storage_api->CloseFile(source_storage_api, file_handle);
-            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index, EBADF);
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index);
             return EBADF;
         }
-        LONGTAIL_MONTITOR_ASSET_READ(job->m_StoreIndex, job->m_VersionIndex, asset_index, asset_offset, chunk_size, chunk_hash, job->m_BlockIndex, write_offset);
         int err = source_storage_api->Read(source_storage_api, file_handle, asset_offset, chunk_size, write_buffer + write_offset);
+        LONGTAIL_MONTITOR_ASSET_READ(job->m_StoreIndex, job->m_VersionIndex, asset_index, asset_offset, chunk_size, chunk_hash, job->m_BlockIndex, write_offset, err);
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "source_storage_api->Read() failed with %d", err);
             Longtail_Free(put_block_mem);
             source_storage_api->CloseFile(source_storage_api, file_handle);
-            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, err);
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
             return err;
         }
         write_offset += chunk_size;
@@ -4674,7 +4694,7 @@ static int WriteContentBlockJob(void* context, uint32_t job_id, int detected_err
     {
         source_storage_api->CloseFile(source_storage_api, file_handle);
         file_handle = 0;
-        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index, 0);
+        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, last_asset_index);
     }
 
     Longtail_InitBlockIndex(block_index_ptr, chunk_count);
@@ -7309,13 +7329,11 @@ static SORTFUNC(SortPathShortToLong)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
 
-    const struct Longtail_VersionIndex* version_index = (const struct Longtail_VersionIndex*)context;
+        const uint32_t* asset_path_lengths = (const uint32_t*)context;
     uint32_t a = *(const uint32_t*)a_ptr;
     uint32_t b = *(const uint32_t*)b_ptr;
-    const char* a_path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
-    const char* b_path = &version_index->m_NameData[version_index->m_NameOffsets[b]];
-    size_t a_len = strlen(a_path);
-    size_t b_len = strlen(b_path);
+    uint32_t a_len = asset_path_lengths[a];
+    uint32_t b_len = asset_path_lengths[b];
     if (a_len < b_len)
     {
         return -1;
@@ -7350,15 +7368,28 @@ static SORTFUNC(SortPathLongToShort)
     LONGTAIL_FATAL_ASSERT(ctx, context != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
     LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
-
-    const struct Longtail_VersionIndex* version_index = (const struct Longtail_VersionIndex*)context;
+    const uint32_t* asset_path_lengths = (const uint32_t*)context;
     uint32_t a = *(const uint32_t*)a_ptr;
     uint32_t b = *(const uint32_t*)b_ptr;
-    const char* a_path = &version_index->m_NameData[version_index->m_NameOffsets[a]];
-    const char* b_path = &version_index->m_NameData[version_index->m_NameOffsets[b]];
-    size_t a_len = strlen(a_path);
-    size_t b_len = strlen(b_path);
-    return (a_len < b_len) ? 1 : (a_len > b_len) ? -1 : 0;
+    uint32_t a_len = asset_path_lengths[a];
+    uint32_t b_len = asset_path_lengths[b];
+    if (a_len < b_len)
+    {
+        return 1;
+    }
+    if (a_len > b_len)
+    {
+        return -1;
+    }
+    if (a < b)
+    {
+        return 1;
+    }
+    if (a > b)
+    {
+        return -1;
+    }
+    return 0;
 }
 
 static size_t GetVersionDiffDataSize(uint32_t removed_count, uint32_t added_count, uint32_t modified_content_count, uint32_t modified_permission_count)
@@ -7465,6 +7496,8 @@ int Longtail_CreateVersionDiff(
         sizeof(uint32_t) * source_asset_count +
         sizeof(uint32_t) * target_asset_count +
         sizeof(uint32_t) * source_asset_count +
+        sizeof(uint32_t) * target_asset_count +
+        sizeof(uint32_t) * source_asset_count +
         sizeof(uint32_t) * target_asset_count;
     void* work_mem = Longtail_Alloc("CreateVersionDiff", work_mem_size);
     uint8_t* p = (uint8_t*)work_mem;
@@ -7486,32 +7519,63 @@ int Longtail_CreateVersionDiff(
     uint32_t* modified_source_permissions_indexes = &modified_target_content_indexes[target_asset_count];
     uint32_t* modified_target_permissions_indexes = &modified_source_permissions_indexes[source_asset_count];
 
-    for (uint32_t i = 0; i < source_asset_count; ++i)
+    uint32_t* source_assets_path_lengths = &modified_target_permissions_indexes[target_asset_count];
+    uint32_t* target_assets_path_lengths = &source_assets_path_lengths[source_asset_count];
+
+    if (*source_version->m_Version < LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
         // We are re-hashing since we might have an older version hash that is incompatible
-        const char* path = &source_version->m_NameData[source_version->m_NameOffsets[i]];
-        int err = LongtailPrivate_GetPathHash(hash_api, path, &source_path_hashes[i]);
-        if (err)
+        for (uint32_t i = 0; i < source_asset_count; ++i)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
-            Longtail_Free(work_mem);
-            return err;
+            const char* path = &source_version->m_NameData[source_version->m_NameOffsets[i]];
+            source_assets_path_lengths[i] = (uint32_t)strlen(path);
+            int err = GetPathHashWithLength(hash_api, path, source_assets_path_lengths[i], &source_path_hashes[i]);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
+                Longtail_Free(work_mem);
+                return err;
+            }
+            LongtailPrivate_LookupTable_Put(source_path_hash_to_index, source_path_hashes[i], i);
         }
-        LongtailPrivate_LookupTable_Put(source_path_hash_to_index, source_path_hashes[i], i);
+    }
+    else
+    {
+        memcpy(source_path_hashes, source_version->m_PathHashes, sizeof(TLongtail_Hash) * source_asset_count);
+        for (uint32_t i = 0; i < source_asset_count; ++i)
+        {
+            const char* path = &source_version->m_NameData[source_version->m_NameOffsets[i]];
+            source_assets_path_lengths[i] = (uint32_t)strlen(path);
+            LongtailPrivate_LookupTable_Put(source_path_hash_to_index, source_version->m_PathHashes[i], i);
+        }
     }
 
-    for (uint32_t i = 0; i < target_asset_count; ++i)
+    if (*target_version->m_Version < LONGTAIL_VERSION_INDEX_VERSION_0_0_2)
     {
         // We are re-hashing since we might have an older version hash that is incompatible
-        const char* path = &target_version->m_NameData[target_version->m_NameOffsets[i]];
-        int err = LongtailPrivate_GetPathHash(hash_api, path, &target_path_hashes[i]);
-        if (err)
+        for (uint32_t i = 0; i < target_asset_count; ++i)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
-            Longtail_Free(work_mem);
-            return err;
+            const char* path = &target_version->m_NameData[target_version->m_NameOffsets[i]];
+            target_assets_path_lengths[i] = (uint32_t)strlen(path);
+            int err = GetPathHashWithLength(hash_api, path, target_assets_path_lengths[i], &target_path_hashes[i]);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "LongtailPrivate_GetPathHash() failed with %d", err)
+                Longtail_Free(work_mem);
+                return err;
+            }
+            LongtailPrivate_LookupTable_Put(target_path_hash_to_index, target_path_hashes[i], i);
         }
-        LongtailPrivate_LookupTable_Put(target_path_hash_to_index, target_path_hashes[i], i);
+    }
+    else
+    {
+        memcpy(target_path_hashes, target_version->m_PathHashes, sizeof(TLongtail_Hash) * target_asset_count);
+        for (uint32_t i = 0; i < target_asset_count; ++i)
+        {
+            const char* path = &target_version->m_NameData[target_version->m_NameOffsets[i]];
+            target_assets_path_lengths[i] = (uint32_t)strlen(path);
+            LongtailPrivate_LookupTable_Put(target_path_hash_to_index, target_version->m_PathHashes[i], i);
+        }
     }
 
     qsort(source_path_hashes, source_asset_count, sizeof(TLongtail_Hash), CompareHashes);
@@ -7655,8 +7719,8 @@ int Longtail_CreateVersionDiff(
     memmove(version_diff->m_SourcePermissionsModifiedAssetIndexes, modified_source_permissions_indexes, sizeof(uint32_t) * modified_permissions_count);
     memmove(version_diff->m_TargetPermissionsModifiedAssetIndexes, modified_target_permissions_indexes, sizeof(uint32_t) * modified_permissions_count);
 
-    QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
-    QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
+    QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_assets_path_lengths);
+    QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_assets_path_lengths);
 
     Longtail_Free(work_mem);
     *out_version_diff = version_diff;
@@ -7740,12 +7804,12 @@ static int CleanUpRemoveAssets(
                     Longtail_Free(remove_indexes);
                     return err;
                 }
-                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index)
                 uint16_t permissions = 0;
                 err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
                 if (err)
                 {
                     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                    LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                     Longtail_Free(full_asset_path);
                     Longtail_Free(remove_indexes);
                     return err;
@@ -7756,6 +7820,7 @@ static int CleanUpRemoveAssets(
                     if (err)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
                         return err;
@@ -7769,12 +7834,14 @@ static int CleanUpRemoveAssets(
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to remove dir `%s`, failed with %d", full_asset_path, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         return err;
                     }
                     Longtail_Free(full_asset_path);
                     full_asset_path = 0;
                     continue;
                 }
+                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, 0)
             }
             else
             {
@@ -7784,12 +7851,12 @@ static int CleanUpRemoveAssets(
                     Longtail_Free(full_asset_path);
                     continue;
                 }
-                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index)
                 uint16_t permissions = 0;
                 err = version_storage_api->GetPermissions(version_storage_api, full_asset_path, &permissions);
                 if (err)
                 {
                     LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->GetPermissions() failed with %d", err)
+                    LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                     Longtail_Free(full_asset_path);
                     Longtail_Free(remove_indexes);
                     return err;
@@ -7800,6 +7867,7 @@ static int CleanUpRemoveAssets(
                     if (err)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed with %d", err)
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
                         return err;
@@ -7811,6 +7879,7 @@ static int CleanUpRemoveAssets(
                     if (!retry_count)
                     {
                         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Can't to file dir `%s`, failed with %d", full_asset_path, err)
+                        LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, err)
                         Longtail_Free(full_asset_path);
                         Longtail_Free(remove_indexes);
                         return err;
@@ -7819,6 +7888,7 @@ static int CleanUpRemoveAssets(
                     full_asset_path = 0;
                     continue;
                 }
+                LONGTAIL_MONITOR_ASSET_REMOVE(source_version, asset_index, 0)
             }
             Longtail_Free(full_asset_path);
             full_asset_path = 0;
@@ -8189,26 +8259,28 @@ static int WriteNonBlockAssetsJob(void* context, uint32_t job_id, int detected_e
         const TBlockChunkWriteArray block_chunk_write_info = &block_write_infos[block_write_chunk_info_index];
         const uint32_t asset_index = block_chunk_write_info->AssetIndex;
         const char* asset_path = &job->m_VersionIndex->m_NameData[job->m_VersionIndex->m_NameOffsets[asset_index]];
-        LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index);
         if (IsDirPath(asset_path))
         {
-            int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_path);
+            int err = job->m_ConcurrentChunkWriteApi->CreateDir(job->m_ConcurrentChunkWriteApi, asset_index);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "job->m_ConcurrentChunkWriteApi->CreateDir() failed with %d", err)
+                LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index, err);
                 return err;
             }
         }
         else
         {
-            Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
-            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_path, 0, &asset_file_handle);
+            int err = job->m_ConcurrentChunkWriteApi->Open(job->m_ConcurrentChunkWriteApi, asset_index);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "m_ConcurrentChunkWriteApi->Open() failed with %d", err)
                 return err;
             }
+            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_VersionIndex, asset_index, err);
+            job->m_ConcurrentChunkWriteApi->Close(job->m_ConcurrentChunkWriteApi, asset_index);
         }
+        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_VersionIndex, asset_index);
     }
     return 0;
 }
@@ -8296,8 +8368,8 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
 
     const uint8_t* block_data = (const uint8_t*)stored_block->m_BlockData;
 
+    int asset_is_open = 0;
     uint32_t last_asset_index = 0;
-    Longtail_ConcurrentChunkWriteAPI_HOpenFile asset_file_handle = 0;
 
     TBlockChunkWriteArray write_infos = job->m_Context->m_BlockWriteInfos->m_BlockWritesArrays[block_index];
     ptrdiff_t block_write_chunk_info_count = arrlen(write_infos);
@@ -8311,29 +8383,30 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         const uint32_t asset_index = block_chunk_write_info->AssetIndex;
         const char* asset_path = &job->m_Context->m_VersionIndex->m_NameData[job->m_Context->m_VersionIndex->m_NameOffsets[asset_index]];
 
-        if (asset_file_handle != 0)
+        if (asset_is_open)
         {
             if (last_asset_index != asset_index)
             {
-                asset_file_handle = 0;
+                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, last_asset_index);
+                asset_is_open = 0;
             }
         }
 
-        if (asset_file_handle == 0)
+        if (asset_is_open == 0)
         {
             uint32_t asset_chunk_count = job->m_Context->m_VersionIndex->m_AssetChunkCounts[asset_index];
-            LONGTAIL_MONTITOR_ASSET_OPEN(job->m_Context->m_VersionIndex, asset_index);
-            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_path, asset_chunk_count, &asset_file_handle);
+            int err = job->m_Context->m_ConcurrentChunkWriteApi->Open(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Open() failed for `%s` with %d", asset_path, err)
+                LONGTAIL_MONTITOR_ASSET_OPEN(job->m_Context->m_VersionIndex, asset_index, err);
                 Longtail_Free(work_mem);
                 SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-                LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, err);
                 LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, err);
                 return err;
             }
             last_asset_index = asset_index;
+            asset_is_open = 1;
         }
 
         uint32_t chunk_index = block_chunk_write_info->ChunkIndex;
@@ -8341,10 +8414,12 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         uint32_t* chunk_index_in_block_ptr = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, chunk_hash);
         if (chunk_index_in_block_ptr == 0)
         {
+            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
+            asset_is_open = 0;
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
             Longtail_Free(work_mem);
             SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-            LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, ENOENT);
             LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, ENOENT);
             return ENOENT;
         }
@@ -8352,7 +8427,7 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
         uint32_t chunk_index_in_block = *chunk_index_in_block_ptr;
         uint32_t chunk_size = stored_block->m_BlockIndex->m_ChunkSizes[chunk_index_in_block];
         uint32_t chunk_offset_in_block = chunk_offsets_in_block[chunk_index_in_block];
-        LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index, chunk_index_in_block);
+        LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index, chunk_index_in_block, 0);
 
         uint32_t chunk_run_count = 1;
         uint32_t chunk_run_size = chunk_size;
@@ -8372,10 +8447,12 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
             uint32_t* chunk_index_in_block_ptr_next = LongtailPrivate_LookupTable_Get(chunk_hash_to_chunk_index, chunk_hash_next);
             if (chunk_index_in_block_ptr_next == 0)
             {
+                job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
+                asset_is_open = 0;
+                LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to find chunk in block for `%s` with %d", asset_path, ENOENT)
                 Longtail_Free(work_mem);
                 SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-                LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, ENOENT);
                 LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, ENOENT);
                 return ENOENT;
             }
@@ -8385,33 +8462,38 @@ static int WriteContentBlock2Job(void* context, uint32_t job_id, int detected_er
                 break;
             }
             uint32_t chunk_size_next = stored_block->m_BlockIndex->m_ChunkSizes[chunk_index_in_block_next];
-            LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index_next, chunk_index_in_block_next);
+            LONGTAIL_MONTITOR_CHUNK_READ(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, block_index, chunk_index_next, chunk_index_in_block_next, 0);
 
             chunk_run_size += chunk_size_next;
             chunk_run_count++;
         }
 
-        LONGTAIL_MONTITOR_ASSET_WRITE(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, asset_index, block_chunk_write_info->Offset, chunk_run_size, chunk_index, chunk_index_in_block, chunk_run_count, block_index, chunk_offset_in_block);
-        uint32_t pending_chunk_count = 0;
-        int err = job->m_Context->m_ConcurrentChunkWriteApi->Write(job->m_Context->m_ConcurrentChunkWriteApi, asset_file_handle, block_chunk_write_info->Offset, chunk_run_size, chunk_run_count, &block_data[chunk_offset_in_block], &pending_chunk_count);
+        int err = job->m_Context->m_ConcurrentChunkWriteApi->Write(job->m_Context->m_ConcurrentChunkWriteApi, asset_index, block_chunk_write_info->Offset, chunk_run_size, &block_data[chunk_offset_in_block]);
+        LONGTAIL_MONTITOR_ASSET_WRITE(job->m_Context->m_StoreIndex, job->m_Context->m_VersionIndex, asset_index, block_chunk_write_info->Offset, chunk_run_size, chunk_index, chunk_index_in_block, chunk_run_count, block_index, chunk_offset_in_block, err);
         if (err)
         {
+            job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, asset_index);
+            asset_is_open = 0;
+            LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, asset_index);
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Write() failed for `%s` with %d", asset_path, err)
             Longtail_Free(work_mem);
             SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
-            LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, err);
             LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, err);
             return err;
         }
-        if (pending_chunk_count == 0)
-        {
-            LONGTAIL_MONTITOR_ASSET_COMPLETE(job->m_Context->m_VersionIndex, asset_index, 0);
-        }
         block_write_chunk_info_index += chunk_run_count;
     }
+    if (asset_is_open != 0)
+    {
+        job->m_Context->m_ConcurrentChunkWriteApi->Close(job->m_Context->m_ConcurrentChunkWriteApi, last_asset_index);
+        asset_is_open = 0;
+        LONGTAIL_MONTITOR_ASSET_CLOSE(job->m_Context->m_VersionIndex, last_asset_index);
+    }
+
     Longtail_Free(work_mem);
     SAFE_DISPOSE_STORED_BLOCK(job->m_StoredBlock);
     LONGTAIL_MONTITOR_BLOCK_COMPLETE(job->m_Context->m_StoreIndex, job->m_BlockIndex, 0);
+    job->m_Context->m_ConcurrentChunkWriteApi->Flush(job->m_Context->m_ConcurrentChunkWriteApi);
     return 0;
 }
 

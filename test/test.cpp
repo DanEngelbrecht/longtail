@@ -3018,7 +3018,7 @@ TEST(Longtail, Longtail_VersionDiff)
     Longtail_Free(required_chunk_hashes);
     required_chunk_hashes = 0;
 
-    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, new_vindex, version_diff, "old");
     ASSERT_EQ(0, Longtail_ChangeVersion2(
         block_store_api,
         storage,
@@ -3059,7 +3059,7 @@ TEST(Longtail, Longtail_VersionDiff)
 
     store_index = SyncGetExistingContent(block_store_api, required_chunk_count, required_chunk_hashes, 0);
 
-    concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+    concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, new_vindex, version_diff, "old");
     ASSERT_EQ(0, Longtail_ChangeVersion2(
         block_store_api,
         storage,
@@ -5271,7 +5271,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         ASSERT_EQ(0, cancel_api->CreateToken(cancel_api, &cancel_token));
         ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
 
-        Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+        Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, vindex, version_diff, "old");
         ASSERT_EQ(ECANCELED, Longtail_ChangeVersion2(
             block_store_proxy,
             storage,
@@ -5348,7 +5348,7 @@ TEST(Longtail, TestChangeVersionCancelOperation)
         ASSERT_NE((Longtail_CancelAPI_HCancelToken)0, cancel_token);
 
         blockStoreProxy.m_FailCounter = 0x7fffffff;
-        Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, "old");
+        Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage, vindex, version_diff, "old");
         int err = Longtail_ChangeVersion2(
             block_store_proxy,
             storage,
@@ -5689,7 +5689,8 @@ struct FailableStorageAPI
     static int UnlockFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HLockFile lock_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnlockFile(api->m_BackingAPI, lock_file);}
     static char* GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->GetParentPath(api->m_BackingAPI, path);}
     static int MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->MapFile(api->m_BackingAPI, f, offset, length, out_file_map, out_data_ptr);}
-    static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m);}
+    static void UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->UnMapFile(api->m_BackingAPI, m); }
+    static int OpenAppendFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file) { struct FailableStorageAPI* api = (struct FailableStorageAPI*)storage_api; return api->m_BackingAPI->OpenAppendFile(api->m_BackingAPI, path, out_open_file); }
 };
 
 struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* backing_api)
@@ -5722,7 +5723,8 @@ struct FailableStorageAPI* CreateFailableStorageAPI(struct Longtail_StorageAPI* 
         FailableStorageAPI::UnlockFile,
         FailableStorageAPI::GetParentPath,
         FailableStorageAPI::MapFile,
-        FailableStorageAPI::UnmapFile);
+        FailableStorageAPI::UnmapFile,
+        FailableStorageAPI::OpenAppendFile);
     struct FailableStorageAPI* failable_storage_api = (struct FailableStorageAPI*)api;
     failable_storage_api->m_BackingAPI = backing_api;
     failable_storage_api->m_PassCount = 0x7fffffff;
@@ -5899,7 +5901,7 @@ TEST(Longtail, TestChangeVersionDiskFull)
     Longtail_SetLogLevel(LONGTAIL_LOG_LEVEL_OFF);
     failable_local_storage_api->m_PassCount = 3;
     failable_local_storage_api->m_WriteError = ENOSPC;
-    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(local_storage, "old");
+    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(local_storage, vindex, version_diff, "old");
     ASSERT_EQ(ENOSPC, Longtail_ChangeVersion2(
         cached_compress_store_api,
         local_storage,
@@ -6534,8 +6536,22 @@ static int DownloadFolder(
     }
     Longtail_Free(required_chunk_hashes);
 
-    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage_api, target_path);
-    err = Longtail_ChangeVersion2(block_store_api, storage_api, concurrent_chunk_write_api, hash_api, job_api, 0, 0, 0, store_index, current_version_index, version_index, version_diff, target_path, 1);
+    Longtail_ConcurrentChunkWriteAPI* concurrent_chunk_write_api = Longtail_CreateConcurrentChunkWriteAPI(storage_api, version_index, version_diff, target_path);
+    err = Longtail_ChangeVersion2(
+        block_store_api,
+        storage_api,
+        concurrent_chunk_write_api,
+        hash_api,
+        job_api,
+        0,
+        0,
+        0,
+        store_index,
+        current_version_index,
+        version_index,
+        version_diff,
+        target_path,
+        1);
     SAFE_DISPOSE_API(concurrent_chunk_write_api);
     if (err)
     {

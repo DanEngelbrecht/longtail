@@ -2,8 +2,13 @@
 - **CHANGED API** `Longtail_JobAPI_JobFunc` renamed `is_cancelled` to `detected_error`, now contains first error returned from a job task in the same job group (if any) or ECANCELLED if job group was cancelled
     If `detected_error` is non-zero, try to exit (and cleanup) your task directly and return `0`.
 - **CHANGED_API** JobAPI `WaitForAllJobs` now returns first error encountered in a job group for a task as well as any error in the job api itself, removing the need to book keep the error for tasks separately
-- **ADDED** memtracer now tracks allocations in stb_ds
-- **ADDED** memtracer now tracks allocations in zstd
+- **CHANGED API** `Longtail_StorageAPI.OpenAppend` added to `Longtail_StorageAPI` to open files without truncating existing data
+- **CHANGED API** `Longtail_CreateConcurrentChunkWriteAPI` changed to take `source_version_index` and `version_diff`
+- **CHANGED API** `Longtail_ConcurrentChunkWriteAPI` refactored to use asset index and open/close files instead of keeping all open during entire lifetime
+  - `Longtail_ConcurrentChunkWriteAPI.CreateDir` now takes asset index instead of version local path
+  - `Longtail_ConcurrentChunkWriteAPI.Open` now takes asset index instead of version local path and dropping `chunk_write_count` parameter
+  - `Longtail_ConcurrentChunkWriteAPI.Write` now takes asset index instead of version local path and dropping `chunk_write_count` parameter
+- **CHANGED API** `Longtail_SetMonitor` callback functions refactored to accomodate changes in `Longtail_ConcurrentChunkWriteAPI`
 - **NEW API** `Longtail_SetReAllocAndFree`
 - **NEW API** `Longtail_ReAlloc`
 - **NEW API** `Longtail_MemTracer_ReAlloc`
@@ -12,12 +17,31 @@
 - **NEW API** `Longtail_GetFilesRecursively2` that executes using parallel jobs improving execution speed for large file trees significantly
 - **REMOVED API** `Longtail_SetAllocAndFree` is replaced by `Longtail_SetReAllocAndFree`
 - **REMOVED API** `Longtail_MemTracer_Alloc` is replaced by `Longtail_MemTracer_ReAlloc`
-- **CHANGED API** `Longtail_ConcurrentChunkWriteAPI::Write` has new parameter `out_chunks_remaining` which is set to the remaining number of chunks to write to asset after call completes
+- **REMOVED API** Remove platform api for Read/Write mutex
+  - `Longtail_GetRWLockSize`
+  - `Longtail_CreateRWLock`
+  - `Longtail_DeleteRWLock`
+  - `Longtail_LockRWLockRead`
+  - `Longtail_LockRWLockWrite`
+  - `Longtail_UnlockRWLockRead`
+  - `Longtail_UnlockRWLockWrite`
+- **ADDED** memtracer now tracks allocations in stb_ds
+- **ADDED** memtracer now tracks allocations in zstd
 - **FIXED** Fixed memory leaks in command tool
 - **FIXED** `Longtail_ChangeVersion2()` can now handle workloads with a block count larger than 65535
 - **FIXED** Bikeshed JobAPI implementation does efficient wait when task queue is full
 - **FIXED** Bikeshed JobAPI::CreateJobs implementation now properly drains both task channels when task queue is full
 - **FIXED** Make sure we retain order of assets with equal length when sorting them
+- **FIXED** Fixed excessive "Disk Used" increase during `Longtail_ChangeVersion2` execution causing Out Of Disk space errors.
+  The changes also improves performance for more common cases with smaller archive sizes (60 Gb raw data/many files) but causes a small regression compared to 0.4.1 for archives with many very large files. It is still performing much more reasonable than 0.4.0 for these cases.
+  | Version | Files | Raw Size | Compressed Size | Unpack Time | Peak Memory |
+  |-|-|-|-|-|-|
+  |0.4.0|1019|735 GB|214 GB|2h44m26s|7.9 GB|
+  |0.4.1|1019|735 GB|214 GB|0h12m14s|1.9 GB|
+  |0.4.2|1019|735 GB|214 GB|0h13m25s|2.2 GB|
+  |0.4.0|239 340|60 GB|17 GB|0h01m24s|4.2 GB|
+  |0.4.1|239 340|60 GB|17 GB|0h02m48s|0.9 GB|
+  |0.4.2|239 340|60 GB|17 GB|0h01m12s|0.9 GB|
 - **CHANGED** Refactored all internal usage of JobAPI `ReadyJobs` with new error handling
 - **UPDATED** Update of ZStd: 1.5.5 https://github.com/facebook/zstd/releases/tag/v1.5.5
 - **UPDATED** Update of Blake3: 1.5.0 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.0

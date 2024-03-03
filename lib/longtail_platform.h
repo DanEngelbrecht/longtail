@@ -44,15 +44,6 @@ void    Longtail_DeleteSpinLock(HLongtail_SpinLock spin_lock);
 void    Longtail_LockSpinLock(HLongtail_SpinLock spin_lock);
 void    Longtail_UnlockSpinLock(HLongtail_SpinLock spin_lock);
 
-typedef struct Longtail_RWLock* HLongtail_RWLock;
-size_t  Longtail_GetRWLockSize();
-int     Longtail_CreateRWLock(void* mem, HLongtail_RWLock* out_rwlock);
-void    Longtail_DeleteRWLock(HLongtail_RWLock rwlock);
-void    Longtail_LockRWLockRead(HLongtail_RWLock rwlock);
-void    Longtail_LockRWLockWrite(HLongtail_RWLock rwlock);
-void    Longtail_UnlockRWLockRead(HLongtail_RWLock rwlock);
-void    Longtail_UnlockRWLockWrite(HLongtail_RWLock rwlock);
-
 typedef struct Longtail_FSIterator_private* HLongtail_FSIterator;
 
 size_t Longtail_GetFSIteratorSize();
@@ -75,6 +66,7 @@ typedef struct Longtail_OpenFile_private* HLongtail_OpenFile;
 
 int     Longtail_OpenReadFile(const char* path, HLongtail_OpenFile* out_read_file);
 int     Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file);
+int     Longtail_OpenAppendFile(const char* path, HLongtail_OpenFile* out_write_file);
 int     Longtail_SetFileSize(HLongtail_OpenFile handle, uint64_t length);
 int     Longtail_SetFilePermissions(const char* path, uint16_t permissions);
 int     Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions);
