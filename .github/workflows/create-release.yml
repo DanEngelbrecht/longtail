@@ -38,6 +38,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v3
       with:
+        name: linux-x64-*
         path: build/artifacts
     - name: build dist
       run: |
@@ -81,6 +82,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v3
       with:
+        name: darwin-x64-*
         path: build/artifacts
     - name: build dist
       run: |
@@ -122,6 +124,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v3
       with:
+        name: win32-*
         path: build/artifacts
     - name: build dist
       run: |
