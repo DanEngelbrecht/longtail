@@ -36,9 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
-        name: linux-x64-*
+        pattern: linux-*
+        merge-multiple: true
         path: build/artifacts
     - name: build dist
       run: |
@@ -80,9 +81,10 @@ jobs:
         arch: [arm64, x64]
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
-        name: darwin-x64-*
+        pattern: darwin-*
+        merge-multiple: true
         path: build/artifacts
     - name: build dist
       run: |
@@ -122,9 +124,10 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
-        name: win32-*
+        pattern: win32-*
+        merge-multiple: true
         path: build/artifacts
     - name: build dist
       run: |
