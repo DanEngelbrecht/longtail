@@ -14,12 +14,12 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.sh ${{matrix.config}}
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
         name: linux_x64-${{matrix.target}}-${{matrix.config}}
@@ -35,7 +35,7 @@ jobs:
       matrix:
         config: [debug, release]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: build test
       run: |
         test/build.sh ${{matrix.config}}
@@ -50,14 +50,14 @@ jobs:
     needs: build-linux
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: dist-linux-x64
         path: dist
@@ -71,12 +71,12 @@ jobs:
         target: [static_lib, shared_lib, cmd]
         arch: [arm64, x64]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.sh ${{matrix.config}} ${{matrix.arch}}
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
         name: darwin_${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
@@ -93,7 +93,7 @@ jobs:
         config: [debug, release]
         arch: [arm64, x64]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: build test
       run: |
         test/build.sh ${{matrix.config}} ${{matrix.arch}}
@@ -112,14 +112,14 @@ jobs:
       matrix:
         arch: [arm64, x64]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.sh ${{matrix.arch}}
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: dist-darwin-${{matrix.arch}}
         path: dist
@@ -133,12 +133,12 @@ jobs:
         target: [static_lib, shared_lib, cmd]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: build ${{matrix.target}}
       run: |
         ${{matrix.target}}/build.bat ${{matrix.config}}
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
         name: win32_x64-${{matrix.target}}-${{matrix.config}}
@@ -155,7 +155,7 @@ jobs:
       matrix:
         config: [debug, release]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: build test
       run: |
         test/build.bat ${{matrix.config}}
@@ -170,14 +170,14 @@ jobs:
     needs: build-win32
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions/download-artifact@v3
       with:
         path: build/artifacts
     - name: build dist
       run: |
         ./dist.bat
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: dist-win32-x64
         path: dist
