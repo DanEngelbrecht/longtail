@@ -2306,6 +2306,10 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
 
         static int IncludeFunc(struct Longtail_PathFilterAPI* path_filter_api, const char* root_path, const char* asset_path, const char* asset_name, int is_dir, uint64_t size, uint16_t permissions)
         {
+            if (strcmp(asset_path, "WillBeRenamed.txt") == 0)
+            {
+                return 0;
+            }
             if(!is_dir)
             {
                 return 1;
@@ -2324,7 +2328,7 @@ TEST(Longtail, Longtail_TestGetFilesRecursively)
     Longtail_FileInfos* filtered_file_infos;
     ASSERT_EQ(0, Longtail_GetFilesRecursively2(storage, 0, &test_filter.m_API, 0, 0, "", &filtered_file_infos));
     ASSERT_NE((Longtail_FileInfos*)0, filtered_file_infos);
-    ASSERT_EQ(12u, filtered_file_infos->m_Count);
+    ASSERT_EQ(11u, filtered_file_infos->m_Count);
     Longtail_Free(filtered_file_infos);
 
     SAFE_DISPOSE_API(storage);

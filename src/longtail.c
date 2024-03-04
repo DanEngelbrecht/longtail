@@ -1435,7 +1435,6 @@ struct ScanFolderResult
 
 static int ScanFolder(
     struct Longtail_StorageAPI* storage_api,
-    struct Longtail_PathFilterAPI* optional_path_filter_api,
     const char* root_path,
     const char* folder_sub_path,
     struct ScanFolderResult** out_result)
@@ -1512,17 +1511,11 @@ static int ScanFolder(
             break;
         }
 
-        if (optional_path_filter_api == 0 || optional_path_filter_api->Include(optional_path_filter_api, path, path, properties.m_Name, properties.m_IsDir, properties.m_Size, properties.m_Permissions))
-        {
-            arrput(properties_array, properties);
-            name_data_size += strlen(path) + 1;
-            ptrdiff_t count = arrlen(properties_array);
-            properties_array[count - 1].m_Name = path;
-        }
-        else
-        {
-            Longtail_Free(path);
-        }
+        arrput(properties_array, properties);
+        name_data_size += strlen(path) + 1;
+        ptrdiff_t count = arrlen(properties_array);
+        properties_array[count - 1].m_Name = path;
+
         err = storage_api->FindNext(storage_api, fs_iterator);
         if (err == ENOENT)
         {
@@ -1581,7 +1574,6 @@ static int ScanFolder(
 struct ScanFolderJobContext
 {
     struct Longtail_StorageAPI* m_StorageAPI;
-    struct Longtail_PathFilterAPI* m_OptionalPathFilterAPI;
     const char* m_RootPath;
     const char* m_FolderSubPath;
     struct ScanFolderResult** m_Result;
@@ -1606,7 +1598,7 @@ static int ScanFolderJob(void* context, uint32_t job_id, int detected_error)
         return 0;
     }
     struct ScanFolderJobContext* job = (struct ScanFolderJobContext*)context;
-    int err = ScanFolder(job->m_StorageAPI, job->m_OptionalPathFilterAPI, job->m_RootPath, job->m_FolderSubPath, job->m_Result);
+    int err = ScanFolder(job->m_StorageAPI, job->m_RootPath, job->m_FolderSubPath, job->m_Result);
     return err;
 }
 
@@ -1640,6 +1632,28 @@ static SORTFUNC(SortScannedPaths)
     return strcmp(a_name, b_name);
 }
 
+static int IncludeFoundFile(const char* root_path, struct Longtail_PathFilterAPI* optional_path_filter_api, const struct Longtail_StorageAPI_EntryProperties* properties)
+{
+    if (optional_path_filter_api == 0)
+    {
+        return 1;
+    }
+    const char* name = strrchr(properties->m_Name, '/');
+    if (name == 0)
+    {
+        name = properties->m_Name;
+    }
+    else
+    {
+        name = &name[1];
+    }
+    if (optional_path_filter_api->Include(optional_path_filter_api, root_path, properties->m_Name, name, properties->m_IsDir, properties->m_Size, properties->m_Permissions))
+    {
+        return 1;
+    }
+    return 0;
+}
+
 int Longtail_GetFilesRecursively2(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_JobAPI* optional_job_api,
@@ -1668,7 +1682,7 @@ int Longtail_GetFilesRecursively2(
     LONGTAIL_FATAL_ASSERT(ctx, out_file_infos != 0, return EINVAL)
 
     struct ScanFolderResult* root_result = 0;
-    int err = ScanFolder(storage_api, optional_path_filter_api, root_path, 0, &root_result);
+    int err = ScanFolder(storage_api, root_path, 0, &root_result);
     if (err != 0)
     {
         err = ENOMEM;
@@ -1686,12 +1700,17 @@ int Longtail_GetFilesRecursively2(
             ptrdiff_t job_count = 0;
             for (ptrdiff_t result_index = scan_index; result_index < result_count; result_index++)
             {
-                for (uint32_t property_index = 0; property_index < results[result_index]->m_PropertyCount; property_index++)
+                struct ScanFolderResult* folder_result = results[result_index];
+                for (uint32_t property_index = 0; property_index < folder_result->m_PropertyCount; property_index++)
                 {
-                    if (results[result_index]->m_Properties[property_index].m_IsDir)
+                    struct Longtail_StorageAPI_EntryProperties* properties = &folder_result->m_Properties[property_index];
+                    if (properties->m_IsDir)
                     {
-                        job_count++;
-                        arrput(results, 0);
+                        if (IncludeFoundFile(root_path, optional_path_filter_api, properties))
+                        {
+                            job_count++;
+                            arrput(results, 0);
+                        }
                     }
                 }
             }
@@ -1720,7 +1739,6 @@ int Longtail_GetFilesRecursively2(
                         if (results[result_index]->m_Properties[property_index].m_IsDir)
                         {
                             job_contexts[job_index].m_StorageAPI = storage_api;
-                            job_contexts[job_index].m_OptionalPathFilterAPI = optional_path_filter_api;
                             job_contexts[job_index].m_RootPath = root_path;
                             job_contexts[job_index].m_FolderSubPath = results[result_index]->m_Properties[property_index].m_Name;
                             job_contexts[job_index].m_Result = &results[result_count + job_index];
@@ -1748,18 +1766,23 @@ int Longtail_GetFilesRecursively2(
         {
             for (ptrdiff_t result_index = scan_index; result_index < result_count && err == 0; result_index++)
             {
-                for (uint32_t property_index = 0; property_index < results[result_index]->m_PropertyCount; property_index++)
+                struct ScanFolderResult* folder_result = results[result_index];
+                for (uint32_t property_index = 0; property_index < folder_result->m_PropertyCount; property_index++)
                 {
-                    if (results[result_index]->m_Properties[property_index].m_IsDir)
+                    struct Longtail_StorageAPI_EntryProperties* properties = &folder_result->m_Properties[property_index];
+                    if (properties->m_IsDir)
                     {
-                        struct ScanFolderResult* scan_result = 0;
-                        err = ScanFolder(storage_api, optional_path_filter_api, root_path, results[result_index]->m_Properties[property_index].m_Name, &scan_result);
-                        if (err)
+                        if (IncludeFoundFile(root_path, optional_path_filter_api, properties))
                         {
-                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ScanFolder() failed with %d", err)
-                            break;
+                            struct ScanFolderResult* scan_result = 0;
+                            err = ScanFolder(storage_api, root_path, properties->m_Name, &scan_result);
+                            if (err)
+                            {
+                                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ScanFolder() failed with %d", err)
+                                break;
+                            }
+                            arrput(results, scan_result);
                         }
-                        arrput(results, scan_result);
                     }
                 }
                 if (err == 0 && optional_cancel_api && optional_cancel_token)
@@ -1779,24 +1802,16 @@ int Longtail_GetFilesRecursively2(
 
     if (err == 0)
     {
-        uint32_t path_count = 0;
-        uint32_t path_data_size = 0;
+        uint32_t max_path_count = 0;
 
         ptrdiff_t result_count = arrlen(results);
         for (ptrdiff_t result_index = 0; result_index < result_count; result_index++)
         {
-            for (uint32_t property_index = 0; property_index < results[result_index]->m_PropertyCount; property_index++)
-            {
-                path_count++;
-                path_data_size += (uint32_t)(strlen(results[result_index]->m_Properties[property_index].m_Name) + 1);
-                if (results[result_index]->m_Properties[property_index].m_IsDir)
-                {
-                    path_data_size++;
-                }
-            }
+            struct ScanFolderResult* folder_result = results[result_index];
+            max_path_count += folder_result->m_PropertyCount;
         }
 
-        uint64_t* sort_array = (uint64_t*)Longtail_Alloc("Longtail_GetFilesRecursively2", sizeof(uint64_t) * path_count);
+        uint64_t* sort_array = (uint64_t*)Longtail_Alloc("Longtail_GetFilesRecursively2", sizeof(uint64_t) * max_path_count);
         if (sort_array == 0)
         {
             err = ENOMEM;
@@ -1804,12 +1819,23 @@ int Longtail_GetFilesRecursively2(
         }
         else
         {
-            uint32_t sort_array_index = 0;
+            uint32_t path_count = 0;
+            uint32_t path_data_size = 0;
             for (ptrdiff_t result_index = 0; result_index < result_count; result_index++)
             {
-                for (uint32_t property_index = 0; property_index < results[result_index]->m_PropertyCount; property_index++)
+                struct ScanFolderResult* folder_result = results[result_index];
+                for (uint32_t property_index = 0; property_index < folder_result->m_PropertyCount; property_index++)
                 {
-                    sort_array[sort_array_index++] = (((uint64_t)result_index) << 32) + property_index;
+                    struct Longtail_StorageAPI_EntryProperties* properties = &folder_result->m_Properties[property_index];
+                    if (IncludeFoundFile(root_path, optional_path_filter_api, properties))
+                    {
+                        path_data_size += (uint32_t)(strlen(properties->m_Name) + 1);
+                        if (properties->m_IsDir)
+                        {
+                            path_data_size++;
+                        }
+                        sort_array[path_count++] = (((uint64_t)result_index) << 32) + property_index;
+                    }
                 }
             }
 
@@ -1830,20 +1856,21 @@ int Longtail_GetFilesRecursively2(
                 for (uint32_t path_index = 0; path_index < path_count; path_index++)
                 {
                     uint32_t result_index = (uint32_t)((sort_array[path_index] >> 32) & 0xffffffffu);
+                    struct ScanFolderResult* folder_result = results[result_index];
                     uint32_t property_index = (uint32_t)(sort_array[path_index] & 0xffffffffu);
+                    struct Longtail_StorageAPI_EntryProperties* properties = &folder_result->m_Properties[property_index];
 
                     file_infos->m_PathStartOffsets[path_index] = path_data_offset;
-                    file_infos->m_Sizes[path_index] = results[result_index]->m_Properties[property_index].m_Size;
-                    file_infos->m_Permissions[path_index] = results[result_index]->m_Properties[property_index].m_Permissions;
+                    file_infos->m_Sizes[path_index] = properties->m_Size;
+                    file_infos->m_Permissions[path_index] = properties->m_Permissions;
 
-                    strcpy(&file_infos->m_PathData[path_data_offset], results[result_index]->m_Properties[property_index].m_Name);
-                    size_t path_len = strlen(results[result_index]->m_Properties[property_index].m_Name);
+                    strcpy(&file_infos->m_PathData[path_data_offset], properties->m_Name);
+                    size_t path_len = strlen(properties->m_Name);
                     path_data_offset += (uint32_t)path_len;
-                    if (results[result_index]->m_Properties[property_index].m_IsDir)
+                    if (properties->m_IsDir)
                     {
-                        file_infos->m_PathData[path_data_offset] = '/';
-                        file_infos->m_PathData[path_data_offset + 1] = '\0';
-                        path_data_offset++;
+                        file_infos->m_PathData[path_data_offset++] = '/';
+                        file_infos->m_PathData[path_data_offset] = '\0';
                     }
                     path_data_offset++;
                 }
