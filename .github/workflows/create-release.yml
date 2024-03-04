@@ -142,25 +142,25 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Download Linux artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-linux-x64
         path: dist-linux-x64
 
     - name: Download Win32 artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-win32-x64
         path: dist-win32-x64
 
     - name: Download darwin x64 artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-darwin-x64
         path: dist-darwin-x64
 
     - name: Download darwin arm64 artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-darwin-arm64
         path: dist-darwin-arm64
