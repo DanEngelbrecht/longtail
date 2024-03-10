@@ -750,7 +750,6 @@ static struct Longtail_Monitor Monitor_private = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #define LONGTAIL_MONITOR_ASSET_REMOVE(version_index, asset_index, err) if (Monitor_private.AssetRemove) {Monitor_private.AssetRemove(version_index, asset_index, err);}
 #define LONGTAIL_MONTITOR_ASSET_OPEN(version_index, asset_index, err) if (Monitor_private.AssetOpen) {Monitor_private.AssetOpen(version_index, asset_index, err);}
 #define LONGTAIL_MONTITOR_ASSET_WRITE(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset, err) if (Monitor_private.AssetWrite) {Monitor_private.AssetWrite(store_index, version_index, asset_index, write_offset, size, chunk_index, chunk_index_in_block, chunk_count_in_block, block_index, block_data_offset, err);}
-//#define LONGTAIL_MONTITOR_ASSET_COMPLETE(version_index, asset_index, err) if (Monitor_private.AssetComplete) {Monitor_private.AssetComplete(version_index, asset_index, err);};
 
 #define LONGTAIL_MONTITOR_CHUNK_READ(store_index, version_index, block_index, chunk_index, chunk_index_in_block, err) if (Monitor_private.ChunkRead) {Monitor_private.ChunkRead(store_index, version_index, block_index, chunk_index, chunk_index_in_block, err);}
 
