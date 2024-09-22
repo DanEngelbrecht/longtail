@@ -1074,12 +1074,21 @@ int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, v
     OVERLAPPED ReadOp;
     memset(&ReadOp, 0, sizeof(ReadOp));
 
-    ReadOp.Offset  = (DWORD)(offset & 0xffffffff);
-    ReadOp.OffsetHigh = (DWORD)(offset >> 32);
-
-    if (FALSE == ReadFile(h, output, (DWORD)length, 0, &ReadOp))
+    char* cur = (char*)output;
+    const char* end = cur + length;
+    while (cur < end)
     {
-        return Win32ErrorToErrno(GetLastError());
+        ReadOp.Offset  = (DWORD)(offset & 0xffffffff);
+        ReadOp.OffsetHigh = (DWORD)(offset >> 32);
+
+        const DWORD chunk_size = ((end - cur) > MaxChunkSize) ? (DWORD)MaxChunkSize : (DWORD)(end - cur);
+        DWORD bytes_read = 0;
+        if (FALSE == ReadFile(h, cur, chunk_size, &bytes_read, &ReadOp))
+        {
+            return Win32ErrorToErrno(GetLastError());
+        }
+        cur += bytes_read;
+        offset += bytes_read;
     }
 
     return 0;
@@ -1092,13 +1101,23 @@ int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, 
     OVERLAPPED WriteOp;
     memset(&WriteOp, 0, sizeof(WriteOp));
 
-    WriteOp.Offset  = (DWORD)(offset & 0xffffffff);
-    WriteOp.OffsetHigh = (DWORD)(offset >> 32);
-
-    if (FALSE == WriteFile(h, input, (DWORD)length, 0, &WriteOp))
+    const char* cur = (const char*)input;
+    const char* end = cur + length;
+    while (cur < end)
     {
-        return Win32ErrorToErrno(GetLastError());
+        WriteOp.Offset  = (DWORD)(offset & 0xffffffff);
+        WriteOp.OffsetHigh = (DWORD)(offset >> 32);
+
+        const DWORD chunk_size = ((end - cur) > MaxChunkSize) ? (DWORD)MaxChunkSize : (DWORD)(end - cur);
+        DWORD bytes_written = 0;
+        if (FALSE == WriteFile(h, cur, chunk_size, &bytes_written, &WriteOp))
+        {
+            return Win32ErrorToErrno(GetLastError());
+        }
+        cur += bytes_written;
+        offset += bytes_written;
     }
+
     return 0;
 }
 
