@@ -2222,10 +2222,18 @@ int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, v
 {
     FILE* f = (FILE*)handle;
     int fd = fileno(f);
-    ssize_t length_read = pread(fd, output, (off_t)length, (off_t)offset);
-    if (length_read == -1)
+    char* cur = (char*)output;
+    const char* end = cur + length;
+    while (cur < end)
     {
-        return errno;
+        const size_t chunk_size = ((end - cur) > MaxChunkSize) ? MaxChunkSize : (end - cur);
+        ssize_t length_read = pread(fd, cur, chunk_size, (off_t)offset);
+        if (length_read == -1)
+        {
+            return errno;
+        }
+        cur += length_read;
+        offset += length_read;
     }
     return 0;
 }
@@ -2235,10 +2243,18 @@ int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, 
     FILE* f = (FILE*)handle;
 
     int fd = fileno(f);
-    ssize_t length_written = pwrite(fd, input, length, offset);
-    if (length_written == -1)
+    const char* cur = (const char*)input;
+    const char* end = cur + length;
+    while (cur < end)
     {
-        return errno;
+        const size_t chunk_size = ((end - cur) > MaxChunkSize) ? MaxChunkSize : (end - cur);
+        ssize_t length_written = pwrite(fd, cur, chunk_size, offset);
+        if (length_written == -1)
+        {
+            return errno;
+        }
+        cur += length_written;
+        offset += length_written;
     }
     return 0;
 }
