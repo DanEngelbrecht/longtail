@@ -37,6 +37,13 @@
 #define TEST_LOG(fmt, ...) \
     fprintf(stderr, "--- ");fprintf(stderr, fmt, __VA_ARGS__);
 
+
+template<>
+char* jc_test_print_value(char* buffer, size_t buffer_len, uint64_t value)
+{
+    return buffer + JC_TEST_SNPRINTF(buffer, buffer_len, "%" PRId64, value);
+}
+
 static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* dir_path = Longtail_Strdup(path);
