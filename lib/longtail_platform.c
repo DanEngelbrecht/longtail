@@ -1066,6 +1066,8 @@ int Longtail_GetFilePermissions(const char* path, uint16_t* out_permissions)
     return 0;
 }
 
+static const DWORD MaxBatchSize = 0xffffffffu;
+
 int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, void* output)
 {
     HANDLE h = (HANDLE)(handle);
@@ -1073,12 +1075,21 @@ int Longtail_Read(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, v
     OVERLAPPED ReadOp;
     memset(&ReadOp, 0, sizeof(ReadOp));
 
-    ReadOp.Offset  = (DWORD)(offset & 0xffffffff);
-    ReadOp.OffsetHigh = (DWORD)(offset >> 32);
-
-    if (FALSE == ReadFile(h, output, (DWORD)length, 0, &ReadOp))
+    const uint64_t end = offset + length;
+    while (offset < end)
     {
-        return Win32ErrorToErrno(GetLastError());
+        ReadOp.Offset = (DWORD)(offset & 0xffffffff);
+        ReadOp.OffsetHigh = (DWORD)(offset >> 32);
+
+        uint64_t left = end - offset;
+        DWORD count = (left > MaxBatchSize) ? MaxBatchSize : (DWORD)left;
+        DWORD completed = 0;
+        if (FALSE == ReadFile(h, output, count, &completed, &ReadOp))
+        {
+            return Win32ErrorToErrno(GetLastError());
+        }
+        offset += completed;
+        output = ((char*)(output)) + completed;
     }
 
     return 0;
@@ -1091,13 +1102,23 @@ int Longtail_Write(HLongtail_OpenFile handle, uint64_t offset, uint64_t length, 
     OVERLAPPED WriteOp;
     memset(&WriteOp, 0, sizeof(WriteOp));
 
-    WriteOp.Offset  = (DWORD)(offset & 0xffffffff);
-    WriteOp.OffsetHigh = (DWORD)(offset >> 32);
-
-    if (FALSE == WriteFile(h, input, (DWORD)length, 0, &WriteOp))
+    const uint64_t end = offset + length;
+    while (offset < end)
     {
-        return Win32ErrorToErrno(GetLastError());
+        WriteOp.Offset = (DWORD)(offset & 0xffffffff);
+        WriteOp.OffsetHigh = (DWORD)(offset >> 32);
+
+        uint64_t left = end - offset;
+        DWORD count = (left > MaxBatchSize) ? MaxBatchSize : (DWORD)left;
+        DWORD completed = 0;
+        if (FALSE == WriteFile(h, input, count, &completed, &WriteOp))
+        {
+            return Win32ErrorToErrno(GetLastError());
+        }
+        offset += completed;
+        input = ((const char*)(input)) + completed;
     }
+
     return 0;
 }
 
