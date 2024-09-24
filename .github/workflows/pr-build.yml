@@ -73,7 +73,7 @@ jobs:
 
   build-darwin:
 
-    runs-on: macos-14
+    runs-on: macos-13
     strategy:
       matrix:
         config: [debug, release]
@@ -97,7 +97,7 @@ jobs:
 
   test-darwin:
 
-    runs-on: macos-14
+    runs-on: macos-13
     strategy:
       matrix:
         config: [debug, release]
@@ -117,7 +117,7 @@ jobs:
   dist-darwin:
 
     needs: build-darwin
-    runs-on: macos-14
+    runs-on: macos-13
     strategy:
       matrix:
         arch: [x64, arm64]
