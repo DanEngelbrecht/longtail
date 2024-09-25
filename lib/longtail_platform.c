@@ -5,6 +5,7 @@
 
 static const uint32_t HostnamePrime = 0x01000193;
 static const uint32_t HostnameSeed  = 0x811C9DC5;
+static const uint32_t MaxChunkSize  = 4194304;
 
 static uint32_t HostnameFNV1A(const void* data, uint32_t numBytes)
 {
