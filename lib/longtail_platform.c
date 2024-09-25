@@ -2157,7 +2157,7 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
 
 int Longtail_OpenAppendFile(const char* path, HLongtail_OpenFile* out_write_file)
 {
-    FILE* f = fopen(path, "ab");
+    FILE* f = fopen(path, "r+");
     if (!f)
     {
         int e = errno;

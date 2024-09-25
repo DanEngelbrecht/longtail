@@ -8195,3 +8195,56 @@ TEST(Longtail, Longtail_CaseSensitivePaths)
     SAFE_DISPOSE_API(target_storage);
     SAFE_DISPOSE_API(source_storage);
 }
+
+// Test writing blocks within a file in reverse order
+TEST(Longtail, Longtail_OutOfOrderWrites)
+{
+    static const uint32_t CONTENT_SIZE = 1024 * 2u;
+
+    Longtail_StorageAPI* local_storage = Longtail_CreateFSStorageAPI();
+    char* temp_folder = Longtail_GetTempFolder();
+    char* test_file = local_storage->ConcatPath(local_storage, temp_folder, "longtail.test.ooowrite");
+    if (local_storage->IsFile(local_storage, test_file))
+    {
+        ASSERT_EQ(0, local_storage->RemoveFile(local_storage, test_file));
+    }
+
+    char* data_ff = (char*)Longtail_Alloc(0, sizeof(char) * CONTENT_SIZE/2);
+    char* data_7f = (char*)Longtail_Alloc(0, sizeof(char) * CONTENT_SIZE/2);
+    char* data_tmp = (char*)Longtail_Alloc(0, sizeof(char) * CONTENT_SIZE/2);
+    memset(data_ff, (int)255, CONTENT_SIZE/2);
+    memset(data_7f, (int)127, CONTENT_SIZE/2);
+
+    Longtail_StorageAPI_HOpenFile content_file;
+
+    // Fill the second half of the file with 0xff
+    local_storage->OpenWriteFile(local_storage, test_file, 0, &content_file);
+    ASSERT_EQ(0,local_storage->Write(local_storage, content_file, CONTENT_SIZE/2, CONTENT_SIZE/2, data_ff));
+    local_storage->CloseFile(local_storage, content_file);
+
+
+    // Fill the first half of the file with 0x7f
+    local_storage->OpenAppendFile(local_storage, test_file, &content_file);
+    ASSERT_EQ(0,local_storage->Write(local_storage, content_file, 0, CONTENT_SIZE/2, data_7f));
+    local_storage->CloseFile(local_storage, content_file);
+
+    // Verify the contents
+    local_storage->OpenReadFile(local_storage, test_file, &content_file);
+    // The first half of the file should be 0x7f
+    ASSERT_EQ(0, local_storage->Read(local_storage, content_file, 0, CONTENT_SIZE/2, data_tmp));
+    ASSERT_EQ(0, memcmp(data_7f, data_tmp, CONTENT_SIZE/2));
+
+    // The second half of the file should be 0xff
+    ASSERT_EQ(0, local_storage->Read(local_storage, content_file, CONTENT_SIZE/2, CONTENT_SIZE/2, data_tmp));
+    ASSERT_EQ(0, memcmp(data_ff, data_tmp, CONTENT_SIZE/2));
+    local_storage->CloseFile(local_storage, content_file);
+
+    SAFE_DISPOSE_API(local_storage);
+
+    Longtail_Free(data_7f);
+    Longtail_Free(data_ff);
+    Longtail_Free(data_tmp);
+    Longtail_Free((void*)temp_folder);
+    Longtail_Free((void*)test_file);
+
+}
