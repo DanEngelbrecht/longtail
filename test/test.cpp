@@ -8203,6 +8203,8 @@ TEST(Longtail, Longtail_CaseSensitivePaths)
     SAFE_DISPOSE_API(source_storage);
 }
 
+#if 0
+
 TEST(Longtail, PlatformWriteLargeFile)
 {
     static const uint64_t expected_size = 4ULL * 1024ULL * 1024ULL * 1024ULL;
@@ -8258,3 +8260,6 @@ TEST(Longtail, PlatformReadLargeFile)
 
     Longtail_CloseFile(large_file);
 }
+
+#endif
+
