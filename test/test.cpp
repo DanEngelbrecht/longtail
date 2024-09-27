@@ -37,6 +37,13 @@
 #define TEST_LOG(fmt, ...) \
     fprintf(stderr, "--- ");fprintf(stderr, fmt, __VA_ARGS__);
 
+
+template<>
+char* jc_test_print_value(char* buffer, size_t buffer_len, uint64_t value)
+{
+    return buffer + JC_TEST_SNPRINTF(buffer, buffer_len, "%" PRId64, value);
+}
+
 static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* dir_path = Longtail_Strdup(path);
@@ -8195,3 +8202,64 @@ TEST(Longtail, Longtail_CaseSensitivePaths)
     SAFE_DISPOSE_API(target_storage);
     SAFE_DISPOSE_API(source_storage);
 }
+
+#if 0
+
+TEST(Longtail, PlatformWriteLargeFile)
+{
+    static const uint64_t expected_size = 4ULL * 1024ULL * 1024ULL * 1024ULL;
+
+    HLongtail_OpenFile large_file;
+    ASSERT_EQ(0, Longtail_OpenWriteFile("testdata/write_large_file.bin", 0, &large_file));
+    ASSERT_NE((HLongtail_OpenFile)0, large_file);
+
+    uint8_t* buf = (uint8_t*)malloc(expected_size);
+    ASSERT_NE(nullptr, buf);
+    ASSERT_EQ(0, Longtail_Write(large_file, 0, expected_size, buf));
+    free(buf);
+
+    uint64_t actual_size;
+    ASSERT_EQ(0, Longtail_GetFileSize(large_file, &actual_size));
+    ASSERT_EQ(actual_size, expected_size);
+
+    Longtail_CloseFile(large_file);
+}
+
+TEST(Longtail, PlatformReadLargeFile)
+{
+    static const uint64_t expected_size = 4ULL * 1024ULL * 1024ULL * 1024ULL;
+
+    uint8_t magic[256];
+    GenerateRandomData(magic, sizeof(magic));
+
+    // Generate large file
+    {
+        HLongtail_OpenFile large_file;
+        ASSERT_EQ(0, Longtail_OpenWriteFile("testdata/read_large_file.bin", expected_size, &large_file));
+        ASSERT_NE((HLongtail_OpenFile)0, large_file);
+        
+        uint64_t actual_size;
+        ASSERT_EQ(0, Longtail_GetFileSize(large_file, &actual_size));
+        ASSERT_EQ(actual_size, expected_size);
+
+        ASSERT_EQ(0, Longtail_Write(large_file, expected_size - sizeof(magic), sizeof(magic), magic));
+
+        Longtail_CloseFile(large_file);
+    }
+
+    // Read large file
+    HLongtail_OpenFile large_file;
+    ASSERT_EQ(0, Longtail_OpenReadFile("testdata/read_large_file.bin", &large_file));
+    ASSERT_NE((HLongtail_OpenFile)0, large_file);
+
+    uint8_t* buf = (uint8_t*)malloc(expected_size);
+    ASSERT_NE(nullptr, buf);
+    ASSERT_EQ(0, Longtail_Read(large_file, 0, expected_size, buf));
+    ASSERT_EQ(0, memcmp(buf + expected_size - sizeof(magic), magic, sizeof(magic)));
+    free(buf);
+
+    Longtail_CloseFile(large_file);
+}
+
+#endif
+
