@@ -1,1 +1,1 @@
-Blake3: 1.5.0 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.0
+Blake3: 1.5.4 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.4
