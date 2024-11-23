@@ -9,7 +9,7 @@ on:
 jobs:
   build-linux:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         config: [debug, release]
@@ -33,7 +33,7 @@ jobs:
   dist-linux:
 
     needs: build-linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v4
@@ -49,7 +49,7 @@ jobs:
 
   build-darwin:
 
-    runs-on: macos-latest
+    runs-on: macos-13
     strategy:
       matrix:
         config: [debug, release]
@@ -73,7 +73,7 @@ jobs:
   dist-darwin:
 
     needs: build-darwin
-    runs-on: macos-latest
+    runs-on: macos-13
     strategy:
       matrix:
         arch: [arm64, x64]
@@ -92,7 +92,7 @@ jobs:
 
   build-win32:
 
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       matrix:
         config: [debug, release]
@@ -117,7 +117,7 @@ jobs:
   dist-win32:
 
     needs: build-win32
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v4
@@ -133,7 +133,7 @@ jobs:
 
   create-release:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     needs: [dist-linux, dist-darwin, dist-win32]
 
