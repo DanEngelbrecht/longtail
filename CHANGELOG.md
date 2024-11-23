@@ -1,6 +1,9 @@
 ##
 - **FIXED** Fixed file corruption on Linux when using `--use-legacy-write` option. [chris-believer](https://github.com/chris-believer)
 - **FIXED** Fixed large file corruption. [timsjostrand](https://github.com/timsjostrand)
+- **UPDATED** Update of ZStd: 1.5.6 https://github.com/facebook/zstd/releases/tag/v1.5.6
+- **UPDATED** Update of LZ4: 1.10.0 https://github.com/lz4/lz4/releases/tag/v1.10.0
+- **UPDATED** Update of Blake3: 1.5.4 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.4
 
 ## 0.4.2
 - **CHANGED API** `Longtail_JobAPI_JobFunc` renamed `is_cancelled` to `detected_error`, now contains first error returned from a job task in the same job group (if any) or ECANCELLED if job group was cancelled
