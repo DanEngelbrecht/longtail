@@ -1,4 +1,8 @@
 ##
+- **FIXED** Fixed file corruption on Linux when using `--use-legacy-write` option. [chris-believer](https://github.com/chris-believer)
+- **FIXED** Fixed large file corruption. [timsjostrand](https://github.com/timsjostrand)
+
+## 0.4.2
 - **CHANGED API** `Longtail_JobAPI_JobFunc` renamed `is_cancelled` to `detected_error`, now contains first error returned from a job task in the same job group (if any) or ECANCELLED if job group was cancelled
     If `detected_error` is non-zero, try to exit (and cleanup) your task directly and return `0`.
 - **CHANGED_API** JobAPI `WaitForAllJobs` now returns first error encountered in a job group for a task as well as any error in the job api itself, removing the need to book keep the error for tasks separately
@@ -98,7 +102,7 @@
 - **NEW API** `Longtail_SplitStoreIndex` added
 - **CHANGED** Make `Longtail_CopyStoreIndex` store_index arg const
 - **FIXED** Fixed `Longtail_StoreIndex m_BlockChunksOffsets` documentation
-- **FIXED** `Longtail_CreateDirectory` no longer ends up in an infinite loop when trying to create a folder when path is a root folder
+- **FIXED** `Longtail_CreateDirectory` no longer ends up in an infinite loop when trying to create a folder when path is a root folder. [timsjostrand](https://github.com/timsjostrand)
 
 ## 0.3.8
 - **CHANGED** Paths in a version index is now stored with case sensitivity to avoid confusion when a file is renamed by changing casing only
