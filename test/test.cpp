@@ -239,6 +239,47 @@ static struct Longtail_StoreIndex* SyncGetExistingContent(Longtail_BlockStoreAPI
     return get_existing_content_content_index_complete.m_StoreIndex;
 }
 
+struct MyReadBlob
+{
+    LONGTAIL_CALLBACK_API(GetBlob) m_API;
+    void* data_ptr;
+    uint64_t size;
+    int err;
+};
+
+static void MyReadBlob_Dispose(struct Longtail_API* api)
+{
+    struct MyReadBlob* MyReadBlob = (struct MyReadBlob*)api;
+    Longtail_Free(MyReadBlob);
+}
+
+static void MyReadBlob_OnComplete(LONGTAIL_CALLBACK_API(GetBlob)* api, int err)
+{
+    struct MyReadBlob* my_api = (struct MyReadBlob*)api;
+    SAFE_DISPOSE_API(&my_api->m_API);
+}
+
+TEST(Longtail, Longtail_PersistanceAPI)
+{
+    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI();
+
+    struct MyReadBlob* MyReadBlob = (struct MyReadBlob*)Longtail_MakeAsyncGetBlobAPI(Longtail_Alloc("Longtail_MakeAsyncGetBlobAPI", sizeof(struct MyReadBlob)), MyReadBlob_Dispose, MyReadBlob_OnComplete);
+    MyReadBlob->data_ptr = 0;
+    MyReadBlob->size = 0;
+    MyReadBlob->err = 0;
+    int err = Longtail_PersistenceAPI_Read(persistance_api, "test/file", &MyReadBlob->data_ptr, &MyReadBlob->size, &MyReadBlob->m_API);
+    if (err)
+    {
+        SAFE_DISPOSE_API(&MyReadBlob->m_API);
+    }
+    else
+    {
+        err = MyReadBlob->err;
+    }
+
+    SAFE_DISPOSE_API(persistance_api);
+}
+
 TEST(Longtail, Longtail_Malloc)
 {
     void* p = Longtail_Alloc(0, 77);
