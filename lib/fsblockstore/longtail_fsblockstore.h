@@ -15,12 +15,19 @@ LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStor
 
 LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStore2API(
     struct Longtail_JobAPI* job_api,
-    struct Longtail_PersistenceAPI persistence_api,
+    struct Longtail_PersistenceAPI* persistence_api,
     struct Longtail_PersistenceAPI* cache_storage_api,
     const char* content_path,
     const char* optional_extension,
     int enable_file_mapping);
 
+LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateBaseBlockStoreAPI(
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_PersistenceAPI* persistence_api,
+    struct Longtail_PersistenceAPI* cache_storage_api,
+    const char* content_path,
+    const char* optional_extension,
+    int enable_file_mapping);
 
 #define LONGTAIL_DECLARE_CALLBACK_API(name) \
 struct Longtail_Async##name##API;\

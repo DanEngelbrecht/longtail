@@ -8297,6 +8297,46 @@ TEST(Longtail, Longtail_OutOfOrderWrites)
 
 }
 
+TEST(Longtail, Longtail_BaseBlockStore)
+{
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI();
+    struct Longtail_BlockStoreAPI* block_store_api = Longtail_CreateBaseBlockStoreAPI(job_api, persistance_api, 0, 0, 0, 0);
+    
+    {
+        Longtail_StoredBlock put_block;
+        size_t block_index_size = Longtail_GetBlockIndexSize(2);
+        void* block_index_mem = Longtail_Alloc(0, block_index_size);
+        put_block.m_BlockIndex = Longtail_InitBlockIndex(block_index_mem, 2);
+        *put_block.m_BlockIndex->m_BlockHash = 0xdeadbeef;
+        *put_block.m_BlockIndex->m_HashIdentifier = hash_api->GetIdentifier(hash_api);
+        *put_block.m_BlockIndex->m_Tag = 0;
+        put_block.m_BlockIndex->m_ChunkHashes[0] = 0xf001fa5;
+        put_block.m_BlockIndex->m_ChunkHashes[1] = 0xfff1fa5;
+        put_block.m_BlockIndex->m_ChunkSizes[0] = 4711;
+        put_block.m_BlockIndex->m_ChunkSizes[1] = 1147;
+        *put_block.m_BlockIndex->m_ChunkCount = 2;
+        put_block.m_BlockChunksDataSize = 4711 + 1147;
+
+        put_block.m_BlockData = Longtail_Alloc(0, put_block.m_BlockChunksDataSize);
+        memset(put_block.m_BlockData, 77, 4711);
+        memset(&((uint8_t*)put_block.m_BlockData)[4711], 13, 1147);
+
+        TestAsyncPutBlockComplete putCB;
+        ASSERT_EQ(0, block_store_api->PutStoredBlock(block_store_api, &put_block, &putCB.m_API));
+        putCB.Wait();
+        Longtail_Free(put_block.m_BlockIndex);
+        Longtail_Free(put_block.m_BlockData);
+        ASSERT_EQ(0, putCB.m_Err);
+    }
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(persistance_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(job_api);
+}
+
 #if 0
 
 TEST(Longtail, PlatformWriteLargeFile)

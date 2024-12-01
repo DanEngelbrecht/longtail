@@ -33,9 +33,9 @@ project "longtail-src"
 
 project "longtail-lib"
    kind "StaticLib"
-   language ("C")
+   language ("C", "C++")
    warnings "Default"
-   files { 'lib/**/*.c', 'lib/**/*.h', 'lib/*.c', 'lib/*.h' }
+   files { 'lib/**/*.c', 'lib/**/*.h', 'lib/**/*.cpp', 'lib/*.c', 'lib/*.h' }
    removefiles { 'lib/**/ext/**'}
 
 project "longtail-lib-ext"

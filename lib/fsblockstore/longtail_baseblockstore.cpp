@@ -9,6 +9,382 @@
 #include <stdio.h>
 #include <string.h>
 
+//class PersistanceAPI
+//{
+//public:
+//    class WriteCallback
+//    {
+//    public:
+//        virtual void OnComplete(int err) = 0;
+//    };
+//    class ReadCallback
+//    {
+//    public:
+//        virtual void OnComplete(int err) = 0;
+//    };
+//    class ListCallback
+//    {
+//    public:
+//        virtual void OnComplete(int err) = 0;
+//    };
+//
+//
+//    // TODO: These functions should have a OnComplete parameter
+//    virtual int Write(const char* sub_path, const void* data, uint64_t size, WriteCallback* callback) = 0;
+//    virtual int Read(const char* sub_path, void* data, uint64_t size, ReadCallback* callback) = 0;
+//    virtual int List(const char* sub_path, int recursive, ListCallback* callback) = 0;
+//};
+
+class TestPersistanceAPI
+{
+public:
+    TestPersistanceAPI()
+    {
+        Longtail_MakePersistenceAPI(&m_API, Dispose, WriteItem, ReadItem, ListItems);
+        m_API.m_Owner = this;
+    }
+    ~TestPersistanceAPI()
+    {
+        m_API.m_Owner = 0;
+    }
+    operator struct Longtail_PersistenceAPI* () { return &m_API.m_API; };
+private:
+    struct API
+    {
+        struct Longtail_PersistenceAPI m_API;
+        TestPersistanceAPI* m_Owner;
+    } m_API;
+
+    int Write(const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback)
+    {
+        Longtail_AsyncPutBlob_OnComplete(callback, 0);
+        return 0;
+    }
+    int Read(const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback)
+    {
+        Longtail_AsyncGetBlob_OnComplete(callback, 0);
+        return 0;
+    }
+    int List(const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
+    {
+        Longtail_AsyncListBlobs_OnComplete(callback, 0);
+        return 0;
+    }
+
+    static void Dispose(struct Longtail_API* longtail_api)
+    {
+        struct API* api = (struct API*)(longtail_api);
+        delete api->m_Owner;
+    }
+
+    static int WriteItem(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback)
+    {
+        struct API* api = (struct API*)persistance_api;
+        return api->m_Owner->Write(sub_path, data, size, callback);
+    }
+    static int ReadItem(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback)
+    {
+        struct API* api = (struct API*)persistance_api;
+        return api->m_Owner->Read(sub_path, data, size_buffer, callback);
+    }
+    static int ListItems(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
+    {
+        struct API* api = (struct API*)persistance_api;
+        return api->m_Owner->List(sub_path, recursive, name_buffer, size_buffer, callback);
+    }
+
+};
+
+struct Longtail_PersistenceAPI* Longtail_CreateTestPersistanceAPI()
+{
+    TestPersistanceAPI* api = new TestPersistanceAPI;
+    return *api;
+}
+
+class BaseBlockStore
+{
+public:
+    BaseBlockStore(struct Longtail_PersistenceAPI* PersistanceAPI);
+    ~BaseBlockStore();
+
+    int PutStoredBlock(struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+    int PreflightGet(uint32_t block_count, const TLongtail_Hash* block_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api);
+    int GetStoredBlock(uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
+    int GetExistingContent(uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
+    int PruneBlocks(uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api);
+    int GetStats(struct Longtail_BlockStore_Stats* out_stats);
+    int Flush(struct Longtail_AsyncFlushAPI* async_complete_api);
+
+    operator struct Longtail_BlockStoreAPI*() { return &m_API.m_BlockStoreAPI; };
+private:
+    struct API
+    {
+        struct Longtail_BlockStoreAPI m_BlockStoreAPI;
+        BaseBlockStore* m_Owner;
+    } m_API;
+
+    struct Longtail_PersistenceAPI* m_Persistance = 0;
+
+    struct Longtail_BlockIndex** m_AddedBlockIndexes = 0;
+
+    struct BlockHashToBlockState
+    {
+        enum class EState : uint8_t
+        {
+            Writing = 0,
+            Complete = 1
+        };
+        uint64_t key;
+        enum EState value;
+    };
+
+    struct BlockHashToBlockState* m_BlockState = 0;
+
+
+    static void BaseBlockStore_Dispose(struct Longtail_API* longtail_api)
+    {
+        struct API* api = (struct API*)(longtail_api);
+        delete api->m_Owner;
+    }
+
+    static int BaseBlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
+    {
+        struct API* api = (struct API*)(block_store_api);
+        return api->m_Owner->PutStoredBlock(stored_block, async_complete_api);
+    }
+
+    static int BaseBlockStore_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
+    {
+        struct API* api = (struct API*)(block_store_api);
+        return api->m_Owner->PreflightGet(chunk_count, chunk_hashes, optional_async_complete_api);
+    }
+
+    static int BaseBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
+    {
+        struct API* api = (struct API*)(block_store_api);
+        return api->m_Owner->GetStoredBlock(block_hash, async_complete_api);
+    }
+
+    static int BaseBlockStore_GetExistingContent(struct Longtail_BlockStoreAPI* block_store_api, uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
+    {
+        struct API* api = (struct API*)(block_store_api);
+        return api->m_Owner->GetExistingContent(chunk_count, chunk_hashes, min_block_usage_percent, async_complete_api);
+    }
+
+    static int BaseBlockStore_PruneBlocks(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+    {
+        struct API* api = (struct API*)(block_store_api);
+        return api->m_Owner->PruneBlocks(block_keep_count, block_keep_hashes, async_complete_api);
+    }
+
+    static int BaseBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+    {
+        struct API* api = (struct API*)(block_store_api);
+        return api->m_Owner->GetStats(out_stats);
+    }
+
+    static int BaseBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+    {
+        struct API* api = (struct API*)(block_store_api);
+        return api->m_Owner->Flush(async_complete_api);
+    }
+};
+
+
+
+
+BaseBlockStore::BaseBlockStore(struct Longtail_PersistenceAPI* PersistanceAPI)
+    :m_Persistance(PersistanceAPI)
+{
+    Longtail_MakeBlockStoreAPI(
+        &m_API, 
+        BaseBlockStore_Dispose, 
+        BaseBlockStore_PutStoredBlock, 
+        BaseBlockStore_PreflightGet, 
+        BaseBlockStore_GetStoredBlock, 
+        BaseBlockStore_GetExistingContent, 
+        BaseBlockStore_PruneBlocks, 
+        BaseBlockStore_GetStats, 
+        BaseBlockStore_Flush);
+    m_API.m_Owner = this;
+}
+
+BaseBlockStore::~BaseBlockStore()
+{
+    m_API.m_Owner = 0;
+    hmfree(m_BlockState);
+    for (intptr_t i = 0; i < arrlen(m_AddedBlockIndexes); i++)
+    {
+        Longtail_Free(m_AddedBlockIndexes[i]);
+    }
+    arrfree(m_AddedBlockIndexes);
+}
+
+int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
+{
+    uint64_t block_hash = *stored_block->m_BlockIndex->m_BlockHash;
+
+    struct Longtail_BlockIndex* block_index_copy = Longtail_CopyBlockIndex(stored_block->m_BlockIndex);
+    if (!block_index_copy)
+    {
+        //          LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)        
+        //          Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
+        return ENOMEM;
+    }
+
+    void* buffer;
+    size_t size;
+    int err = Longtail_WriteStoredBlockToBuffer(
+        stored_block,
+        &buffer,
+        &size);
+    if (err)
+    {
+        Longtail_Free(block_index_copy);
+        return err;
+    }
+
+    const char* block_path = 0;
+    // Build block path
+
+    {
+        // With lock
+        intptr_t block_ptr = hmgeti(m_BlockState, block_hash);
+        if (block_ptr != -1)
+        {
+            // Already busy doing put or the block already has been stored
+
+            Longtail_Free(buffer);
+            Longtail_Free(block_index_copy);
+            return 0;
+        }
+        hmput(m_BlockState, block_hash, BlockHashToBlockState::EState::Writing);
+    }
+
+    class CB
+    {
+    public:
+        CB(BaseBlockStore* BaseBlockAPI, void* buffer, struct Longtail_BlockIndex* block_index, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
+            : m_BaseBlockAPI(BaseBlockAPI), m_Buffer(buffer), m_BlockIndex(block_index), m_AsyncCompleteAPI(async_complete_api)
+        {
+            Longtail_MakeAsyncPutBlobAPI(&m_API, Dispose, OnComplete);
+            m_API.m_CB = this;
+        }
+        void Complete(int err)
+        {
+            Longtail_Free(m_Buffer);
+            if (err == 0)
+            {
+                {
+                    // With lock
+                    hmput(m_BaseBlockAPI->m_BlockState, *m_BlockIndex->m_BlockHash, BlockHashToBlockState::EState::Complete);
+                    arrput(m_BaseBlockAPI->m_AddedBlockIndexes, m_BlockIndex);
+                    m_BlockIndex = 0;
+                }
+            }
+            else
+            {
+                Longtail_Free(m_BlockIndex);
+            }
+            Longtail_AsyncPutStoredBlock_OnComplete(m_AsyncCompleteAPI, err);
+            delete this;
+        }
+
+        operator LONGTAIL_CALLBACK_API(PutBlob)*() { return &m_API.m_API; };
+    private:
+        struct API {
+            LONGTAIL_CALLBACK_API(PutBlob) m_API;
+            CB* m_CB;
+        } m_API;
+
+        static void Dispose(struct Longtail_API* longtail_api)
+        {
+            struct API* api = (struct API*)longtail_api;
+            delete api->m_CB;
+        }
+
+        static void OnComplete(struct Longtail_AsyncPutBlobAPI* async_complete_api, int err)
+        {
+            struct API* api = (struct API*)async_complete_api;
+            api->m_CB->Complete(err);
+        }
+
+        BaseBlockStore* m_BaseBlockAPI;
+        void* m_Buffer;
+        struct Longtail_BlockIndex* m_BlockIndex;
+        struct Longtail_AsyncPutStoredBlockAPI* m_AsyncCompleteAPI;
+    };
+
+    // Callback owns buffer and block_index_copy if m_Persistance->Write returns 0;
+    CB* Callback = new CB(this, buffer, block_index_copy, async_complete_api);
+    err = Longtail_PersistenceAPI_Write(m_Persistance, block_path, buffer, size, *Callback);
+    if (err)
+    {
+        delete Callback;
+        Longtail_Free(buffer);
+        Longtail_Free(block_index_copy);
+        {
+            // With lock
+            hmdel(m_BlockState, block_hash);
+        }
+    }
+    return err;
+}
+
+int BaseBlockStore::PreflightGet(uint32_t block_count, const TLongtail_Hash* block_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
+{
+    if (optional_async_complete_api)
+    {
+        Longtail_AsyncPreflightStarted_OnComplete(optional_async_complete_api, 0, 0, ENOTSUP);
+        return 0;
+    }
+    return ENOTSUP;
+}
+
+int BaseBlockStore::GetStoredBlock(uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
+{
+    Longtail_AsyncGetStoredBlock_OnComplete(async_complete_api, 0, ENOTSUP);
+    return 0;
+}
+
+int BaseBlockStore::GetExistingContent(uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
+{
+    Longtail_AsyncGetExistingContent_OnComplete(async_complete_api, 0, ENOTSUP);
+    return 0;
+}
+
+int BaseBlockStore::PruneBlocks(uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
+{
+    Longtail_AsyncPruneBlocks_OnComplete(async_complete_api, 0, ENOTSUP);
+    return 0;
+}
+
+int BaseBlockStore::GetStats(struct Longtail_BlockStore_Stats* out_stats)
+{
+    return ENOTSUP;
+}
+
+int BaseBlockStore::Flush(struct Longtail_AsyncFlushAPI* async_complete_api)
+{
+    Longtail_AsyncFlush_OnComplete(async_complete_api, ENOTSUP);
+    return 0;
+}
+
+
+struct Longtail_BlockStoreAPI* Longtail_CreateBaseBlockStoreAPI(
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_PersistenceAPI* persistence_api,
+    struct Longtail_PersistenceAPI* cache_storage_api,
+    const char* content_path,
+    const char* optional_extension,
+    int enable_file_mapping)
+{
+    BaseBlockStore* Store = new BaseBlockStore(persistence_api); // TODO: Memory leak!
+    return *Store;
+}
+
+
+#if 0
 struct BlockHashToBlockState
 {
     uint64_t key;
@@ -138,32 +514,32 @@ int Longtail_CreateTestPersistanceInit(void* mem, struct Longtail_TestPersistanc
     return 0;
 }
 
-//struct Longtail_PersistenceAPI* Longtail_CreateTestPersistanceAPI()
-//{
-////    MAKE_LOG_CONTEXT_FIELDS(ctx)
-////    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
-//    struct Longtail_LogContextFmt_Private* ctx = 0;
-//
-//    size_t api_size = sizeof(struct Longtail_TestPersistanceAPI);
-//    void* mem = Longtail_Alloc("FSBlockStore2API", api_size);
-//    if (!mem)
-//    {
-//        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-//        return 0;
-//    }
-//
-//    struct Longtail_TestPersistanceAPI* api;
-//    int err = Longtail_CreateTestPersistanceInit(
-//        mem,
-//        &api);
-//    if (err)
-//    {
-//        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateTestPersistanceInit() failed with %d", err)
-//            Longtail_Free(mem);
-//        return 0;
-//    }
-//    return (struct Longtail_PersistenceAPI*)api;
-//}
+struct Longtail_PersistenceAPI* Longtail_CreateTestPersistanceAPI()
+{
+//    MAKE_LOG_CONTEXT_FIELDS(ctx)
+//    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+
+    size_t api_size = sizeof(struct Longtail_TestPersistanceAPI);
+    void* mem = Longtail_Alloc("FSBlockStore2API", api_size);
+    if (!mem)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
+        return 0;
+    }
+
+    struct Longtail_TestPersistanceAPI* api;
+    int err = Longtail_CreateTestPersistanceInit(
+        mem,
+        &api);
+    if (err)
+    {
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateTestPersistanceInit() failed with %d", err)
+            Longtail_Free(mem);
+        return 0;
+    }
+    return (struct Longtail_PersistenceAPI*)api;
+}
 
 
 
@@ -2026,3 +2402,5 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStore2API(
     return block_store_api;
 }
 #endif // 0 
+
+#endif // 0
