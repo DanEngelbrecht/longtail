@@ -1471,7 +1471,6 @@ int DownSync(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create get required chunks for source `%s`, %d", source_path, err);
-        Longtail_Free(required_chunk_hashes);
         Longtail_Free(version_diff);
         Longtail_Free(target_version_index);
         Longtail_Free(source_version_index);
@@ -1486,6 +1485,32 @@ int DownSync(
         SAFE_DISPOSE_API(job_api);
         Longtail_Free((void*)storage_path);
         return err;
+    }
+
+    if (cache_path == 0)
+    {
+        struct AssetPartLookup* asset_part_lookup = 0;
+        err = Longtail_CreateAssetPartLookup(target_version_index, required_chunk_hashes, required_chunk_count, &asset_part_lookup);
+        if (err)
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Failed to create asset part lookup for target `%s`, %d", target_path, err);
+            Longtail_Free(required_chunk_hashes);
+            Longtail_Free(version_diff);
+            Longtail_Free(target_version_index);
+            Longtail_Free(source_version_index);
+            SAFE_DISPOSE_API(chunker_api);
+            SAFE_DISPOSE_API(compress_block_store_api);
+            SAFE_DISPOSE_API(store_block_cachestore_api);
+            SAFE_DISPOSE_API(store_block_localstore_api);
+            SAFE_DISPOSE_API(store_block_remotestore_api);
+            SAFE_DISPOSE_API(storage_api);
+            SAFE_DISPOSE_API(compression_registry);
+            SAFE_DISPOSE_API(hash_registry);
+            SAFE_DISPOSE_API(job_api);
+            Longtail_Free((void*)storage_path);
+            return err;
+        }
+        Longtail_Free(asset_part_lookup);
     }
 
     struct Longtail_StoreIndex* required_version_store_index;

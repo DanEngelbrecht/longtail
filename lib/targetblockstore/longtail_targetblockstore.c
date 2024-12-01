@@ -1,4 +1,4 @@
-#include "longtail_fsblockstore.h"
+#include "longtail_targetblockstore.h"
 
 #include "../../src/ext/stb_ds.h"
 #include "../longtail_platform.h"
@@ -16,7 +16,7 @@ struct BlockHashToBlockState
 
 #define TMP_EXTENSION_LENGTH (1 + 16)
 
-struct FSBlockStoreAPI
+struct TargetBlockStoreAPI
 {
     struct Longtail_BlockStoreAPI m_BlockStoreAPI;
     struct Longtail_JobAPI* m_JobAPI;
@@ -143,7 +143,7 @@ static char* GetTempBlockPath(
     return storage_api->ConcatPath(storage_api, store_path, file_name);
 }
 
-static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api, int merge_with_existing_index)
+static int SafeWriteStoreIndex(struct TargetBlockStoreAPI* api, int merge_with_existing_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(api, "%p")
@@ -241,7 +241,7 @@ static int SafeWriteStoreIndex(struct FSBlockStoreAPI* api, int merge_with_exist
 
 }
 static int SafeWriteStoredBlock(
-    struct FSBlockStoreAPI* api,
+    struct TargetBlockStoreAPI* api,
     struct Longtail_StorageAPI* storage_api,
     const char* store_path,
     const char* block_extension,
@@ -355,12 +355,12 @@ static int UpdateStoreIndex(
     return 0;
 }
 
-struct FSStoredBlock
+struct TargetStoredBlock
 {
     struct Longtail_StoredBlock m_StoredBlock;
 };
 
-static int FSStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
+static int TargetStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(stored_block, "%p")
@@ -506,7 +506,7 @@ static int ReadContent(
     }
 
     size_t scan_jobs_size = sizeof(struct ScanBlockJob) * path_count;
-    struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc("FSBlockStoreAPI", scan_jobs_size);
+    struct ScanBlockJob* scan_jobs = (struct ScanBlockJob*)Longtail_Alloc("TargetBlockStoreAPI", scan_jobs_size);
     if (!scan_jobs)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -551,7 +551,7 @@ static int ReadContent(
     }
 
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (path_count);
-    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc("FSBlockStoreAPI", block_indexes_size);
+    struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc("TargetBlockStoreAPI", block_indexes_size);
     if (!block_indexes)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -604,30 +604,30 @@ static int ReadContent(
 }
 
 
-int FSBlockStore_GetStoreIndexFromStorage(
-    struct FSBlockStoreAPI* fsblockstore_api,
+int TargetBlockStore_GetStoreIndexFromStorage(
+    struct TargetBlockStoreAPI* targetblockstore_api,
     struct Longtail_StoreIndex** out_store_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(fsblockstore_api, "%p"),
+        LONGTAIL_LOGFIELD(targetblockstore_api, "%p"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    struct Longtail_StorageAPI* storage_api = fsblockstore_api->m_StorageAPI;
-    struct Longtail_JobAPI* job_api = fsblockstore_api->m_JobAPI;
-    const char* store_path = fsblockstore_api->m_StorePath;
-    const char* block_extension = fsblockstore_api->m_BlockExtension;
+    struct Longtail_StorageAPI* storage_api = targetblockstore_api->m_StorageAPI;
+    struct Longtail_JobAPI* job_api = targetblockstore_api->m_JobAPI;
+    const char* store_path = targetblockstore_api->m_StorePath;
+    const char* block_extension = targetblockstore_api->m_BlockExtension;
 
     struct Longtail_StoreIndex* store_index = 0;
 
-    int err = EnsureParentPathExists(storage_api, fsblockstore_api->m_StoreIndexLockPath);
+    int err = EnsureParentPathExists(storage_api, targetblockstore_api->m_StoreIndexLockPath);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "EnsureParentPathExists() failed with %d", err)
         return err;
     }
     Longtail_StorageAPI_HLockFile store_index_lock_file;
-    err = storage_api->LockFile(storage_api, fsblockstore_api->m_StoreIndexLockPath, &store_index_lock_file);
+    err = storage_api->LockFile(storage_api, targetblockstore_api->m_StoreIndexLockPath, &store_index_lock_file);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "storage_api->LockFile() failed with %d", err)
@@ -667,34 +667,34 @@ int FSBlockStore_GetStoreIndexFromStorage(
         return err;
     }
     *out_store_index = store_index;
-    fsblockstore_api->m_StoreIndexIsDirty = 1;
+    targetblockstore_api->m_StoreIndexIsDirty = 1;
     return 0;
 }
 
-static int FSBlockStore_UpdateStoreIndex(
-    struct FSBlockStoreAPI* fsblockstore_api)
+static int TargetBlockStore_UpdateStoreIndex(
+    struct TargetBlockStoreAPI* targetblockstore_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(fsblockstore_api, "%p")
+        LONGTAIL_LOGFIELD(targetblockstore_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    if (!fsblockstore_api->m_StoreIndex)
+    if (!targetblockstore_api->m_StoreIndex)
     {
         struct Longtail_StoreIndex* store_index;
-        int err = FSBlockStore_GetStoreIndexFromStorage(
-            fsblockstore_api,
+        int err = TargetBlockStore_GetStoreIndexFromStorage(
+            targetblockstore_api,
             &store_index);
         if (err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetStoreIndexFromStorage() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "TargetBlockStore_GetStoreIndexFromStorage() failed with %d", err)
             return err;
         }
 
-        if (fsblockstore_api->m_StoreIndex)
+        if (targetblockstore_api->m_StoreIndex)
         {
             struct Longtail_StoreIndex* merged_store_index;
             err = Longtail_MergeStoreIndex(
-                fsblockstore_api->m_StoreIndex, // Our opinion of the store index has precedence
+                targetblockstore_api->m_StoreIndex, // Our opinion of the store index has precedence
                 store_index,
                 &merged_store_index);
             if (err)
@@ -704,28 +704,28 @@ static int FSBlockStore_UpdateStoreIndex(
                 return err;
             }
             Longtail_Free(store_index);
-            Longtail_Free(fsblockstore_api->m_StoreIndex);
-            fsblockstore_api->m_StoreIndex = 0;
+            Longtail_Free(targetblockstore_api->m_StoreIndex);
+            targetblockstore_api->m_StoreIndex = 0;
             store_index = merged_store_index;
-            fsblockstore_api->m_StoreIndexIsDirty = 1;
+            targetblockstore_api->m_StoreIndexIsDirty = 1;
         }
 
-        fsblockstore_api->m_StoreIndex = store_index;
+        targetblockstore_api->m_StoreIndex = store_index;
         uint64_t block_count = *store_index->m_BlockCount;
         for (uint64_t b = 0; b < block_count; ++b)
         {
             uint64_t block_hash = store_index->m_BlockHashes[b];
-            hmput(fsblockstore_api->m_BlockState, block_hash, 1);
+            hmput(targetblockstore_api->m_BlockState, block_hash, 1);
         }
     }
 
-    intptr_t new_block_count = arrlen(fsblockstore_api->m_AddedBlockIndexes);
+    intptr_t new_block_count = arrlen(targetblockstore_api->m_AddedBlockIndexes);
     if (new_block_count > 0)
     {
         struct Longtail_StoreIndex* new_store_index;
         int err = UpdateStoreIndex(
-            fsblockstore_api->m_StoreIndex,
-            fsblockstore_api->m_AddedBlockIndexes,
+            targetblockstore_api->m_StoreIndex,
+            targetblockstore_api->m_AddedBlockIndexes,
             &new_store_index);
         if (err)
         {
@@ -733,54 +733,54 @@ static int FSBlockStore_UpdateStoreIndex(
             return err;
         }
 
-        Longtail_Free(fsblockstore_api->m_StoreIndex);
-        fsblockstore_api->m_StoreIndex = new_store_index;
+        Longtail_Free(targetblockstore_api->m_StoreIndex);
+        targetblockstore_api->m_StoreIndex = new_store_index;
 
         while(new_block_count-- > 0)
         {
-            struct Longtail_BlockIndex* block_index = fsblockstore_api->m_AddedBlockIndexes[new_block_count];
+            struct Longtail_BlockIndex* block_index = targetblockstore_api->m_AddedBlockIndexes[new_block_count];
             Longtail_Free(block_index);
         }
-        arrfree(fsblockstore_api->m_AddedBlockIndexes);
-        fsblockstore_api->m_StoreIndexIsDirty = 1;
+        arrfree(targetblockstore_api->m_AddedBlockIndexes);
+        targetblockstore_api->m_StoreIndexIsDirty = 1;
     }
 
     return 0;
 }
 
-static int FSBlockStore_GetIndexSync(
-    struct FSBlockStoreAPI* fsblockstore_api,
+static int TargetBlockStore_GetIndexSync(
+    struct TargetBlockStoreAPI* targetblockstore_api,
     struct Longtail_StoreIndex** out_store_index)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
-        LONGTAIL_LOGFIELD(fsblockstore_api, "%p"),
+        LONGTAIL_LOGFIELD(targetblockstore_api, "%p"),
         LONGTAIL_LOGFIELD(out_store_index, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-    int err = FSBlockStore_UpdateStoreIndex(fsblockstore_api);
+    Longtail_LockSpinLock(targetblockstore_api->m_Lock);
+    int err = TargetBlockStore_UpdateStoreIndex(targetblockstore_api);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_UpdateStoreIndex() failed with %d", err)
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "TargetBlockStore_UpdateStoreIndex() failed with %d", err)
+        Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
         return err;
     }
 
-    struct Longtail_StoreIndex* store_index = Longtail_CopyStoreIndex(fsblockstore_api->m_StoreIndex);
+    struct Longtail_StoreIndex* store_index = Longtail_CopyStoreIndex(targetblockstore_api->m_StoreIndex);
     if (!store_index)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CopyStoreIndex() failed with %d", ENOMEM)
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
         return ENOMEM;
     }
 
-    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+    Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
 
     *out_store_index = store_index;
     return 0;
 }
 
-static int FSBlockStore_PutStoredBlock(
+static int TargetBlockStore_PutStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StoredBlock* stored_block,
     struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
@@ -799,34 +799,34 @@ static int FSBlockStore_PutStoredBlock(
     LONGTAIL_VALIDATE_INPUT(ctx, stored_block, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api != 0, return EINVAL)
 
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1);
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
+    struct TargetBlockStoreAPI* targetblockstore_api = (struct TargetBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1);
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     uint64_t block_hash = *stored_block->m_BlockIndex->m_BlockHash;
 
-    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-    intptr_t block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
+    Longtail_LockSpinLock(targetblockstore_api->m_Lock);
+    intptr_t block_ptr = hmgeti(targetblockstore_api->m_BlockState, block_hash);
     if (block_ptr != -1)
     {
         // Already busy doing put or the block already has been stored
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
         async_complete_api->OnComplete(async_complete_api, 0);
         return 0;
     }
 
-    hmput(fsblockstore_api->m_BlockState, block_hash, 0);
-    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+    hmput(targetblockstore_api->m_BlockState, block_hash, 0);
+    Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
 
-    int err = SafeWriteStoredBlock(fsblockstore_api, fsblockstore_api->m_StorageAPI, fsblockstore_api->m_StorePath, fsblockstore_api->m_BlockExtension, stored_block);
+    int err = SafeWriteStoredBlock(targetblockstore_api, targetblockstore_api->m_StorageAPI, targetblockstore_api->m_StorePath, targetblockstore_api->m_BlockExtension, stored_block);
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "SafeWriteStoredBlock() failed with %d", err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        hmdel(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
+        Longtail_LockSpinLock(targetblockstore_api->m_Lock);
+        hmdel(targetblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
         async_complete_api->OnComplete(async_complete_api, err);
         return 0;
     }
@@ -836,21 +836,21 @@ static int FSBlockStore_PutStoredBlock(
     if (!block_index_copy)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
+        Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1);
         async_complete_api->OnComplete(async_complete_api, ENOMEM);
         return 0;
     }
 
-    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-    hmput(fsblockstore_api->m_BlockState, block_hash, 1);
-    arrput(fsblockstore_api->m_AddedBlockIndexes, block_index_copy);
-    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+    Longtail_LockSpinLock(targetblockstore_api->m_Lock);
+    hmput(targetblockstore_api->m_BlockState, block_hash, 1);
+    arrput(targetblockstore_api->m_AddedBlockIndexes, block_index_copy);
+    Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
 
     async_complete_api->OnComplete(async_complete_api, 0);
     return 0;
 }
 
-static int FSBlockStore_PreflightGet(
+static int TargetBlockStore_PreflightGet(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint32_t block_count,
     const TLongtail_Hash* block_hashes,
@@ -865,8 +865,8 @@ static int FSBlockStore_PreflightGet(
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, (block_count == 0) || (block_hashes != 0), return EINVAL)
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
+    struct TargetBlockStoreAPI* targetblockstore_api = (struct TargetBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count], 1);
 
     if (!optional_async_complete_api)
     {
@@ -874,15 +874,15 @@ static int FSBlockStore_PreflightGet(
     }
 
     struct Longtail_StoreIndex* store_index;
-    int err = FSBlockStore_GetIndexSync(fsblockstore_api, &store_index);
+    int err = TargetBlockStore_GetIndexSync(targetblockstore_api, &store_index);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync() failed with %d", err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "TargetBlockStore_GetIndexSync() failed with %d", err)
+        Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         return err;
     }
 
-    struct Longtail_LookupTable* requested_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("FSBlockStore", LongtailPrivate_LookupTable_GetSize(block_count)), block_count, 0);
+    struct Longtail_LookupTable* requested_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("TargetBlockStore", LongtailPrivate_LookupTable_GetSize(block_count)), block_count, 0);
     if (!requested_block_lookup)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -954,7 +954,7 @@ static int MappedStoredBlock_Dispose(struct Longtail_StoredBlock* stored_block)
 }
 
 
-static int FSBlockStore_GetStoredBlock(
+static int TargetBlockStore_GetStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint64_t block_hash,
     struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
@@ -972,60 +972,60 @@ static int FSBlockStore_GetStoredBlock(
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
+    struct TargetBlockStoreAPI* targetblockstore_api = (struct TargetBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1);
 
-    Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-    intptr_t block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
+    Longtail_LockSpinLock(targetblockstore_api->m_Lock);
+    intptr_t block_ptr = hmgeti(targetblockstore_api->m_BlockState, block_hash);
     if (block_ptr == -1)
     {
-        char* block_path = GetBlockPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_StorePath, fsblockstore_api->m_BlockExtension, block_hash);
-        if (!fsblockstore_api->m_StorageAPI->IsFile(fsblockstore_api->m_StorageAPI, block_path))
+        char* block_path = GetBlockPath(targetblockstore_api->m_StorageAPI, targetblockstore_api->m_StorePath, targetblockstore_api->m_BlockExtension, block_hash);
+        if (!targetblockstore_api->m_StorageAPI->IsFile(targetblockstore_api->m_StorageAPI, block_path))
         {
             Longtail_Free((void*)block_path);
-            Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+            Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
             return ENOENT;
         }
         Longtail_Free((void*)block_path);
-        hmput(fsblockstore_api->m_BlockState, block_hash, 1);
-        block_ptr = hmgeti(fsblockstore_api->m_BlockState, block_hash);
+        hmput(targetblockstore_api->m_BlockState, block_hash, 1);
+        block_ptr = hmgeti(targetblockstore_api->m_BlockState, block_hash);
     }
-    uint32_t state = fsblockstore_api->m_BlockState[block_ptr].value;
-    Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+    uint32_t state = targetblockstore_api->m_BlockState[block_ptr].value;
+    Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
     while (state == 0)
     {
         Longtail_Sleep(1000);
-        Longtail_LockSpinLock(fsblockstore_api->m_Lock);
-        state = hmget(fsblockstore_api->m_BlockState, block_hash);
-        Longtail_UnlockSpinLock(fsblockstore_api->m_Lock);
+        Longtail_LockSpinLock(targetblockstore_api->m_Lock);
+        state = hmget(targetblockstore_api->m_BlockState, block_hash);
+        Longtail_UnlockSpinLock(targetblockstore_api->m_Lock);
     }
-    char* block_path = GetBlockPath(fsblockstore_api->m_StorageAPI, fsblockstore_api->m_StorePath, fsblockstore_api->m_BlockExtension, block_hash);
+    char* block_path = GetBlockPath(targetblockstore_api->m_StorageAPI, targetblockstore_api->m_StorePath, targetblockstore_api->m_BlockExtension, block_hash);
 
     struct Longtail_StoredBlock* stored_block = 0;
-    if (fsblockstore_api->m_EnableFileMapping)
+    if (targetblockstore_api->m_EnableFileMapping)
     {
         Longtail_StorageAPI_HOpenFile file_handle;
-        int err = fsblockstore_api->m_StorageAPI->OpenReadFile(fsblockstore_api->m_StorageAPI, block_path, &file_handle);
+        int err = targetblockstore_api->m_StorageAPI->OpenReadFile(targetblockstore_api->m_StorageAPI, block_path, &file_handle);
         if (err)
         {
-            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->OpenReadFile() failed with %d", err)
-            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "targetblockstore_api->m_StorageAPI->OpenReadFile() failed with %d", err)
+            Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             Longtail_Free((char*)block_path);
             return err;
         }
         uint64_t block_size;
-        err = fsblockstore_api->m_StorageAPI->GetSize(fsblockstore_api->m_StorageAPI, file_handle, &block_size);
+        err = targetblockstore_api->m_StorageAPI->GetSize(targetblockstore_api->m_StorageAPI, file_handle, &block_size);
         if (err)
         {
-            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->GetSize() failed with %d", err)
-            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-            fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "targetblockstore_api->m_StorageAPI->GetSize() failed with %d", err)
+            Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            targetblockstore_api->m_StorageAPI->CloseFile(targetblockstore_api->m_StorageAPI, file_handle);
             Longtail_Free((char*)block_path);
             return err;
         }
         void* block_data;
         Longtail_StorageAPI_HFileMap file_map;
-        err = fsblockstore_api->m_StorageAPI->MapFile(fsblockstore_api->m_StorageAPI, file_handle, 0, block_size, &file_map, (const void**)&block_data);
+        err = targetblockstore_api->m_StorageAPI->MapFile(targetblockstore_api->m_StorageAPI, file_handle, 0, block_size, &file_map, (const void**)&block_data);
         if (!err)
         {
             size_t block_mem_size = Longtail_GetStoredBlockSize(0) + sizeof(struct Longtail_StorageAPI*) + sizeof(Longtail_StorageAPI_HOpenFile) + sizeof(Longtail_StorageAPI_HFileMap);
@@ -1033,9 +1033,9 @@ static int FSBlockStore_GetStoredBlock(
             if (!stored_block)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
-                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-                fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
-                fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+                Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+                targetblockstore_api->m_StorageAPI->UnMapFile(targetblockstore_api->m_StorageAPI, file_map);
+                targetblockstore_api->m_StorageAPI->CloseFile(targetblockstore_api->m_StorageAPI, file_handle);
                 Longtail_Free((char*)block_path);
                 return ENOMEM;
             }
@@ -1046,16 +1046,16 @@ static int FSBlockStore_GetStoredBlock(
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_InitStoredBlockFromData() failed with %d", err)
-                Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+                Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
                 Longtail_Free(stored_block);
-                fsblockstore_api->m_StorageAPI->UnMapFile(fsblockstore_api->m_StorageAPI, file_map);
-                fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+                targetblockstore_api->m_StorageAPI->UnMapFile(targetblockstore_api->m_StorageAPI, file_map);
+                targetblockstore_api->m_StorageAPI->CloseFile(targetblockstore_api->m_StorageAPI, file_handle);
                 Longtail_Free((char*)block_path);
                 return err;
             }
             char* p = (char*)stored_block;
             p += Longtail_GetStoredBlockSize(0);
-            *(struct Longtail_StorageAPI**)p = fsblockstore_api->m_StorageAPI;
+            *(struct Longtail_StorageAPI**)p = targetblockstore_api->m_StorageAPI;
             p += sizeof(struct Longtail_StorageAPI*);
             *(Longtail_StorageAPI_HOpenFile*)p = file_handle;
             p += sizeof(Longtail_StorageAPI_HOpenFile);
@@ -1064,26 +1064,26 @@ static int FSBlockStore_GetStoredBlock(
         }
         else if (err != ENOTSUP)
         {
-            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "fsblockstore_api->m_StorageAPI->MapFile() failed with %d", err)
-            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
-            fsblockstore_api->m_StorageAPI->CloseFile(fsblockstore_api->m_StorageAPI, file_handle);
+            LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "targetblockstore_api->m_StorageAPI->MapFile() failed with %d", err)
+            Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            targetblockstore_api->m_StorageAPI->CloseFile(targetblockstore_api->m_StorageAPI, file_handle);
             Longtail_Free((char*)block_path);
             return err;
         }
     }
     if (stored_block == 0)
     {
-        int err = Longtail_ReadStoredBlock(fsblockstore_api->m_StorageAPI, block_path, &stored_block);
+        int err = Longtail_ReadStoredBlock(targetblockstore_api->m_StorageAPI, block_path, &stored_block);
         if (err)
         {
             LONGTAIL_LOG(ctx, err == ENOENT ? LONGTAIL_LOG_LEVEL_INFO : LONGTAIL_LOG_LEVEL_WARNING, "Longtail_ReadStoredBlock() failed with %d", err)
-            Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
+            Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1);
             Longtail_Free((char*)block_path);
             return err;
         }
     }
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], *stored_block->m_BlockIndex->m_ChunkCount);
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], Longtail_GetBlockIndexDataSize(*stored_block->m_BlockIndex->m_ChunkCount) + stored_block->m_BlockChunksDataSize);
 
     Longtail_Free(block_path);
 
@@ -1091,7 +1091,7 @@ static int FSBlockStore_GetStoredBlock(
     return 0;
 }
 
-static int FSBlockStore_GetExistingContent(
+static int TargetBlockStore_GetExistingContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint32_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
@@ -1110,14 +1110,14 @@ static int FSBlockStore_GetExistingContent(
     LONGTAIL_VALIDATE_INPUT(ctx, (chunk_count == 0) || (chunk_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
+    struct TargetBlockStoreAPI* targetblockstore_api = (struct TargetBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count], 1);
     struct Longtail_StoreIndex* store_index;
-    int err = FSBlockStore_GetIndexSync(fsblockstore_api, &store_index);
+    int err = TargetBlockStore_GetIndexSync(targetblockstore_api, &store_index);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync() failed with %d", err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "TargetBlockStore_GetIndexSync() failed with %d", err)
+        Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         return err;
     }
 
@@ -1131,7 +1131,7 @@ static int FSBlockStore_GetExistingContent(
     if (err)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_GetExistingStoreIndex() failed with %d", err)
-        Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
+        Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount], 1);
         Longtail_Free(store_index);
         return err;
     }
@@ -1140,7 +1140,7 @@ static int FSBlockStore_GetExistingContent(
     return 0;
 }
 
-static int FSBlockStore_PruneBlocks(
+static int TargetBlockStore_PruneBlocks(
     struct Longtail_BlockStoreAPI* block_store_api,
     uint32_t block_keep_count,
     const TLongtail_Hash* block_keep_hashes,
@@ -1157,14 +1157,14 @@ static int FSBlockStore_PruneBlocks(
     LONGTAIL_VALIDATE_INPUT(ctx, (block_keep_count == 0) || (block_keep_hashes != 0), return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, async_complete_api, return EINVAL)
 
-    struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)block_store_api;
+    struct TargetBlockStoreAPI* api = (struct TargetBlockStoreAPI*)block_store_api;
 
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count], 1);
     struct Longtail_StoreIndex* store_index;
-    int err = FSBlockStore_GetIndexSync(api, &store_index);
+    int err = TargetBlockStore_GetIndexSync(api, &store_index);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_GetIndexSync() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "TargetBlockStore_GetIndexSync() failed with %d", err)
         Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount], 1);
         return err;
     }
@@ -1224,7 +1224,7 @@ static int FSBlockStore_PruneBlocks(
     if (pruned_count > 0)
     {
         size_t kept_block_lookup_size = LongtailPrivate_LookupTable_GetSize(block_count);
-        void* kept_block_lookup_mem = Longtail_Alloc("FSBlockStore_PruneBlocks", kept_block_lookup_size);
+        void* kept_block_lookup_mem = Longtail_Alloc("TargetBlockStore_PruneBlocks", kept_block_lookup_size);
         if (kept_block_lookup_mem == 0)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
@@ -1260,7 +1260,7 @@ static int FSBlockStore_PruneBlocks(
             err = api->m_StorageAPI->RemoveFile(api->m_StorageAPI, block_path);
             if (err != 0)
             {
-                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_PruneBlocks() failed to remove file `%s`, error %d", block_path, err);
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "TargetBlockStore_PruneBlocks() failed to remove file `%s`, error %d", block_path, err);
             }
             Longtail_Free((void*)block_path);
             hmdel(api->m_BlockState, block_hash);
@@ -1279,7 +1279,7 @@ static int FSBlockStore_PruneBlocks(
     return 0;
 }
 
-static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
+static int TargetBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_BlockStore_Stats* out_stats)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
@@ -1288,24 +1288,24 @@ static int FSBlockStore_GetStats(struct Longtail_BlockStoreAPI* block_store_api,
 
     LONGTAIL_VALIDATE_INPUT(ctx, block_store_api, return EINVAL)
     LONGTAIL_VALIDATE_INPUT(ctx, out_stats, return EINVAL)
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
-    Longtail_AtomicAdd64(&fsblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
+    struct TargetBlockStoreAPI* targetblockstore_api = (struct TargetBlockStoreAPI*)block_store_api;
+    Longtail_AtomicAdd64(&targetblockstore_api->m_StatU64[Longtail_BlockStoreAPI_StatU64_GetStats_Count], 1);
     memset(out_stats, 0, sizeof(struct Longtail_BlockStore_Stats));
     for (uint32_t s = 0; s < Longtail_BlockStoreAPI_StatU64_Count; ++s)
     {
-        out_stats->m_StatU64[s] = fsblockstore_api->m_StatU64[s];
+        out_stats->m_StatU64[s] = targetblockstore_api->m_StatU64[s];
     }
     return 0;
 }
 
-static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
+static int TargetBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_AsyncFlushAPI* async_complete_api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(block_store_api, "%p"),
         LONGTAIL_LOGFIELD(async_complete_api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)block_store_api;
+    struct TargetBlockStoreAPI* api = (struct TargetBlockStoreAPI*)block_store_api;
     Longtail_AtomicAdd64(&api->m_StatU64[Longtail_BlockStoreAPI_StatU64_Flush_Count], 1);
 
     Longtail_LockSpinLock(api->m_Lock);
@@ -1313,10 +1313,10 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
     int err = 0;
     if (new_block_count > 0)
     {
-        err = FSBlockStore_UpdateStoreIndex(api);
+        err = TargetBlockStore_UpdateStoreIndex(api);
         if (err)
         {
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_UpdateStoreIndex() failed with %d", err)
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "TargetBlockStore_UpdateStoreIndex() failed with %d", err)
         }
     }
 
@@ -1364,32 +1364,32 @@ static int FSBlockStore_Flush(struct Longtail_BlockStoreAPI* block_store_api, st
     return err;
 }
 
-static void FSBlockStore_Dispose(struct Longtail_API* api)
+static void TargetBlockStore_Dispose(struct Longtail_API* api)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(api, "%p")
     MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_FATAL_ASSERT(ctx, api, return)
-    struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)api;
+    struct TargetBlockStoreAPI* targetblockstore_api = (struct TargetBlockStoreAPI*)api;
 
-    int err = FSBlockStore_Flush(&fsblockstore_api->m_BlockStoreAPI, 0);
+    int err = TargetBlockStore_Flush(&targetblockstore_api->m_BlockStoreAPI, 0);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "FSBlockStore_Flush() failed with %d", err);
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "TargetBlockStore_Flush() failed with %d", err);
     }
 
-    hmfree(fsblockstore_api->m_BlockState);
-    fsblockstore_api->m_BlockState = 0;
-    Longtail_DeleteSpinLock(fsblockstore_api->m_Lock);
-    Longtail_Free(fsblockstore_api->m_Lock);
-    Longtail_Free((void*)fsblockstore_api->m_StoreIndexLockPath);
-    Longtail_Free(fsblockstore_api->m_StorePath);
-    Longtail_Free(fsblockstore_api->m_StoreIndex);
-    Longtail_Free(fsblockstore_api);
+    hmfree(targetblockstore_api->m_BlockState);
+    targetblockstore_api->m_BlockState = 0;
+    Longtail_DeleteSpinLock(targetblockstore_api->m_Lock);
+    Longtail_Free(targetblockstore_api->m_Lock);
+    Longtail_Free((void*)targetblockstore_api->m_StoreIndexLockPath);
+    Longtail_Free(targetblockstore_api->m_StorePath);
+    Longtail_Free(targetblockstore_api->m_StoreIndex);
+    Longtail_Free(targetblockstore_api);
 }
 
-static int FSBlockStore_Init(
+static int TargetBlockStore_Init(
     void* mem,
     struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
@@ -1417,20 +1417,20 @@ static int FSBlockStore_Init(
 
     struct Longtail_BlockStoreAPI* block_store_api = Longtail_MakeBlockStoreAPI(
         mem,
-        FSBlockStore_Dispose,
-        FSBlockStore_PutStoredBlock,
-        FSBlockStore_PreflightGet,
-        FSBlockStore_GetStoredBlock,
-        FSBlockStore_GetExistingContent,
-        FSBlockStore_PruneBlocks,
-        FSBlockStore_GetStats,
-        FSBlockStore_Flush);
+        TargetBlockStore_Dispose,
+        TargetBlockStore_PutStoredBlock,
+        TargetBlockStore_PreflightGet,
+        TargetBlockStore_GetStoredBlock,
+        TargetBlockStore_GetExistingContent,
+        TargetBlockStore_PruneBlocks,
+        TargetBlockStore_GetStats,
+        TargetBlockStore_Flush);
     if (!block_store_api)
     {
         return EINVAL;
     }
 
-    struct FSBlockStoreAPI* api = (struct FSBlockStoreAPI*)block_store_api;
+    struct TargetBlockStoreAPI* api = (struct TargetBlockStoreAPI*)block_store_api;
 
     api->m_JobAPI = job_api;
     api->m_StorageAPI = storage_api;
@@ -1452,7 +1452,7 @@ static int FSBlockStore_Init(
     }
 
 
-    int err = Longtail_CreateSpinLock(Longtail_Alloc("FSBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);
+    int err = Longtail_CreateSpinLock(Longtail_Alloc("TargetBlockStoreAPI", Longtail_GetSpinLockSize()), &api->m_Lock);
     if (err)
     {
         hmfree(api->m_BlockState);
@@ -1465,7 +1465,7 @@ static int FSBlockStore_Init(
     return 0;
 }
 
-struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
+struct Longtail_BlockStoreAPI* Longtail_CreateTargetBlockStoreAPI(
     struct Longtail_JobAPI* job_api,
     struct Longtail_StorageAPI* storage_api,
     const char* content_path,
@@ -1482,10 +1482,10 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     LONGTAIL_VALIDATE_INPUT(ctx, storage_api != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, content_path != 0, return 0)
     LONGTAIL_VALIDATE_INPUT(ctx, optional_extension == 0 || strlen(optional_extension) < 15, return 0)
-    size_t api_size = sizeof(struct FSBlockStoreAPI);
+    size_t api_size = sizeof(struct TargetBlockStoreAPI);
     const char* block_extension = optional_extension ? optional_extension : ".lrb";
     size_t block_extension_length = strlen(block_extension);
-    void* mem = Longtail_Alloc("FSBlockStoreAPI", api_size + block_extension_length + 1);
+    void* mem = Longtail_Alloc("TargetBlockStoreAPI", api_size + block_extension_length + 1);
     if (!mem)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -1496,7 +1496,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
     uint64_t unique_id = computer_id ^ instance_id;
 
     struct Longtail_BlockStoreAPI* block_store_api;
-    int err = FSBlockStore_Init(
+    int err = TargetBlockStore_Init(
         mem,
         job_api,
         storage_api,
@@ -1507,7 +1507,7 @@ struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStoreAPI(
         &block_store_api);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore_Init() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "TargetBlockStore_Init() failed with %d", err)
         Longtail_Free(mem);
         return 0;
     }

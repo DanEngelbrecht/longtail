@@ -4413,17 +4413,10 @@ int Longtail_GetRequiredChunkHashes(
     return 0;
 }
 
-struct AssetPartLookup
-{
-    uint64_t* m_AssetOffsets;
-    uint32_t* m_AssetIndexes;
-    uint32_t* m_ChunkIndexes;
-    uint32_t* m_Tags;
-    struct Longtail_LookupTable* m_ChunkHashToIndex;
-};
-
-static int CreateAssetPartLookup(
+int Longtail_CreateAssetPartLookup(
     struct Longtail_VersionIndex* version_index,
+    const TLongtail_Hash* optional_wanted_hashes,
+    const uint32_t optional_wanted_hash_count,
     struct AssetPartLookup** out_assert_part_lookup)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -4434,7 +4427,7 @@ static int CreateAssetPartLookup(
     LONGTAIL_FATAL_ASSERT(ctx, version_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(ctx, out_assert_part_lookup != 0, return EINVAL)
 
-    uint32_t asset_chunk_index_count = *version_index->m_AssetChunkIndexCount;
+    uint32_t asset_chunk_index_count = optional_wanted_hashes == 0 ? *version_index->m_AssetChunkIndexCount : optional_wanted_hash_count;
     size_t asset_part_lookup_size =
         sizeof(struct AssetPartLookup) +
         sizeof(uint64_t) * asset_chunk_index_count +
@@ -4442,7 +4435,7 @@ static int CreateAssetPartLookup(
         sizeof(uint32_t) * asset_chunk_index_count +
         sizeof(uint32_t) * asset_chunk_index_count +
         LongtailPrivate_LookupTable_GetSize(asset_chunk_index_count);
-    struct AssetPartLookup* asset_part_lookup = (struct AssetPartLookup*)Longtail_Alloc("CreateAssetPartLookup", asset_part_lookup_size);
+    struct AssetPartLookup* asset_part_lookup = (struct AssetPartLookup*)Longtail_Alloc("Longtail_CreateAssetPartLookup", asset_part_lookup_size);
     if (!asset_part_lookup_size)
     {
         LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", ENOMEM)
@@ -4464,6 +4457,19 @@ static int CreateAssetPartLookup(
 
     asset_part_lookup->m_ChunkHashToIndex = LongtailPrivate_LookupTable_Create(p, asset_chunk_index_count, 0);
 
+    struct Longtail_LookupTable* optional_wanted_hash_lookup = 0;
+    if (optional_wanted_hashes != 0)
+    {
+        size_t optional_wanted_hash_lookup_mem_size = LongtailPrivate_LookupTable_GetSize(optional_wanted_hash_count);
+        void* optional_wanted_hash_lookup_mem = Longtail_Alloc("Longtail_CreateAssetPartLookup", optional_wanted_hash_lookup_mem_size);
+
+        optional_wanted_hash_lookup = LongtailPrivate_LookupTable_Create(optional_wanted_hash_lookup_mem, optional_wanted_hash_count, 0);
+        for (uint32_t chunk_index = 0; chunk_index < optional_wanted_hash_count; chunk_index++)
+        {
+            LongtailPrivate_LookupTable_PutUnique(optional_wanted_hash_lookup, optional_wanted_hashes[chunk_index], chunk_index);
+        }
+    }
+
     uint32_t unique_chunk_count = 0;
     uint32_t asset_count = *version_index->m_AssetCount;
     for (uint32_t asset_index = 0; asset_index < asset_count; ++asset_index)
@@ -4477,8 +4483,13 @@ static int CreateAssetPartLookup(
             LONGTAIL_FATAL_ASSERT(ctx, asset_chunk_index_start + asset_chunk_index < *version_index->m_AssetChunkIndexCount, return EINVAL)
             uint32_t chunk_index = version_index->m_AssetChunkIndexes[asset_chunk_index_start + asset_chunk_index];
             LONGTAIL_FATAL_ASSERT(ctx, chunk_index < *version_index->m_ChunkCount, return EINVAL)
-            uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             TLongtail_Hash chunk_hash = version_index->m_ChunkHashes[chunk_index];
+            if (optional_wanted_hash_lookup != 0 && LongtailPrivate_LookupTable_Get(optional_wanted_hash_lookup, chunk_hash) == 0)
+            {
+                continue;
+            }
+
+            uint32_t chunk_size = version_index->m_ChunkSizes[chunk_index];
             uint32_t tag = version_index->m_ChunkTags[chunk_index];
             if (0 == LongtailPrivate_LookupTable_PutUnique(asset_part_lookup->m_ChunkHashToIndex, chunk_hash, unique_chunk_count))
             {
@@ -4490,6 +4501,10 @@ static int CreateAssetPartLookup(
             }
             asset_chunk_offset += chunk_size;
         }
+    }
+    if (optional_wanted_hash_lookup)
+    {
+        Longtail_Free(optional_wanted_hash_lookup);
     }
     *out_assert_part_lookup = asset_part_lookup;
     return 0;
@@ -4842,10 +4857,10 @@ int Longtail_WriteContent(
     }
 
     struct AssetPartLookup* asset_part_lookup;
-    int err = CreateAssetPartLookup(version_index, &asset_part_lookup);
+    int err = Longtail_CreateAssetPartLookup(version_index, 0, 0,  &asset_part_lookup);
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "CreateAssetPartLookup() failed with %d", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_CreateAssetPartLookup() failed with %d", err)
         Longtail_Free(work_mem);
         return err;
     }
