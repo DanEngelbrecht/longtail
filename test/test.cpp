@@ -242,41 +242,100 @@ static struct Longtail_StoreIndex* SyncGetExistingContent(Longtail_BlockStoreAPI
 struct MyReadBlob
 {
     LONGTAIL_CALLBACK_API(GetBlob) m_API;
-    void* data_ptr;
-    uint64_t size;
-    int err;
+    void* data_ptr = 0;
+    uint64_t size = 0;
+    int err = 0;
 };
 
 static void MyReadBlob_Dispose(struct Longtail_API* api)
 {
     struct MyReadBlob* MyReadBlob = (struct MyReadBlob*)api;
+    Longtail_Free(MyReadBlob->data_ptr);
     Longtail_Free(MyReadBlob);
 }
 
 static void MyReadBlob_OnComplete(LONGTAIL_CALLBACK_API(GetBlob)* api, int err)
 {
     struct MyReadBlob* my_api = (struct MyReadBlob*)api;
-    SAFE_DISPOSE_API(&my_api->m_API);
+    my_api->err = err;
+}
+
+struct MyWriteBlob
+{
+    LONGTAIL_CALLBACK_API(PutBlob) m_API;
+    int err;
+};
+
+static void MyWriteBlob_Dispose(struct Longtail_API* api)
+{
+    struct MyWriteBlob* MyWriteBlob = (struct MyWriteBlob*)api;
+    Longtail_Free(MyWriteBlob);
+}
+
+static void MyWriteBlob_OnComplete(LONGTAIL_CALLBACK_API(PutBlob)* api, int err)
+{
+    struct MyWriteBlob* my_api = (struct MyWriteBlob*)api;
+    my_api->err = err;
+}
+
+struct MyListBlobs
+{
+    LONGTAIL_CALLBACK_API(ListBlobs) m_API;
+    char* names;
+    uint64_t namessize;
+    int err;
+};
+
+static void MyListBlobs_Dispose(struct Longtail_API* api)
+{
+    struct MyListBlobs* MyListBlobs = (struct MyListBlobs*)api;
+    Longtail_Free(MyListBlobs->names);
+    Longtail_Free(MyListBlobs);
+}
+
+static void MyListBlobs_OnComplete(LONGTAIL_CALLBACK_API(ListBlobs)* api, int err)
+{
+    struct MyListBlobs* my_api = (struct MyListBlobs*)api;
+    my_api->err = err;
 }
 
 TEST(Longtail, Longtail_PersistanceAPI)
 {
-    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI();
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI(storage_api);
 
     struct MyReadBlob* MyReadBlob = (struct MyReadBlob*)Longtail_MakeAsyncGetBlobAPI(Longtail_Alloc("Longtail_MakeAsyncGetBlobAPI", sizeof(struct MyReadBlob)), MyReadBlob_Dispose, MyReadBlob_OnComplete);
     MyReadBlob->data_ptr = 0;
     MyReadBlob->size = 0;
     MyReadBlob->err = 0;
     int err = Longtail_PersistenceAPI_Read(persistance_api, "test/file", &MyReadBlob->data_ptr, &MyReadBlob->size, &MyReadBlob->m_API);
-    if (err)
-    {
-        SAFE_DISPOSE_API(&MyReadBlob->m_API);
-    }
-    else
+    if (!err)
     {
         err = MyReadBlob->err;
     }
+    SAFE_DISPOSE_API(&MyReadBlob->m_API);
 
+    struct MyWriteBlob* MyWriteBlob = (struct MyWriteBlob*)Longtail_MakeAsyncPutBlobAPI(Longtail_Alloc("Longtail_MakeAsyncPutBlobAPI", sizeof(struct MyWriteBlob)), MyWriteBlob_Dispose, MyWriteBlob_OnComplete);
+    MyWriteBlob->err = 0;
+    err = Longtail_PersistenceAPI_Write(persistance_api, "test/file", "hello", 5, &MyWriteBlob->m_API);
+    if (!err)
+    {
+        err = MyWriteBlob->err;
+    }
+    SAFE_DISPOSE_API(&MyWriteBlob->m_API);
+
+    struct MyListBlobs* MyListBlobs = (struct MyListBlobs*)Longtail_MakeAsyncListBlobsAPI(Longtail_Alloc("Longtail_MakeAsyncListBlobsAPI", sizeof(struct MyListBlobs)), MyListBlobs_Dispose, MyListBlobs_OnComplete);
+    MyListBlobs->names = 0;
+    MyListBlobs->namessize = 0;
+    MyListBlobs->err = 0;
+    err = Longtail_PersistenceAPI_List(persistance_api, "", 1, &MyListBlobs->names, &MyListBlobs->namessize, &MyListBlobs->m_API);
+    if (!err)
+    {
+        err = MyListBlobs->err;
+    }
+    SAFE_DISPOSE_API(&MyListBlobs->m_API);
+
+    SAFE_DISPOSE_API(storage_api);
     SAFE_DISPOSE_API(persistance_api);
 }
 
@@ -8301,7 +8360,8 @@ TEST(Longtail, Longtail_BaseBlockStore)
 {
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
-    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI();
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI(storage_api);
     struct Longtail_BlockStoreAPI* block_store_api = Longtail_CreateBaseBlockStoreAPI(job_api, persistance_api, 0, 0, 0, 0);
     
     {
@@ -8333,6 +8393,7 @@ TEST(Longtail, Longtail_BaseBlockStore)
 
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(persistance_api);
+    SAFE_DISPOSE_API(storage_api);
     SAFE_DISPOSE_API(hash_api);
     SAFE_DISPOSE_API(job_api);
 }

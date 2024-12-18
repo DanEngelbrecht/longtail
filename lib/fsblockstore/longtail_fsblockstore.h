@@ -88,7 +88,7 @@ LONGTAIL_DECLARE_CALLBACK_API(ListBlobs)
 
 typedef int (*Longtail_PersistenceAPI_WriteItemFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback);
 typedef int (*Longtail_PersistenceAPI_ReadItemFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback);
-typedef int (*Longtail_PersistenceAPI_ListItemsFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback);
+typedef int (*Longtail_PersistenceAPI_ListItemsFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback);
 
 struct Longtail_PersistenceAPI
 {
@@ -116,9 +116,9 @@ struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
 
 LONGTAIL_EXPORT int Longtail_PersistenceAPI_Write(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback);
 LONGTAIL_EXPORT int Longtail_PersistenceAPI_Read(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback);
-LONGTAIL_EXPORT int Longtail_PersistenceAPI_List(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback);
+LONGTAIL_EXPORT int Longtail_PersistenceAPI_List(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback);
 
-struct Longtail_PersistenceAPI* Longtail_CreateTestPersistanceAPI();
+struct Longtail_PersistenceAPI* Longtail_CreateTestPersistanceAPI(struct Longtail_StorageAPI* storage_api);
 
 #ifdef __cplusplus
 }

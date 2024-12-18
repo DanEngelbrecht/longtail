@@ -38,7 +38,8 @@
 class TestPersistanceAPI
 {
 public:
-    TestPersistanceAPI()
+    TestPersistanceAPI(struct Longtail_StorageAPI* storage_api)
+        : m_StorageAPI(storage_api)
     {
         Longtail_MakePersistenceAPI(&m_API, Dispose, WriteItem, ReadItem, ListItems);
         m_API.m_Owner = this;
@@ -55,18 +56,156 @@ private:
         TestPersistanceAPI* m_Owner;
     } m_API;
 
+    struct Longtail_StorageAPI* m_StorageAPI;
+
     int Write(const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback)
     {
-        Longtail_AsyncPutBlob_OnComplete(callback, 0);
+        int err = EnsureParentPathExists(m_StorageAPI, sub_path);
+        if (err)
+        {
+            Longtail_AsyncPutBlob_OnComplete(callback, err);
+            return 0;
+        }
+
+        Longtail_StorageAPI_HOpenFile f;
+        err = m_StorageAPI->OpenWriteFile(m_StorageAPI, sub_path, 0, &f);
+        if (err)
+        {
+            Longtail_AsyncPutBlob_OnComplete(callback, err);
+            return 0;
+        }
+        err = m_StorageAPI->Write(m_StorageAPI, f, 0, size, data);
+        m_StorageAPI->CloseFile(m_StorageAPI, f);
+        Longtail_AsyncPutBlob_OnComplete(callback, err);
         return 0;
     }
     int Read(const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback)
     {
-        Longtail_AsyncGetBlob_OnComplete(callback, 0);
+        Longtail_StorageAPI_HOpenFile f;
+        int err = m_StorageAPI->OpenReadFile(m_StorageAPI, sub_path, &f);
+        if (err)
+        {
+            Longtail_AsyncGetBlob_OnComplete(callback, err);
+            return 0;
+        }
+        err = m_StorageAPI->GetSize(m_StorageAPI, f, size_buffer);
+        if (err)
+        {
+            Longtail_AsyncGetBlob_OnComplete(callback, err);
+            return 0;
+        }
+        *data = Longtail_Alloc("TestPersistanceAPI", *size_buffer);
+        if (*data == 0)
+        {
+            Longtail_AsyncGetBlob_OnComplete(callback, ENOMEM);
+        }
+        err = m_StorageAPI->Read(m_StorageAPI, f, 0, *size_buffer, *data);
+        if (err)
+        {
+            Longtail_Free(*data);
+            *data = 0;
+            *size_buffer = 0;
+        }
+        m_StorageAPI->CloseFile(m_StorageAPI, f);
+        Longtail_AsyncGetBlob_OnComplete(callback, err);
         return 0;
     }
-    int List(const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
+    int List(const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
     {
+        size_t NamesBufferSize = 0;
+        char** Names = 0;
+        char** ScanDirs = 0;
+        arrput(ScanDirs, Longtail_Strdup(sub_path));
+        intptr_t ScanDirIndex = 0;
+
+        while (ScanDirIndex < arrlen(ScanDirs))
+        {
+            Longtail_StorageAPI_HIterator Iterator;
+            int err = m_StorageAPI->StartFind(m_StorageAPI, ScanDirs[ScanDirIndex], &Iterator);
+            if (err)
+            {
+                for (intptr_t D = 0; D < arrlen(Names); D++)
+                {
+                    Longtail_Free(Names[D]);
+                }
+                arrfree(Names);
+
+                for (intptr_t D = 0; D < arrlen(ScanDirs); D++)
+                {
+                    Longtail_Free(ScanDirs[D]);
+                }
+                arrfree(ScanDirs);
+                Longtail_AsyncListBlobs_OnComplete(callback, err);
+                return 0;
+            }
+
+            while (err != ENOENT)
+            {
+                struct Longtail_StorageAPI_EntryProperties properties;
+                err = m_StorageAPI->GetEntryProperties(m_StorageAPI, Iterator, &properties);
+                if (err)
+                {
+                    break;
+                }
+                if (properties.m_IsDir && recursive)
+                {
+                    arrput(ScanDirs, m_StorageAPI->ConcatPath(m_StorageAPI, ScanDirs[ScanDirIndex], properties.m_Name));
+                }
+                NamesBufferSize += strlen(properties.m_Name) + 1;
+                arrput(Names, Longtail_Strdup(properties.m_Name));
+                err = m_StorageAPI->FindNext(m_StorageAPI, Iterator);
+            }
+            m_StorageAPI->CloseFind(m_StorageAPI, Iterator);
+            if (err != ENOENT)
+            {
+                for (intptr_t D = 0; D < arrlen(Names); D++)
+                {
+                    Longtail_Free(Names[D]);
+                }
+                arrfree(Names);
+
+                for (intptr_t D = 0; D < arrlen(ScanDirs); D++)
+                {
+                    Longtail_Free(ScanDirs[D]);
+                }
+                arrfree(ScanDirs);
+                Longtail_AsyncListBlobs_OnComplete(callback, err);
+                return 0;
+            }
+            ScanDirIndex++;
+        }
+
+        for (intptr_t D = 0; D < arrlen(ScanDirs); D++)
+        {
+            Longtail_Free(ScanDirs[D]);
+        }
+        arrfree(ScanDirs);
+
+        *size_buffer = NamesBufferSize + 1;
+        *name_buffer = (char*)Longtail_Alloc("TestPersistanceAPI", *size_buffer);
+        if (*name_buffer == 0)
+        {
+            *size_buffer = 0;
+            for (intptr_t D = 0; D < arrlen(Names); D++)
+            {
+                Longtail_Free(Names[D]);
+            }
+            arrfree(Names);
+            Longtail_AsyncListBlobs_OnComplete(callback, ENOMEM);
+            return 0;
+        }
+        char* target_ptr = *name_buffer;
+        for (intptr_t I = 0; I < arrlen(Names); I++)
+        {
+            strcpy(target_ptr, Names[I]);
+            target_ptr += strlen(Names[I]) + 1;
+        }
+        *target_ptr = 0;
+        for (intptr_t D = 0; D < arrlen(Names); D++)
+        {
+            Longtail_Free(Names[D]);
+        }
+        arrfree(Names);
         Longtail_AsyncListBlobs_OnComplete(callback, 0);
         return 0;
     }
@@ -87,7 +226,7 @@ private:
         struct API* api = (struct API*)persistance_api;
         return api->m_Owner->Read(sub_path, data, size_buffer, callback);
     }
-    static int ListItems(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
+    static int ListItems(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
     {
         struct API* api = (struct API*)persistance_api;
         return api->m_Owner->List(sub_path, recursive, name_buffer, size_buffer, callback);
@@ -95,10 +234,64 @@ private:
 
 };
 
-struct Longtail_PersistenceAPI* Longtail_CreateTestPersistanceAPI()
+struct Longtail_PersistenceAPI* Longtail_CreateTestPersistanceAPI(struct Longtail_StorageAPI* storage_api)
 {
-    TestPersistanceAPI* api = new TestPersistanceAPI;
+    TestPersistanceAPI* api = new TestPersistanceAPI(storage_api);
     return *api;
+}
+
+#define BLOCK_NAME_LENGTH   23
+
+static const char* HashLUT = "0123456789abcdef";
+
+static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
+{
+    LONGTAIL_FATAL_ASSERT(0, out_name, return)
+        out_name[7] = HashLUT[(block_hash >> 60) & 0xf];
+    out_name[8] = HashLUT[(block_hash >> 56) & 0xf];
+    out_name[9] = HashLUT[(block_hash >> 52) & 0xf];
+    out_name[10] = HashLUT[(block_hash >> 48) & 0xf];
+    out_name[11] = HashLUT[(block_hash >> 44) & 0xf];
+    out_name[12] = HashLUT[(block_hash >> 40) & 0xf];
+    out_name[13] = HashLUT[(block_hash >> 36) & 0xf];
+    out_name[14] = HashLUT[(block_hash >> 32) & 0xf];
+    out_name[15] = HashLUT[(block_hash >> 28) & 0xf];
+    out_name[16] = HashLUT[(block_hash >> 24) & 0xf];
+    out_name[17] = HashLUT[(block_hash >> 20) & 0xf];
+    out_name[18] = HashLUT[(block_hash >> 16) & 0xf];
+    out_name[19] = HashLUT[(block_hash >> 12) & 0xf];
+    out_name[20] = HashLUT[(block_hash >> 8) & 0xf];
+    out_name[21] = HashLUT[(block_hash >> 4) & 0xf];
+    out_name[22] = HashLUT[(block_hash >> 0) & 0xf];
+    out_name[0] = out_name[7];
+    out_name[1] = out_name[8];
+    out_name[2] = out_name[9];
+    out_name[3] = out_name[10];
+    out_name[4] = '/';
+    out_name[5] = '0';
+    out_name[6] = 'x';
+}
+
+static char* GetBlobPath(
+    const char* block_extension,
+    TLongtail_Hash block_hash)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(block_extension, "%s"),
+        LONGTAIL_LOGFIELD(block_hash, "%" PRIx64)
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+
+    LONGTAIL_FATAL_ASSERT(ctx, block_extension, return 0)
+
+    char file_name[7 + BLOCK_NAME_LENGTH + 3 + 1];
+    strcpy(file_name, "chunks/");
+    GetBlockName(block_hash, &file_name[7]);
+    strcpy(&file_name[7 + BLOCK_NAME_LENGTH], block_extension);
+    return Longtail_Strdup(file_name);
 }
 
 class BaseBlockStore
@@ -188,6 +381,7 @@ private:
         struct API* api = (struct API*)(block_store_api);
         return api->m_Owner->Flush(async_complete_api);
     }
+
 };
 
 
@@ -244,8 +438,7 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
         return err;
     }
 
-    const char* block_path = 0;
-    // Build block path
+    char* block_path = GetBlobPath(".lsb", block_hash);
 
     {
         // With lock
@@ -256,6 +449,7 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
 
             Longtail_Free(buffer);
             Longtail_Free(block_index_copy);
+            Longtail_Free(block_path);
             return 0;
         }
         hmput(m_BlockState, block_hash, BlockHashToBlockState::EState::Writing);
@@ -264,15 +458,27 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
     class CB
     {
     public:
-        CB(BaseBlockStore* BaseBlockAPI, void* buffer, struct Longtail_BlockIndex* block_index, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
-            : m_BaseBlockAPI(BaseBlockAPI), m_Buffer(buffer), m_BlockIndex(block_index), m_AsyncCompleteAPI(async_complete_api)
+        CB(BaseBlockStore* BaseBlockAPI, char* block_path, void* buffer, struct Longtail_BlockIndex* block_index, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
+            : m_BaseBlockAPI(BaseBlockAPI)
+            , m_BlockPath(block_path)
+            , m_Buffer(buffer)
+            , m_BlockIndex(block_index)
+            , m_AsyncCompleteAPI(async_complete_api)
         {
             Longtail_MakeAsyncPutBlobAPI(&m_API, Dispose, OnComplete);
             m_API.m_CB = this;
         }
-        void Complete(int err)
+        ~CB()
         {
             Longtail_Free(m_Buffer);
+            m_Buffer = 0;
+            Longtail_Free(m_BlockIndex);
+            m_BlockIndex = 0;
+            Longtail_Free(m_BlockPath);
+            m_BlockPath = 0;
+        }
+        void Complete(int err)
+        {
             if (err == 0)
             {
                 {
@@ -281,10 +487,6 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
                     arrput(m_BaseBlockAPI->m_AddedBlockIndexes, m_BlockIndex);
                     m_BlockIndex = 0;
                 }
-            }
-            else
-            {
-                Longtail_Free(m_BlockIndex);
             }
             Longtail_AsyncPutStoredBlock_OnComplete(m_AsyncCompleteAPI, err);
             delete this;
@@ -310,19 +512,18 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
         }
 
         BaseBlockStore* m_BaseBlockAPI;
+        void* m_BlockPath;
         void* m_Buffer;
         struct Longtail_BlockIndex* m_BlockIndex;
         struct Longtail_AsyncPutStoredBlockAPI* m_AsyncCompleteAPI;
     };
 
     // Callback owns buffer and block_index_copy if m_Persistance->Write returns 0;
-    CB* Callback = new CB(this, buffer, block_index_copy, async_complete_api);
+    CB* Callback = new CB(this, block_path, buffer, block_index_copy, async_complete_api);
     err = Longtail_PersistenceAPI_Write(m_Persistance, block_path, buffer, size, *Callback);
     if (err)
     {
         delete Callback;
-        Longtail_Free(buffer);
-        Longtail_Free(block_index_copy);
         {
             // With lock
             hmdel(m_BlockState, block_hash);
@@ -370,6 +571,9 @@ int BaseBlockStore::Flush(struct Longtail_AsyncFlushAPI* async_complete_api)
     return 0;
 }
 
+LONGTAIL_IMPLEMENT_CALLBACK_API(PutBlob)
+LONGTAIL_IMPLEMENT_CALLBACK_API(GetBlob)
+LONGTAIL_IMPLEMENT_CALLBACK_API(ListBlobs)
 
 struct Longtail_BlockStoreAPI* Longtail_CreateBaseBlockStoreAPI(
     struct Longtail_JobAPI* job_api,
@@ -383,22 +587,6 @@ struct Longtail_BlockStoreAPI* Longtail_CreateBaseBlockStoreAPI(
     return *Store;
 }
 
-
-#if 0
-struct BlockHashToBlockState
-{
-    uint64_t key;
-    uint32_t value;
-};
-
-#define TMP_EXTENSION_LENGTH (1 + 16)
-
-LONGTAIL_IMPLEMENT_CALLBACK_API(PutBlob)
-LONGTAIL_IMPLEMENT_CALLBACK_API(GetBlob)
-LONGTAIL_IMPLEMENT_CALLBACK_API(ListBlobs)
-
-
-
 int Longtail_PersistenceAPI_Write(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback)
 {
     return persistance_api->Write(persistance_api, sub_path, data, size, callback);
@@ -409,7 +597,7 @@ int Longtail_PersistenceAPI_Read(struct Longtail_PersistenceAPI* persistance_api
     return persistance_api->Read(persistance_api, sub_path, data, size_buffer, callback);
 }
 
-int Longtail_PersistenceAPI_List(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
+int Longtail_PersistenceAPI_List(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
 {
     return persistance_api->List(persistance_api, sub_path, recursive, name_buffer, size_buffer, callback);
 }
@@ -427,16 +615,29 @@ struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
         LONGTAIL_LOGFIELD(write_func, "%p"),
         LONGTAIL_LOGFIELD(read_func, "%p"),
         LONGTAIL_LOGFIELD(list_func, "%p")
-    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
-    struct Longtail_PersistenceAPI* api = (struct Longtail_PersistenceAPI*)mem;
+        LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+        struct Longtail_PersistenceAPI* api = (struct Longtail_PersistenceAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->Write = write_func;
     api->Read = read_func;
     api->List = list_func;
     return api;
 }
+
+
+
+#if 0
+struct BlockHashToBlockState
+{
+    uint64_t key;
+    uint32_t value;
+};
+
+#define TMP_EXTENSION_LENGTH (1 + 16)
+
+
 
 
 struct Longtail_TestPersistanceAPI
@@ -470,7 +671,7 @@ static int TestReadItemFunc(struct Longtail_PersistenceAPI* persistance_api, con
     return ENOENT;
 }
 
-static int TestListItemsFunc(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char* name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
+static int TestListItemsFunc(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
 {
     struct Longtail_TestPersistanceAPI* api = (struct Longtail_TestPersistanceAPI*)persistance_api;
     return 0;
