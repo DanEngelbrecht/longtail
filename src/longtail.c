@@ -10142,8 +10142,9 @@ struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
         LONGTAIL_LOGFIELD(list_func, "%p")
         MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
-        LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
-        struct Longtail_PersistenceAPI* api = (struct Longtail_PersistenceAPI*)mem;
+    LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+
+    struct Longtail_PersistenceAPI* api = (struct Longtail_PersistenceAPI*)mem;
     api->m_API.Dispose = dispose_func;
     api->Write = write_func;
     api->Read = read_func;
