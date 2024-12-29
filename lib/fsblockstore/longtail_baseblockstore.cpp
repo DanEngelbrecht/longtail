@@ -1,8 +1,8 @@
 #include "longtail_fsblockstore.h"
-#include "longtail_sha1.h"
 
 #include "../../src/ext/stb_ds.h"
 #include "../longtail_platform.h"
+#include "../longtail_sha1.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -39,6 +39,16 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
     out_name[4] = '/';
     out_name[5] = '0';
     out_name[6] = 'x';
+}
+
+static void SHA1String(unsigned char SHA[SHA1_BLOCK_SIZE], char out_name[SHA1_BLOCK_SIZE * 2])
+{
+    LONGTAIL_FATAL_ASSERT(0, out_name, return)
+    for (size_t i = 0; i < SHA1_BLOCK_SIZE; i++)
+    {
+        *out_name++ = HashLUT[(SHA[i] >> 4) & 0xf];
+        *out_name++ = HashLUT[SHA[i] & 0xf];
+    }
 }
 
 static char* GetBlobPath(
@@ -206,7 +216,6 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
         Longtail_Free(block_index_copy);
         return err;
     }
-
 
     {
         // With lock
@@ -410,10 +419,65 @@ int BaseBlockStore::GetStoredBlock(uint64_t block_hash, struct Longtail_AsyncGet
     return err;
 }
 
+struct BaseBlockStore_GetExistingContentListBlobsCallback {
+    LONGTAIL_CALLBACK_API(ListBlobs) m_API;
+    struct Longtail_AsyncGetExistingContentAPI* m_GetExistingContentCallback;
+    char* m_NameBuffer;
+    uint64_t m_Size;
+
+    static void Dispose(struct Longtail_API* longtail_api)
+    {
+        struct BaseBlockStore_GetExistingContentListBlobsCallback* api = (struct BaseBlockStore_GetExistingContentListBlobsCallback*)longtail_api;
+        if (api->m_NameBuffer)
+        {
+            Longtail_Free(api->m_NameBuffer);
+            api->m_NameBuffer = 0;
+        }
+        Longtail_Free((void*)api);
+    }
+
+    static void OnComplete(struct Longtail_AsyncListBlobsAPI* async_complete_api, int err)
+    {
+        struct BaseBlockStore_GetExistingContentListBlobsCallback* api = (struct BaseBlockStore_GetExistingContentListBlobsCallback*)async_complete_api;
+        struct Longtail_AsyncGetExistingContentAPI* get_existing_content_callback = api->m_GetExistingContentCallback;
+        struct Longtail_StoreIndex* store_index = 0;
+        if (err == 0)
+        {
+            // TODO: Build store index from list of files... gonna be messy with all the callbacks?
+            // Can we issue them all with one callback instance and have a semaphore with name list count?
+
+            Longtail_Free(api->m_NameBuffer);
+            api->m_NameBuffer = 0;
+        }
+        Longtail_Free((void*)api);
+        get_existing_content_callback->OnComplete(get_existing_content_callback, store_index, err);
+    }
+};
+
 int BaseBlockStore::GetExistingContent(uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
-    Longtail_AsyncGetExistingContent_OnComplete(async_complete_api, 0, ENOTSUP);
-    return 0;
+    struct BaseBlockStore_GetExistingContentListBlobsCallback* CB = (struct BaseBlockStore_GetExistingContentListBlobsCallback*)Longtail_MakeAsyncListBlobsAPI(
+        Longtail_Alloc("BaseBlockStore::GetExistingContent", sizeof(struct BaseBlockStore_GetExistingContentListBlobsCallback)),
+        BaseBlockStore_GetExistingContentListBlobsCallback::Dispose,
+        BaseBlockStore_GetExistingContentListBlobsCallback::OnComplete);
+    int err = 0;
+    if (CB)
+    {
+        CB->m_GetExistingContentCallback = async_complete_api;
+        CB->m_NameBuffer = 0;
+        CB->m_Size = 0;
+        int err = m_Persistance->List(m_Persistance, "index", 0, &CB->m_NameBuffer, &CB->m_Size, &CB->m_API);
+        if (err)
+        {
+            Longtail_Free(CB);
+            Longtail_AsyncGetExistingContent_OnComplete(async_complete_api, 0, err);
+        }
+    }
+    else
+    {
+        err = ENOMEM;
+    }
+    return err;
 }
 
 int BaseBlockStore::PruneBlocks(uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
@@ -427,10 +491,101 @@ int BaseBlockStore::GetStats(struct Longtail_BlockStore_Stats* out_stats)
     return ENOTSUP;
 }
 
+struct BaseBlockStore_FlushPutBlobCallback {
+    LONGTAIL_CALLBACK_API(PutBlob) m_API;
+    struct Longtail_AsyncFlushAPI* m_FlushCallback;
+    char* m_Path;
+    void* m_Buffer;
+
+    static void Dispose(struct Longtail_API* longtail_api)
+    {
+        struct BaseBlockStore_FlushPutBlobCallback* api = (struct BaseBlockStore_FlushPutBlobCallback*)longtail_api;
+        Longtail_Free(api->m_Path);
+        api->m_Path = 0;
+        Longtail_Free(api->m_Buffer);
+        api->m_Buffer = 0;
+        Longtail_Free((void*)api);
+    }
+
+    static void OnComplete(struct Longtail_AsyncPutBlobAPI* async_complete_api, int err)
+    {
+        struct BaseBlockStore_FlushPutBlobCallback* api = (struct BaseBlockStore_FlushPutBlobCallback*)async_complete_api;
+        struct Longtail_AsyncFlushAPI* flush_callback = api->m_FlushCallback;
+        Longtail_Free(api->m_Path);
+        api->m_Path = 0;
+        Longtail_Free(api->m_Buffer);
+        api->m_Buffer = 0;
+        Longtail_Free((void*)api);
+        flush_callback->OnComplete(flush_callback, err);
+    }
+};
+
+
 int BaseBlockStore::Flush(struct Longtail_AsyncFlushAPI* async_complete_api)
 {
-    Longtail_AsyncFlush_OnComplete(async_complete_api, ENOTSUP);
-    return 0;
+    int err = 0;
+    intptr_t pending_index_count = arrlen(m_AddedBlockIndexes);
+    if (pending_index_count > 0)
+    {
+        struct Longtail_StoreIndex* added_store_index = 0;
+        err = Longtail_CreateStoreIndexFromBlocks((uint32_t)pending_index_count, (const struct Longtail_BlockIndex**)m_AddedBlockIndexes, &added_store_index);
+        if (err == 0)
+        {
+            void* buffer = 0;
+            uint64_t size = 0;
+            err = Longtail_WriteStoreIndexToBuffer(added_store_index, &buffer, &size);
+            if (err == 0)
+            {
+                char index_path[6 + (SHA1_BLOCK_SIZE * 2) + 4 + 1];
+                strcpy(index_path, "index/");
+                unsigned char SHA[SHA1_BLOCK_SIZE];
+                SHA1((const unsigned char*)buffer, size_t(size), SHA);
+                SHA1String(SHA, &index_path[6]);
+                strcpy(&index_path[6 + (SHA1_BLOCK_SIZE * 2)], ".lsi");
+                index_path[6 + (SHA1_BLOCK_SIZE * 2) + 4] = '\0';
+
+                struct BaseBlockStore_FlushPutBlobCallback* CB = (struct BaseBlockStore_FlushPutBlobCallback*)Longtail_MakeAsyncPutBlobAPI(Longtail_Alloc("BaseBlockStore::Flush", sizeof(struct BaseBlockStore_FlushPutBlobCallback)), BaseBlockStore_FlushPutBlobCallback::Dispose, BaseBlockStore_FlushPutBlobCallback::OnComplete);
+                if (CB)
+                {
+                    CB->m_FlushCallback = async_complete_api;
+                    CB->m_Path = Longtail_Strdup(index_path);
+                    if (CB->m_Path)
+                    {
+                        CB->m_Buffer = buffer;
+                        buffer = 0;
+                        err = m_Persistance->Write(m_Persistance, CB->m_Path, CB->m_Buffer, size, &CB->m_API);
+                        if (err)
+                        {
+                            SAFE_DISPOSE_API(&CB->m_API);
+                        }
+                    }
+                    else
+                    {
+                        SAFE_DISPOSE_API(&CB->m_API);
+                        err = ENOMEM;
+                    }
+                }
+                else
+                {
+                    err = ENOMEM;
+                }
+                if (buffer)
+                {
+                    Longtail_Free((void*)buffer);
+                }
+            }
+            Longtail_Free((void*)added_store_index);
+        }
+        if (err == 0)
+        {
+            for (intptr_t i = 0; i < arrlen(m_AddedBlockIndexes); i++)
+            {
+                Longtail_Free(m_AddedBlockIndexes[i]);
+            }
+            arrsetlen(m_AddedBlockIndexes, 0);
+        }
+    }
+    return err;
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateBaseBlockStoreAPI(

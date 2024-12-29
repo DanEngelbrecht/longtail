@@ -8487,6 +8487,17 @@ TEST(Longtail, Longtail_BaseBlockStore)
         Longtail_Free(put_block.m_BlockData);
         ASSERT_EQ(0, putCB.m_Err);
     }
+    {
+        TestAsyncFlushComplete flushCB;
+        ASSERT_EQ(0, block_store_api->Flush(block_store_api, &flushCB.m_API));
+        flushCB.Wait();
+        ASSERT_EQ(0, flushCB.m_Err);
+    }
+
+    {
+        struct Longtail_StoreIndex* store_index = SyncGetExistingContent(block_store_api, 0, 0, 0);
+        Longtail_Free(store_index);
+    }
 
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(persistance_api);

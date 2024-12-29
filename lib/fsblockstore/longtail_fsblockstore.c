@@ -2,6 +2,7 @@
 
 #include "../../src/ext/stb_ds.h"
 #include "../longtail_platform.h"
+#include "../longtail_sha1.h"
 
 #include <errno.h>
 #include <inttypes.h>
