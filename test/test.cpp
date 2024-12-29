@@ -20,6 +20,7 @@
 #include "../lib/hashregistry/longtail_full_hash_registry.h"
 #include "../lib/hashregistry/longtail_blake3_hash_registry.h"
 #include "../lib/lrublockstore/longtail_lrublockstore.h"
+#include "../lib/fspersistance/longtail_fspersistance.h"
 #include "../lib/lz4/longtail_lz4.h"
 #include "../lib/memstorage/longtail_memstorage.h"
 #include "../lib/meowhash/longtail_meowhash.h"
@@ -256,135 +257,6 @@ static struct Longtail_StoreIndex* SyncGetExistingContent(Longtail_BlockStoreAPI
     }
     get_existing_content_content_index_complete.Wait();
     return get_existing_content_content_index_complete.m_StoreIndex;
-}
-
-struct MyReadBlob
-{
-    LONGTAIL_CALLBACK_API(GetBlob) m_API;
-    void* data_ptr = 0;
-    uint64_t size = 0;
-    SyncComplete complete;
-    int err = 0;
-};
-
-static void MyReadBlob_Dispose(struct Longtail_API* api)
-{
-    struct MyReadBlob* MyReadBlob = (struct MyReadBlob*)api;
-    Longtail_Free(MyReadBlob->data_ptr);
-}
-
-static void MyReadBlob_OnComplete(LONGTAIL_CALLBACK_API(GetBlob)* api, int err)
-{
-    struct MyReadBlob* my_api = (struct MyReadBlob*)api;
-    my_api->err = err;
-    my_api->complete.Signal();
-}
-
-struct MyWriteBlob
-{
-    LONGTAIL_CALLBACK_API(PutBlob) m_API;
-    SyncComplete complete;
-    int err;
-};
-
-static void MyWriteBlob_Dispose(struct Longtail_API* api)
-{
-}
-
-static void MyWriteBlob_OnComplete(LONGTAIL_CALLBACK_API(PutBlob)* api, int err)
-{
-    struct MyWriteBlob* my_api = (struct MyWriteBlob*)api;
-    my_api->err = err;
-    my_api->complete.Signal();
-}
-
-struct MyListBlobs
-{
-    LONGTAIL_CALLBACK_API(ListBlobs) m_API;
-    char* names;
-    uint64_t namessize;
-    SyncComplete complete;
-    int err;
-};
-
-static void MyListBlobs_Dispose(struct Longtail_API* api)
-{
-    struct MyListBlobs* MyListBlobs = (struct MyListBlobs*)api;
-    Longtail_Free(MyListBlobs->names);
-}
-
-static void MyListBlobs_OnComplete(LONGTAIL_CALLBACK_API(ListBlobs)* api, int err)
-{
-    struct MyListBlobs* my_api = (struct MyListBlobs*)api;
-    my_api->err = err;
-    my_api->complete.Signal();
-}
-
-TEST(Longtail, Longtail_PersistanceAPI)
-{
-    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
-    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI(storage_api);
-
-    {
-        MyReadBlob ReadBlob;
-        Longtail_MakeAsyncGetBlobAPI(&ReadBlob.m_API, MyReadBlob_Dispose, MyReadBlob_OnComplete);
-        int err = Longtail_PersistenceAPI_Read(persistance_api, "test/file", &ReadBlob.data_ptr, &ReadBlob.size, &ReadBlob.m_API);
-        if (!err)
-        {
-            ReadBlob.complete.Wait();
-            err = ReadBlob.err;
-        }
-        ASSERT_EQ(ENOENT, err);
-        SAFE_DISPOSE_API(&ReadBlob.m_API);
-    }
-
-    {
-        MyWriteBlob WriteBlob;
-        Longtail_MakeAsyncPutBlobAPI(&WriteBlob.m_API, MyWriteBlob_Dispose, MyWriteBlob_OnComplete);
-        int err = Longtail_PersistenceAPI_Write(persistance_api, "test/file", "hello", 5, &WriteBlob.m_API);
-        if (!err)
-        {
-            WriteBlob.complete.Wait();
-            err = WriteBlob.err;
-        }
-        SAFE_DISPOSE_API(&WriteBlob.m_API);
-    }
-
-    {
-        MyListBlobs ListBlobs;
-        Longtail_MakeAsyncListBlobsAPI(&ListBlobs.m_API, MyListBlobs_Dispose, MyListBlobs_OnComplete);
-        int err = Longtail_PersistenceAPI_List(persistance_api, "", 1, &ListBlobs.names, &ListBlobs.namessize, &ListBlobs.m_API);
-        if (!err)
-        {
-            ListBlobs.complete.Wait();
-            err = ListBlobs.err;
-        }
-        ASSERT_STREQ("test", ListBlobs.names);
-        ASSERT_STREQ("test/file", &ListBlobs.names[strlen("test") + 1]);
-        ASSERT_STREQ("", &ListBlobs.names[strlen("test") + 1 + strlen("test/file") + 1]);
-        ASSERT_EQ('\0', ListBlobs.names[ListBlobs.namessize - 2]);
-        ASSERT_EQ('\0', ListBlobs.names[ListBlobs.namessize - 1]);
-        SAFE_DISPOSE_API(&ListBlobs.m_API);
-    }
-
-    {
-        MyReadBlob ReadBlob;
-        Longtail_MakeAsyncGetBlobAPI(&ReadBlob.m_API, MyReadBlob_Dispose, MyReadBlob_OnComplete);
-        int err = Longtail_PersistenceAPI_Read(persistance_api, "test/file", &ReadBlob.data_ptr, &ReadBlob.size, &ReadBlob.m_API);
-        if (!err)
-        {
-            ReadBlob.complete.Wait();
-            err = ReadBlob.err;
-        }
-        ASSERT_EQ(0, err);
-        ASSERT_TRUE(ReadBlob.data_ptr != 0);
-        ASSERT_EQ(5, ReadBlob.size);
-        ASSERT_EQ(0, strncmp("hello", (char*)ReadBlob.data_ptr, 5));
-        SAFE_DISPOSE_API(&ReadBlob.m_API);
-    }
-
-    SAFE_DISPOSE_API(storage_api);
-    SAFE_DISPOSE_API(persistance_api);
 }
 
 TEST(Longtail, Longtail_Malloc)
@@ -8404,13 +8276,190 @@ TEST(Longtail, Longtail_OutOfOrderWrites)
 
 }
 
+struct MyReadBlob
+{
+    LONGTAIL_CALLBACK_API(GetBlob) m_API;
+    void* data_ptr = 0;
+    uint64_t size = 0;
+    SyncComplete complete;
+    int err = 0;
+};
+
+static void MyReadBlob_Dispose(struct Longtail_API* api)
+{
+    struct MyReadBlob* MyReadBlob = (struct MyReadBlob*)api;
+    Longtail_Free(MyReadBlob->data_ptr);
+}
+
+static void MyReadBlob_OnComplete(LONGTAIL_CALLBACK_API(GetBlob)* api, int err)
+{
+    struct MyReadBlob* my_api = (struct MyReadBlob*)api;
+    my_api->err = err;
+    my_api->complete.Signal();
+}
+
+struct MyWriteBlob
+{
+    LONGTAIL_CALLBACK_API(PutBlob) m_API;
+    SyncComplete complete;
+    int err;
+};
+
+static void MyWriteBlob_Dispose(struct Longtail_API* api)
+{
+}
+
+static void MyWriteBlob_OnComplete(LONGTAIL_CALLBACK_API(PutBlob)* api, int err)
+{
+    struct MyWriteBlob* my_api = (struct MyWriteBlob*)api;
+    my_api->err = err;
+    my_api->complete.Signal();
+}
+
+struct MyListBlobs
+{
+    LONGTAIL_CALLBACK_API(ListBlobs) m_API;
+    char* names;
+    uint64_t namessize;
+    SyncComplete complete;
+    int err;
+};
+
+static void MyListBlobs_Dispose(struct Longtail_API* api)
+{
+    struct MyListBlobs* MyListBlobs = (struct MyListBlobs*)api;
+    Longtail_Free(MyListBlobs->names);
+}
+
+static void MyListBlobs_OnComplete(LONGTAIL_CALLBACK_API(ListBlobs)* api, int err)
+{
+    struct MyListBlobs* my_api = (struct MyListBlobs*)api;
+    my_api->err = err;
+    my_api->complete.Signal();
+}
+
+struct MyDeleteBlob
+{
+    LONGTAIL_CALLBACK_API(DeleteBlob) m_API;
+    void* data_ptr = 0;
+    uint64_t size = 0;
+    SyncComplete complete;
+    int err = 0;
+};
+
+static void MyDeleteBlob_Dispose(struct Longtail_API* api)
+{
+    struct MyDeleteBlob* MyDeleteBlob = (struct MyDeleteBlob*)api;
+    Longtail_Free(MyDeleteBlob->data_ptr);
+}
+
+static void MyDeleteBlob_OnComplete(LONGTAIL_CALLBACK_API(DeleteBlob)* api, int err)
+{
+    struct MyDeleteBlob* my_api = (struct MyDeleteBlob*)api;
+    my_api->err = err;
+    my_api->complete.Signal();
+}
+
+TEST(Longtail, Longtail_PersistanceAPI)
+{
+    Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
+    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateFSPersistanceAPI(storage_api);
+
+    {
+        MyReadBlob ReadBlob;
+        Longtail_MakeAsyncGetBlobAPI(&ReadBlob.m_API, MyReadBlob_Dispose, MyReadBlob_OnComplete);
+        int err = Longtail_PersistenceAPI_Read(persistance_api, "test/file", &ReadBlob.data_ptr, &ReadBlob.size, &ReadBlob.m_API);
+        if (!err)
+        {
+            ReadBlob.complete.Wait();
+            err = ReadBlob.err;
+        }
+        ASSERT_EQ(ENOENT, err);
+        SAFE_DISPOSE_API(&ReadBlob.m_API);
+    }
+
+    {
+        MyWriteBlob WriteBlob;
+        Longtail_MakeAsyncPutBlobAPI(&WriteBlob.m_API, MyWriteBlob_Dispose, MyWriteBlob_OnComplete);
+        int err = Longtail_PersistenceAPI_Write(persistance_api, "test/file", "hello", 5, &WriteBlob.m_API);
+        if (!err)
+        {
+            WriteBlob.complete.Wait();
+            err = WriteBlob.err;
+        }
+        SAFE_DISPOSE_API(&WriteBlob.m_API);
+    }
+
+    {
+        MyListBlobs ListBlobs;
+        Longtail_MakeAsyncListBlobsAPI(&ListBlobs.m_API, MyListBlobs_Dispose, MyListBlobs_OnComplete);
+        int err = Longtail_PersistenceAPI_List(persistance_api, "", 1, &ListBlobs.names, &ListBlobs.namessize, &ListBlobs.m_API);
+        if (!err)
+        {
+            ListBlobs.complete.Wait();
+            err = ListBlobs.err;
+        }
+        ASSERT_STREQ("test", ListBlobs.names);
+        ASSERT_STREQ("test/file", &ListBlobs.names[strlen("test") + 1]);
+        ASSERT_STREQ("", &ListBlobs.names[strlen("test") + 1 + strlen("test/file") + 1]);
+        ASSERT_EQ('\0', ListBlobs.names[ListBlobs.namessize - 2]);
+        ASSERT_EQ('\0', ListBlobs.names[ListBlobs.namessize - 1]);
+        SAFE_DISPOSE_API(&ListBlobs.m_API);
+    }
+
+    {
+        MyReadBlob ReadBlob;
+        Longtail_MakeAsyncGetBlobAPI(&ReadBlob.m_API, MyReadBlob_Dispose, MyReadBlob_OnComplete);
+        int err = Longtail_PersistenceAPI_Read(persistance_api, "test/file", &ReadBlob.data_ptr, &ReadBlob.size, &ReadBlob.m_API);
+        if (!err)
+        {
+            ReadBlob.complete.Wait();
+            err = ReadBlob.err;
+        }
+        ASSERT_EQ(0, err);
+        ASSERT_TRUE(ReadBlob.data_ptr != 0);
+        ASSERT_EQ(5, ReadBlob.size);
+        ASSERT_EQ(0, strncmp("hello", (char*)ReadBlob.data_ptr, 5));
+        SAFE_DISPOSE_API(&ReadBlob.m_API);
+    }
+
+    {
+        MyDeleteBlob DeleteBlob;
+        Longtail_MakeAsyncDeleteBlobAPI(&DeleteBlob.m_API, MyDeleteBlob_Dispose, MyDeleteBlob_OnComplete);
+        int err = Longtail_PersistenceAPI_Delete(persistance_api, "test/file", &DeleteBlob.m_API);
+        if (!err)
+        {
+            DeleteBlob.complete.Wait();
+            err = DeleteBlob.err;
+        }
+        ASSERT_EQ(0, err);
+        SAFE_DISPOSE_API(&DeleteBlob.m_API);
+    }
+
+    {
+        MyReadBlob ReadBlob;
+        Longtail_MakeAsyncGetBlobAPI(&ReadBlob.m_API, MyReadBlob_Dispose, MyReadBlob_OnComplete);
+        int err = Longtail_PersistenceAPI_Read(persistance_api, "test/file", &ReadBlob.data_ptr, &ReadBlob.size, &ReadBlob.m_API);
+        if (!err)
+        {
+            ReadBlob.complete.Wait();
+            err = ReadBlob.err;
+        }
+        ASSERT_EQ(ENOENT, err);
+        SAFE_DISPOSE_API(&ReadBlob.m_API);
+    }
+
+    SAFE_DISPOSE_API(persistance_api);
+    SAFE_DISPOSE_API(storage_api);
+}
+
 TEST(Longtail, Longtail_BaseBlockStore)
 {
     Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
-    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateTestPersistanceAPI(storage_api);
-    struct Longtail_BlockStoreAPI* block_store_api = Longtail_CreateBaseBlockStoreAPI(job_api, persistance_api, 0, 0, 0, 0);
+    struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateFSPersistanceAPI(storage_api);
+    struct Longtail_BlockStoreAPI* block_store_api = Longtail_CreateBaseBlockStoreAPI(job_api, persistance_api);
     
     {
         Longtail_StoredBlock put_block;

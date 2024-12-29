@@ -10099,3 +10099,55 @@ const uint32_t* Longtail_StoreIndex_GetBlockChunksOffsets(const struct Longtail_
 const uint32_t* Longtail_StoreIndex_GetBlockChunkCounts(const struct Longtail_StoreIndex* store_index) { return store_index->m_BlockChunkCounts;}
 const uint32_t* Longtail_StoreIndex_GetBlockTags(const struct Longtail_StoreIndex* store_index) { return store_index->m_BlockTags;}
 const uint32_t* Longtail_StoreIndex_GetChunkSizes(const struct Longtail_StoreIndex* store_index) { return store_index->m_ChunkSizes;}
+
+LONGTAIL_IMPLEMENT_CALLBACK_API(PutBlob)
+LONGTAIL_IMPLEMENT_CALLBACK_API(GetBlob)
+LONGTAIL_IMPLEMENT_CALLBACK_API(DeleteBlob)
+LONGTAIL_IMPLEMENT_CALLBACK_API(ListBlobs)
+
+int Longtail_PersistenceAPI_Write(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback)
+{
+    return persistance_api->Write(persistance_api, sub_path, data, size, callback);
+}
+
+int Longtail_PersistenceAPI_Read(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback)
+{
+    return persistance_api->Read(persistance_api, sub_path, data, size_buffer, callback);
+}
+
+int Longtail_PersistenceAPI_Delete(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, LONGTAIL_CALLBACK_API(DeleteBlob)* callback)
+{
+    return persistance_api->Delete(persistance_api, sub_path, callback);
+}
+
+int Longtail_PersistenceAPI_List(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
+{
+    return persistance_api->List(persistance_api, sub_path, recursive, name_buffer, size_buffer, callback);
+}
+
+struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_PersistenceAPI_WriteItemFunc write_func,
+    Longtail_PersistenceAPI_ReadItemFunc read_func,
+    Longtail_PersistenceAPI_DeleteItemFunc delete_func,
+    Longtail_PersistenceAPI_ListItemsFunc list_func)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(mem, "%p"),
+        LONGTAIL_LOGFIELD(dispose_func, "%p"),
+        LONGTAIL_LOGFIELD(write_func, "%p"),
+        LONGTAIL_LOGFIELD(read_func, "%p"),
+        LONGTAIL_LOGFIELD(delete_func, "%p"),
+        LONGTAIL_LOGFIELD(list_func, "%p")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+        LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
+        struct Longtail_PersistenceAPI* api = (struct Longtail_PersistenceAPI*)mem;
+    api->m_API.Dispose = dispose_func;
+    api->Write = write_func;
+    api->Read = read_func;
+    api->Delete = delete_func;
+    api->List = list_func;
+    return api;
+}
