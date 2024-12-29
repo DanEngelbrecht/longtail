@@ -151,8 +151,8 @@ private:
                 {
                     arrput(ScanDirs, m_StorageAPI->ConcatPath(m_StorageAPI, ScanDirs[ScanDirIndex], properties.m_Name));
                 }
-                NamesBufferSize += strlen(properties.m_Name) + 1;
-                arrput(Names, Longtail_Strdup(properties.m_Name));
+                arrput(Names, m_StorageAPI->ConcatPath(m_StorageAPI, ScanDirs[ScanDirIndex], properties.m_Name));
+                NamesBufferSize += strlen(Names[arrlen(Names) - 1]) + 1;
                 err = m_StorageAPI->FindNext(m_StorageAPI, Iterator);
             }
             m_StorageAPI->CloseFind(m_StorageAPI, Iterator);
@@ -445,7 +445,7 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
         intptr_t block_ptr = hmgeti(m_BlockState, block_hash);
         if (block_ptr != -1)
         {
-            // Already busy doing put or the block already has been stored
+            // Already busy doing put or the block has already been stored
 
             Longtail_Free(buffer);
             Longtail_Free(block_index_copy);
