@@ -2042,6 +2042,19 @@ int LongtailPrivate_MakeFileInfos(
     const uint16_t* file_permissions,
     struct Longtail_FileInfos** out_file_infos);
 
+#if defined(_WIN32)
+#define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+#define QSORT(base, count, size, func, context) qsort_s(base, count, size, func, context)
+#elif defined(__clang__) || defined(__GNUC__)
+#if defined(__APPLE__)
+#define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+#define QSORT(base, count, size, func, context) qsort_r(base, count, size, context, func)
+#else
+#define SORTFUNC(name) int name(const void* a_ptr, const void* b_ptr, void* context)
+#define QSORT(base, count, size, func, context) qsort_r(base, count, size, func, context)
+#endif
+#endif
+
 #ifdef __cplusplus
 }
 #endif

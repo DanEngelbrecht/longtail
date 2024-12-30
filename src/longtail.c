@@ -23,19 +23,6 @@ uint32_t Longtail_CurrentVersionIndexVersion = LONGTAIL_VERSION_INDEX_VERSION_0_
 uint32_t Longtail_CurrentStoreIndexVersion = LONGTAIL_STORE_INDEX_VERSION_1_0_0;
 uint32_t Longtail_CurrentArchiveVersion = LONGTAIL_ARCHIVE_VERSION_0_0_1;
 
-#if defined(_WIN32)
-    #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
-    #define QSORT(base, count, size, func, context) qsort_s(base, count, size, func, context)
-#elif defined(__clang__) || defined(__GNUC__)
-    #if defined(__APPLE__)
-        #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
-        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, context, func)
-    #else
-        #define SORTFUNC(name) int name(const void* a_ptr, const void* b_ptr, void* context)
-        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, func, context)
-    #endif
-#endif
-
 uint64_t Longtail_GetCancelAPISize()
 {
     return sizeof(struct Longtail_CancelAPI);

@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define BLOCK_NAME_LENGTH   23
@@ -41,7 +42,9 @@ static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
     out_name[6] = 'x';
 }
 
-static void SHA1String(unsigned char SHA[SHA1_BLOCK_SIZE], char out_name[SHA1_BLOCK_SIZE * 2])
+#define SHA1_NAME_LENGTH   (SHA1_BLOCK_SIZE * 2)
+
+static void SHA1String(unsigned char SHA[SHA1_BLOCK_SIZE], char out_name[SHA1_NAME_LENGTH])
 {
     LONGTAIL_FATAL_ASSERT(0, out_name, return)
     for (size_t i = 0; i < SHA1_BLOCK_SIZE; i++)
@@ -76,7 +79,9 @@ static char* GetBlobPath(
 class BaseBlockStore
 {
 public:
-    BaseBlockStore(struct Longtail_PersistenceAPI* PersistanceAPI);
+    BaseBlockStore(struct Longtail_PersistenceAPI* PersistanceAPI,
+        struct Longtail_StorageAPI* cache_storage_api,
+        const char* cache_base_path);
     ~BaseBlockStore();
 
     int PutStoredBlock(struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
@@ -96,6 +101,8 @@ private:
     } m_API;
 
     struct Longtail_PersistenceAPI* m_Persistance = 0;
+    struct Longtail_StorageAPI* m_CacheStorage = 0;
+    const char* m_CacheBasePath = 0;
 
     struct Longtail_BlockIndex** m_AddedBlockIndexes = 0;
 
@@ -163,11 +170,434 @@ private:
 
 };
 
+struct SyncIndexToLocalCache_GetBlobCallback {
+    LONGTAIL_CALLBACK_API(GetBlob) m_API;
+    TLongtail_Atomic32* m_PendingItems;
+    HLongtail_Sema* m_CompletionEvent;
+    char* m_Path;
+    void* m_Buffer;
+    uint64_t m_Size;
+    int m_Err;
+
+    static void Dispose(struct Longtail_API* longtail_api)
+    {
+        struct SyncIndexToLocalCache_GetBlobCallback* api = (struct SyncIndexToLocalCache_GetBlobCallback*)longtail_api;
+        Longtail_Free((void*)api->m_Buffer);
+        Longtail_Free((void*)api);
+    }
+
+    static void OnComplete(struct Longtail_AsyncGetBlobAPI* async_complete_api, int err)
+    {
+        struct SyncIndexToLocalCache_GetBlobCallback* api = (struct SyncIndexToLocalCache_GetBlobCallback*)async_complete_api;
+        api->m_Err = err;
+        int32_t remaining_items = Longtail_AtomicAdd32(api->m_PendingItems, -1);
+        if (remaining_items == 0)
+        {
+            Longtail_PostSema(*api->m_CompletionEvent, 1);
+        }
+    }
+    static struct SyncIndexToLocalCache_GetBlobCallback* Make(TLongtail_Atomic32* pending_items,
+        HLongtail_Sema* completion_event, char* path)
+    {
+        size_t MemSize = sizeof(SyncIndexToLocalCache_GetBlobCallback);
+        void* Mem = Longtail_Alloc("SyncIndexToLocalCache_GetBlobCallback::Make", MemSize);
+        if (Mem == 0)
+        {
+            return 0;
+        }
+        struct SyncIndexToLocalCache_GetBlobCallback* api = (struct SyncIndexToLocalCache_GetBlobCallback*)Longtail_MakeAsyncGetBlobAPI(
+            Mem,
+            Dispose,
+            OnComplete);
+        api->m_PendingItems = pending_items;
+        api->m_CompletionEvent = completion_event;
+        api->m_Path = path;
+        api->m_Buffer = 0;
+        api->m_Size = 0;
+        api->m_Err = ENOENT;
+        return api;
+    }
+};
 
 
+struct SyncIndexToLocalCache_ListBlobsCallback {
+    LONGTAIL_CALLBACK_API(ListBlobs) m_API;
+    char* m_NameBuffer;
+    uint64_t m_Size;
+    HLongtail_Sema m_CompletionEvent;
 
-BaseBlockStore::BaseBlockStore(struct Longtail_PersistenceAPI* PersistanceAPI)
+    static void Dispose(struct Longtail_API* longtail_api)
+    {
+        struct SyncIndexToLocalCache_ListBlobsCallback* api = (struct SyncIndexToLocalCache_ListBlobsCallback*)longtail_api;
+        if (api->m_NameBuffer)
+        {
+            Longtail_Free(api->m_NameBuffer);
+            api->m_NameBuffer = 0;
+        }
+        Longtail_DeleteSema(api->m_CompletionEvent);
+        Longtail_Free((void*)api);
+    }
+
+    static void OnComplete(struct Longtail_AsyncListBlobsAPI* async_complete_api, int err)
+    {
+        struct SyncIndexToLocalCache_ListBlobsCallback* api = (struct SyncIndexToLocalCache_ListBlobsCallback*)async_complete_api;
+        Longtail_PostSema(api->m_CompletionEvent, 1);
+    }
+    static struct SyncIndexToLocalCache_ListBlobsCallback* Make()
+    {
+        size_t MemSize = sizeof(SyncIndexToLocalCache_ListBlobsCallback) + Longtail_GetSemaSize();
+        void* Mem = Longtail_Alloc("SyncIndexToLocalCache_ListBlobsCallback::Make", MemSize);
+        if (Mem == 0)
+        {
+            return 0;
+        }
+        struct SyncIndexToLocalCache_ListBlobsCallback* api = (struct SyncIndexToLocalCache_ListBlobsCallback*)Longtail_MakeAsyncListBlobsAPI(
+            Mem,
+            Dispose,
+            OnComplete);
+        void* MemPtr = &api[1];
+        int err = Longtail_CreateSema(MemPtr, 0, &api->m_CompletionEvent);
+        if (err)
+        {
+            Longtail_Free(Mem);
+            return 0;
+        }
+        api->m_NameBuffer = 0;
+        api->m_Size = 0;
+        return api;
+    }
+    static int Wait(struct SyncIndexToLocalCache_ListBlobsCallback* api)
+    {
+        return Longtail_WaitSema(api->m_CompletionEvent, LONGTAIL_TIMEOUT_INFINITE);
+    }
+};
+
+static SORTFUNC(SortLSINames)
+{
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(context, "%p"),
+        LONGTAIL_LOGFIELD(a_ptr, "%p"),
+        LONGTAIL_LOGFIELD(b_ptr, "%p")
+        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
+    LONGTAIL_FATAL_ASSERT(ctx, a_ptr != 0, return 0)
+    LONGTAIL_FATAL_ASSERT(ctx, b_ptr != 0, return 0)
+
+    const char* a_name = *(const char**)a_ptr;
+    const char* b_name = *(const char**)b_ptr;
+    return strcmp(a_name, b_name);
+}
+
+static int GetLocalCacheIndexFiles(struct Longtail_StorageAPI* cache_storage_api,
+    const char* cache_base_path, char*** OutLocalNames)
+{
+    char** LocalNames = 0;
+    Longtail_StorageAPI_HIterator iterator = 0;
+    int err = cache_storage_api->StartFind(cache_storage_api, cache_base_path, &iterator);
+    if (err == 0)
+    {
+        while (err == 0)
+        {
+            struct Longtail_StorageAPI_EntryProperties properties;
+            err = cache_storage_api->GetEntryProperties(cache_storage_api, iterator, &properties);
+            if (err)
+            {
+                break;
+            }
+            size_t name_length = strlen(properties.m_Name);
+            if (name_length == SHA1_NAME_LENGTH + 4)
+            {
+                if (strcmp(&properties.m_Name[SHA1_NAME_LENGTH], ".lsi") == 0)
+                {
+                    arrput(LocalNames, Longtail_Strdup(properties.m_Name));
+                }
+            }
+            err = cache_storage_api->FindNext(cache_storage_api, iterator);
+        }
+        cache_storage_api->CloseFind(cache_storage_api, iterator);
+    }
+    if (err == ENOENT)
+    {
+        err = 0;
+    }
+    if (err == 0)
+    {
+        *OutLocalNames = LocalNames;
+    }
+    return err;
+}
+
+static int BuildStoreIndexFromLocalCache(struct Longtail_StorageAPI* cache_storage_api,
+    const char* cache_base_path, struct Longtail_StoreIndex** out_store_index)
+{
+    char** LocalNames = 0;
+    int err = GetLocalCacheIndexFiles(cache_storage_api, cache_base_path, &LocalNames);
+    if (err)
+    {
+        return err;
+    }
+
+    intptr_t count = arrlen(LocalNames);
+    if (count > 0)
+    {
+        QSORT(LocalNames, arrlen(LocalNames), sizeof(const char*), SortLSINames, 0);
+        char* local_path = cache_storage_api->ConcatPath(cache_storage_api, cache_base_path, LocalNames[0]);
+        struct Longtail_StoreIndex* store_index;
+        err = Longtail_ReadStoreIndex(cache_storage_api, local_path, &store_index);
+        Longtail_Free((void*)local_path);
+        if (err == 0)
+        {
+            if (count > 1)
+            {
+                for (intptr_t index = 1; index < count; index++)
+                {
+                    char* next_local_path = cache_storage_api->ConcatPath(cache_storage_api, cache_base_path, LocalNames[index]);
+                    struct Longtail_StoreIndex* next_store_index;
+                    err = Longtail_ReadStoreIndex(cache_storage_api, next_local_path, &next_store_index);
+                    Longtail_Free((void*)next_local_path);
+                    if (err == 0)
+                    {
+                        struct Longtail_StoreIndex* merged_store_index;
+                        err = Longtail_MergeStoreIndex(store_index, next_store_index, &merged_store_index);
+                        if (err == 0)
+                        {
+                            Longtail_Free((void*)store_index);
+                            store_index = merged_store_index;
+                        }
+                        Longtail_Free((void*)next_store_index);
+                    }
+                    if (err)
+                    {
+                        Longtail_Free((void*)store_index);
+                        break;
+                    }
+                }
+            }
+            if (err == 0)
+            {
+                *out_store_index = store_index;
+            }
+        }
+    }
+    else
+    {
+        err = Longtail_CreateStoreIndexFromBlocks(0, 0, out_store_index);
+    }
+
+    for (intptr_t i = 0; i < arrlen(LocalNames); i++)
+    {
+        Longtail_Free(LocalNames[i]);
+    }
+    arrfree(LocalNames);
+
+    return err;
+}
+
+static int SyncIndexToLocalCache(struct Longtail_PersistenceAPI* PersistanceAPI,
+    struct Longtail_StorageAPI* cache_storage_api,
+    const char* cache_base_path)
+{
+    struct SyncIndexToLocalCache_ListBlobsCallback* CB = SyncIndexToLocalCache_ListBlobsCallback::Make();
+    if (CB == 0)
+    {
+        return ENOMEM;
+    }
+    int err = PersistanceAPI->List(PersistanceAPI, "index", 0, &CB->m_NameBuffer, &CB->m_Size, &CB->m_API);
+    if (err)
+    {
+        SAFE_DISPOSE_API(&CB->m_API);
+        return err;
+    }
+    err = SyncIndexToLocalCache_ListBlobsCallback::Wait(CB);
+    if (err)
+    {
+        SAFE_DISPOSE_API(&CB->m_API);
+        return err;
+    }
+    char** RemoteNames = 0;
+    char* NameBufferPtr = CB->m_NameBuffer;
+    while (*NameBufferPtr != 0)
+    {
+        arrput(RemoteNames, Longtail_Strdup(NameBufferPtr));
+        NameBufferPtr += strlen(NameBufferPtr) + 1;
+    }
+
+    QSORT(RemoteNames, arrlen(RemoteNames), sizeof(const char*), SortLSINames, 0);
+
+    char** LocalNames = 0;
+    err = GetLocalCacheIndexFiles(cache_storage_api, cache_base_path, &LocalNames);
+    if (err == 0)
+    {
+        QSORT(LocalNames, arrlen(LocalNames), sizeof(const char*), SortLSINames, 0);
+
+        char** AddedNames = 0;
+        char** RemovedNames = 0;
+        intptr_t remote_index = 0;
+        intptr_t local_index = 0;
+        while (local_index < arrlen(LocalNames) && remote_index < arrlen(RemoteNames))
+        {
+            int comp = strcmp(LocalNames[local_index], RemoteNames[remote_index]);
+            if (comp == 0)
+            {
+                local_index++;
+                remote_index++;
+            }
+            else if (comp < 0)
+            {
+                arrput(RemovedNames, LocalNames[local_index]);
+                local_index++;
+            }
+            else
+            {
+                arrput(AddedNames, RemoteNames[remote_index]);
+                remote_index++;
+            }
+        }
+        while (local_index < arrlen(LocalNames))
+        {
+            arrput(RemovedNames, LocalNames[local_index]);
+            local_index++;
+        }
+        while (remote_index < arrlen(RemoteNames))
+        {
+            arrput(AddedNames, RemoteNames[remote_index]);
+            remote_index++;
+        }
+
+        TLongtail_Atomic32 pending_items = 1;
+        HLongtail_Sema completion_event;
+        err = Longtail_CreateSema(Longtail_Alloc("SyncIndexToLocalCache", Longtail_GetSemaSize()), 0, &completion_event);
+        if (err == 0)
+        {
+            SyncIndexToLocalCache_GetBlobCallback** get_blob_callbacks = 0;
+            for (intptr_t added_index = 0; added_index < arrlen(AddedNames); added_index++)
+            {
+                SyncIndexToLocalCache_GetBlobCallback* CB = SyncIndexToLocalCache_GetBlobCallback::Make(&pending_items, &completion_event, AddedNames[added_index]);
+                if (CB)
+                {
+                    Longtail_AtomicAdd32(&pending_items, 1);
+                    err = PersistanceAPI->Read(PersistanceAPI, CB->m_Path, &CB->m_Buffer, &CB->m_Size, &CB->m_API);
+                    if (err)
+                    {
+                        Longtail_AtomicAdd32(&pending_items, -1);
+                        SAFE_DISPOSE_API(&CB->m_API);
+                        break;
+                    }
+                    arrput(get_blob_callbacks, CB);
+                }
+                else
+                {
+                    err = ENOMEM;
+                }
+                if (err)
+                {
+                    break;
+                }
+            }
+
+            if (Longtail_AtomicAdd32(&pending_items, -1) == 0)
+            {
+                Longtail_PostSema(completion_event, 1);
+            }
+
+            Longtail_WaitSema(completion_event, LONGTAIL_TIMEOUT_INFINITE);
+            if (err == 0)
+            {
+                for (intptr_t i = 0; i < arrlen(get_blob_callbacks); i++)
+                {
+                    SyncIndexToLocalCache_GetBlobCallback* CB = get_blob_callbacks[i];
+                    if (CB->m_Err == 0)
+                    {
+                        char* name_part = strrchr(CB->m_Path, '/');
+                        if (name_part == 0)
+                        {
+                            name_part = CB->m_Path;
+                        }
+                        else
+                        {
+                            name_part++;
+                        }
+
+                        char* local_path = cache_storage_api->ConcatPath(cache_storage_api, cache_base_path, name_part);
+                        if (local_path != 0)
+                        {
+                            err = EnsureParentPathExists(cache_storage_api, local_path);
+                            if (err == 0)
+                            {
+                                Longtail_StorageAPI_HOpenFile f;
+                                err = cache_storage_api->OpenWriteFile(cache_storage_api, local_path, 0, &f);
+                                if (err == 0)
+                                {
+                                    err = cache_storage_api->Write(cache_storage_api, f, 0, CB->m_Size, CB->m_Buffer);
+                                    cache_storage_api->CloseFile(cache_storage_api, f);
+                                }
+                            }
+                            Longtail_Free((void*)local_path);
+                        }
+                        else
+                        {
+                            err = ENOMEM;
+                            break;
+                        }
+                    }
+                    else if (CB->m_Err == ENOENT)
+                    {
+                        err = EAGAIN;
+                    }
+                }
+            }
+
+            for (intptr_t i = 0; i < arrlen(get_blob_callbacks); i++)
+            {
+                SAFE_DISPOSE_API(&get_blob_callbacks[i]->m_API);
+            }
+            arrfree(get_blob_callbacks);
+            Longtail_DeleteSema(completion_event);
+            Longtail_Free((void*)completion_event);
+        }
+
+        if (err == 0)
+        {
+            for (intptr_t removed_index = 0; removed_index < arrlen(RemovedNames); removed_index++)
+            {
+                const char* local_path = RemovedNames[removed_index];
+                err = cache_storage_api->RemoveFile(cache_storage_api, local_path);
+                if (err == ENOENT)
+                {
+                    err = 0;
+                }
+            }
+        }
+
+        arrfree(AddedNames);
+        arrfree(RemovedNames);
+    }
+
+    for (intptr_t i = 0; i < arrlen(LocalNames); i++)
+    {
+        Longtail_Free(LocalNames[i]);
+    }
+    arrfree(LocalNames);
+
+    for (intptr_t i = 0; i < arrlen(RemoteNames); i++)
+    {
+        Longtail_Free((void*)RemoteNames[i]);
+    }
+    arrfree(RemoteNames);
+    SAFE_DISPOSE_API(&CB->m_API);
+    return err;
+}
+
+
+BaseBlockStore::BaseBlockStore(struct Longtail_PersistenceAPI* PersistanceAPI,
+    struct Longtail_StorageAPI* cache_storage_api,
+    const char* cache_base_path)
     :m_Persistance(PersistanceAPI)
+    ,m_CacheStorage(cache_storage_api)
+    ,m_CacheBasePath(Longtail_Strdup(cache_base_path))
 {
     Longtail_MakeBlockStoreAPI(
         &m_API, 
@@ -191,6 +621,7 @@ BaseBlockStore::~BaseBlockStore()
         Longtail_Free(m_AddedBlockIndexes[i]);
     }
     arrfree(m_AddedBlockIndexes);
+    Longtail_Free((void*)m_CacheBasePath);
 }
 
 int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
@@ -314,12 +745,67 @@ int BaseBlockStore::PutStoredBlock(struct Longtail_StoredBlock* stored_block, st
 
 int BaseBlockStore::PreflightGet(uint32_t block_count, const TLongtail_Hash* block_hashes, struct Longtail_AsyncPreflightStartedAPI* optional_async_complete_api)
 {
-    if (optional_async_complete_api)
+    if (!optional_async_complete_api)
     {
-        Longtail_AsyncPreflightStarted_OnComplete(optional_async_complete_api, 0, 0, ENOTSUP);
         return 0;
     }
-    return ENOTSUP;
+
+    int err = SyncIndexToLocalCache(m_Persistance,
+        m_CacheStorage,
+        m_CacheBasePath);
+    while (err == EAGAIN)
+    {
+        err = SyncIndexToLocalCache(m_Persistance,
+            m_CacheStorage,
+            m_CacheBasePath);
+    }
+
+    struct Longtail_StoreIndex* store_index;
+    err = BuildStoreIndexFromLocalCache(m_CacheStorage, m_CacheBasePath, &store_index);
+    if (err)
+    {
+        return err;
+    }
+
+    struct Longtail_LookupTable* requested_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("BaseBlockStore::PreflightGet", LongtailPrivate_LookupTable_GetSize(block_count)), block_count, 0);
+    if (!requested_block_lookup)
+    {
+        Longtail_Free(store_index);
+        return ENOMEM;
+    }
+
+    TLongtail_Hash* found_block_hashes = (TLongtail_Hash*)Longtail_Alloc("BaseBlockStore::PreflightGet", sizeof(TLongtail_Hash) * block_count);
+    if (!found_block_hashes)
+    {
+        Longtail_Free(requested_block_lookup);
+        Longtail_Free(store_index);
+        return ENOMEM;
+    }
+
+    uint32_t found_block_count = 0;
+    for (uint32_t b = 0; b < block_count; ++b)
+    {
+        TLongtail_Hash block_hash = block_hashes[b];
+        LongtailPrivate_LookupTable_PutUnique(requested_block_lookup, block_hash, b);
+    }
+
+    for (uint32_t b = 0; b < *store_index->m_BlockCount; ++b)
+    {
+        TLongtail_Hash block_hash = store_index->m_BlockHashes[b];
+        if (LongtailPrivate_LookupTable_Get(requested_block_lookup, block_hash))
+        {
+            found_block_hashes[found_block_count++] = block_hash;
+        }
+    }
+    Longtail_Free(store_index);
+    store_index = 0;
+    Longtail_Free(requested_block_lookup);
+
+    optional_async_complete_api->OnComplete(optional_async_complete_api, found_block_count, found_block_hashes, 0);
+
+    Longtail_Free(found_block_hashes);
+
+    return 0;
 }
 
 int BaseBlockStore::GetStoredBlock(uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
@@ -419,65 +905,30 @@ int BaseBlockStore::GetStoredBlock(uint64_t block_hash, struct Longtail_AsyncGet
     return err;
 }
 
-struct BaseBlockStore_GetExistingContentListBlobsCallback {
-    LONGTAIL_CALLBACK_API(ListBlobs) m_API;
-    struct Longtail_AsyncGetExistingContentAPI* m_GetExistingContentCallback;
-    char* m_NameBuffer;
-    uint64_t m_Size;
-
-    static void Dispose(struct Longtail_API* longtail_api)
-    {
-        struct BaseBlockStore_GetExistingContentListBlobsCallback* api = (struct BaseBlockStore_GetExistingContentListBlobsCallback*)longtail_api;
-        if (api->m_NameBuffer)
-        {
-            Longtail_Free(api->m_NameBuffer);
-            api->m_NameBuffer = 0;
-        }
-        Longtail_Free((void*)api);
-    }
-
-    static void OnComplete(struct Longtail_AsyncListBlobsAPI* async_complete_api, int err)
-    {
-        struct BaseBlockStore_GetExistingContentListBlobsCallback* api = (struct BaseBlockStore_GetExistingContentListBlobsCallback*)async_complete_api;
-        struct Longtail_AsyncGetExistingContentAPI* get_existing_content_callback = api->m_GetExistingContentCallback;
-        struct Longtail_StoreIndex* store_index = 0;
-        if (err == 0)
-        {
-            // TODO: Build store index from list of files... gonna be messy with all the callbacks?
-            // Can we issue them all with one callback instance and have a semaphore with name list count?
-
-            Longtail_Free(api->m_NameBuffer);
-            api->m_NameBuffer = 0;
-        }
-        Longtail_Free((void*)api);
-        get_existing_content_callback->OnComplete(get_existing_content_callback, store_index, err);
-    }
-};
-
 int BaseBlockStore::GetExistingContent(uint32_t chunk_count, const TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api)
 {
-    struct BaseBlockStore_GetExistingContentListBlobsCallback* CB = (struct BaseBlockStore_GetExistingContentListBlobsCallback*)Longtail_MakeAsyncListBlobsAPI(
-        Longtail_Alloc("BaseBlockStore::GetExistingContent", sizeof(struct BaseBlockStore_GetExistingContentListBlobsCallback)),
-        BaseBlockStore_GetExistingContentListBlobsCallback::Dispose,
-        BaseBlockStore_GetExistingContentListBlobsCallback::OnComplete);
-    int err = 0;
-    if (CB)
+    int err = SyncIndexToLocalCache(m_Persistance,
+        m_CacheStorage,
+        m_CacheBasePath);
+    while (err == EAGAIN)
     {
-        CB->m_GetExistingContentCallback = async_complete_api;
-        CB->m_NameBuffer = 0;
-        CB->m_Size = 0;
-        int err = m_Persistance->List(m_Persistance, "index", 0, &CB->m_NameBuffer, &CB->m_Size, &CB->m_API);
-        if (err)
+        err = SyncIndexToLocalCache(m_Persistance,
+            m_CacheStorage,
+            m_CacheBasePath);
+    }
+
+    struct Longtail_StoreIndex* existing_store_index = 0;
+    {
+        struct Longtail_StoreIndex* local_store_index;
+        err = BuildStoreIndexFromLocalCache(m_CacheStorage, m_CacheBasePath, &local_store_index);
+        if (err == 0)
         {
-            Longtail_Free(CB);
-            Longtail_AsyncGetExistingContent_OnComplete(async_complete_api, 0, err);
+            err = Longtail_GetExistingStoreIndex(local_store_index, chunk_count, chunk_hashes, min_block_usage_percent, &existing_store_index);
+            Longtail_Free((void*)local_store_index);
         }
     }
-    else
-    {
-        err = ENOMEM;
-    }
-    return err;
+    Longtail_AsyncGetExistingContent_OnComplete(async_complete_api, existing_store_index, err);
+    return 0;
 }
 
 int BaseBlockStore::PruneBlocks(uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
@@ -523,75 +974,89 @@ struct BaseBlockStore_FlushPutBlobCallback {
 
 int BaseBlockStore::Flush(struct Longtail_AsyncFlushAPI* async_complete_api)
 {
-    int err = 0;
-    intptr_t pending_index_count = arrlen(m_AddedBlockIndexes);
-    if (pending_index_count > 0)
+    int err = SyncIndexToLocalCache(m_Persistance,
+        m_CacheStorage,
+        m_CacheBasePath);
+    while (err == EAGAIN)
     {
-        struct Longtail_StoreIndex* added_store_index = 0;
-        err = Longtail_CreateStoreIndexFromBlocks((uint32_t)pending_index_count, (const struct Longtail_BlockIndex**)m_AddedBlockIndexes, &added_store_index);
-        if (err == 0)
+        err = SyncIndexToLocalCache(m_Persistance,
+            m_CacheStorage,
+            m_CacheBasePath);
+    }
+    if (err == 0)
+    {
+        intptr_t pending_index_count = arrlen(m_AddedBlockIndexes);
+        if (pending_index_count > 0)
         {
-            void* buffer = 0;
-            uint64_t size = 0;
-            err = Longtail_WriteStoreIndexToBuffer(added_store_index, &buffer, &size);
+            struct Longtail_StoreIndex* added_store_index = 0;
+            err = Longtail_CreateStoreIndexFromBlocks((uint32_t)pending_index_count, (const struct Longtail_BlockIndex**)m_AddedBlockIndexes, &added_store_index);
             if (err == 0)
             {
-                char index_path[6 + (SHA1_BLOCK_SIZE * 2) + 4 + 1];
-                strcpy(index_path, "index/");
-                unsigned char SHA[SHA1_BLOCK_SIZE];
-                SHA1((const unsigned char*)buffer, size_t(size), SHA);
-                SHA1String(SHA, &index_path[6]);
-                strcpy(&index_path[6 + (SHA1_BLOCK_SIZE * 2)], ".lsi");
-                index_path[6 + (SHA1_BLOCK_SIZE * 2) + 4] = '\0';
-
-                struct BaseBlockStore_FlushPutBlobCallback* CB = (struct BaseBlockStore_FlushPutBlobCallback*)Longtail_MakeAsyncPutBlobAPI(Longtail_Alloc("BaseBlockStore::Flush", sizeof(struct BaseBlockStore_FlushPutBlobCallback)), BaseBlockStore_FlushPutBlobCallback::Dispose, BaseBlockStore_FlushPutBlobCallback::OnComplete);
-                if (CB)
+                void* buffer = 0;
+                uint64_t size = 0;
+                err = Longtail_WriteStoreIndexToBuffer(added_store_index, &buffer, &size);
+                if (err == 0)
                 {
-                    CB->m_FlushCallback = async_complete_api;
-                    CB->m_Path = Longtail_Strdup(index_path);
-                    if (CB->m_Path)
+                    char index_path[6 + (SHA1_NAME_LENGTH)+4 + 1];
+                    strcpy(index_path, "index/");
+                    unsigned char SHA[SHA1_BLOCK_SIZE];
+                    SHA1((const unsigned char*)buffer, size_t(size), SHA);
+                    SHA1String(SHA, &index_path[6]);
+                    strcpy(&index_path[6 + (SHA1_NAME_LENGTH)], ".lsi");
+                    index_path[6 + (SHA1_NAME_LENGTH)+4] = '\0';
+
+                    struct BaseBlockStore_FlushPutBlobCallback* CB = (struct BaseBlockStore_FlushPutBlobCallback*)Longtail_MakeAsyncPutBlobAPI(Longtail_Alloc("BaseBlockStore::Flush", sizeof(struct BaseBlockStore_FlushPutBlobCallback)), BaseBlockStore_FlushPutBlobCallback::Dispose, BaseBlockStore_FlushPutBlobCallback::OnComplete);
+                    if (CB)
                     {
-                        CB->m_Buffer = buffer;
-                        buffer = 0;
-                        err = m_Persistance->Write(m_Persistance, CB->m_Path, CB->m_Buffer, size, &CB->m_API);
-                        if (err)
+                        CB->m_FlushCallback = async_complete_api;
+                        CB->m_Path = Longtail_Strdup(index_path);
+                        if (CB->m_Path)
+                        {
+                            CB->m_Buffer = buffer;
+                            buffer = 0;
+                            err = m_Persistance->Write(m_Persistance, CB->m_Path, CB->m_Buffer, size, &CB->m_API);
+                            if (err)
+                            {
+                                SAFE_DISPOSE_API(&CB->m_API);
+                            }
+                        }
+                        else
                         {
                             SAFE_DISPOSE_API(&CB->m_API);
+                            err = ENOMEM;
                         }
                     }
                     else
                     {
-                        SAFE_DISPOSE_API(&CB->m_API);
                         err = ENOMEM;
                     }
+                    if (buffer)
+                    {
+                        Longtail_Free((void*)buffer);
+                    }
                 }
-                else
-                {
-                    err = ENOMEM;
-                }
-                if (buffer)
-                {
-                    Longtail_Free((void*)buffer);
-                }
+                Longtail_Free((void*)added_store_index);
             }
-            Longtail_Free((void*)added_store_index);
-        }
-        if (err == 0)
-        {
-            for (intptr_t i = 0; i < arrlen(m_AddedBlockIndexes); i++)
+            if (err == 0)
             {
-                Longtail_Free(m_AddedBlockIndexes[i]);
+                for (intptr_t i = 0; i < arrlen(m_AddedBlockIndexes); i++)
+                {
+                    Longtail_Free(m_AddedBlockIndexes[i]);
+                }
+                arrsetlen(m_AddedBlockIndexes, 0);
             }
-            arrsetlen(m_AddedBlockIndexes, 0);
         }
     }
-    return err;
+    async_complete_api->OnComplete(async_complete_api, err);
+    return 0;
 }
 
 struct Longtail_BlockStoreAPI* Longtail_CreateBaseBlockStoreAPI(
     struct Longtail_JobAPI* job_api,
-    struct Longtail_PersistenceAPI* persistence_api)
+    struct Longtail_PersistenceAPI* persistence_api,
+    struct Longtail_StorageAPI* cache_storage_api,
+    const char* cache_base_path)
 {
-    BaseBlockStore* Store = new BaseBlockStore(persistence_api);
+    BaseBlockStore* Store = new BaseBlockStore(persistence_api, cache_storage_api, cache_base_path);
     return *Store;
 }

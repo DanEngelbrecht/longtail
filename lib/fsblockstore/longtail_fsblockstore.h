@@ -15,7 +15,9 @@ LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateFSBlockStor
 
 LONGTAIL_EXPORT extern struct Longtail_BlockStoreAPI* Longtail_CreateBaseBlockStoreAPI(
     struct Longtail_JobAPI* job_api,
-    struct Longtail_PersistenceAPI* persistence_api);
+    struct Longtail_PersistenceAPI* persistence_api,
+    struct Longtail_StorageAPI* cache_storage_api,
+    const char* cache_base_path);
 
 #ifdef __cplusplus
 }

@@ -259,6 +259,54 @@ static struct Longtail_StoreIndex* SyncGetExistingContent(Longtail_BlockStoreAPI
     return get_existing_content_content_index_complete.m_StoreIndex;
 }
 
+struct TestAsyncPreflightGetComplete
+{
+    struct Longtail_AsyncPreflightStartedAPI m_API;
+    SyncComplete m_SyncComplete;
+    TestAsyncPreflightGetComplete()
+        : m_Err(EINVAL)
+    {
+        m_API.m_API.Dispose = 0;
+        m_API.OnComplete = OnComplete;
+        m_BlockCount = 0;
+        m_BlockHashes = 0;
+    }
+    ~TestAsyncPreflightGetComplete()
+    {
+    }
+
+    static void OnComplete(struct Longtail_AsyncPreflightStartedAPI* async_complete_api, uint32_t block_count, TLongtail_Hash* block_hashes, int err)
+    {
+        struct TestAsyncPreflightGetComplete* cb = (struct TestAsyncPreflightGetComplete*)async_complete_api;
+        cb->m_Err = err;
+        cb->m_BlockCount = block_count;
+        arrsetlen(cb->m_BlockHashes, block_count);
+        memcpy(cb->m_BlockHashes, block_hashes, sizeof(TLongtail_Hash) * block_count);
+        cb->m_SyncComplete.Signal();
+    }
+
+    void Wait()
+    {
+        m_SyncComplete.Wait();
+    }
+
+    int m_Err;
+    uint32_t m_BlockCount;
+    TLongtail_Hash* m_BlockHashes;
+};
+
+static TLongtail_Hash* SyncPreflightGet(Longtail_BlockStoreAPI* block_store, uint32_t block_count, const TLongtail_Hash* block_hashes)
+{
+    TestAsyncPreflightGetComplete preflight_get_index_complete;
+    if (block_store->PreflightGet(block_store, block_count, block_hashes, &preflight_get_index_complete.m_API))
+    {
+        return 0;
+    }
+    preflight_get_index_complete.Wait();
+    return preflight_get_index_complete.m_BlockHashes;
+}
+
+
 TEST(Longtail, Longtail_Malloc)
 {
     void* p = Longtail_Alloc(0, 77);
@@ -8459,7 +8507,7 @@ TEST(Longtail, Longtail_BaseBlockStore)
     struct Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
     Longtail_StorageAPI* storage_api = Longtail_CreateInMemStorageAPI();
     struct Longtail_PersistenceAPI* persistance_api = Longtail_CreateFSPersistanceAPI(storage_api);
-    struct Longtail_BlockStoreAPI* block_store_api = Longtail_CreateBaseBlockStoreAPI(job_api, persistance_api);
+    struct Longtail_BlockStoreAPI* block_store_api = Longtail_CreateBaseBlockStoreAPI(job_api, persistance_api, storage_api, "index_cache");
     
     {
         Longtail_StoredBlock put_block;
@@ -8497,6 +8545,14 @@ TEST(Longtail, Longtail_BaseBlockStore)
     {
         struct Longtail_StoreIndex* store_index = SyncGetExistingContent(block_store_api, 0, 0, 0);
         Longtail_Free(store_index);
+    }
+
+    {
+        TLongtail_Hash block_hashes[2] = { 0xdeadbeef , 0xbeefdead };
+        TLongtail_Hash* found_blocks = SyncPreflightGet(block_store_api, 2, block_hashes);
+        ASSERT_EQ(1, arrlen(found_blocks));
+        ASSERT_EQ(0xdeadbeef, found_blocks[0]);
+        arrfree(found_blocks);
     }
 
     SAFE_DISPOSE_API(block_store_api);
