@@ -10118,7 +10118,8 @@ struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
     Longtail_PersistenceAPI_WriteItemFunc write_func,
     Longtail_PersistenceAPI_ReadItemFunc read_func,
     Longtail_PersistenceAPI_DeleteItemFunc delete_func,
-    Longtail_PersistenceAPI_ListItemsFunc list_func)
+    Longtail_PersistenceAPI_ListItemsFunc list_func,
+    Longtail_PersistenceAPI_PrefetchItemsFunc prefetch_func)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
         LONGTAIL_LOGFIELD(mem, "%p"),
@@ -10126,8 +10127,9 @@ struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
         LONGTAIL_LOGFIELD(write_func, "%p"),
         LONGTAIL_LOGFIELD(read_func, "%p"),
         LONGTAIL_LOGFIELD(delete_func, "%p"),
-        LONGTAIL_LOGFIELD(list_func, "%p")
-        MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+        LONGTAIL_LOGFIELD(list_func, "%p"),
+        LONGTAIL_LOGFIELD(prefetch_func, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
 
     LONGTAIL_VALIDATE_INPUT(ctx, mem != 0, return 0)
 
@@ -10137,5 +10139,6 @@ struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
     api->Read = read_func;
     api->Delete = delete_func;
     api->List = list_func;
+    api->Prefetch = prefetch_func;
     return api;
 }

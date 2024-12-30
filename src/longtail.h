@@ -1984,11 +1984,13 @@ LONGTAIL_DECLARE_CALLBACK_API(PutBlob)
 LONGTAIL_DECLARE_CALLBACK_API(GetBlob)
 LONGTAIL_DECLARE_CALLBACK_API(DeleteBlob)
 LONGTAIL_DECLARE_CALLBACK_API(ListBlobs)
+LONGTAIL_DECLARE_CALLBACK_API(PrefetchBlobs)
 
 typedef int (*Longtail_PersistenceAPI_WriteItemFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback);
 typedef int (*Longtail_PersistenceAPI_ReadItemFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback);
 typedef int (*Longtail_PersistenceAPI_DeleteItemFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, LONGTAIL_CALLBACK_API(DeleteBlob)* callback);
 typedef int (*Longtail_PersistenceAPI_ListItemsFunc)(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback);
+typedef int (*Longtail_PersistenceAPI_PrefetchItemsFunc)(struct Longtail_PersistenceAPI* persistance_api, uint32_t count, const char** sub_paths, LONGTAIL_CALLBACK_API(PrefetchBlobs)* callback);
 
 struct Longtail_PersistenceAPI
 {
@@ -1997,6 +1999,7 @@ struct Longtail_PersistenceAPI
     Longtail_PersistenceAPI_ReadItemFunc Read;
     Longtail_PersistenceAPI_DeleteItemFunc Delete;
     Longtail_PersistenceAPI_ListItemsFunc List;
+    Longtail_PersistenceAPI_PrefetchItemsFunc Prefetch;
 };
 
 /*! @brief Create a Longtail_PersistenceAPI instance.
@@ -2007,6 +2010,7 @@ struct Longtail_PersistenceAPI
  * @param[in] read_func             implementation of Longtail_PersistenceAPI_ReadItemFunc
  * @param[in] delete_func           implementation of Longtail_PersistenceAPI_DeleteItemFunc
  * @param[in] list_func             implementation of Longtail_PersistenceAPI_ListItemsFunc
+ * @param[in] prefetch_func         implementation of Longtail_PersistenceAPI_PrefetchItemsFunc
  * @return                          initialize API structure (same address as @p mem)
  */
 struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
@@ -2015,12 +2019,14 @@ struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
     Longtail_PersistenceAPI_WriteItemFunc write_func,
     Longtail_PersistenceAPI_ReadItemFunc read_func,
     Longtail_PersistenceAPI_DeleteItemFunc delete_func,
-    Longtail_PersistenceAPI_ListItemsFunc list_func);
+    Longtail_PersistenceAPI_ListItemsFunc list_func,
+    Longtail_PersistenceAPI_PrefetchItemsFunc prefetch_func);
 
 LONGTAIL_EXPORT int Longtail_PersistenceAPI_Write(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback);
 LONGTAIL_EXPORT int Longtail_PersistenceAPI_Read(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, void** data, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(GetBlob)* callback);
 LONGTAIL_EXPORT int Longtail_PersistenceAPI_Delete(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, LONGTAIL_CALLBACK_API(DeleteBlob)* callback);
 LONGTAIL_EXPORT int Longtail_PersistenceAPI_List(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback);
+LONGTAIL_EXPORT int Longtail_PersistenceAPI_Prefetch(struct Longtail_PersistenceAPI* persistance_api, uint32_t count, const char** sub_paths, LONGTAIL_CALLBACK_API(PrefetchBlobs)* callback);
 
 
 

@@ -285,6 +285,7 @@ static int FSPersistanceAPI_ReadItem(struct Longtail_PersistenceAPI* persistance
     Longtail_PostSema(api->m_WorkerSema, 1);
     return 0;
 }
+
 static int FSPersistanceAPI_DeleteItem(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, LONGTAIL_CALLBACK_API(DeleteBlob)* callback)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -307,6 +308,7 @@ static int FSPersistanceAPI_DeleteItem(struct Longtail_PersistenceAPI* persistan
     Longtail_PostSema(api->m_WorkerSema, 1);
     return 0;
 }
+
 static int FSPersistanceAPI_ListItems(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
 {
     MAKE_LOG_CONTEXT_FIELDS(ctx)
@@ -336,6 +338,31 @@ static int FSPersistanceAPI_ListItems(struct Longtail_PersistenceAPI* persistanc
     return 0;
 }
 
+static int FSPersistanceAPI_PrefetchItems(struct Longtail_PersistenceAPI* persistance_api, uint32_t count, const char** sub_paths, LONGTAIL_CALLBACK_API(PrefetchBlobs)* callback)
+{
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(persistance_api, "%p"),
+        LONGTAIL_LOGFIELD(count, "%u"),
+        LONGTAIL_LOGFIELD(sub_paths, "%p"),
+        LONGTAIL_LOGFIELD(callback, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_DEBUG)
+
+    LONGTAIL_VALIDATE_INPUT(ctx, persistance_api != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, count == 0 || sub_paths != 0, return EINVAL)
+    LONGTAIL_VALIDATE_INPUT(ctx, callback != 0, return EINVAL)
+
+    struct FSPersistanceAPI* api = (struct FSPersistanceAPI*)persistance_api;
+    {
+        Longtail_LockSpinLock(api->m_WorkerLock);
+        // TODO:
+//        struct FSPersistanceAPI_JobItem Job = { sub_path, {0, 0, 0}, {0, 0, 0}, {recursive, name_buffer, size_buffer, callback}, {0} };
+//        arrput(api->m_JobQueue, Job);
+        Longtail_UnlockSpinLock(api->m_WorkerLock);
+    }
+    Longtail_PostSema(api->m_WorkerSema, 1);
+    callback->OnComplete(callback, 0);
+    return 0;
+}
 
 struct Longtail_PersistenceAPI* Longtail_CreateFSPersistanceAPI(struct Longtail_StorageAPI* storage_api)
 {
@@ -346,7 +373,14 @@ struct Longtail_PersistenceAPI* Longtail_CreateFSPersistanceAPI(struct Longtail_
     {
         return 0;
     }
-    struct Longtail_PersistenceAPI* persistance_api = Longtail_MakePersistenceAPI(Mem, FSPersistanceAPI_Dispose, FSPersistanceAPI_WriteItem, FSPersistanceAPI_ReadItem, FSPersistanceAPI_DeleteItem, FSPersistanceAPI_ListItems);
+    struct Longtail_PersistenceAPI* persistance_api = Longtail_MakePersistenceAPI(
+        Mem, 
+        FSPersistanceAPI_Dispose, 
+        FSPersistanceAPI_WriteItem, 
+        FSPersistanceAPI_ReadItem, 
+        FSPersistanceAPI_DeleteItem, 
+        FSPersistanceAPI_ListItems, 
+        FSPersistanceAPI_PrefetchItems);
     struct FSPersistanceAPI* api = (struct FSPersistanceAPI*)persistance_api;
     api->m_StorageAPI = storage_api;
     api->m_JobQueue = 0;
