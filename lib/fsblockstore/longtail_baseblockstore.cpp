@@ -767,6 +767,8 @@ int BaseBlockStore::PreflightGet(uint32_t block_count, const TLongtail_Hash* blo
         return err;
     }
 
+    // TODO: Pick up m_AddedBlockIndexes? Locking?
+
     struct Longtail_LookupTable* requested_block_lookup = LongtailPrivate_LookupTable_Create(Longtail_Alloc("BaseBlockStore::PreflightGet", LongtailPrivate_LookupTable_GetSize(block_count)), block_count, 0);
     if (!requested_block_lookup)
     {
@@ -923,6 +925,7 @@ int BaseBlockStore::GetExistingContent(uint32_t chunk_count, const TLongtail_Has
         err = BuildStoreIndexFromLocalCache(m_CacheStorage, m_CacheBasePath, &local_store_index);
         if (err == 0)
         {
+            // TODO: Pick up m_AddedBlockIndexes? Locking?
             err = Longtail_GetExistingStoreIndex(local_store_index, chunk_count, chunk_hashes, min_block_usage_percent, &existing_store_index);
             Longtail_Free((void*)local_store_index);
         }
@@ -987,6 +990,8 @@ int BaseBlockStore::Flush(struct Longtail_AsyncFlushAPI* async_complete_api)
     }
     if (err == 0)
     {
+        // TODO: Pick up m_AddedBlockIndexes? Locking?
+
         // TODO:
         // + Merge small index files with m_AddedBlockIndexes
         // + Save merged index to local and remote
