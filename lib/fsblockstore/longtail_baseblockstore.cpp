@@ -933,12 +933,14 @@ int BaseBlockStore::GetExistingContent(uint32_t chunk_count, const TLongtail_Has
 
 int BaseBlockStore::PruneBlocks(uint32_t block_keep_count, const TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api)
 {
+    // TODO
     Longtail_AsyncPruneBlocks_OnComplete(async_complete_api, 0, ENOTSUP);
     return 0;
 }
 
 int BaseBlockStore::GetStats(struct Longtail_BlockStore_Stats* out_stats)
 {
+    // TODO
     return ENOTSUP;
 }
 
@@ -985,6 +987,11 @@ int BaseBlockStore::Flush(struct Longtail_AsyncFlushAPI* async_complete_api)
     }
     if (err == 0)
     {
+        // TODO:
+        // + Merge small index files with m_AddedBlockIndexes
+        // + Save merged index to local and remote
+        // + Remove merged small index files from remote and local
+
         intptr_t pending_index_count = arrlen(m_AddedBlockIndexes);
         if (pending_index_count > 0)
         {
