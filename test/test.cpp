@@ -8555,6 +8555,15 @@ TEST(Longtail, Longtail_BaseBlockStore)
         arrfree(found_blocks);
     }
 
+    {
+        TestAsyncGetBlockComplete getCB;
+        ASSERT_EQ(0, block_store_api->GetStoredBlock(block_store_api, 0xdeadbeef, &getCB.m_API));
+        getCB.Wait();
+        ASSERT_EQ(0, getCB.m_Err);
+        struct Longtail_StoredBlock* get_block = getCB.m_StoredBlock;
+        Longtail_Free(get_block);
+    }
+
     SAFE_DISPOSE_API(block_store_api);
     SAFE_DISPOSE_API(persistance_api);
     SAFE_DISPOSE_API(storage_api);

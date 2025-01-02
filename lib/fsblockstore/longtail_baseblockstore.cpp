@@ -803,10 +803,75 @@ int BaseBlockStore::PreflightGet(uint32_t block_count, const TLongtail_Hash* blo
     store_index = 0;
     Longtail_Free(requested_block_lookup);
 
-    optional_async_complete_api->OnComplete(optional_async_complete_api, found_block_count, found_block_hashes, 0);
+    class CB
+    {
+    public:
+        CB(BaseBlockStore* BaseBlockAPI, uint32_t count, TLongtail_Hash* block_hashes, char** sub_paths, struct Longtail_AsyncPreflightStartedAPI* async_complete_api)
+            : m_BaseBlockAPI(BaseBlockAPI)
+            , m_PrefetchBlockCount(count)
+            , m_PrefetchBlockHashes(block_hashes)
+            , m_PrefetchBlockPaths(sub_paths)
+            , m_AsyncCompleteAPI(async_complete_api)
+        {
+            Longtail_MakeAsyncPrefetchBlobsAPI(&m_API, Dispose, OnComplete);
+            m_API.m_CB = this;
+        }
+        ~CB()
+        {
+            for (intptr_t i = 0; i < m_PrefetchBlockCount; i++)
+            {
+                Longtail_Free(m_PrefetchBlockPaths[i]);
+            }
 
-    Longtail_Free(found_block_hashes);
+            Longtail_Free(m_PrefetchBlockPaths);
+            Longtail_Free(m_PrefetchBlockHashes);
+        }
+        void Complete(int err)
+        {
+            Longtail_AsyncPreflightStarted_OnComplete(m_AsyncCompleteAPI, m_PrefetchBlockCount, m_PrefetchBlockHashes, err);
+            delete this;
+        }
 
+        operator LONGTAIL_CALLBACK_API(PrefetchBlobs)* () { return &m_API.m_API; };
+    private:
+        struct API {
+            LONGTAIL_CALLBACK_API(PrefetchBlobs) m_API;
+            CB* m_CB;
+        } m_API;
+
+        static void Dispose(struct Longtail_API* longtail_api)
+        {
+            struct API* api = (struct API*)longtail_api;
+            delete api->m_CB;
+        }
+
+        static void OnComplete(struct Longtail_AsyncPrefetchBlobsAPI* async_complete_api, int err)
+        {
+            struct API* api = (struct API*)async_complete_api;
+            api->m_CB->Complete(err);
+        }
+
+        BaseBlockStore* m_BaseBlockAPI;
+        struct Longtail_AsyncPreflightStartedAPI* m_AsyncCompleteAPI;
+        uint32_t m_PrefetchBlockCount = 0;
+        TLongtail_Hash* m_PrefetchBlockHashes = 0;
+        char** m_PrefetchBlockPaths = 0;
+        struct Longtail_BlockIndex* m_BlockIndex;
+    };
+
+    char** prefetch_blocks = (char**)Longtail_Alloc("BaseBlockStore::PreflightGet", sizeof(char*) * found_block_count);
+    for (uint32_t i = 0; i < found_block_count; i++)
+    {
+        prefetch_blocks[i] = GetBlobPath(".lsb", found_block_hashes[i]);
+    }
+
+    CB* Callback = new CB(this, found_block_count, found_block_hashes, prefetch_blocks, optional_async_complete_api);
+    err = Longtail_PersistenceAPI_Prefetch(m_Persistance, found_block_count, (const char**)prefetch_blocks, *Callback);
+    if (err)
+    {
+        delete Callback;
+        optional_async_complete_api->OnComplete(optional_async_complete_api, 0, 0, err);
+    }
     return 0;
 }
 

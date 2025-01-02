@@ -10091,6 +10091,7 @@ LONGTAIL_IMPLEMENT_CALLBACK_API(PutBlob)
 LONGTAIL_IMPLEMENT_CALLBACK_API(GetBlob)
 LONGTAIL_IMPLEMENT_CALLBACK_API(DeleteBlob)
 LONGTAIL_IMPLEMENT_CALLBACK_API(ListBlobs)
+LONGTAIL_IMPLEMENT_CALLBACK_API(PrefetchBlobs)
 
 int Longtail_PersistenceAPI_Write(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, const void* data, uint64_t size, LONGTAIL_CALLBACK_API(PutBlob)* callback)
 {
@@ -10110,6 +10111,11 @@ int Longtail_PersistenceAPI_Delete(struct Longtail_PersistenceAPI* persistance_a
 int Longtail_PersistenceAPI_List(struct Longtail_PersistenceAPI* persistance_api, const char* sub_path, int recursive, char** name_buffer, uint64_t* size_buffer, LONGTAIL_CALLBACK_API(ListBlobs)* callback)
 {
     return persistance_api->List(persistance_api, sub_path, recursive, name_buffer, size_buffer, callback);
+}
+
+int Longtail_PersistenceAPI_Prefetch(struct Longtail_PersistenceAPI* persistance_api, uint32_t count, const char** sub_paths, LONGTAIL_CALLBACK_API(PrefetchBlobs)* callback)
+{
+    return persistance_api->Prefetch(persistance_api, count, sub_paths, callback);
 }
 
 struct Longtail_PersistenceAPI* Longtail_MakePersistenceAPI(
