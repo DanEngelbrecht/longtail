@@ -7974,6 +7974,31 @@ static int RetainPermissions(
         }
         Longtail_Free(full_path);
     }
+
+     uint32_t version_diff_target_added_count = *version_diff->m_TargetAddedCount;
+     for (uint32_t i = 0; i < version_diff_target_added_count; ++i)
+     {
+         if ((i & 0x7f) == 0x7f) {
+             if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+             {
+                 int err = ECANCELED;
+                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
+                 return err;
+             }
+         }
+         uint32_t asset_index = version_diff->m_TargetAddedAssetIndexes[i];
+         const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
+         char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+         uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
+         int err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
+         if (err)
+         {
+             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed for `%s` with %d", full_path, err)
+             Longtail_Free(full_path);
+             return err;
+         }
+         Longtail_Free(full_path);
+     }
     return 0;
 }
 
