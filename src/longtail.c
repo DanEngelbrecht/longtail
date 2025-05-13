@@ -7989,6 +7989,11 @@ static int RetainPermissions(
          uint32_t asset_index = version_diff->m_TargetAddedAssetIndexes[i];
          const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
          char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+         if (full_path[strlen(full_path)-1] == '/')
+         {
+             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Removing trailing slash from `%s`", full_path)
+             full_path[strlen(full_path) - 1] = '\0';
+         }
          uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
          int err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
          if (err)
