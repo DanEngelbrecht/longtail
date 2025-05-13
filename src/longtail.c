@@ -7643,17 +7643,15 @@ int Longtail_CreateVersionDiff(
                 ++modified_content_count;
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching content for asset %s", source_path)
             }
-            else
+
+            uint16_t source_permissions = source_version->m_Permissions[source_asset_index];
+            uint16_t target_permissions = target_version->m_Permissions[target_asset_index];
+            if (source_permissions != target_permissions)
             {
-                uint16_t source_permissions = source_version->m_Permissions[source_asset_index];
-                uint16_t target_permissions = target_version->m_Permissions[target_asset_index];
-                if (source_permissions != target_permissions)
-                {
-                    modified_source_permissions_indexes[modified_permissions_count] = source_asset_index;
-                    modified_target_permissions_indexes[modified_permissions_count] = target_asset_index;
-                    ++modified_permissions_count;
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching permissions for asset %s", source_path)
-                }
+                modified_source_permissions_indexes[modified_permissions_count] = source_asset_index;
+                modified_target_permissions_indexes[modified_permissions_count] = target_asset_index;
+                ++modified_permissions_count;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching permissions for asset %s", source_path)
             }
 
             ++source_index;
@@ -8810,6 +8808,16 @@ int Longtail_ChangeVersion2(
 
     if (block_write_infos == 0)
     {
+        if (retain_permissions)
+        {
+            err = RetainPermissions(version_storage_api, optional_cancel_api, optional_cancel_token, target_version, version_diff, version_path);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "RetainPermissions() failed with %d", err)
+                (void)concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
+                return err;
+            }
+        }
         return 0;
     }
 
