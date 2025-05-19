@@ -1,3 +1,6 @@
+##
+- **FIXED** Update permissions on added files and files with unmodified content
+
 ## 0.4.3
 - **FIXED** Fixed file corruption on Linux when using `--use-legacy-write` option. [chris-believer](https://github.com/chris-believer)
 - **FIXED** Fixed large file corruption. [timsjostrand](https://github.com/timsjostrand)
