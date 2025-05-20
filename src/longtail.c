@@ -7983,7 +7983,7 @@ static int RetainPermissions(
             {
                 int err = ECANCELED;
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
-                    return err;
+                return err;
             }
         }
         uint32_t asset_index = version_diff->m_TargetAddedAssetIndexes[i];
@@ -7996,7 +7996,7 @@ static int RetainPermissions(
             if (err)
             {
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed for `%s` with %d", full_path, err)
-                    Longtail_Free(full_path);
+                Longtail_Free(full_path);
                 return err;
             }
             Longtail_Free(full_path);
@@ -8823,7 +8823,7 @@ int Longtail_ChangeVersion2(
             {
                 err = ENOMEM;
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
-                    SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
                 return err;
             }
             uint8_t* job_mem_ptr = (uint8_t*)job_mem;
@@ -8875,7 +8875,7 @@ int Longtail_ChangeVersion2(
             if (err)
             {
                 LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RunJobsBatched() failed with %d", err)
-                    Longtail_Free(job_mem);
+                Longtail_Free(job_mem);
                 SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
                 return err;
             }
@@ -8889,7 +8889,7 @@ int Longtail_ChangeVersion2(
         if (err)
         {
             LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Flush() failed with %d", err)
-                return err;
+            return err;
         }
     }
 
