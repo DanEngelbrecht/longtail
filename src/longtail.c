@@ -7643,17 +7643,15 @@ int Longtail_CreateVersionDiff(
                 ++modified_content_count;
                 LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching content for asset %s", source_path)
             }
-            else
+
+            uint16_t source_permissions = source_version->m_Permissions[source_asset_index];
+            uint16_t target_permissions = target_version->m_Permissions[target_asset_index];
+            if (source_permissions != target_permissions)
             {
-                uint16_t source_permissions = source_version->m_Permissions[source_asset_index];
-                uint16_t target_permissions = target_version->m_Permissions[target_asset_index];
-                if (source_permissions != target_permissions)
-                {
-                    modified_source_permissions_indexes[modified_permissions_count] = source_asset_index;
-                    modified_target_permissions_indexes[modified_permissions_count] = target_asset_index;
-                    ++modified_permissions_count;
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching permissions for asset %s", source_path)
-                }
+                modified_source_permissions_indexes[modified_permissions_count] = source_asset_index;
+                modified_target_permissions_indexes[modified_permissions_count] = target_asset_index;
+                ++modified_permissions_count;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_CreateVersionDiff: Mismatching permissions for asset %s", source_path)
             }
 
             ++source_index;
@@ -7953,7 +7951,8 @@ static int RetainPermissions(
     uint32_t version_diff_modified_permissions_count = *version_diff->m_ModifiedPermissionsCount;
     for (uint32_t i = 0; i < version_diff_modified_permissions_count; ++i)
     {
-        if ((i & 0x7f) == 0x7f) {
+        if ((i & 0x7f) == 0x7f)
+        {
             if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
             {
                 int err = ECANCELED;
@@ -7974,6 +7973,36 @@ static int RetainPermissions(
         }
         Longtail_Free(full_path);
     }
+
+    uint32_t version_diff_added_permissions_count = *version_diff->m_TargetAddedCount;
+    for (uint32_t i = 0; i < version_diff_added_permissions_count; ++i)
+    {
+        if ((i & 0x7f) == 0x7f)
+        {
+            if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
+            {
+                int err = ECANCELED;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
+                return err;
+            }
+        }
+        uint32_t asset_index = version_diff->m_TargetAddedAssetIndexes[i];
+        const char* asset_path = &target_version->m_NameData[target_version->m_NameOffsets[asset_index]];
+        if (!IsDirPath(asset_path))
+        {
+            char* full_path = version_storage_api->ConcatPath(version_storage_api, version_path, asset_path);
+            uint16_t permissions = (uint16_t)target_version->m_Permissions[asset_index];
+            int err = version_storage_api->SetPermissions(version_storage_api, full_path, permissions);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "version_storage_api->SetPermissions() failed for `%s` with %d", full_path, err)
+                Longtail_Free(full_path);
+                return err;
+            }
+            Longtail_Free(full_path);
+        }
+    }
+
     return 0;
 }
 
@@ -8778,92 +8807,90 @@ int Longtail_ChangeVersion2(
         return err;
     }
 
-    if (block_write_infos == 0)
+    if (block_write_infos != 0)
     {
-        return 0;
-    }
-
-    ptrdiff_t block_write_info_count = block_write_infos->m_BlockCount;
-    ptrdiff_t zero_size_job_count = (arrlen(block_write_infos->m_ZeroSizeWriteInfoArray) > 0) ? 1 : 0;
-    size_t job_count = block_write_info_count + zero_size_job_count;
-    if (job_count > 0)
-    {
-        size_t job_mem_size =
-            sizeof(struct ContentBlock2Job) * block_write_info_count +
-            sizeof(Longtail_JobAPI_JobFunc) * job_count +
-            sizeof(void*) * job_count;
-        void* job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
-        if (job_mem == 0)
+        ptrdiff_t block_write_info_count = block_write_infos->m_BlockCount;
+        ptrdiff_t zero_size_job_count = (arrlen(block_write_infos->m_ZeroSizeWriteInfoArray) > 0) ? 1 : 0;
+        size_t job_count = block_write_info_count + zero_size_job_count;
+        if (job_count > 0)
         {
-            err = ENOMEM;
-            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
+            size_t job_mem_size =
+                sizeof(struct ContentBlock2Job) * block_write_info_count +
+                sizeof(Longtail_JobAPI_JobFunc) * job_count +
+                sizeof(void*) * job_count;
+            void* job_mem = Longtail_Alloc("ChangeVersion2", job_mem_size);
+            if (job_mem == 0)
+            {
+                err = ENOMEM;
+                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Longtail_Alloc() failed with %d", err)
+                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                return err;
+            }
+            uint8_t* job_mem_ptr = (uint8_t*)job_mem;
+            struct ContentBlock2Job* jobs = (struct ContentBlock2Job*)job_mem_ptr;
+            job_mem_ptr += sizeof(struct ContentBlock2Job) * block_write_info_count;
+            Longtail_JobAPI_JobFunc* job_funcs = (Longtail_JobAPI_JobFunc*)job_mem_ptr;
+            job_mem_ptr += sizeof(Longtail_JobAPI_JobFunc) * job_count;
+            void** job_ctxs = (void**)job_mem_ptr;
+
+            struct ContentBlock2JobContext context;
+            context.m_StoreIndex = store_index;
+            context.m_VersionIndex = target_version;
+            context.m_BlockWriteInfos = block_write_infos;
+            context.m_BlockStoreAPI = block_store_api;
+            context.m_ConcurrentChunkWriteApi = concurrent_chunk_write_api;
+            context.m_JobAPI = job_api;
+            context.m_VersionPath = version_path;
+
+            if (zero_size_job_count)
+            {
+                job_funcs[0] = WriteNonBlockAssetsJob;
+                job_ctxs[0] = &context;
+            }
+
+            for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
+            {
+                struct ContentBlock2Job* job = &jobs[i];
+                job->m_AsyncCompleteAPI.m_API.Dispose = 0;
+                job->m_AsyncCompleteAPI.OnComplete = 0;
+                job->m_Context = &context;
+                job->m_BlockIndex = (uint32_t)i;
+                job->m_StoredBlock = 0;
+                job->m_JobID = 0;
+
+                job_funcs[i + zero_size_job_count] = WriteContentBlock2Job;
+                job_ctxs[i + zero_size_job_count] = job;
+            }
+
+            uint32_t jobs_submitted = 0;
+            err = Longtail_RunJobsBatched(
+                job_api,
+                progress_api,
+                optional_cancel_api,
+                optional_cancel_token,
+                (uint32_t)job_count,
+                job_funcs,
+                job_ctxs,
+                &jobs_submitted);
+            if (err)
+            {
+                LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RunJobsBatched() failed with %d", err)
+                Longtail_Free(job_mem);
+                SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+                return err;
+            }
+
             SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
-            return err;
-        }
-        uint8_t* job_mem_ptr = (uint8_t*)job_mem;
-        struct ContentBlock2Job* jobs = (struct ContentBlock2Job*)job_mem_ptr;
-        job_mem_ptr += sizeof(struct ContentBlock2Job) * block_write_info_count;
-        Longtail_JobAPI_JobFunc* job_funcs = (Longtail_JobAPI_JobFunc*)job_mem_ptr;
-        job_mem_ptr += sizeof(Longtail_JobAPI_JobFunc) * job_count;
-        void** job_ctxs = (void**)job_mem_ptr;
-
-        struct ContentBlock2JobContext context;
-        context.m_StoreIndex = store_index;
-        context.m_VersionIndex = target_version;
-        context.m_BlockWriteInfos = block_write_infos;
-        context.m_BlockStoreAPI = block_store_api;
-        context.m_ConcurrentChunkWriteApi = concurrent_chunk_write_api;
-        context.m_JobAPI = job_api;
-        context.m_VersionPath = version_path;
-
-        if (zero_size_job_count)
-        {
-            job_funcs[0] = WriteNonBlockAssetsJob;
-            job_ctxs[0] = &context;
+            Longtail_Free(job_mem);
+            job_mem = 0;
         }
 
-        for (ptrdiff_t i = 0; i < block_write_info_count; ++i)
-        {
-            struct ContentBlock2Job* job = &jobs[i];
-            job->m_AsyncCompleteAPI.m_API.Dispose = 0;
-            job->m_AsyncCompleteAPI.OnComplete = 0;
-            job->m_Context = &context;
-            job->m_BlockIndex = (uint32_t)i;
-            job->m_StoredBlock = 0;
-            job->m_JobID = 0;
-
-            job_funcs[i + zero_size_job_count] = WriteContentBlock2Job;
-            job_ctxs[i + zero_size_job_count] = job;
-        }
-
-        uint32_t jobs_submitted = 0;
-        err = Longtail_RunJobsBatched(
-            job_api,
-            progress_api,
-            optional_cancel_api,
-            optional_cancel_token,
-            (uint32_t)job_count,
-            job_funcs,
-            job_ctxs,
-            &jobs_submitted);
+        err = concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
         if (err)
         {
-            LONGTAIL_LOG(ctx, err == ECANCELED ? LONGTAIL_LOG_LEVEL_DEBUG : LONGTAIL_LOG_LEVEL_ERROR, "Longtail_RunJobsBatched() failed with %d", err)
-            Longtail_Free(job_mem);
-            SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Flush() failed with %d", err)
             return err;
         }
-
-        SAVE_FREE_BLOCK_WRITE_INFOS(block_write_infos);
-        Longtail_Free(job_mem);
-        job_mem = 0;
-    }
-
-    err = concurrent_chunk_write_api->Flush(concurrent_chunk_write_api);
-    if (err)
-    {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "Flush() failed with %d", err)
-        return err;
     }
 
     if (retain_permissions)

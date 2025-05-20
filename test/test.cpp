@@ -44,6 +44,12 @@ char* jc_test_print_value(char* buffer, size_t buffer_len, uint64_t value)
     return buffer + JC_TEST_SNPRINTF(buffer, buffer_len, "%" PRId64, value);
 }
 
+template<>
+char* jc_test_print_value(char* buffer, size_t buffer_len, uint16_t value)
+{
+    return buffer + JC_TEST_SNPRINTF(buffer, buffer_len, "%" PRId16, value);
+}
+
 static int CreateParentPath(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* dir_path = Longtail_Strdup(path);
@@ -8254,6 +8260,88 @@ TEST(Longtail, Longtail_OutOfOrderWrites)
     Longtail_Free((void*)temp_folder);
     Longtail_Free((void*)test_file);
 
+}
+
+// Test permissions on files and folders
+TEST(Longtail, Longtail_RetainPermissions)
+{
+    static const uint32_t TARGET_CHUNK_SIZE = 16u;
+    static const uint32_t MAX_BLOCK_SIZE = 32u;
+    static const uint32_t MAX_CHUNKS_PER_BLOCK = 3u;
+
+    Longtail_StorageAPI* source_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_StorageAPI* target_storage = Longtail_CreateInMemStorageAPI();
+    Longtail_CompressionRegistryAPI* compression_registry = Longtail_CreateFullCompressionRegistry();
+    Longtail_HashAPI* hash_api = Longtail_CreateBlake3HashAPI();
+    Longtail_ChunkerAPI* chunker_api = Longtail_CreateHPCDCChunkerAPI();
+    Longtail_JobAPI* job_api = Longtail_CreateBikeshedJobAPI(0, 0);
+    Longtail_BlockStoreAPI* fs_block_store_api = Longtail_CreateFSBlockStoreAPI(job_api, target_storage, "chunks", 0, 0);
+    Longtail_BlockStoreAPI* block_store_api = Longtail_CreateCompressBlockStoreAPI(fs_block_store_api, compression_registry);
+
+    const char* TEST_FILENAMES[2] = {
+        "local/file1.txt",
+        "local/file2.sh",
+    };
+
+    const uint16_t TEST_PERMISSIONS[2] = {
+        Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserExecuteAccess,
+        Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess,
+    };
+
+    const uint16_t TEST_PERMISSIONS_MODIFIED[2] = {
+        Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess,
+        Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserExecuteAccess,
+    };
+
+    const char* TEST_STRINGS[2] = {
+        "This is the first test string which is fairly long and should - reconstructed properly, than you very much",
+        "Short string"
+    };
+
+    for (uint32_t i = 0; i < 2; ++i)
+    {
+        ASSERT_NE(0, CreateParentPath(source_storage, TEST_FILENAMES[i]));
+        Longtail_StorageAPI_HOpenFile w;
+        ASSERT_EQ(0, source_storage->OpenWriteFile(source_storage, TEST_FILENAMES[i], 0, &w));
+        ASSERT_NE((Longtail_StorageAPI_HOpenFile)0, w);
+        ASSERT_EQ(0, source_storage->Write(source_storage, w, 0, strlen(TEST_STRINGS[i]) + 1, TEST_STRINGS[i]));
+        source_storage->CloseFile(source_storage, w);
+        source_storage->SetPermissions(source_storage, TEST_FILENAMES[i], TEST_PERMISSIONS[i]);
+        w = 0;
+    }
+
+    ASSERT_EQ(0, UploadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "local", "version.lvi", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+    for (uint32_t i = 0; i < 2; ++i)
+    {
+        source_storage->SetPermissions(source_storage, TEST_FILENAMES[i], TEST_PERMISSIONS_MODIFIED[i]);
+    }
+
+    ASSERT_EQ(0, UploadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "local", "version_modified.lvi", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+    ASSERT_EQ(0, DownloadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "version.lvi", "target", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+    uint16_t permissions;
+    ASSERT_EQ(0, source_storage->GetPermissions(source_storage, "target/file1.txt", &permissions));
+    ASSERT_EQ((permissions & (Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserExecuteAccess)), TEST_PERMISSIONS[0]);
+    ASSERT_EQ(0, source_storage->GetPermissions(source_storage, "target/file2.sh", &permissions));
+    ASSERT_EQ((permissions & (Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess)), TEST_PERMISSIONS[1]);
+
+    ASSERT_EQ(0, DownloadFolder(source_storage, hash_api, chunker_api, job_api, fs_block_store_api, "version_modified.lvi", "target", TARGET_CHUNK_SIZE, MAX_BLOCK_SIZE, MAX_CHUNKS_PER_BLOCK));
+
+    ASSERT_EQ(0, source_storage->GetPermissions(source_storage, "target/file1.txt", &permissions));
+    ASSERT_EQ((permissions & (Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess)), TEST_PERMISSIONS_MODIFIED[0]);
+    ASSERT_EQ(0, source_storage->GetPermissions(source_storage, "target/file2.sh", &permissions));
+    ASSERT_EQ((permissions & (Longtail_StorageAPI_UserReadAccess | Longtail_StorageAPI_UserWriteAccess | Longtail_StorageAPI_UserExecuteAccess)), TEST_PERMISSIONS_MODIFIED[1]);
+
+    SAFE_DISPOSE_API(block_store_api);
+    SAFE_DISPOSE_API(fs_block_store_api);
+    SAFE_DISPOSE_API(job_api);
+    SAFE_DISPOSE_API(chunker_api);
+    SAFE_DISPOSE_API(hash_api);
+    SAFE_DISPOSE_API(compression_registry);
+    SAFE_DISPOSE_API(target_storage);
+    SAFE_DISPOSE_API(source_storage);
 }
 
 #if 0
