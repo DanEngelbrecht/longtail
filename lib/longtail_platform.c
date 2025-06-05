@@ -1,7 +1,9 @@
 #include "longtail_platform.h"
 #include "../src/longtail.h"
-#include <stdint.h>
+
 #include <errno.h>
+#include <inttypes.h>
+#include <stdint.h>
 
 static const uint32_t HostnamePrime = 0x01000193;
 static const uint32_t HostnameSeed  = 0x811C9DC5;
@@ -893,6 +895,15 @@ DWORD NativeOpenWriteFileWithRetry(wchar_t* long_path, DWORD desired_access, DWO
 
 int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_OpenFile* out_write_file)
 {
+#if defined(LONGTAIL_ASSERTS)
+    MAKE_LOG_CONTEXT_FIELDS(ctx)
+        LONGTAIL_LOGFIELD(path, "%s"),
+        LONGTAIL_LOGFIELD(initial_size, "%" PRIu64),
+        LONGTAIL_LOGFIELD(out_write_file, "%p")
+    MAKE_LOG_CONTEXT_WITH_FIELDS(ctx, 0, LONGTAIL_LOG_LEVEL_OFF)
+#else
+    struct Longtail_LogContextFmt_Private* ctx = 0;
+#endif // defined(LONGTAIL_ASSERTS)
     wchar_t long_path_buffer[512];
     wchar_t* long_path = MakeLongPlatformPath(path, long_path_buffer, sizeof(long_path_buffer));
     HANDLE handle;
@@ -908,6 +919,29 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
 
     if (initial_size > 0)
     {
+        BY_HANDLE_FILE_INFORMATION information;
+        memset(&information, 0, sizeof(BY_HANDLE_FILE_INFORMATION));
+        if (GetFileInformationByHandle(handle, &information))
+        {
+            if ((information.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE) == 0)
+            {
+                DWORD _	 = 0;
+                BOOL  Ok = DeviceIoControl(handle, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &_, NULL);
+                if (!Ok)
+                {
+                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Unable to set FILE_ATTRIBUTE_SPARSE_FILE attribute for file `%s`: %d\n", path, GetLastError());
+                }
+            }
+        }
+
+        FILE_ALLOCATION_INFO allocation_info;
+        memset(&allocation_info, 0, sizeof(FILE_ALLOCATION_INFO));
+        allocation_info.AllocationSize.QuadPart = (LONGLONG)initial_size;
+        if (!SetFileInformationByHandle(handle, FileAllocationInfo, &allocation_info, (DWORD)sizeof(FILE_ALLOCATION_INFO)))
+        {
+            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Unable to set file allocation size to %" PRIu64 " for file `%s`: %d\n", initial_size, path, GetLastError());
+        }
+
         LONG low = (LONG)(initial_size & 0xffffffff);
         LONG high = (LONG)(initial_size >> 32);
         if (INVALID_SET_FILE_POINTER == SetFilePointer(handle, low, &high, FILE_BEGIN))
