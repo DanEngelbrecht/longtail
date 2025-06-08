@@ -919,17 +919,20 @@ int Longtail_OpenWriteFile(const char* path, uint64_t initial_size, HLongtail_Op
 
     if (initial_size > 0)
     {
-        BY_HANDLE_FILE_INFORMATION information;
-        memset(&information, 0, sizeof(BY_HANDLE_FILE_INFORMATION));
-        if (GetFileInformationByHandle(handle, &information))
+        if (initial_size > 16u * 1024u * 1024u)
         {
-            if ((information.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE) == 0)
+            BY_HANDLE_FILE_INFORMATION information;
+            memset(&information, 0, sizeof(BY_HANDLE_FILE_INFORMATION));
+            if (GetFileInformationByHandle(handle, &information))
             {
-                DWORD _	 = 0;
-                BOOL  Ok = DeviceIoControl(handle, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &_, NULL);
-                if (!Ok)
+                if ((information.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE) == 0)
                 {
-                    LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Unable to set FILE_ATTRIBUTE_SPARSE_FILE attribute for file `%s`: %d\n", path, GetLastError());
+                    DWORD _ = 0;
+                    BOOL  Ok = DeviceIoControl(handle, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &_, NULL);
+                    if (!Ok)
+                    {
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Unable to set FILE_ATTRIBUTE_SPARSE_FILE attribute for file `%s`: %d\n", path, GetLastError());
+                    }
                 }
             }
         }
