@@ -12,6 +12,7 @@ struct OpenFileEntry
     TLongtail_Atomic32 m_ActiveOpenCount;
     HLongtail_SpinLock m_SpinLock;
     uint32_t m_OpenCount;
+    TLongtail_Atomic64 m_FileSize;
     TLongtail_Atomic64 m_BytesLeftToWrite;
 };
 
@@ -104,7 +105,7 @@ static int ConcurrentChunkWriteAPI_Open(
 
     if (open_file_entry->m_OpenCount == 0)
     {
-        err = api->m_StorageAPI->OpenWriteFile(api->m_StorageAPI, open_file_entry->m_FullPath, 0, &open_file_entry->m_FileHandle);
+        err = api->m_StorageAPI->OpenWriteFile(api->m_StorageAPI, open_file_entry->m_FullPath, open_file_entry->m_FileSize, &open_file_entry->m_FileHandle);
     }
     else
     {
@@ -412,6 +413,7 @@ static int AllocateFileEntry(
     new_open_file_entry->m_ActiveOpenCount = 0;
     new_open_file_entry->m_FullPath = p;
     new_open_file_entry->m_OpenCount = 0;
+    new_open_file_entry->m_FileSize = version_index->m_AssetSizes[asset_index];
     new_open_file_entry->m_BytesLeftToWrite = version_index->m_AssetSizes[asset_index];
     strcpy(new_open_file_entry->m_FullPath, full_asset_path);
 
