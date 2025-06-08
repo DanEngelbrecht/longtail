@@ -1,6 +1,6 @@
 ##
 - **FIXED** Update permissions on added files and files with unmodified content
-- **CHANGED** Attempt to use sparse files on windows when writing out a version to disk
+- **CHANGED** Attempt to use sparse files on windows when writing out a files larger than 16 MB
 
 ## 0.4.3
 - **FIXED** Fixed file corruption on Linux when using `--use-legacy-write` option. [chris-believer](https://github.com/chris-believer)
