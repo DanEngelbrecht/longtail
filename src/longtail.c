@@ -1793,7 +1793,7 @@ int Longtail_GetFilesRecursively2(
                     if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
                     {
                         err = ECANCELED;
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_RunJobsBatched() failed with %d", err)
                         break;
                     }
                 }
@@ -6262,7 +6262,7 @@ static int WriteAssets(
 
     if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", ECANCELED)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Cancelled, failed with %d", ECANCELED)
         return ECANCELED;
     }
 
