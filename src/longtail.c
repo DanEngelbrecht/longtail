@@ -1705,11 +1705,8 @@ int Longtail_GetFilesRecursively2(
                     struct Longtail_StorageAPI_EntryProperties* properties = &folder_result->m_Properties[property_index];
                     if (properties->m_IsDir)
                     {
-                        if (IncludeFoundFile(root_path, optional_path_filter_api, properties))
-                        {
-                            job_count++;
-                            arrput(results, 0);
-                        }
+                        job_count++;
+                        arrput(results, 0);
                     }
                 }
             }
@@ -1735,11 +1732,12 @@ int Longtail_GetFilesRecursively2(
                 {
                     for (uint32_t property_index = 0; property_index < results[result_index]->m_PropertyCount; property_index++)
                     {
-                        if (results[result_index]->m_Properties[property_index].m_IsDir)
+                        struct Longtail_StorageAPI_EntryProperties* properties = &results[result_index]->m_Properties[property_index];
+                        if (properties->m_IsDir)
                         {
                             job_contexts[job_index].m_StorageAPI = storage_api;
                             job_contexts[job_index].m_RootPath = root_path;
-                            job_contexts[job_index].m_FolderSubPath = results[result_index]->m_Properties[property_index].m_Name;
+                            job_contexts[job_index].m_FolderSubPath = properties->m_Name;
                             job_contexts[job_index].m_Result = &results[result_count + job_index];
                             funcs[job_index] = ScanFolderJob;
                             ctxs[job_index] = (void*)&job_contexts[job_index];
@@ -1771,25 +1769,22 @@ int Longtail_GetFilesRecursively2(
                     struct Longtail_StorageAPI_EntryProperties* properties = &folder_result->m_Properties[property_index];
                     if (properties->m_IsDir)
                     {
-                        if (IncludeFoundFile(root_path, optional_path_filter_api, properties))
+                        struct ScanFolderResult* scan_result = 0;
+                        err = ScanFolder(storage_api, root_path, properties->m_Name, &scan_result);
+                        if (err)
                         {
-                            struct ScanFolderResult* scan_result = 0;
-                            err = ScanFolder(storage_api, root_path, properties->m_Name, &scan_result);
-                            if (err)
-                            {
-                                LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ScanFolder() failed with %d", err)
-                                break;
-                            }
-                            arrput(results, scan_result);
+                            LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_ERROR, "ScanFolder() failed with %d", err)
+                            break;
                         }
+                        arrput(results, scan_result);
                     }
                 }
                 if (err == 0 && optional_cancel_api && optional_cancel_token)
                 {
                     if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
                     {
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_RunJobsBatched() failed with %d", err)
                         err = ECANCELED;
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", err)
                         break;
                     }
                 }
@@ -6258,7 +6253,7 @@ static int WriteAssets(
 
     if (optional_cancel_api && optional_cancel_token && optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token) == ECANCELED)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Cancelled, failed with %d", ECANCELED)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Operation cancelled, failed with %d", ECANCELED)
         return ECANCELED;
     }
 
