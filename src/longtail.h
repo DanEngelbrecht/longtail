@@ -1880,6 +1880,21 @@ struct Longtail_VersionIndex
     char* m_NameData;
 };
 
+struct AssetPartLookup
+{
+    uint64_t* m_AssetOffsets;
+    uint32_t* m_AssetIndexes;
+    uint32_t* m_ChunkIndexes;
+    uint32_t* m_Tags;
+    struct Longtail_LookupTable* m_ChunkHashToIndex;
+};
+
+LONGTAIL_EXPORT int Longtail_CreateAssetPartLookup(
+    struct Longtail_VersionIndex* version_index,
+    const TLongtail_Hash* optional_wanted_hashes,
+    const uint32_t optional_wanted_hash_count,
+    struct AssetPartLookup** out_assert_part_lookup);
+
 struct Longtail_ArchiveIndex
 {
     uint32_t* m_Version;
