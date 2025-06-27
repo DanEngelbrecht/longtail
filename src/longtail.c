@@ -356,7 +356,7 @@ int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* storage_api, Longtai
 char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path) { return storage_api->GetParentPath(storage_api, path); }
 int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr) { return storage_api->MapFile(storage_api, f, offset, length, out_file_map, out_data_ptr); }
 void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m) { storage_api->UnMapFile(storage_api, m); }
-void Longtail_Storage_OpenAppendfile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file) { storage_api->OpenAppendFile(storage_api, path, out_open_file); }
+int Longtail_Storage_OpenAppendFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file) { return storage_api->OpenAppendFile(storage_api, path, out_open_file); }
 
 ////////////// ConcurrentChunkWriteAPI
 
