@@ -1735,15 +1735,19 @@ int Longtail_GetFilesRecursively2(
                 {
                     for (uint32_t property_index = 0; property_index < results[result_index]->m_PropertyCount; property_index++)
                     {
-                        if (results[result_index]->m_Properties[property_index].m_IsDir)
+                        struct Longtail_StorageAPI_EntryProperties* properties = &results[result_index]->m_Properties[property_index];
+                        if (properties->m_IsDir)
                         {
-                            job_contexts[job_index].m_StorageAPI = storage_api;
-                            job_contexts[job_index].m_RootPath = root_path;
-                            job_contexts[job_index].m_FolderSubPath = results[result_index]->m_Properties[property_index].m_Name;
-                            job_contexts[job_index].m_Result = &results[result_count + job_index];
-                            funcs[job_index] = ScanFolderJob;
-                            ctxs[job_index] = (void*)&job_contexts[job_index];
-                            job_index++;
+                            if (IncludeFoundFile(root_path, optional_path_filter_api, properties))
+                            {
+                                job_contexts[job_index].m_StorageAPI = storage_api;
+                                job_contexts[job_index].m_RootPath = root_path;
+                                job_contexts[job_index].m_FolderSubPath = properties->m_Name;
+                                job_contexts[job_index].m_Result = &results[result_count + job_index];
+                                funcs[job_index] = ScanFolderJob;
+                                ctxs[job_index] = (void*)&job_contexts[job_index];
+                                job_index++;
+                            }
                         }
                     }
                 }
@@ -1788,8 +1792,8 @@ int Longtail_GetFilesRecursively2(
                 {
                     if (optional_cancel_api->IsCancelled(optional_cancel_api, optional_cancel_token))
                     {
-                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_RunJobsBatched() failed with %d", err)
                         err = ECANCELED;
+                        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_DEBUG, "Longtail_RunJobsBatched() failed with %d", err)
                         break;
                     }
                 }
