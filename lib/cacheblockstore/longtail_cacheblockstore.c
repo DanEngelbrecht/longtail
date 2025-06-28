@@ -447,7 +447,7 @@ static void OnGetStoredBlockPutLocalComplete(struct Longtail_AsyncPutStoredBlock
     struct CacheBlockStoreAPI* cacheblockstore_api = api->m_CacheBlockStoreAPI;
     if (err)
     {
-        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockPutLocalComplete called with error", err)
+        LONGTAIL_LOG(ctx, LONGTAIL_LOG_LEVEL_WARNING, "OnGetStoredBlockPutLocalComplete called with error %d", err)
     }
     SAFE_DISPOSE_STORED_BLOCK(api->m_StoredBlock);
     Longtail_Free(api);
