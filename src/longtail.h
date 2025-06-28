@@ -449,7 +449,7 @@ LONGTAIL_EXPORT int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* stor
 LONGTAIL_EXPORT char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
 LONGTAIL_EXPORT int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
 LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
-LONGTAIL_EXPORT void Longtail_Storage_OpenAppendfile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
+LONGTAIL_EXPORT int Longtail_Storage_OpenAppendFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 
 ////////////// Longtail_ConcurrentChunkWriteAPI
 
