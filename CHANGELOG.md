@@ -1,5 +1,8 @@
 ##
 - **FIXED** Update permissions on added files and files with unmodified content
+- **FIXED** Fix potential Longtail_GetFilesRecursively2 buffer overrun (@webbju)
+- **FIXED** Fix OnGetStoredBlockPutLocalComplete error code reporting (@webbju)
+- **FIXED** Fix Longtail_Storage_OpenAppendFile prototype (@webbju)
 - **CHANGED** Attempt to use sparse files on windows when writing out a files larger than 16 MB
 
 ## 0.4.3
