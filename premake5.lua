@@ -8,7 +8,7 @@ newoption
 
 workspace "longtail"
    configurations { "Debug", "Release" }
-   platforms { 'x86_64' }   
+   platforms { 'x86_64', 'arm64' }   
    location ( _OPTIONS["to"] )
    intrinsics "on"
    vectorextensions "AVX2"
@@ -17,13 +17,21 @@ workspace "longtail"
    defines { '_CRT_SECURE_NO_DEPRECATE', '_CRT_SECURE_NO_WARNINGS', '_CRT_NONSTDC_NO_WARNINGS', '_HAS_EXCEPTIONS=0' }
    characterset("MBCS")
 
+   filter "platforms:arm64"
+      vectorextensions "NEON"
+      defines { "_M_ARM64" }
+
+   filter "platforms:x86_64"
+      vectorextensions "AVX2"
+      defines { "__SSE2__" }
+
    filter "configurations:Debug"
       runtime "Debug"
-      defines { "DEBUG", "BIKESHED_ASSERTS",  "LONGTAIL_ASSERTS", "LONGTAIL_LOG_LEVEL=3", "__SSE2__",  "LONGTAIL_EXPORT_SYMBOLS", "STBDS_REALLOC=Longtail_STBRealloc", "STBDS_FREE=Longtail_STBFree"}
+      defines { "DEBUG", "BIKESHED_ASSERTS",  "LONGTAIL_ASSERTS", "LONGTAIL_LOG_LEVEL=3",  "LONGTAIL_EXPORT_SYMBOLS", "STBDS_REALLOC=Longtail_STBRealloc", "STBDS_FREE=Longtail_STBFree"}
 
    filter "configurations:Release"
       runtime "Release"
-      defines { "NDEBUG", "__SSE2__", "LONGTAIL_LOG_LEVEL=5" }
+      defines { "NDEBUG", "LONGTAIL_LOG_LEVEL=5" }
       optimize "On"
 
 project "longtail-src"

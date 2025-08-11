@@ -1,5 +1,7 @@
 If %PROCESSOR_ARCHITECTURE% == AMD64 (
     set ARCH=x64
+) Else If %PROCESSOR_ARCHITECTURE% == ARM64 (
+    set ARCH=arm64
 ) Else (
     set ARCH=x86
 )
