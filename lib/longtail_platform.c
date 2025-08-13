@@ -187,7 +187,9 @@ int32_t Longtail_AtomicAdd32(TLongtail_Atomic32* value, int32_t amount)
 }
 
 #if !defined(__GNUC__)
-    #define _InterlockedAdd64 _InlineInterlockedAdd64
+    // Use InterlockedAdd64 which is available on both ARM64 and x64
+    // This avoids the _InlineInterlockedAdd64 issue on ARM64
+    #define _InterlockedAdd64 InterlockedAdd64
 #endif
 
 int64_t Longtail_AtomicAdd64(TLongtail_Atomic64* value, int64_t amount)

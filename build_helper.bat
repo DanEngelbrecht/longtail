@@ -91,73 +91,121 @@ if "!RELEASE_MODE!" == "release" (
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio 15.0\VC\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio 15.0\VC\vcvarsall.bat" amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio 15.0\VC\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio 15.0\VC\vcvarsall.bat" amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\14.0\VC\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\14.0\VC\vcvarsall.bat" amd64
+        )
     )
 )
 
 if NOT DEFINED VCINSTALLDIR (
     if exist "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" amd64
+        if "!ARCH!" == "arm64" (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\12.0\VC\vcvarsall.bat" arm64
+        ) else (
+            call "C:\Program Files (x86)\Microsoft Visual Studio\12.0\VC\vcvarsall.bat" amd64
+        )
     )
 )
 
@@ -176,7 +224,11 @@ if "!BUILD_THIRD_PARTY!" == "build-third-party" (
     echo Compiling third party dependencies to library !THIRD_PARTY_LIB!
     del /q !THIRD_PARTY_OUTPUT_FOLDER!\*.obj >nul 2>&1
     cd !THIRD_PARTY_OUTPUT_FOLDER!
-    cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% %THIRDPARTY_SSE% %THIRDPARTY_SSE42% %THIRDPARTY_SRC_AVX2% %THIRDPARTY_SRC_AVX512%
+    if "!ARCH!" == "arm64" (
+        cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% %THIRDPARTY_SRC_NEON%
+    ) else (
+        cl.exe /c %CXXFLAGS% %OPT% %THIRDPARTY_SRC% %THIRDPARTY_SSE% %THIRDPARTY_SSE42% %THIRDPARTY_SRC_AVX2% %THIRDPARTY_SRC_AVX512%
+    )
     set LIB_COMPILE_ERROR=%ERRORLEVEL%
     echo Creating third party dependencies library !THIRD_PARTY_LIB!
     lib.exe /nologo *.obj /OUT:!THIRD_PARTY_OUTPUT_FOLDER!\!THIRD_PARTY_LIB!

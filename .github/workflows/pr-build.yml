@@ -141,17 +141,46 @@ jobs:
       matrix:
         config: [debug, release]
         target: [static_lib, shared_lib, cmd]
+        arch: [x64, arm64]
 
     steps:
     - uses: actions/checkout@v4
     - name: build ${{matrix.target}}
       run: |
-        ${{matrix.target}}/build.bat ${{matrix.config}}
+        if ("${{matrix.arch}}" -eq "arm64") {
+          ${{matrix.target}}/build.bat arm64 ${{matrix.config}}
+        } else {
+          ${{matrix.target}}/build.bat ${{matrix.config}}
+        }
 
     - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
-        name: win32_x64-${{matrix.target}}-${{matrix.config}}
+        name: win32_${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.obj
+          !build/**/*.o
+          !build/**/third-party/**
+
+  build-win-arm64:
+
+    runs-on: windows-11-arm
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: build ${{matrix.target}}
+      run: |
+        ${{matrix.target}}/build.bat arm64 ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v4
+      name: upload ${{matrix.target}}
+      with:
+        name: win_arm64-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.obj
@@ -175,9 +204,26 @@ jobs:
         ../build/win32_x64/test/${{matrix.config}}/test.exe
         cd ..
 
+  test-win-arm64:
+
+    runs-on: windows-11-arm
+    strategy:
+      matrix:
+        config: [debug, release]
+    steps:
+    - uses: actions/checkout@v4
+    - name: build test
+      run: |
+        test/build.bat arm64 ${{matrix.config}}
+    - name: run tests
+      run: |
+        cd ./test
+        ../build/win_arm64/test/${{matrix.config}}/test.exe
+        cd ..
+
   dist-win32:
 
-    needs: build-win32
+    needs: [build-win32, build-win-arm64]
     runs-on: windows-2022
     steps:
     - uses: actions/checkout@v4
@@ -190,4 +236,21 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: dist-win32-x64
+        path: dist
+
+  dist-win-arm64:
+
+    needs: build-win-arm64
+    runs-on: windows-11-arm
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        path: build/artifacts
+    - name: build dist
+      run: |
+        ./dist.bat arm64
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dist-win-arm64
         path: dist

@@ -76,7 +76,7 @@ jobs:
     runs-on: macos-13
     strategy:
       matrix:
-        arch: [arm64, x64]
+        arch: [x64, arm64]
     steps:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v4
@@ -97,17 +97,46 @@ jobs:
       matrix:
         config: [debug, release]
         target: [static_lib, shared_lib, cmd]
+        arch: [x64, arm64]
 
     steps:
     - uses: actions/checkout@v4
     - name: build ${{matrix.target}}
       run: |
-        ${{matrix.target}}/build.bat ${{matrix.config}}
+        if ("${{matrix.arch}}" -eq "arm64") {
+          ${{matrix.target}}/build.bat arm64 ${{matrix.config}}
+        } else {
+          ${{matrix.target}}/build.bat ${{matrix.config}}
+        }
 
     - uses: actions/upload-artifact@v4
       name: upload ${{matrix.target}}
       with:
-        name: win32_x64-${{matrix.target}}-${{matrix.config}}
+        name: win32_${{matrix.arch}}-${{matrix.target}}-${{matrix.config}}
+        path: |
+          build/**
+          !build/**/*.obj
+          !build/**/*.o
+          !build/**/third-party/**
+
+  build-win-arm64:
+
+    runs-on: windows-11-arm
+    strategy:
+      matrix:
+        config: [debug, release]
+        target: [static_lib, shared_lib, cmd]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: build ${{matrix.target}}
+      run: |
+        ${{matrix.target}}/build.bat arm64 ${{matrix.config}}
+
+    - uses: actions/upload-artifact@v4
+      name: upload ${{matrix.target}}
+      with:
+        name: win_arm64-${{matrix.target}}-${{matrix.config}}
         path: |
           build/**
           !build/**/*.obj
@@ -116,7 +145,7 @@ jobs:
 
   dist-win32:
 
-    needs: build-win32
+    needs: [build-win32, build-win-arm64]
     runs-on: windows-2022
     steps:
     - uses: actions/checkout@v4
@@ -131,11 +160,28 @@ jobs:
         name: dist-win32-x64
         path: dist
 
+  dist-win-arm64:
+
+    needs: build-win-arm64
+    runs-on: windows-11-arm
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        path: build/artifacts
+    - name: build dist
+      run: |
+        ./dist.bat arm64
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dist-win-arm64
+        path: dist
+
   create-release:
 
     runs-on: ubuntu-24.04
 
-    needs: [dist-linux, dist-darwin, dist-win32]
+    needs: [dist-linux, dist-darwin, dist-win32, dist-win-arm64]
 
     steps:
     - name: Checkout code
@@ -147,11 +193,17 @@ jobs:
         name: dist-linux-x64
         path: dist-linux-x64
 
-    - name: Download Win32 artifacts
+    - name: Download Win32 x64 artifacts
       uses: actions/download-artifact@v4
       with:
         name: dist-win32-x64
         path: dist-win32-x64
+
+    - name: Download Win ARM64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: dist-win-arm64
+        path: dist-win-arm64
 
     - name: Download darwin x64 artifacts
       uses: actions/download-artifact@v4
@@ -170,10 +222,15 @@ jobs:
       with:
         args: zip -qq -r ./linux-x64.zip ./dist-linux-x64
 
-    - name: Zip Win32 artifacts
+    - name: Zip Win32 x64 artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
+
+    - name: Zip Win ARM64 artifacts
+      uses: montudor/action-zip@v0.1.0
+      with:
+        args: zip -qq -r ./win-arm64.zip ./dist-win-arm64
 
     - name: Zip darwin x64 artifacts
       uses: montudor/action-zip@v0.1.0

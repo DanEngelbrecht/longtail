@@ -6,7 +6,11 @@ FOR %%a IN ("%SOURCEFOLDER:~0,-1%") DO SET BASE_DIR=%%~dpa
 
 call !BASE_DIR!arch_helper.bat
 
-set CXXFLAGS=-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread  -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
+if "%ARCH%" == "arm64" (
+    set CXXFLAGS=-std=gnu99 -g -m64 -pthread -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -D_M_ARM64
+) else (
+    set CXXFLAGS=-std=gnu99 -g -m64 -maes -mssse3 -msse4.1 -pthread -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00
+)
 set TARGET=longtail_static
 
 call !BASE_DIR!all_sources.bat
@@ -49,18 +53,26 @@ del /q !OUTPUT_FOLDER!\*.o >nul 2>&1
 
 pushd !OUTPUT_FOLDER!
 !COMPILER! -c !CXXFLAGS! !OPT! !THIRDPARTY_SRC! !SRC!
-if NOT "!THIRDPARTY_SSE!" == "" (
-    !COMPILER! -c !CXXFLAGS! !OPT! %THIRDPARTY_SSE%
+
+if "%ARCH%" == "arm64" (
+    if NOT "!THIRDPARTY_SRC_NEON!" == "" (
+        !COMPILER! -c !CXXFLAGS! !OPT! !THIRDPARTY_SRC_NEON!
+    )
+) else (
+    if NOT "!THIRDPARTY_SSE!" == "" (
+        !COMPILER! -c !CXXFLAGS! !OPT! !THIRDPARTY_SSE!
+    )
+    if NOT "!THIRDPARTY_SSE42!" == "" (
+        !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 !THIRDPARTY_SSE42!
+    )
+    if NOT "%THIRDPARTY_SRC_AVX2%" == "" (
+        !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 %THIRDPARTY_SRC_AVX2%
+    )
+    if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
+        !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
+    )
 )
-if NOT "!THIRDPARTY_SSE42!" == "" (
-    !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 %THIRDPARTY_SSE42%
-)
-if NOT "%THIRDPARTY_SRC_AVX2%" == "" (
-    !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 %THIRDPARTY_SRC_AVX2%
-)
-if NOT "%THIRDPARTY_SRC_AVX512%" == "" (
-    !COMPILER! -c !CXXFLAGS! !OPT! -msse4.2 -mavx2 -mavx512vl -mavx512f -fno-asynchronous-unwind-tables %THIRDPARTY_SRC_AVX512%
-)
+
 if NOT "%ZSTD_THIRDPARTY_GCC_SRC%" == "" (
     !COMPILER! -c !CXXFLAGS! !OPT! -fno-asynchronous-unwind-tables %ZSTD_THIRDPARTY_GCC_SRC%
 )
