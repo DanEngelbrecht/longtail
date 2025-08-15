@@ -1,0 +1,31 @@
+﻿add_library(shared_lib
+	SHARED
+	$<TARGET_OBJECTS:src>
+	$<TARGET_OBJECTS:platform>
+	$<TARGET_OBJECTS:archiveblockstore>
+	$<TARGET_OBJECTS:atomiccancel>
+	$<TARGET_OBJECTS:bikeshed>
+	$<TARGET_OBJECTS:blake2>
+	$<TARGET_OBJECTS:blake3>
+	$<TARGET_OBJECTS:blake3_sse2>
+	$<TARGET_OBJECTS:blake3_sse4_1>
+	$<TARGET_OBJECTS:blake3_avx2>
+	$<TARGET_OBJECTS:blake3_avx512>
+	$<TARGET_OBJECTS:blockstorestorage>
+	$<TARGET_OBJECTS:brotli>
+	$<TARGET_OBJECTS:cacheblockstore>
+	$<TARGET_OBJECTS:compressblockstore>
+	$<TARGET_OBJECTS:compressionregistry_full>
+	$<TARGET_OBJECTS:filestorage>
+	$<TARGET_OBJECTS:fsblockstore>
+	$<TARGET_OBJECTS:hashregistry>
+	$<TARGET_OBJECTS:hpcdcchunker>
+	$<TARGET_OBJECTS:lrublockstore>
+	$<TARGET_OBJECTS:lz4>
+	$<TARGET_OBJECTS:memstorage>
+	$<TARGET_OBJECTS:memtracer>
+	$<TARGET_OBJECTS:meowhash>
+	$<TARGET_OBJECTS:ratelimitedprogress>
+	$<TARGET_OBJECTS:shareblockstore>
+	$<TARGET_OBJECTS:zstd>
+)
