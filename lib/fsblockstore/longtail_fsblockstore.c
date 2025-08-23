@@ -381,7 +381,7 @@ struct ScanBlockJob
     struct Longtail_BlockIndex* m_BlockIndex;
 };
 
-int EndsWith(const char *str, const char *suffix)
+static int EndsWith(const char *str, const char *suffix)
 {
     if (!str || !suffix)
         return 0;
