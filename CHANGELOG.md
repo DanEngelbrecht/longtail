@@ -1,4 +1,7 @@
 ##
+- **FIXED** Fixed crash if `--detailed-progress` was given and we fail to create a frame buffer
+
+## 0.4.4
 - **FIXED** Update permissions on added files and files with unmodified content
 - **FIXED** Fix potential Longtail_GetFilesRecursively2 buffer overrun (@webbju)
 - **FIXED** Fix OnGetStoredBlockPutLocalComplete error code reporting (@webbju)
