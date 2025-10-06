@@ -327,10 +327,6 @@ static int UpdateProgressWindow()
 {
     if (FrameBufferAPI)
     {
-        if (MonitorWindowReady == 0)
-        {
-            return 0;
-        }
         if (MonitorWindowReady == 1)
         {
             if (0 == FrameBufferAPI->Open(FrameBufferAPI, "Monitor", 800, 600, &FrameBuffer))
@@ -342,239 +338,245 @@ static int UpdateProgressWindow()
             else
             {
                 Longtail_AtomicAdd32(&MonitorWindowReady, -1);
+                SAFE_DISPOSE_API(FrameBufferAPI);
+                FrameBufferAPI = 0;
             }
         }
-        for (uint32_t b = 0; b < MonitorBlockInfosCount; b++)
+        if (MonitorWindowReady == 2)
         {
-            int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
-            if (access_count > 0)
+            for (uint32_t b = 0; b < MonitorBlockInfosCount; b++)
             {
-                Longtail_AtomicAdd64(&MonitorBlockInfos[b].m_AccessCount, -access_count);
-                MonitorBlockInfos[b].m_ActivityIndicator = 10;
-            }
-            if (MonitorBlockInfos[b].m_ActivityIndicator > 0)
-            {
-                if (MonitorBlockInfos[b].m_State == BlockPrepare)
+                int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
+                if (access_count > 0)
                 {
-                    SetBlock(b, Grey);
+                    Longtail_AtomicAdd64(&MonitorBlockInfos[b].m_AccessCount, -access_count);
+                    MonitorBlockInfos[b].m_ActivityIndicator = 10;
+                }
+                if (MonitorBlockInfos[b].m_ActivityIndicator > 0)
+                {
+                    if (MonitorBlockInfos[b].m_State == BlockPrepare)
+                    {
+                        SetBlock(b, Grey);
+                    }
+                    else
+                    {
+                        SetBlock(b, White);
+                    }
+                    Longtail_AtomicAdd32(&MonitorBlockInfos[b].m_ActivityIndicator, -1);
+                    continue;
+                }
+
+                switch (MonitorBlockInfos[b].m_State)
+                {
+                case BlockIdle:
+                    SetBlock(b, DarkGrey);
+                    break;
+                case BlockPrepare:
+                    SetBlock(b, DarkGrey);
+                    break;
+                case BlockFetching:
+                    SetBlock(b, Yellow);
+                    break;
+                case BlockFetchedSuccess:
+                    SetBlock(b, Blue);
+                    break;
+                case BlockFetchedFailed:
+                    SetBlock(b, Red);
+                    break;
+                case BlockCompletedSuccess:
+                    SetBlock(b, Green);
+                    break;
+                case BlockCompletedFailed:
+                    SetBlock(b, Red);
+                    break;
+                }
+            }
+
+            for (uint32_t a = 0; a < MonitorAssetInfosCount; a++)
+            {
+                int64_t access_count = MonitorAssetInfos[a].m_AccessCount;
+
+                if (access_count > 0)
+                {
+                    Longtail_AtomicAdd64(&MonitorAssetInfos[a].m_AccessCount, -access_count);
+                    MonitorAssetInfos[a].m_ActivityIndicator = 10;
+                }
+                if (MonitorAssetInfos[a].m_ActivityIndicator > 0)
+                {
+                    SetAsset(a, White);
+                    Longtail_AtomicAdd32(&MonitorAssetInfos[a].m_ActivityIndicator, -1);
+                    continue;
+                }
+                if (MonitorAssetInfos[a].m_ReadWriteCount == 0)
+                {
+                    SetAsset(a, Grey);
+                }
+                else if (MonitorAssetInfos[a].m_PendingChunkCount > 0)
+                {
+                    SetAsset(a, Blue);
                 }
                 else
                 {
-                    SetBlock(b, White);
+                    SetAsset(a, Green);
                 }
-                Longtail_AtomicAdd32(&MonitorBlockInfos[b].m_ActivityIndicator, -1);
-                continue;
             }
 
-            switch (MonitorBlockInfos[b].m_State)
+            int err = FrameBufferAPI->Update(FrameBufferAPI, FrameBuffer, MonitorWindowBuffer);
+            if (err != 0)
             {
-            case BlockIdle:
-                SetBlock(b, DarkGrey);
-                break;
-            case BlockPrepare:
-                SetBlock(b, DarkGrey);
-                break;
-            case BlockFetching:
-                SetBlock(b, Yellow);
-                break;
-            case BlockFetchedSuccess:
-                SetBlock(b, Blue);
-                break;
-            case BlockFetchedFailed:
-                SetBlock(b, Red);
-                break;
-            case BlockCompletedSuccess:
-                SetBlock(b, Green);
-                break;
-            case BlockCompletedFailed:
-                SetBlock(b, Red);
-                break;
+                FrameBufferAPI->Close(FrameBufferAPI, FrameBuffer);
+                FrameBuffer = 0;
+                return 0;
             }
-        }
-
-        for (uint32_t a = 0; a < MonitorAssetInfosCount; a++)
-        {
-            int64_t access_count = MonitorAssetInfos[a].m_AccessCount;
-
-            if (access_count > 0)
-            {
-                Longtail_AtomicAdd64(&MonitorAssetInfos[a].m_AccessCount, -access_count);
-                MonitorAssetInfos[a].m_ActivityIndicator = 10;
-            }
-            if (MonitorAssetInfos[a].m_ActivityIndicator > 0)
-            {
-                SetAsset(a, White);
-                Longtail_AtomicAdd32(&MonitorAssetInfos[a].m_ActivityIndicator, -1);
-                continue;
-            }
-            if (MonitorAssetInfos[a].m_ReadWriteCount == 0)
-            {
-                SetAsset(a, Grey);
-            }
-            else if (MonitorAssetInfos[a].m_PendingChunkCount > 0)
-            {
-                SetAsset(a, Blue);
-            }
-            else
-            {
-                SetAsset(a, Green);
-            }
-        }
-
-        int err = FrameBufferAPI->Update(FrameBufferAPI, FrameBuffer, MonitorWindowBuffer);
-        if (err != 0)
-        {
-            FrameBuffer = 0;
-            return 0;
+            return 1;
         }
     }
-    else
+
+    int32_t backup_lines = progress_lines;
+    Longtail_AtomicAdd32(&progress_lines, -backup_lines);
+    for (int32_t backup = 0; backup < backup_lines; ++backup)
     {
-        int32_t backup_lines = progress_lines;
-        Longtail_AtomicAdd32(&progress_lines, -backup_lines);
-        for (int32_t backup = 0; backup < backup_lines; ++backup)
-        {
-            fprintf(stderr, "\033[A");
-        }
+        fprintf(stderr, "\033[A");
+    }
 
-        uint32_t columns = 80, rows = 40;
-        GetConsoleSize(&columns, &rows);
+    uint32_t columns = 80, rows = 40;
+    GetConsoleSize(&columns, &rows);
 
-        uint32_t row = 0;
-        if (columns > 1023)
-        {
-            columns = 1023;
-        }
+    uint32_t row = 0;
+    if (columns > 1023)
+    {
+        columns = 1023;
+    }
 
-        char tmp_buffer[1023 + 1];
+    char tmp_buffer[1023 + 1];
 
-        if (MonitorBlockInfos)
-        {
-            if (MonitorAssetInfos)
-            {
-                rows -= 2;
-            }
-
-            uint32_t block_offset = 0;
-            while (block_offset < MonitorBlockInfosCount && row < rows)
-            {
-                uint32_t blocks_left = MonitorBlockInfosCount - block_offset;
-                uint32_t blocks_in_line = blocks_left > columns ? columns : blocks_left;
-
-                for (uint32_t u = 0; u < blocks_in_line; u++)
-                {
-                    uint32_t b = block_offset + u;
-                    switch (MonitorBlockInfos[b].m_State)
-                    {
-                    case BlockIdle:
-                        tmp_buffer[u] = ' ';
-                        break;
-                    case BlockPrepare:
-                        tmp_buffer[u] = '-';
-                        break;
-                    case BlockFetching:
-                        tmp_buffer[u] = '+';
-                        break;
-                    case BlockFetchedSuccess:
-                    {
-                        int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
-                        if (access_count > 0)
-                        {
-                            tmp_buffer[u] = '*';
-                            Longtail_AtomicAdd64(&MonitorBlockInfos[b].m_AccessCount, -access_count);
-                        }
-                        else
-                        {
-                            tmp_buffer[u] = '=';
-                        }
-                    }
-                    break;
-                    case BlockFetchedFailed:
-                        tmp_buffer[u] = '?';
-                        break;
-                    case BlockCompletedSuccess:
-                        tmp_buffer[u] = '.';
-                        break;
-                    case BlockCompletedFailed:
-                        tmp_buffer[u] = '!';
-                        break;
-                    }
-                }
-                tmp_buffer[blocks_in_line] = '\0';
-                fprintf(stderr, "\r%s\n", tmp_buffer);
-                block_offset += blocks_in_line;
-                Longtail_AtomicAdd32(&progress_lines, 1);
-                row++;
-            }
-        }
-
+    if (MonitorBlockInfos)
+    {
         if (MonitorAssetInfos)
         {
-            if (MonitorBlockInfos)
+            rows -= 2;
+        }
+
+        uint32_t block_offset = 0;
+        while (block_offset < MonitorBlockInfosCount && row < rows)
+        {
+            uint32_t blocks_left = MonitorBlockInfosCount - block_offset;
+            uint32_t blocks_in_line = blocks_left > columns ? columns : blocks_left;
+
+            for (uint32_t u = 0; u < blocks_in_line; u++)
             {
-                memset(tmp_buffer, '#', columns);
-                tmp_buffer[columns] = 0;
-                fprintf(stderr, "%s\r\n", tmp_buffer);
-                Longtail_AtomicAdd32(&progress_lines, 1);
-                row++;
-            }
-            static uint32_t skip_row_count = 0;
-
-            uint32_t incomplete_asset_count = 0;
-            uint32_t complete_row_count = 0;
-
-            uint32_t asset_offset = skip_row_count * columns;
-            while (asset_offset < MonitorAssetInfosCount && row < rows)
-            {
-                uint32_t assets_left = MonitorAssetInfosCount - asset_offset;
-                uint32_t assets_in_line = assets_left > columns ? columns : assets_left;
-
-                for (uint32_t u = 0; u < assets_in_line; u++)
+                uint32_t b = block_offset + u;
+                switch (MonitorBlockInfos[b].m_State)
                 {
-                    uint32_t a = asset_offset + u;
-                    int64_t access_count = MonitorAssetInfos[a].m_AccessCount;
-
+                case BlockIdle:
+                    tmp_buffer[u] = ' ';
+                    break;
+                case BlockPrepare:
+                    tmp_buffer[u] = '-';
+                    break;
+                case BlockFetching:
+                    tmp_buffer[u] = '+';
+                    break;
+                case BlockFetchedSuccess:
+                {
+                    int64_t access_count = MonitorBlockInfos[b].m_AccessCount;
                     if (access_count > 0)
                     {
                         tmp_buffer[u] = '*';
-                        Longtail_AtomicAdd64(&MonitorAssetInfos[a].m_AccessCount, -access_count);
+                        Longtail_AtomicAdd64(&MonitorBlockInfos[b].m_AccessCount, -access_count);
+                    }
+                    else
+                    {
+                        tmp_buffer[u] = '=';
+                    }
+                }
+                break;
+                case BlockFetchedFailed:
+                    tmp_buffer[u] = '?';
+                    break;
+                case BlockCompletedSuccess:
+                    tmp_buffer[u] = '.';
+                    break;
+                case BlockCompletedFailed:
+                    tmp_buffer[u] = '!';
+                    break;
+                }
+            }
+            tmp_buffer[blocks_in_line] = '\0';
+            fprintf(stderr, "\r%s\n", tmp_buffer);
+            block_offset += blocks_in_line;
+            Longtail_AtomicAdd32(&progress_lines, 1);
+            row++;
+        }
+    }
+
+    if (MonitorAssetInfos)
+    {
+        if (MonitorBlockInfos)
+        {
+            memset(tmp_buffer, '#', columns);
+            tmp_buffer[columns] = 0;
+            fprintf(stderr, "%s\r\n", tmp_buffer);
+            Longtail_AtomicAdd32(&progress_lines, 1);
+            row++;
+        }
+        static uint32_t skip_row_count = 0;
+
+        uint32_t incomplete_asset_count = 0;
+        uint32_t complete_row_count = 0;
+
+        uint32_t asset_offset = skip_row_count * columns;
+        while (asset_offset < MonitorAssetInfosCount && row < rows)
+        {
+            uint32_t assets_left = MonitorAssetInfosCount - asset_offset;
+            uint32_t assets_in_line = assets_left > columns ? columns : assets_left;
+
+            for (uint32_t u = 0; u < assets_in_line; u++)
+            {
+                uint32_t a = asset_offset + u;
+                int64_t access_count = MonitorAssetInfos[a].m_AccessCount;
+
+                if (access_count > 0)
+                {
+                    tmp_buffer[u] = '*';
+                    Longtail_AtomicAdd64(&MonitorAssetInfos[a].m_AccessCount, -access_count);
+                    incomplete_asset_count++;
+                }
+                else
+                {
+                    if (MonitorAssetInfos[a].m_ReadWriteCount == 0)
+                    {
+                        tmp_buffer[u] = ' ';
+                        incomplete_asset_count++;
+                    }
+                    else if (MonitorAssetInfos[a].m_PendingChunkCount > 0)
+                    {
+                        tmp_buffer[u] = '+';
                         incomplete_asset_count++;
                     }
                     else
                     {
-                        if (MonitorAssetInfos[a].m_ReadWriteCount == 0)
-                        {
-                            tmp_buffer[u] = ' ';
-                            incomplete_asset_count++;
-                        }
-                        else if (MonitorAssetInfos[a].m_PendingChunkCount > 0)
-                        {
-                            tmp_buffer[u] = '+';
-                            incomplete_asset_count++;
-                        }
-                        else
-                        {
-                            tmp_buffer[u] = '=';
-                        }
+                        tmp_buffer[u] = '=';
                     }
                 }
-
-                tmp_buffer[assets_in_line] = '\0';
-                fprintf(stderr, "\r%s\n", tmp_buffer);
-                asset_offset += assets_in_line;
-                Longtail_AtomicAdd32(&progress_lines, 1);
-                row++;
-                if (incomplete_asset_count == 0)
-                {
-                    complete_row_count++;
-                }
             }
-            if ((complete_row_count > (1 + (rows / 5))) && asset_offset < MonitorAssetInfosCount)
+
+            tmp_buffer[assets_in_line] = '\0';
+            fprintf(stderr, "\r%s\n", tmp_buffer);
+            asset_offset += assets_in_line;
+            Longtail_AtomicAdd32(&progress_lines, 1);
+            row++;
+            if (incomplete_asset_count == 0)
             {
-                skip_row_count += complete_row_count;
+                complete_row_count++;
             }
         }
+        if ((complete_row_count > (1 + (rows / 5))) && asset_offset < MonitorAssetInfosCount)
+        {
+            skip_row_count += complete_row_count;
+        }
     }
+
     return 1;
 }
 
